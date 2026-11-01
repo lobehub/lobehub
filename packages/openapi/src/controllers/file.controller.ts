@@ -1,17 +1,43 @@
 import type { Context } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 
 import { BaseController } from '../common/base.controller';
 import { FileUploadService } from '../services/file.service';
 import type {
+  BatchFileUploadFormFields,
   BatchFileUploadRequest,
   BatchGetFilesRequest,
   FileChunkRequest,
   FileListQuery,
   FileParseRequest,
+  FileUploadFormFields,
   FileUrlRequest,
   PublicFileUploadRequest,
   UpdateFileRequest,
 } from '../types/file.type';
+import { BatchFileUploadFormFieldsSchema, FileUploadFormFieldsSchema } from '../types/file.type';
+
+const getMultipartTextFields = (formData: FormData, fields: readonly string[]) =>
+  Object.fromEntries(
+    fields.map((field) => {
+      const value = formData.get(field);
+      return [field, typeof value === 'string' ? value : undefined];
+    }),
+  );
+
+const parseMultipartFields = <T>(result: {
+  error?: { issues: Array<{ message: string }> };
+  success: boolean;
+  data?: T;
+}): T => {
+  if (!result.success) {
+    throw new HTTPException(400, {
+      message: result.error?.issues[0]?.message ?? 'Invalid multipart form fields',
+    });
+  }
+
+  return result.data!;
+};
 
 /**
  * File upload controller
@@ -41,27 +67,39 @@ export class FileController extends BaseController {
       }
 
       for (const file of fileEntries) {
-        if (file instanceof File) files.push(file);
+        if (!(file instanceof File)) {
+          throw new HTTPException(400, { message: 'Every files entry must be a binary file' });
+        }
+        files.push(file);
       }
 
       if (!files.length) {
         return this.error(c, 'No files provided', 400);
       }
 
-      // Get other parameters
-      const knowledgeBaseId = (formData.get('knowledgeBaseId') as string | null) || null;
-      const skipCheckFileType = formData.get('skipCheckFileType') === 'true';
-      const directory = (formData.get('directory') as string | null) || null;
-      const agentId = (formData.get('agentId') as string | null) || null;
-      const sessionId = (formData.get('sessionId') as string | null) || null;
+      if (files.length > 20) {
+        return this.error(c, 'A batch can contain at most 20 files', 400);
+      }
+
+      const fields = parseMultipartFields<BatchFileUploadFormFields>(
+        BatchFileUploadFormFieldsSchema.safeParse(
+          getMultipartTextFields(formData, [
+            'agentId',
+            'directory',
+            'knowledgeBaseId',
+            'sessionId',
+            'skipCheckFileType',
+          ]),
+        ),
+      );
 
       const request: BatchFileUploadRequest = {
-        agentId: agentId || undefined,
-        directory: directory || undefined,
+        agentId: fields.agentId,
+        directory: fields.directory,
         files,
-        knowledgeBaseId: knowledgeBaseId || undefined,
-        sessionId: sessionId || undefined,
-        skipCheckFileType,
+        knowledgeBaseId: fields.knowledgeBaseId,
+        sessionId: fields.sessionId,
+        skipCheckFileType: fields.skipCheckFileType,
       };
 
       const result = await fileService.uploadFiles(request);
@@ -154,27 +192,27 @@ export class FileController extends BaseController {
       const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const formData = await this.getFormData(c);
-      const file = formData.get('file') as File | null;
+      const file = formData.get('file');
 
-      if (!file) {
+      if (!(file instanceof File)) {
         return this.error(c, 'No file provided', 400);
       }
 
-      // Get other parameters
-      const knowledgeBaseId = (formData.get('knowledgeBaseId') as string | null) || null;
-      const skipCheckFileType = formData.get('skipCheckFileType') === 'true';
-      const directory = (formData.get('directory') as string | null) || null;
-      const agentId = (formData.get('agentId') as string | null) || null;
-      const sessionId = (formData.get('sessionId') as string | null) || null;
-      const skipDeduplication = formData.get('skipDeduplication') === 'true';
+      const fields = parseMultipartFields<FileUploadFormFields>(
+        FileUploadFormFieldsSchema.safeParse(
+          getMultipartTextFields(formData, [
+            'agentId',
+            'directory',
+            'knowledgeBaseId',
+            'sessionId',
+            'skipCheckFileType',
+            'skipDeduplication',
+          ]),
+        ),
+      );
 
       const options: PublicFileUploadRequest = {
-        agentId: agentId || undefined,
-        directory: directory || undefined,
-        knowledgeBaseId: knowledgeBaseId || undefined,
-        sessionId: sessionId || undefined,
-        skipCheckFileType,
-        skipDeduplication,
+        ...fields,
       };
 
       const result = await fileService.uploadFile(file, options);

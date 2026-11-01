@@ -1,0 +1,123 @@
+import type { ChannelContextMessage, ChannelInputManifest } from '@lobechat/types';
+import {
+  agentDisplayName,
+  CHANNEL_DELETED_AGENT_NAME,
+  CHANNEL_DELETED_USER_NAME,
+} from '@lobechat/types';
+import { and, asc, desc, eq, isNull, lt, lte, or } from 'drizzle-orm';
+
+import type {
+  ChannelJobItem,
+  ChannelMemberItem,
+  ChannelMessageItem,
+  ChannelThreadItem,
+} from '../../schemas';
+import { agents, channelMessages, users } from '../../schemas';
+import type { LobeChatDatabase, Transaction } from '../../type';
+import { fileIdsByMessage } from './attachments';
+
+/** Freeze the public history cutoff and branch for this request. */
+export const buildManifest = (params: {
+  job: ChannelJobItem;
+  member: ChannelMemberItem;
+  request: ChannelMessageItem;
+  thread: ChannelThreadItem | null;
+}): ChannelInputManifest => {
+  const { job, member, request, thread } = params;
+
+  return {
+    // Jobs inherit the request's branch, so the request itself always sorts last.
+    cutoffSequence: request.sequence,
+    requestMessageId: request.id,
+    requesterMemberId: job.requesterMemberId,
+    self: { agentId: member.agentId!, memberId: member.id, name: member.name ?? 'Agent' },
+    threadId: job.threadId,
+    threadRootSequence: thread?.rootSequence ?? null,
+  };
+};
+
+/** The branch messages a manifest covers; see {@link buildManifest}. */
+const manifestScope = (channelId: string, manifest: ChannelInputManifest) => {
+  const { threadId, threadRootSequence } = manifest;
+  const mainPrefix =
+    threadRootSequence === null
+      ? undefined
+      : and(isNull(channelMessages.threadId), lte(channelMessages.sequence, threadRootSequence));
+
+  return and(
+    eq(channelMessages.channelId, channelId),
+    lte(channelMessages.sequence, manifest.cutoffSequence),
+    threadId
+      ? or(eq(channelMessages.threadId, threadId), mainPrefix)
+      : isNull(channelMessages.threadId),
+  );
+};
+
+/**
+ * The messages a manifest froze, oldest first. Needs no channel lock: Channel writes change
+ * only the routing fields of a sent message, and sequences only grow, so nothing at or before
+ * the cutoff changes. Author names and attachments are read at call time: a deleted account
+ * reads as deleted and a deleted file is no longer listed.
+ */
+export const readManifestMessages = async (
+  db: LobeChatDatabase | Transaction,
+  channelId: string,
+  manifest: ChannelInputManifest,
+  options: { beforeSequence?: number; limit?: number; messageId?: string } = {},
+): Promise<ChannelContextMessage[]> => {
+  const scope = and(
+    manifestScope(channelId, manifest),
+    options.beforeSequence === undefined
+      ? undefined
+      : lt(channelMessages.sequence, options.beforeSequence),
+    options.messageId ? eq(channelMessages.id, options.messageId) : undefined,
+  );
+  const query = db
+    .select({
+      agentId: channelMessages.agentId,
+      agentName: agents.name,
+      agentTitle: agents.title,
+      fullName: users.fullName,
+      routingStatus: channelMessages.routingStatus,
+      userId: channelMessages.userId,
+      username: users.username,
+      content: channelMessages.content,
+      id: channelMessages.id,
+      sequence: channelMessages.sequence,
+      replyToId: channelMessages.replyToId,
+      threadId: channelMessages.threadId,
+    })
+    .from(channelMessages)
+    .leftJoin(users, eq(users.id, channelMessages.userId))
+    .leftJoin(agents, eq(agents.id, channelMessages.agentId))
+    .where(scope)
+    .orderBy(options.limit ? desc(channelMessages.sequence) : asc(channelMessages.sequence))
+    .$dynamic();
+  const visible = options.limit ? await query.limit(options.limit) : await query;
+  if (options.limit) visible.reverse();
+  const attachments = await fileIdsByMessage(
+    db,
+    visible.map((message) => message.id),
+  );
+
+  return visible.map((message) => {
+    const isAgent = message.routingStatus === 'reply';
+    return {
+      author: {
+        id: isAgent ? message.agentId : message.userId,
+        name: isAgent
+          ? message.agentId
+            ? agentDisplayName({ name: message.agentName, title: message.agentTitle }, 'Agent')
+            : CHANNEL_DELETED_AGENT_NAME
+          : message.fullName || message.username || CHANNEL_DELETED_USER_NAME,
+        type: isAgent ? 'agent' : 'user',
+      },
+      content: message.content,
+      ...(attachments.has(message.id) && { fileIds: attachments.get(message.id) }),
+      id: message.id,
+      sequence: message.sequence,
+      replyToId: message.replyToId,
+      threadId: message.threadId,
+    };
+  });
+};

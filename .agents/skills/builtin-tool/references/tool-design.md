@@ -194,7 +194,7 @@ When planning work:
 - **Disambiguate confusable APIs explicitly** (`runTask` vs `updateTaskStatus`).
 - **Push toward batched APIs** ("Prefer this when…").
 - **End with a numbered workflow** if the tool has a typical sequence.
-- **For tools with multiple environments** (e.g. desktop vs cloud), keep variants in `systemRole.ts` and `systemRole.desktop.ts` and pick at the manifest level. See `builtin-tool-local-system`.
+- **For tools with multiple environments** (e.g. desktop vs cloud), variants in `systemRole.ts` + `systemRole.desktop.ts` picked at the manifest level are fine — but only while the content genuinely differs. `builtin-tool-local-system` forked them for image reads; once every runtime could upload images the fork held nothing but drift, so it was merged back.
 
 ### Dynamic system prompts
 
@@ -275,7 +275,7 @@ Use when the same logic runs in browser and Node (e.g. mathjs, nerdamer). The ru
 
 ### Pattern C: Extend a shared base
 
-When you're implementing a domain that already has a base runtime (file ops via `ComputerRuntime`), extend and only override `callService` + result normalization. See `builtin-tool-local-system/src/ExecutionRuntime/index.ts`.
+When you're implementing a domain that already has a base runtime (file ops via `ComputerRuntime`), extend and only override `callService` + result normalization. See `packages/tool-runtime/src/LocalSystemExecutionRuntime.ts`.
 
 ### Runtime contract
 
@@ -446,9 +446,7 @@ This entry is what `packages/builtin-tools/src/index.ts` and `identifiers.ts` im
   "main": "./src/index.ts",
   "name": "@lobechat/builtin-tool-<name>",
   "peerDependencies": {
-    "@lobehub/ui": "^5",
-    "antd": "^6",
-    "antd-style": "*",
+    "@lobehub/ui": "^6",
     "lucide-react": "*",
     "react": "*",
     "react-i18next": "*"

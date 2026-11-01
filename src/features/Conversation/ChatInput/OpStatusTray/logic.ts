@@ -27,3 +27,19 @@ export const pickStableStatusPhrase = (phrases: string[], seed: string): string 
   if (phrases.length === 0) return undefined;
   return phrases[hashString(seed) % phrases.length];
 };
+
+/**
+ * Cycle through phrases over time so the status text reads like a carousel.
+ * `step` advances once per rotation tick; the seed keeps the starting phrase
+ * stable per operation so two concurrent operations don't sync up.
+ */
+export const pickRotatingStatusPhrase = (
+  phrases: string[],
+  seed: string,
+  step: number,
+): string | undefined => {
+  if (phrases.length === 0) return undefined;
+  const start = hashString(seed) % phrases.length;
+  const safeStep = Number.isFinite(step) ? Math.max(0, Math.floor(step)) : 0;
+  return phrases[(start + safeStep) % phrases.length];
+};

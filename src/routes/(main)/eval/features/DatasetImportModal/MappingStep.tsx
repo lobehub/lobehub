@@ -1,9 +1,15 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { Checkbox, Input, Table } from 'antd';
-import { cssVar } from 'antd-style';
+import {
+  Checkbox,
+  cssVar,
+  Flexbox,
+  Input,
+  Select,
+  Table,
+  type TableColumn,
+  Text,
+} from '@lobehub/ui';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,13 +41,7 @@ const CATEGORY_CANDIDATES = new Set(['category', 'topic', 'type', 'subject', 'cl
 const CHOICES_CANDIDATES = new Set(['choices', 'options', 'alternatives', 'candidates']);
 
 type MappingTarget =
-  | 'choices'
-  | 'category'
-  | 'expected'
-  | 'ignore'
-  | 'input'
-  | 'metadata'
-  | 'sortOrder';
+  'choices' | 'category' | 'expected' | 'ignore' | 'input' | 'metadata' | 'sortOrder';
 
 export interface FieldMappingValue {
   category?: string;
@@ -175,10 +175,10 @@ const MappingStep = memo<MappingStepProps>(
     ].map(({ desc, label, value }) => ({
       label: (
         <Flexbox gap={2}>
-          <span style={{ fontSize: 11 }}>{t(`dataset.import.${label}` as any)}</span>
-          <span style={{ color: roleDescColor(value as MappingTarget), fontSize: 11 }}>
+          <Text fontSize={12}>{t(`dataset.import.${label}` as any)}</Text>
+          <Text color={roleDescColor(value as MappingTarget)} fontSize={12}>
             {t(`dataset.import.${desc}` as any)}
-          </span>
+          </Text>
         </Flexbox>
       ),
       value: value as MappingTarget,
@@ -198,7 +198,7 @@ const MappingStep = memo<MappingStepProps>(
       onMappingChange(newMapping);
     };
 
-    const columns = useMemo(
+    const columns = useMemo<TableColumn<Record<string, any>>[]>(
       () =>
         visibleHeaders.map((h) => {
           const role = mapping[h];
@@ -222,7 +222,7 @@ const MappingStep = memo<MappingStepProps>(
                 : undefined,
             title: (
               <Flexbox gap={2}>
-                <span style={{ fontSize: 13, opacity: isIgnored ? 0.4 : 1 }}>{h}</span>
+                <span style={{ fontSize: 14, opacity: isIgnored ? 0.4 : 1 }}>{h}</span>
                 <Select
                   options={targetOptions}
                   popupMatchSelectWidth={200}
@@ -232,8 +232,8 @@ const MappingStep = memo<MappingStepProps>(
                   style={{
                     color:
                       color || (isIgnored ? cssVar.colorTextQuaternary : cssVar.colorTextTertiary),
-                    fontSize: 11,
-                    marginInlineStart: -7,
+                    fontSize: 12,
+                    marginInlineStart: -8,
                   }}
                   onChange={(val: MappingTarget) => handleRoleChange(h, val)}
                 />
@@ -251,25 +251,32 @@ const MappingStep = memo<MappingStepProps>(
     );
 
     return (
-      <Flexbox gap={12}>
+      <Flexbox gap={16}>
         {/* Toolbar */}
         <Flexbox horizontal align="center" justify="space-between">
-          <Flexbox horizontal align="center" gap={16}>
-            <span style={{ color: cssVar.colorTextTertiary, fontSize: 13 }}>
-              {t('dataset.import.fieldMapping.desc')}
-            </span>
-            <span style={{ color: cssVar.colorTextQuaternary, fontSize: 12 }}>
-              {t('dataset.import.preview.rows', { count: totalCount })}
-            </span>
+          <Flexbox gap={2}>
+            <Text fontSize={12} type="secondary" weight={500}>
+              {t('dataset.import.step.mapping')}
+            </Text>
+            <Flexbox horizontal align="center" gap={8}>
+              <Text color={cssVar.colorTextTertiary} fontSize={12}>
+                {t('dataset.import.fieldMapping.desc')}
+              </Text>
+              <Text
+                color={cssVar.colorTextQuaternary}
+                fontSize={12}
+                style={{ fontFamily: cssVar.fontFamilyCode }}
+              >
+                {t('dataset.import.preview.rows', { count: totalCount })}
+              </Text>
+            </Flexbox>
           </Flexbox>
           <Flexbox horizontal align="center" gap={16}>
             {hasChoices && (
               <Flexbox horizontal align="center" gap={8}>
-                <span
-                  style={{ color: cssVar.colorTextSecondary, fontSize: 12, whiteSpace: 'nowrap' }}
-                >
+                <Text fontSize={12} style={{ whiteSpace: 'nowrap' }} type="secondary">
                   {t('dataset.import.expectedDelimiter.desc')}
-                </span>
+                </Text>
                 <Input
                   placeholder={t('dataset.import.expectedDelimiter.placeholder')}
                   size="small"
@@ -280,10 +287,10 @@ const MappingStep = memo<MappingStepProps>(
               </Flexbox>
             )}
             {hasIgnored && (
-              <Checkbox checked={hideSkipped} onChange={(e) => setHideSkipped(e.target.checked)}>
-                <span style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
+              <Checkbox checked={hideSkipped} onChange={setHideSkipped}>
+                <Text fontSize={12} type="secondary">
                   {t('dataset.import.hideSkipped')}
-                </span>
+                </Text>
               </Checkbox>
             )}
           </Flexbox>
@@ -291,13 +298,13 @@ const MappingStep = memo<MappingStepProps>(
 
         {/* Data preview table */}
         <Table
-          bordered
           columns={columns}
           dataSource={preview.map((row, i) => ({ ...row, _key: i }))}
           pagination={false}
           rowKey="_key"
           scroll={{ x: scrollX, y: 'calc(95vh - 280px)' }}
           size="small"
+          variant="outlined"
         />
       </Flexbox>
     );

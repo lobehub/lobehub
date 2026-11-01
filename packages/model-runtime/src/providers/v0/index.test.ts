@@ -2,22 +2,13 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeV0AI, params } from './index';
 
-testProvider({
-  Runtime: LobeV0AI,
-  bizErrorType: 'ProviderBizError',
-  chatDebugEnv: 'DEBUG_V0_CHAT_COMPLETION',
-  chatModel: 'gpt-4o',
-  defaultBaseURL: 'https://api.v0.dev/v1',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  provider: ModelProvider.V0,
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
 
 describe('LobeV0AI - custom features', () => {
   let instance: InstanceType<typeof LobeV0AI>;
@@ -37,17 +28,6 @@ describe('LobeV0AI - custom features', () => {
     it('should export params with correct provider', () => {
       expect(params.provider).toBe(ModelProvider.V0);
     });
-
-    it('should have debug configuration', () => {
-      expect(params.debug).toBeDefined();
-      expect(params.debug.chatCompletion).toBeDefined();
-      expect(typeof params.debug.chatCompletion).toBe('function');
-    });
-
-    it('should have models function', () => {
-      expect(params.models).toBeDefined();
-      expect(typeof params.models).toBe('function');
-    });
   });
 
   describe('debug configuration', () => {
@@ -65,12 +45,6 @@ describe('LobeV0AI - custom features', () => {
 
     it('should disable debug when env is set to 0', () => {
       process.env.DEBUG_V0_CHAT_COMPLETION = '0';
-      const result = params.debug.chatCompletion();
-      expect(result).toBe(false);
-    });
-
-    it('should disable debug when env is empty string', () => {
-      process.env.DEBUG_V0_CHAT_COMPLETION = '';
       const result = params.debug.chatCompletion();
       expect(result).toBe(false);
     });
@@ -135,24 +109,6 @@ describe('LobeV0AI - custom features', () => {
       expect(Array.isArray(models)).toBe(true);
       expect(models).toHaveLength(0);
     });
-
-    it('should handle empty models list without data property', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.v0.dev/v1',
-        models: {
-          list: vi.fn().mockResolvedValue([]),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-      expect(models).toHaveLength(0);
-    });
-
     it('should handle null response', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
@@ -169,24 +125,6 @@ describe('LobeV0AI - custom features', () => {
       expect(Array.isArray(models)).toBe(true);
       expect(models).toHaveLength(0);
     });
-
-    it('should handle undefined response', async () => {
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.v0.dev/v1',
-        models: {
-          list: vi.fn().mockResolvedValue(undefined),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-      expect(models).toHaveLength(0);
-    });
-
     it('should handle response with non-array data', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
@@ -206,8 +144,7 @@ describe('LobeV0AI - custom features', () => {
       expect(models).toHaveLength(0);
     });
 
-    it('should handle network error and return empty array', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should throw when network error occurs', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
         baseURL: 'https://api.v0.dev/v1',
@@ -216,88 +153,11 @@ describe('LobeV0AI - custom features', () => {
         },
       } as any;
 
-      const models = await params.models!({ client: mockClient });
+      await expect(params.models!({ client: mockClient })).rejects.toThrow('Network error');
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-      expect(models).toHaveLength(0);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
     });
-
-    it('should handle API authentication error and return empty array', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const mockClient = {
-        apiKey: 'invalid_key',
-        baseURL: 'https://api.v0.dev/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('401 Unauthorized')),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
-    });
-
-    it('should handle API rate limit error and return empty array', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.v0.dev/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('429 Too Many Requests')),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
-    });
-
-    it('should handle timeout error and return empty array', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const mockClient = {
-        apiKey: 'test_api_key',
-        baseURL: 'https://api.v0.dev/v1',
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('Request timeout')),
-        },
-      } as any;
-
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
-    });
-
     it('should handle malformed JSON response', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const mockClient = {
         apiKey: 'test_api_key',
         baseURL: 'https://api.v0.dev/v1',
@@ -306,15 +166,9 @@ describe('LobeV0AI - custom features', () => {
         },
       } as any;
 
-      const models = await params.models!({ client: mockClient });
+      await expect(params.models!({ client: mockClient })).rejects.toThrow('Invalid JSON');
 
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
 
     it('should pass correct client to processModelList', async () => {

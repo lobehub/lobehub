@@ -1,0 +1,95 @@
+'use client';
+
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
+import { Avatar, createStaticStyles, Spin } from '@lobehub/ui';
+import { type CSSProperties } from 'react';
+import { memo } from 'react';
+
+import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
+import NavItem from '@/features/NavPanel/components/NavItem';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
+import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/selectors';
+
+import { usePreservedAgentUrl } from './usePreservedAgentUrl';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  runningBadge: css`
+    pointer-events: none;
+
+    position: absolute;
+    inset-block-end: -3px;
+    inset-inline-end: -3px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid ${cssVar.colorBgContainer};
+    border-radius: 999px;
+
+    color: ${cssVar.colorWarning};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  wrapper: css`
+    position: relative;
+    display: inline-flex;
+  `,
+}));
+
+interface InboxItemProps {
+  className?: string;
+  style?: CSSProperties;
+}
+
+const InboxItem = memo<InboxItemProps>(({ className, style }) => {
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const inboxRouteAgentId = resolveInboxAgentRouteId(inboxAgentId);
+  const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxRouteAgentId));
+
+  const isLoading = useChatStore(
+    inboxAgentId ? operationSelectors.isAgentVisiblyRunning(inboxAgentId) : () => false,
+  );
+  const prefetchAgent = usePrefetchAgent();
+  const inboxAgentTitle = agentDisplayName(inboxMeta, DEFAULT_INBOX_TITLE);
+  const inboxAgentAvatar = inboxMeta.avatar || DEFAULT_INBOX_AVATAR;
+  const inboxUrl = usePreservedAgentUrl(inboxRouteAgentId);
+
+  // Prefetch agent layout chunk and data eagerly since Lobe AI is almost always clicked
+  if (inboxAgentId) prefetchAgent(inboxAgentId);
+
+  const avatarNode = (
+    <Avatar emojiScaleWithBackground avatar={inboxAgentAvatar} shape={'square'} size={24} />
+  );
+
+  return (
+    <WorkspaceLink aria-label={inboxAgentTitle} to={inboxUrl}>
+      <NavItem
+        className={className}
+        style={style}
+        title={inboxAgentTitle}
+        icon={
+          isLoading ? (
+            <span className={styles.wrapper}>
+              {avatarNode}
+              <span className={styles.runningBadge}>
+                <Spin size={9} style={{ color: 'inherit' }} />
+              </span>
+            </span>
+          ) : (
+            avatarNode
+          )
+        }
+      />
+    </WorkspaceLink>
+  );
+});
+
+export default InboxItem;

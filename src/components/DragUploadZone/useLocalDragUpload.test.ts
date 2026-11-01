@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   detectDragContentKind,
-  type DroppedFolder,
-  partitionDroppedItems,
+  type DroppedLocalPath,
+  partitionDroppedItemsAsLocalPaths,
 } from './useLocalDragUpload';
 
 type EntryShape = { isDirectory: boolean; isFile: boolean; name?: string };
@@ -63,7 +63,7 @@ describe('detectDragContentKind', () => {
   });
 });
 
-describe('partitionDroppedItems', () => {
+describe('partitionDroppedItemsAsLocalPaths', () => {
   const originalElectron = (globalThis as any).window?.electron;
 
   beforeEach(() => {
@@ -83,7 +83,7 @@ describe('partitionDroppedItems', () => {
     }
   });
 
-  it('routes top-level folders to the folders bucket with absolute paths', async () => {
+  it('routes top-level folders to the local paths bucket with absolute paths', async () => {
     const folderFile = makeFile('my-folder');
     const items = [
       makeItem({
@@ -92,15 +92,15 @@ describe('partitionDroppedItems', () => {
       }),
     ];
 
-    const result = await partitionDroppedItems(items);
+    const result = await partitionDroppedItemsAsLocalPaths(items);
 
     expect(result.files).toEqual([]);
-    expect(result.folders).toEqual<DroppedFolder[]>([
-      { name: 'my-folder', path: '/abs/my-folder' },
+    expect(result.localPaths).toEqual<DroppedLocalPath[]>([
+      { isDirectory: true, name: 'my-folder', path: '/abs/my-folder' },
     ]);
   });
 
-  it('routes top-level files to the files bucket', async () => {
+  it('routes top-level files to the local paths bucket with absolute paths', async () => {
     const fileA = makeFile('a.txt');
     const fileB = makeFile('b.txt');
     const items = [
@@ -108,15 +108,16 @@ describe('partitionDroppedItems', () => {
       makeItem({ entry: { isDirectory: false, isFile: true }, file: fileB }),
     ];
 
-    const result = await partitionDroppedItems(items);
+    const result = await partitionDroppedItemsAsLocalPaths(items);
 
-    expect(result.folders).toEqual([]);
-    expect(result.files).toHaveLength(2);
-    expect(result.files[0].name).toBe('a.txt');
-    expect(result.files[1].name).toBe('b.txt');
+    expect(result.files).toEqual([]);
+    expect(result.localPaths).toEqual<DroppedLocalPath[]>([
+      { isDirectory: false, name: 'a.txt', path: '/abs/a.txt' },
+      { isDirectory: false, name: 'b.txt', path: '/abs/b.txt' },
+    ]);
   });
 
-  it('preserves drop order across mixed folders and files', async () => {
+  it('preserves drop order across mixed local paths', async () => {
     const folderFile = makeFile('docs');
     const file = makeFile('readme.md');
     const items = [
@@ -127,10 +128,13 @@ describe('partitionDroppedItems', () => {
       makeItem({ entry: { isDirectory: false, isFile: true }, file }),
     ];
 
-    const result = await partitionDroppedItems(items);
+    const result = await partitionDroppedItemsAsLocalPaths(items);
 
-    expect(result.folders).toEqual<DroppedFolder[]>([{ name: 'docs', path: '/abs/docs' }]);
-    expect(result.files.map((f) => f.name)).toEqual(['readme.md']);
+    expect(result.files).toEqual([]);
+    expect(result.localPaths).toEqual<DroppedLocalPath[]>([
+      { isDirectory: true, name: 'docs', path: '/abs/docs' },
+      { isDirectory: false, name: 'readme.md', path: '/abs/readme.md' },
+    ]);
   });
 
   it('falls back to flattening a folder when Electron path resolution fails', async () => {
@@ -160,18 +164,30 @@ describe('partitionDroppedItems', () => {
       }),
     ];
 
-    const result = await partitionDroppedItems(items);
+    const result = await partitionDroppedItemsAsLocalPaths(items);
 
-    expect(result.folders).toEqual([]);
+    expect(result.localPaths).toEqual([]);
     expect(result.files.map((f) => f.name)).toEqual(['child.txt']);
+  });
+
+  it('falls back to uploading a file when Electron path resolution fails', async () => {
+    (globalThis as any).window.electron = undefined;
+
+    const file = makeFile('fallback.txt');
+    const items = [makeItem({ entry: { isDirectory: false, isFile: true }, file })];
+
+    const result = await partitionDroppedItemsAsLocalPaths(items);
+
+    expect(result.localPaths).toEqual([]);
+    expect(result.files.map((f) => f.name)).toEqual(['fallback.txt']);
   });
 
   it('skips items whose kind is not "file"', async () => {
     const items = [makeItem({ kind: 'string', entry: { isDirectory: true, isFile: false } })];
 
-    const result = await partitionDroppedItems(items);
+    const result = await partitionDroppedItemsAsLocalPaths(items);
 
-    expect(result.folders).toEqual([]);
+    expect(result.localPaths).toEqual([]);
     expect(result.files).toEqual([]);
   });
 });

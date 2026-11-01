@@ -165,6 +165,16 @@ export const iconBtn = style({
   },
 });
 
+export const captureBtn = style({
+  height: 32,
+  width: 32,
+});
+
+export const captureBtnActive = style({
+  background: v(vars.colorFillSecondary),
+  color: v(vars.colorText),
+});
+
 export const multiSelectionSummary = style({
   borderBottom: `1px solid ${v(vars.colorBorderSecondary)}`,
   display: 'flex',

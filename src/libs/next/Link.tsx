@@ -4,7 +4,7 @@
  */
 
 import { type AnchorHTMLAttributes } from 'react';
-import { Link as RRLink } from 'react-router-dom';
+import { Link as RRLink } from 'react-router';
 
 import { authSpaRoutes, nextjsOnlyRoutes } from './nextjsOnlyRoutes';
 
@@ -29,8 +29,8 @@ const Link = ({
   ref,
   href,
   replace,
-  prefetch,
-  scroll,
+  prefetch: _prefetch,
+  scroll: _scroll,
   children,
   ...rest
 }: LinkProps & { ref?: React.RefObject<HTMLAnchorElement | null> }) => {

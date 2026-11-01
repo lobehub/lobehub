@@ -1,10 +1,14 @@
 'use client';
 
+import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import { Flexbox, Markdown, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useConversationStore } from '@/features/Conversation';
+import ToolAuthAlert from '@/features/Conversation/AgentWelcome/ToolAuthAlert';
+import { contextSelectors } from '@/features/Conversation/store';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentStore } from '@/store/agent';
@@ -14,7 +18,6 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import OpeningQuestions from './OpeningQuestions';
-import ToolAuthAlert from './ToolAuthAlert';
 
 const InboxWelcome = memo(() => {
   const { t } = useTranslation(['welcome', 'chat']);
@@ -22,12 +25,17 @@ const InboxWelcome = memo(() => {
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const fontSize = useUserStore(userGeneralSettingsSelectors.fontSize);
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  const [groupMeta] = useAgentGroupStore((s) => [agentGroupSelectors.currentGroupMeta(s)]);
+  const groupId = useConversationStore(contextSelectors.groupId);
+  const [groupMeta] = useAgentGroupStore((s) => [
+    agentGroupSelectors.getGroupMeta(groupId ?? '')(s),
+  ]);
 
   // Use group config for opening message and questions
-  const groupOpeningMessage = useAgentGroupStore(agentGroupSelectors.currentGroupOpeningMessage);
+  const groupOpeningMessage = useAgentGroupStore((s) =>
+    agentGroupSelectors.getGroupOpeningMessage(groupId ?? '')(s),
+  );
   const groupOpeningQuestions = useAgentGroupStore(
-    agentGroupSelectors.currentGroupOpeningQuestions,
+    (s) => agentGroupSelectors.getGroupOpeningQuestions(groupId ?? '')(s),
     isEqual,
   );
 
@@ -68,7 +76,9 @@ const InboxWelcome = memo(() => {
         </Text>
         <Flexbox width={'min(100%, 640px)'}>
           <Markdown fontSize={fontSize} variant={'chat'}>
-            {isInbox ? t('guide.defaultMessageWithoutCreate', { appName: 'Lobe AI' }) : message}
+            {isInbox
+              ? t('guide.defaultMessageWithoutCreate', { appName: DEFAULT_INBOX_TITLE })
+              : message}
           </Markdown>
         </Flexbox>
         {openingQuestions.length > 0 && (

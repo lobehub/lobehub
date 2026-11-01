@@ -1,11 +1,16 @@
-import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import {
+  getComposioAppByIdentifier,
+  getLobehubSkillProviderById,
+  OFFICIAL_URL,
+} from '@lobechat/const';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
+import { buildRequestCredsInputResult } from '../requestCredsInput';
 import type {
-  ConnectKlavisServiceParams,
+  ConnectComposioServiceParams,
   InitiateOAuthConnectParams,
   InjectCredsToSandboxParams,
-  SaveCredsParams,
+  RequestCredsInputParams,
 } from '../types';
 import { LOBEHUB_OAUTH_PROVIDER_LIST } from '../types';
 
@@ -55,17 +60,6 @@ export interface ICredsService {
   listCreds: () => Promise<{
     data?: Array<{ id: number; key: string }>;
   }>;
-
-  /**
-   * Save KV credential
-   */
-  saveKVCred: (params: {
-    description?: string;
-    key: string;
-    name: string;
-    type: 'kv-env' | 'kv-header';
-    values: Record<string, string>;
-  }) => Promise<{ id: number }>;
 }
 
 /**
@@ -89,21 +83,21 @@ export class CredsExecutionRuntime {
   }
 
   /**
-   * Connect a Klavis integration service
-   * In server-side context, Klavis OAuth requires browser interaction,
+   * Connect a Composio integration service
+   * In server-side context, Composio OAuth requires browser interaction,
    * so we return a message guiding the user to connect via the UI.
    */
-  async connectKlavisService(
-    args: ConnectKlavisServiceParams,
+  async connectComposioService(
+    args: ConnectComposioServiceParams,
   ): Promise<BuiltinServerRuntimeOutput> {
     const { service } = args;
 
-    const serverType = getKlavisServerByServerIdentifier(service);
+    const serverType = getComposioAppByIdentifier(service);
     if (!serverType) {
       return {
-        content: `Unknown Klavis service: "${service}". Check the available Klavis services list in the credentials context.`,
+        content: `Unknown Composio service: "${service}". Check the available Composio services list in the credentials context.`,
         error: {
-          message: `Unknown Klavis service: ${service}`,
+          message: `Unknown Composio service: ${service}`,
           type: 'UnknownService',
         },
         success: false,
@@ -113,7 +107,7 @@ export class CredsExecutionRuntime {
     // Server-side cannot open OAuth popups or access browser stores.
     // Guide the user to connect via the frontend UI.
     return {
-      content: `To connect ${serverType.label}, please use the LobeHub app UI to initiate the Klavis OAuth flow. Server-side execution cannot open OAuth popups. Go to Settings or the onboarding page to connect ${serverType.label}.`,
+      content: `To connect ${serverType.label}, please use the LobeHub app UI to initiate the Composio OAuth flow. Server-side execution cannot open OAuth popups. Go to Settings or the onboarding page to connect ${serverType.label}.`,
       state: {
         connected: false,
         identifier: service,
@@ -164,7 +158,7 @@ export class CredsExecutionRuntime {
       // Get the authorization URL
       // Note: In background execution, we cannot use window.location.origin
       // Normalize APP_URL by removing trailing slash to avoid double-slash in redirectUri
-      const appUrl = (process.env.APP_URL || 'https://app.lobehub.com').replace(/\/+$/, '');
+      const appUrl = (process.env.APP_URL || OFFICIAL_URL).replace(/\/+$/, '');
       const redirectUri = `${appUrl}/oauth/callback/success?provider=${provider}`;
       const response = await this.credsService.getOAuthAuthorizeUrl(provider, redirectUri);
 
@@ -274,46 +268,20 @@ export class CredsExecutionRuntime {
   }
 
   /**
-   * Save new credentials
+   * Runs after the user approves the secure form. The form already wrote the
+   * values to the credential store, so this only confirms the key exists and
+   * reports it — the values never pass through the agent run.
    */
-  async saveCreds(args: SaveCredsParams): Promise<BuiltinServerRuntimeOutput> {
+  async requestCredsInput(args: RequestCredsInputParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      // Only support kv-env and kv-header types in server runtime
-      // File upload requires frontend interaction
-      if (args.type !== 'kv-env' && args.type !== 'kv-header') {
-        return {
-          content: `Credential type "${args.type}" is not supported in background execution. Only kv-env and kv-header types are supported.`,
-          error: {
-            message: `Unsupported credential type: ${args.type}`,
-            type: 'UnsupportedCredentialType',
-          },
-          success: false,
-        };
-      }
-
-      await this.credsService.saveKVCred({
-        description: args.description,
-        key: args.key,
-        name: args.name,
-        type: args.type,
-        values: args.values,
-      });
-
-      return {
-        content: `Credential "${args.name}" saved successfully with key "${args.key}"`,
-        state: {
-          key: args.key,
-          message: `Credential "${args.name}" saved successfully`,
-          success: true,
-        },
-        success: true,
-      };
+      const { data } = await this.credsService.listCreds();
+      return buildRequestCredsInputResult(args, !!data?.some((cred) => cred.key === args.key));
     } catch (error) {
       return {
-        content: `Failed to save credential: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        content: `Failed to check credential "${args.key}": ${error instanceof Error ? error.message : 'Unknown error'}`,
         error: {
-          message: error instanceof Error ? error.message : 'Failed to save credential',
-          type: 'SaveCredentialFailed',
+          message: error instanceof Error ? error.message : 'Failed to check credential',
+          type: 'CheckCredentialFailed',
         },
         success: false,
       };

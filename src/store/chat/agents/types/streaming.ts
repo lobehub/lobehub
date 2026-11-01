@@ -2,9 +2,9 @@ import {
   type ChatImageItem,
   type ChatToolPayload,
   type GroundingSearch,
-  type MessageContentPart,
   type MessageToolCall,
   type ModelPerformance,
+  type ModelReasoning,
   type ModelUsage,
 } from '@lobechat/types';
 
@@ -20,15 +20,9 @@ export interface StreamingContext {
 }
 
 /**
- * Reasoning state
+ * Reasoning state — same shape as the persisted message reasoning metadata
  */
-export interface ReasoningState {
-  content?: string;
-  duration?: number;
-  isMultimodal?: boolean;
-  signature?: string;
-  tempDisplayContent?: MessageContentPart[];
-}
+export type ReasoningState = ModelReasoning;
 
 /**
  * Grounding/search data - extends GroundingSearch for compatibility
@@ -71,7 +65,7 @@ export interface StreamingCallbacks {
 export interface FinishData {
   grounding?: GroundingData;
   observationId?: string | null;
-  reasoning?: { content?: string; signature?: string };
+  reasoning?: ModelReasoning;
   speed?: ModelPerformance;
   toolCalls?: MessageToolCall[];
   traceId?: string | null;

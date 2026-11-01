@@ -45,8 +45,11 @@ export const HotkeyEnum = {
   DeleteAndRegenerateMessage: 'deleteAndRegenerateMessage',
   DeleteLastMessage: 'deleteLastMessage',
   EditMessage: 'editMessage',
+  FindInTopic: 'findInTopic',
   NavigateToChat: 'navigateToChat',
+  NextTab: 'nextTab',
   OpenChatSettings: 'openChatSettings',
+  PrevTab: 'prevTab',
   OpenHotkeyHelper: 'openHotkeyHelper',
   RegenerateMessage: 'regenerateMessage',
   SaveDocument: 'saveDocument',
@@ -54,9 +57,11 @@ export const HotkeyEnum = {
   Search: 'search',
   ShowApp: 'showApp',
   SwitchAgent: 'switchAgent',
+  SwitchTab: 'switchTab',
+  ToggleFavorite: 'toggleFavorite',
   ToggleLeftPanel: 'toggleLeftPanel',
   ToggleRightPanel: 'toggleRightPanel',
-  ToggleZenMode: 'toggleZenMode',
+  ToggleTerminalPanel: 'toggleTerminalPanel',
 } as const satisfies Record<string, HotkeyId>;
 
 export const HotkeyGroupEnum = {
@@ -95,8 +100,29 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
   },
   {
     group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.SwitchTab,
+    keys: combineKeys([KeyEnum.Mod, KeyEnum.Number]),
+    nonEditable: true,
+    scopes: [HotkeyScopeEnum.Global],
+  },
+  {
+    group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.NextTab,
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Tab]),
+    nonEditable: true,
+    scopes: [HotkeyScopeEnum.Global],
+  },
+  {
+    group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.PrevTab,
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Shift, KeyEnum.Tab]),
+    nonEditable: true,
+    scopes: [HotkeyScopeEnum.Global],
+  },
+  {
+    group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.NavigateToChat,
-    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Backquote]),
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Shift, KeyEnum.Backquote]),
     scopes: [HotkeyScopeEnum.Global],
   },
   {
@@ -117,11 +143,23 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Shift, KeyEnum.QuestionMark]),
     scopes: [HotkeyScopeEnum.Global],
   },
-  // Chat
   {
     group: HotkeyGroupEnum.Essential,
-    id: HotkeyEnum.ToggleZenMode,
-    keys: combineKeys([KeyEnum.Mod, KeyEnum.Backslash]),
+    id: HotkeyEnum.ToggleFavorite,
+    keys: combineKeys([KeyEnum.Alt, 'f']),
+    scopes: [HotkeyScopeEnum.Global],
+  },
+  // Chat
+  {
+    group: HotkeyGroupEnum.Conversation,
+    id: HotkeyEnum.FindInTopic,
+    keys: combineKeys([KeyEnum.Mod, 'f']),
+    scopes: [HotkeyScopeEnum.Chat],
+  },
+  {
+    group: HotkeyGroupEnum.Conversation,
+    id: HotkeyEnum.ToggleTerminalPanel,
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Backquote]),
     scopes: [HotkeyScopeEnum.Chat],
   },
   {

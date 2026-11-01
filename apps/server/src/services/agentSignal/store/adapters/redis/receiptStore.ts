@@ -1,7 +1,10 @@
 import { LayersEnum } from '@lobechat/types';
 
-import { AGENT_SIGNAL_KEYS } from '../../../constants';
-import type { AgentSignalReceipt } from '../../../services/receiptService';
+import { AGENT_SIGNAL_DEFAULTS, AGENT_SIGNAL_KEYS } from '../../../constants';
+import type {
+  AgentSignalReceipt,
+  AgentSignalReceiptMetadata,
+} from '../../../services/receiptService';
 import type { AgentSignalReceiptStore } from '../../types';
 import { getRedisClient, readHash, trySetNx, writeHash } from './shared';
 
@@ -34,7 +37,6 @@ const parseReceiptTarget = (value?: string): AgentSignalReceipt['target'] | unde
     const target = JSON.parse(value) as Record<string, unknown>;
 
     if (target.type !== 'memory' && target.type !== 'skill') return;
-    if (typeof target.title !== 'string' || target.title.length === 0) return;
 
     return {
       ...(typeof target.agentDocumentId === 'string' && target.agentDocumentId.length > 0
@@ -52,10 +54,18 @@ const parseReceiptTarget = (value?: string): AgentSignalReceipt['target'] | unde
       ...(target.type === 'memory' && isMemoryLayer(target.memoryLayer)
         ? { memoryLayer: target.memoryLayer }
         : {}),
+      ...(target.type === 'memory' &&
+      (target.operation === 'create' ||
+        target.operation === 'remove' ||
+        target.operation === 'update')
+        ? { operation: target.operation }
+        : {}),
       ...(typeof target.summary === 'string' && target.summary.length > 0
         ? { summary: target.summary }
         : {}),
-      title: target.title,
+      ...(typeof target.title === 'string' && target.title.length > 0
+        ? { title: target.title }
+        : {}),
       type: target.type,
     };
   } catch {
@@ -119,6 +129,17 @@ const fromReceiptHash = (payload: Record<string, string>): AgentSignalReceipt | 
   };
 };
 
+const readReceipt = async (receiptId: string): Promise<AgentSignalReceipt | undefined> => {
+  try {
+    const payload = await readHash(AGENT_SIGNAL_KEYS.receipt(receiptId));
+
+    return payload ? fromReceiptHash(payload) : undefined;
+  } catch (error) {
+    console.error('[AgentSignal] Failed to read receipt payload:', { error, receiptId });
+    return undefined;
+  }
+};
+
 /** Appends one deduped receipt payload and its scoped topic index entry. */
 export const appendReceipt: AgentSignalReceiptStore['appendReceipt'] = async (
   receipt,
@@ -138,6 +159,59 @@ export const appendReceipt: AgentSignalReceiptStore['appendReceipt'] = async (
   await redis.expire(indexKey, ttlSeconds);
 
   return true;
+};
+
+/**
+ * Reads one persisted receipt payload by id.
+ *
+ * Use when:
+ * - A server-side follow-up needs the original receipt metadata
+ * - The rollback flow must validate one specific stored receipt
+ *
+ * Expects:
+ * - The receipt payload still exists in Redis
+ *
+ * Returns:
+ * - The parsed receipt, or `undefined` when it is missing or unreadable
+ */
+export const getReceipt: NonNullable<AgentSignalReceiptStore['getReceipt']> = async (receiptId) => {
+  return readReceipt(receiptId);
+};
+
+/**
+ * Updates the metadata envelope for one persisted receipt payload.
+ *
+ * Use when:
+ * - A follow-up server action needs to persist a new terminal receipt status
+ * - The UI should reflect the stored receipt state after refresh or remount
+ *
+ * Expects:
+ * - The target receipt still exists in Redis
+ *
+ * Returns:
+ * - The updated receipt payload, or `undefined` when the receipt no longer exists
+ */
+export const updateReceiptMetadata: NonNullable<
+  AgentSignalReceiptStore['updateReceiptMetadata']
+> = async (receiptId, metadata) => {
+  const redis = getRedisClient();
+  if (!redis) return undefined;
+
+  const existing = await readReceipt(receiptId);
+  if (!existing) return undefined;
+
+  const nextMetadata: AgentSignalReceiptMetadata | undefined =
+    Object.keys(metadata).length > 0 ? metadata : undefined;
+
+  await writeHash(
+    AGENT_SIGNAL_KEYS.receipt(receiptId),
+    nextMetadata ? { metadata: JSON.stringify(nextMetadata) } : { metadata: '' },
+    AGENT_SIGNAL_DEFAULTS.receiptTtlSeconds,
+  );
+
+  return nextMetadata
+    ? { ...existing, metadata: nextMetadata }
+    : { ...existing, metadata: undefined };
 };
 
 /**
@@ -200,5 +274,7 @@ export const listReceipts: AgentSignalReceiptStore['listReceipts'] = async (inpu
 /** Redis-backed Agent Signal receipt store. */
 export const redisReceiptStore: AgentSignalReceiptStore = {
   appendReceipt,
+  getReceipt,
   listReceipts,
+  updateReceiptMetadata,
 };

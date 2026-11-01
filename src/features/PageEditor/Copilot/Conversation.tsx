@@ -19,8 +19,10 @@ import {
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
+import { usePageLockedByOther } from '../usePageLockedByOther';
 import AgentSelectorAction from './AgentSelector/AgentSelectorAction';
 import CopilotModelSelect from './CopilotModelSelect';
+import PageAgentUnavailableAlert from './PageAgentUnavailableAlert';
 import CopilotToolbar from './Toolbar';
 import Welcome from './Welcome';
 
@@ -41,7 +43,7 @@ const Conversation = memo(() => {
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ model, provider });
+  const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
 
   const handleAgentChange = useCallback(
     (id: string) => {
@@ -65,6 +67,10 @@ const Conversation = memo(() => {
 
   const modelSelector = useMemo(() => <CopilotModelSelect />, []);
 
+  // Another member holds the page edit lock → the agent's edits can't be saved,
+  // so block sending until the lock clears. The body LockedAlert explains why.
+  const lockedByOther = usePageLockedByOther();
+
   return (
     <DragUploadZone
       style={{ flex: 1, height: '100%', minWidth: 300 }}
@@ -75,9 +81,11 @@ const Conversation = memo(() => {
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>
           <ChatList welcome={<Welcome />} />
         </Flexbox>
+        <PageAgentUnavailableAlert />
         <ChatInput
           actionBarStyle={COMPACT_ACTION_BAR_STYLE}
           allowExpand={false}
+          disableSend={lockedByOther}
           leftActions={EMPTY_LEFT_ACTIONS}
           leftContent={leftContent}
           sendAreaPrefix={modelSelector}

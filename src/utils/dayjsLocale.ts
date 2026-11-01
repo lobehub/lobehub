@@ -4,6 +4,8 @@
 const DAYJS_LOCALE_ALIASES: Record<string, string> = {
   'en-us': 'en',
   'zh': 'zh-cn',
+  'zh-cn': 'zh-cn',
+  'zh-tw': 'zh-tw',
 };
 
 interface DayjsLocaleModule {

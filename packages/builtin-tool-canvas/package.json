@@ -1,0 +1,24 @@
+{
+  "name": "@lobechat/builtin-tool-canvas",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/canvas": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^6.0.4",
+    "@stylexjs/stylex": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

@@ -1,21 +1,15 @@
 'use client';
 
-import { type DraggablePanelProps } from '@lobehub/ui';
-import { DraggablePanel } from '@lobehub/ui';
-import { createStaticStyles, useResponsive } from 'antd-style';
-import isEqual from 'fast-deep-equal';
+import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui';
+import { createStaticStyles, useResponsive } from '@lobehub/ui';
 import { type PropsWithChildren } from 'react';
 import { Activity, memo, useState } from 'react';
 
-import {
-  CHAT_PORTAL_MAX_WIDTH,
-  CHAT_PORTAL_TOOL_UI_WIDTH,
-  CHAT_PORTAL_WIDTH,
-} from '@/const/layoutTokens';
+import { useTopicDrawerPortalHostViewType } from '@/features/AgentTasks/hooks/useTopicDrawerArtifactPortal';
+import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, portalThreadSelectors } from '@/store/chat/selectors';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
@@ -39,17 +33,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const PortalPanel = memo(({ children }: PropsWithChildren) => {
-  const [showPortal, showToolUI, showArtifactUI, showThread] = useChatStore((s) => [
-    chatPortalSelectors.showPortal(s),
-    chatPortalSelectors.showPluginUI(s),
-    chatPortalSelectors.showArtifactUI(s),
+  const [showPortal, showThread] = useChatStore((s) => [
+    chatPortalSelectors.showStandalonePortal(s),
     portalThreadSelectors.showThread(s),
   ]);
+  const currentViewType = useTopicDrawerPortalHostViewType();
 
-  const [portalWidth, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.portalWidth(s),
-    s.updateSystemStatus,
-  ]);
+  // legacy threads live outside the view stack, so they surface as an empty stack
+  const viewType = currentViewType ?? (showThread ? PortalViewType.Thread : null);
+
+  const { maxWidth, minWidth, updateWidth, width: portalWidth } = usePortalPanelWidth(viewType);
 
   const [tmpWidth, setWidth] = useState(portalWidth);
   if (tmpWidth !== portalWidth) setWidth(portalWidth);
@@ -59,11 +52,10 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
   const handleSizeChange: DraggablePanelProps['onSizeChange'] = (_, size) => {
     if (!size) return;
     const nextWidth = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
-    if (!nextWidth) return;
+    if (!nextWidth || nextWidth === portalWidth) return;
 
-    if (isEqual(nextWidth, portalWidth)) return;
     setWidth(nextWidth);
-    updateSystemStatus({ portalWidth: nextWidth });
+    updateWidth(nextWidth);
   };
 
   return (
@@ -72,7 +64,8 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
       defaultSize={{ width: tmpWidth }}
       expand={showPortal}
       expandable={false}
-      maxWidth={CHAT_PORTAL_MAX_WIDTH}
+      maxWidth={maxWidth}
+      minWidth={minWidth}
       mode={lg ? 'fixed' : 'float'}
       placement={'right'}
       showHandleWhenCollapsed={false}
@@ -81,9 +74,6 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
       classNames={{
         content: styles.content,
       }}
-      minWidth={
-        showArtifactUI || showToolUI || showThread ? CHAT_PORTAL_TOOL_UI_WIDTH : CHAT_PORTAL_WIDTH
-      }
       onSizeChange={handleSizeChange}
     >
       <Activity mode={showPortal ? 'visible' : 'hidden'} name="AgentPortal">

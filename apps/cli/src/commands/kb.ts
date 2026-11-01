@@ -1,14 +1,14 @@
-import crypto from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { getAuthInfo } from '../api/http';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { uploadLocalFile } from '../utils/uploadLocalFile';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
+import { resolveAppUrlBuilder } from './task/url';
 
 function formatFileType(fileType: string): string {
   if (!fileType) return '';
@@ -46,7 +46,12 @@ export function registerKbCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.knowledgeBase(item.id),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -113,7 +118,11 @@ export function registerKbCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson({ ...result, files: allItems }, fields);
+        const toUrl = await resolveUrlBuilder(client);
+        const files = withUrls(allItems, toUrl, (item) =>
+          resourcePath.file({ id: item.id, knowledgeBaseId: id }),
+        );
+        outputJson(withUrl({ ...result, files }, toUrl, resourcePath.knowledgeBase(id)), fields);
         return;
       }
 
@@ -152,6 +161,7 @@ export function registerKbCommand(program: Command) {
     .option('--avatar <url>', 'Avatar URL')
     .action(async (options: { avatar?: string; description?: string; name: string }) => {
       const client = await getTrpcClient();
+      const buildUrl = await resolveAppUrlBuilder(client);
 
       const input: { avatar?: string; description?: string; name: string } = {
         name: options.name,
@@ -160,7 +170,9 @@ export function registerKbCommand(program: Command) {
       if (options.avatar) input.avatar = options.avatar;
 
       const id = await client.knowledgeBase.createKnowledgeBase.mutate(input);
+      const url = buildUrl(`/resource/library/${encodeURIComponent(String(id))}`);
       console.log(`${pc.green('✓')} Created knowledge base ${pc.bold(String(id))}`);
+      console.log(`${pc.bold('knowledge base')}: ${url}`);
     });
 
   // ── edit ──────────────────────────────────────────────
@@ -286,15 +298,17 @@ export function registerKbCommand(program: Command) {
         options: { content?: string; parent?: string; title: string },
       ) => {
         const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
         const result = await client.document.createDocument.mutate({
           content: options.content,
-          editorData: JSON.stringify({}),
           fileType: 'custom/document',
           knowledgeBaseId,
           parentId: options.parent,
           title: options.title,
         });
+        const url = buildUrl(resourcePath.document({ id: (result as any).id, knowledgeBaseId })!);
         console.log(`${pc.green('✓')} Created document ${pc.bold((result as any).id)}`);
+        console.log(`${pc.bold('document')}: ${url}`);
       },
     );
 
@@ -324,81 +338,22 @@ export function registerKbCommand(program: Command) {
     .description('Upload a file to a knowledge base')
     .option('--parent <parentId>', 'Parent folder ID')
     .action(async (knowledgeBaseId: string, filePath: string, options: { parent?: string }) => {
-      const resolved = path.resolve(filePath);
-      if (!fs.existsSync(resolved)) {
-        log.error(`File not found: ${resolved}`);
-        process.exit(1);
-      }
-
-      const stat = fs.statSync(resolved);
-      const fileName = path.basename(resolved);
-      const fileBuffer = fs.readFileSync(resolved);
-
-      // Compute SHA-256 hash
-      const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-
-      // Detect MIME type from extension
-      const ext = path.extname(fileName).toLowerCase().slice(1);
-      const mimeMap: Record<string, string> = {
-        csv: 'text/csv',
-        doc: 'application/msword',
-        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        gif: 'image/gif',
-        jpeg: 'image/jpeg',
-        jpg: 'image/jpeg',
-        json: 'application/json',
-        md: 'text/markdown',
-        mp3: 'audio/mpeg',
-        mp4: 'video/mp4',
-        pdf: 'application/pdf',
-        png: 'image/png',
-        pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        svg: 'image/svg+xml',
-        txt: 'text/plain',
-        webp: 'image/webp',
-        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      };
-      const fileType = mimeMap[ext] || 'application/octet-stream';
-
       const client = await getTrpcClient();
-      const { serverUrl, headers } = await getAuthInfo();
 
-      // 1. Get presigned URL
-      const date = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-      const pathname = `files/${date}/${hash}.${ext}`;
-      const presigned = await client.upload.createS3PreSignedUrl.mutate({ pathname });
-
-      // 2. Upload to S3
-      const presignedUrl = typeof presigned === 'string' ? presigned : (presigned as any).url;
-      const uploadRes = await fetch(presignedUrl, {
-        body: fileBuffer,
-        headers: { 'Content-Type': fileType },
-        method: 'PUT',
-      });
-      if (!uploadRes.ok) {
-        log.error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+      let result;
+      try {
+        result = await uploadLocalFile(client, filePath, {
+          knowledgeBaseId,
+          parentId: options.parent,
+        });
+      } catch (error) {
+        log.error(error instanceof Error ? error.message : String(error));
         process.exit(1);
+        return;
       }
-
-      // 3. Create file record
-      const result = await client.file.createFile.mutate({
-        fileType,
-        hash,
-        knowledgeBaseId,
-        metadata: {
-          date,
-          dirname: '',
-          filename: fileName,
-          path: pathname,
-        },
-        name: fileName,
-        parentId: options.parent,
-        size: stat.size,
-        url: pathname,
-      });
 
       console.log(
-        `${pc.green('✓')} Uploaded ${pc.bold(fileName)} → ${pc.bold((result as any).id)}`,
+        `${pc.green('✓')} Uploaded ${pc.bold(path.basename(filePath))} → ${pc.bold((result as any).id)}`,
       );
     });
 }

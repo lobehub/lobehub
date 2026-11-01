@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '../types';
 
 // ref: https://docs.z.ai/devpack/overview
 const GLMCodingPlan: ModelProviderCard = {

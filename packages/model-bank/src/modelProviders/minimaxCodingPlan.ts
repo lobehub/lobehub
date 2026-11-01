@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '../types';
 
 // ref: https://platform.minimax.io/docs/coding-plan/intro
 const MinimaxCodingPlan: ModelProviderCard = {

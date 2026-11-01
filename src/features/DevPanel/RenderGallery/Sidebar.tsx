@@ -1,18 +1,14 @@
 'use client';
 
-import { Menu, type MenuProps, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { type DropdownItem, List, type ListItem, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
+import { memo, useMemo } from 'react';
+
+import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  header: css`
-    padding-block: 16px 12px;
-    padding-inline: 20px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
   menu: css`
-    padding-block: 8px;
-    border-inline-end: none !important;
+    padding-block: 4px;
   `,
   sidebar: css`
     display: flex;
@@ -32,28 +28,37 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface SidebarProps {
-  items: MenuProps['items'];
+  items: DropdownItem[];
   onSelect: (key: string) => void;
   selectedKey?: string;
 }
 
-const Sidebar = memo<SidebarProps>(({ items, selectedKey, onSelect }) => (
-  <aside className={styles.sidebar}>
-    <div className={styles.header}>
-      <Text fontSize={13} type={'secondary'} weight={600}>
-        Builtin Tool Renders
-      </Text>
-    </div>
-    <div className={styles.scroll}>
-      <Menu
-        className={styles.menu}
-        items={items}
-        mode={'inline'}
-        selectedKeys={selectedKey ? [selectedKey] : []}
-        onClick={({ key }) => onSelect(key)}
-      />
-    </div>
-  </aside>
-));
+const Sidebar = memo<SidebarProps>(({ items, selectedKey, onSelect }) => {
+  const listItems = useMemo<ListItem[]>(
+    () =>
+      (items ?? []).flatMap((item) =>
+        item && 'label' in item && item.key != null ? [{ key: item.key, label: item.label }] : [],
+      ),
+    [items],
+  );
+
+  return (
+    <aside className={styles.sidebar}>
+      <div className={devDockPanelStyles.paneHeader}>
+        <Text fontSize={13} type={'secondary'} weight={600}>
+          Builtin Tool Renders
+        </Text>
+      </div>
+      <div className={styles.scroll}>
+        <List
+          activeKey={selectedKey ?? null}
+          className={styles.menu}
+          items={listItems}
+          onClick={({ key }) => onSelect(String(key))}
+        />
+      </div>
+    </aside>
+  );
+});
 
 export default Sidebar;

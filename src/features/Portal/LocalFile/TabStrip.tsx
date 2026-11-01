@@ -1,10 +1,15 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { ContextMenuTrigger, type GenericItemType, Icon } from '@lobehub/ui';
-import { confirmModal, ScrollArea } from '@lobehub/ui/base-ui';
+import {
+  confirmModal,
+  ContextMenuTrigger,
+  createStaticStyles,
+  type DropdownItem,
+  Icon,
+  ScrollArea,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +18,7 @@ import FileIcon from '@/components/FileIcon';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { getLocalFileTabId } from '@/store/chat/slices/portal/helpers';
+import { getLocalFileTabId, isRemoteLocalFile } from '@/store/chat/slices/portal/helpers';
 
 const SKILL_PATH_RE = /\/\.(?:agents|claude)\/skills\/([^/]+)\/SKILL\.md$/;
 
@@ -131,7 +136,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const SCROLL_AREA_STYLE = {
   background: 'transparent',
   borderRadius: 0,
-  flex: 1,
+  // Hug the tabs so the portal header's `…` sits right after the last one;
+  // still shrinks (and scrolls) once the tabs outgrow the header.
+  flex: '0 1 auto',
   minWidth: 0,
 };
 
@@ -161,8 +168,9 @@ const TabStrip = memo(() => {
   const closeRightLocalFileTabs = useChatStore((s) => s.closeRightLocalFileTabs);
 
   const confirmClose = useCallback(
-    (filePath: string, perform: () => void) => {
-      if (!(filePath in dirtyContents)) {
+    (id: string, filePath: string, perform: () => void) => {
+      // Edit buffers are keyed by tab identity, not bare file path.
+      if (!(id in dirtyContents)) {
         perform();
         return;
       }
@@ -187,7 +195,7 @@ const TabStrip = memo(() => {
   );
 
   const getContextMenuItems = useCallback(
-    (id: string, filePath: string, index: number): GenericItemType[] => [
+    (id: string, filePath: string, index: number): DropdownItem[] => [
       {
         disabled: index === 0,
         key: 'closeLeft',
@@ -206,7 +214,9 @@ const TabStrip = memo(() => {
         label: t('workingPanel.localFile.closeOther'),
         onClick: () => closeOtherLocalFileTabs(id),
       },
-      ...(isDesktop
+      // Remote device and sandbox paths cannot be revealed in the local filesystem.
+      ...(isDesktop &&
+      !isRemoteLocalFile(openLocalFiles.find((file) => getLocalFileTabId(file) === id))
         ? [
             {
               key: 'showInSystem',
@@ -222,7 +232,7 @@ const TabStrip = memo(() => {
         onClick: () => {
           const filePath =
             openLocalFiles.find((file) => getLocalFileTabId(file) === id)?.filePath ?? id;
-          confirmClose(filePath, () => closeLocalFileTab(id));
+          confirmClose(id, filePath, () => closeLocalFileTab(id));
         },
       },
     ],
@@ -281,11 +291,11 @@ const TabStrip = memo(() => {
               <button
                 aria-label={`Close ${filename}`}
                 className={styles.tabClose}
-                data-dirty={filePath in dirtyContents ? 'true' : 'false'}
+                data-dirty={id in dirtyContents ? 'true' : 'false'}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  confirmClose(filePath, () => closeLocalFileTab(id));
+                  confirmClose(id, filePath, () => closeLocalFileTab(id));
                 }}
               >
                 <span className={'cm-tab-close-x'}>

@@ -19,28 +19,36 @@ import { cleanupTestUser, createTestAgent, createTestContext, createTestUser } f
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 // Mock FileService to avoid S3 dependency
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    createGlobalFile: vi.fn().mockResolvedValue({ id: 'mock-global-file-id' }),
-    createFileRecord: vi.fn().mockResolvedValue({ fileId: 'mock-file-id', url: '/f/mock-file-id' }),
-    downloadFileToLocal: vi.fn(),
-    getFileContent: vi.fn(),
-    uploadBuffer: vi.fn().mockResolvedValue({ key: 'mock-key' }),
-    uploadMedia: vi.fn().mockResolvedValue({ key: 'mock-key' }),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      createGlobalFile: vi.fn().mockResolvedValue({ id: 'mock-global-file-id' }),
+      createFileRecord: vi
+        .fn()
+        .mockResolvedValue({ fileId: 'mock-file-id', url: '/f/mock-file-id' }),
+      downloadFileToLocal: vi.fn(),
+      getFileContent: vi.fn(),
+      uploadBuffer: vi.fn().mockResolvedValue({ key: 'mock-key' }),
+      uploadMedia: vi.fn().mockResolvedValue({ key: 'mock-key' }),
+    };
+  }),
 }));
 
 // Mock SkillResourceService to avoid S3 dependency
 vi.mock('@/server/services/skill/resource', () => ({
-  SkillResourceService: vi.fn().mockImplementation(() => ({
-    storeResources: vi.fn().mockResolvedValue({}),
-    readResource: vi.fn().mockRejectedValue(new Error('Resource not found')),
-    listResources: vi.fn().mockResolvedValue([]),
-  })),
+  SkillResourceService: vi.fn().mockImplementation(function () {
+    return {
+      storeResources: vi.fn().mockResolvedValue({}),
+      readResource: vi.fn().mockRejectedValue(new Error('Resource not found')),
+      listResources: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock GitHub module
@@ -52,20 +60,24 @@ const normalizeIdentifierPart = (part: string) =>
 
 const mockGitHubInstance = {
   downloadRepoZip: vi.fn(),
-  generateIdentifier: vi
-    .fn()
-    .mockImplementation((info: { owner: string; path?: string; repo: string }) => {
-      const parts = [normalizeIdentifierPart(info.owner), normalizeIdentifierPart(info.repo)];
-      if (info.path) {
-        const lastSegment = info.path.split('/').findLast(Boolean);
-        if (lastSegment) parts.push(normalizeIdentifierPart(lastSegment));
-      }
-      return parts.join('-').toLowerCase();
-    }),
+  generateIdentifier: vi.fn().mockImplementation(function (info: {
+    owner: string;
+    path?: string;
+    repo: string;
+  }) {
+    const parts = [normalizeIdentifierPart(info.owner), normalizeIdentifierPart(info.repo)];
+    if (info.path) {
+      const lastSegment = info.path.split('/').findLast(Boolean);
+      if (lastSegment) parts.push(normalizeIdentifierPart(lastSegment));
+    }
+    return parts.join('-').toLowerCase();
+  }),
   parseRepoUrl: vi.fn(),
 };
 vi.mock('@/server/modules/GitHub', () => ({
-  GitHub: vi.fn().mockImplementation(() => mockGitHubInstance),
+  GitHub: vi.fn().mockImplementation(function () {
+    return mockGitHubInstance;
+  }),
   GitHubNotFoundError: class extends Error {},
   GitHubParseError: class extends Error {},
 }));
@@ -76,18 +88,30 @@ const mockParserInstance = {
   parseZipPackage: vi.fn(),
 };
 vi.mock('@/server/services/skill/parser', () => ({
-  SkillParser: vi.fn().mockImplementation(() => mockParserInstance),
+  SkillParser: vi.fn().mockImplementation(function () {
+    return mockParserInstance;
+  }),
 }));
 
 const mockMarketServiceInstance = {
   getSkillDownloadUrl: vi.fn(),
 };
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => mockMarketServiceInstance),
+  MarketService: vi.fn().mockImplementation(function () {
+    return mockMarketServiceInstance;
+  }),
 }));
 
-// Mock global fetch for URL imports
-const mockFetch = vi.fn();
+// User-supplied URLs (importFromUrl / importFromMarket download) must be fetched through
+// ssrfSafeFetch (SSRF guard), never raw global fetch. Configure responses on mockSsrfSafeFetch;
+// the raw global fetch is stubbed to throw so any regression back to raw fetch fails loudly
+// (GHSA-53h9-fmjf-frwr / #16536).
+const { mockSsrfSafeFetch } = vi.hoisted(() => ({ mockSsrfSafeFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
+
+const mockFetch = vi.fn(function () {
+  throw new Error('raw global fetch must not be used for user-supplied URLs; use ssrfSafeFetch');
+});
 vi.stubGlobal('fetch', mockFetch);
 
 describe('Skill Router Integration Tests', () => {
@@ -647,6 +671,190 @@ describe('Skill Router Integration Tests', () => {
     });
   });
 
+  describe('convertDocumentToSkill', () => {
+    it('does not execute frontmatter when converting a document', async () => {
+      const executed = vi.fn();
+      vi.stubGlobal('__skillFrontmatterExecuted', executed);
+      try {
+        const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+        const agentId = await createTestAgent(serverDB, userId);
+        const doc = await agentDocumentModel.create(
+          agentId,
+          'untrusted-document',
+          `---js
+(() => { globalThis.__skillFrontmatterExecuted(); throw new Error('Executed frontmatter'); })()
+---
+Body`,
+        );
+        await expect(
+          caller.convertDocumentToSkill({
+            agentId,
+            description: 'Description',
+            name: 'untrusted-skill',
+            sourceAgentDocumentId: doc!.id,
+            title: 'Skill',
+          }),
+        ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+        expect(executed).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('should migrate an existing document into a managed skill in place', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const doc = await caller.createDocument({
+        agentId,
+        content: '# Weekly Report\n\nSummarize the week.',
+        title: 'Weekly Report',
+      });
+
+      const sourceAgentDocumentId = doc!.id;
+
+      const skill = await caller.convertDocumentToSkill({
+        agentId,
+        description: 'Generate the weekly report.',
+        name: 'weekly-report',
+        sourceAgentDocumentId,
+        title: 'Weekly Report',
+      });
+
+      expect(skill.name).toBe('weekly-report');
+      expect(skill.content).toContain('name: weekly-report');
+      expect(skill.content).toContain('description: Generate the weekly report.');
+      expect(skill.content).toContain('Summarize the week.');
+
+      // The original document row is reused as the SKILL.md index (id preserved).
+      expect(skill.index.agentDocumentId).toBe(sourceAgentDocumentId);
+
+      const indexRow = await new AgentDocumentModel(serverDB, userId).findById(
+        sourceAgentDocumentId,
+      );
+      expect(indexRow?.fileType).toBe(SKILL_INDEX_FILE_TYPE);
+      expect(indexRow?.filename).toBe(SKILL_INDEX_FILENAME);
+      expect(indexRow?.templateId).toBe(AGENT_SKILL_TEMPLATE_ID);
+
+      // A bundle parent was created to hold the index.
+      const bundleRow = await new AgentDocumentModel(serverDB, userId).findById(
+        skill.bundle.agentDocumentId,
+      );
+      expect(bundleRow?.fileType).toBe(SKILL_BUNDLE_FILE_TYPE);
+      expect(bundleRow?.filename).toBe('weekly-report');
+      expect(indexRow?.parentId).toBe(bundleRow?.documentId);
+    });
+
+    it('should surface NOT_FOUND when the source document does not exist', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await expect(
+        caller.convertDocumentToSkill({
+          agentId,
+          description: 'desc',
+          name: 'missing-doc',
+          sourceAgentDocumentId: '00000000-0000-0000-0000-000000000000',
+          title: 'Missing',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('should surface BAD_REQUEST for an invalid skill name', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const doc = await caller.createDocument({
+        agentId,
+        content: '# Doc\n\nBody.',
+        title: 'Doc',
+      });
+
+      await expect(
+        caller.convertDocumentToSkill({
+          agentId,
+          description: 'desc',
+          name: 'Bad Name',
+          sourceAgentDocumentId: doc!.id,
+          title: 'Doc',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('should reject converting an existing managed skill index', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const doc = await caller.createDocument({
+        agentId,
+        content: '# Existing Skill\n\nBody.',
+        title: 'Existing Skill',
+      });
+
+      const skill = await caller.convertDocumentToSkill({
+        agentId,
+        description: 'An existing skill.',
+        name: 'existing-skill',
+        sourceAgentDocumentId: doc!.id,
+        title: 'Existing Skill',
+      });
+
+      // Converting the managed skill index again would reparent it under a new
+      // bundle and strip the original bundle of its SKILL.md, corrupting it.
+      await expect(
+        caller.convertDocumentToSkill({
+          agentId,
+          description: 'desc',
+          name: 'another-skill',
+          sourceAgentDocumentId: skill.index.agentDocumentId,
+          title: 'Another Skill',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+  });
+
+  describe('generateSkillMeta', () => {
+    it('should surface NOT_FOUND when the source document does not exist', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await expect(
+        caller.generateSkillMeta({
+          agentId,
+          sourceAgentDocumentId: '00000000-0000-0000-0000-000000000000',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('should reject generating meta for an existing managed skill', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const doc = await caller.createDocument({
+        agentId,
+        content: '# Existing Skill\n\nBody.',
+        title: 'Existing Skill',
+      });
+
+      const skill = await caller.convertDocumentToSkill({
+        agentId,
+        description: 'An existing skill.',
+        name: 'existing-skill',
+        sourceAgentDocumentId: doc!.id,
+        title: 'Existing Skill',
+      });
+
+      // Shares the convert guard: managed skill rows are not convertible, so
+      // meta generation must reject before reaching the model.
+      await expect(
+        caller.generateSkillMeta({
+          agentId,
+          sourceAgentDocumentId: skill.index.agentDocumentId,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+  });
+
   describe('listResources', () => {
     it('should return empty array for skill without resources', async () => {
       const caller = agentSkillsRouter.createCaller(createTestContext(userId));
@@ -753,7 +961,7 @@ describe('Skill Router Integration Tests', () => {
       mockGitHubInstance.downloadRepoZip.mockResolvedValue(Buffer.from('mock-zip'));
 
       let callCount = 0;
-      mockParserInstance.parseZipPackage.mockImplementation(() => {
+      mockParserInstance.parseZipPackage.mockImplementation(function () {
         callCount++;
         return {
           content: callCount === 1 ? '# Original' : '# Updated Content',
@@ -788,11 +996,11 @@ describe('Skill Router Integration Tests', () => {
 
   describe('importFromUrl', () => {
     beforeEach(() => {
-      mockFetch.mockReset();
+      mockSsrfSafeFetch.mockReset();
     });
 
     it('should import skill from URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => `---
@@ -825,14 +1033,14 @@ description: A skill from URL
     });
 
     it('should update existing skill when re-importing from same URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => 'content',
       });
 
       let callCount = 0;
-      mockParserInstance.parseSkillMd.mockImplementation(() => {
+      mockParserInstance.parseSkillMd.mockImplementation(function () {
         callCount++;
         return {
           content: callCount === 1 ? '# Original' : '# Updated',
@@ -865,7 +1073,7 @@ description: A skill from URL
 
   describe('importFromMarket', () => {
     beforeEach(() => {
-      mockFetch.mockReset();
+      mockSsrfSafeFetch.mockReset();
       mockMarketServiceInstance.getSkillDownloadUrl.mockReset();
     });
 
@@ -876,7 +1084,7 @@ description: A skill from URL
           'https://market.lobehub.com/api/v1/skills/github.owner.repo/download?version=1.0.0',
         );
 
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         arrayBuffer: async () => new ArrayBuffer(8),
         headers: {
           get: (key: string) => (key === 'content-type' ? 'application/zip' : null),
@@ -887,7 +1095,7 @@ description: A skill from URL
       });
 
       let callCount = 0;
-      mockParserInstance.parseZipPackage.mockImplementation(() => {
+      mockParserInstance.parseZipPackage.mockImplementation(function () {
         callCount++;
         return {
           content: callCount === 1 ? '# Original' : '# Updated',
@@ -949,8 +1157,10 @@ description: A skill from URL
       const otherUserId = await createTestUser(serverDB);
       const caller2 = agentSkillsRouter.createCaller(createTestContext(otherUserId));
 
-      // Try to update (should not affect the skill due to userId filter)
-      await caller2.update({ id: created!.id, manifest: { name: 'Hacked' } });
+      // Another user cannot see the skill, so the update is rejected outright.
+      await expect(
+        caller2.update({ id: created!.id, manifest: { name: 'Hacked' } }),
+      ).rejects.toThrow('Skill not found');
 
       // Original skill should be unchanged
       const unchanged = await caller1.getById({ id: created!.id });

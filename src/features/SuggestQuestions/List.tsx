@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

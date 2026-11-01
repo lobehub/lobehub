@@ -1,3 +1,27 @@
+export interface TrayAgentItem {
+  id: string;
+  title: string;
+  url: string;
+}
+
+export interface TrayNavigationItem {
+  subtitle?: string;
+  title: string;
+  url: string;
+}
+
+export interface TrayActiveTopicItem extends TrayNavigationItem {
+  status: 'running' | 'waitingForHuman';
+}
+
+export interface TrayNavigationSnapshot {
+  // Optional: an OTA-updated renderer and the main process can ship different versions.
+  activeTopics?: TrayActiveTopicItem[];
+  agents: TrayAgentItem[];
+  pinned: TrayNavigationItem[];
+  recent: TrayNavigationItem[];
+}
+
 /**
  * Parameters for showing tray notification
  */

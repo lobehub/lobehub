@@ -2,7 +2,9 @@ import { Flexbox } from '@lobehub/ui';
 // import { PencilLineIcon } from 'lucide-react';
 import { type FC } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import AsyncBoundary from '@/components/AsyncBoundary';
+import SkeletonBar from '@/components/Skeleton/Bar';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -22,20 +24,35 @@ const Home: FC = () => {
   const roles = useUserMemoryStore((s) => s.roles);
   const persona = useUserMemoryStore((s) => s.persona);
 
-  const { isLoading: isTagsLoading } = useFetchTags();
-  const { isLoading: isPersonaLoading } = useFetchPersona();
+  const { error: tagsError, isLoading: tagsLoading, mutate: mutateTags } = useFetchTags();
+  const {
+    error: personaError,
+    isLoading: personaLoading,
+    mutate: mutatePersona,
+  } = useFetchPersona();
   // const { EditorModalElement, openEditor } = usePersonaEditor();
 
-  if (isTagsLoading || isPersonaLoading) return <Loading debugId={'Home'} />;
+  // Persona / tags feed the store, so a failed fetch left the render falling
+  // through to the "analyze to get started" onboarding — telling the user they
+  // have no memories when the load merely errored. Branch error before empty.
+  const hasData = !!persona || roles?.length > 0;
+  const error = tagsError ?? personaError;
+  // Nothing to purge, analyse or widen when the onboarding empty state is the
+  // whole page — and it already offers the analyse action inline.
+  const isEmpty = !hasData && !error;
+
+  if ((tagsLoading || personaLoading) && !hasData) return <RouteLoading />;
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
         right={
-          <ActionBar showAnalysis showPurge>
-            {/* <ActionIcon icon={PencilLineIcon} onClick={openEditor} /> */}
-            <WideScreenButton />
-          </ActionBar>
+          isEmpty ? undefined : (
+            <ActionBar showAnalysis showPurge>
+              {/* <ActionIcon icon={PencilLineIcon} onClick={openEditor} /> */}
+              <WideScreenButton />
+            </ActionBar>
+          )
         }
         style={{
           zIndex: 1,
@@ -48,19 +65,33 @@ const Home: FC = () => {
         width={'100%'}
       >
         <WideScreenContainer gap={32} paddingBlock={48}>
-          {roles?.length > 0 && <RoleTagCloud tags={roles} />}
-          {persona ? (
-            <>
-              <PersonaHeader />
-              <Persona />
-            </>
-          ) : (
-            !roles?.length && (
+          <AsyncBoundary
+            data={persona ?? (roles?.length ? roles : undefined)}
+            error={error}
+            errorVariant={'page'}
+            isEmpty={!hasData}
+            empty={
               <MemoryEmpty>
                 <MemoryAnalysis />
               </MemoryEmpty>
-            )
-          )}
+            }
+            onRetry={() => {
+              mutateTags();
+              mutatePersona();
+            }}
+          >
+            {roles?.length > 0 ? (
+              <RoleTagCloud tags={roles} />
+            ) : (
+              tagsLoading && <SkeletonBar height={400} radius={12} />
+            )}
+            {persona && (
+              <>
+                <PersonaHeader />
+                <Persona />
+              </>
+            )}
+          </AsyncBoundary>
         </WideScreenContainer>
       </Flexbox>
       {/* {EditorModalElement} */}

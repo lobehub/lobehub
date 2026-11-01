@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
+import { initialAgentArtworkSliceState } from '@/store/agent/slices/artwork/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin/initialState';
 
 import { chatConfigByIdSelectors } from './chatConfigByIdSelectors';
@@ -16,6 +17,7 @@ vi.mock('@lobechat/model-runtime', () => ({
 // isDesktop defaults to false in test environment (no __ELECTRON__)
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
+  ...initialAgentArtworkSliceState,
   ...initialAgentSliceState,
   ...initialBuiltinAgentSliceState,
   ...overrides,
@@ -59,12 +61,12 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.getChatConfigById('non-existent')(state)).toEqual({});
     });
 
-    it('should return stored fable chat config without model-specific overrides', () => {
+    it('should return stored chat config without model-specific overrides', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
             chatConfig: { enableAgentMode: true, historyCount: 10 },
-            model: 'claude-fable-5',
+            model: 'claude-opus-4-8',
             provider: 'lobehub',
           },
         },

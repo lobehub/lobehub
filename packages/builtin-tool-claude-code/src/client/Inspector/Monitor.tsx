@@ -2,7 +2,7 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Check, Monitor as MonitorIcon, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -113,8 +113,8 @@ export const MonitorInspector = memo<BuiltinInspectorProps<MonitorArgs>>(
     const isError = success === false || (typeof exitCode === 'number' && exitCode !== 0);
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{label}:</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>{label}:</span>
         {chipText && (
           <span className={styles.chip}>
             <MonitorIcon className={styles.monitorIcon} size={12} />

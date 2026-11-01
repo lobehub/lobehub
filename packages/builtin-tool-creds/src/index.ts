@@ -1,26 +1,29 @@
-export { CredsExecutionRuntime, type ICredsService } from './ExecutionRuntime';
+export type { ICredsService } from './ExecutionRuntime';
 export {
   checkCredsSatisfied,
+  type ComposioAppTypeLike,
+  type ComposioServiceSummary,
   type CredRequirement,
   type CredSummary,
+  excludeDisabledComposioServices,
+  generateComposioServicesList,
   generateCredsList,
-  generateKlavisServicesList,
   groupCredsByType,
   injectCredsContext,
-  type KlavisServiceSummary,
+  resolveAvailableComposioServices,
   type UserCredsContext,
 } from './helpers';
 export { CredsIdentifier, CredsManifest } from './manifest';
 export { systemPrompt } from './systemRole';
 export {
-  type ConnectKlavisServiceParams,
-  type ConnectKlavisServiceState,
+  type ConnectComposioServiceParams,
+  type ConnectComposioServiceState,
   CredsApiName,
   type CredsApiNameType,
   type CredSummaryForContext,
   type InitiateOAuthConnectParams,
   type InjectCredsToSandboxParams,
   type InjectCredsToSandboxState,
-  type SaveCredsParams,
-  type SaveCredsState,
+  type RequestCredsInputParams,
+  type RequestCredsInputState,
 } from './types';

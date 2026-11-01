@@ -1,9 +1,13 @@
 import type { ActivateToolsState } from '@lobechat/builtin-tool-activator';
 import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
+import { AuvApiName, AuvIdentifier } from '@lobechat/builtin-tool-auv';
+import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
+import { getFilePathDisplayInfo } from '@lobechat/shared-tool-ui/components';
 import type { ToolIntervention } from '@lobechat/types';
 import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
+import { MessageCircleQuestion } from 'lucide-react';
 import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
@@ -22,9 +26,19 @@ interface InspectorProps {
    */
   isArgumentsStreaming?: boolean;
   /**
+   * Whether the tool detail is expanded. Collapsed rows show the plain
+   * "<action> <keyword>" title; an expanded row restores the tool's own rich
+   * inspector (full command, per-tool chips) since expanding means "show me
+   * the details". Computer Use and image reads keep their action-specific
+   * inspector visible in both states.
+   */
+  isExpanded?: boolean;
+  /**
    * Whether the tool is currently executing (from operation state)
    */
   isToolCalling?: boolean;
+  /** Owning message; native tool ids such as Codex `item_1` repeat across messages. */
+  messageId: string;
   result?: { content: string | null; error?: any; state?: any };
   toolCallId: string;
   toolCallStartTime?: number;
@@ -38,7 +52,9 @@ const Inspectors = memo<InspectorProps>(
     result,
     intervention,
     isArgumentsStreaming,
+    isExpanded,
     isToolCalling,
+    messageId,
     toolCallId,
     toolCallStartTime,
   }) => {
@@ -71,20 +87,51 @@ const Inspectors = memo<InspectorProps>(
       }
     }
 
-    // Check for custom inspector renderer
-    const CustomInspector = getBuiltinInspector(identifier, apiName);
+    // askUserQuestion (Claude Code and the builtin user-interaction tool share
+    // the apiName) completes as "a question was asked", not "a task succeeded"
+    // — keep the question-mark glyph instead of the generic tick.
+    const statusSuccessIcon = apiName === 'askUserQuestion' ? MessageCircleQuestion : undefined;
 
-    if (CustomInspector) {
-      const args = safeParseJSON(argsStr);
-      const partialJson = safeParsePartialJSON(argsStr);
-      return (
-        <Flexbox allowShrink horizontal align={'center'} gap={6}>
-          <StatusIndicator
-            intervention={intervention}
-            isToolExecuting={isToolCalling}
-            result={result}
-            successVariant={statusSuccessVariant}
-          />
+    const args = safeParseJSON(argsStr);
+    const partialJson = safeParsePartialJSON(argsStr);
+
+    // Collapsed rows read as one plain sentence ("<action> <keyword>") so a
+    // finished run scans as prose; expanding a row is an explicit ask for the
+    // details, so it restores the tool's own rich inspector when one exists.
+    // Computer Use multiplexes distinct actions behind runCommand; its inspector
+    // carries the action/purpose even in the compact row. Image reads likewise
+    // need their viewing label instead of the generic read-file title.
+    const isComputerUse =
+      (identifier === AuvIdentifier || identifier === 'lobe-auv') &&
+      apiName === AuvApiName.runCommand;
+    const readPath =
+      args?.path ||
+      args?.filePath ||
+      args?.file_path ||
+      partialJson?.path ||
+      partialJson?.filePath ||
+      partialJson?.file_path ||
+      result?.state?.path;
+    const isImageRead =
+      identifier === LocalSystemIdentifier &&
+      (apiName === LocalSystemApiName.readFile || apiName === 'readLocalFile') &&
+      ((typeof readPath === 'string' && getFilePathDisplayInfo(readPath).isImage) ||
+        (Array.isArray(result?.state?.images) && result.state.images.length > 0));
+    const CustomInspector =
+      isExpanded || isComputerUse || isImageRead
+        ? getBuiltinInspector(identifier, apiName)
+        : undefined;
+
+    return (
+      <Flexbox allowShrink horizontal align={'center'} gap={6}>
+        <StatusIndicator
+          intervention={intervention}
+          isToolExecuting={isToolCalling}
+          result={result}
+          successIcon={statusSuccessIcon}
+          successVariant={statusSuccessVariant}
+        />
+        {CustomInspector ? (
           <SafeBoundary minHeight={22} resetKeys={[argsStr, result]}>
             <CustomInspector
               apiName={apiName}
@@ -98,38 +145,21 @@ const Inspectors = memo<InspectorProps>(
               toolCallId={toolCallId}
             />
           </SafeBoundary>
-          <ExecutionTime
-            isExecuting={showExecutionTimer}
-            startTime={toolCallStartTime}
-            timerKey={toolCallId}
+        ) : (
+          <ToolTitle
+            apiName={apiName}
+            args={args || undefined}
+            identifier={identifier}
+            isAborted={isAborted}
+            isLoading={isTitleLoading}
+            partialArgs={partialJson || undefined}
+            result={result}
           />
-        </Flexbox>
-      );
-    }
-
-    const args = safeParseJSON(argsStr);
-    const partialJson = safeParsePartialJSON(argsStr);
-
-    return (
-      <Flexbox horizontal align={'center'} gap={6}>
-        <StatusIndicator
-          intervention={intervention}
-          isToolExecuting={isToolCalling}
-          result={result}
-          successVariant={statusSuccessVariant}
-        />
-        <ToolTitle
-          apiName={apiName}
-          args={args || undefined}
-          identifier={identifier}
-          isAborted={isAborted}
-          isLoading={isTitleLoading}
-          partialArgs={partialJson || undefined}
-        />
+        )}
         <ExecutionTime
           isExecuting={showExecutionTimer}
           startTime={toolCallStartTime}
-          timerKey={toolCallId}
+          timerKey={`${messageId}:${toolCallId}`}
         />
       </Flexbox>
     );

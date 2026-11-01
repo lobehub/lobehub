@@ -11,8 +11,8 @@ describe('parseAgentConfig', () => {
     });
 
     it('parses nested fields correctly', () => {
-      const envStr = 'tts.sttLocale=en-US';
-      const expected = { tts: { sttLocale: 'en-US' } };
+      const envStr = 'tts.ttsService=openai';
+      const expected = { tts: { ttsService: 'openai' } };
       expect(parseAgentConfig(envStr)).toEqual(expected);
     });
 
@@ -71,10 +71,10 @@ describe('parseAgentConfig', () => {
       expect(parseAgentConfig(envStr)).toEqual(expected);
     });
 
-    it('parses tts voice configuration correctly', () => {
-      const envStr = 'tts.voice.openai=english-voice;tts.voice.microsoft=spanish-voice';
+    it('parses OpenAI TTS voice configuration correctly', () => {
+      const envStr = 'tts.voice.openai=english-voice';
       const expected = {
-        tts: { voice: { openai: 'english-voice', microsoft: 'spanish-voice' } },
+        tts: { voice: { openai: 'english-voice' } },
       };
       expect(parseAgentConfig(envStr)).toEqual(expected);
     });

@@ -1,5 +1,4 @@
-import { type SliderWithInputProps } from '@lobehub/ui';
-import { SliderWithInput } from '@lobehub/ui';
+import { SliderWithInput, type SliderWithInputProps } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 
 interface FormSliderWithInputProps extends Omit<SliderWithInputProps, 'onChange' | 'value'> {
@@ -12,7 +11,7 @@ interface FormSliderWithInputProps extends Omit<SliderWithInputProps, 'onChange'
  * Only triggers onChange on blur to prevent excessive updates during user interaction.
  */
 const FormSliderWithInput = memo<FormSliderWithInputProps>(
-  ({ onChange, value: defaultValue, ...props }) => {
+  ({ onBlur, onChange, value: defaultValue, ...props }) => {
     const [value, setValue] = useState(defaultValue ?? 0);
 
     useEffect(() => {
@@ -21,8 +20,9 @@ const FormSliderWithInput = memo<FormSliderWithInputProps>(
 
     return (
       <SliderWithInput
-        onBlur={() => {
+        onBlur={(e) => {
           onChange?.(value);
+          onBlur?.(e);
         }}
         onChange={(newValue) => {
           if (typeof newValue === 'number') {

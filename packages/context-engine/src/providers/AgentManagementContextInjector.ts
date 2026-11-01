@@ -1,5 +1,5 @@
 import { escapeXml } from '@lobechat/prompts';
-import type { RuntimeMentionedAgent } from '@lobechat/types';
+import { agentIdentityLabel, type RuntimeMentionedAgent } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
@@ -52,7 +52,9 @@ export interface AvailableAgentInfo {
   description?: string;
   /** Agent ID */
   id: string;
-  /** Agent display name */
+  /** Personal name the agent is addressed by; wins over `title` as its label */
+  name?: string;
+  /** The role the agent plays */
   title: string;
 }
 
@@ -67,11 +69,11 @@ export interface AvailablePluginInfo {
   /** Plugin display name */
   name: string;
   /**
-   * Plugin source: 'builtin' for built-in tools, 'klavis' for Klavis servers,
+   * Plugin source: 'builtin' for built-in tools, 'composio' for Composio servers,
    * 'lobehub-skill' for LobehubSkill providers, 'custom' for user-added custom
    * MCP connectors (aligns with ConnectorSourceType.custom).
    */
-  type: 'builtin' | 'klavis' | 'lobehub-skill' | 'custom';
+  type: 'builtin' | 'composio' | 'lobehub-skill' | 'custom';
 }
 
 /**
@@ -97,7 +99,7 @@ export interface AgentManagementContext {
    * Exposed so the model can use Agent Management tools (updateAgent, getAgentDetail,
    * installPlugin, etc.) to manage itself when the user asks to modify the current agent.
    */
-  currentAgent?: { id: string; title?: string };
+  currentAgent?: { id: string; name?: string; title?: string };
   /** Agents @mentioned by the user — supervisor should delegate to these via callAgent */
   mentionedAgents?: RuntimeMentionedAgent[];
 }
@@ -119,10 +121,11 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
 
   // Add current agent identity so the model can self-manage
   if (context.currentAgent) {
-    const titleAttr = context.currentAgent.title
-      ? ` title="${escapeXml(context.currentAgent.title)}"`
-      : '';
-    parts.push(`<current_agent id="${escapeXml(context.currentAgent.id)}"${titleAttr} />`);
+    // Both fields: `name` is what people call it by, `title` its role. Either may be blank.
+    const { id, name, title } = context.currentAgent;
+    const nameAttr = name?.trim() ? ` name="${escapeXml(name.trim())}"` : '';
+    const titleAttr = title?.trim() ? ` title="${escapeXml(title.trim())}"` : '';
+    parts.push(`<current_agent id="${escapeXml(id)}"${nameAttr}${titleAttr} />`);
   }
 
   // Add available models section
@@ -155,7 +158,9 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
     const agentsXml = context.availableAgents
       .map((agent) => {
         const desc = agent.description ? ` - ${escapeXml(agent.description)}` : '';
-        return `    <agent id="${escapeXml(agent.id)}">${escapeXml(agent.title)}${desc}</agent>`;
+        // "Nasa (Shadow Arvin)": the name a user would ask for, and the role.
+        const label = agentIdentityLabel(agent, agent.title);
+        return `    <agent id="${escapeXml(agent.id)}">${escapeXml(label)}${desc}</agent>`;
       })
       .join('\n');
     const hasMoreNote = context.availableAgentsHasMore
@@ -167,7 +172,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
   // Add available plugins section
   if (context.availablePlugins && context.availablePlugins.length > 0) {
     const builtinPlugins = context.availablePlugins.filter((p) => p.type === 'builtin');
-    const klavisPlugins = context.availablePlugins.filter((p) => p.type === 'klavis');
+    const composioPlugins = context.availablePlugins.filter((p) => p.type === 'composio');
     const lobehubSkillPlugins = context.availablePlugins.filter((p) => p.type === 'lobehub-skill');
     const customPlugins = context.availablePlugins.filter((p) => p.type === 'custom');
 
@@ -183,14 +188,14 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
       pluginsSections.push(`  <builtin_plugins>\n${builtinItems}\n  </builtin_plugins>`);
     }
 
-    if (klavisPlugins.length > 0) {
-      const klavisItems = klavisPlugins
+    if (composioPlugins.length > 0) {
+      const composioItems = composioPlugins
         .map((p) => {
           const desc = p.description ? ` - ${escapeXml(p.description)}` : '';
           return `    <plugin id="${p.identifier}">${escapeXml(p.name)}${desc}</plugin>`;
         })
         .join('\n');
-      pluginsSections.push(`  <klavis_plugins>\n${klavisItems}\n  </klavis_plugins>`);
+      pluginsSections.push(`  <composio_plugins>\n${composioItems}\n  </composio_plugins>`);
     }
 
     if (lobehubSkillPlugins.length > 0) {

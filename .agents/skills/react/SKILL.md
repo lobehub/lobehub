@@ -1,6 +1,6 @@
 ---
 name: react
-description: 'LobeHub React component conventions. Use when editing TSX UI, choosing base-ui vs @lobehub/ui vs antd, styling with antd-style, routing, desktop variants, layouts, or component state.'
+description: 'Use for TSX components, UI libraries, styling, state locality, layout, render performance and memoization.'
 user-invocable: false
 ---
 
@@ -8,11 +8,23 @@ user-invocable: false
 
 ## Styling
 
-| Scenario                                                   | Approach                                                       |
-| ---------------------------------------------------------- | -------------------------------------------------------------- |
-| Most cases                                                 | `createStaticStyles` + `cssVar.*` (zero-runtime, module-level) |
-| Simple one-off                                             | Inline `style` attribute                                       |
-| Truly dynamic (JS color fns like `readableColor`/`chroma`) | `createStyles` + `token` — **last resort**                     |
+| Scenario                                                   | Approach                                                                                                                                                                                                                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Files already on StyleX, and new SPA styles                | `stylex.create` + `@lobehub/ui/stylex/cssVar.stylex` / `@lobehub/ui/stylex/media.stylex`. The SPA compiler is `plugins/vite/stylex.ts` (`@stylexjs/unplugin`, prefix `lh`). Do not copy those token modules into the app. |
+| Existing styles not yet migrated                           | `createStaticStyles` + `cssVar.*` (zero-runtime, module-level)                                                                                                                                                            |
+| Simple one-off                                             | Inline `style` attribute                                                                                                                                                                                                  |
+| Truly dynamic (JS color fns like `readableColor`/`chroma`) | `createStyles` + `token` — **last resort**                                                                                                                                                                                |
+
+### StyleX
+
+- New code may not import `createStaticStyles` / `createStyles` / `css` / `keyframes` / `createGlobalStyle` / `injectGlobal` from `@lobehub/ui` (`stylex-migration/no-emotion-styles`). Files still on them are listed in `scripts/stylexMigration/legacyFiles.json`; after migrating one, run `bun run stylex:migration --prune-legacy`. Never add entries.
+- Migrate a whole file at once. StyleX longhand rules carry raised specificity (`.x:not(#\#)`) and beat emotion classes on the same element, but StyleX shorthand rules do not, so a half-migrated element resolves by property.
+- Element that also forwards a caller's `className` / `style`: `{...sx([styles.root, active && styles.active], className, style)}` from `@/styles/sx`. Spreading `stylex.props` next to `className` fails `@stylexjs/no-conflicting-props`.
+- Component that lets callers restyle it: take `xstyle?: StyleXStyles` and pass it last in the `sx` / `stylex.props` array. A plain `className` from outside cannot override StyleX rules. Passing a class to `@lobehub/ui` components (`className`, `classNames`) works, because lobe-ui CSS sits in `@layer lobe-ui`.
+- Values follow `@stylexjs/valid-styles`: no multi-value shorthands (`margin: '0 8px'` → `marginBlock` / `marginInline`), and string `flex` (`flex: '1'`).
+- `background`, `animation`, `border` and `border{Top,Right,Bottom,Left}` shorthands compile to no class at all, whatever the value (`border: 'none'` included), without an error. Write longhands: `backgroundColor` (plus `backgroundImage: 'none'` when replacing a `background` shorthand), `animationName` / `animationDuration` / …, `borderWidth` / `borderStyle` / `borderColor`.
+- Check a migration in dev with the DevDock snapshot helper: on the migrated page run `__lobeStyleSnapshot.capture('<name>', '<root selector>')`, swap the files back (`git stash push -- <path>`), reload, run `__lobeStyleSnapshot.compare('<name>')`, then `git stash pop`. Each pair reads `[captured, current]`, here `[migrated, original]`. It lists elements and `::before` / `::after` whose tracked computed styles, box (relative to the root) or text differ; an empty list means those match, not that hover, focus or closed dialogs were checked, so open each state you migrated and compare it too. Keep the window size, scroll everything under the root back to the start, and move the pointer off the compared area.
+- `bun run stylex:migration --list <A|B|C|D>` lists files by how hard they are to move: A flat, B self pseudo-classes, C descendant / ancestor coupling (use `stylex.defaultMarker()` + `stylex.when.ancestor()` or `xstyle`), D tag / third-party DOM selectors (scoped plain CSS).
 
 ## Component Priority
 
@@ -28,6 +40,7 @@ If unsure about available components, search existing code or check `node_module
 
 | Component                                  | Import                                                                                                  |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `Alert` (+ `AlertProps`)                   | `import { Alert, type AlertProps } from '@lobehub/ui/base-ui';`                                         |
 | `Select` (+ `SelectProps`, `SelectOption`) | `import { Select } from '@lobehub/ui/base-ui';`                                                         |
 | `Modal` (imperative API)                   | `import { createModal, confirmModal, useModalContext, type ModalInstance } from '@lobehub/ui/base-ui';` |
 | `DropdownMenu`                             | `import { DropdownMenu } from '@lobehub/ui/base-ui';`                                                   |
@@ -37,6 +50,7 @@ If unsure about available components, search existing code or check `node_module
 | `Switch`                                   | `import { Switch } from '@lobehub/ui/base-ui';`                                                         |
 | `Toast`                                    | `import { Toast } from '@lobehub/ui/base-ui';`                                                          |
 | `FloatingSheet`                            | `import { FloatingSheet } from '@lobehub/ui/base-ui';`                                                  |
+| `Drawer`                                   | `import { Drawer } from '@lobehub/ui/base-ui';`                                                         |
 
 For Modal specifically, see the dedicated **modal** skill — use the imperative `createModal({ content: … })` pattern over the legacy `<Modal open … />` declarative pattern. base-ui has its own `ModalHost` already mounted in `SPAGlobalProvider`.
 
@@ -49,13 +63,34 @@ For Modal specifically, see the dedicated **modal** skill — use the imperative
 | General      | ActionIcon, ActionIconGroup, Block, Button, Icon                                      |
 | Data Display | Avatar, Collapse, Empty, Highlighter, Markdown, Tag, Tooltip                          |
 | Data Entry   | CodeEditor, CopyButton, EditableText, Form, Input, InputPassword, SearchBar, TextArea |
-| Feedback     | Alert, Drawer                                                                         |
 | Layout       | Center, DraggablePanel, Flexbox, Grid, Header, MaskShadow                             |
 | Navigation   | Burger, Menu, SideNav, Tabs                                                           |
 
 ## State
 
-When a feature component manages more than 3 pieces of state (`useState`/`useReducer`/derived state), extract the logic into a custom hook (e.g. `useXxx`). Keep the component focused on rendering — the hook holds state and handlers, so logic can be unit-tested without rendering the component.
+Keep transient state in its smallest useful owner. Extract a custom hook when state transitions and handlers obscure rendering or form a reusable unit; do not extract solely because a component has a particular number of hooks.
+
+Split a component only to establish a real state, reuse, render-update, or mountable-capability boundary. Do not split solely to make files smaller; when a file reaches the 1200-line limit in **`source-layout`**, find one of these boundaries rather than cutting at a line count. Decomposing a heavy domain feature into host-assembled atoms is owned by **`compose-atoms`**.
+
+## Popover Exits
+
+An action inside popover content that leaves the popover must close it, or the popover stays over the destination (for example, a plan badge in the user panel navigating to `/settings/plans`).
+
+- Navigation: a host whose content links or navigates keeps `open` state, calls `useCloseOnNavigate(open, () => setOpen(false))` from `@/hooks/useCloseOnNavigate`, and passes the returned key to its `Popover`. This covers links added later, including links from other files. The key matters when navigation hides the host in an `<Activity>` (the home sidebar): a hidden tree sets up no new effects, so the base-ui popup never finishes its exit animation and stays on screen until a remount removes it.
+- Modal handoff or a final pick: call `usePopoverContext().close()` (or the host's setter) before opening the modal or after the pick, as `NavPanel/switcher/SwitcherMenu.tsx` does. Content rendered outside a popover cannot use the context, because its default `close` throws in development.
+- A confirm step whose result appears in the same popover, such as the share-link privacy confirm, keeps it open.
+
+## Render Performance and Memoization
+
+Treat `memo`, `useMemo`, and `useCallback` as opt-in optimizations, not default component wrappers. Before adding one, identify the actual rerender boundary and prefer structural fixes:
+
+1. Split at the update boundary.
+2. Move transient state to its smallest owner.
+3. Use narrow Zustand selectors and avoid broad subscriptions.
+
+Do not memoize prop-free or trivially rendered components, or a component that normally receives new objects, arrays, functions, or JSX children. Do not use memoization to compensate for state held too high in the tree.
+
+Use memoization only when the subtree is demonstrably expensive or frequently repeated, its relevant inputs are stable during normal parent renders, and profiling or a concrete render-path analysis identifies the avoided work. State that reason in the implementation summary or PR.
 
 ## Layout
 
@@ -65,58 +100,10 @@ Use `Flexbox` and `Center` from `@lobehub/ui`. See `references/layout-kit.md` fo
 - Use `flex={1}` to fill available space
 - Nest Flexbox for complex layouts; set `overflow: 'auto'` for scrollable regions
 
-## Navigation
+## Related Skills
 
-**For SPA pages, use `react-router-dom`, NOT `next/link`.**
-
-```tsx
-// ❌ Wrong
-import Link from 'next/link';
-
-// ✅ Correct
-import { Link, useNavigate } from 'react-router-dom';
-```
-
-Access navigate from stores: `useGlobalStore.getState().navigate?.('/settings');`
-
-## Desktop File Sync Rule
-
-Files with a `.desktop.ts(x)` variant must be edited **in sync**. Drift causes blank pages in Electron.
-
-| Base file (web)            | Desktop file (Electron)            |
-| -------------------------- | ---------------------------------- |
-| `desktopRouter.config.tsx` | `desktopRouter.config.desktop.tsx` |
-| `componentMap.ts`          | `componentMap.desktop.ts`          |
-
-**After editing any `.ts`/`.tsx`:** glob for `<filename>.desktop.{ts,tsx}` in the same directory. If found, apply the equivalent sync-import change.
-
-## Routing Architecture
-
-| Route Type         | Use Case   | Implementation                                     |
-| ------------------ | ---------- | -------------------------------------------------- |
-| Next.js App Router | Auth pages | `src/app/[variants]/(auth)/`                       |
-| React Router DOM   | Main SPA   | `desktopRouter.config.tsx` + `.desktop.tsx` (pair) |
-
-Router utilities:
-
-```tsx
-import { dynamicElement, redirectElement, ErrorBoundary } from '@/utils/router';
-element: dynamicElement(() => import('./chat'), 'Desktop > Chat');
-element: redirectElement('/settings/profile');
-errorElement: <ErrorBoundary />;
-```
-
-## Common Mistakes
-
-| Mistake                                                            | Fix                                                                         |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| Using `next/link` in SPA                                           | Use `react-router-dom` `Link`                                               |
-| Using antd directly                                                | Use `@lobehub/ui/base-ui` first, then `@lobehub/ui`                         |
-| `import { Select } from '@lobehub/ui'`                             | `import { Select } from '@lobehub/ui/base-ui'`                              |
-| `import { Modal } from '@lobehub/ui'` + `<Modal open>` declarative | `createModal` / `confirmModal` from `@lobehub/ui/base-ui` (see modal skill) |
-| `import { DropdownMenu/Popover/Switch } from '@lobehub/ui'`        | Import same name from `@lobehub/ui/base-ui` instead                         |
-| `createStyles` for static styles                                   | Use `createStaticStyles` + `cssVar`                                         |
-| Editing only `desktopRouter.config.tsx`                            | Must edit both `.tsx` and `.desktop.tsx`                                    |
-| Using `margin` for flex spacing                                    | Use `gap` prop on Flexbox                                                   |
-| Accessing zustand store without selector                           | Use selectors to access store data (see zustand skill)                      |
-| Text or icon-text actions built with `Flexbox`/`Text` + `onClick`  | Use `Button type={'text'} size={'small'}` with `icon` when needed           |
+- **`ux`**: loading visuals (scenario → loader table in `references/feedback.md` §4.1) and user-facing interaction design.
+- **`modal`**: imperative base-ui modal patterns.
+- **`spa-routes`**: SPA navigation, route ownership, router configuration, and `.desktop` variants.
+- **`compose-atoms`**: split a heavy domain feature into mountable capability atoms; each host imports only what it mounts.
+- **`zustand`**: store structure and selector conventions.

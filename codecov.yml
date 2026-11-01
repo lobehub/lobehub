@@ -40,16 +40,19 @@ coverage:
       server:
         flags:
           - server
+        threshold: '0.5%'
       database:
         flags:
           - database
+        threshold: '0.5%'
       builtin-tools:
         flags:
           - builtin-tools
+        threshold: '0.5%'
       app:
         flags:
           - app
-      threshold: '0.5%'
+        threshold: '0.5%'
     patch: off
 
 ignore:

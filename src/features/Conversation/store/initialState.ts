@@ -1,7 +1,6 @@
-import { type UIChatMessage } from '@lobechat/types';
-
 import {
   type ActionsBarConfig,
+  type ComposerTarget,
   type ConversationContext,
   type ConversationHooks,
   type OperationState,
@@ -23,6 +22,11 @@ export interface State extends DataState, InputState, MessageStateState, VirtuaL
   actionsBar?: ActionsBarConfig;
 
   /**
+   * Composer capability for this mounted conversation surface
+   */
+  composerTarget: ComposerTarget;
+
+  /**
    * Conversation context (data coordinates)
    */
   context: ConversationContext;
@@ -31,13 +35,6 @@ export interface State extends DataState, InputState, MessageStateState, VirtuaL
    * Lifecycle hooks for external behavior injection
    */
   hooks: ConversationHooks;
-
-  /**
-   * Callback when messages are fetched or changed internally
-   * @param messages - The updated messages array
-   * @param context - The context that this data belongs to (prevents race conditions)
-   */
-  onMessagesChange?: (messages: UIChatMessage[], context: ConversationContext) => void;
 
   /**
    * External operation state (from ChatStore)
@@ -53,12 +50,42 @@ export const initialState: State = {
   ...virtuaListInitialState,
 
   actionsBar: undefined,
+  composerTarget: { reason: 'unresolved', writable: false },
   context: {
     agentId: '',
     threadId: null,
     topicId: null,
   },
   hooks: {},
-  onMessagesChange: undefined,
   operationState: DEFAULT_OPERATION_STATE,
 };
+
+/**
+ * State patch applied in place on context switch (the Provider is NOT keyed by
+ * context, so the store instance survives). Deliberately excludes fields owned
+ * by still-mounted UI infra — `editor`, `chatInputOverlayHeight`,
+ * `virtuaScrollMethods` — which stay valid across the switch and are managed by
+ * their components' own mount/unmount lifecycles.
+ */
+export const createEphemeralResetState = (): Partial<State> => ({
+  activeIndex: null,
+  atBottom: true,
+  autoScrollDetached: false,
+  earlierMessagesError: undefined,
+  heteroOverloadRetryAttempts: {},
+  heteroOverloadWaitOpIds: {},
+  inputMessage: '',
+  isLoadingEarlierMessages: false,
+  isLoadingLaterMessages: false,
+  laterMessagesError: undefined,
+  refreshingRowId: undefined,
+  isScrolling: false,
+  messageEditingIds: [],
+  messageLoadingIds: [],
+  pendingArgsUpdates: new Map(),
+  scheduledSendAt: undefined,
+  selectedMessageIds: [],
+  selectionAnchorId: undefined,
+  selectionMode: false,
+  visibleItems: new Map(),
+});

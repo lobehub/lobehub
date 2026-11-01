@@ -114,6 +114,34 @@ describe('validateExternalUrl', () => {
     });
   });
 
+  it('should accept supported external audio URLs', async () => {
+    vi.mocked(ssrfSafeFetch).mockResolvedValueOnce(
+      mockHeadResponse({ 'content-length': '1024', 'content-type': 'audio/wav' }),
+    );
+
+    const result = await validateExternalUrl('https://example.com/audio.wav');
+
+    expect(result).toEqual({
+      contentLength: 1024,
+      contentType: 'audio/wav',
+      isValid: true,
+    });
+  });
+
+  it('should normalize audio/mpeg to audio/mp3 so mp3 URLs hand off as fileData', async () => {
+    vi.mocked(ssrfSafeFetch).mockResolvedValueOnce(
+      mockHeadResponse({ 'content-length': '1024', 'content-type': 'audio/mpeg' }),
+    );
+
+    const result = await validateExternalUrl('https://example.com/audio.mp3');
+
+    expect(result).toEqual({
+      contentLength: 1024,
+      contentType: 'audio/mp3',
+      isValid: true,
+    });
+  });
+
   it('should reject supported MIME types when Content-Length is missing', async () => {
     vi.mocked(ssrfSafeFetch).mockResolvedValueOnce(
       mockHeadResponse({ 'content-type': 'image/png' }),

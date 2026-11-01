@@ -1,8 +1,19 @@
 export interface WechatAdapterConfig {
+  /** Optional iLink API base URL returned by QR confirmation. */
+  baseUrl?: string;
   /** Bot's iLink user ID (from QR login) */
   botId?: string;
   /** Bot token obtained from iLink QR code authentication */
   botToken: string;
+  /** Called immediately before outbound `sendmessage` requests are attempted. */
+  onBeforeSendMessage?: (event: WechatOutboundSendEvent) => Promise<void> | void;
+}
+
+export interface WechatOutboundSendEvent {
+  /** Number of iLink `sendmessage` requests about to be made. */
+  count: number;
+  /** Recipient's iLink user ID. */
+  toUserId: string;
 }
 
 export interface WechatThreadId {
@@ -57,9 +68,15 @@ export interface ImageItem {
 }
 
 export interface VoiceItem {
+  bits_per_sample?: number;
+  /** `1 = pcm`, `2 = adpcm`, `3 = feature`, `4 = speex`, `5 = amr`, `6 = silk`, `7 = mp3`, `8 = ogg-speex`. */
   encode_type?: number;
   media?: CDNMedia;
+  /** Playback length in milliseconds. */
   playtime?: number;
+  /** Sample rate of the encoded audio; iLink voice defaults to 24000. */
+  sample_rate?: number;
+  /** Speech-to-text result provided by WeChat. */
   text?: string;
 }
 

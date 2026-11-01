@@ -4,9 +4,9 @@ import { type ComponentType } from 'react';
 
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-import { type PricingMode } from './components/ModelDetailPanel';
-
 export type GroupMode = 'byModel' | 'byProvider';
+
+export type PricingMode = 'image' | 'video';
 
 export interface ModelWithProviders {
   displayName: string;
@@ -61,6 +61,8 @@ export interface ModelSwitchPanelProps {
    * Optional row component for generation UIs (e.g. ImageModelItem). Requires `enabledList` + `pricingMode`.
    */
   ModelItemComponent?: ComponentType<any>;
+  /** Explanation of any restrictions applied by the host. */
+  notice?: React.ReactNode;
   /**
    * Callback when model changes. If not provided, uses updateAgentConfig from store.
    */

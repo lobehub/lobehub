@@ -1,4 +1,18 @@
-import { index, jsonb, pgTable, primaryKey, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
+import type { WorkspaceUserPreference } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  foreignKey,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  unique,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 import { createNanoId } from '../utils/idGenerator';
 import { createdAt, timestamptz, updatedAt } from './_helpers';
@@ -15,14 +29,19 @@ export const workspaces = pgTable(
     name: varchar('name', { length: 255 }).notNull(),
     description: varchar('description', { length: 1000 }),
     avatar: text('avatar'),
-    // The user whose payment method backs the workspace's subscription. A
-    // workspace can have multiple `role='owner'` members; only this one is the
-    // Stripe-bound owner. Transferring the Stripe binding goes through
+    // The unique workspace Owner, whose payment method also backs the
+    // subscription. Ownership transfer atomically swaps Owner/Admin roles via
     // `WorkspaceModel.transferPrimaryOwnership`.
     primaryOwnerId: text('primary_owner_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     settings: jsonb('settings').default({}),
+    // Freeze state, mirrors the `users.banned` / `banReason` / `banExpires`
+    // trio. Driven by cloud risk control (abnormal spend) and admin tooling;
+    // OSS column with no desktop/open-source behavior attached.
+    frozen: boolean('frozen').default(false),
+    frozenReason: text('frozen_reason'),
+    frozenAt: timestamptz('frozen_at'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -45,6 +64,10 @@ export const workspaceMembers = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     role: text('role').notNull().default('member'),
+    // Workspace-scoped profile: the same person can hold a different title and
+    // duties in each workspace. Lengths are enforced by the API, not the column.
+    title: text('title'),
+    responsibilities: text('responsibilities'),
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
     deletedAt: timestamptz('deleted_at'),
@@ -55,6 +78,15 @@ export const workspaceMembers = pgTable(
     // user can be inserted into the same workspace multiple times.
     primaryKey({ columns: [t.workspaceId, t.userId] }),
     index('workspace_members_user_id_idx').on(t.userId),
+    // Owner is unique per workspace and bound to `workspaces.primary_owner_id`;
+    // it is only produced by ownership transfer, which demotes the previous
+    // owner in the same transaction. This partial index makes a second active
+    // owner unrepresentable rather than relying on that write path staying
+    // correct. Soft-deleted rows are excluded so a removed owner does not block
+    // the next one.
+    uniqueIndex('workspace_members_unique_active_owner_idx')
+      .on(t.workspaceId)
+      .where(sql`${t.role} = 'owner' AND ${t.deletedAt} IS NULL`),
   ],
 );
 
@@ -84,6 +116,7 @@ export const workspaceInvitations = pgTable(
   },
   (t) => [
     index('workspace_invitations_workspace_id_idx').on(t.workspaceId),
+    index('workspace_invitations_inviter_id_idx').on(t.inviterId),
     index('workspace_invitations_email_idx').on(t.email),
     index('workspace_invitations_token_idx').on(t.token),
   ],
@@ -119,3 +152,135 @@ export const workspaceAuditLogs = pgTable(
 
 export type WorkspaceAuditLogItem = typeof workspaceAuditLogs.$inferSelect;
 export type NewWorkspaceAuditLog = typeof workspaceAuditLogs.$inferInsert;
+
+/**
+ * Per-user preferences scoped to a specific workspace — the workspace-scoped
+ * counterpart to `user_settings`. One row per (workspace, user), lazily
+ * upserted the first time the caller saves any workspace-scoped preference
+ * (device picker, future workspace-scoped UI prefs, …). Members that never
+ * customize anything simply have no row and fall through to defaults.
+ *
+ * Independent FK cascades to `workspaces` and `users` — the two identity
+ * anchors: destroying either takes every row with them. The `workspace_members`
+ * membership record is *not* the FK anchor deliberately, so a member who
+ * leaves and later rejoins the same workspace still sees their old
+ * preferences (workspace_members can be soft-deleted; this table is real
+ * user-owned data that the caller should get back on re-entry). Orphan rows
+ * left behind after a leave without rejoin are read-blocked by the
+ * membership guard at every API path and can be swept periodically if needed.
+ */
+export const workspaceUserSettings = pgTable(
+  'workspace_user_settings',
+  {
+    /**
+     * Surrogate primary key. Business uniqueness lives in the
+     * (workspace_id, user_id) unique index instead of a composite PK, so the
+     * uniqueness scope can grow by nullable dimensions later without a PK
+     * rebuild (see the ai_providers/ai_models migration 0110 lesson).
+     */
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    workspaceId: text('workspace_id')
+      .references(() => workspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    /**
+     * The full bag of workspace-scoped user preferences for this (workspace,
+     * user) pair. Single jsonb (matching how `users.preference` scales) —
+     * split into typed columns once a family (à la `user_settings.hotkey`)
+     * grows large enough to justify a migration.
+     */
+    preference: jsonb('preference').$type<WorkspaceUserPreference>().notNull().default({}),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('workspace_user_settings_workspace_id_user_id_unique').on(t.workspaceId, t.userId),
+    index('workspace_user_settings_user_id_idx').on(t.userId),
+  ],
+);
+
+export type WorkspaceUserSettingsItem = typeof workspaceUserSettings.$inferSelect;
+export type NewWorkspaceUserSettings = typeof workspaceUserSettings.$inferInsert;
+
+/**
+ * Teams inside a workspace (modeled after Linear teams). A lightweight
+ * organizing unit for now — no sidebar grouping or permission scoping yet —
+ * reserved as the future anchor for team-owned resources such as projects.
+ *
+ * `identifier` is the short uppercase key (e.g. `ENG`) used as a prefix for
+ * team-scoped ids later on, so it is unique per workspace.
+ */
+export const workspaceTeams = pgTable(
+  'workspace_teams',
+  {
+    id: text('id')
+      .$defaultFn(() => createNanoId(16)())
+      .notNull()
+      .primaryKey(),
+    workspaceId: text('workspace_id')
+      .references(() => workspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    /** Uppercase short key, unique per workspace. Normalized by the writer. */
+    identifier: varchar('identifier', { length: 16 }).notNull(),
+    description: varchar('description', { length: 1000 }),
+    /** Emoji (or image URL) shown next to the team name. */
+    avatar: text('avatar'),
+    createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('workspace_teams_workspace_identifier_unique').on(t.workspaceId, t.identifier),
+    index('workspace_teams_workspace_id_idx').on(t.workspaceId),
+    // Lets a user deletion find the rows its `created_by` FK must null out.
+    index('workspace_teams_created_by_idx').on(t.createdBy),
+    // Target of the composite FK that pins a membership's workspace to its team's.
+    unique('workspace_teams_id_workspace_unique').on(t.id, t.workspaceId),
+  ],
+);
+
+export type WorkspaceTeamItem = typeof workspaceTeams.$inferSelect;
+export type NewWorkspaceTeam = typeof workspaceTeams.$inferInsert;
+
+/**
+ * Membership of a workspace member in a team. Surrogate PK with the business
+ * uniqueness in a unique index (same reasoning as `workspace_user_settings`).
+ * `role` is reserved for future team-level permissions; everyone is `member`
+ * today.
+ */
+export const workspaceTeamMembers = pgTable(
+  'workspace_team_members',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    teamId: text('team_id').notNull(),
+    /**
+     * Denormalized so member-scoped lookups never need to join the team table.
+     * The composite FK below keeps it equal to the team's own workspace.
+     */
+    workspaceId: text('workspace_id')
+      .references(() => workspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    role: text('role').notNull().default('member'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.teamId, t.workspaceId],
+      foreignColumns: [workspaceTeams.id, workspaceTeams.workspaceId],
+      name: 'workspace_team_members_team_workspace_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('workspace_team_members_team_user_unique').on(t.teamId, t.userId),
+    index('workspace_team_members_workspace_user_idx').on(t.workspaceId, t.userId),
+    // Lets a user deletion find the rows its `user_id` FK must cascade to.
+    index('workspace_team_members_user_id_idx').on(t.userId),
+  ],
+);
+
+export type WorkspaceTeamMemberItem = typeof workspaceTeamMembers.$inferSelect;
+export type NewWorkspaceTeamMember = typeof workspaceTeamMembers.$inferInsert;

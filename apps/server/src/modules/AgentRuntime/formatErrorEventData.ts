@@ -1,4 +1,11 @@
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
+import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
+
+import { formatErrorForState } from './formatErrorForState';
 import { formatPgError, pgErrorType, unwrapPgError } from './pgError';
+
+const isErrorType = (value: unknown): value is string | number =>
+  typeof value === 'string' || typeof value === 'number';
 
 /**
  * Normalize an arbitrary thrown value into the shape the runtime stream-event
@@ -23,55 +30,51 @@ import { formatPgError, pgErrorType, unwrapPgError } from './pgError';
  * DB failures by SQLSTATE.
  */
 export const formatErrorEventData = (error: unknown, phase: string) => {
-  let errorMessage = 'Unknown error';
-  let errorType: string | undefined;
-  // True when `errorType` came from a business-typed field on the error
-  // payload (step 1 above). Driver class names assigned via `error.name`
-  // do NOT set this flag, so raw `PostgresError` / `DatabaseError` instances
-  // still fall through to the PG unwrap step.
-  let hasBusinessErrorType = false;
-
-  if (error && typeof error === 'object') {
-    const payload = error as { error?: unknown; errorType?: unknown; message?: unknown };
-
-    if (typeof payload.errorType === 'string') {
-      errorType = payload.errorType;
-      hasBusinessErrorType = true;
-    }
-
-    if (typeof payload.message === 'string' && payload.message.length > 0) {
-      errorMessage = payload.message;
-    } else if (typeof payload.error === 'string' && payload.error.length > 0) {
-      errorMessage = payload.error;
-    } else if (
-      payload.error &&
-      typeof payload.error === 'object' &&
-      'message' in payload.error &&
-      typeof payload.error.message === 'string'
-    ) {
-      errorMessage = payload.error.message;
-    } else if (error instanceof Error && error.message.length > 0) {
-      errorMessage = error.message;
-    } else if (errorType) {
-      errorMessage = errorType;
-    }
-  } else if (error instanceof Error && error.message.length > 0) {
-    errorMessage = error.message;
-    errorType = error.name;
-  } else if (typeof error === 'string' && error.length > 0) {
-    errorMessage = error;
-  }
+  const payload = toRecord(error);
+  const rawPayloadErrorType = payload?.errorType ?? payload?.type;
+  const payloadErrorType = isErrorType(rawPayloadErrorType) ? rawPayloadErrorType : undefined;
+  /**
+   * Runtime completion errors and provider chat errors thrown as Error instances (e.g. a
+   * `StreamChunkError` raised while consuming the model stream) carry their provider,
+   * diagnostics, and trace id on the instance. Keep that body so the client can persist it
+   * and render provider-specific error UI; other Error instances keep the flat shape.
+   */
+  const isRuntimeCompletionError =
+    error instanceof ModelEmptyError ||
+    error instanceof ModelRefusalError ||
+    (error instanceof Error &&
+      payloadErrorType !== undefined &&
+      pickNonEmptyString(payload?.provider) !== undefined);
+  const structuredError = isRuntimeCompletionError
+    ? formatErrorForState(error)
+    : error instanceof Error || payloadErrorType === undefined
+      ? undefined
+      : formatErrorForState(payload);
+  const body = structuredError?.body;
+  const hasPayloadErrorType = payloadErrorType !== undefined;
+  let errorType = hasPayloadErrorType
+    ? String(structuredError?.type ?? payloadErrorType)
+    : undefined;
+  const payloadError = payload?.error;
+  let errorMessage =
+    pickNonEmptyString(structuredError?.message) ??
+    pickNonEmptyString(payload?.message) ??
+    pickNonEmptyString(payloadError) ??
+    pickNonEmptyString(toRecord(payloadError)?.message) ??
+    (error instanceof Error ? pickNonEmptyString(error.message) : pickNonEmptyString(error)) ??
+    errorType ??
+    'Unknown error';
 
   if (!errorType && error instanceof Error && error.name) {
     errorType = error.name;
   }
 
-  // Enrichment: run PG unwrap whenever no *business-typed* errorType was
+  // Enrichment: run PG unwrap whenever no payload errorType was
   // declared. This covers both Drizzle-wrapped errors (PG info under .cause)
   // AND raw top-level driver errors like `PostgresError` / `DatabaseError`
   // which carry a specific `name` but are still real PG errors deserving
   // `pg_<sqlstate>` classification on the dashboard.
-  if (!hasBusinessErrorType) {
+  if (!hasPayloadErrorType) {
     const pg = unwrapPgError(error);
     if (pg) {
       errorMessage = formatPgError(pg);
@@ -80,6 +83,7 @@ export const formatErrorEventData = (error: unknown, phase: string) => {
   }
 
   return {
+    ...(body === undefined ? {} : { body }),
     error: errorMessage,
     errorType,
     phase,

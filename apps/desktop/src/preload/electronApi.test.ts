@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SetupElectronApiFunction } from './electronApi';
 
@@ -6,6 +6,14 @@ import type { SetupElectronApiFunction } from './electronApi';
 const mockElectronAPI = { someAPI: 'mock-electron-api' };
 const mockContextBridgeExposeInMainWorld = vi.fn();
 const mockIpcRendererOn = vi.fn();
+const mockIpcRendererSendSync = vi.fn();
+const mockGetProcessMemoryInfo = vi.fn();
+const mockGetHeapStatistics = vi.fn();
+const mockGetBlinkMemoryInfo = vi.fn();
+
+const originalGetProcessMemoryInfo = process.getProcessMemoryInfo;
+const originalGetHeapStatistics = process.getHeapStatistics;
+const originalGetBlinkMemoryInfo = process.getBlinkMemoryInfo;
 
 vi.mock('electron', () => ({
   contextBridge: {
@@ -13,6 +21,7 @@ vi.mock('electron', () => ({
   },
   ipcRenderer: {
     on: mockIpcRendererOn,
+    sendSync: mockIpcRendererSendSync,
   },
 }));
 
@@ -39,8 +48,25 @@ describe('setupElectronApi', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
+    mockGetProcessMemoryInfo.mockReset();
+    mockGetHeapStatistics.mockReset();
+    mockGetBlinkMemoryInfo.mockReset();
+    Object.assign(process, {
+      getBlinkMemoryInfo: mockGetBlinkMemoryInfo,
+      getHeapStatistics: mockGetHeapStatistics,
+      getProcessMemoryInfo: mockGetProcessMemoryInfo,
+    });
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     ({ setupElectronApi } = await import('./electronApi'));
+  });
+
+  afterAll(() => {
+    if (originalGetProcessMemoryInfo) process.getProcessMemoryInfo = originalGetProcessMemoryInfo;
+    else Reflect.deleteProperty(process, 'getProcessMemoryInfo');
+    if (originalGetHeapStatistics) process.getHeapStatistics = originalGetHeapStatistics;
+    else Reflect.deleteProperty(process, 'getHeapStatistics');
+    if (originalGetBlinkMemoryInfo) process.getBlinkMemoryInfo = originalGetBlinkMemoryInfo;
+    else Reflect.deleteProperty(process, 'getBlinkMemoryInfo');
   });
 
   it('should expose electron API to main world', () => {
@@ -57,9 +83,50 @@ describe('setupElectronApi', () => {
     expect(call).toBeTruthy();
     expect(call?.[1]).toMatchObject({
       invoke: mockInvoke,
+      getDesktopBootstrapIdentity: expect.any(Function),
       onScreenCaptureSession: expect.any(Function),
       onStreamInvoke: mockOnStreamInvoke,
     });
+  });
+
+  it('reads the bootstrap identity synchronously before renderer initialization', () => {
+    const identity = { isIdentityResolved: true, userId: 'user-1' };
+    mockIpcRendererSendSync.mockReturnValue(identity);
+    setupElectronApi();
+
+    const exposedAPI = mockContextBridgeExposeInMainWorld.mock.calls[1][1];
+
+    expect(exposedAPI.getDesktopBootstrapIdentity()).toEqual(identity);
+    expect(mockIpcRendererSendSync).toHaveBeenCalledWith('desktop:get-bootstrap-identity');
+  });
+
+  it('reads precise renderer process memory', async () => {
+    mockGetProcessMemoryInfo.mockResolvedValue({ private: 2_621_440, shared: 1024 });
+    mockGetHeapStatistics.mockReturnValue({
+      heapSizeLimit: 4_194_304,
+      mallocedMemory: 512,
+      totalHeapSize: 2048,
+      totalPhysicalSize: 1536,
+      usedHeapSize: 1024,
+    });
+    mockGetBlinkMemoryInfo.mockReturnValue({ allocated: 256, total: 320 });
+    setupElectronApi();
+
+    const exposedAPI = mockContextBridgeExposeInMainWorld.mock.calls[1][1];
+
+    await expect(exposedAPI.getRendererMemoryInfo()).resolves.toEqual({
+      blink: { allocatedBytes: 262_144, totalBytes: 327_680 },
+      heap: {
+        limitBytes: 4_294_967_296,
+        mallocedBytes: 524_288,
+        physicalBytes: 1_572_864,
+        totalBytes: 2_097_152,
+        usedBytes: 1_048_576,
+      },
+      privateBytes: 2_684_354_560,
+      sharedBytes: 1_048_576,
+    });
+    expect(mockGetProcessMemoryInfo).toHaveBeenCalledOnce();
   });
 
   it('should expose lobeEnv with darwinMajorVersion, isMacTahoe, platform and version info', () => {

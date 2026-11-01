@@ -8,37 +8,35 @@ afterEach(() => {
 });
 
 describe('skillFilters', () => {
-  it('should disable agent-browser on web environment', () => {
-    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: false })).toBe(false);
+  it('should disable agent-browser when the run cannot execute on a device', () => {
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { canExecuteOnDevice: false })).toBe(
+      false,
+    );
   });
 
   it('should disable task builtin skill globally', () => {
-    expect(shouldEnableBuiltinSkill('task', { isDesktop: false })).toBe(false);
-    expect(shouldEnableBuiltinSkill('task', { isDesktop: true })).toBe(false);
+    expect(shouldEnableBuiltinSkill('task', { canExecuteOnDevice: false })).toBe(false);
+    expect(shouldEnableBuiltinSkill('task', { canExecuteOnDevice: true })).toBe(false);
   });
 
-  it('should enable agent-browser on desktop (non-Windows) environment', () => {
-    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(true);
+  it('should enable agent-browser when the run can execute on a device', () => {
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { canExecuteOnDevice: true })).toBe(true);
   });
 
-  it('should enable agent-browser on desktop Windows', () => {
-    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(true);
-  });
-
-  it('should not be affected by Windows platform detection when desktop is enabled', async () => {
+  it('should not be affected by Windows platform detection when device execution is enabled', async () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' });
     vi.resetModules();
 
     const { shouldEnableBuiltinSkill } = await import('./skillFilters');
 
-    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { isDesktop: true })).toBe(true);
+    expect(shouldEnableBuiltinSkill('lobe-agent-browser', { canExecuteOnDevice: true })).toBe(true);
   });
 
-  it('should keep non-desktop-only skills enabled', () => {
-    expect(shouldEnableBuiltinSkill('lobe-artifacts', { isDesktop: false })).toBe(true);
+  it('should keep non-device-only skills enabled', () => {
+    expect(shouldEnableBuiltinSkill('lobe-artifacts', { canExecuteOnDevice: false })).toBe(true);
   });
 
-  it('should filter builtin skills by platform context', () => {
+  it('should filter builtin skills by device execution context', () => {
     const skills = [
       {
         content: 'agent-browser',
@@ -63,7 +61,7 @@ describe('skillFilters', () => {
       },
     ];
 
-    const filtered = filterBuiltinSkills(skills, { isDesktop: false });
+    const filtered = filterBuiltinSkills(skills, { canExecuteOnDevice: false });
 
     expect(filtered).toHaveLength(1);
     expect(filtered[0].identifier).toBe('lobe-artifacts');

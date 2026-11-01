@@ -1,6 +1,5 @@
-import { Button, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
-import { Space } from 'antd';
-import { CalendarOffIcon, ChevronDown, PlayIcon, RotateCcwIcon } from 'lucide-react';
+import { Button, Flexbox, SplitButton, Text, toast } from '@lobehub/ui';
+import { CalendarOffIcon, PlayIcon, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,14 +14,32 @@ import { nextHeartbeatFiring, nextScheduleFiring } from './scheduler/helpers';
 
 const padTime = (n: number) => String(n).padStart(2, '0');
 
-const formatCountdown = (msRemaining: number): string => {
+export type CountdownDisplay =
+  { countdown: string; type: 'time' } | { days: number; hours: number; type: 'days' };
+
+export const formatCountdown = (msRemaining: number): CountdownDisplay => {
   const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
+  const days = Math.floor(totalSeconds / 86_400);
+  if (days > 0) {
+    return { days, hours: Math.floor((totalSeconds % 86_400) / 3600), type: 'days' };
+  }
+
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  if (hours > 0) return `${padTime(hours)}:${padTime(minutes)}:${padTime(seconds)}`;
-  return `${padTime(minutes)}:${padTime(seconds)}`;
+  const countdown =
+    hours > 0
+      ? `${padTime(hours)}:${padTime(minutes)}:${padTime(seconds)}`
+      : `${padTime(minutes)}:${padTime(seconds)}`;
+
+  return { countdown, type: 'time' };
 };
+
+export const shouldPersistFallbackAssignee = (
+  assigneeAgentId?: string | null,
+  assigneeUserId?: string | null,
+  inboxAgentId?: string | null,
+) => !assigneeAgentId && !assigneeUserId && !!inboxAgentId;
 
 const TaskDetailRunPauseAction = memo(() => {
   const { t } = useTranslation('chat');
@@ -37,8 +54,10 @@ const TaskDetailRunPauseAction = memo(() => {
   const schedulePattern = useTaskStore(taskDetailSelectors.activeTaskSchedulePattern);
   const scheduleTimezone = useTaskStore(taskDetailSelectors.activeTaskScheduleTimezone);
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isRerun = status === 'completed';
+  const isArchived = !!useTaskStore(taskDetailSelectors.activeTaskArchivedAt);
   const runTask = useTaskStore((s) => s.runTask);
   const updateTask = useTaskStore((s) => s.updateTask);
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
@@ -56,9 +75,14 @@ const TaskDetailRunPauseAction = memo(() => {
       return;
     }
     if (!canRun) return;
+    // Archived tasks are hidden from lists; the server refuses to run them.
+    if (isArchived) {
+      toast.info(t('taskList.contextMenu.runArchivedBlocked'));
+      return;
+    }
     setIsStarting(true);
     try {
-      if (!assigneeAgentId && inboxAgentId) {
+      if (shouldPersistFallbackAssignee(assigneeAgentId, assigneeUserId, inboxAgentId)) {
         await updateTask(taskId, { assigneeAgentId: inboxAgentId });
       }
       await runTask(taskId);
@@ -69,7 +93,10 @@ const TaskDetailRunPauseAction = memo(() => {
     taskId,
     canRun,
     canPause,
+    isArchived,
+    t,
     assigneeAgentId,
+    assigneeUserId,
     inboxAgentId,
     runTask,
     updateTask,
@@ -80,16 +107,30 @@ const TaskDetailRunPauseAction = memo(() => {
   const handleRunNow = useCallback(async () => {
     if (!canEditTask) return;
     if (!taskId) return;
+    if (isArchived) {
+      toast.info(t('taskList.contextMenu.runArchivedBlocked'));
+      return;
+    }
     setIsRunningNow(true);
     try {
-      if (!assigneeAgentId && inboxAgentId) {
+      if (shouldPersistFallbackAssignee(assigneeAgentId, assigneeUserId, inboxAgentId)) {
         await updateTask(taskId, { assigneeAgentId: inboxAgentId });
       }
       await runTask(taskId);
     } finally {
       setIsRunningNow(false);
     }
-  }, [canEditTask, taskId, assigneeAgentId, inboxAgentId, runTask, updateTask]);
+  }, [
+    canEditTask,
+    taskId,
+    isArchived,
+    t,
+    assigneeAgentId,
+    assigneeUserId,
+    inboxAgentId,
+    runTask,
+    updateTask,
+  ]);
 
   const handleCancelSchedule = useCallback(async () => {
     if (!canEditTask) return;
@@ -118,7 +159,10 @@ const TaskDetailRunPauseAction = memo(() => {
     if (!isScheduled) return null;
     let next = null;
     if (automationMode === 'heartbeat') {
-      next = nextHeartbeatFiring(detail?.heartbeat?.lastAt, interval);
+      next = nextHeartbeatFiring(
+        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
+        interval,
+      );
     } else if (automationMode === 'schedule' && schedulePattern) {
       next = nextScheduleFiring(schedulePattern, scheduleTimezone);
     }
@@ -128,6 +172,7 @@ const TaskDetailRunPauseAction = memo(() => {
     isScheduled,
     automationMode,
     detail?.heartbeat?.lastAt,
+    detail?.heartbeat?.scheduledAt,
     interval,
     schedulePattern,
     scheduleTimezone,
@@ -137,8 +182,8 @@ const TaskDetailRunPauseAction = memo(() => {
   if (isScheduled) {
     return (
       <Flexbox horizontal align={'center'} gap={12}>
-        <Space.Compact>
-          <Button
+        <SplitButton disabled={!canEditTask || isCancellingSchedule} loading={isRunningNow}>
+          <SplitButton.Main
             disabled={!canEditTask || isRunningNow}
             icon={CalendarOffIcon}
             loading={isCancellingSchedule}
@@ -146,8 +191,8 @@ const TaskDetailRunPauseAction = memo(() => {
             onClick={handleCancelSchedule}
           >
             {t('taskDetail.cancelSchedule')}
-          </Button>
-          <DropdownMenu
+          </SplitButton.Main>
+          <SplitButton.Menu
             items={[
               {
                 disabled: !canEditTask || isRunningNow || isCancellingSchedule,
@@ -157,18 +202,13 @@ const TaskDetailRunPauseAction = memo(() => {
                 onClick: handleRunNow,
               },
             ]}
-          >
-            <Button
-              disabled={!canEditTask || isCancellingSchedule}
-              icon={ChevronDown}
-              loading={isRunningNow}
-              title={canEditTask ? undefined : reason}
-            />
-          </DropdownMenu>
-        </Space.Compact>
+          />
+        </SplitButton>
         {countdownText && (
           <Text fontSize={12} type={'secondary'}>
-            {t('taskDetail.nextRunCountdown', { countdown: countdownText })}
+            {countdownText.type === 'days'
+              ? t('taskDetail.nextRunCountdownDays', countdownText)
+              : t('taskDetail.nextRunCountdown', countdownText)}
           </Text>
         )}
       </Flexbox>

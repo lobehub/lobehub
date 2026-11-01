@@ -4,10 +4,10 @@ import {
   type ListSkillsArgs,
   type RenameSkillArgs,
   type ReplaceSkillIndexArgs,
-  SkillMaintainerExecutionRuntime,
   SkillMaintainerIdentifier,
   type SkillMaintainerRuntimeService,
 } from '@lobechat/builtin-tool-skill-maintainer';
+import { SkillMaintainerExecutionRuntime } from '@lobechat/builtin-tool-skill-maintainer/executionRuntime';
 
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
 

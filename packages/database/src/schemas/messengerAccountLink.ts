@@ -1,3 +1,4 @@
+import { isNotNull } from 'drizzle-orm';
 import { index, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
@@ -13,9 +14,11 @@ import { workspaces } from './workspace';
  * client (`/agents` + `/switch <n>`) or the web UI without re-running the
  * verify-im flow per agent.
  *
- * Distinct from `agent_bot_providers` (per-user-deployed bots): the bot
- * itself is shared (credentials in env), and the routing key is the IM
- * account, not the agent.
+ * Most platforms use a shared bot whose credentials live in env or
+ * `messenger_installations`. User-scoped credential platforms such as WeChat
+ * keep their encrypted connection credentials on this same account aggregate
+ * instead: the credential cannot outlive or be shared independently from the
+ * bound IM identity.
  */
 export const messengerAccountLinks = pgTable(
   'messenger_account_links',
@@ -50,6 +53,21 @@ export const messengerAccountLinks = pgTable(
     platformUsername: text('platform_username'),
 
     /**
+     * Platform-side application/bot id for user-scoped credential platforms.
+     * WeChat stores the scanned iLink bot id here so inbound payloads can fail
+     * closed before decrypting credentials. Null for shared-bot platforms.
+     */
+    applicationId: varchar('application_id', { length: 255 }),
+
+    /**
+     * AES-GCM encrypted platform credential JSON. WeChat stores
+     * `{ baseUrl, botId, botToken }`; shared-bot platforms leave this null.
+     * Server-side model methods must use an explicit credential projection so
+     * ordinary account-link API responses never expose this ciphertext.
+     */
+    credentials: text('credentials'),
+
+    /**
      * Currently selected agent for this IM session. Nullable so a fresh link
      * can sit "agent-less" until the user picks one via /switch or the UI;
      * `set null` on agent delete so a deleted agent doesn't orphan the link.
@@ -78,6 +96,15 @@ export const messengerAccountLinks = pgTable(
       t.platform,
       t.tenantId,
     ),
+    // A user-scoped credential bot (WeChat iLink bot id) belongs to exactly
+    // one account link — a second link claiming the same bot id must fail
+    // closed instead of creating an ambiguous inbound route with the wrong
+    // ciphertext. Partial: shared-bot rows keep `application_id` NULL and are
+    // unaffected. Mirrors the unique routing keys on `messenger_installations`
+    // and `agent_bot_providers`.
+    uniqueIndex('messenger_account_links_platform_tenant_application_unique')
+      .on(t.platform, t.tenantId, t.applicationId)
+      .where(isNotNull(t.applicationId)),
     index('messenger_account_links_active_agent_idx').on(t.activeAgentId),
     index('messenger_account_links_workspace_id_idx').on(t.workspaceId),
   ],
@@ -87,3 +114,10 @@ export const insertMessengerAccountLinkSchema = createInsertSchema(messengerAcco
 
 export type NewMessengerAccountLink = typeof messengerAccountLinks.$inferInsert;
 export type MessengerAccountLinkItem = typeof messengerAccountLinks.$inferSelect;
+
+/**
+ * Row shape safe to return from account-link APIs — excludes the encrypted
+ * `credentials` ciphertext, which only explicit credential-scoped reads may
+ * project.
+ */
+export type MessengerAccountLinkPublicItem = Omit<MessengerAccountLinkItem, 'credentials'>;

@@ -1,13 +1,15 @@
 // cspell:ignore tokenx
 import { filesPrompts } from '@lobechat/prompts';
 import type {
+  ChatAudioItem,
   ChatFileItem,
   ChatImageItem,
   ChatVideoItem,
   UIChatMessage,
   UploadFileItem,
 } from '@lobechat/types';
-import { getMimeType } from '@lobechat/utils/mimeType';
+import { estimateAudioInputTokens } from '../utils/audio';
+import { getMimeType } from '../utils/mimeType';
 import { estimateTokenCount } from 'tokenx';
 
 const ESTIMATE_INPUT_MESSAGE_ID = '__cost_estimate_input__';
@@ -31,17 +33,24 @@ const TEXT_UPLOAD_MIME_TYPES = new Set([
 const TEXT_UPLOAD_EXTENSION_OVERRIDES = new Set(['.cs', '.jsonl', '.ts', '.tsx']);
 
 export interface InputTokenBuckets {
+  audioTokens: number;
   imageTokens: number;
   textTokens: number;
   videoTokens: number;
 }
 
 interface AttachmentTokenOptions {
+  /** Conservative per-item fallback when an audio duration or model rate is unavailable. */
+  audioTokenEstimate?: number;
+  /** Positive model-specific audio input token rate. */
+  audioTokensPerSecond?: number;
+  canUseAudio: boolean;
   canUseVideo: boolean;
   canUseVision: boolean;
 }
 
 export const EMPTY_TOKEN_BUCKETS: InputTokenBuckets = {
+  audioTokens: 0,
   imageTokens: 0,
   textTokens: 0,
   videoTokens: 0,
@@ -54,11 +63,13 @@ const countPromptTextTokens = (content: string) => {
 };
 
 const countFileContextTokens = ({
+  audioList,
   fileList,
   imageList,
   messageId,
   videoList,
 }: {
+  audioList?: ChatAudioItem[];
   fileList?: ChatFileItem[];
   imageList?: ChatImageItem[];
   messageId: string;
@@ -66,6 +77,7 @@ const countFileContextTokens = ({
 }) => {
   const prompt = filesPrompts({
     addUrl: false,
+    audioList,
     fileList,
     imageList,
     messageId,
@@ -77,11 +89,18 @@ const countFileContextTokens = ({
 
 export const estimateSentMessageAttachmentTokenBuckets = (
   messages: UIChatMessage[],
-  { canUseVideo, canUseVision }: AttachmentTokenOptions,
+  {
+    audioTokenEstimate,
+    audioTokensPerSecond,
+    canUseAudio,
+    canUseVideo,
+    canUseVision,
+  }: AttachmentTokenOptions,
 ): InputTokenBuckets => {
   let textTokens = 0;
   let imageTokens = 0;
   let videoTokens = 0;
+  let audioTokens = 0;
 
   for (const message of messages) {
     if (message.role !== 'user') continue;
@@ -89,10 +108,18 @@ export const estimateSentMessageAttachmentTokenBuckets = (
     const fileList = message.fileList ?? [];
     const imageList = message.imageList ?? [];
     const videoList = message.videoList ?? [];
+    const audioList = message.audioList ?? [];
 
-    if (fileList.length === 0 && imageList.length === 0 && videoList.length === 0) continue;
+    if (
+      fileList.length === 0 &&
+      imageList.length === 0 &&
+      videoList.length === 0 &&
+      audioList.length === 0
+    )
+      continue;
 
     textTokens += countFileContextTokens({
+      audioList,
       fileList,
       imageList,
       messageId: message.id,
@@ -106,9 +133,17 @@ export const estimateSentMessageAttachmentTokenBuckets = (
     if (canUseVideo) {
       videoTokens += videoList.length * VISUAL_INPUT_TOKEN_ESTIMATE;
     }
+
+    if (canUseAudio) {
+      audioTokens += estimateAudioInputTokens(audioList, {
+        fallbackTokensPerItem: audioTokenEstimate,
+        tokensPerSecond: audioTokensPerSecond,
+      }).tokens;
+    }
   }
 
   return {
+    audioTokens,
     imageTokens,
     textTokens,
     videoTokens,
@@ -144,7 +179,13 @@ const estimateTextFileTokensBySize = (size: number) =>
 
 export const estimatePendingUploadTokenBuckets = (
   files: UploadFileItem[],
-  { canUseVideo, canUseVision }: AttachmentTokenOptions,
+  {
+    audioTokenEstimate,
+    audioTokensPerSecond,
+    canUseAudio,
+    canUseVideo,
+    canUseVision,
+  }: AttachmentTokenOptions,
   textFileContents: Record<string, string>,
 ): InputTokenBuckets => {
   if (files.length === 0) return EMPTY_TOKEN_BUCKETS;
@@ -152,6 +193,7 @@ export const estimatePendingUploadTokenBuckets = (
   const fileList: ChatFileItem[] = [];
   const imageList: ChatImageItem[] = [];
   const videoList: ChatVideoItem[] = [];
+  const audioList: ChatAudioItem[] = [];
   let pendingTextFallbackTokens = 0;
 
   for (const item of files) {
@@ -176,6 +218,15 @@ export const estimatePendingUploadTokenBuckets = (
       continue;
     }
 
+    if (type.startsWith('audio')) {
+      audioList.push({
+        alt: item.file.name || item.id,
+        id: item.id,
+        url,
+      });
+      continue;
+    }
+
     const textContent = textFileContents[item.id];
     if (isTextLikeUploadFile(item) && textContent === undefined) {
       pendingTextFallbackTokens += estimateTextFileTokensBySize(item.file.size || 0);
@@ -192,9 +243,16 @@ export const estimatePendingUploadTokenBuckets = (
   }
 
   return {
+    audioTokens: canUseAudio
+      ? estimateAudioInputTokens(audioList, {
+          fallbackTokensPerItem: audioTokenEstimate,
+          tokensPerSecond: audioTokensPerSecond,
+        }).tokens
+      : 0,
     imageTokens: canUseVision ? imageList.length * VISUAL_INPUT_TOKEN_ESTIMATE : 0,
     textTokens:
       countFileContextTokens({
+        audioList,
         fileList,
         imageList,
         messageId: ESTIMATE_INPUT_MESSAGE_ID,
@@ -207,6 +265,7 @@ export const estimatePendingUploadTokenBuckets = (
 export const addTokenBuckets = (...buckets: InputTokenBuckets[]): InputTokenBuckets =>
   buckets.reduce<InputTokenBuckets>(
     (sum, bucket) => ({
+      audioTokens: sum.audioTokens + bucket.audioTokens,
       imageTokens: sum.imageTokens + bucket.imageTokens,
       textTokens: sum.textTokens + bucket.textTokens,
       videoTokens: sum.videoTokens + bucket.videoTokens,

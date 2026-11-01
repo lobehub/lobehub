@@ -1,0 +1,331 @@
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import type { LobeChatDatabase } from '@lobechat/database';
+import {
+  agentDisplayName,
+  CHANNEL_LIMITS,
+  defaultChannelAgentDevice,
+  defaultChannelAgentDirectory,
+  isChannelRuntime,
+} from '@lobechat/types';
+import pMap from 'p-map';
+
+import { DeviceModel } from '@/database/models/device';
+import { ProjectModel } from '@/database/models/project';
+import type {
+  ChannelAddAgentInput,
+  ChannelSendInput,
+  ChannelStopScope,
+} from '@/database/repositories/channel';
+import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import { AgentService } from '@/server/services/agent';
+import { deviceGateway } from '@/server/services/deviceGateway';
+import { FileService } from '@/server/services/file';
+
+import { ChannelCoordinator } from './ChannelCoordinator';
+import { notifyChannel } from './notify';
+import { wakeChannel } from './queue';
+import { resolveChannelRoutingConfig } from './routingConfig';
+
+/** Environment selection is a request, never trusted device ownership or canonical-path data. */
+export interface ChannelAgentSelection {
+  agentId: string;
+  description?: string;
+  deviceId?: string;
+  name?: string;
+  workingDirectory?: string;
+}
+
+type ChannelAgentConfig = NonNullable<Awaited<ReturnType<AgentService['getAgentConfigById']>>>;
+
+/** An Agent's own runtime: external when it names a heterogeneous provider or model. */
+const agentRuntime = (agent: Pick<ChannelAgentConfig, 'agencyConfig' | 'model'>) =>
+  agent.agencyConfig?.heterogeneousProvider?.type ??
+  (isHeterogeneousAgentModelId(agent.model) ? agent.model : 'native');
+
+export class ChannelService {
+  readonly repository: ChannelRepository;
+  private readonly agentService: AgentService;
+  private readonly deviceModel: DeviceModel;
+  private readonly projectModel: ProjectModel;
+
+  constructor(
+    private readonly db: LobeChatDatabase,
+    private readonly userId: string,
+    private readonly workspaceId?: string,
+  ) {
+    this.repository = new ChannelRepository(db, userId, workspaceId);
+    this.agentService = new AgentService(db, userId, workspaceId);
+    this.deviceModel = new DeviceModel(db, userId, workspaceId);
+    this.projectModel = new ProjectModel(db, userId, workspaceId);
+  }
+
+  private async resolveAgent(
+    input: ChannelAgentSelection,
+    /** The Agent's config when the caller already loaded it. */
+    loaded?: ChannelAgentConfig,
+  ): Promise<ChannelAddAgentInput> {
+    const agent = loaded ?? (await this.agentService.getAgentConfigById(input.agentId));
+    if (!agent) throw new ChannelError('NOT_FOUND', 'Agent not found');
+    const runtime = agentRuntime(agent);
+    if (!isChannelRuntime(runtime))
+      throw new ChannelError('BAD_REQUEST', 'Unsupported Channel runtime');
+    const config: NonNullable<ChannelAddAgentInput['config']> = {};
+    if (input.deviceId) {
+      const device = this.workspaceId
+        ? await this.deviceModel.findWorkspaceDeviceById(input.deviceId)
+        : await this.deviceModel.findPersonalByDeviceId(input.deviceId);
+      if (!device || (this.workspaceId && device.visibility !== 'public'))
+        throw new ChannelError(
+          'FORBIDDEN',
+          'Choose an accessible device shared with this workspace',
+        );
+      // Early feedback only; the device itself refuses the Native scope. See executeDeviceOperation.
+      if (runtime === 'native' && device.platform === 'win32')
+        throw new ChannelError(
+          'BAD_REQUEST',
+          'Native Channel execution is not supported on Windows devices yet',
+        );
+      // An unpicked directory follows the Agent's own choice on this device, then the device's
+      // default, then its home folder: the fallbacks an ordinary conversation uses.
+      const workingDirectory =
+        input.workingDirectory?.trim() ||
+        defaultChannelAgentDirectory(agent.agencyConfig, device.deviceId, device.defaultCwd) ||
+        (await deviceGateway.queryDeviceSystemInfo(this.userId, input.deviceId, this.workspaceId))
+          ?.homePath;
+      if (!workingDirectory)
+        throw new ChannelError('BAD_REQUEST', 'Choose a working directory for this device');
+      const path = await deviceGateway.statPath({
+        deviceId: input.deviceId,
+        path: workingDirectory,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+      if (!path)
+        throw new ChannelError(
+          'BAD_REQUEST',
+          'Could not reach the device to verify the working directory',
+        );
+      if (!path.isDirectory)
+        throw new ChannelError(
+          'BAD_REQUEST',
+          'The working directory does not exist or is not a directory',
+        );
+      if (!path.canonicalPath)
+        throw new ChannelError(
+          'BAD_REQUEST',
+          'The device connector must be upgraded to verify the working directory',
+        );
+      config.deviceId = device.deviceId;
+      config.deviceOwnerId = device.userId;
+      config.workingDirectory = path.canonicalPath;
+    } else if (runtime !== 'native' || input.workingDirectory) {
+      throw new ChannelError('BAD_REQUEST', 'Choose an online device and working directory');
+    }
+    return { agentId: input.agentId, config, description: input.description, name: input.name };
+  }
+
+  create = async (input: {
+    agents: ChannelAgentSelection[];
+    projectId?: string;
+    title: string;
+  }) => {
+    // The project must be readable in this scope, the same visibility as the project list.
+    if (input.projectId && !(await this.projectModel.findById(input.projectId)))
+      throw new ChannelError('NOT_FOUND', 'Project not found');
+    // Resolving probes devices, so cap the work one request can start.
+    const agents = await pMap(input.agents, (agent) => this.resolveAgent(agent), {
+      concurrency: 5,
+    });
+    return this.repository.create({ agents, projectId: input.projectId, title: input.title });
+  };
+
+  /**
+   * The Channel a new workspace or project starts with. Callers pass a project they just created
+   * in this scope, so its readability is not checked again.
+   */
+  createDefault = async (input: { agentId: string; projectId?: string; title: string }) => {
+    const agentId = await this.defaultChannelAgent(input.agentId);
+    return this.repository.create({
+      agents: [{ agentId }],
+      projectId: input.projectId,
+      title: input.title,
+    });
+  };
+
+  /**
+   * Inviting into a direct conversation starts a group with its Agent and the invitees; the
+   * direct conversation stays one person and one Agent.
+   */
+  createGroupFromDirect = async (
+    channelId: string,
+    input: { agents: ChannelAgentSelection[]; title: string; userIds: string[] },
+  ) => {
+    // Check membership before probing a device; the write rechecks the current admin role.
+    if (!(await this.repository.findAccess(channelId)))
+      throw new ChannelError('NOT_FOUND', 'Channel not found');
+    const agents = await pMap(input.agents, (agent) => this.resolveAgent(agent), {
+      concurrency: 5,
+    });
+    const access = await this.repository.createGroupFromDirect(channelId, {
+      agents,
+      title: input.title,
+      userIds: input.userIds,
+    });
+    // Invitees see the new group without waiting for their next poll.
+    await this.changed(access.channel.id);
+    return access;
+  };
+
+  /**
+   * The direct conversation a person starts with an Agent they just created, titled with the
+   * Agent's name. The Agent keeps the device and directory a new Channel would give it, checked
+   * the same way; an external Agent with no device to run on gets none, as it could not join a
+   * group either.
+   */
+  createDirect = async (agentId: string, { localDeviceId }: { localDeviceId?: string } = {}) => {
+    const agent = await this.agentService.getAgentConfigById(agentId);
+    if (!agent) return;
+    const runtime = agentRuntime(agent);
+    if (!isChannelRuntime(runtime)) return;
+    const deviceId = defaultChannelAgentDevice({
+      agencyConfig: agent.agencyConfig,
+      localDeviceId,
+      runtime,
+    });
+    if (!deviceId && runtime !== 'native') return;
+    const { config } = await this.resolveAgent({ agentId, deviceId }, agent);
+    return this.repository.create({
+      agentConfig: config,
+      agentId,
+      title: agentDisplayName(agent, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
+    });
+  };
+
+  /**
+   * The main Agent when it runs natively. An external Agent needs a device and directory that a
+   * member picks when adding it, so the scope's LobeAI answers in the meantime.
+   */
+  private async defaultChannelAgent(agentId: string) {
+    const agent = await this.agentService.getAgentConfigById(agentId);
+    if (agent && agentRuntime(agent) === 'native') return agentId;
+    const inbox = await this.agentService.getBuiltinAgent(BUILTIN_AGENT_SLUGS.inbox);
+    if (!inbox?.id || agentRuntime(inbox) !== 'native')
+      throw new ChannelError('NOT_FOUND', 'No Agent can answer in the default Channel');
+    return inbox.id;
+  }
+
+  addAgent = async (channelId: string, input: ChannelAgentSelection) => {
+    // Check membership before probing a device; the write rechecks the current admin role.
+    if (!(await this.repository.findAccess(channelId)))
+      throw new ChannelError('NOT_FOUND', 'Channel not found');
+    const member = await this.repository.addAgent(channelId, await this.resolveAgent(input));
+    await this.changed(channelId);
+    return member;
+  };
+
+  /** The member's Agent decides its runtime; the request only chooses where it runs. */
+  updateAgentEnvironment = async (
+    channelId: string,
+    memberId: string,
+    input: Pick<ChannelAgentSelection, 'deviceId' | 'workingDirectory'>,
+  ) => {
+    const { agentId } = await this.repository.agentEnvironment(channelId, memberId);
+    const { config = {} } = await this.resolveAgent({ ...input, agentId });
+    const member = await this.repository.updateAgentEnvironment(channelId, memberId, config);
+    // A job blocked on the previous device or directory may be claimable now.
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return member;
+  };
+
+  rename = async (channelId: string, title: string) => {
+    const channel = await this.repository.rename(channelId, title);
+    await this.changed(channelId);
+    return channel;
+  };
+
+  addUser = async (channelId: string, userId: string) => {
+    const member = await this.repository.addUser(channelId, userId);
+    await this.changed(channelId);
+    return member;
+  };
+
+  changed = (channelId: string) => notifyChannel(this.db, channelId);
+
+  detail = async (channelId: string, options: Parameters<ChannelRepository['detail']>[1]) => {
+    const view = await this.repository.detail(channelId, options);
+    const files = new FileService(this.db, this.userId, this.workspaceId);
+    // The public message's attachment relation grants this read after membership authorization.
+    // Do not return private storage keys or route through an unrelated ordinary-chat ACL.
+    return {
+      ...view,
+      attachments: await pMap(
+        view.attachments,
+        async (file) => ({ ...file, url: await files.getFullFileUrl(file.url, 300) }),
+        { concurrency: 10 },
+      ),
+    };
+  };
+
+  remove = async (channelId: string) => {
+    await this.repository.remove(channelId);
+    // The coordinator physically stops revoked runs and retries unconfirmed exits.
+    // Keep receipts and directory locks until then, without holding this request open.
+    // A scheduling failure propagates; repeating the deletion safely schedules it again.
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
+  /** Like `remove`, the coordinator physically stops the runs the archive revoked. */
+  archive = async (channelId: string) => {
+    await this.repository.archive(channelId);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
+  unarchive = async (channelId: string) => {
+    await this.repository.unarchive(channelId);
+    await this.changed(channelId);
+  };
+
+  archiveThread = async (channelId: string, threadId: string) => {
+    await this.repository.archiveThread(channelId, threadId);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
+  unarchiveThread = async (channelId: string, threadId: string) => {
+    await this.repository.unarchiveThread(channelId, threadId);
+    await this.changed(channelId);
+  };
+
+  removeThread = async (channelId: string, threadId: string) => {
+    await this.repository.removeThread(channelId, threadId);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
+  send = async (channelId: string, input: Omit<ChannelSendInput, 'routing'>) => {
+    // Explicit reply and mention routing is decided by the repository.
+    const config =
+      input.replyToId || input.mentions?.length
+        ? null
+        : await resolveChannelRoutingConfig(this.db, this.userId);
+    const message = await this.repository.send(channelId, {
+      ...input,
+      routing: config ? 'decision' : 'fallback',
+    });
+    // Human quotes only update the public feed; they never schedule Agent work.
+    if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
+    else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return message;
+  };
+
+  retryRouting = async (channelId: string, messageId: string) => {
+    const message = await this.repository.retryRouting(channelId, messageId);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return message;
+  };
+
+  stop = async (channelId: string, scope: ChannelStopScope) => {
+    const writers = await this.repository.stop(channelId, scope);
+    await new ChannelCoordinator(this.db).stopWriters(writers);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+}

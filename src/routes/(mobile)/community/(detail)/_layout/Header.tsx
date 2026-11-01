@@ -2,7 +2,7 @@
 
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';

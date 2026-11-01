@@ -1,0 +1,154 @@
+import {
+  GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_BATCH_ASSAY_TITLE,
+  GOAL_BATCH_BREAK_OPTION,
+  GOAL_BATCH_RELEASE_OPTION,
+  GOAL_BATCH_RELEASE_TITLE,
+  GOAL_BATCH_TEMPLATE_TITLE,
+  GOAL_BATCH_TITLE,
+  GOAL_CLARIFICATION_OPTION,
+  GOAL_MACHINE_GATE_TITLE,
+  GOAL_MANAGER_QUESTION_TITLE,
+} from '@lobechat/const/goal';
+import type { GoalDecisionOption } from '@lobechat/types';
+import { coordinatorReasonCopies } from '@lobechat/utils/goalCopy';
+
+import type { GoalNodeView } from './goalGraphViewModel';
+
+/**
+ * The goal coordinator authors its gate/attempt strings in English on the
+ * server (`GoalService.openFailureDecision` and the verify settle reasons).
+ * The option ids and reason templates are a stable, finite vocabulary, so the
+ * client recognizes them and swaps in the user's language; anything it does
+ * not recognize renders verbatim.
+ */
+
+export type CoordinatorGateKind =
+  | 'agentQuestion'
+  | 'batchPatternBreak'
+  | 'batchRelease'
+  | 'clarifyGoal'
+  | 'fixSetup'
+  | 'goalAcceptance'
+  | 'recoverTask';
+
+/** Only the options name a gate, so any decision shape that carries them will do. */
+type GateOptions = { options?: GoalDecisionOption[] | null };
+
+const idsOf = (decision?: GateOptions | null): Set<string> =>
+  new Set((decision?.options ?? []).map((option) => option.id));
+
+export const coordinatorGateKind = (
+  decision?: GateOptions | null,
+  /** The gate node's title; the machine gate shares its options with `recoverTask`. */
+  nodeTitle?: string | null,
+): CoordinatorGateKind | undefined => {
+  const ids = idsOf(decision);
+  // `fail` only ever appears on the terminal acceptance gate, which may also
+  // offer `retire` — check it first.
+  if (ids.has('retry') && ids.has('fail')) return 'goalAcceptance';
+  if (ids.has('retry') && ids.has('retire'))
+    return nodeTitle === GOAL_MACHINE_GATE_TITLE ? 'fixSetup' : 'recoverTask';
+  if (ids.has(GOAL_CLARIFICATION_OPTION.assume) && ids.has(GOAL_CLARIFICATION_OPTION.answer))
+    return 'clarifyGoal';
+  // A batch's pattern break: revise the recipe, or fork it as a new class.
+  if (ids.has(GOAL_BATCH_BREAK_OPTION.revise) && ids.has(GOAL_BATCH_BREAK_OPTION.newClass))
+    return 'batchPatternBreak';
+  // A passed batch gate held for a person to approve the next wave.
+  if (ids.has(GOAL_BATCH_RELEASE_OPTION.release) && ids.has(GOAL_BATCH_RELEASE_OPTION.revise))
+    return 'batchRelease';
+  return undefined;
+};
+
+/** The gate a node view carries — pending first, else the last human-resolved one. */
+export const viewGateKind = (view: GoalNodeView): CoordinatorGateKind | undefined =>
+  coordinatorGateKind(view.decision ?? view.humanTouches.at(-1), view.node.title);
+
+export const gateTitleKey = (kind: CoordinatorGateKind): string => `goalProcess.gate.title.${kind}`;
+
+/**
+ * Locale key for a coordinator gate option, or undefined for a planner-authored
+ * option that keeps its stored label. The machine gate's Retry says the person
+ * fixed something first.
+ */
+export const gateOptionLabelKey = (
+  option: Pick<GoalDecisionOption, 'id'>,
+  kind?: CoordinatorGateKind,
+): string | undefined => {
+  switch (option.id) {
+    case 'fail': {
+      return 'goalProcess.gate.option.fail';
+    }
+    case 'retire': {
+      return 'goalProcess.gate.option.retire';
+    }
+    case 'retry': {
+      return kind === 'fixSetup'
+        ? 'goalProcess.gate.option.fixedRetry'
+        : 'goalProcess.gate.option.retry';
+    }
+    // The release gate shares the id, but sends the plan back without re-probing.
+    case GOAL_BATCH_BREAK_OPTION.revise: {
+      return kind === 'batchRelease'
+        ? 'goalProcess.gate.option.sendBackBatch'
+        : 'goalProcess.gate.option.reviseBatch';
+    }
+    case GOAL_BATCH_BREAK_OPTION.newClass: {
+      return 'goalProcess.gate.option.newClassBatch';
+    }
+    case GOAL_BATCH_RELEASE_OPTION.release: {
+      return 'goalProcess.gate.option.releaseBatch';
+    }
+    default: {
+      return undefined;
+    }
+  }
+};
+
+/** The coordinator's terminal Task that accepts the whole Goal (matched by its fixed title). */
+export const isGoalAcceptanceTask = (view: GoalNodeView): boolean =>
+  view.node.kind === 'task' && view.node.title === GOAL_ACCEPTANCE_TASK_TITLE;
+
+/**
+ * Locale key for a coordinator-authored fixed node title (gate nodes and the
+ * terminal Goal-acceptance Task), or undefined for user/agent-authored nodes.
+ */
+export const coordinatorNodeTitleKey = (view: GoalNodeView): string | undefined => {
+  const { node } = view;
+  if (isGoalAcceptanceTask(view)) return 'goalProcess.node.terminalAcceptance';
+  // A batch's own nodes carry fixed English titles, like the gates below.
+  if (node.kind === 'batch' && node.title === GOAL_BATCH_TITLE) return 'goalBatch.title';
+  if (node.kind === 'finding' && node.title === GOAL_BATCH_TEMPLATE_TITLE)
+    return 'goalBatch.templatePlain';
+  if (node.kind === 'decision' && node.title === GOAL_BATCH_ASSAY_TITLE)
+    return 'goalBatch.gate.title';
+  if (node.kind === 'decision' && node.title === GOAL_BATCH_RELEASE_TITLE)
+    return gateTitleKey('batchRelease');
+  if (node.kind === 'decision' && node.title === GOAL_MANAGER_QUESTION_TITLE)
+    return gateTitleKey('agentQuestion');
+  if (node.kind === 'decision') {
+    const kind = viewGateKind(view);
+    if (kind) return gateTitleKey(kind);
+  }
+  return undefined;
+};
+
+/**
+ * A stored coordinator reason in the reader's language: every blocker of a
+ * compound batch reason localized and rejoined, or the stored text when it is
+ * not (wholly) coordinator-authored.
+ */
+export const localizedCoordinatorReason = <R extends string | null | undefined>(
+  reason: R,
+  t: (key: string, params?: Record<string, unknown>) => string,
+): string | R => {
+  const copies = coordinatorReasonCopies(reason);
+  return copies ? copies.map((copy) => t(copy.key, copy.params)).join('; ') : reason;
+};
+
+export {
+  coordinatorGateReason,
+  coordinatorReasonCopies,
+  coordinatorReasonCopy,
+  type LocalizedCopyRef,
+} from '@lobechat/utils/goalCopy';

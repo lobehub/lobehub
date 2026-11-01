@@ -45,6 +45,90 @@ describe('InMemoryStreamEventManager', () => {
     });
   });
 
+  describe('readEventsOnce', () => {
+    it("returns nothing but a tail cursor for '$' (from-now semantics)", async () => {
+      await manager.publishStreamEvent('op-1', {
+        data: {},
+        stepIndex: 0,
+        type: 'agent_runtime_init',
+      });
+
+      const { events, lastEventId } = await manager.readEventsOnce('op-1', '$');
+      expect(events).toHaveLength(0);
+      // Cursor points at the current tail so the next poll reads strictly forward.
+      expect(lastEventId).not.toBe('$');
+    });
+
+    it('returns events after the cursor and advances it', async () => {
+      const firstId = await manager.publishStreamEvent('op-1', {
+        data: { n: 1 },
+        stepIndex: 0,
+        type: 'agent_runtime_init',
+      });
+      await manager.publishStreamEvent('op-1', {
+        data: { result: { a: 1 }, toolCallId: 't1' },
+        stepIndex: 1,
+        type: 'agent_intervention_response',
+      });
+
+      const { events, lastEventId } = await manager.readEventsOnce('op-1', firstId);
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('agent_intervention_response');
+      expect(events[0].data).toMatchObject({ toolCallId: 't1' });
+      expect(lastEventId).toBe(events[0].id);
+    });
+
+    it('is empty with an unchanged cursor when nothing is newer', async () => {
+      const id = await manager.publishStreamEvent('op-1', {
+        data: {},
+        stepIndex: 0,
+        type: 'agent_runtime_init',
+      });
+      const { events, lastEventId } = await manager.readEventsOnce('op-1', id);
+      expect(events).toHaveLength(0);
+      expect(lastEventId).toBe(id);
+    });
+
+    it("returns empty with a '0' cursor for an unknown operation", async () => {
+      const { events, lastEventId } = await manager.readEventsOnce('nope', '$');
+      expect(events).toHaveLength(0);
+      expect(lastEventId).toBe('0');
+    });
+  });
+
+  it('retains and paginates the complete history beyond the old 1000-event cap', async () => {
+    await manager.publishAgentRuntimeInit('op-1', {});
+    for (let n = 0; n < 1200; n++)
+      await manager.publishStreamEvent('op-1', { data: { n }, stepIndex: 0, type: 'stream_chunk' });
+    expect(manager.getAllEvents('op-1')).toHaveLength(1201);
+    let cursor = '0';
+    const ids: string[] = [];
+    let hasMore = true;
+    while (hasMore) {
+      const page = await manager.getStreamHistoryPage('op-1', cursor, 200);
+      expect(page.available).toBe(true);
+      ids.push(...page.events.map((event) => event.id!));
+      cursor = page.nextCursor;
+      hasMore = page.hasMore;
+    }
+    expect(ids).toHaveLength(1201);
+    expect(new Set(ids).size).toBe(1201);
+    expect((await manager.getStreamHistoryPage('op-1', cursor)).events).toEqual([]);
+    expect((await manager.getStreamHistoryPage('op-1', 'missing')).available).toBe(false);
+  });
+
+  it('reports history unavailable after the two-hour retention window', async () => {
+    const now = vi.spyOn(Date, 'now');
+    try {
+      now.mockReturnValue(1000);
+      await manager.publishAgentRuntimeInit('op-1', {});
+      now.mockReturnValue(1000 + 2 * 3600 * 1000 + 1);
+      expect((await manager.getStreamHistoryPage('op-1')).available).toBe(false);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   describe('subscribe', () => {
     it('should return an unsubscribe function', async () => {
       const callback = vi.fn();

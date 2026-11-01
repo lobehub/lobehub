@@ -1,8 +1,9 @@
-import { cssVar } from 'antd-style';
+import { cssVar, Image } from '@lobehub/ui';
 import type { ComponentProps } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { localFileKeys } from '@/libs/swr/keys';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 
 import { resolveMarkdownRelativeAssetPath } from './Body.helpers';
@@ -15,7 +16,7 @@ interface MarkdownImageProps extends ComponentProps<'img'> {
 }
 
 const MarkdownImage = memo<MarkdownImageProps>(
-  ({ alt, deviceId, markdownFilePath, node, src, style, workingDirectory, ...rest }) => {
+  ({ alt, className, deviceId, markdownFilePath, node, src, style, workingDirectory }) => {
     void node;
 
     const markdownSrc = typeof src === 'string' ? src : undefined;
@@ -26,7 +27,12 @@ const MarkdownImage = memo<MarkdownImageProps>(
 
     const { data: preview } = useClientDataSWR<LocalFilePreview>(
       resolvedPath
-        ? ['local-markdown-image-preview', deviceId ?? 'local', resolvedPath, workingDirectory]
+        ? localFileKeys.preview({
+            accept: 'image',
+            deviceId,
+            filePath: resolvedPath,
+            workingDirectory,
+          })
         : null,
       () =>
         projectFileService.getLocalFilePreview({
@@ -71,12 +77,16 @@ const MarkdownImage = memo<MarkdownImageProps>(
       );
     }
 
+    const resolvedSrc = imageSrc ?? markdownSrc;
+
     return (
-      <img
+      <Image
         alt={alt}
-        src={imageSrc ?? src}
-        style={{ maxWidth: '100%', ...style }}
-        {...rest}
+        classNames={className ? { image: className } : undefined}
+        objectFit={'contain'}
+        src={resolvedSrc}
+        styles={{ image: { maxWidth: '100%', ...style } }}
+        variant={'borderless'}
       />
     );
   },

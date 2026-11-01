@@ -8,15 +8,19 @@
  *
  * This module automatically resolves the full dependency tree.
  */
+import { execSync } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
-  copyModulesToDirectory,
   copyModulesToSource,
   getDependenciesForModules,
   getModuleFilesConfig,
-  getModuleFilesPatterns,
 } from './module-deps.config.mjs';
+
+const configDir = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Get the current target platform
@@ -26,7 +30,72 @@ import {
 function getTargetPlatform() {
   return process.env.npm_config_platform || os.platform();
 }
-const isDarwin = getTargetPlatform() === 'darwin';
+const targetPlatform = getTargetPlatform();
+const isDarwin = targetPlatform === 'darwin';
+
+// The packaged macOS runtime invokes get-windows' native helper directly.
+// Its optional dependencies are build/install tooling and the Windows loader
+// chain, neither of which is required in a macOS application artifact.
+// Platform prebuild packages (`@lydell/node-pty-win32-*`, `node-screenshots-linux-*`)
+// declare `os` in package.json; only the target platform's are packaged.
+export const dependencyOptions = {
+  targetPlatform,
+  ...(isDarwin ? { skipOptionalDependenciesFor: new Set(['get-windows']) } : {}),
+};
+
+/**
+ * First-party native addon packages are discovered instead of being listed by
+ * hand: any `@lobechat/*` workspace package carrying a `binding.gyp` is one.
+ * Per-platform gating comes from the package's own
+ * `lobechat.nativeAddonPlatforms` field (absent = every platform), and its
+ * `build:native` script is what the packaging pipeline invokes — so renaming
+ * or adding an addon package never requires touching this file.
+ */
+export function discoverFirstPartyNativeAddons() {
+  const scopeDir = path.join(configDir, 'node_modules', '@lobechat');
+  let entries;
+  try {
+    entries = fs.readdirSync(scopeDir);
+  } catch {
+    return [];
+  }
+
+  const targetPlatform = getTargetPlatform();
+  const addons = [];
+  for (const entry of entries) {
+    // pnpm renames displaced real directories (e.g. earlier copyModulesToSource
+    // output) to `.ignored_*` on reinstall — they shadow the live symlink.
+    if (entry.startsWith('.')) continue;
+    const packageDir = path.join(scopeDir, entry);
+    if (!fs.existsSync(path.join(packageDir, 'binding.gyp'))) continue;
+
+    let packageJson;
+    try {
+      packageJson = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'));
+    } catch {
+      continue;
+    }
+
+    const platforms = packageJson.lobechat?.nativeAddonPlatforms;
+    if (Array.isArray(platforms) && !platforms.includes(targetPlatform)) continue;
+
+    addons.push({
+      hasBuildScript: Boolean(packageJson.scripts?.['build:native']),
+      name: packageJson.name,
+    });
+  }
+  return addons;
+}
+
+const firstPartyNativeAddons = discoverFirstPartyNativeAddons();
+
+export function buildFirstPartyNativeAddons() {
+  for (const addon of firstPartyNativeAddons) {
+    if (!addon.hasBuildScript) continue;
+    console.info(`🔧 Building native addon ${addon.name}...`);
+    execSync(`pnpm --filter ${addon.name} build:native`, { cwd: configDir, stdio: 'inherit' });
+  }
+}
 
 /**
  * List of native modules that need special handling
@@ -35,9 +104,10 @@ const isDarwin = getTargetPlatform() === 'darwin';
  * Platform-specific modules are only included when building for their target platform
  */
 export const nativeModules = [
+  ...firstPartyNativeAddons.map((addon) => addon.name),
   // macOS-only native modules
   ...(isDarwin ? ['node-mac-permissions'] : []),
-  '@napi-rs/canvas',
+  '@lydell/node-pty',
   'get-windows',
   'node-screenshots',
 ];
@@ -47,15 +117,7 @@ export const nativeModules = [
  * @returns {string[]} Array of all dependency names
  */
 export function getAllNativeDependencies() {
-  return getDependenciesForModules(nativeModules);
-}
-
-/**
- * Generate glob patterns for electron-builder files config
- * @returns {string[]} Array of glob patterns
- */
-export function getNativeModuleFilesPatterns() {
-  return getModuleFilesPatterns(nativeModules);
+  return getDependenciesForModules(nativeModules, dependencyOptions);
 }
 
 /**
@@ -64,7 +126,7 @@ export function getNativeModuleFilesPatterns() {
  * @returns {Array<{from: string, to: string, filter: string[]}>}
  */
 export function getNativeModulesFilesConfig() {
-  return getModuleFilesConfig(nativeModules);
+  return getModuleFilesConfig(nativeModules, dependencyOptions);
 }
 
 /**
@@ -72,7 +134,15 @@ export function getNativeModulesFilesConfig() {
  * @returns {string[]} Array of glob patterns
  */
 export function getAsarUnpackPatterns() {
-  return getNativeModuleFilesPatterns();
+  return [
+    ...firstPartyNativeAddons.map((addon) => `node_modules/${addon.name}/build/Release/*.node`),
+    'node_modules/@lydell/node-pty-*/prebuilds/**/*.node',
+    'node_modules/@lydell/node-pty-*/prebuilds/*/spawn-helper',
+    'node_modules/font-list/libs/darwin/fontlist',
+    'node_modules/get-windows/main',
+    'node_modules/node-mac-permissions/build/Release/permissions.node',
+    'node_modules/node-screenshots-*/*.node',
+  ];
 }
 
 /**
@@ -89,14 +159,5 @@ export function getNativeExternalDependencies() {
  * included in the asar archive (electron-builder glob doesn't follow symlinks).
  */
 export async function copyNativeModulesToSource() {
-  await copyModulesToSource(nativeModules, 'native module');
-}
-
-/**
- * Copy native modules to destination, resolving symlinks
- * This is used in afterPack hook to handle pnpm symlinks correctly
- * @param {string} destNodeModules - Destination node_modules path
- */
-export async function copyNativeModules(destNodeModules) {
-  await copyModulesToDirectory(nativeModules, destNodeModules, 'native modules');
+  await copyModulesToSource(nativeModules, 'native module', dependencyOptions);
 }

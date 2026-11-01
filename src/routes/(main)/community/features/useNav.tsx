@@ -1,10 +1,11 @@
 import { MCP } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import { Bot, Brain, BrainCircuit, House } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { type MenuProps } from '@/components/Menu';
 import { DiscoverTab } from '@/types/discover';
@@ -37,6 +38,11 @@ export const useNav = () => {
         icon: <Icon icon={Bot} size={ICON_SIZE} />,
         key: DiscoverTab.Assistants,
         label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.assistant')}</div>,
+      },
+      {
+        icon: <Icon icon={SkillsIcon} size={ICON_SIZE} />,
+        key: DiscoverTab.Skills,
+        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.skill')}</div>,
       },
       {
         icon: <MCP className={'anticon'} size={ICON_SIZE} />,

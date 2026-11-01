@@ -1,11 +1,26 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import MessageItem from '@/features/Conversation/Messages';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
+
+const styles = createStaticStyles(({ css }) => ({
+  header: css`
+    flex: none;
+    padding-block: 12px;
+    padding-inline: 16px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  scroll: css`
+    position: relative;
+    overflow: hidden auto;
+    flex: 1;
+  `,
+}));
 
 interface ChatAreaProps {
   agentId: string;
@@ -14,6 +29,7 @@ interface ChatAreaProps {
 }
 
 const ChatArea = memo<ChatAreaProps>(({ agentId, topicId, threadId }) => {
+  const { t } = useTranslation('eval');
   useInitAgentConfig(agentId);
 
   const itemContent = useCallback(
@@ -26,12 +42,15 @@ const ChatArea = memo<ChatAreaProps>(({ agentId, topicId, threadId }) => {
 
   return (
     <ConversationProvider context={{ agentId, threadId, topicId }} key={contextKey}>
-      <Flexbox
-        flex={1}
-        style={{ overflowX: 'hidden', overflowY: 'auto', position: 'relative' }}
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        <ChatList disableActionsBar itemContent={itemContent} />
+      <Flexbox flex={1} style={{ minWidth: 0, overflow: 'hidden' }}>
+        <Flexbox className={styles.header}>
+          <Text fontSize={12} type={'secondary'} weight={500}>
+            {t('caseDetail.chatArea.title')}
+          </Text>
+        </Flexbox>
+        <Flexbox className={styles.scroll} onContextMenu={(e) => e.preventDefault()}>
+          <ChatList disableActionsBar itemContent={itemContent} />
+        </Flexbox>
       </Flexbox>
     </ConversationProvider>
   );

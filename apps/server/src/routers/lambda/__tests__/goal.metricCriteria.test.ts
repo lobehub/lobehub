@@ -1,0 +1,210 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
+}));
+
+vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
+}));
+
+vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async (importOriginal) => {
+  const { authedProcedure } = await import('@/libs/trpc/lambda');
+  return { ...(await importOriginal<object>()), wsCompatProcedure: authedProcedure };
+});
+
+// Router contract tests do not launch an Agent runtime.
+vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: vi.fn() }));
+
+const mockCreate = vi.fn();
+const mockSetMetricCriteria = vi.fn();
+const mockRecordObservation = vi.fn();
+const mockFindById = vi.fn();
+const mockRetireNodes = vi.fn();
+
+vi.mock('@/server/services/goal', () => ({
+  GoalService: vi.fn(function () {
+    return {
+      create: mockCreate,
+      recordObservation: mockRecordObservation,
+      retireNodes: mockRetireNodes,
+      setMetricCriteria: mockSetMetricCriteria,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/goal', () => ({
+  GoalModel: vi.fn(function () {
+    return { findById: mockFindById };
+  }),
+}));
+
+const mockScheduleGoalAdvance = vi.fn();
+vi.mock('@/server/services/goal/scheduler', () => ({
+  scheduleGoalAdvance: mockScheduleGoalAdvance,
+}));
+
+const { goalRouter } = await import('../goal');
+
+describe('goalRouter numeric acceptance', () => {
+  const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: null };
+  const caller = goalRouter.createCaller(ctx);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCreate.mockResolvedValue({ goal: { id: 'goal_1' } });
+    mockFindById.mockResolvedValue({ id: 'goal_1', userId: 'user-1' });
+    mockSetMetricCriteria.mockResolvedValue({ goal: { id: 'goal_1' } });
+    mockRecordObservation.mockResolvedValue({ point: {}, series: {}, shouldAdvance: true });
+  });
+
+  it('accepts planning limits without a separately configured manager identity', async () => {
+    await caller.create({
+      agentId: 'task-worker',
+      createdByAgentId: 'creating-agent',
+      config: { manager: { maxTurns: 5 } },
+      title: 'Creator-managed goal',
+    });
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createdByAgentId: 'creating-agent',
+        config: { manager: { maxTurns: 5 } },
+      }),
+    );
+  });
+
+  it('carries measured clauses through the create contract', async () => {
+    // Zod strips unknown keys, so a clause absent from the schema would reach
+    // the service as `undefined` and leave the gate unreachable in production
+    // while the service-level tests still passed.
+    await caller.create({
+      config: { acceptance: { metrics: [{ key: 'followers', target: 1_000_000 }] } },
+      title: 'Grow the account',
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: { acceptance: { metrics: [{ key: 'followers', target: 1_000_000 }] } },
+      }),
+    );
+  });
+
+  it('declares clauses after creation, defaulting to replace mode', async () => {
+    await caller.setMetricCriteria({
+      id: 'goal_1',
+      metrics: [{ key: 'churn', op: 'lte', target: 5 }],
+    });
+
+    expect(mockSetMetricCriteria).toHaveBeenCalledWith(
+      'goal_1',
+      [{ key: 'churn', op: 'lte', target: 5 }],
+      undefined,
+    );
+  });
+
+  it('passes merge mode through, so single-clause declares upsert server-side', async () => {
+    await caller.setMetricCriteria({
+      id: 'goal_1',
+      metrics: [{ key: 'churn', op: 'lte', target: 5 }],
+      mode: 'merge',
+    });
+
+    expect(mockSetMetricCriteria).toHaveBeenCalledWith(
+      'goal_1',
+      [{ key: 'churn', op: 'lte', target: 5 }],
+      'merge',
+    );
+  });
+
+  it('rejects a comparison the evaluator does not implement', async () => {
+    await expect(
+      caller.setMetricCriteria({
+        id: 'goal_1',
+        metrics: [{ key: 'churn', op: 'approx' as never, target: 5 }],
+      }),
+    ).rejects.toThrow();
+    expect(mockSetMetricCriteria).not.toHaveBeenCalled();
+  });
+
+  describe('recordObservation', () => {
+    it('wakes the coordinator when the measurement cleared the gate', async () => {
+      await caller.recordObservation({ id: 'goal_1', key: 'followers', value: 1200 });
+
+      expect(mockRecordObservation).toHaveBeenCalledWith('goal_1', {
+        key: 'followers',
+        value: 1200,
+      });
+      expect(mockScheduleGoalAdvance).toHaveBeenCalledWith(
+        expect.objectContaining({ goalId: 'goal_1', trigger: 'observe' }),
+      );
+    });
+
+    it('does not queue an advance a parked goal would tick straight back out of', async () => {
+      mockRecordObservation.mockResolvedValue({ point: {}, series: {}, shouldAdvance: false });
+
+      const result = await caller.recordObservation({ id: 'goal_1', key: 'followers', value: 400 });
+
+      expect(mockScheduleGoalAdvance).not.toHaveBeenCalled();
+      // `shouldAdvance` is coordination bookkeeping, not part of the response.
+      expect(result.data).not.toHaveProperty('shouldAdvance');
+    });
+  });
+
+  describe('retireNodes', () => {
+    const nodeId = '00000000-0000-4000-8000-000000000001';
+
+    it("refuses a workspace member retiring a colleague's goal nodes", async () => {
+      // Retiring cancels the nodes' Tasks and recovery gates, so it is held to
+      // the same creator-or-owner rule as restart and delete.
+      mockFindById.mockResolvedValue({ id: 'goal_1', userId: 'colleague' });
+      const memberCaller = goalRouter.createCaller({
+        ...ctx,
+        workspaceId: 'ws-1',
+        workspaceRole: 'member',
+      });
+
+      await expect(memberCaller.retireNodes({ id: 'goal_1', nodeIds: [nodeId] })).rejects.toThrow(
+        /Only the creator or a workspace owner/,
+      );
+      expect(mockRetireNodes).not.toHaveBeenCalled();
+      expect(mockScheduleGoalAdvance).not.toHaveBeenCalled();
+    });
+
+    it('lets the creator retire nodes and wakes the coordinator', async () => {
+      mockRetireNodes.mockResolvedValue({ retiredNodeIds: [nodeId] });
+      const memberCaller = goalRouter.createCaller({
+        ...ctx,
+        workspaceId: 'ws-1',
+        workspaceRole: 'member',
+      });
+
+      await memberCaller.retireNodes({ id: 'goal_1', nodeIds: [nodeId] });
+
+      expect(mockRetireNodes).toHaveBeenCalledWith('goal_1', [nodeId], undefined);
+      expect(mockScheduleGoalAdvance).toHaveBeenCalledWith(
+        expect.objectContaining({ goalId: 'goal_1' }),
+      );
+    });
+
+    it("advances as the goal's owner when a workspace owner retires a colleague's nodes", async () => {
+      mockFindById.mockResolvedValue({ id: 'goal_1', userId: 'colleague' });
+      mockRetireNodes.mockResolvedValue({ retiredNodeIds: [nodeId] });
+      const ownerCaller = goalRouter.createCaller({
+        ...ctx,
+        workspaceId: 'ws-1',
+        workspaceRole: 'owner',
+      });
+
+      await ownerCaller.retireNodes({ id: 'goal_1', nodeIds: [nodeId] });
+
+      expect(mockScheduleGoalAdvance).toHaveBeenCalledWith(
+        expect.objectContaining({ goalId: 'goal_1', userId: 'colleague', workspaceId: 'ws-1' }),
+      );
+    });
+  });
+});

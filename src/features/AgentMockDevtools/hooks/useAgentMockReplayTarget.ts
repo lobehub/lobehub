@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router';
 
 import { useChatStore } from '@/store/chat/store';
 

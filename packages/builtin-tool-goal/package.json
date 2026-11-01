@@ -1,0 +1,23 @@
+{
+  "name": "@lobechat/builtin-tool-goal",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./client/executor": "./src/client/executor/index.ts",
+    "./report": "./src/report.ts",
+    "./supervisor": "./src/supervisor.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/builtin-tool-task": "workspace:*"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

@@ -1,5 +1,5 @@
 // Define supported file types - consider using an enum or const assertion
-export type SupportedFileType = 'pdf' | 'doc' | 'docx' | 'txt' | 'excel' | 'pptx'; // | 'pptx' | 'latex' | 'epub' | 'code' | 'markdown';
+export type SupportedFileType = 'pdf' | 'doc' | 'docx' | 'txt' | 'excel' | 'pptx' | 'ipynb'; // | 'pptx' | 'latex' | 'epub' | 'code' | 'markdown';
 
 /**
  * Represents a complete loaded file, including file-level information and all its pages/chunks.

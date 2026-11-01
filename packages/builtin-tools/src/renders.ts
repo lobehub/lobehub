@@ -1,57 +1,4 @@
-import {
-  LobeActivatorManifest,
-  LobeActivatorRenders,
-} from '@lobechat/builtin-tool-activator/client';
-import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
-import { AgentBuilderRenders } from '@lobechat/builtin-tool-agent-builder/client';
-import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
-import { AgentDocumentsRenders } from '@lobechat/builtin-tool-agent-documents/client';
-import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
-import { AgentManagementRenders } from '@lobechat/builtin-tool-agent-management/client';
-import { ClaudeCodeIdentifier, ClaudeCodeRenders } from '@lobechat/builtin-tool-claude-code/client';
-import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
-import { CloudSandboxRenders } from '@lobechat/builtin-tool-cloud-sandbox/client';
-import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
-import { GroupAgentBuilderRenders } from '@lobechat/builtin-tool-group-agent-builder/client';
-import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
-import { GroupManagementRenders } from '@lobechat/builtin-tool-group-management/client';
-import {
-  KnowledgeBaseManifest,
-  KnowledgeBaseRenders,
-} from '@lobechat/builtin-tool-knowledge-base/client';
-import { LobeAgentManifest, LobeAgentRenders } from '@lobechat/builtin-tool-lobe-agent/client';
-import {
-  LobeDeliveryCheckerManifest,
-  LobeDeliveryCheckerRenders,
-} from '@lobechat/builtin-tool-lobe-delivery-checker/client';
-import {
-  LocalSystemManifest,
-  LocalSystemRenders,
-} from '@lobechat/builtin-tool-local-system/client';
-import { MemoryManifest, MemoryRenders } from '@lobechat/builtin-tool-memory/client';
-import { MessageManifest, MessageRenders } from '@lobechat/builtin-tool-message/client';
-import { PageAgentManifest, PageAgentRenders } from '@lobechat/builtin-tool-page-agent/client';
-import {
-  RemoteDeviceManifest,
-  RemoteDeviceRenders,
-} from '@lobechat/builtin-tool-remote-device/client';
-import { SkillStoreManifest, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
-import { SkillsManifest, SkillsRenders } from '@lobechat/builtin-tool-skills/client';
-import { TaskManifest, TaskRenders } from '@lobechat/builtin-tool-task/client';
-import {
-  WebBrowsingManifest,
-  WebBrowsingRenders,
-} from '@lobechat/builtin-tool-web-browsing/client';
-import {
-  WebOnboardingManifest,
-  WebOnboardingRenders,
-} from '@lobechat/builtin-tool-web-onboarding/client';
-import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
-import { type BuiltinRender } from '@lobechat/types';
-
-import { CodexRenders } from './codex';
-import { GithubIdentifier, GithubRenders } from './github';
-import { NotebookIdentifier, NotebookRenders } from './notebook';
+import type { BuiltinRender } from '@lobechat/types';
 
 export interface BuiltinRenderRegistryEntry {
   apiName: string;
@@ -63,41 +10,19 @@ export interface BuiltinRenderRegistryEntry {
  * Builtin tools renders registry
  * Organized by toolset (identifier) -> API name
  */
-const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
-  [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
-  [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
-  [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
-  [ClaudeCodeIdentifier]: ClaudeCodeRenders as Record<string, BuiltinRender>,
-  [CloudSandboxManifest.identifier]: CloudSandboxRenders as Record<string, BuiltinRender>,
-  [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderRenders as Record<string, BuiltinRender>,
-  [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
-  [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
-  [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
-  [LobeDeliveryCheckerManifest.identifier]: LobeDeliveryCheckerRenders as Record<
-    string,
-    BuiltinRender
-  >,
-  [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
-  [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
-  [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,
-  [NotebookIdentifier]: NotebookRenders,
-  [PageAgentManifest.identifier]: PageAgentRenders as Record<string, BuiltinRender>,
-  [RemoteDeviceManifest.identifier]: RemoteDeviceRenders as Record<string, BuiltinRender>,
-  [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
-  [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,
-  [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,
-  [LobeActivatorManifest.identifier]: LobeActivatorRenders as Record<string, BuiltinRender>,
-  [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
-  [WebOnboardingManifest.identifier]: WebOnboardingRenders as Record<string, BuiltinRender>,
-  codex: {
-    ...CodexRenders,
-    command_execution: RunCommandRender as BuiltinRender,
-  },
-  [GithubIdentifier]: GithubRenders,
+const builtinToolsRenders: Record<string, Record<string, BuiltinRender>> = {};
+
+export const registerBuiltinRenders = (
+  entries: Record<string, Record<string, BuiltinRender>>,
+): void => {
+  for (const [identifier, renders] of Object.entries(entries)) {
+    const current = builtinToolsRenders[identifier];
+    builtinToolsRenders[identifier] = current ? Object.assign(current, renders) : renders;
+  }
 };
 
 export const listBuiltinRenderEntries = (): BuiltinRenderRegistryEntry[] =>
-  Object.entries(BuiltinToolsRenders).flatMap(([identifier, toolset]) =>
+  Object.entries(builtinToolsRenders).flatMap(([identifier, toolset]) =>
     Object.entries(toolset)
       .filter((entry): entry is [string, BuiltinRender] => !!entry[1])
       .map(([apiName, render]) => ({
@@ -118,7 +43,7 @@ export const getBuiltinRender = (
 ): BuiltinRender | undefined => {
   if (!identifier) return undefined;
 
-  const toolset = BuiltinToolsRenders[identifier];
+  const toolset = builtinToolsRenders[identifier];
   if (!toolset) return undefined;
 
   if (apiName && toolset[apiName]) {

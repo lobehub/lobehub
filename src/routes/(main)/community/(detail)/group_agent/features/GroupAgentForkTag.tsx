@@ -8,6 +8,7 @@ import useSWR from 'swr';
 import urlJoin from 'url-join';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { forkKeys } from '@/libs/swr/keys';
 import { marketApiService } from '@/services/marketApi';
 
 import { useDetailContext } from './DetailProvider';
@@ -23,7 +24,7 @@ const GroupAgentForkTag = memo(() => {
 
   // Fetch fork source info
   const { data: forkSource } = useSWR(
-    identifier && forkedFromGroupId ? ['group-fork-source', identifier] : null,
+    identifier && forkedFromGroupId ? forkKeys.groupSource(identifier) : null,
     () => marketApiService.getAgentGroupForkSource(identifier!),
     { revalidateOnFocus: false },
   );
@@ -38,7 +39,6 @@ const GroupAgentForkTag = memo(() => {
 
   return (
     <Tag
-      bordered={false}
       color="default"
       icon={<Icon icon={GitFork} />}
       style={{ cursor: 'pointer' }}

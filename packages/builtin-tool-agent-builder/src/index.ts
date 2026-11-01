@@ -1,4 +1,5 @@
 export { AgentBuilderManifest } from './manifest';
+export { normalizeUpdateConfigParams } from './normalizeUpdateConfigParams';
 export { systemPrompt } from './systemRole';
 export {
   AgentBuilderApiName,

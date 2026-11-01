@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { type ModelProviderCard } from '@/types/llm';
+import { type ModelProviderCard } from '../types';
+import {
+  DEFAULT_MODEL_PROVIDER_LIST,
+  getProviderDisplayName,
+  isProviderDisableBrowserRequest,
+  isProviderFetchOnClient,
+  isProviderOAuthDeviceFlow,
+} from './index';
 
-import { DEFAULT_MODEL_PROVIDER_LIST, isProviderDisableBrowserRequest } from './index';
-
-describe('isProviderDisableBrowserRequest', () => {
+describe('model provider predicates', () => {
   const originalProviders = [...DEFAULT_MODEL_PROVIDER_LIST];
 
   const createProvider = (overrides: Partial<ModelProviderCard>): ModelProviderCard => ({
@@ -21,6 +26,7 @@ describe('isProviderDisableBrowserRequest', () => {
     DEFAULT_MODEL_PROVIDER_LIST.push(
       createProvider({ id: 'root-disabled', disableBrowserRequest: true }),
       createProvider({ id: 'settings-disabled', settings: { disableBrowserRequest: true } }),
+      createProvider({ id: 'oauth-provider', settings: { authType: 'oauthDeviceFlow' } }),
       createProvider({ id: 'enabled-provider' }),
     );
   });
@@ -44,5 +50,41 @@ describe('isProviderDisableBrowserRequest', () => {
 
   it('returns false for unknown provider id', () => {
     expect(isProviderDisableBrowserRequest('not-exists')).toBe(false);
+  });
+
+  it('resolves a provider id to its display name and falls back to the id', () => {
+    expect(getProviderDisplayName('enabled-provider')).toBe('Test Provider');
+    expect(getProviderDisplayName('not-exists')).toBe('not-exists');
+  });
+
+  it('detects OAuth device flow providers', () => {
+    expect(isProviderOAuthDeviceFlow('oauth-provider')).toBe(true);
+    expect(isProviderOAuthDeviceFlow('enabled-provider')).toBe(false);
+    expect(isProviderOAuthDeviceFlow('not-exists')).toBe(false);
+    expect(isProviderOAuthDeviceFlow()).toBe(false);
+  });
+});
+
+describe('isProviderFetchOnClient', () => {
+  it('runs a local provider on the device unless fetchOnClient says otherwise', () => {
+    expect(isProviderFetchOnClient('lmstudio', undefined)).toBe(true);
+    expect(isProviderFetchOnClient('ollama', { keyVaults: {} })).toBe(true);
+    expect(isProviderFetchOnClient('lmstudio', { fetchOnClient: false })).toBe(false);
+  });
+
+  it('runs on the server without an endpoint or a key', () => {
+    expect(isProviderFetchOnClient('openai', { fetchOnClient: true, keyVaults: {} })).toBe(false);
+  });
+
+  it('runs on the device when only a base URL is set', () => {
+    expect(
+      isProviderFetchOnClient('openai', { keyVaults: { baseURL: 'http://localhost:8000/v1' } }),
+    ).toBe(true);
+  });
+
+  it('follows fetchOnClient with both a base URL and a key, default server', () => {
+    const keyVaults = { apiKey: 'sk', baseURL: 'http://localhost:8000/v1' };
+    expect(isProviderFetchOnClient('openai', { fetchOnClient: true, keyVaults })).toBe(true);
+    expect(isProviderFetchOnClient('openai', { keyVaults })).toBe(false);
   });
 });

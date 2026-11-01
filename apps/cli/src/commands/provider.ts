@@ -2,8 +2,10 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
+import { CLI_PRODUCT_NAME } from '../constants/identity';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 
 export function registerProviderCommand(program: Command) {
   const provider = program.command('provider').description('Manage AI providers');
@@ -21,7 +23,12 @@ export function registerProviderCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.provider(item.id),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -58,7 +65,10 @@ export function registerProviderCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(result, fields);
+        outputJson(
+          withUrl(result, await resolveUrlBuilder(client), resourcePath.provider(id)),
+          fields,
+        );
         return;
       }
 
@@ -169,7 +179,7 @@ export function registerProviderCommand(program: Command) {
         // lobehub is a platform-managed provider, users cannot configure its API key or base URL
         if (id === 'lobehub' && (options.apiKey !== undefined || options.baseUrl !== undefined)) {
           log.error(
-            `Provider "lobehub" is managed by the LobeHub platform. You cannot set --api-key or --base-url for it.`,
+            `Provider "lobehub" is managed by the ${CLI_PRODUCT_NAME} platform. You cannot set --api-key or --base-url for it.`,
           );
           process.exit(1);
         }

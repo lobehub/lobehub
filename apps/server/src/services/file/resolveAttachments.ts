@@ -1,14 +1,24 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import type {
+  ChatAudioItem,
+  ChatFileItem,
+  ChatImageItem,
+  ChatVideoItem,
+  FileAccessScope,
+} from '@lobechat/types';
+import { ordinaryFileAccessScope } from '@lobechat/types';
+import { readAudioDurationMs } from '@lobechat/utils/audio';
 import debug from 'debug';
 
 import { FileModel } from '@/database/models/file';
+import { readOriginalCharCount } from '@/database/utils/parsedDocument';
 import { DocumentService } from '@/server/services/document';
-import { FileService } from '@/server/services/file';
+import { FileService, getFileProxyUrl } from '@/server/services/file';
 
 const log = debug('lobe-server:resolveAttachments');
 
 export interface ResolvedAttachments {
+  audioList: ChatAudioItem[];
   fileList: ChatFileItem[];
   imageList: ChatImageItem[];
   /**
@@ -23,12 +33,31 @@ export interface ResolvedAttachments {
 
 interface ResolveArgs {
   db: LobeChatDatabase;
+  fileAccessScope?: FileAccessScope;
   fileIds: string[];
   userId: string;
   workspaceId?: string;
 }
 
 const dedupe = (ids: string[]) => Array.from(new Set(ids));
+
+const getAudioMetadata = (
+  metadata: unknown,
+  fileType: string,
+): Pick<ChatAudioItem, 'codec' | 'durationMs' | 'mimeType'> => {
+  const value =
+    metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : {};
+
+  const durationMs = readAudioDurationMs(metadata);
+
+  return {
+    ...(typeof value.codec === 'string' ? { codec: value.codec } : undefined),
+    ...(durationMs === undefined ? {} : { durationMs }),
+    mimeType: typeof value.mimeType === 'string' ? value.mimeType : fileType,
+  };
+};
 
 /**
  * Resolve fileIds into image/video/file lists for the LLM prompt layer.
@@ -40,11 +69,13 @@ const dedupe = (ids: string[]) => Array.from(new Set(ids));
  */
 export const resolveAttachmentsByFileIds = async ({
   db,
+  fileAccessScope = ordinaryFileAccessScope,
   fileIds,
   userId,
   workspaceId,
 }: ResolveArgs): Promise<ResolvedAttachments> => {
   const result: ResolvedAttachments = {
+    audioList: [],
     fileList: [],
     imageList: [],
     orderedFileIds: [],
@@ -56,7 +87,7 @@ export const resolveAttachmentsByFileIds = async ({
   const dedupedFileIds = dedupe(fileIds);
   const fileModel = new FileModel(db, userId, workspaceId);
   const fileService = new FileService(db, userId, workspaceId);
-  const fileRecords = await fileModel.findByIds(dedupedFileIds);
+  const fileRecords = await fileModel.findByIds(dedupedFileIds, fileAccessScope);
   if (fileRecords.length === 0) {
     log('no file records found for fileIds=%O', dedupedFileIds);
     return result;
@@ -76,18 +107,24 @@ export const resolveAttachmentsByFileIds = async ({
       }
       const resolvedUrl = (await fileService.getFullFileUrl(file.url)) || file.url;
       const fileType = file.fileType || '';
-      if (fileType.startsWith('image') || fileType.startsWith('video')) {
+      if (
+        fileType.startsWith('image') ||
+        fileType.startsWith('video') ||
+        fileType.startsWith('audio')
+      ) {
         return { file, fileType, id, resolvedUrl };
       }
       let content: string | undefined;
+      let originalCharCount: number | undefined;
       let parseError: unknown;
       try {
-        const document = await documentService.parseFile(file.id);
+        const document = await documentService.parseFile(file.id, fileAccessScope);
         content = document.content ?? undefined;
+        originalCharCount = readOriginalCharCount(document.metadata);
       } catch (error) {
         parseError = error;
       }
-      return { content, file, fileType, id, parseError, resolvedUrl };
+      return { content, file, fileType, id, originalCharCount, parseError, resolvedUrl };
     }),
   );
 
@@ -99,11 +136,25 @@ export const resolveAttachmentsByFileIds = async ({
     const { file, fileType, resolvedUrl } = entry;
     result.orderedFileIds.push(file.id);
     if (fileType.startsWith('image')) {
-      result.imageList.push({ alt: file.name || 'image', id: file.id, url: resolvedUrl });
+      result.imageList.push({
+        alt: file.name || 'image',
+        id: file.id,
+        mimeType: fileType,
+        url: resolvedUrl,
+      });
       continue;
     }
     if (fileType.startsWith('video')) {
       result.videoList.push({ alt: file.name || 'video', id: file.id, url: resolvedUrl });
+      continue;
+    }
+    if (fileType.startsWith('audio')) {
+      result.audioList.push({
+        ...getAudioMetadata(file.metadata, fileType),
+        alt: file.name || 'audio',
+        id: file.id,
+        url: resolvedUrl,
+      });
       continue;
     }
     if (entry.parseError) {
@@ -117,16 +168,18 @@ export const resolveAttachmentsByFileIds = async ({
       fileType: fileType || 'application/octet-stream',
       id: file.id,
       name: file.name || 'file',
+      originalCharCount: entry.originalCharCount,
       size: file.size ?? 0,
       url: resolvedUrl,
     });
   }
 
   log(
-    'resolved %d attachment(s) (%d images, %d videos, %d documents)',
+    'resolved %d attachment(s) (%d images, %d videos, %d audios, %d documents)',
     fileRecords.length,
     result.imageList.length,
     result.videoList.length,
+    result.audioList.length,
     result.fileList.length,
   );
 
@@ -162,11 +215,12 @@ export const resolveAttachmentMetadata = async ({
   const fileService = signUrls ? new FileService(db, userId, workspaceId) : null;
   const recordById = new Map(fileRecords.map((f) => [f.id, f]));
   const items = await Promise.all(
-    dedupedFileIds.map(async (id) => {
+    dedupedFileIds.map(async (id): Promise<ChatFileItem | undefined> => {
       const file = recordById.get(id);
       if (!file) return undefined;
       const url = fileService ? (await fileService.getFullFileUrl(file.url)) || file.url : file.url;
       return {
+        downloadUrl: getFileProxyUrl(file.id),
         fileType: file.fileType || 'application/octet-stream',
         id: file.id,
         name: file.name || 'file',

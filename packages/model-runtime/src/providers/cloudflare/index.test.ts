@@ -3,6 +3,7 @@ import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletionTool } from '../../types/chat';
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import * as debugStreamModule from '../../utils/debugStream';
 import { LobeCloudflareAI } from './index';
 
@@ -77,6 +78,27 @@ describe('LobeCloudflareAI', () => {
 
       // Assert
       expect(result).toBeInstanceOf(Response);
+    });
+
+    it('captures the bounded raw provider response when diagnostics are enabled', async () => {
+      const diagnostics: ModelRuntimeDiagnostics = {};
+      const result = await instance.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: '@hf/meta-llama/meta-llama-3-8b-instruct',
+        },
+        { diagnostics },
+      );
+      await result.text();
+
+      expect(diagnostics.providerResponse).toMatchObject({
+        apiMode: 'cloudflare_workers_ai',
+        rawResponse: {
+          body: 'data: {"response": "Hello, world!"}\n\n',
+          status: 'captured',
+        },
+        status: 200,
+      });
     });
 
     it('should handle text messages correctly', async () => {
@@ -181,7 +203,7 @@ describe('LobeCloudflareAI', () => {
       expect(result).toBeInstanceOf(Response);
     });
 
-    it('should call Cloudflare API with supported opions', async () => {
+    it('should call Cloudflare API with supported options', async () => {
       // Arrange
       const mockResponse = new Response(
         new ReadableStream<Uint8Array>({
@@ -557,6 +579,33 @@ describe('LobeCloudflareAI', () => {
       );
 
       expect(result).toHaveLength(2);
+    });
+
+    it('should throw regular Error when API returns null result', async () => {
+      const instance = new LobeCloudflareAI({
+        apiKey: 'test_api_key',
+        baseURLOrAccountID: accountID,
+      });
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            errors: [{ code: 10000, message: 'Authentication error' }],
+            result: null,
+            success: false,
+          }),
+          { status: 401 },
+        ),
+      );
+
+      await expect(instance.models()).rejects.toMatchObject({
+        cause: {
+          errors: [{ code: 10000, message: 'Authentication error' }],
+          result: null,
+          success: false,
+        },
+        message: 'Cloudflare models API returned an invalid response',
+      });
     });
   });
 });

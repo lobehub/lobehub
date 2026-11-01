@@ -1,5 +1,4 @@
-import { Icon, Tooltip } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Icon, Tooltip } from '@lobehub/ui';
 import { startCase } from 'es-toolkit/compat';
 import { type LucideIcon } from 'lucide-react';
 import {
@@ -10,17 +9,19 @@ import {
   MicIcon,
   MusicIcon,
   PhoneIcon,
+  SplitIcon,
   VideoIcon,
 } from 'lucide-react';
 import { type AiModelType } from 'model-bank';
 import { memo } from 'react';
 
 const icons: Record<AiModelType, LucideIcon> = {
+  asr: MicIcon,
   chat: MessageSquareTextIcon,
+  decision: SplitIcon,
   embedding: BoltIcon,
   image: ImageIcon,
   realtime: PhoneIcon,
-  stt: MicIcon,
   text2music: MusicIcon,
   tts: AudioLines,
   video: VideoIcon,

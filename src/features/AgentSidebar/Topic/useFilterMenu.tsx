@@ -1,0 +1,98 @@
+import type { DropdownItem } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { LucideCheck } from 'lucide-react';
+import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useUserStore } from '@/store/user';
+import { preferenceSelectors } from '@/store/user/selectors';
+import type { TopicGroupMode, TopicSortBy } from '@/types/topic';
+
+import { useAgentTopicGroupMode } from './hooks/useAgentTopicGroupMode';
+import { useTopicListScope } from './TopicListScope';
+import { useOnlyMineFilterItem } from './useOnlyMineFilterItem';
+import { useProjectTopicFilterItems } from './useProjectTopicFilterItems';
+
+export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
+  const { t } = useTranslation('topic');
+  const { topicGroupMode, updateTopicGroupMode } = useAgentTopicGroupMode();
+  const scope = useTopicListScope();
+  const projectFilterItems = useProjectTopicFilterItems();
+  const onlyMineItem = useOnlyMineFilterItem();
+
+  const [topicSortBy, topicIncludeCompleted, updatePreference] = useUserStore((s) => [
+    preferenceSelectors.topicSortBy(s),
+    preferenceSelectors.topicIncludeCompleted(s),
+    s.updatePreference,
+  ]);
+
+  return useCallback(() => {
+    // "by agent" and "by device" only exist where topics span multiple agents
+    // and machines — the project-scoped list, where "by agent" is the default
+    // and listed first. A single agent's own sidebar hides them. The project-scoped list already is one project, so it hides
+    // "by project" instead.
+    const groupModes: TopicGroupMode[] = scope
+      ? ['byAgent', 'byStatus', 'byTime', 'byDevice', 'flat']
+      : ['byStatus', 'byTime', 'byProject', 'flat'];
+    const sortByOptions: TopicSortBy[] = ['createdAt', 'updatedAt'];
+
+    return [
+      {
+        children: groupModes.map((mode) => ({
+          icon: topicGroupMode === mode ? <Icon icon={LucideCheck} /> : <div />,
+          key: `group-${mode}`,
+          label: t(`filter.groupMode.${mode}`),
+          onClick: () => {
+            void updateTopicGroupMode(mode);
+          },
+        })),
+        key: 'organize',
+        label: t('filter.organize'),
+        type: 'group' as const,
+      },
+      { type: 'divider' as const },
+      {
+        children: sortByOptions.map((option) => ({
+          icon: topicSortBy === option ? <Icon icon={LucideCheck} /> : <div />,
+          key: `sort-${option}`,
+          label: t(`filter.sortBy.${option}`),
+          onClick: () => {
+            updatePreference({ topicSortBy: option });
+          },
+        })),
+        key: 'sort',
+        label: t('filter.sort'),
+        type: 'group' as const,
+      },
+      { type: 'divider' as const },
+      {
+        children: [
+          // A project spans agents and devices; narrow its topics by either.
+          ...projectFilterItems(),
+          {
+            icon: topicIncludeCompleted ? <Icon icon={LucideCheck} /> : <div />,
+            key: 'showCompleted',
+            label: t('filter.showCompleted'),
+            onClick: () => {
+              updatePreference({ topicIncludeCompleted: !topicIncludeCompleted });
+            },
+          },
+          ...(onlyMineItem ? [onlyMineItem] : []),
+        ],
+        key: 'filter',
+        label: t('filter.filter'),
+        type: 'group' as const,
+      },
+    ];
+  }, [
+    topicGroupMode,
+    topicSortBy,
+    topicIncludeCompleted,
+    onlyMineItem,
+    updatePreference,
+    updateTopicGroupMode,
+    projectFilterItems,
+    scope,
+    t,
+  ]);
+};

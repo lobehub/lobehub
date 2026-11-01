@@ -1,0 +1,18 @@
+.foldHeader:hover [data-fold-title] {
+      color: var(--lobe-color-text);
+    }
+
+.facts dt {
+      color: var(--lobe-color-text-tertiary);
+    }
+
+.facts dd {
+      min-width: 0;
+      margin: 0;
+      color: var(--lobe-color-text-secondary);
+      overflow-wrap: anywhere;
+    }
+
+@media (width <= 767px) { .facts dd + dt {
+        margin-block-start: 6px;
+      } }

@@ -1,8 +1,9 @@
 'use client';
 
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';
 import StoreSearchBar from '@/routes/(main)/community/features/Search';
@@ -21,7 +22,7 @@ const Header = memo(() => {
 
   return (
     <NavHeader
-      className={styles.headerContainer}
+      className={stylex.props(styles.headerContainer).className}
       left={<StoreSearchBar />}
       style={cssVariables}
       right={

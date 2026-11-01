@@ -1,5 +1,5 @@
 import { LOBE_CHAT_OBSERVATION_ID, LOBE_CHAT_TRACE_ID, MESSAGE_CANCEL_FLAT } from '@lobechat/const';
-import { parseToolCalls } from '@lobechat/model-runtime';
+import { parseToolCalls } from '@lobechat/model-runtime/helpers/parseToolCalls';
 import type {
   ChatImageChunk,
   ChatMessageError,
@@ -7,6 +7,7 @@ import type {
   MessageToolCall,
   ModelPerformance,
   ModelReasoning,
+  ModelReasoningResponseItem,
   ModelUsage,
   ResponseAnimation,
   ResponseAnimationStyle,
@@ -19,15 +20,12 @@ import { getMessageError } from './parseError';
 
 type SSEFinishType = 'done' | 'error' | 'abort' | string;
 
-const PLAN_UPGRADE_AFTER_FINISH_HEADER = 'x-lobe-plan-upgrade-after-finish';
-
 export type OnFinishHandler = (
   text: string,
   context: {
     grounding?: GroundingSearch;
     images?: ChatImageChunk[];
     observationId?: string | null;
-    planUpgradeAfterFinish?: boolean;
     reasoning?: ModelReasoning;
     speed?: ModelPerformance;
     toolCalls?: MessageToolCall[];
@@ -285,6 +283,7 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
 
   let thinking = '';
   let thinkingSignature: string | undefined;
+  const reasoningResponseItems: ModelReasoningResponseItem[] = [];
 
   const thinkingController = createSmoothMessage({
     onTextUpdate: (delta, text) => {
@@ -435,7 +434,14 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
         }
 
         case 'reasoning_signature': {
-          thinkingSignature = data;
+          // Server guarantees string payloads on this event; guard against object
+          // payloads so a malformed stream can't corrupt the persisted signature.
+          if (typeof data === 'string') thinkingSignature = data;
+          break;
+        }
+
+        case 'reasoning_response_item': {
+          reasoningResponseItems.push(data as ModelReasoningResponseItem);
           break;
         }
 
@@ -543,7 +549,6 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
 
       const traceId = response.headers.get(LOBE_CHAT_TRACE_ID);
       const observationId = response.headers.get(LOBE_CHAT_OBSERVATION_ID);
-      const planUpgradeAfterFinish = response.headers.get(PLAN_UPGRADE_AFTER_FINISH_HEADER) === '1';
 
       textController.flushQueue();
       thinkingController.flushQueue();
@@ -552,8 +557,28 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
         grounding,
         images: images.length > 0 ? images : undefined,
         observationId,
-        planUpgradeAfterFinish,
-        reasoning: !!thinking ? { content: thinking, signature: thinkingSignature } : undefined,
+        reasoning: (() => {
+          /**
+           * Non-streaming Responses conversion emits reasoning items without summary
+           * deltas; derive visible thinking text from item summaries when nothing was
+           * streamed so the summary renders instead of being replay-only state.
+           */
+          const responseItemsThinking = reasoningResponseItems
+            .flatMap(({ summary }) => summary ?? [])
+            .map(({ text }) => text)
+            .filter(Boolean)
+            .join('\n');
+          const reasoningContent = thinking || responseItemsThinking || undefined;
+
+          return reasoningContent || thinkingSignature || reasoningResponseItems.length > 0
+            ? {
+                content: reasoningContent,
+                responseItems:
+                  reasoningResponseItems.length > 0 ? reasoningResponseItems : undefined,
+                signature: thinkingSignature,
+              }
+            : undefined;
+        })(),
         speed,
         toolCalls,
         traceId,

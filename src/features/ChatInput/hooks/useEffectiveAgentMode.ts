@@ -1,0 +1,91 @@
+import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+
+import { useEffectiveAgentModePreference } from './effectiveAgentModePreference';
+import { useEffectiveModel } from './useEffectiveModel';
+
+export type ChatInputMode = 'agent' | 'chat';
+
+interface ResolveEffectiveAgentModeParams {
+  enableAgentMode: boolean;
+  /**
+   * Whether the aiProvider runtime-state (the enabled-model list + abilities)
+   * has finished loading. Defaults to `true` so callers that don't track it keep
+   * the prior behaviour.
+   */
+  isModelListReady?: boolean;
+  supportToolUse: boolean;
+}
+
+export const resolveEffectiveAgentMode = ({
+  enableAgentMode,
+  isModelListReady = true,
+  supportToolUse,
+}: ResolveEffectiveAgentModeParams) => {
+  // While the model list is not ready, `supportToolUse` is `false` only because
+  // the model hasn't hydrated into the store yet — not because it lacks tool
+  // calling. Downgrading to chat mode on that transient unknown would drop tools
+  // and flash the mode pill to "chat" on first paint. Assume tool use is
+  // available while loading and honour the user's stored intent; the real
+  // capability re-evaluates once the list loads.
+  const effectiveSupportToolUse = isModelListReady ? supportToolUse : true;
+
+  const currentMode: ChatInputMode = enableAgentMode && effectiveSupportToolUse ? 'agent' : 'chat';
+  // Example: stored Agent mode + a model without tool calling should render chat-only runtime UI.
+  const isAgentRuntimeMode = currentMode === 'agent';
+
+  return {
+    canSelectAgentMode: effectiveSupportToolUse,
+    currentMode,
+    isAgentModeUnavailable: enableAgentMode && !effectiveSupportToolUse,
+    isAgentRuntimeMode,
+    supportToolUse: effectiveSupportToolUse,
+  };
+};
+
+interface ModelAndProvider {
+  model: string;
+  provider: string;
+}
+
+/**
+ * Shared core: resolve the agent mode for the given model's tool-use ability.
+ * Not exported on purpose — callers must pick which model applies by using
+ * `useEffectiveAgentMode` or `useAgentDefaultModelAgentMode`.
+ */
+const useAgentModeForModel = (agentId: string, { model, provider }: ModelAndProvider) => {
+  const { enableAgentMode, isPreferenceLoading, usesWorkspaceMemberMode } =
+    useEffectiveAgentModePreference(agentId);
+  const supportToolUse = useModelSupportToolUse(model, provider);
+  const isModelListReady = useAiInfraStore(aiProviderSelectors.isInitAiProviderRuntimeState);
+
+  return {
+    ...resolveEffectiveAgentMode({ enableAgentMode, isModelListReady, supportToolUse }),
+    isPreferenceLoading,
+    usesWorkspaceMemberMode,
+  };
+};
+
+/**
+ * Agent mode for a chat composer: judged by the model that will actually run —
+ * the active topic's pinned model, otherwise the agent default
+ * (see `useEffectiveModel`).
+ */
+export const useEffectiveAgentMode = (agentId: string) =>
+  useAgentModeForModel(agentId, useEffectiveModel(agentId));
+
+/**
+ * Agent mode judged by the agent's own default model only. For surfaces that
+ * have no topic context (e.g. task execution settings, which target an assignee
+ * agent) and must not follow whatever topic the chat page currently has active.
+ */
+export const useAgentDefaultModelAgentMode = (agentId: string) => {
+  const [model, provider] = useAgentStore((s) => [
+    agentByIdSelectors.getAgentModelById(agentId)(s),
+    agentByIdSelectors.getAgentModelProviderById(agentId)(s),
+  ]);
+
+  return useAgentModeForModel(agentId, { model, provider });
+};

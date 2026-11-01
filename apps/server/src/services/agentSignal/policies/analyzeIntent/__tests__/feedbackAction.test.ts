@@ -431,6 +431,70 @@ describe('feedbackActionPlanner', () => {
   });
 
   /**
+   * A server execAgent inbound skill candidate (trigger is neither
+   * `client.runtime.*` nor an agent-signal self-iteration run) is parked WITH a
+   * synthesis payload and NOT dispatched on the user prompt alone — the deferred
+   * completion-stage handler synthesizes it off the full trajectory instead of
+   * just the user prompt.
+   */
+  it('parks a server-inbound skill candidate until agent.execution.completed', async () => {
+    const store = createStore();
+    const procedure = createProcedurePolicyOptions({
+      now: () => 123,
+      policyStateStore: store,
+      ttlSeconds: 3600,
+    });
+    const writeIntentRecord = vi.spyOn(procedure.procedureState.skillIntentRecords!, 'write');
+    const skillActions = { prepare: vi.fn() };
+    const handler = createFeedbackActionPlannerSignalHandler({
+      actionServices: {
+        memoryActions: { prepare: vi.fn() },
+        skillActions: skillActions as never,
+      },
+      procedure: {
+        now: () => 123,
+        procedureState: procedure.procedureState,
+      },
+    });
+    const signal = createDomainSignal({
+      message: 'Assign T199 to device 2, research and build an MVP, then write a report.',
+      messageId: 'msg_skill_server',
+      satisfactionResult: 'not_satisfied',
+      signalId: 'sig_skill_server',
+      skillActionIntent: 'create',
+      skillIntentConfidence: 0.9,
+      skillIntentExplicitness: 'implicit_strong_learning',
+      skillIntentReason: 'a reusable task execution pattern',
+      skillRoute: 'direct_decision',
+      sourceId: 'source_skill_server',
+      target: 'skill',
+      // A server execAgent inbound trigger — not client.runtime.* and not the
+      // agent-signal self-iteration trigger — so it reaches the deferred lane.
+      trigger: 'bot',
+    });
+
+    const result = await handler.handle(signal, context);
+
+    expect(result).toEqual({
+      concluded: { reason: 'skill candidate parked until agent.execution.completed' },
+      status: 'conclude',
+    });
+    // Crucially: no inbound dispatch — synthesis is deferred, not run on the prompt.
+    expect(skillActions.prepare).not.toHaveBeenCalled();
+    // The parked record carries the synthesis payload (message) for the
+    // completion-stage handler to act on once the trajectory exists.
+    expect(writeIntentRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        feedbackMessageId: 'msg_skill_server',
+        route: 'direct_decision',
+        pendingSynthesis: expect.objectContaining({
+          message: 'Assign T199 to device 2, research and build an MVP, then write a report.',
+        }),
+      }),
+    );
+  });
+
+  /**
    * @example
    * Completion-triggered direct skill intent is allowed to mutate skills.
    */

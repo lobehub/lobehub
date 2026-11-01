@@ -1,19 +1,11 @@
-import { ActionIcon, createRawModal } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
 import { LucideSettings } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type PluginDetailModalProps } from '@/features/PluginDetailModal';
-import dynamic from '@/libs/next/dynamic';
+import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
-
-const PluginDetailModal = dynamic<PluginDetailModalProps>(
-  () => import('@/features/PluginDetailModal'),
-  {
-    ssr: false,
-  },
-);
 
 const Settings = memo<{ id: string }>(({ id }) => {
   const item = useToolStore(pluginSelectors.getToolManifestById(id));
@@ -28,9 +20,10 @@ const Settings = memo<{ id: string }>(({ id }) => {
       size={'small'}
       title={t('setting')}
       onClick={() => {
-        createRawModal(PluginDetailModal, {
+        createPluginDetailModal({
           id,
           schema: item?.settings,
+          tab: 'settings',
         });
       }}
     />

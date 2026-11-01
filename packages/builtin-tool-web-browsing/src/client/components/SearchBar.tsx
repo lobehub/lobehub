@@ -1,15 +1,7 @@
 import type { SearchQuery } from '@lobechat/types';
-import {
-  Block,
-  Checkbox,
-  Flexbox,
-  SearchBar as Search,
-  Segmented,
-  Select,
-  Text,
-  Tooltip,
-} from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, Flexbox, SearchBar as Search, Tooltip } from '@lobehub/ui';
+import { CheckboxGroup, Segmented, Select, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -128,7 +120,7 @@ const SearchBar = memo<SearchBarProps>(
               <Text className={styles.textHeader} type={'secondary'}>
                 {t('search.searchEngine.title')}
               </Text>
-              <Checkbox.Group
+              <CheckboxGroup
                 value={engines}
                 options={Object.keys(ENGINE_ICON_MAP).map((item) => ({
                   label: (
@@ -177,7 +169,7 @@ const SearchBar = memo<SearchBarProps>(
               <Text className={styles.textHeader} type={'secondary'}>
                 {t('search.searchCategory.title')}
               </Text>
-              <Checkbox.Group
+              <CheckboxGroup
                 value={categories}
                 options={Object.keys(CATEGORY_ICON_MAP).map((item) => ({
                   label: (

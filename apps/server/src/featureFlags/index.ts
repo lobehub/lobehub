@@ -5,7 +5,7 @@ import type { IFeatureFlags } from '@/config/featureFlags';
 import {
   DEFAULT_FEATURE_FLAGS,
   FeatureFlagsSchema,
-  getServerFeatureFlagsValue,
+  getExplicitServerFeatureFlags,
   mapFeatureFlagsEnvToState,
 } from '@/config/featureFlags';
 import type {
@@ -31,6 +31,7 @@ const FEATURE_FLAGS_DOMAIN: RuntimeConfigDomain<IFeatureFlags> = {
 };
 
 const FEATURE_FLAG_OVERRIDE_DOMAIN: RuntimeConfigDomain<Record<string, boolean>> = {
+  cacheNullSnapshots: false,
   cacheTtlMs: 30_000,
   getStorageKey: (selector?: RuntimeConfigSelector) => {
     if (!selector || selector.scope !== 'user')
@@ -45,11 +46,29 @@ const FEATURE_FLAG_OVERRIDE_DOMAIN: RuntimeConfigDomain<Record<string, boolean>>
 let featureFlagsProvider: RuntimeConfigProvider<IFeatureFlags> | null = null;
 let featureFlagsOverrideProvider: RuntimeConfigProvider<Record<string, boolean>> | null = null;
 
+export const applyDevelopmentFeatureFlagDefaults = (
+  flags: IFeatureFlags,
+  snapshot?: Partial<IFeatureFlags>,
+) => {
+  if (process.env.NODE_ENV !== 'development') return flags;
+
+  if (process.env.FORCE_ENABLE_WORKSPACE_IN_DEV === 'false') {
+    // Opting out must also neutralize the isDev schema default, otherwise the
+    // disabled path is untestable locally; an explicit value from the shared
+    // runtime config still wins.
+    return snapshot && 'workspace' in snapshot ? flags : { ...flags, workspace: false };
+  }
+
+  return { ...flags, workspace: true };
+};
+
 const getFeatureFlagsProvider = () => {
   featureFlagsProvider ??= new CompositeRuntimeConfigProvider(
     new RedisRuntimeConfigProvider(FEATURE_FLAGS_DOMAIN),
+    // Expose only explicitly-configured env flags; schema defaults are merged in
+    // getMergedFeatureFlags, so the snapshot stays distinguishable from defaults.
     new EnvRuntimeConfigProvider(FEATURE_FLAGS_DOMAIN, {
-      getSnapshotData: () => getServerFeatureFlagsValue(),
+      getSnapshotData: () => getExplicitServerFeatureFlags(),
     }),
   );
 
@@ -65,7 +84,12 @@ const getFeatureFlagOverrideProvider = () => {
 const getMergedFeatureFlags = async (userId?: string) => {
   const globalSnapshot = await getFeatureFlagsProvider().getSnapshot({ scope: 'global' });
 
-  const globalFlags = merge(DEFAULT_FEATURE_FLAGS, globalSnapshot?.data || {});
+  // Shared runtime config can contain production allowlists even in local development.
+  // Apply development defaults after the global snapshot; user-specific overrides below still win.
+  const globalFlags = applyDevelopmentFeatureFlagDefaults(
+    merge(DEFAULT_FEATURE_FLAGS, globalSnapshot?.data || {}),
+    globalSnapshot?.data,
+  );
 
   if (!userId) {
     return globalFlags;

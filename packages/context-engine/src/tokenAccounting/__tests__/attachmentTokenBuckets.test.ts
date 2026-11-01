@@ -48,34 +48,70 @@ describe('attachment token buckets', () => {
               url: 'https://example.com/note.txt',
             },
           ],
+          audioList: [{ alt: 'audio.mp3', id: 'audio-id', url: 'https://example.com/audio.mp3' }],
           imageList: [{ alt: 'image.png', id: 'image-id', url: 'https://example.com/image.png' }],
           role: 'user',
           videoList: [{ alt: 'video.mp4', id: 'video-id', url: 'https://example.com/video.mp4' }],
         }),
       ],
-      { canUseVideo: true, canUseVision: true },
+      { canUseAudio: true, canUseVideo: true, canUseVision: true },
     );
 
     expect(result.textTokens).toBeGreaterThan(0);
     expect(result.imageTokens).toBe(1000);
     expect(result.videoTokens).toBe(1000);
+    expect(result.audioTokens).toBe(1000);
   });
 
   it('keeps file context but skips visual buckets when the model cannot consume them', () => {
     const result = estimateSentMessageAttachmentTokenBuckets(
       [
         mkMsg({
+          audioList: [{ alt: 'audio.mp3', id: 'audio-id', url: 'https://example.com/audio.mp3' }],
           imageList: [{ alt: 'image.png', id: 'image-id', url: 'https://example.com/image.png' }],
           role: 'user',
           videoList: [{ alt: 'video.mp4', id: 'video-id', url: 'https://example.com/video.mp4' }],
         }),
       ],
-      { canUseVideo: false, canUseVision: false },
+      { canUseAudio: false, canUseVideo: false, canUseVision: false },
     );
 
     expect(result.textTokens).toBeGreaterThan(0);
     expect(result.imageTokens).toBe(0);
     expect(result.videoTokens).toBe(0);
+    expect(result.audioTokens).toBe(0);
+  });
+
+  it('uses persisted audio duration and falls back per item when duration is missing', () => {
+    const result = estimateSentMessageAttachmentTokenBuckets(
+      [
+        mkMsg({
+          audioList: [
+            {
+              alt: 'known.mp3',
+              durationMs: 40_000,
+              id: 'known-audio',
+              url: 'https://example.com/known.mp3',
+            },
+            {
+              alt: 'unknown.mp3',
+              id: 'unknown-audio',
+              url: 'https://example.com/unknown.mp3',
+            },
+          ],
+          role: 'user',
+        }),
+      ],
+      {
+        audioTokenEstimate: 1200,
+        audioTokensPerSecond: 32,
+        canUseAudio: true,
+        canUseVideo: false,
+        canUseVision: false,
+      },
+    );
+
+    expect(result.audioTokens).toBe(1280 + 1200);
   });
 
   it('estimates pending upload buckets with text fallback and loaded text content', () => {
@@ -83,16 +119,17 @@ describe('attachment token buckets', () => {
       mkUploadFile({ id: 'text-file', name: 'note.txt', size: 40, type: 'text/plain' }),
       mkUploadFile({ id: 'image-file', name: 'image.png', size: 100, type: 'image/png' }),
       mkUploadFile({ id: 'video-file', name: 'video.mp4', size: 200, type: 'video/mp4' }),
+      mkUploadFile({ id: 'audio-file', name: 'audio.mp3', size: 300, type: 'audio/mpeg' }),
     ];
 
     const fallbackResult = estimatePendingUploadTokenBuckets(
       files,
-      { canUseVideo: true, canUseVision: true },
+      { canUseAudio: true, canUseVideo: true, canUseVision: true },
       {},
     );
     const loadedResult = estimatePendingUploadTokenBuckets(
       files,
-      { canUseVideo: true, canUseVision: true },
+      { canUseAudio: true, canUseVideo: true, canUseVision: true },
       { 'text-file': 'loaded text content' },
     );
 
@@ -100,8 +137,10 @@ describe('attachment token buckets', () => {
     expect(loadedResult.textTokens).toBeGreaterThan(0);
     expect(fallbackResult.imageTokens).toBe(1000);
     expect(fallbackResult.videoTokens).toBe(1000);
+    expect(fallbackResult.audioTokens).toBe(1000);
     expect(loadedResult.imageTokens).toBe(1000);
     expect(loadedResult.videoTokens).toBe(1000);
+    expect(loadedResult.audioTokens).toBe(1000);
   });
 
   it('detects text-like upload files by mime type and extension', () => {
@@ -135,5 +174,22 @@ describe('attachment token buckets', () => {
         mkUploadFile({ id: 'pdf', name: 'document.pdf', size: 1, type: 'application/pdf' }),
       ),
     ).toBe(false);
+    // HDL sources resolve to text/x-* via the custom mime map even when the
+    // browser reports an empty or octet-stream type.
+    expect(
+      isTextLikeUploadFile(
+        mkUploadFile({
+          id: 'verilog',
+          name: 'adder.v',
+          size: 1,
+          type: 'application/octet-stream',
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isTextLikeUploadFile(
+        mkUploadFile({ id: 'systemverilog', name: 'top.sv', size: 1, type: '' }),
+      ),
+    ).toBe(true);
   });
 });

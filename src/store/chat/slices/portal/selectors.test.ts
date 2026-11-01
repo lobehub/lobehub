@@ -84,6 +84,89 @@ describe('chatDockSelectors', () => {
     });
   });
 
+  describe('agent detail', () => {
+    it('should expose the active agent detail id', () => {
+      const state = createState({
+        portalStack: [{ agentId: 'agt_1', type: PortalViewType.AgentDetail }],
+      });
+
+      expect(chatPortalSelectors.showAgentDetail(state)).toBe(true);
+      expect(chatPortalSelectors.agentDetailId(state)).toBe('agt_1');
+    });
+  });
+
+  describe('topic comments', () => {
+    it('extracts list and thread view data only from the active view', () => {
+      const listState = createState({
+        portalStack: [
+          {
+            messageId: 'message-1',
+            topicId: 'topic-1',
+            type: PortalViewType.TopicComments,
+          },
+        ],
+      });
+
+      expect(chatPortalSelectors.topicCommentsView(listState)).toEqual({
+        messageId: 'message-1',
+        topicId: 'topic-1',
+        type: PortalViewType.TopicComments,
+      });
+      expect(chatPortalSelectors.topicCommentThreadView(listState)).toBeNull();
+
+      const threadState = createState({
+        portalStack: [
+          {
+            rootCommentId: 'comment-1',
+            topicId: 'topic-1',
+            type: PortalViewType.TopicCommentThread,
+          },
+        ],
+      });
+      expect(chatPortalSelectors.topicCommentThreadView(threadState)).toEqual({
+        rootCommentId: 'comment-1',
+        topicId: 'topic-1',
+        type: PortalViewType.TopicCommentThread,
+      });
+      expect(chatPortalSelectors.topicCommentsView(threadState)).toBeNull();
+    });
+
+    it('keeps comment views out of the standalone desktop portal', () => {
+      const listState = createState({
+        portalStack: [
+          {
+            topicId: 'topic-1',
+            type: PortalViewType.TopicComments,
+          },
+        ],
+        showPortal: true,
+      });
+      const threadState = createState({
+        portalStack: [
+          {
+            rootCommentId: 'comment-1',
+            topicId: 'topic-1',
+            type: PortalViewType.TopicCommentThread,
+          },
+        ],
+        showPortal: true,
+      });
+
+      expect(chatPortalSelectors.showTopicComments(listState)).toBe(true);
+      expect(chatPortalSelectors.showStandalonePortal(listState)).toBe(false);
+      expect(chatPortalSelectors.showTopicComments(threadState)).toBe(true);
+      expect(chatPortalSelectors.showStandalonePortal(threadState)).toBe(false);
+      expect(
+        chatPortalSelectors.showStandalonePortal(
+          createState({
+            portalStack: [{ type: PortalViewType.Notebook }],
+            showPortal: true,
+          }),
+        ),
+      ).toBe(true);
+    });
+  });
+
   describe('canGoBack', () => {
     it('should return false when stack has 0 or 1 views', () => {
       expect(chatPortalSelectors.canGoBack(createState())).toBe(false);
@@ -238,6 +321,55 @@ describe('chatDockSelectors', () => {
         portalStack: [{ type: PortalViewType.LocalFile }],
       });
       expect(chatPortalSelectors.showLocalFile(state)).toBe(true);
+    });
+  });
+
+  describe('openLocalFiles scope filter', () => {
+    // Regression: sandbox tabs open with `workingDirectory: ''`, so the cwd
+    // filter of a project-scoped topic dropped them and the portal cleared
+    // right after opening. They are scoped by their sandbox topic instead.
+    it('keeps sandbox tabs of the active topic visible in a cwd-scoped topic', () => {
+      const state = createState({
+        ...createTopicState('topic-a', { 'topic-a': '/project-a' }),
+        openLocalFiles: [
+          { filePath: '/project-a/a.ts', workingDirectory: '/project-a' },
+          { filePath: '/work/notes.md', sandboxTopicId: 'topic-a', workingDirectory: '' },
+          { filePath: '/work/other.md', sandboxTopicId: 'topic-b', workingDirectory: '' },
+        ],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.openLocalFiles(state).map((file) => file.filePath)).toEqual([
+        '/project-a/a.ts',
+        '/work/notes.md',
+      ]);
+    });
+  });
+
+  describe('isCurrentLocalFileRemote', () => {
+    it.each([
+      ['local', {}, false],
+      ['remote device', { deviceId: 'remote-device' }, true],
+      ['cloud sandbox', { sandboxTopicId: 'topic-a' }, true],
+    ])('identifies a %s file', (_label, source, expected) => {
+      const file = { filePath: '/work/index.html', workingDirectory: '', ...source };
+      const state = createState({
+        activeLocalFilePath: file.filePath,
+        activeTopicId: 'topic-a',
+        openLocalFiles: [file],
+      });
+      expect(chatPortalSelectors.isCurrentLocalFileRemote(state)).toBe(expected);
+    });
+
+    it('follows the active tab when local and remote files share the same path', () => {
+      const local = { filePath: '/work/index.html', workingDirectory: '/work' };
+      const remote = { ...local, deviceId: 'remote-device' };
+      const state = createState({
+        activeLocalFileId: createLocalFileTabId(remote),
+        openLocalFiles: [local, remote],
+      });
+      expect(chatPortalSelectors.isCurrentLocalFileRemote(state)).toBe(true);
+      state.activeLocalFileId = createLocalFileTabId(local);
+      expect(chatPortalSelectors.isCurrentLocalFileRemote(state)).toBe(false);
     });
   });
 
@@ -423,6 +555,30 @@ describe('chatDockSelectors', () => {
 
       expect(chatPortalSelectors.openLocalFiles(state)).toEqual([
         { filePath: '/project-b/b.ts', workingDirectory: '/project-b' },
+      ]);
+    });
+
+    it('should keep user-approved external preview files visible across topic scopes', () => {
+      const externalFile = {
+        allowExternalFilePreview: true,
+        filePath: '/tmp/worktree-switcher-demo.html',
+        workingDirectory: '/tmp',
+      };
+      const state = createState({
+        ...createTopicState('topic-b', {
+          'topic-a': '/project-a',
+          'topic-b': '/project-b',
+        }),
+        openLocalFiles: [
+          { filePath: '/project-a/a.ts', workingDirectory: '/project-a' },
+          { filePath: '/project-b/b.ts', workingDirectory: '/project-b' },
+          externalFile,
+        ],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.openLocalFiles(state)).toEqual([
+        { filePath: '/project-b/b.ts', workingDirectory: '/project-b' },
+        externalFile,
       ]);
     });
   });

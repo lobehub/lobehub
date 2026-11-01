@@ -32,6 +32,17 @@ export interface DeriveDeviceIdOptions {
 }
 
 /**
+ * Namespace a stable per-install seed (stored UUID, connection id) into a
+ * `fallbackId` for a specific principal. Fallback machines (no readable
+ * machine id) must still derive the SAME id for the same principal across
+ * calls — probe, real enroll, and restore all re-derive — and a raw seed
+ * cannot be reused across principals (a workspace fallback equal to the
+ * personal deviceId would collide the two pools).
+ */
+export const deriveScopedFallbackId = (seedId: string, principal: string): string =>
+  createHash('sha256').update(`${seedId}|${principal}|${SALT}`).digest('hex').slice(0, 32);
+
+/**
  * Derive a stable deviceId for `(machine, user)`.
  *
  * Same machine + same user → same id (survives LobeHub reinstall, since the

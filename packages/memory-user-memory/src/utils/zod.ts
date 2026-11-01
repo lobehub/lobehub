@@ -1,6 +1,5 @@
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
-import type { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from 'zod';
 
 export interface BuildSchemaOptions {
   description?: string;
@@ -23,7 +22,7 @@ export const buildGenerateObjectSchema = (
   schema: z.ZodTypeAny,
   options: BuildSchemaOptions,
 ): GenerateObjectSchema => {
-  const fullSchema = zodToJsonSchema(schema, options.name);
+  const fullSchema = z.toJSONSchema(schema, { target: 'draft-7' });
 
   const jsonSchema = pickMainSchema(fullSchema, options.name);
   if (jsonSchema.type === 'object') {

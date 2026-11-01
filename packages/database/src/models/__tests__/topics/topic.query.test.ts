@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import {
@@ -52,6 +52,19 @@ describe('TopicModel - Query', () => {
       expect(result.items[0].id).toBe('5');
       expect(result.items[1].id).toBe('2');
       expect(result.items[2].id).toBe('4');
+    });
+
+    it('should project the row owner userId so clients can filter by ownership', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(users).values([{ id: '456' }]);
+        await tx
+          .insert(topics)
+          .values([{ id: 'own-topic', userId, sessionId, updatedAt: new Date('2023-01-01') }]);
+      });
+
+      const result = await topicModel.query({ containerId: sessionId });
+
+      expect(result.items[0].userId).toBe(userId);
     });
 
     it('should isolate personal and workspace topics for the same user', async () => {
@@ -194,6 +207,43 @@ describe('TopicModel - Query', () => {
 
       // Without status sort, most-recent message activity wins even if topic.updatedAt is older.
       expect(result.items.map((t) => t.id)).toEqual(['waiting', 'active']);
+    });
+
+    it('returns the latest message activity as `sortUpdatedAt` while `updatedAt` stays the row value', async () => {
+      // The client sorts the sidebar by `sortUpdatedAt`, so it must carry the same
+      // activity time the server ORDER BY uses (topicActivityAt) — otherwise the two
+      // sorts disagree and the list jumps. `updatedAt` stays the raw row value so
+      // rename/favorite edits still show a real edit time.
+      await serverDB.insert(topics).values([
+        { id: 'has-msg', sessionId, updatedAt: new Date('2023-01-01'), userId },
+        { id: 'no-msg', sessionId, updatedAt: new Date('2023-03-01'), userId },
+      ]);
+      // An assistant message (any role counts) that is newer than the row.
+      await serverDB.insert(messages).values([
+        {
+          id: 'has-msg-latest',
+          role: 'assistant',
+          topicId: 'has-msg',
+          updatedAt: new Date('2023-06-01'),
+          userId,
+        },
+      ]);
+
+      const result = await topicModel.query({ containerId: sessionId });
+
+      const byId = Object.fromEntries(result.items.map((t) => [t.id, t]));
+      // sortUpdatedAt reflects the message time (2023-06), NOT its row updatedAt (2023-01).
+      expect(byId['has-msg'].sortUpdatedAt?.toISOString()).toBe(
+        new Date('2023-06-01').toISOString(),
+      );
+      // updatedAt still carries the raw row value (2023-01), untouched by message activity.
+      expect(byId['has-msg'].updatedAt.toISOString()).toBe(new Date('2023-01-01').toISOString());
+      // no-msg has no messages → sortUpdatedAt COALESCE falls back to the row updatedAt.
+      expect(byId['no-msg'].sortUpdatedAt?.toISOString()).toBe(
+        new Date('2023-03-01').toISOString(),
+      );
+      // And the order follows the activity time (2023-06 before 2023-03).
+      expect(result.items.map((t) => t.id)).toEqual(['has-msg', 'no-msg']);
     });
 
     it('should query topics with pagination', async () => {
@@ -878,6 +928,114 @@ describe('TopicModel - Query', () => {
     });
   });
 
+  describe('query with editing-target filters', () => {
+    // Builder panels run on one shared builtin agent for every target, so their
+    // topics all carry the same `agentId` and no `groupId` (a groupId would pull
+    // them into the target's own chat read path). What each conversation was
+    // configuring lives only in `metadata.editingGroupId` / `editingAgentId`.
+    // The panels list the full history on purpose — these filters exist for
+    // callers that want one target's builds.
+    const seedBuilderTopics = async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx
+          .insert(agents)
+          .values([{ id: 'builder-agent', userId, title: 'Group Agent Builder' }]);
+        await trx.insert(chatGroups).values([
+          { id: 'grp-a', userId, title: 'Group A' },
+          { id: 'grp-b', userId, title: 'Group B' },
+        ]);
+        await trx.insert(topics).values([
+          {
+            id: 'builder-topic-a',
+            userId,
+            agentId: 'builder-agent',
+            metadata: { editingGroupId: 'grp-a' },
+            updatedAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'builder-topic-b',
+            userId,
+            agentId: 'builder-agent',
+            metadata: { editingGroupId: 'grp-b' },
+            updatedAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'builder-topic-legacy',
+            userId,
+            agentId: 'builder-agent',
+            updatedAt: new Date('2023-01-03'),
+          },
+        ]);
+      });
+    };
+
+    it('should only return builder topics belonging to the edited group', async () => {
+      await seedBuilderTopics();
+
+      const result = await topicModel.query({
+        agentId: 'builder-agent',
+        editingGroupId: 'grp-a',
+      });
+
+      expect(result.items.map((item) => item.id)).toEqual(['builder-topic-a']);
+      expect(result.total).toBe(1);
+    });
+
+    it('should exclude legacy builder topics that carry no editingGroupId', async () => {
+      await seedBuilderTopics();
+
+      const result = await topicModel.query({
+        agentId: 'builder-agent',
+        editingGroupId: 'grp-b',
+      });
+
+      expect(result.items.map((item) => item.id)).toEqual(['builder-topic-b']);
+    });
+
+    // The builder panel relies on this: its history list is deliberately
+    // unfiltered, so the default query must keep returning every build.
+    it('should return every builder topic when no editing target is given', async () => {
+      await seedBuilderTopics();
+
+      const result = await topicModel.query({ agentId: 'builder-agent' });
+
+      expect(result.items).toHaveLength(3);
+    });
+
+    it('should filter agent-builder topics by the agent they configured', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([
+          { id: 'agent-builder-agent', userId, title: 'Agent Builder' },
+          { id: 'edited-agent-a', userId, title: 'Edited A' },
+          { id: 'edited-agent-b', userId, title: 'Edited B' },
+        ]);
+        await trx.insert(topics).values([
+          {
+            id: 'agent-build-a',
+            userId,
+            agentId: 'agent-builder-agent',
+            metadata: { editingAgentId: 'edited-agent-a' },
+            updatedAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'agent-build-b',
+            userId,
+            agentId: 'agent-builder-agent',
+            metadata: { editingAgentId: 'edited-agent-b' },
+            updatedAt: new Date('2023-01-02'),
+          },
+        ]);
+      });
+
+      const result = await topicModel.query({
+        agentId: 'agent-builder-agent',
+        editingAgentId: 'edited-agent-a',
+      });
+
+      expect(result.items.map((item) => item.id)).toEqual(['agent-build-a']);
+    });
+  });
+
   describe('query with withDetails option', () => {
     const seedTopicWithMessages = async (
       topicId: string,
@@ -1438,18 +1596,77 @@ describe('TopicModel - Query', () => {
     });
   });
 
-  describe('queryAll', () => {
-    it('should return all topics', async () => {
+  describe('queryTopics', () => {
+    it('should return all topics when no status filter is given', async () => {
       await serverDB.insert(topics).values([
         { id: 'topic1', sessionId, userId },
         { id: 'topic2', sessionId, userId },
       ]);
 
-      const result = await topicModel.queryAll();
+      const result = await topicModel.queryTopics();
 
       expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('topic1');
-      expect(result[1].id).toBe('topic2');
+      expect(result.map((t) => t.id).sort()).toEqual(['topic1', 'topic2']);
+    });
+
+    it('should filter by status', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'running1', sessionId, status: 'running', userId },
+        { id: 'done1', sessionId, status: 'completed', userId },
+      ]);
+
+      const result = await topicModel.queryTopics({ statuses: ['running'] });
+
+      expect(result.map((t) => t.id)).toEqual(['running1']);
+    });
+
+    it('should only return topics owned by the model user', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'mine-running', sessionId, status: 'running', userId },
+        { id: 'mine-done', sessionId, status: 'completed', userId },
+        { id: 'others-running', sessionId, status: 'running', userId: userId2 },
+      ]);
+
+      const all = await topicModel.queryTopics();
+      expect(all.map((t) => t.id).sort()).toEqual(['mine-done', 'mine-running']);
+
+      // a status filter must not leak another user's topics
+      const running = await topicModel.queryTopics({ statuses: ['running'] });
+      expect(running.map((t) => t.id)).toEqual(['mine-running']);
+    });
+
+    it('should not leak workspace topics into the personal scope', async () => {
+      await serverDB.insert(workspaces).values({
+        id: 'qt-workspace',
+        name: 'QT Workspace',
+        primaryOwnerId: userId,
+        slug: 'qt-workspace',
+      });
+      await serverDB.insert(sessions).values({
+        id: 'qt-workspace-session',
+        userId,
+        workspaceId: 'qt-workspace',
+      });
+      await serverDB.insert(topics).values([
+        { id: 'qt-personal', sessionId, status: 'running', userId, workspaceId: null },
+        {
+          id: 'qt-workspace-topic',
+          sessionId: 'qt-workspace-session',
+          status: 'running',
+          userId,
+          workspaceId: 'qt-workspace',
+        },
+      ]);
+
+      // topicModel is scoped to the personal context (no workspaceId)
+      const personal = await topicModel.queryTopics({ statuses: ['running'] });
+      expect(personal.map((t) => t.id)).toEqual(['qt-personal']);
+
+      // a workspace-scoped model only sees that workspace's topics
+      const workspaceScoped = await new TopicModel(serverDB, userId, 'qt-workspace').queryTopics({
+        statuses: ['running'],
+      });
+      expect(workspaceScoped.map((t) => t.id)).toEqual(['qt-workspace-topic']);
     });
   });
 
@@ -1534,6 +1751,205 @@ describe('TopicModel - Query', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('title-match-topic');
+    });
+
+    it('should match topics by agentId when the scope provides one (no sessionId)', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values([{ id: 'search-agent', userId }]);
+        await tx.insert(topics).values([
+          // New agent system: topic carries agentId but no sessionId.
+          { id: 'agent-topic', title: 'Hello world', agentId: 'search-agent', userId },
+          { id: 'other-topic', title: 'Hello world', sessionId, userId },
+        ]);
+      });
+
+      const result = await topicModel.queryByKeyword('hello', { agentId: 'search-agent' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('agent-topic');
+    });
+
+    it('should not fall back to the session when scoped by agentId (stays consistent with the list)', async () => {
+      // The agent scope mirrors `query` exactly: it matches by agentId only,
+      // with NO sessionId fallback. A legacy row that another agent owns but
+      // shares the resolved session must not leak into this agent's search,
+      // and un-backfilled rows the list hides must not appear here either.
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values([
+          { id: 'search-agent', userId },
+          { id: 'other-agent', userId },
+        ]);
+        await tx.insert(topics).values([
+          { id: 'agent-topic', title: 'Hello world', agentId: 'search-agent', userId },
+          // Same session mapping, but already stamped for a DIFFERENT agent.
+          {
+            id: 'other-agent-topic',
+            title: 'Hello world',
+            agentId: 'other-agent',
+            sessionId,
+            userId,
+          },
+          // Legacy, un-backfilled (agentId null) — the list doesn't show it either.
+          { id: 'legacy-topic', title: 'Hello legacy', sessionId, userId },
+        ]);
+      });
+
+      const result = await topicModel.queryByKeyword('hello', {
+        agentId: 'search-agent',
+        containerId: sessionId,
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('agent-topic');
+    });
+
+    it('should not leak other agents topics when scoped by agentId', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values([
+          { id: 'search-agent', userId },
+          { id: 'other-agent', userId },
+        ]);
+        await tx.insert(topics).values([
+          { id: 'agent-topic', title: 'Hello world', agentId: 'search-agent', userId },
+          { id: 'other-agent-topic', title: 'Hello world', agentId: 'other-agent', userId },
+        ]);
+      });
+
+      const result = await topicModel.queryByKeyword('hello', { agentId: 'search-agent' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('agent-topic');
+    });
+  });
+
+  describe('queryByKeyword with external candidates', () => {
+    it('ignores tool and blank message candidates when finding topics', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'candidate-tool-topic', title: 'Tool topic', userId },
+        { id: 'candidate-blank-topic', title: 'Blank topic', userId },
+        { id: 'candidate-visible-topic', title: 'Visible topic', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'Tool output',
+          id: 'candidate-tool-hit',
+          role: 'tool',
+          topicId: 'candidate-tool-topic',
+          userId,
+        },
+        {
+          content: ' \n\t',
+          id: 'candidate-blank-hit',
+          role: 'assistant',
+          topicId: 'candidate-blank-topic',
+          userId,
+        },
+        {
+          content: 'Visible response',
+          id: 'candidate-visible-hit',
+          role: 'assistant',
+          topicId: 'candidate-visible-topic',
+          userId,
+        },
+      ]);
+      const model = new TopicModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates: vi.fn().mockImplementation(({ entity }) =>
+          Promise.resolve({
+            candidates:
+              entity === 'messages'
+                ? [
+                    { id: 'candidate-tool-hit', score: 3 },
+                    { id: 'candidate-blank-hit', score: 2 },
+                    { id: 'candidate-visible-hit', score: 1 },
+                  ]
+                : [],
+            total: 3,
+          }),
+        ),
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id)).toEqual(['candidate-visible-topic']);
+    });
+
+    it('hydrates title and message legs through the requested topic scope', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'candidate-topic-title',
+          sessionId,
+          title: 'Title match',
+          updatedAt: new Date('2026-08-20T00:00:00.000Z'),
+          userId,
+        },
+        {
+          id: 'candidate-topic-message',
+          sessionId,
+          title: 'Message match',
+          updatedAt: new Date('2026-08-25T00:00:00.000Z'),
+          userId,
+        },
+        { id: 'candidate-topic-wrong-scope', title: 'Wrong scope', userId },
+        { id: 'candidate-topic-other', title: 'Other user', userId: userId2 },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'Own matching message',
+          id: 'candidate-topic-message-hit',
+          role: 'user',
+          topicId: 'candidate-topic-message',
+          userId,
+        },
+        {
+          content: 'Other matching message',
+          id: 'candidate-topic-message-other',
+          role: 'user',
+          topicId: 'candidate-topic-other',
+          userId: userId2,
+        },
+      ]);
+      const ftsSearchCandidates = vi.fn().mockImplementation(({ entity }) =>
+        Promise.resolve({
+          candidates:
+            entity === 'topics'
+              ? [
+                  { id: 'candidate-topic-other', score: 12 },
+                  { id: 'candidate-topic-wrong-scope', score: 10 },
+                  { id: 'candidate-topic-deleted', score: 8 },
+                  { id: 'candidate-topic-title', score: 6 },
+                ]
+              : [
+                  { id: 'candidate-topic-message-other', score: 12 },
+                  { id: 'candidate-message-deleted', score: 10 },
+                  { id: 'candidate-topic-message-hit', score: 8 },
+                ],
+          total: 4,
+        }),
+      );
+      const model = new TopicModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.queryByKeyword('candidate', sessionId);
+
+      expect(result.map(({ id }) => id)).toEqual([
+        'candidate-topic-message',
+        'candidate-topic-title',
+      ]);
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'topics',
+        filters: { topicScope: { containerId: sessionId } },
+        pagination: {},
+        query: { fields: ['title'], text: 'candidate' },
+      });
+      expect(ftsSearchCandidates).toHaveBeenCalledWith({
+        entity: 'messages',
+        filters: { topicScope: { containerId: sessionId } },
+        pagination: {},
+        query: { fields: ['content'], text: 'candidate' },
+      });
     });
   });
 

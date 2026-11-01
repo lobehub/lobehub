@@ -30,11 +30,12 @@ LobeHub supports the configuration of external authentication services using Bet
 
 To enable Better Auth in LobeHub, set the following environment variables:
 
-| Environment Variable   | Type     | Description                                                                                                                                                               |
-| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AUTH_SECRET`          | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`                                                                                             |
-| `NEXT_PUBLIC_AUTH_URL` | Required | The browser-accessible base URL for Better Auth (e.g., `http://localhost:3010`, `https://LobeHub.com`). Optional for Vercel deployments (auto-detected from `VERCEL_URL`) |
-| `AUTH_SSO_PROVIDERS`   | Optional | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft`                                                                                            |
+| Environment Variable   | Type       | Description                                                                                                                                                                                                                                                                                               |
+| ---------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SECRET`          | Required   | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`                                                                                                                                                                                                                             |
+| `APP_URL`              | Required   | Public base URL of this LobeHub instance (e.g. `https://lobe.example.com`). Better Auth uses it as `baseURL` for OAuth callbacks and trusted origins. On Vercel it can fall back to `VERCEL_*` URLs when unset; elsewhere omitting it defaults to `http://localhost:<PORT>` and breaks public-domain SSO. |
+| `NEXT_PUBLIC_AUTH_URL` | Deprecated | Removed NextAuth/browser auth URL. Setting this variable will cause the deployment to fail — use `APP_URL` instead.                                                                                                                                                                                       |
+| `AUTH_SSO_PROVIDERS`   | Optional   | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft`                                                                                                                                                                                                                            |
 
 ## Supported SSO Providers
 
@@ -104,6 +105,18 @@ When configuring OAuth providers, use the following callback URL format:
 
 - **Development**: `http://localhost:3210/api/auth/callback/{provider}`
 - **Production**: `https://yourdomain.com/api/auth/callback/{provider}`
+
+## Additional Trusted Origins
+
+Better Auth validates the origin of callback and redirect URLs. To allow another exact origin while keeping the automatically generated application, Vercel, mobile, and provider origins, configure:
+
+```bash
+AUTH_ADDITIONAL_TRUSTED_ORIGINS=https://gateway.example.com
+```
+
+Separate multiple origins with commas. HTTP(S) values are reduced to their origin, so `https://gateway.example.com/signin` is treated as `https://gateway.example.com`; mobile custom schemes are preserved.
+
+Use `AUTH_TRUSTED_ORIGINS` only when you intend to replace the complete generated list. When using that variable, include every required web origin and mobile custom scheme yourself. Use exact origins instead of wildcards.
 
 ## Email/Password Options
 

@@ -1,26 +1,29 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import {
+  COMPOSIO_APP_TYPES,
+  type ComposioAppType,
   getLobehubSkillProviderById,
-  KLAVIS_SERVER_TYPES,
-  type KlavisServerType,
   type LobehubSkillProviderType,
+  OFFICIAL_SITE,
 } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
 import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useDiscoverStore } from '@/store/discover';
+import { pluginSelectors } from '@/store/discover/selectors';
 
 /**
- * Icon component for built-in tools (Klavis & LobehubSkill)
+ * Icon component for built-in tools (Composio & LobehubSkill)
  * For string type icon, use Image component to render
  * For IconType type icon, use Icon component to render with theme fill color
  */
-const BuiltinToolIcon = memo<Pick<KlavisServerType | LobehubSkillProviderType, 'icon' | 'label'>>(
+const BuiltinToolIcon = memo<Pick<ComposioAppType | LobehubSkillProviderType, 'icon' | 'label'>>(
   ({ icon, label }) => {
     if (typeof icon === 'string') {
       return <Image alt={label} height={40} src={icon} style={{ flex: 'none' }} width={40} />;
@@ -33,40 +36,18 @@ const BuiltinToolIcon = memo<Pick<KlavisServerType | LobehubSkillProviderType, '
 
 BuiltinToolIcon.displayName = 'BuiltinToolIcon';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    clickable: css`
-      cursor: pointer;
-
-      &:hover {
-        .plugin-title {
-          color: ${cssVar.colorLink};
-        }
-      }
-    `,
-    desc: css`
-      flex: 1;
-      margin: 0 !important;
-      font-size: 14px !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    noLink: css`
-      cursor: default;
-    `,
-    tag: css`
-      flex-shrink: 0;
-    `,
-    title: css`
-      margin: 0 !important;
-      font-size: 14px !important;
-      font-weight: 500 !important;
-    `,
-    titleRow: css`
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    `,
-  };
+const styles = stylex.create({
+  clickable: { cursor: 'pointer' },
+  desc: { flex: '1', margin: '0', fontSize: '14px', color: cssVar.colorTextSecondary },
+  noLink: { cursor: 'default' },
+  tag: { flexShrink: 0 },
+  title: {
+    margin: '0',
+    fontSize: '14px',
+    fontWeight: 500,
+    color: { default: null, [stylex.when.ancestor(':hover')]: cssVar.colorLink },
+  },
+  titleRow: { display: 'flex', gap: '8px', alignItems: 'center' },
 });
 
 interface PluginItemProps {
@@ -75,12 +56,14 @@ interface PluginItemProps {
 
 const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const { t } = useTranslation('discover');
-  const usePluginDetail = useDiscoverStore((s) => s.usePluginDetail);
-  const { data: apiData, isLoading } = usePluginDetail({ identifier, withManifest: false });
+  const usePluginDetail = useDiscoverStore((s) => s.useFetchPluginDetail);
+  const { isLoading, queryKey } = usePluginDetail({ identifier, withManifest: false });
+  // The replica view of this identifier; the sync hook only reports the fetch flags.
+  const apiData = useDiscoverStore(pluginSelectors.pluginDetail(queryKey));
 
-  // Try to get Klavis tool info if API returns no data
-  const klavisTool = useMemo(() => {
-    return KLAVIS_SERVER_TYPES.find((tool) => tool.identifier === identifier);
+  // Try to get Composio tool info if API returns no data
+  const composioTool = useMemo(() => {
+    return COMPOSIO_APP_TYPES.find((tool) => tool.identifier === identifier);
   }, [identifier]);
 
   // Try to get LobehubSkill info if API returns no data
@@ -97,22 +80,22 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const data: DiscoverPluginDetail | undefined = useMemo(() => {
     if (apiData) return apiData;
 
-    // Check Klavis tools
-    if (klavisTool) {
+    // Check Composio tools
+    if (composioTool) {
       return {
-        author: 'Klavis',
+        author: 'Composio',
         avatar: '', // Avatar will be rendered by BuiltinToolIcon component
         category: undefined,
         createdAt: '',
-        description: `LobeHub Mcp Server: ${klavisTool.label}`,
-        homepage: 'https://klavis.ai',
-        identifier: klavisTool.identifier,
+        description: `LobeHub Mcp Server: ${composioTool.label}`,
+        homepage: 'https://composio.dev',
+        identifier: composioTool.identifier,
         manifest: undefined,
         related: [],
         schemaVersion: 1,
         source: 'builtin' as const,
-        tags: ['klavis', 'mcp'],
-        title: klavisTool.label,
+        tags: ['composio', 'mcp'],
+        title: composioTool.label,
       };
     }
 
@@ -124,7 +107,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
         category: undefined,
         createdAt: '',
         description: lobehubSkill.description,
-        homepage: lobehubSkill.authorUrl || 'https://lobehub.com',
+        homepage: lobehubSkill.authorUrl || OFFICIAL_SITE,
         identifier: lobehubSkill.id,
         manifest: undefined,
         related: [],
@@ -139,23 +122,23 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
     if (builtinTool) {
       return {
         author: 'LobeHub',
-        avatar: builtinTool.manifest.meta.avatar || '',
+        avatar: builtinTool.avatar || '',
         category: undefined,
         createdAt: '',
-        description: builtinTool.manifest.meta.description || '',
-        homepage: 'https://lobehub.com',
+        description: builtinTool.description || '',
+        homepage: OFFICIAL_SITE,
         identifier: builtinTool.identifier,
         manifest: undefined,
         related: [],
         schemaVersion: 1,
         source: 'builtin' as const,
-        tags: builtinTool.manifest.meta.tags || ['builtin-tool'],
-        title: builtinTool.manifest.meta.title,
+        tags: builtinTool.tags || ['builtin-tool'],
+        title: builtinTool.title || builtinTool.identifier,
       };
     }
 
     return undefined;
-  }, [apiData, klavisTool, lobehubSkill, builtinTool]);
+  }, [apiData, composioTool, lobehubSkill, builtinTool]);
 
   const sourceConfig = useMemo(() => {
     const source: PluginSource = data?.source || 'market';
@@ -196,7 +179,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   if (isLoading)
     return (
       <Block horizontal gap={12} key={identifier} padding={12} variant={'outlined'}>
-        <Skeleton paragraph={{ rows: 1 }} title={false} />
+        <Skeleton.Text rows={1} />
       </Block>
     );
 
@@ -205,8 +188,8 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
 
   // Render avatar - use BuiltinToolIcon for built-in tools, Avatar for others
   const renderAvatar = () => {
-    if (klavisTool) {
-      return <BuiltinToolIcon icon={klavisTool.icon} label={klavisTool.label} />;
+    if (composioTool) {
+      return <BuiltinToolIcon icon={composioTool.icon} label={composioTool.label} />;
     }
     if (lobehubSkill) {
       return <BuiltinToolIcon icon={lobehubSkill.icon} label={lobehubSkill.label} />;
@@ -217,11 +200,15 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const content = (
     <Block
       horizontal
-      className={cx(sourceConfig.clickable ? styles.clickable : styles.noLink)}
       gap={12}
       key={identifier}
       padding={12}
       variant={'outlined'}
+      className={
+        stylex.props(
+          sourceConfig.clickable ? [styles.clickable, stylex.defaultMarker()] : styles.noLink,
+        ).className
+      }
     >
       {renderAvatar()}
       <Flexbox
@@ -231,19 +218,23 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
           overflow: 'hidden',
         }}
       >
-        <div className={styles.titleRow}>
-          <Text ellipsis as={'h2'} className={cx(styles.title, 'plugin-title')}>
+        <div {...stylex.props(styles.titleRow)}>
+          <Text ellipsis as={'h2'} className={stylex.props(styles.title).className}>
             {data.title}
           </Text>
           {sourceConfig.tagText && (
-            <Tag className={styles.tag} color={sourceConfig.tagColor} size={'small'}>
+            <Tag
+              className={stylex.props(styles.tag).className}
+              color={sourceConfig.tagColor}
+              size={'small'}
+            >
               {sourceConfig.tagText}
             </Tag>
           )}
         </div>
         <Text
           as={'p'}
-          className={styles.desc}
+          className={stylex.props(styles.desc).className}
           ellipsis={{
             rows: 2,
           }}

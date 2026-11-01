@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { FilesTabs, SortType } from '@lobechat/types';
+import { agentShareFileAccessScope, FileSource, FilesTabs, SortType } from '@lobechat/types';
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -194,7 +194,7 @@ describe('FileModel', () => {
         fileHash: '1',
       });
 
-      await fileModel.delete(id, false);
+      await fileModel.delete(id, { removeGlobalFile: false });
 
       const file = await serverDB.query.files.findFirst({ where: eq(files.id, id) });
       const globalFile = await serverDB.query.globalFiles.findFirst({
@@ -288,6 +288,250 @@ describe('FileModel', () => {
         where: inArray(asyncTasks.id, [chunkTask!.id, embeddingTask!.id]),
       });
       expect(remainingTasks).toHaveLength(0);
+    });
+  });
+
+  describe('deleteUnreferenced', () => {
+    /** @example Dedicated cleanup cannot remove an ordinary library file. */
+    it('limits source-specific cleanup to agent uploads', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'application/pdf',
+        name: 'library.pdf',
+        size: 100,
+        url: 'files/library.pdf',
+      });
+      await fileModel.deleteUnreferenced(id, { source: FileSource.AgentDocument });
+      /** @example Ordinary resources keep their independent lifecycle. */
+      expect(await fileModel.findById(id)).toBeDefined();
+    });
+
+    /** @example A backing upload survives while another document or KB still uses it. */
+    it('preserves document and knowledge-base references during agent upload cleanup', async () => {
+      // ROOT CAUSE:
+      // Cleanup only checked messages and sessions and could delete files still used by
+      // documents or knowledge bases. Check these references under the same file-row lock.
+      const { id } = await fileModel.create({
+        fileType: 'application/pdf',
+        name: 'shared.pdf',
+        size: 100,
+        source: FileSource.AgentDocument,
+        url: 'files/shared.pdf',
+      });
+      const [document] = await serverDB
+        .insert(documents)
+        .values({
+          fileId: id,
+          fileType: 'application/pdf',
+          filename: 'shared.pdf',
+          source: 'files/shared.pdf',
+          sourceType: 'file',
+          userId,
+          totalCharCount: 0,
+          totalLineCount: 0,
+        })
+        .returning();
+      await fileModel.deleteUnreferenced(id);
+      /** @example Document-backed files must survive cleanup. */
+      expect(await fileModel.findById(id)).toBeDefined();
+
+      await serverDB.delete(documents).where(eq(documents.id, document.id));
+      await serverDB
+        .insert(knowledgeBaseFiles)
+        .values({ fileId: id, knowledgeBaseId: 'kb1', userId });
+      await fileModel.deleteUnreferenced(id);
+      /** @example A KB relation independently keeps the file alive. */
+      expect(await fileModel.findById(id)).toBeDefined();
+    });
+
+    it('deletes an owned file that has no message or session references', async () => {
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'audio/webm',
+        hashId: 'voice-unreferenced',
+        size: 100,
+        url: 'voice/unreferenced.webm',
+      });
+      const { id } = await fileModel.create({
+        fileHash: 'voice-unreferenced',
+        fileType: 'audio/webm',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/unreferenced.webm',
+      });
+
+      const deleted = await fileModel.deleteUnreferenced(id);
+
+      expect(deleted).toMatchObject({ id, url: 'voice/unreferenced.webm' });
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('preserves a file attached to a persisted message', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'audio/webm',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/message.webm',
+      });
+      await serverDB.insert(messages).values({ id: 'voice-message', role: 'user', userId });
+      await serverDB
+        .insert(messagesFiles)
+        .values({ fileId: id, messageId: 'voice-message', userId });
+
+      await expect(fileModel.deleteUnreferenced(id)).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeDefined();
+    });
+
+    it('preserves a file attached to a session', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'audio/webm',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/session.webm',
+      });
+      await serverDB.insert(sessions).values({ id: 'voice-session', userId });
+      await serverDB
+        .insert(filesToSessions)
+        .values({ fileId: id, sessionId: 'voice-session', userId });
+
+      await expect(fileModel.deleteUnreferenced(id)).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeDefined();
+    });
+
+    it('derives hashless agent-share object ownership from persisted provenance', async () => {
+      const { id: silent } = await fileModel.create(
+        { fileType: 'image/png', name: 'cat.png', size: 10, url: 'files/u/plain/cat.png' },
+        false,
+      );
+      await expect(fileModel.deleteUnreferenced(silent)).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, silent) }),
+      ).resolves.toBeUndefined();
+
+      const { id } = await fileModel.create(
+        {
+          fileType: 'image/png',
+          metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+          name: 'cat.png',
+          size: 10,
+          url: 'files/u/share/a/cat.png',
+        },
+        false,
+      );
+      await expect(fileModel.deleteUnreferenced(id)).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeDefined();
+      await expect(
+        fileModel.deleteUnreferenced(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-b',
+          }),
+        }),
+      ).resolves.toBeUndefined();
+      await expect(
+        fileModel.deleteUnreferenced(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
+        }),
+      ).resolves.toMatchObject({
+        id,
+        url: 'files/u/share/a/cat.png',
+      });
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeUndefined();
+
+      const { id: removalDisabled } = await fileModel.create(
+        {
+          fileType: 'image/png',
+          metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+          name: 'dog.png',
+          size: 10,
+          url: 'files/u/share/a/dog.png',
+        },
+        false,
+      );
+      await expect(
+        fileModel.deleteUnreferenced(removalDisabled, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
+          removeGlobalFile: false,
+        }),
+      ).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, removalDisabled) }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('keeps hashed rows on the global reference-count path even with share provenance', async () => {
+      await fileModel.createGlobalFile({
+        creator: userId,
+        fileType: 'image/png',
+        hashId: 'shared-hash',
+        size: 10,
+        url: 'files/u/first.png',
+      });
+      const { id: keeper } = await fileModel.create({
+        fileHash: 'shared-hash',
+        fileType: 'image/png',
+        name: 'first.png',
+        size: 10,
+        url: 'files/u/first.png',
+      });
+      const { id } = await fileModel.create({
+        fileHash: 'shared-hash',
+        fileType: 'image/png',
+        metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+        name: 'second.png',
+        size: 10,
+        url: 'files/u/second.png',
+      });
+
+      await expect(
+        fileModel.deleteUnreferenced(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
+        }),
+      ).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, id) }),
+      ).resolves.toBeUndefined();
+
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, keeper) }),
+      ).resolves.toBeDefined();
+      await expect(
+        serverDB.query.globalFiles.findFirst({ where: eq(globalFiles.hashId, 'shared-hash') }),
+      ).resolves.toBeDefined();
+    });
+
+    it("does not delete another user's unreferenced file", async () => {
+      await serverDB.insert(files).values({
+        fileType: 'audio/webm',
+        id: 'other-user-voice',
+        name: 'voice.webm',
+        size: 100,
+        url: 'voice/other.webm',
+        userId: 'user2',
+      });
+
+      await expect(fileModel.deleteUnreferenced('other-user-voice')).resolves.toBeUndefined();
+      await expect(
+        serverDB.query.files.findFirst({ where: eq(files.id, 'other-user-voice') }),
+      ).resolves.toBeDefined();
     });
   });
 
@@ -703,6 +947,130 @@ describe('FileModel', () => {
         expect(result).toHaveLength(2);
       });
     });
+
+    describe('Hidden sources', () => {
+      beforeEach(async () => {
+        await serverDB.insert(files).values([
+          {
+            id: 'plain-file',
+            name: 'notes.txt',
+            userId,
+            fileType: 'text/plain',
+            size: 100,
+            url: 'plain-url',
+          },
+          {
+            id: 'acceptance-file',
+            name: 'payload-execution.txt',
+            userId,
+            fileType: 'text/plain',
+            size: 100,
+            source: FileSource.Acceptance,
+            url: 'acceptance-url',
+          },
+          {
+            id: 'agent-share-file',
+            name: 'visitor.txt',
+            userId,
+            fileType: 'text/plain',
+            metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+            size: 100,
+            url: 'visitor-url',
+          },
+          {
+            id: 'generation-file',
+            name: 'generated.png',
+            userId,
+            fileType: 'image/png',
+            size: 100,
+            source: FileSource.ImageGeneration,
+            url: 'generation-url',
+          },
+        ]);
+      });
+
+      it('should exclude acceptance evidence and agent-share provenance', async () => {
+        const result = await fileModel.query();
+
+        expect(result.map((f) => f.id).sort()).toEqual(['generation-file', 'plain-file']);
+      });
+
+      it('should still find acceptance evidence by id', async () => {
+        const result = await fileModel.findById('acceptance-file');
+
+        expect(result?.name).toBe('payload-execution.txt');
+      });
+    });
+  });
+
+  describe('countAgentShareUsage', () => {
+    it("sums only this user's files with provenance for the given share", async () => {
+      const base = { fileType: 'text/plain', url: 'https://example.com/f' };
+      const visitorFile = (shareId: string, size: number) => ({
+        ...base,
+        metadata: { agentShare: { shareId, visitorUserId: 'visitor' } },
+        name: `${shareId}-${size}`,
+        size,
+      });
+
+      await fileModel.create(visitorFile('share-a', 10));
+      await fileModel.create(visitorFile('share-a', 20));
+      await fileModel.create(visitorFile('share-b', 40));
+      await fileModel.create({ ...base, name: 'ordinary', size: 80 });
+      // Another user's visitor file on the same share id.
+      await new FileModel(serverDB, 'user2').create(visitorFile('share-a', 160));
+
+      expect(await fileModel.countAgentShareUsage('share-a')).toBe(30);
+      expect(await fileModel.countAgentShareUsage('share-b')).toBe(40);
+      expect(await fileModel.countAgentShareUsage('share-none')).toBe(0);
+    });
+  });
+
+  describe('findKnowledgeBaseIds', () => {
+    it('lists the libraries a file is filed in', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'image/png',
+        name: 'photo.png',
+        size: 100,
+        url: 'files/photo.png',
+      });
+      await serverDB
+        .insert(knowledgeBaseFiles)
+        .values({ fileId: id, knowledgeBaseId: 'kb1', userId });
+
+      expect(await fileModel.findKnowledgeBaseIds(id)).toEqual(['kb1']);
+    });
+
+    // Regression: a collaborator's private library leaked into the caller's
+    // list, and saving an edit then tried to write to it.
+    it('omits libraries the caller cannot see', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'image/png',
+        name: 'shared.png',
+        size: 100,
+        url: 'files/shared.png',
+      });
+      await serverDB
+        .insert(knowledgeBases)
+        .values({ id: 'kb_other_private', name: 'theirs', userId: 'user2' });
+      await serverDB.insert(knowledgeBaseFiles).values([
+        { fileId: id, knowledgeBaseId: 'kb1', userId },
+        { fileId: id, knowledgeBaseId: 'kb_other_private', userId: 'user2' },
+      ]);
+
+      expect(await fileModel.findKnowledgeBaseIds(id)).toEqual(['kb1']);
+    });
+
+    it('returns an empty list for a file outside any library', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'image/png',
+        name: 'loose.png',
+        size: 100,
+        url: 'files/loose.png',
+      });
+
+      expect(await fileModel.findKnowledgeBaseIds(id)).toEqual([]);
+    });
   });
 
   describe('findById', () => {
@@ -723,6 +1091,35 @@ describe('FileModel', () => {
         fileType: 'text/plain',
         userId,
       });
+    });
+
+    it('hides share-provenance files from ordinary reads and resolves them through the scoped API', async () => {
+      const { id } = await fileModel.create({
+        fileType: 'text/plain',
+        metadata: { agentShare: { shareId: 'share-a', visitorUserId: 'visitor-a' } },
+        name: 'visitor.txt',
+        size: 100,
+        url: 'https://example.com/visitor.txt',
+      });
+
+      await expect(fileModel.findById(id)).resolves.toBeUndefined();
+      await expect(fileModel.findByIds([id])).resolves.toEqual([]);
+      await expect(
+        fileModel.findById(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-a',
+          }),
+        }),
+      ).resolves.toMatchObject({ id });
+      await expect(
+        fileModel.findById(id, {
+          accessScope: agentShareFileAccessScope({
+            shareId: 'share-a',
+            visitorUserId: 'visitor-b',
+          }),
+        }),
+      ).resolves.toBeUndefined();
     });
   });
 
@@ -1086,7 +1483,7 @@ describe('FileModel', () => {
 
         // Delete file in transaction
         await serverDB.transaction(async (trx) => {
-          await fileModel.delete(id, true, trx);
+          await fileModel.delete(id, { transaction: trx });
 
           // Verify file was deleted inside the transaction
           const file = await trx.query.files.findFirst({ where: eq(files.id, id) });
@@ -1125,7 +1522,7 @@ describe('FileModel', () => {
         // Intentionally fail the transaction
         await expect(
           serverDB.transaction(async (trx) => {
-            await fileModel.delete(id, true, trx);
+            await fileModel.delete(id, { transaction: trx });
 
             // Verify file was deleted inside the transaction
             const file = await trx.query.files.findFirst({ where: eq(files.id, id) });
@@ -1168,7 +1565,7 @@ describe('FileModel', () => {
 
         // Delete file in transaction, but keep global file
         await serverDB.transaction(async (trx) => {
-          await fileModel.delete(id, false, trx);
+          await fileModel.delete(id, { removeGlobalFile: false, transaction: trx });
         });
 
         // Verify file was deleted
@@ -1205,7 +1602,7 @@ describe('FileModel', () => {
         // Delete old file and create new file in the same transaction
         const result = await serverDB.transaction(async (trx) => {
           // Delete old file
-          await fileModel.delete(deleteFileId, true, trx);
+          await fileModel.delete(deleteFileId, { transaction: trx });
 
           // Create new file
           const { id: newFileId } = await fileModel.create(
@@ -1288,12 +1685,9 @@ describe('FileModel', () => {
       expect(result[0].id).toBe('page-file');
     });
 
-    it('should handle Pages category (should use text/html like Websites)', async () => {
-      // FilesTabs.Pages is not explicitly handled in switch, falls to default
-      // which returns empty string, so it won't filter by file type
+    it('should handle Pages category (derived pages never live in the files table)', async () => {
       const result = await fileModel.query({ category: FilesTabs.Pages });
-      // Should return all files since default case returns empty string
-      expect(result.length).toBeGreaterThan(0);
+      expect(result).toHaveLength(0);
     });
 
     it('should handle unknown file category', async () => {
@@ -1335,7 +1729,7 @@ describe('FileModel', () => {
 
       // Insert chunks (this might need to be done through proper API)
       // For testing purposes, we'll delete the file which should trigger the batch deletion
-      await fileModel.delete(fileId, true);
+      await fileModel.delete(fileId);
 
       // Verify the file is deleted
       const deletedFile = await serverDB.query.files.findFirst({
@@ -1393,7 +1787,7 @@ describe('FileModel', () => {
       // Skip documentChunks test, requires creating documents records first
 
       // Delete file, should clean up all related data
-      const result = await fileModel.delete(fileId, true);
+      const result = await fileModel.delete(fileId);
 
       // Verify file was deleted
       const deletedFile = await serverDB.query.files.findFirst({
@@ -1451,7 +1845,7 @@ describe('FileModel', () => {
         .values([{ chunkId, embeddings: testEmbedding, model: 'test-model', userId }]);
 
       // Delete file
-      await fileModel.delete(fileId, true);
+      await fileModel.delete(fileId);
 
       // Verify file was deleted
       const deletedFile = await serverDB.query.files.findFirst({
@@ -1513,7 +1907,7 @@ describe('FileModel', () => {
       expect(kbFile).toBeDefined();
 
       // Delete file
-      await fileModel.delete(fileId, true);
+      await fileModel.delete(fileId);
 
       // Verify files in knowledge base were also completely deleted
       const deletedFile = await serverDB.query.files.findFirst({
@@ -1688,6 +2082,192 @@ describe('FileModel', () => {
         .values({ fileId: 'sf-user2', messageId: 'sandbox-msg-other', userId: 'user2' });
 
       const result = await fileModel.findFilesToInitInSandbox(topicId);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('hasFilesByTopicIds', () => {
+    const sessionId = 'has-topic-files-session';
+    const topicId = 'has-topic-files-topic';
+
+    beforeEach(async () => {
+      await serverDB.insert(sessions).values({ id: sessionId, userId });
+      await serverDB.insert(topics).values({ id: topicId, sessionId, userId });
+      await serverDB
+        .insert(messages)
+        .values({ id: 'has-topic-files-message', role: 'user', topicId, userId });
+    });
+
+    it('returns false when no topic ids are provided', async () => {
+      await expect(fileModel.hasFilesByTopicIds([])).resolves.toBe(false);
+    });
+
+    it('returns false when the topics have no message files', async () => {
+      await expect(fileModel.hasFilesByTopicIds([topicId])).resolves.toBe(false);
+    });
+
+    it('returns true when any selected topic has a message file', async () => {
+      await serverDB.insert(files).values({
+        fileType: 'image/png',
+        id: 'has-topic-files-image',
+        name: 'image.png',
+        size: 1,
+        url: 'has-topic-files-image-key',
+        userId,
+      });
+      await serverDB.insert(messagesFiles).values({
+        fileId: 'has-topic-files-image',
+        messageId: 'has-topic-files-message',
+        userId,
+      });
+
+      await expect(fileModel.hasFilesByTopicIds(['topic-without-files', topicId])).resolves.toBe(
+        true,
+      );
+    });
+
+    it("does not expose another user's topic files", async () => {
+      await serverDB
+        .insert(sessions)
+        .values({ id: 'has-topic-files-other-session', userId: 'user2' });
+      await serverDB.insert(topics).values({
+        id: 'has-topic-files-other-topic',
+        sessionId: 'has-topic-files-other-session',
+        userId: 'user2',
+      });
+      await serverDB.insert(messages).values({
+        id: 'has-topic-files-other-message',
+        role: 'user',
+        topicId: 'has-topic-files-other-topic',
+        userId: 'user2',
+      });
+      await serverDB.insert(files).values({
+        fileType: 'image/png',
+        id: 'has-topic-files-other-image',
+        name: 'other.png',
+        size: 1,
+        url: 'has-topic-files-other-image-key',
+        userId: 'user2',
+      });
+      await serverDB.insert(messagesFiles).values({
+        fileId: 'has-topic-files-other-image',
+        messageId: 'has-topic-files-other-message',
+        userId: 'user2',
+      });
+
+      await expect(fileModel.hasFilesByTopicIds(['has-topic-files-other-topic'])).resolves.toBe(
+        false,
+      );
+    });
+  });
+
+  describe('findDeletableFilesByTopicId', () => {
+    const sessionId = 'topic-files-session-1';
+    const topicId = 'topic-files-topic-1';
+
+    beforeEach(async () => {
+      await serverDB.insert(sessions).values({ id: sessionId, userId });
+      await serverDB.insert(topics).values([
+        { id: topicId, sessionId, userId },
+        { id: 'topic-files-topic-2', sessionId, userId },
+      ]);
+      await serverDB.insert(messages).values([
+        { id: 'tf-msg-1', role: 'user', topicId, userId },
+        { id: 'tf-msg-1b', role: 'user', topicId, userId },
+        { id: 'tf-msg-2', role: 'user', topicId: 'topic-files-topic-2', userId },
+      ]);
+      await serverDB.insert(files).values([
+        { fileType: 'text/csv', id: 'tf-msg', name: 'msg.csv', size: 1, url: 'k-msg', userId },
+        {
+          fileType: 'application/pdf',
+          id: 'tf-shared',
+          name: 'shared.pdf',
+          size: 2,
+          url: 'k-shared',
+          userId,
+        },
+        { fileType: 'text/plain', id: 'tf-sess', name: 's.txt', size: 3, url: 'k-sess', userId },
+        { fileType: 'text/plain', id: 'tf-other', name: 'o.txt', size: 4, url: 'k-other', userId },
+      ]);
+    });
+
+    it('returns only files attached exclusively inside the topic, de-duped', async () => {
+      await serverDB.insert(messagesFiles).values([
+        { fileId: 'tf-msg', messageId: 'tf-msg-1', userId },
+        // same file attached to another message in the topic → must be de-duped
+        { fileId: 'tf-msg', messageId: 'tf-msg-1b', userId },
+        // attached only to a different topic → not a candidate
+        { fileId: 'tf-other', messageId: 'tf-msg-2', userId },
+      ]);
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+
+      expect(result).toEqual(['tf-msg']);
+    });
+
+    it('preserves a file still attached to a message in another topic', async () => {
+      await serverDB.insert(messagesFiles).values([
+        { fileId: 'tf-msg', messageId: 'tf-msg-1', userId },
+        // tf-shared lives in both the deleted topic and another topic
+        { fileId: 'tf-shared', messageId: 'tf-msg-1', userId },
+        { fileId: 'tf-shared', messageId: 'tf-msg-2', userId },
+      ]);
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+
+      expect(result).toEqual(['tf-msg']);
+    });
+
+    it('preserves a file still attached to a message with no topic', async () => {
+      await serverDB.insert(messages).values({ id: 'tf-msg-inbox', role: 'user', userId });
+      await serverDB.insert(messagesFiles).values([
+        { fileId: 'tf-shared', messageId: 'tf-msg-1', userId },
+        // also attached to an inbox message (topicId = null) → must be preserved
+        { fileId: 'tf-shared', messageId: 'tf-msg-inbox', userId },
+      ]);
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+
+      expect(result).toEqual([]);
+    });
+
+    it('preserves a file still attached at the session level', async () => {
+      await serverDB
+        .insert(messagesFiles)
+        .values({ fileId: 'tf-sess', messageId: 'tf-msg-1', userId });
+      // also bound to the session → survives a single-topic deletion
+      await serverDB.insert(filesToSessions).values({ fileId: 'tf-sess', sessionId, userId });
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+
+      expect(result).toEqual([]);
+    });
+
+    it('returns an empty array when the topic has no message files', async () => {
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
+      expect(result).toEqual([]);
+    });
+
+    it('does not return files belonging to another user', async () => {
+      await serverDB.insert(messages).values({
+        id: 'tf-msg-other',
+        role: 'user',
+        topicId,
+        userId: 'user2',
+      });
+      await serverDB.insert(files).values({
+        fileType: 'text/plain',
+        id: 'tf-user2',
+        name: 'u2.txt',
+        size: 5,
+        url: 'k-u2',
+        userId: 'user2',
+      });
+      await serverDB
+        .insert(messagesFiles)
+        .values({ fileId: 'tf-user2', messageId: 'tf-msg-other', userId: 'user2' });
+
+      const result = await fileModel.findDeletableFilesByTopicId(topicId);
       expect(result).toEqual([]);
     });
   });
@@ -1893,6 +2473,162 @@ describe('FileModel', () => {
       await expect(
         fileModel.copyToWorkspace('non-existent-file', targetWorkspaceId, 'user2'),
       ).rejects.toThrow('File not found');
+    });
+  });
+
+  describe('publishToWorkspace', () => {
+    const wsId = 'publish-ws';
+    const wsFileModel = new FileModel(serverDB, userId, wsId);
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'Publish WS',
+        slug: 'publish-ws',
+        primaryOwnerId: userId,
+      });
+    });
+
+    it('should flip the creator’s own private file to public', async () => {
+      await serverDB.insert(files).values({
+        id: 'priv-file-1',
+        name: 'priv.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-priv',
+        userId,
+        workspaceId: wsId,
+        visibility: 'private',
+      });
+
+      await wsFileModel.publishToWorkspace('priv-file-1');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'priv-file-1'),
+      });
+      expect(file?.visibility).toBe('public');
+    });
+
+    it('should leave already-public files untouched (no-op when the row is not private)', async () => {
+      await serverDB.insert(files).values({
+        id: 'pub-file-1',
+        name: 'pub.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-pub',
+        userId,
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+      const before = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'pub-file-1'),
+      });
+
+      await wsFileModel.publishToWorkspace('pub-file-1');
+
+      const after = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'pub-file-1'),
+      });
+      expect(after?.visibility).toBe('public');
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+    });
+
+    it('should refuse to publish another member’s private file', async () => {
+      await serverDB.insert(files).values({
+        id: 'others-priv-file',
+        name: 'others.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-others',
+        userId: 'user2',
+        workspaceId: wsId,
+        visibility: 'private',
+      });
+
+      await wsFileModel.publishToWorkspace('others-priv-file');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'others-priv-file'),
+      });
+      expect(file?.visibility).toBe('private');
+    });
+  });
+
+  describe('setVisibility', () => {
+    const wsId = 'visibility-ws';
+    const wsFileModel = new FileModel(serverDB, userId, wsId);
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: wsId,
+        name: 'Visibility WS',
+        slug: 'visibility-ws',
+        primaryOwnerId: userId,
+      });
+    });
+
+    it('should flip the creator’s own public file back to private', async () => {
+      await serverDB.insert(files).values({
+        id: 'to-privatize',
+        name: 'x.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-x',
+        userId,
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+
+      await wsFileModel.setVisibility('to-privatize', 'private');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'to-privatize'),
+      });
+      expect(file?.visibility).toBe('private');
+    });
+
+    it('should be a no-op when the file already sits at the target visibility', async () => {
+      await serverDB.insert(files).values({
+        id: 'already-private',
+        name: 'p.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-p',
+        userId,
+        workspaceId: wsId,
+        visibility: 'private',
+      });
+      const before = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'already-private'),
+      });
+
+      await wsFileModel.setVisibility('already-private', 'private');
+
+      const after = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'already-private'),
+      });
+      expect(after?.visibility).toBe('private');
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+    });
+
+    it('should refuse to flip another member’s file', async () => {
+      await serverDB.insert(files).values({
+        id: 'others-public-file',
+        name: 'o.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-o',
+        userId: 'user2',
+        workspaceId: wsId,
+        visibility: 'public',
+      });
+
+      await wsFileModel.setVisibility('others-public-file', 'private');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'others-public-file'),
+      });
+      expect(file?.visibility).toBe('public');
     });
   });
 });

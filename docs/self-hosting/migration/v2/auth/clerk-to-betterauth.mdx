@@ -226,7 +226,7 @@ See [Clerk documentation](https://clerk.com/docs/guides/development/migrating/ov
 
 ```bash
 # Run export script (automatically selects key and output path based on CLERK_TO_BETTERAUTH_MODE)
-npx tsx scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
+bun run scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
 ```
 
 This automatically creates `scripts/clerk-to-betterauth/test/clerk_users.json` with additional user data.
@@ -235,7 +235,7 @@ This automatically creates `scripts/clerk-to-betterauth/test/clerk_users.json` w
 
 ```bash
 # Run migration (CLERK_TO_BETTERAUTH_DRY_RUN=1, only logs without modifying database)
-npx tsx scripts/clerk-to-betterauth/index.ts
+bun run scripts/clerk-to-betterauth/index.ts
 ```
 
 Review the output logs, confirm no issues, then proceed to the next step.
@@ -246,10 +246,10 @@ Update `.env` to set `CLERK_TO_BETTERAUTH_DRY_RUN` to `0`, then execute:
 
 ```bash
 # Execute migration
-npx tsx scripts/clerk-to-betterauth/index.ts
+bun run scripts/clerk-to-betterauth/index.ts
 
 # Verify the migration
-npx tsx scripts/clerk-to-betterauth/verify.ts
+bun run scripts/clerk-to-betterauth/verify.ts
 ```
 
 After verifying the test environment migration is successful, proceed to the next step.
@@ -264,10 +264,10 @@ After verifying the test environment migration is successful, proceed to the nex
 
 ```bash
 # Export production user data
-npx tsx scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
+bun run scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
 
 # Run migration (dry-run mode to verify)
-npx tsx scripts/clerk-to-betterauth/index.ts
+bun run scripts/clerk-to-betterauth/index.ts
 ```
 
 Review the output logs, confirm no issues, then proceed to the next step.
@@ -278,10 +278,10 @@ Update `.env` to set `CLERK_TO_BETTERAUTH_DRY_RUN` to `0`, then execute:
 
 ```bash
 # Execute migration
-npx tsx scripts/clerk-to-betterauth/index.ts
+bun run scripts/clerk-to-betterauth/index.ts
 
 # Verify the migration
-npx tsx scripts/clerk-to-betterauth/verify.ts
+bun run scripts/clerk-to-betterauth/verify.ts
 ```
 
 ### Step 7: Configure Better Auth and Redeploy

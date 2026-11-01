@@ -1,24 +1,16 @@
 import { useCallback } from 'react';
 
-import { mutate } from '@/libs/swr';
-import { agentService } from '@/services/agent';
-
-const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
+import { getAgentStoreState } from '@/store/agent';
 
 /**
- * Returns a callback to prefetch agent config data into the SWR cache.
- * Call the returned function on mouseEnter to warm the cache before navigation.
+ * Returns a callback that warms an agent's config before navigation (call it
+ * on mouseEnter). The config lands in `agentMap`, so the page paints it on
+ * its first frame; agents already there are skipped.
  */
 export const usePrefetchAgent = () => {
   return useCallback((agentId: string) => {
     if (!agentId) return;
 
-    const key = [FETCH_AGENT_CONFIG_KEY, agentId] as const;
-
-    // Populate the SWR cache without triggering re-renders on consuming hooks
-    mutate(key, agentService.getAgentConfigById(agentId), {
-      // Don't revalidate if data already exists
-      revalidate: false,
-    });
+    void getAgentStoreState().prefetchAgentConfig(agentId);
   }, []);
 };

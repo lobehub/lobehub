@@ -12,8 +12,18 @@ import type { IStreamEventManager } from './types';
 const log = debug('lobe-server:agent-runtime:dispatch-client-tool');
 
 interface DispatchContext {
+  agentId?: string | null;
+  /** Assistant message that carries this tool call. */
+  assistantMessageId?: string;
+  documentId?: string | null;
+  groupId?: string | null;
   operationId: string;
+  rootOperationId?: string;
+  scope?: string | null;
+  sourceMessageId?: string | null;
   streamManager: IStreamEventManager;
+  taskId?: string | null;
+  threadId?: string | null;
   /**
    * Per-call execution budget in milliseconds, normally produced by
    * `resolveToolTimeoutMs`. When omitted, falls back to the global default
@@ -22,6 +32,7 @@ interface DispatchContext {
    * a suggester, this dispatcher is the arbiter.
    */
   timeoutMs?: number;
+  topicId?: string | null;
 }
 
 const clampTimeout = (value: number): number =>
@@ -98,11 +109,21 @@ export async function dispatchClientTool(
     );
 
     await streamManager.sendToolExecute(operationId, {
+      agentId: ctx.agentId,
       apiName: chatToolPayload.apiName,
       arguments: chatToolPayload.arguments,
+      assistantMessageId: ctx.assistantMessageId,
+      documentId: ctx.documentId,
       executionTimeoutMs: timeoutMs,
+      groupId: ctx.groupId,
       identifier: chatToolPayload.identifier,
+      rootOperationId: ctx.rootOperationId ?? operationId,
+      scope: ctx.scope,
+      sourceMessageId: ctx.sourceMessageId,
+      taskId: ctx.taskId,
+      threadId: ctx.threadId,
       toolCallId: chatToolPayload.id,
+      topicId: ctx.topicId,
     });
 
     const result = await waiter.waitForResult(chatToolPayload.id, timeoutMs);
@@ -134,9 +155,15 @@ function projectToExecutionResult(
 ): ToolExecutionResultResponse {
   return {
     content: payload.content ?? '',
+    // Absent when the device or the gateway is too old to report it; the
+    // server-observed `executionTime` is always present.
+    deviceExecutionTime: payload.executionTimeMs,
     error: payload.error,
     executionTime,
     state: payload.state,
     success: payload.success,
+    // Forward the client-relayed Work registration intent so the agent runtime
+    // loop calls `registerWork` (the persist path strips it — never hits the DB).
+    workRegistration: payload.workRegistration,
   };
 }
