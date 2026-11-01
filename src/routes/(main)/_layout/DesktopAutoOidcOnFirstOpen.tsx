@@ -2,7 +2,7 @@
 
 import { memo, useEffect } from 'react';
 
-import { getDesktopOnboardingCompleted } from '@/routes/(desktop)/desktop-onboarding/storage';
+import { getDesktopOnboardingCompleted } from '@/features/DesktopOnboarding/storage';
 import { useElectronStore } from '@/store/electron';
 import {
   getDesktopAutoOidcFirstOpenHandled,
@@ -55,5 +55,7 @@ const DesktopAutoOidcOnFirstOpen = memo(() => {
 
   return null;
 });
+
+DesktopAutoOidcOnFirstOpen.displayName = 'DesktopAutoOidcOnFirstOpen';
 
 export default DesktopAutoOidcOnFirstOpen;

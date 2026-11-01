@@ -19,6 +19,7 @@ const { mockApp, mockI18nextInstance, mockLoadResources, mockCreateInstance } = 
   return {
     mockApp: {
       getLocale: vi.fn().mockReturnValue('en-US'),
+      getPreferredSystemLanguages: vi.fn().mockReturnValue(['en-US']),
     },
     mockCreateInstance,
     mockI18nextInstance,
@@ -36,16 +37,6 @@ vi.mock('i18next', () => ({
   default: {
     createInstance: mockCreateInstance,
   },
-}));
-
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
 }));
 
 // Mock loadResources
@@ -73,6 +64,7 @@ describe('I18nManager', () => {
 
     // Reset electron app mock
     mockApp.getLocale.mockReturnValue('en-US');
+    mockApp.getPreferredSystemLanguages.mockReturnValue(['en-US']);
 
     // Create mock App core
     mockStoreManagerGet = vi.fn().mockReturnValue('auto');
@@ -91,8 +83,8 @@ describe('I18nManager', () => {
   });
 
   describe('constructor', () => {
-    it('should create i18next instance', () => {
-      expect(mockCreateInstance).toHaveBeenCalled();
+    it('should defer creating the i18next instance until initialization', () => {
+      expect(mockCreateInstance).not.toHaveBeenCalled();
     });
   });
 
@@ -138,13 +130,27 @@ describe('I18nManager', () => {
 
     it('should use system locale when stored locale is auto', async () => {
       mockStoreManagerGet.mockReturnValue('auto');
-      mockApp.getLocale.mockReturnValue('fr-FR');
+      mockApp.getPreferredSystemLanguages.mockReturnValue(['fr-FR']);
 
       await manager.init();
 
       expect(mockI18nextInstance.init).toHaveBeenCalledWith(
         expect.objectContaining({
           lng: 'fr-FR',
+        }),
+      );
+    });
+
+    it('should prefer the OS language over a getLocale() poisoned by pruned app locales', async () => {
+      mockStoreManagerGet.mockReturnValue('auto');
+      mockApp.getPreferredSystemLanguages.mockReturnValue(['zh-Hans-CN']);
+      mockApp.getLocale.mockReturnValue('en-US');
+
+      await manager.init();
+
+      expect(mockI18nextInstance.init).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lng: 'zh-CN',
         }),
       );
     });

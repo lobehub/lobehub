@@ -3,7 +3,9 @@
 import { Button, Center } from '@lobehub/ui';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router';
+
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 
 import { useWorkspaceFromSlug } from './useWorkspaceFromSlug';
 
@@ -12,16 +14,20 @@ import { useWorkspaceFromSlug } from './useWorkspaceFromSlug';
  *
  * - Calls `useWorkspaceFromSlug` to resolve the slug → status.
  * - Renders a 404-style empty state when the slug doesn't match any workspace.
- * - Renders `<Outlet />` when the workspace is found (or still loading).
+ * - Renders the route's own skeleton while the workspace list is in flight.
+ * - Renders `<Outlet />` when the workspace is found.
+ *
+ * A billing-inactive workspace is intentionally NOT blocked here — the member
+ * should still be able to browse shared content. The "subscription inactive"
+ * banner lives in the UserPanel and the chat-level error card surfaces when a
+ * spend operation is attempted.
  */
 const WorkspaceSlugBoundary: FC = () => {
   const { t } = useTranslation('error');
   const navigate = useNavigate();
   const result = useWorkspaceFromSlug();
 
-  // Workspaces are still being fetched — render nothing so the parent layout
-  // spinner shows through instead of flashing a false 404.
-  if (result.status === 'loading') return null;
+  if (result.status === 'loading') return <RouteLoading />;
 
   if (result.status === 'not-found') {
     return (

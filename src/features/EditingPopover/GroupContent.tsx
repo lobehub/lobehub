@@ -6,9 +6,9 @@ import {
   Icon,
   Input,
   stopPropagation,
+  toast,
   Tooltip,
 } from '@lobehub/ui';
-import { type InputRef, message } from 'antd';
 import { Check, PaletteIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -90,7 +90,7 @@ const GroupContent = memo<GroupContentProps>(
     const handleAvatarUpload = useCallback(
       async (file: File) => {
         if (file.size > MAX_AVATAR_SIZE) {
-          message.error(t('settingAgent.avatar.sizeExceeded'));
+          toast.error(t('settingAgent.avatar.sizeExceeded'));
           return;
         }
 
@@ -111,7 +111,7 @@ const GroupContent = memo<GroupContentProps>(
       setNewAvatar(null);
     }, []);
 
-    const inputRef = useRef<InputRef>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {

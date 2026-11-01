@@ -1,0 +1,541 @@
+import type {
+  AfterToolCallHookEvent,
+  AgentState,
+  ToolCallErrorHookEvent,
+  ToolRunContext,
+  ToolRunExecution,
+  ToolTransport,
+  ToolWorkRegistration,
+} from '@lobechat/agent-runtime';
+import { executeToolWithRetry, selectOperationToolSet } from '@lobechat/agent-runtime';
+import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
+import { SpanStatusCode } from '@lobechat/observability-otel/api';
+import {
+  buildExecuteToolAttributes,
+  buildExecuteToolResultAttributes,
+  executeToolSpanName,
+  tracer as agentRuntimeTracer,
+} from '@lobechat/observability-otel/modules/agent-runtime';
+import type { ChatToolPayload } from '@lobechat/types';
+
+import { AgentModel } from '@/database/models/agent';
+import { AgentOperationModel } from '@/database/models/agentOperation';
+import { isDeviceCapablePlan, isLocalSandboxEnabled } from '@/helpers/executionTarget';
+import {
+  controlDeferredToolResult,
+  loadDurableToolResultHooks,
+} from '@/server/services/agentRuntime/hooks/deferredToolResultControl';
+import { controlToolResult } from '@/server/services/agentRuntime/hooks/toolResultControl';
+import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceToolAudit';
+import {
+  isDeviceToolIdentifier,
+  logDeviceToolAudit,
+} from '@/server/services/aiAgent/deviceToolAudit';
+import { resolveRunWorkAccessScope } from '@/server/services/workRegistration';
+
+import type { RuntimeExecutorContext } from '../context';
+import { dispatchClientTool } from '../dispatchClientTool';
+import {
+  archiveRuntimeToolResult,
+  buildServerAgentMemberRunner,
+  buildServerVirtualSubAgentRunner,
+  GEN_AI_FUNCTION_TOOL_TYPE,
+  isOperationInterrupted,
+  log,
+  registerWorkFromIntent,
+  TOOL_MAX_RETRIES,
+  TOOL_PRICING,
+} from '../executorHelpers';
+import { resolveRunActiveDeviceId } from '../executors/resolveRunActiveDeviceId';
+import { resolveRunProjectSkills } from '../executors/resolveRunProjectSkills';
+import { resolveToolTimeoutMs } from '../resolveToolTimeout';
+import { buildToolCallHookContext } from './toolCallHookContext';
+
+export class ServerToolTransport implements ToolTransport {
+  maxRetries = TOOL_MAX_RETRIES;
+
+  constructor(private readonly ctx: RuntimeExecutorContext) {}
+
+  getCost(toolName: string) {
+    return TOOL_PRICING[toolName] || 0;
+  }
+
+  async registerWork(registration: ToolWorkRegistration, state: AgentState): Promise<void> {
+    const topicId = state.origin?.topicId;
+    // A share visitor's run registers under the share scope of its visitor
+    // topic; without a topic there is no scope to serve it back through, so
+    // fail closed rather than leak an unscoped Work into the creator's lists.
+    const accessScope = resolveRunWorkAccessScope({
+      shareVisitor: this.ctx.agentShareVisitor,
+      topicId,
+    });
+    if (accessScope === null) {
+      log('registerWork skipped: share visitor run has no topic (op=%s)', this.ctx.operationId);
+      return;
+    }
+
+    await registerWorkFromIntent({
+      accessScope,
+      agentId: state.origin?.agentId ?? null,
+      intent: registration.intent,
+      rootOperationId: this.ctx.operationId,
+      serverDB: this.ctx.serverDB,
+      sourceMessageId: registration.sourceMessageId,
+      sourceToolCallId: registration.sourceToolCallId,
+      sourceToolIdentifier: registration.sourceToolIdentifier,
+      sourceToolName: registration.sourceToolName,
+      state: registration.state,
+      threadId: state.origin?.threadId,
+      topicId,
+      userId: this.ctx.userId,
+      workspaceId: state.origin?.workspaceId ?? this.ctx.workspaceId,
+    });
+  }
+
+  async handleError(
+    chatToolPayload: ChatToolPayload,
+    error: unknown,
+    context: ToolRunContext,
+  ): Promise<void> {
+    const { hookDispatcher, operationId, stepIndex } = this.ctx;
+
+    if (hookDispatcher) {
+      hookDispatcher
+        .dispatch(
+          operationId,
+          'onToolCallError',
+          {
+            ...buildToolCallHookContext(chatToolPayload, context, this.ctx),
+            error: error instanceof Error ? error.message : String(error),
+          } satisfies ToolCallErrorHookEvent,
+          context.state.host?.hooks,
+        )
+        .catch(() => {});
+    }
+
+    console.error(
+      `[StreamingToolExecutor] Tool execution failed for operation ${operationId}:${stepIndex}:`,
+      error,
+    );
+  }
+
+  async beforeToolCall(
+    call: ChatToolPayload,
+    context: ToolRunContext,
+  ): Promise<ToolRunExecution | undefined> {
+    const decision = await this.ctx.hookDispatcher?.evaluateToolCall(
+      this.ctx.operationId,
+      buildToolCallHookContext(call, context, this.ctx),
+      context.state.host?.hooks,
+      context.abortSignal,
+    );
+    if (context.abortSignal?.aborted || decision?.status === 'cancelled')
+      return this.abortedBeforeLaunch();
+    if (decision?.status === 'blocked') {
+      const reason = decision.reason ?? 'Blocked by beforeToolCall hook.';
+      const result = {
+        content: reason,
+        error: 'hook_denied',
+        executionTime: 0,
+        state: { reason, type: 'blocked' },
+        success: false,
+      };
+      await this.dispatchAfterToolCall(call, context, result, false);
+      return { attempts: 0, mocked: false, result };
+    }
+  }
+
+  async run(chatToolPayload: ChatToolPayload, context: ToolRunContext): Promise<ToolRunExecution> {
+    const { operationId, serverDB, stepIndex, streamManager, toolExecutionService, userId } =
+      this.ctx;
+    const operationLogId = `${operationId}:${stepIndex}`;
+    const enabledToolIds = [
+      ...selectOperationToolSet(context.state).enabledToolIds,
+      ...(context.state.activatedStepTools ?? []).map((activation) => activation.id),
+    ];
+    const executeToolSpan = agentRuntimeTracer.startSpan(executeToolSpanName(context.toolName), {
+      attributes: buildExecuteToolAttributes({
+        operationId,
+        stepIndex,
+        toolCallId: chatToolPayload.id,
+        toolName: context.toolName,
+        toolSource: context.toolSource,
+        toolType: GEN_AI_FUNCTION_TOOL_TYPE,
+      }),
+    });
+
+    try {
+      const hookResult = await this.dispatchBeforeToolCall(chatToolPayload, context);
+      if (
+        context.abortSignal?.aborted ||
+        (await isOperationInterrupted(this.ctx)) ||
+        context.abortSignal?.aborted
+      )
+        return this.abortedBeforeLaunch();
+      let toolCallMocked = false;
+
+      if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
+        const policy = context.state.principal?.policy?.deviceAccess as
+          { canUseDevice: boolean; reason: DeviceAccessReason } | undefined;
+        logDeviceToolAudit({
+          apiName: chatToolPayload.apiName,
+          botContext: context.state.principal?.actor?.bot,
+          canUseDevice: policy?.canUseDevice ?? true,
+          messageId: context.state.origin?.sourceMessageId,
+          operationId,
+          reason: policy?.reason ?? 'first-party',
+          toolIdentifier: chatToolPayload.identifier,
+          topicId: this.ctx.topicId,
+          userId,
+        });
+      }
+
+      let execution: ToolRunExecution;
+      if (hookResult?.isMocked) {
+        log(`[${operationLogId}] Tool ${context.toolName} mocked by beforeToolCall hook`);
+        toolCallMocked = true;
+        execution = {
+          attempts: 0,
+          mocked: true,
+          result: hookResult.result,
+        };
+      } else if (
+        chatToolPayload.executor === 'client' &&
+        typeof streamManager.sendToolExecute === 'function'
+      ) {
+        log(`[${operationLogId}] Dispatching tool ${context.toolName} to client via Agent Gateway`);
+        const timeoutMs = resolveToolTimeoutMs({
+          apiName: chatToolPayload.apiName,
+          args: context.parsedArgs,
+          manifest: context.effectiveManifestMap[chatToolPayload.identifier],
+        });
+        // The preflight above (`dispatchBeforeToolCall`, policy checks) is async,
+        // so Stop can land between entering `run` and reaching this line. The
+        // executor's race has already settled the call by then — launching now
+        // would start side-effecting work for a cancelled operation.
+        if (
+          context.abortSignal?.aborted ||
+          (await isOperationInterrupted(this.ctx)) ||
+          context.abortSignal?.aborted
+        )
+          return this.abortedBeforeLaunch();
+
+        const dispatchResult = await dispatchClientTool(chatToolPayload, {
+          agentId: context.state.origin?.agentId,
+          assistantMessageId: context.parentMessageId,
+          documentId: context.state.origin?.documentId,
+          groupId: context.state.origin?.groupId,
+          operationId,
+          rootOperationId: operationId,
+          scope: context.state.origin?.scope,
+          sourceMessageId: context.state.origin?.sourceMessageId,
+          streamManager,
+          taskId: context.state.origin?.taskId,
+          threadId: context.state.origin?.threadId,
+          timeoutMs,
+          topicId: context.state.origin?.topicId ?? this.ctx.topicId,
+        });
+        execution = { attempts: 1, result: dispatchResult };
+      } else {
+        if (context.toolSource && !chatToolPayload.source) {
+          chatToolPayload.source = context.toolSource as any;
+        }
+
+        const timeoutMs = resolveToolTimeoutMs({
+          apiName: chatToolPayload.apiName,
+          args: context.parsedArgs,
+          manifest: context.effectiveManifestMap[chatToolPayload.identifier],
+        });
+        const agentVisibility = await this.resolveAgentVisibility(context);
+
+        // Re-checked after the visibility await for the same reason as above:
+        // every await between entry and launch reopens the cancellation window.
+        if (
+          context.abortSignal?.aborted ||
+          (await isOperationInterrupted(this.ctx)) ||
+          context.abortSignal?.aborted
+        )
+          return this.abortedBeforeLaunch();
+
+        log(`[${operationLogId}] Executing tool ${context.toolName} ...`);
+        execution = await executeToolWithRetry(
+          () =>
+            toolExecutionService.executeTool(chatToolPayload, {
+              activatedSkills: context.activatedSkills as any,
+              activeDeviceId: resolveRunActiveDeviceId(context.state),
+              activeDeviceScope: context.state.principal?.actor?.deviceScope,
+              agentId: context.state.origin?.agentId,
+              agentMember: buildServerAgentMemberRunner(
+                this.ctx,
+                context.state,
+                chatToolPayload,
+                context.parentMessageId,
+                context.reuseExistingMessage ? context.toolMessageId : undefined,
+              ),
+              // Share-visitor marker: lets `BuiltinToolsExecutor.execute`
+              // re-apply the share data-tool gate at the actual dispatch site.
+              agentShareVisitor: this.ctx.agentShareVisitor,
+              ...(agentVisibility !== undefined && { agentVisibility }),
+              // Assistant message owning this tool call (≠ source user message).
+              assistantMessageId: context.parentMessageId,
+              // Who in the IM conversation asked for this run; tools that act for the owner
+              // (changing a bot's settings) refuse anyone else.
+              botContext: context.state.principal?.actor?.bot,
+              clientIp: context.state.principal?.audit?.clientIp,
+              currentTodos: context.currentTodos,
+              deviceCapable: context.state.plan?.execution
+                ? isDeviceCapablePlan(context.state.plan?.execution)
+                : undefined,
+              documentId: context.state.origin?.documentId,
+              editingAgentId: context.state.origin?.editingAgentId,
+              editingGroupId: context.state.origin?.editingGroupId,
+              execSubAgent: this.ctx.execSubAgent,
+              executionPlan: context.state.plan?.execution,
+              executionTimeoutMs: timeoutMs,
+              groupId: context.state.origin?.groupId,
+              isSubAgent: context.state.origin?.lineage?.isSubAgent === true,
+              // Sandboxing qualifies a `local` run, so it is gated on the plan's
+              // resolved target rather than the stored flag: a config that says
+              // `localSandbox` but landed on `sandbox`/`device` was never fenced,
+              // and telling the device otherwise would fence the wrong run.
+              localSandbox: context.state.plan?.execution
+                ? isLocalSandboxEnabled(
+                    context.state.world?.agent?.agencyConfig,
+                    context.state.plan?.execution.target,
+                  )
+                : undefined,
+              localSandboxNetwork:
+                context.state.world?.agent?.agencyConfig?.localSandboxNetwork === true,
+              memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
+              messageId: context.state.origin?.sourceMessageId,
+              operationId,
+              projectId: context.state.origin?.projectId,
+              projectSkills: resolveRunProjectSkills(context.state.plan),
+              rootOperationId: operationId,
+              scope: context.state.origin?.scope,
+              serverDB,
+              skipResultTruncation: true,
+              subAgent: buildServerVirtualSubAgentRunner(
+                this.ctx,
+                context.state,
+                chatToolPayload,
+                context.parentMessageId,
+                context.toolMessageId,
+              ),
+              taskId: context.state.origin?.taskId,
+              threadId: context.state.origin?.threadId,
+              toolCallId: chatToolPayload.id,
+              enabledToolIds,
+              toolManifestMap: context.effectiveManifestMap,
+              toolMessageId: context.toolMessageId,
+              toolResultMaxLength: context.toolResultMaxLength,
+              topicId: this.ctx.topicId,
+              userId,
+              workingDirectory: context.state.binding?.device?.systemInfo?.workingDirectory,
+              workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
+            }),
+          {
+            isInterrupted: () => isOperationInterrupted(this.ctx),
+            maxRetries: TOOL_MAX_RETRIES,
+            onRetry: ({ attempt, kind, maxAttempts }) =>
+              log(
+                '[%s] Tool %s failed with kind=%s (attempt %d/%d), retrying ...',
+                operationLogId,
+                context.toolName,
+                kind,
+                attempt,
+                maxAttempts,
+              ),
+          },
+        );
+      }
+
+      if (execution.result.deferred) {
+        executeToolSpan.setAttributes(
+          buildExecuteToolResultAttributes({ attempts: execution.attempts, success: true }),
+        );
+        return { ...execution, mocked: toolCallMocked || execution.mocked };
+      }
+
+      const resultWithExecutionTime = {
+        ...execution.result,
+        executionTime: execution.result.executionTime ?? 0,
+      };
+      // Evaluate the full result before truncation/archive creation. A denied
+      // archive must not remain retrievable by the model on a later tool call.
+      const originalOperationId = context.toolMessageId
+        ? (await this.ctx.messageModel.findMessagePlugin(context.toolMessageId))?.intervention
+            ?.operationId
+        : undefined;
+      let originalControl: Awaited<ReturnType<typeof controlDeferredToolResult>> | undefined;
+      if (originalOperationId && context.toolMessageId) {
+        if (!this.ctx.hookDispatcher || !this.ctx.userId) {
+          throw new Error(
+            'Cannot review a resumed tool result without its runtime owner and dispatcher',
+          );
+        }
+        originalControl = await controlDeferredToolResult(
+          {
+            dispatcher: this.ctx.hookDispatcher,
+            loadState: (operationId) =>
+              operationId === this.ctx.operationId
+                ? Promise.resolve(context.state)
+                : (this.ctx.loadAgentState?.(operationId) ?? Promise.resolve(null)),
+            loadDurableHooks: (operationId) =>
+              loadDurableToolResultHooks(
+                new AgentOperationModel(this.ctx.serverDB, this.ctx.userId!, this.ctx.workspaceId),
+                operationId,
+              ),
+            messageModel: this.ctx.messageModel,
+            userId: this.ctx.userId,
+            workspaceId: this.ctx.workspaceId,
+          },
+          {
+            operationId: originalOperationId,
+            includeServerHooks: originalOperationId === this.ctx.operationId,
+            toolMessageId: context.toolMessageId,
+            result: resultWithExecutionTime,
+            signal: context.abortSignal,
+          },
+        );
+      }
+      // Approval continuations need not inherit caller hooks. Keep the original
+      // gate; any new run controls can only narrow its decision. Never infer
+      // a control decision from the untrusted tool's result.state fields.
+      const controlled =
+        originalControl && (originalControl.blocked || originalOperationId === this.ctx.operationId)
+          ? originalControl
+          : await controlToolResult(
+              this.ctx.hookDispatcher,
+              {
+                ...buildToolCallHookContext(chatToolPayload, context, this.ctx),
+                mocked: toolCallMocked || !!execution.mocked,
+                result: originalControl?.result ?? resultWithExecutionTime,
+              },
+              context.state.host?.hooks,
+              context.abortSignal,
+            );
+      if (controlled.cancelled) {
+        return { ...execution, interrupted: true, result: controlled.result };
+      }
+      const executionResult = controlled.blocked
+        ? controlled.result
+        : await archiveRuntimeToolResult(
+            { ...controlled.result, executionTime: controlled.result.executionTime ?? 0 },
+            {
+              agentId: context.state.origin?.agentId,
+              canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
+              identifier: chatToolPayload.identifier,
+              limit: context.toolResultMaxLength,
+              serverDB,
+              toolCallId: chatToolPayload.id,
+              topicId: this.ctx.topicId ?? context.state.origin?.topicId,
+              userId,
+              workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
+            },
+          );
+
+      await this.dispatchAfterToolCall(chatToolPayload, context, executionResult, toolCallMocked);
+
+      executeToolSpan.setAttributes(
+        buildExecuteToolResultAttributes({
+          attempts: execution.attempts,
+          success: executionResult.success,
+        }),
+      );
+
+      return {
+        ...execution,
+        mocked: toolCallMocked || execution.mocked,
+        result: executionResult,
+        resultBlocked: controlled.blocked,
+        // A tool that created its own row (a background sub-agent's placeholder)
+        // gets its result written there instead of into a second tool message.
+        toolMessageId: execution.toolMessageId ?? executionResult.toolMessageId,
+      };
+    } catch (error) {
+      executeToolSpan.recordException(error as Error);
+      executeToolSpan.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      executeToolSpan.setAttributes(buildExecuteToolResultAttributes({ success: false }));
+      throw error;
+    } finally {
+      executeToolSpan.end();
+    }
+  }
+
+  /**
+   * Result for a call the abort caught before anything was launched.
+   *
+   * Returned rather than thrown: by this point the executor's race has already
+   * rejected and moved on, so this promise is detached — throwing would only
+   * surface as an unhandled rejection.
+   */
+  private abortedBeforeLaunch(): ToolRunExecution {
+    return {
+      attempts: 0,
+      interrupted: true,
+      result: { content: '', success: false },
+    };
+  }
+
+  private async dispatchBeforeToolCall(chatToolPayload: ChatToolPayload, context: ToolRunContext) {
+    const { hookDispatcher, operationId } = this.ctx;
+    if (!hookDispatcher) return null;
+
+    const event = buildToolCallHookContext(chatToolPayload, context, this.ctx);
+    return hookDispatcher.dispatchBeforeToolCall(operationId, event, context.state.host?.hooks);
+  }
+
+  private async dispatchAfterToolCall(
+    chatToolPayload: ChatToolPayload,
+    context: ToolRunContext,
+    result: ToolRunExecution['result'],
+    mocked: boolean,
+  ) {
+    const { hookDispatcher, operationId } = this.ctx;
+    if (!hookDispatcher) return;
+
+    // A tool that outlives an abort still finishes in the background — we cannot
+    // recall work already handed to a process. Its hook must not be dispatched
+    // though: by now `executeStep` has emitted the terminal hooks and
+    // `CompletionLifecycle` has unregistered this operation, so a local consumer
+    // would silently drop it and a webhook consumer would receive `afterToolCall`
+    // AFTER `onComplete`.
+    if (context.abortSignal?.aborted) return;
+
+    hookDispatcher
+      .dispatch(
+        operationId,
+        'afterToolCall',
+        {
+          ...buildToolCallHookContext(chatToolPayload, context, this.ctx),
+          mocked,
+          result,
+        } satisfies AfterToolCallHookEvent,
+        context.state.host?.hooks,
+      )
+      .catch(() => {});
+  }
+
+  private async resolveAgentVisibility(context: ToolRunContext) {
+    if (context.mode !== 'single') return undefined;
+
+    const agentId = context.state.origin?.agentId;
+    const workspaceId = context.state.origin?.workspaceId ?? this.ctx.workspaceId;
+    if (!agentId || !this.ctx.serverDB || !this.ctx.userId) return null;
+
+    try {
+      const agentModel = new AgentModel(this.ctx.serverDB, this.ctx.userId, workspaceId);
+      return await agentModel.getAgentVisibility(agentId);
+    } catch (error) {
+      log(
+        `[${this.ctx.operationId}:${this.ctx.stepIndex}] Failed to resolve agent visibility: %O`,
+        error,
+      );
+      return null;
+    }
+  }
+}

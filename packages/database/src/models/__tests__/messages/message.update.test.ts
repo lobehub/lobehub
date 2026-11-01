@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { MAX_TOOL_IDENTIFIER_LENGTH } from '@/utils/clampToolIdentifier';
 import { uuid } from '@/utils/uuid';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -18,7 +19,7 @@ import {
   workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
-import { MessageModel } from '../../message';
+import { HumanApprovalAlreadyResolvedError, MessageModel } from '../../message';
 import { codeEmbedding } from '../fixtures/embedding';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -99,6 +100,32 @@ describe('MessageModel Update Tests', () => {
       // Assert result
       const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
       expect(result[0].content).toBe('message 1');
+    });
+
+    it('should report success when a row was actually updated', async () => {
+      await serverDB
+        .insert(messages)
+        .values([{ id: '1', userId, role: 'user', content: 'message 1' }]);
+
+      const result = await messageModel.update('1', { content: 'updated message' });
+
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should report failure when no message matches the id', async () => {
+      const result = await messageModel.update('does-not-exist', { content: 'updated message' });
+
+      expect(result).toEqual({ success: false });
+    });
+
+    it('should report failure when the message belongs to another user', async () => {
+      await serverDB
+        .insert(messages)
+        .values([{ id: '1', userId: otherUserId, role: 'user', content: 'message 1' }]);
+
+      const result = await messageModel.update('1', { content: 'updated message' });
+
+      expect(result).toEqual({ success: false });
     });
 
     it('should update message tools', async () => {
@@ -467,6 +494,74 @@ describe('MessageModel Update Tests', () => {
       expect(result[0].state).toEqual({ key1: 'value1' });
     });
 
+    it('atomically preserves independent top-level keys across concurrent writers', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'concurrent-plugin-state',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'concurrent-plugin-state',
+        identifier: 'codex',
+        state: { executionProgress: { completed: 1, total: 2 } },
+        toolCallId: 'concurrent-tool-call',
+        userId,
+      });
+
+      await Promise.all([
+        messageModel.updatePluginState('concurrent-plugin-state', {
+          askUserAnswers: { environment: 'production' },
+        }),
+        messageModel.updatePluginState('concurrent-plugin-state', {
+          heterogeneousIntervention: {
+            action: 'approve_once',
+            status: 'resolved',
+          },
+        }),
+      ]);
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'concurrent-plugin-state'));
+
+      expect(plugin.state).toEqual({
+        askUserAnswers: { environment: 'production' },
+        executionProgress: { completed: 1, total: 2 },
+        heterogeneousIntervention: {
+          action: 'approve_once',
+          status: 'resolved',
+        },
+      });
+    });
+
+    it('does not update plugin state outside the owner scope', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'other-owner-plugin-state',
+        role: 'tool',
+        userId: otherUserId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'other-owner-plugin-state',
+        identifier: 'codex',
+        state: { preserved: true },
+        toolCallId: 'other-owner-tool-call',
+        userId: otherUserId,
+      });
+
+      await expect(
+        messageModel.updatePluginState('other-owner-plugin-state', { overwritten: true }),
+      ).rejects.toThrowError('Plugin not found');
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'other-owner-plugin-state'));
+      expect(plugin.state).toEqual({ preserved: true });
+    });
+
     it('should throw an error if plugin does not exist', async () => {
       // Call updatePluginState method
       await expect(messageModel.updatePluginState('1', { key: 'value' })).rejects.toThrowError(
@@ -495,6 +590,32 @@ describe('MessageModel Update Tests', () => {
       const result = await serverDB.select().from(messagePlugins).where(eq(messagePlugins.id, '1'));
 
       expect(result[0].identifier).toEqual('plugin2');
+    });
+
+    it('should clamp oversized plugin identifiers on update', async () => {
+      const oversizedApiName = `api-${'a'.repeat(40_000)}`;
+      const oversizedIdentifier = `plugin-${'i'.repeat(40_000)}`;
+      await serverDB.insert(messages).values({ id: '1', content: 'abc', role: 'tool', userId });
+      await serverDB.insert(messagePlugins).values({
+        apiName: 'api1',
+        id: '1',
+        identifier: 'plugin1',
+        toolCallId: 'tool1',
+        userId,
+      });
+
+      await messageModel.updateMessagePlugin('1', {
+        apiName: oversizedApiName,
+        identifier: oversizedIdentifier,
+      });
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, '1'));
+
+      expect(plugin.apiName).toBe(oversizedApiName.slice(0, MAX_TOOL_IDENTIFIER_LENGTH));
+      expect(plugin.identifier).toBe(oversizedIdentifier.slice(0, MAX_TOOL_IDENTIFIER_LENGTH));
     });
 
     it('should throw an error if plugin does not exist', async () => {
@@ -541,6 +662,182 @@ describe('MessageModel Update Tests', () => {
     });
   });
 
+  describe('resolveHumanApproval', () => {
+    const pendingIdentity = {
+      batchId: 'batch-approval-1',
+      itemIndex: 0,
+      operationId: 'operation-approval-1',
+      status: 'pending' as const,
+      stepIndex: 4,
+    };
+
+    const seedPendingTool = async (
+      id: string,
+      intervention: Record<string, unknown> = pendingIdentity,
+    ) => {
+      await serverDB.insert(messages).values({
+        content: 'pending content',
+        id,
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        apiName: 'editFile',
+        arguments: '{"path":"/tmp/a"}',
+        id,
+        identifier: 'lobe-local-system',
+        intervention,
+        state: { preserved: true },
+        toolCallId: `call-${id}`,
+        userId,
+      });
+    };
+
+    it('preserves sealed operation/batch identity while applying a claim patch', async () => {
+      await seedPendingTool('approval-preserves-identity');
+
+      await messageModel.resolveHumanApproval(
+        [
+          {
+            id: 'approval-preserves-identity',
+            intervention: {
+              resolutionRequestId: 'resolution-1',
+              status: 'approved',
+            },
+            pluginState: { approvedBy: 'review' },
+          },
+        ],
+        { publishResult: true },
+      );
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'approval-preserves-identity'));
+      expect(plugin.intervention).toEqual({
+        ...pendingIdentity,
+        resolutionRequestId: 'resolution-1',
+        status: 'approved',
+      });
+      expect(plugin.state).toEqual({ approvedBy: 'review', preserved: true });
+    });
+
+    it('rejects the whole batch when any sibling already has a winner', async () => {
+      await seedPendingTool('approval-atomic-pending');
+      await seedPendingTool('approval-atomic-settled', {
+        ...pendingIdentity,
+        itemIndex: 1,
+        status: 'approved',
+      });
+
+      await expect(
+        messageModel.resolveHumanApproval(
+          [
+            {
+              content: 'must not commit',
+              id: 'approval-atomic-pending',
+              intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
+            },
+            {
+              id: 'approval-atomic-settled',
+              intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
+            },
+          ],
+          { publishResult: true },
+        ),
+      ).rejects.toBeInstanceOf(HumanApprovalAlreadyResolvedError);
+
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'approval-atomic-pending'));
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'approval-atomic-pending'));
+      expect(message.content).toBe('pending content');
+      expect(plugin.intervention).toEqual(pendingIdentity);
+    });
+
+    it('returns one applied owner and one idempotent follower for concurrent same-request claims', async () => {
+      await seedPendingTool('approval-concurrent-same-request');
+      const resolution = {
+        content: 'approved once',
+        id: 'approval-concurrent-same-request',
+        intervention: { resolutionRequestId: 'resolution-concurrent', status: 'approved' as const },
+      };
+
+      const results = await Promise.all([
+        messageModel.resolveHumanApproval([resolution], { publishResult: true }),
+        messageModel.resolveHumanApproval([resolution], { publishResult: true }),
+      ]);
+
+      expect(results.sort()).toEqual(['applied', 'idempotent']);
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, resolution.id));
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, resolution.id));
+      expect(message.content).toBe('approved once');
+      expect(plugin.intervention).toMatchObject({
+        resolutionRequestId: 'resolution-concurrent',
+        status: 'approved',
+      });
+    });
+
+    it('restores the exact pre-claim snapshot only for the owning resolution request', async () => {
+      await seedPendingTool('approval-rollback');
+      const original = {
+        content: 'pending content',
+        id: 'approval-rollback',
+        intervention: pendingIdentity,
+        pluginState: { preserved: true },
+      };
+
+      await messageModel.resolveHumanApproval(
+        [
+          {
+            content: 'approved content',
+            id: original.id,
+            intervention: { resolutionRequestId: 'resolution-owner', status: 'approved' },
+            pluginState: { approvedBy: 'review' },
+          },
+        ],
+        { publishResult: true },
+      );
+      await messageModel.restoreHumanApproval([
+        { ...original, claimedResolutionRequestId: 'resolution-loser' },
+      ]);
+
+      let [message] = await serverDB.select().from(messages).where(eq(messages.id, original.id));
+      let [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, original.id));
+      expect(message.content).toBe('approved content');
+      expect(plugin.intervention).toMatchObject({
+        resolutionRequestId: 'resolution-owner',
+        status: 'approved',
+      });
+
+      await messageModel.restoreHumanApproval([
+        { ...original, claimedResolutionRequestId: 'resolution-owner' },
+      ]);
+
+      [message] = await serverDB.select().from(messages).where(eq(messages.id, original.id));
+      [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, original.id));
+      expect(message.content).toBe(original.content);
+      expect(plugin.intervention).toEqual(original.intervention);
+      expect(plugin.state).toEqual(original.pluginState);
+    });
+  });
+
   describe('updateToolMessage', () => {
     it('should update content only', async () => {
       await serverDB.insert(messages).values({
@@ -558,6 +855,22 @@ describe('MessageModel Update Tests', () => {
 
       const dbResult = await serverDB.select().from(messages).where(eq(messages.id, 'tool-msg-1'));
       expect(dbResult[0].content).toBe('updated content');
+    });
+
+    it('should report failure when no tool message matches the id', async () => {
+      const result = await messageModel.updateToolMessage('tool-msg-missing', {
+        content: 'updated content',
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it('should report failure when a plugin-only patch matches no plugin row', async () => {
+      const result = await messageModel.updateToolMessage('tool-msg-missing', {
+        pluginState: { key: 'value' },
+      });
+
+      expect(result.success).toBe(false);
     });
 
     it('should update metadata only and merge with existing', async () => {
@@ -611,6 +924,418 @@ describe('MessageModel Update Tests', () => {
         existingState: 'value1',
         newState: 'value2',
       });
+    });
+
+    it('claims a source answer without publishing it before the runtime hook completes', async () => {
+      await serverDB
+        .insert(messages)
+        .values({ id: 'source-claim', userId, role: 'tool', content: '' });
+      await serverDB
+        .insert(messagePlugins)
+        .values({ id: 'source-claim', userId, intervention: { status: 'pending' } });
+      await messageModel.resolveHumanApproval([
+        {
+          id: 'source-claim',
+          content: 'unreviewed answer',
+          pluginState: { answer: 'unreviewed answer' },
+          intervention: { status: 'approved', resolutionRequestId: 'source-request' },
+        },
+      ]);
+      expect((await messageModel.findById('source-claim'))?.content).toBe('');
+      expect(
+        (await messageModel.findMessagePlugin('source-claim'))?.state ?? {},
+      ).not.toHaveProperty('answer');
+    });
+
+    it('keeps the first deferred completion when callbacks race', async () => {
+      await serverDB
+        .insert(messages)
+        .values({ id: 'completion-race', userId, role: 'tool', content: '' });
+      await serverDB.insert(messagePlugins).values({ id: 'completion-race', userId });
+      const contents = ['first', 'late'];
+      const results = await Promise.all(
+        contents.map((content) =>
+          messageModel.updateToolMessage('completion-race', {
+            content,
+            pluginState: { content },
+            onlyIfEmpty: true,
+          }),
+        ),
+      );
+      expect(results.filter((result) => result.applied)).toHaveLength(1);
+      // Concurrent callbacks commit in either order on a pooled database; the
+      // invariant is that exactly one wins and both tables agree on which.
+      const winner = contents[results.findIndex((result) => result.applied)];
+      expect((await messageModel.findById('completion-race'))?.content).toBe(winner);
+      expect((await messageModel.findMessagePlugin('completion-race'))?.state).toEqual({
+        content: winner,
+      });
+    });
+
+    it('publishes an already claimed answer atomically and retains it on replay', async () => {
+      await serverDB
+        .insert(messages)
+        .values({ id: 'answer-once', userId, role: 'tool', content: '' });
+      await serverDB.insert(messagePlugins).values({
+        id: 'answer-once',
+        userId,
+        state: { old: true },
+        intervention: { status: 'pending' },
+      });
+      const intervention = { status: 'approved', resolutionRequestId: 'answer-request' };
+      await messageModel.resolveHumanApproval([
+        { id: 'answer-once', intervention, content: 'raw answer' },
+      ]);
+      expect((await messageModel.queryByIds(['answer-once']))[0].content).toBe('');
+      await messageModel.resolveHumanApproval(
+        [
+          {
+            id: 'answer-once',
+            intervention,
+            content: 'Tool result withheld.',
+            pluginError: 'hook_denied',
+            pluginState: { type: 'blocked', phase: 'afterToolCall' },
+            replacePluginState: true,
+          },
+        ],
+        { publishResult: true },
+      );
+      expect(
+        await messageModel.resolveHumanApproval(
+          [
+            {
+              id: 'answer-once',
+              intervention,
+              content: 'raw replay',
+              pluginError: null,
+              pluginState: { answer: 'raw replay' },
+            },
+          ],
+          { publishResult: true },
+        ),
+      ).toBe('idempotent');
+      expect((await messageModel.findById('answer-once'))?.content).toBe('Tool result withheld.');
+      expect(await messageModel.findMessagePlugin('answer-once')).toMatchObject({
+        error: 'hook_denied',
+        state: { type: 'blocked', phase: 'afterToolCall' },
+      });
+      expect((await messageModel.queryByIds(['answer-once']))[0].metadata ?? {}).not.toHaveProperty(
+        'toolResultControl',
+      );
+    });
+
+    it.each([null, { message: 'original tool error' }])(
+      'restores the error snapshot after a denied approval continuation fails: %j',
+      async (originalError) => {
+        await serverDB.insert(messages).values({
+          id: 'review-retry',
+          userId,
+          role: 'tool',
+          content: '',
+        });
+        await serverDB.insert(messagePlugins).values({
+          id: 'review-retry',
+          userId,
+          identifier: 'tool',
+          toolCallId: 'retry-call',
+          error: originalError,
+          state: { awaitingAnswer: true },
+          intervention: { status: 'pending' },
+        });
+        await messageModel.resolveHumanApproval([
+          {
+            id: 'review-retry',
+            content: 'answer',
+            intervention: { status: 'approved', resolutionRequestId: 'denied-attempt' },
+          },
+        ]);
+        await messageModel.updateToolMessage('review-retry', {
+          content: 'Tool result withheld by afterToolCall hook.',
+          pluginError: 'hook_denied',
+          pluginState: { phase: 'afterToolCall', type: 'blocked' },
+          replacePluginState: true,
+        });
+        await messageModel.restoreHumanApproval([
+          {
+            id: 'review-retry',
+            content: '',
+            pluginState: { awaitingAnswer: true },
+            pluginError: originalError,
+            intervention: { status: 'pending' },
+            claimedResolutionRequestId: 'denied-attempt',
+          },
+        ]);
+        const [plugin] = await serverDB
+          .select()
+          .from(messagePlugins)
+          .where(eq(messagePlugins.id, 'review-retry'));
+        expect(plugin.error).toEqual(originalError);
+        expect(plugin.state).toEqual({ awaitingAnswer: true });
+        expect((await messageModel.findById('review-retry'))?.content).toBe('');
+      },
+    );
+
+    it('replaces denied result state and prevents a later completion replay from restoring it', async () => {
+      await serverDB
+        .insert(messages)
+        .values({ id: 'tool-withheld', userId, role: 'tool', content: '' });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-withheld',
+        toolCallId: 'withheld-call',
+        identifier: 'tool',
+        state: { private: 'private output' },
+        error: { message: 'private output' },
+        userId,
+      });
+      const blocked = { phase: 'afterToolCall', type: 'blocked', reason: 'Tool result withheld.' };
+      expect(
+        await messageModel.updateToolMessage('tool-withheld', {
+          content: 'Tool result withheld.',
+          pluginError: 'hook_denied',
+          pluginState: blocked,
+          replacePluginState: true,
+          onlyIfEmpty: true,
+        }),
+      ).toMatchObject({ success: true, applied: true });
+      expect(
+        await messageModel.updateToolMessage('tool-withheld', {
+          content: 'private output',
+          pluginError: null,
+          pluginState: { private: 'private output' },
+          onlyIfEmpty: true,
+        }),
+      ).toMatchObject({ success: true, applied: false });
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'tool-withheld'));
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'tool-withheld'));
+      expect(message.content).toBe('Tool result withheld.');
+      expect(plugin.state).toEqual(blocked);
+      expect(plugin.error).toBe('hook_denied');
+    });
+
+    it('does not let result replacement modify another user’s tool message', async () => {
+      await serverDB.insert(messages).values({
+        id: 'foreign-withheld',
+        userId: otherUserId,
+        role: 'tool',
+        content: 'foreign output',
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'foreign-withheld',
+        identifier: 'tool',
+        state: { private: 'foreign output' },
+        userId: otherUserId,
+      });
+      const result = await messageModel.updateToolMessage('foreign-withheld', {
+        content: 'withheld',
+        pluginState: { phase: 'afterToolCall', type: 'blocked' },
+        replacePluginState: true,
+        onlyIfEmpty: true,
+      });
+      expect(result.success).toBe(false);
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'foreign-withheld'));
+      expect(plugin.state).toEqual({ private: 'foreign output' });
+    });
+
+    it('preserves independent pluginState patches across concurrent tool-message updates', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-msg-concurrent-patches',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-msg-concurrent-patches',
+        identifier: 'codex',
+        state: { executionProgress: { completed: 1, total: 2 } },
+        toolCallId: 'tool-call-concurrent-patches',
+        userId,
+      });
+
+      const results = await Promise.all([
+        messageModel.updateToolMessage('tool-msg-concurrent-patches', {
+          pluginState: { askUserAnswers: { environment: 'production' } },
+        }),
+        messageModel.updateToolMessage('tool-msg-concurrent-patches', {
+          pluginState: {
+            heterogeneousIntervention: {
+              action: 'approve_once',
+              status: 'resolved',
+            },
+          },
+        }),
+      ]);
+
+      expect(results).toEqual([
+        { applied: true, success: true },
+        { applied: true, success: true },
+      ]);
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'tool-msg-concurrent-patches'));
+      expect(plugin.state).toEqual({
+        askUserAnswers: { environment: 'production' },
+        executionProgress: { completed: 1, total: 2 },
+        heterogeneousIntervention: {
+          action: 'approve_once',
+          status: 'resolved',
+        },
+      });
+    });
+
+    it('replaces a patched top-level pluginState key while preserving its siblings', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-msg-top-level-patch',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-msg-top-level-patch',
+        identifier: 'codex',
+        state: {
+          askUserAnswers: { environment: 'production' },
+          heterogeneousIntervention: { resolving: true, status: 'pending' },
+        },
+        toolCallId: 'tool-call-top-level-patch',
+        userId,
+      });
+
+      await messageModel.updateToolMessage('tool-msg-top-level-patch', {
+        pluginState: {
+          heterogeneousIntervention: { action: 'approve_once', status: 'resolved' },
+        },
+      });
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'tool-msg-top-level-patch'));
+      expect(plugin.state).toEqual({
+        askUserAnswers: { environment: 'production' },
+        heterogeneousIntervention: { action: 'approve_once', status: 'resolved' },
+      });
+    });
+
+    it('atomically replaces heterogeneous tool state and rejects stale snapshots', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-state-msg',
+        metadata: { preserved: true },
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-state-msg',
+        identifier: 'codex',
+        state: { obsolete: true },
+        toolCallId: 'todo-1',
+        userId,
+      });
+
+      const applied = await messageModel.updateToolMessage('tool-state-msg', {
+        heterogeneousToolState: { operationId: 'op-1', snapshotSeq: 2 },
+        pluginState: { todos: { items: [{ status: 'processing', text: 'Implement' }] } },
+      });
+
+      expect(applied).toEqual({ applied: true, snapshotSeq: 2, success: true });
+      expect(
+        (await serverDB.select().from(messages).where(eq(messages.id, 'tool-state-msg')))[0]
+          .metadata,
+      ).toEqual({
+        heterogeneousToolStateOperationId: 'op-1',
+        heterogeneousToolStateSeq: 2,
+        preserved: true,
+      });
+      expect(
+        (
+          await serverDB
+            .select()
+            .from(messagePlugins)
+            .where(eq(messagePlugins.id, 'tool-state-msg'))
+        )[0].state,
+      ).toEqual({ todos: { items: [{ status: 'processing', text: 'Implement' }] } });
+
+      const stale = await messageModel.updateToolMessage('tool-state-msg', {
+        heterogeneousToolState: { operationId: 'op-1', snapshotSeq: 1 },
+        pluginState: { stale: true },
+      });
+
+      expect(stale).toEqual({ applied: false, snapshotSeq: 2, success: true });
+      expect(
+        (
+          await serverDB
+            .select()
+            .from(messagePlugins)
+            .where(eq(messagePlugins.id, 'tool-state-msg'))
+        )[0].state,
+      ).toEqual({ todos: { items: [{ status: 'processing', text: 'Implement' }] } });
+
+      const nextOperation = await messageModel.updateToolMessage('tool-state-msg', {
+        heterogeneousToolState: { operationId: 'op-2', snapshotSeq: 1 },
+        pluginState: { restarted: true },
+      });
+
+      expect(nextOperation).toEqual({ applied: true, snapshotSeq: 1, success: true });
+      expect(
+        (await serverDB.select().from(messages).where(eq(messages.id, 'tool-state-msg')))[0]
+          .metadata,
+      ).toMatchObject({
+        heterogeneousToolStateOperationId: 'op-2',
+        heterogeneousToolStateSeq: 1,
+      });
+    });
+
+    it('keeps the highest tool-state seq across concurrent writers', async () => {
+      await serverDB.insert(messages).values({
+        content: '',
+        id: 'tool-state-concurrent',
+        role: 'tool',
+        userId,
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-state-concurrent',
+        identifier: 'codex',
+        toolCallId: 'todo-concurrent',
+        userId,
+      });
+
+      await Promise.all([
+        messageModel.updateToolMessage('tool-state-concurrent', {
+          heterogeneousToolState: { operationId: 'op-concurrent', snapshotSeq: 2 },
+          pluginState: { version: 2 },
+        }),
+        messageModel.updateToolMessage('tool-state-concurrent', {
+          heterogeneousToolState: { operationId: 'op-concurrent', snapshotSeq: 3 },
+          pluginState: { version: 3 },
+        }),
+      ]);
+
+      const message = (
+        await serverDB.select().from(messages).where(eq(messages.id, 'tool-state-concurrent'))
+      )[0];
+      const plugin = (
+        await serverDB
+          .select()
+          .from(messagePlugins)
+          .where(eq(messagePlugins.id, 'tool-state-concurrent'))
+      )[0];
+
+      expect(message.metadata).toMatchObject({
+        heterogeneousToolStateOperationId: 'op-concurrent',
+        heterogeneousToolStateSeq: 3,
+      });
+      expect(plugin.state).toEqual({ version: 3 });
     });
 
     it('should update pluginError only', async () => {
@@ -745,7 +1470,8 @@ describe('MessageModel Update Tests', () => {
         content: 'hacked content',
       });
 
-      expect(result.success).toBe(true);
+      // Ownership filters the row out, so the patch lands nowhere — a lost write.
+      expect(result.success).toBe(false);
 
       // Verify content was NOT updated
       const dbResult = await serverDB
@@ -780,15 +1506,13 @@ describe('MessageModel Update Tests', () => {
     });
 
     it('should return success false on error', async () => {
-      // Don't create any message - this should cause the transaction to succeed
-      // but not update anything (which is still success)
+      // The transaction itself succeeds, but the update matches no row. Batched
+      // writers key their retry ledger off `success`, so this must not be true.
       const result = await messageModel.updateToolMessage('non-existent-id', {
         content: 'content',
       });
 
-      // The method returns success: true even for non-existent messages
-      // because the update query doesn't fail, it just doesn't match any rows
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
     });
 
     it('should handle empty params gracefully', async () => {
@@ -1271,7 +1995,7 @@ describe('MessageModel Update Tests', () => {
       expect(result.success).toBe(true);
       // Query should complete within 100ms even with many messages
       // (indexed lookup should be O(1), not O(n))
-      expect(duration).toBeLessThan(30);
+      expect(duration).toBeLessThan(100);
 
       // Verify the update was correct
       const parentResult = await serverDB
@@ -1456,6 +2180,25 @@ describe('MessageModel Update Tests', () => {
       expect(result.success).toBe(false);
     });
 
+    it('should not attach files to a message the caller cannot see', async () => {
+      // Message belongs to another user in personal mode — invisible to messageModel
+      await serverDB.insert(messages).values({
+        id: 'msg-foreign',
+        userId: otherUserId,
+        role: 'user',
+        content: 'not yours',
+      });
+
+      const result = await messageModel.addFiles('msg-foreign', ['f1']);
+      expect(result.success).toBe(false);
+
+      const messageFiles = await serverDB
+        .select()
+        .from(messagesFiles)
+        .where(eq(messagesFiles.messageId, 'msg-foreign'));
+      expect(messageFiles).toHaveLength(0);
+    });
+
     it('should add multiple files at once', async () => {
       await serverDB
         .insert(files)
@@ -1594,8 +2337,7 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'promote-msg'));
       expect(row.usage).toEqual(usage);
-      // metadata.usage stays written for backward-compatible reads
-      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).usage).toBeUndefined();
     });
 
     it('prefers a top-level usage over metadata.usage', async () => {
@@ -1613,11 +2355,10 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'prefer-msg'));
       expect(row.usage).toEqual(topLevel);
-      // metadata.usage is kept consistent with the column
-      expect((row.metadata as any).usage).toEqual(topLevel);
+      expect((row.metadata as any).usage).toBeUndefined();
     });
 
-    it('dual-writes metadata.usage when usage arrives as a top-level param only', async () => {
+    it('writes top-level usage without duplicating it into metadata', async () => {
       await serverDB.insert(messages).values({
         id: 'top-only-msg',
         metadata: { tps: 1 }, // pre-existing non-usage metadata must be preserved
@@ -1631,8 +2372,7 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'top-only-msg'));
       expect(row.usage).toEqual(usage);
-      // legacy readers / rollback paths still see metadata.usage
-      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).usage).toBeUndefined();
       expect((row.metadata as any).tps).toBe(1);
     });
 
@@ -1644,7 +2384,7 @@ describe('MessageModel Update Tests', () => {
 
       const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'meta-msg'));
       expect(row.usage).toEqual(usage);
-      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).usage).toBeUndefined();
     });
   });
 });

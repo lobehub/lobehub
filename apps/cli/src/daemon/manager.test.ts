@@ -3,7 +3,24 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { xSync } from 'tinyexec';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  appendLog,
+  getLogPath,
+  getRunningDaemonPid,
+  isDaemonProcess,
+  isProcessAlive,
+  readPid,
+  readStatus,
+  removePid,
+  removeStatus,
+  rotateLogIfNeeded,
+  stopDaemon,
+  writePid,
+  writeStatus,
+} from './manager';
 
 const tmpDir = path.join(os.tmpdir(), 'daemon-test-' + process.pid);
 const mockDir = path.join(tmpDir, '.lobehub');
@@ -19,25 +36,22 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-// eslint-disable-next-line import-x/first
-import {
-  appendLog,
-  getLogPath,
-  getRunningDaemonPid,
-  isProcessAlive,
-  readPid,
-  readStatus,
-  removePid,
-  removeStatus,
-  rotateLogIfNeeded,
-  stopDaemon,
-  writePid,
-  writeStatus,
-} from './manager';
+// Mock only `xSync` (used by isDaemonProcess to read a process command line);
+// keep the real async executor so daemon integration tests still spawn children.
+vi.mock('tinyexec', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return { ...actual, xSync: vi.fn() };
+});
+
+// A command line that matches the daemon signature (`connect … --daemon-child`).
+const DAEMON_COMMAND = '/usr/local/bin/node /path/to/cli.js connect --daemon-child';
 
 describe('daemon manager', () => {
   beforeEach(async () => {
     await mkdir(mockDir, { recursive: true });
+    // Default: any inspected PID looks like our daemon. Tests that need a
+    // reused / unrelated PID override this per-case.
+    vi.mocked(xSync).mockReturnValue({ stdout: DAEMON_COMMAND } as any);
   });
 
   afterEach(() => {
@@ -80,6 +94,36 @@ describe('daemon manager', () => {
     });
   });
 
+  describe('isDaemonProcess', () => {
+    it('should return true when the command line matches the daemon signature', () => {
+      vi.mocked(xSync).mockReturnValue({ stdout: DAEMON_COMMAND } as any);
+      expect(isDaemonProcess(12345)).toBe(true);
+      expect(xSync).toHaveBeenCalledWith(
+        'ps',
+        ['-ww', '-p', '12345', '-o', 'command='],
+        expect.any(Object),
+      );
+    });
+
+    it('should return false for an unrelated process command line', () => {
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/vim notes.txt' } as any);
+      expect(isDaemonProcess(12345)).toBe(false);
+    });
+
+    it('should return false when the signature is only partially present', () => {
+      // `connect` without the internal `--daemon-child` flag is not our daemon.
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/node /path/cli connect' } as any);
+      expect(isDaemonProcess(12345)).toBe(false);
+    });
+
+    it('should return false when ps is unavailable / throws', () => {
+      vi.mocked(xSync).mockImplementation(() => {
+        throw new Error('ps: command not found');
+      });
+      expect(isDaemonProcess(12345)).toBe(false);
+    });
+  });
+
   describe('getRunningDaemonPid', () => {
     it('should return null when no PID file', () => {
       expect(getRunningDaemonPid()).toBeNull();
@@ -108,6 +152,39 @@ describe('daemon manager', () => {
 
       getRunningDaemonPid();
 
+      expect(readStatus()).toBeNull();
+    });
+
+    it('preserves a service status when cleaning up an unrelated stale daemon pid', () => {
+      writePid(999999);
+      const serviceStatus = {
+        cliVersion: '0.0.71',
+        connectionStatus: 'connected',
+        gatewayUrl: 'https://test.com',
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+      };
+      writeStatus(serviceStatus);
+
+      expect(getRunningDaemonPid()).toBeNull();
+      expect(readPid()).toBeNull();
+      expect(readStatus()).toEqual(serviceStatus);
+    });
+
+    it('should treat a live but reused (non-daemon) PID as stale and clean up', () => {
+      // process.pid is alive, but the inspected command line is not our daemon —
+      // simulates the OS reusing a dead daemon's PID for an unrelated process.
+      writePid(process.pid);
+      writeStatus({
+        connectionStatus: 'connected',
+        gatewayUrl: 'https://test.com',
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+      });
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/some-other-process' } as any);
+
+      expect(getRunningDaemonPid()).toBeNull();
+      expect(readPid()).toBeNull();
       expect(readStatus()).toBeNull();
     });
   });
@@ -229,6 +306,24 @@ describe('daemon manager', () => {
 
       const result = stopDaemon();
       expect(result).toBe(true);
+
+      killSpy.mockRestore();
+    });
+
+    it('should NOT SIGTERM a live PID that is not our daemon', () => {
+      // Stale daemon.pid whose PID was reused by an unrelated, living process.
+      writePid(process.pid);
+      vi.mocked(xSync).mockReturnValue({ stdout: '/usr/bin/some-other-process' } as any);
+
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      const result = stopDaemon();
+
+      expect(result).toBe(false);
+      // Only the liveness probe (signal 0) is allowed — never a real SIGTERM.
+      expect(killSpy).not.toHaveBeenCalledWith(process.pid, 'SIGTERM');
+      // Stale metadata is cleaned up so we don't keep re-checking it.
+      expect(readPid()).toBeNull();
 
       killSpy.mockRestore();
     });

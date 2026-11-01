@@ -8,6 +8,7 @@ import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeErrorType } from '../../types/error';
+import type { ModelRuntimeDiagnostics } from '../../types/providerDiagnostics';
 import * as debugStreamModule from '../../utils/debugStream';
 import { experimental_buildLlama2Prompt, LobeBedrockAI } from './index';
 
@@ -75,6 +76,21 @@ describe('LobeBedrockAI', () => {
       expect(instance).toBeInstanceOf(LobeBedrockAI);
     });
 
+    it('should correctly initialize with API key authentication', async () => {
+      const instance = new LobeBedrockAI({
+        apiKey: 'test-bedrock-api-key',
+        region: 'us-west-2',
+      });
+
+      expect(instance).toBeInstanceOf(LobeBedrockAI);
+      expect(instance.region).toBe('us-west-2');
+      await expect(instance['client'].config.authSchemePreference()).resolves.toEqual([
+        'httpBearerAuth',
+      ]);
+      await expect(instance['client'].config.token?.()).resolves.toEqual({
+        token: 'test-bedrock-api-key',
+      });
+    });
     it('should throw InvalidBedrockCredentials if accessKeyId is missing', () => {
       expect(() => {
         new LobeBedrockAI({
@@ -153,6 +169,42 @@ describe('LobeBedrockAI', () => {
         expect(result).toBeInstanceOf(Response);
       });
 
+      it('captures decoded Bedrock events before protocol transformation', async () => {
+        const providerChunks = [
+          { generation: '', generation_token_count: 1 },
+          { generation: '', generation_token_count: 1, stop_reason: 'stop' },
+        ];
+        (instance['client'].send as Mock).mockResolvedValue({
+          $metadata: { httpStatusCode: 200, requestId: 'request-1' },
+          body: {
+            async *[Symbol.asyncIterator]() {
+              for (const chunk of providerChunks) {
+                yield { chunk: { bytes: new TextEncoder().encode(JSON.stringify(chunk)) } };
+              }
+            },
+          },
+        });
+        const diagnostics: ModelRuntimeDiagnostics = {};
+
+        const response = await instance.chat(
+          {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'meta.llama:1',
+          },
+          { diagnostics },
+        );
+        await response.text();
+
+        expect(diagnostics.providerResponse).toMatchObject({
+          apiMode: 'bedrock_llama',
+          rawEvents: providerChunks,
+          requestId: 'request-1',
+          status: 200,
+          stopReason: 'stop',
+          terminalEventReceived: true,
+        });
+      });
+
       it('should handle text messages correctly', async () => {
         // Arrange
         const mockStream = new ReadableStream({
@@ -225,6 +277,103 @@ describe('LobeBedrockAI', () => {
             content: 'Continue this answer',
             role: 'user',
           },
+        ]);
+      });
+
+      it('should drop ALL stacked trailing assistant messages', async () => {
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue('Hello, world!');
+            controller.close();
+          },
+        });
+        (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+        // Failed-run placeholder rows can stack several assistant turns at the
+        // payload tail; popping only one still triggers the prefill 400.
+        await instance.chat({
+          messages: [
+            { content: 'Continue this answer', role: 'user' },
+            { content: '...', role: 'assistant' },
+            { content: '...', role: 'assistant' },
+          ],
+          model: 'global.anthropic.claude-opus-5',
+        });
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        const body = JSON.parse(commandInput.body);
+
+        expect(body.messages).toEqual([
+          {
+            content: 'Continue this answer',
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should omit disabled thinking when the mapped Bedrock id always thinks', async () => {
+        // Sonnet 5 accepts `disabled`; a channel redirect to Sonnet 5.5 rejects it with a 400.
+        const mappedInstance = new LobeBedrockAI({
+          accessKeyId: 'test-access-key-id',
+          accessKeySecret: 'test-access-key-secret',
+          modelIdMapping: { 'claude-sonnet-5': 'global.anthropic.claude-sonnet-5-5' },
+          region: 'us-west-2',
+        });
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue('Hello, world!');
+            controller.close();
+          },
+        });
+        vi.spyOn(mappedInstance['client'], 'send').mockResolvedValue(
+          Promise.resolve(mockStream) as any,
+        );
+
+        await mappedInstance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'claude-sonnet-5',
+          thinking: { type: 'disabled' },
+        } as any);
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        expect(commandInput.modelId).toBe('global.anthropic.claude-sonnet-5-5');
+        expect(JSON.parse(commandInput.body)).not.toHaveProperty('thinking');
+      });
+
+      it('should drop assistant prefill when a logical id maps to a Claude 5 Bedrock id', async () => {
+        // The channel modelIdMapping resolves the actually-sent Bedrock model
+        // id; the prefill guard must follow it, not the logical id.
+        const mappedInstance = new LobeBedrockAI({
+          accessKeyId: 'test-access-key-id',
+          accessKeySecret: 'test-access-key-secret',
+          modelIdMapping: { 'my-router-model': 'global.anthropic.claude-opus-5' },
+          region: 'us-west-2',
+        });
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.enqueue('Hello, world!');
+            controller.close();
+          },
+        });
+        vi.spyOn(mappedInstance['client'], 'send').mockResolvedValue(
+          Promise.resolve(mockStream) as any,
+        );
+
+        await mappedInstance.chat({
+          messages: [
+            { content: 'Continue this answer', role: 'user' },
+            { content: '...', role: 'assistant' },
+          ],
+          model: 'my-router-model',
+        });
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        expect(commandInput.modelId).toBe('global.anthropic.claude-opus-5');
+        expect(JSON.parse(commandInput.body).messages).toEqual([
+          { content: 'Continue this answer', role: 'user' },
         ]);
       });
 
@@ -568,6 +717,90 @@ describe('LobeBedrockAI', () => {
       });
 
       describe('Parameter conflict handling for Claude 4+ models', () => {
+        it('should forward effort and visible thinking when Claude Opus 5 uses default adaptive thinking', async () => {
+          const mockStream = new ReadableStream({
+            start(controller) {
+              controller.enqueue('Hello, world!');
+              controller.close();
+            },
+          });
+          (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+          await instance.chat({
+            effort: 'xhigh',
+            max_tokens: 64_000,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'global.anthropic.claude-opus-5',
+          });
+
+          const commandInput = (
+            InvokeModelWithResponseStreamCommand as unknown as Mock
+          ).mock.calls.at(-1)?.[0];
+          const body = JSON.parse(commandInput.body);
+
+          expect(body).toEqual({
+            anthropic_version: 'bedrock-2023-05-31',
+            max_tokens: 64_000,
+            messages: [
+              {
+                content: [
+                  {
+                    cache_control: { type: 'ephemeral' },
+                    text: 'Hello',
+                    type: 'text',
+                  },
+                ],
+                role: 'user',
+              },
+            ],
+            output_config: { effort: 'xhigh' },
+            // Opus 5 thinks even without a `thinking` config, and defaults `display` to
+            // `omitted` — without this the reasoning comes back empty.
+            thinking: { display: 'summarized', type: 'adaptive' },
+          });
+        });
+
+        it('should forward disabled thinking without effort for Claude Opus 5', async () => {
+          const mockStream = new ReadableStream({
+            start(controller) {
+              controller.enqueue('Hello, world!');
+              controller.close();
+            },
+          });
+          (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+          await instance.chat({
+            effort: 'xhigh',
+            max_tokens: 64_000,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'global.anthropic.claude-opus-5',
+            thinking: { budget_tokens: 0, type: 'disabled' },
+          });
+
+          const commandInput = (
+            InvokeModelWithResponseStreamCommand as unknown as Mock
+          ).mock.calls.at(-1)?.[0];
+          const body = JSON.parse(commandInput.body);
+
+          expect(body).toEqual({
+            anthropic_version: 'bedrock-2023-05-31',
+            max_tokens: 64_000,
+            messages: [
+              {
+                content: [
+                  {
+                    cache_control: { type: 'ephemeral' },
+                    text: 'Hello',
+                    type: 'text',
+                  },
+                ],
+                role: 'user',
+              },
+            ],
+            thinking: { type: 'disabled' },
+          });
+        });
+
         it('should send only temperature for Claude 4+ models when both temperature and top_p are provided', async () => {
           // Arrange
           const mockStream = new ReadableStream({
@@ -1187,6 +1420,49 @@ describe('LobeBedrockAI', () => {
 
       const commandInput = (InvokeModelCommand as unknown as Mock).mock.calls.at(-1)?.[0];
       expect(commandInput.modelId).toBe('us.anthropic.claude-opus-4-8');
+    });
+
+    it('should drop assistant prefill in generateObject when a logical id maps to Claude 5', async () => {
+      // The prefill guard must follow the resolved Bedrock model id, not the
+      // logical alias the channel mapping hides it behind.
+      const mappedInstance = new LobeBedrockAI({
+        accessKeyId: 'test-access-key-id',
+        accessKeySecret: 'test-access-key-secret',
+        modelIdMapping: { 'my-router-model': 'global.anthropic.claude-opus-5' },
+        region: 'us-east-1',
+      });
+      const mockResponse = {
+        body: new TextEncoder().encode(
+          JSON.stringify({
+            content: [{ input: { title: 'Mapped' }, name: 'mapped_schema', type: 'tool_use' }],
+          }),
+        ),
+      };
+      vi.spyOn(mappedInstance['client'], 'send').mockResolvedValue(mockResponse as any);
+
+      await mappedInstance.generateObject({
+        messages: [
+          { content: 'Create a title.', role: 'user' },
+          { content: '...', role: 'assistant' },
+        ],
+        model: 'my-router-model',
+        schema: {
+          name: 'mapped_schema',
+          schema: {
+            additionalProperties: false,
+            properties: { title: { type: 'string' } },
+            required: ['title'],
+            type: 'object',
+          },
+          strict: true,
+        },
+      });
+
+      const commandInput = (InvokeModelCommand as unknown as Mock).mock.calls.at(-1)?.[0];
+      expect(commandInput.modelId).toBe('global.anthropic.claude-opus-5');
+      expect(JSON.parse(commandInput.body).messages).toEqual([
+        { content: 'Create a title.', role: 'user' },
+      ]);
     });
 
     it('should return tool calls when tools are provided', async () => {

@@ -8,11 +8,13 @@ import {
   Icon,
   Tag,
   Text,
+  toast,
   Tooltip,
   TooltipGroup,
+  useResponsive,
 } from '@lobehub/ui';
-import { App } from 'antd';
-import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BookmarkCheckIcon, BookmarkIcon, DotIcon, GitBranchIcon, UsersIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
@@ -22,22 +24,18 @@ import useSWR from 'swr';
 import PublishedTime from '@/components/PublishedTime';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { favoriteKeys } from '@/libs/swr/keys';
 import { socialService } from '@/services/social';
 
 import { resolveCommunityProfileLink } from '../../utils/profileLink';
 import { useDetailContext } from './DetailProvider';
 import GroupAgentForkTag from './GroupAgentForkTag';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  time: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextDescription};
-  `,
-}));
+const styles = stylex.create({ time: { fontSize: '12px', color: cssVar.colorTextDescription } });
 
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { t } = useTranslation('discover');
-  const { message } = App.useApp();
+
   const data = useDetailContext();
   const { mobile = isMobile } = useResponsive();
   const { isAuthenticated, signIn, session } = useMarketAuth();
@@ -67,7 +65,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   // TODO: Use 'group_agent' type when social service supports it
   // Fetch favorite status
   const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
-    identifier && isAuthenticated ? ['favorite-status', 'agent', identifier] : null,
+    identifier && isAuthenticated ? favoriteKeys.status('agent', identifier) : null,
     () => socialService.checkFavoriteStatus('agent-group', identifier!),
     { revalidateOnFocus: false },
   );
@@ -86,14 +84,14 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     try {
       if (isFavorited) {
         await socialService.removeFavorite('agent-group', identifier);
-        message.success(t('assistant.unfavoriteSuccess'));
+        toast.success(t('assistant.unfavoriteSuccess'));
       } else {
         await socialService.addFavorite('agent-group', identifier);
-        message.success(t('assistant.favoriteSuccess'));
+        toast.success(t('assistant.favoriteSuccess'));
       }
       await mutateFavorite();
     } catch {
-      message.error(t('assistant.favoriteFailed'));
+      toast.error(t('assistant.favoriteFailed'));
     } finally {
       setFavoriteLoading(false);
     }
@@ -106,9 +104,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
         url: '/community/group_agent',
       })}
     >
-      <Button size={'middle'} variant={'outlined'}>
-        {category}
-      </Button>
+      <Button size={'middle'}>{category}</Button>
     </WorkspaceLink>
   ) : null;
 
@@ -180,10 +176,13 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               );
             })()}
             <Icon icon={DotIcon} />
-            <PublishedTime className={styles.time} date={createdAt as string} />
+            <PublishedTime
+              className={stylex.props(styles.time).className}
+              date={createdAt as string}
+            />
             <GroupAgentForkTag />
             {!!forkCount && forkCount > 0 && (
-              <Tag bordered={false} color="default" icon={<Icon icon={GitBranchIcon} />}>
+              <Tag color="default" icon={<Icon icon={GitBranchIcon} />}>
                 {forkCount} {t('fork.forks')}
               </Tag>
             )}

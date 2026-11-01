@@ -1,5 +1,6 @@
-import { Avatar, Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Icon } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui';
 import {
   LucideAtom,
   LucideClapperboard,

@@ -3,21 +3,37 @@
  * Each ComputerRuntime subclass maps its raw service response into this shape.
  */
 export interface ServiceResult {
-  error?: { message: string; name?: string };
+  error?: {
+    code?: string;
+    doc_url?: string;
+    hint?: string;
+    message: string;
+    name?: string;
+    status?: number;
+  };
   result: any;
+  /** The execution workspace was recreated before this call. */
+  sessionExpiredAndRecreated?: boolean;
   success: boolean;
 }
 
 // ==================== Params ====================
 
 export interface ListFilesParams {
+  /** Working directory a relative `directoryPath` resolves against on the service side. */
+  cwd?: string;
   directoryPath: string;
+  limit?: number;
   sortBy?: string;
   sortOrder?: string;
 }
 
 export interface ReadFileParams {
+  /** Working directory a relative `path` resolves against on the service side. */
+  cwd?: string;
   endLine?: number;
+  /** 0-based end-exclusive line window (local-system). */
+  loc?: [number, number];
   path: string;
   startLine?: number;
 }
@@ -25,11 +41,15 @@ export interface ReadFileParams {
 export interface WriteFileParams {
   content: string;
   createDirectories?: boolean;
+  /** Working directory a relative `path` resolves against on the service side. */
+  cwd?: string;
   path: string;
 }
 
 export interface EditFileParams {
   all?: boolean;
+  /** Working directory a relative `path` resolves against on the service side. */
+  cwd?: string;
   path: string;
   replace: string;
   search: string;
@@ -40,7 +60,7 @@ export interface SearchFilesParams {
   createdAfter?: string;
   createdBefore?: string;
   detailed?: boolean;
-  directory: string;
+  directory?: string;
   exclude?: string[];
   /** @deprecated Prefer `fileTypes` (plural). Retained for cloud sandbox back-compat. */
   fileType?: string;
@@ -58,6 +78,8 @@ export interface SearchFilesParams {
 }
 
 export interface MoveFilesParams {
+  /** Working directory each operation's relative paths resolve against on the service side. */
+  cwd?: string;
   operations: Array<{
     destination: string;
     source: string;
@@ -71,17 +93,27 @@ export interface RenameFileParams {
 
 export interface GlobFilesParams {
   directory?: string;
+  limit?: number;
   pattern: string;
 }
 
 export interface RunCommandParams {
   background?: boolean;
   command: string;
+  /**
+   * Working directory the shell spawns in. Without it the service falls back to
+   * its own process cwd (the app install directory in a packaged desktop app).
+   */
+  cwd?: string;
+  description?: string;
+  env?: Record<string, string>;
   timeout?: number;
 }
 
 export interface GetCommandOutputParams {
   commandId: string;
+  /** Regex filter applied to the returned output lines. */
+  filter?: string;
   /**
    * Max time to wait for this observation before returning (does not kill the
    * process). Forwarded to the service so callers polling a running command can
@@ -94,11 +126,38 @@ export interface KillCommandParams {
   commandId: string;
 }
 
+/**
+ * Grep params mirror the tool manifest / IPC contract (`local-file-shell`'s
+ * `GrepContentParams`): the full flag set must survive to the service layer so
+ * the underlying rg/grep honors the agent's filters. `ComputerRuntime` itself
+ * only reads `pattern`; everything else is forwarded verbatim.
+ */
 export interface GrepContentParams {
-  directory: string;
-  filePattern?: string;
-  pattern: string;
-  recursive?: boolean;
+  '-A'?: number;
+  '-B'?: number;
+  '-C'?: number;
+  '-i'?: boolean;
+  '-n'?: boolean;
+  /** Legacy alias for the search root. Prefer `path`/`scope`. */
+  'cwd'?: string;
+  /** @deprecated Legacy alias for the search root. Prefer `path`/`scope`. */
+  'directory'?: string;
+  /** @deprecated Legacy alias for `glob`. */
+  'filePattern'?: string;
+  /** ripgrep-style glob filter on file paths. */
+  'glob'?: string;
+  'head_limit'?: number;
+  'multiline'?: boolean;
+  'output_mode'?: 'content' | 'count' | 'files_with_matches';
+  /** Absolute search root. Takes precedence over `scope` on the service side. */
+  'path'?: string;
+  'pattern': string;
+  'recursive'?: boolean;
+  /** Working directory scope limiting the search. */
+  'scope'?: string;
+  /** Preferred search tool. */
+  'tool'?: 'ag' | 'grep' | 'rg';
+  'type'?: string;
 }
 
 // ==================== State ====================
@@ -113,6 +172,21 @@ export interface ListFilesState {
   totalCount?: number;
 }
 
+/**
+ * An image produced by a tool result — always an already-uploaded reference
+ * (the producer uploads to file storage before emitting; raw base64 must
+ * never reach the DB). Same shape as the hetero
+ * `HeterogeneousToolResultImage` post-upload.
+ */
+export interface ToolResultImage {
+  /** File record id in the file store. */
+  fileId?: string;
+  /** MIME type, e.g. `image/png`. */
+  mediaType: string;
+  /** Durable, fetchable URL. */
+  url: string;
+}
+
 export interface ReadFileState {
   /** Character count of the returned content */
   charCount?: number;
@@ -122,6 +196,13 @@ export interface ReadFileState {
   filename?: string;
   /** Detected file type (e.g., 'ts', 'md', 'json') */
   fileType?: string;
+  /**
+   * Images produced by reading an image file. Carried in `pluginState.images`
+   * on the tool message; the MessageContent tool-message processor turns each
+   * into an `image_url` part so vision-capable models can actually inspect the
+   * file the agent read. Empty/absent for text files.
+   */
+  images?: ToolResultImage[];
   /** Line range as tuple [start, end] */
   loc?: [number, number];
   path: string;
@@ -130,6 +211,8 @@ export interface ReadFileState {
   totalCharCount?: number;
   /** Total line count of the entire file */
   totalLines?: number;
+  /** The service cut the content at its character cap before the window ended */
+  truncated?: boolean;
 }
 
 export interface WriteFileState {
@@ -187,6 +270,22 @@ export interface RunCommandState {
   exitCode?: number;
   isBackground: boolean;
   output?: string;
+  outputFiles?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
+  /**
+   * Whether the device sandbox actually confined this command.
+   *
+   * The execution-environment chip states the user's *intent*; this states the
+   * outcome. They can differ — a run routed somewhere the sandbox flag never
+   * reached executes unfenced while the chip still reads "Local sandbox" — and
+   * a security property nobody can observe is one nobody should trust.
+   * Undefined when no sandbox was requested.
+   */
+  sandboxed?: boolean;
+  /** The execution workspace was recreated before this command. */
+  sessionExpiredAndRecreated?: boolean;
   stderr?: string;
   stdout?: string;
   success: boolean;
@@ -196,8 +295,17 @@ export interface GetCommandOutputState {
   durationMs?: number;
   error?: string;
   exitCode?: number;
-  newOutput?: string;
+  outputFiles?: {
+    stderr: { path: string; size: number; truncated: boolean };
+    stdout: { path: string; size: number; truncated: boolean };
+  };
   running?: boolean;
+  /** The sandbox workspace was recreated before polling this command. */
+  sessionExpiredAndRecreated?: boolean;
+  /** The signal that terminated the command, when one did. */
+  signal?: string;
+  stderr?: string;
+  stdout?: string;
   success: boolean;
 }
 

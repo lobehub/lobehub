@@ -50,13 +50,24 @@ export class SkillResolver {
       const isOperationActivated = enabledPluginIds.has(skill.identifier);
       const stepActivation = stepActivatedMap.get(skill.identifier);
       const isStepActivated = !!stepActivation;
+      // Step delta content overrides original content if provided
+      const resolvedContent = stepActivation?.content || skill.content;
 
-      if (isOperationActivated || isStepActivated) {
+      // Being pinned (isOperationActivated) alone must NOT force `activated:
+      // true` when there's no real content to inject — e.g. a ZIP-bundled
+      // skill whose content is deliberately withheld until `activateSkill`
+      // mounts its bundle (see resolveClientSkills / aiAgent's skills build).
+      // Force-activating it anyway would make it vanish from BOTH the
+      // injected content (no content to show) and SkillContextProvider's
+      // <available_skills> list (which only lists non-activated skills) —
+      // making a pinned-but-unmounted skill invisible to the model entirely.
+      // Falling through here keeps it listed as available so the model can
+      // still discover and activate it.
+      if ((isOperationActivated || isStepActivated) && resolvedContent) {
         return {
           ...skill,
           activated: true,
-          // Step delta content overrides original content if provided
-          content: stepActivation?.content || skill.content,
+          content: resolvedContent,
         };
       }
 

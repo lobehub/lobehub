@@ -1,7 +1,9 @@
 import { type SSOProvider } from '@lobechat/types';
 
+import { clearActiveScopeKey } from '@/libs/swr/useCacheScope';
 import { type StoreSetter } from '@/store/types';
 
+import { clearUserDisplaySnapshot } from '../../displaySnapshot';
 import { type UserStore } from '../../store';
 
 interface AuthProvidersData {
@@ -59,7 +61,11 @@ export class UserAuthActionImpl {
     }
   };
 
-  logout = async (): Promise<void> => {
+  logout = async (options?: { redirectTo?: string }): Promise<void> => {
+    // Capture the owner before any async work. The store may be updated by a
+    // concurrent session event before Better Auth confirms this sign-out.
+    const signingOutUserId = this.#get().user?.id;
+
     // Clear the OIDC Provider session for the current browser *before*
     // destroying the better-auth session. This prevents a stale OIDC session
     // from silently issuing tokens for the old account after the user signs
@@ -74,15 +80,19 @@ export class UserAuthActionImpl {
     await signOut({
       fetchOptions: {
         onSuccess: () => {
+          // Drop the persisted active scope so the next boot doesn't hydrate the
+          // signed-out user's cache (localStorage survives the reload below).
+          clearActiveScopeKey();
+          clearUserDisplaySnapshot(signingOutUserId);
           // Use window.location.href to trigger a full page reload
           // This ensures all client-side state (React, Zustand, cache) is cleared
-          window.location.href = '/signin';
+          window.location.href = options?.redirectTo || '/signin';
         },
       },
     });
   };
 
-  openLogin = async (): Promise<void> => {
+  openLogin = async (reason?: 'sessionExpired'): Promise<void> => {
     // Skip if already on a login page (/signin, /signup)
     const pathname = location.pathname;
     if (pathname.startsWith('/signin') || pathname.startsWith('/signup')) {
@@ -90,7 +100,9 @@ export class UserAuthActionImpl {
     }
 
     const currentUrl = location.toString();
-    window.location.href = `/signin?callbackUrl=${encodeURIComponent(currentUrl)}`;
+    const params = new URLSearchParams({ callbackUrl: currentUrl });
+    if (reason) params.set('reason', reason);
+    window.location.href = `/signin?${params.toString()}`;
   };
 
   refreshAuthProviders = async (): Promise<void> => {

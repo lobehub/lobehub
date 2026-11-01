@@ -1,8 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { initialState } from '@/routes/(main)/resource/features/store/initialState';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { initialState } from '@/features/ResourceManager/store/initialState';
 import { FilesTabs } from '@/types/files';
 
 import { useResetSelectionOnQueryChange } from './useResetSelectionOnQueryChange';
@@ -17,7 +17,7 @@ describe('useResetSelectionOnQueryChange', () => {
       (props: { searchQuery: string | null }) =>
         useResetSelectionOnQueryChange({
           category: FilesTabs.All,
-          currentFolderSlug: 'folder-a',
+          currentFolderId: 'folder-a',
           libraryId: undefined,
           searchQuery: props.searchQuery,
         }),
@@ -45,15 +45,15 @@ describe('useResetSelectionOnQueryChange', () => {
 
   it('should clear selection when the folder changes', () => {
     const { rerender } = renderHook(
-      (props: { currentFolderSlug: string | null }) =>
+      (props: { currentFolderId: string | null }) =>
         useResetSelectionOnQueryChange({
           category: FilesTabs.All,
-          currentFolderSlug: props.currentFolderSlug,
+          currentFolderId: props.currentFolderId,
           libraryId: undefined,
           searchQuery: null,
         }),
       {
-        initialProps: { currentFolderSlug: 'folder-a' },
+        initialProps: { currentFolderId: 'folder-a' },
       },
     );
 
@@ -65,7 +65,7 @@ describe('useResetSelectionOnQueryChange', () => {
     });
 
     act(() => {
-      rerender({ currentFolderSlug: 'folder-b' });
+      rerender({ currentFolderId: 'folder-b' });
     });
 
     expect(useResourceManagerStore.getState()).toMatchObject({

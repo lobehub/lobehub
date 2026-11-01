@@ -1,0 +1,27 @@
+.table table {
+  font-size: 13px;
+}
+
+.table th {
+  background: transparent;
+  box-shadow: inset 0 999px 0 var(--lobe-color-fill-quaternary);
+}
+
+.table td {
+  border: none;
+  background: transparent;
+}
+
+.table tr:hover > td {
+  background: var(--lobe-color-fill-quaternary);
+}
+
+.table tr td:first-child,
+.table tr th:first-child {
+  padding-inline-start: 24px;
+}
+
+.table tr td:last-child,
+.table tr th:last-child {
+  padding-inline-end: 24px;
+}

@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
-import type { CreateVideoPayload, CreateVideoResponse } from '../../types/video';
+import type { CreateVideoPayload, CreateVideoResult } from '../../types/video';
 
 const log = createDebug('lobe-video:wenxin');
 
@@ -89,7 +89,7 @@ export async function pollWenxinVideoStatus(
 export async function createWenxinVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { model, params } = payload;
   const { prompt, imageUrl, aspectRatio, duration, generateAudio, promptExtend, watermark } =
     params;

@@ -1,4 +1,4 @@
-import { type MessageContentPart } from '@lobechat/types';
+import { type MessageContentPart, type ModelReasoning } from '@lobechat/types';
 import { deserializeParts } from '@lobechat/utils';
 import { memo } from 'react';
 
@@ -8,6 +8,16 @@ import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { messageStateSelectors, useConversationStore } from '../../store';
 import { RichContentRenderer } from './RichContentRenderer';
+
+/**
+ * Whether a persisted reasoning object holds renderable thinking. A
+ * signature-only reasoning ({ signature } without content) is protocol state
+ * kept for multi-turn replay and must not render an empty "deep thought" card.
+ * Multimodal reasoning streams image parts via tempDisplayContent
+ * without content, so those count as renderable.
+ */
+export const hasRenderableReasoning = (reasoning?: ModelReasoning | null): boolean =>
+  !!reasoning?.content?.trim() || !!reasoning?.tempDisplayContent?.length;
 
 interface ReasoningProps {
   content?: string;

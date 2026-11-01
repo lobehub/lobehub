@@ -1,48 +1,58 @@
 import os from 'node:os';
 import path from 'node:path';
 
+import type { DesktopBootProfilePayload } from '@lobechat/electron-client-ipc';
 import type { ElectronIPCEventHandler } from '@lobechat/electron-server-ipc';
 import { ElectronIPCServer } from '@lobechat/electron-server-ipc';
-import { app, nativeTheme, protocol } from 'electron';
-import installExtension, { REACT_DEVELOPER_TOOLS } from 'electron-devtools-installer';
-import * as electronIs from 'electron-is';
+import { enableManagedProcesses, shutdownManagedProcesses } from '@lobechat/utils/managedProcess';
+import { app, ipcMain, nativeTheme, net, protocol } from 'electron';
 
 import { name } from '@/../../package.json';
 import { binDir, buildDir } from '@/const/dir';
 import { isDev } from '@/const/env';
+import { shellInfo } from '@/const/shell';
 import type { IControlModule } from '@/controllers';
 import AuthCtr from '@/controllers/AuthCtr';
-import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
-import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
+import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import {
-  astSearchDetectors,
-  browserAutomationDetectors,
-  cliAgentDetectors,
-  contentSearchDetectors,
-  fileSearchDetectors,
-  type IToolDetector,
-  runtimeEnvironmentDetectors,
-  type ToolCategory,
-} from '@/modules/toolDetectors';
-import type { IServiceModule } from '@/services';
+  astSearchBinaries,
+  type BinaryCategory,
+  type BinarySpec,
+  browserAutomationBinaries,
+  cliAgentBinaries,
+  contentSearchBinaries,
+  fileSearchBinaries,
+  runtimeEnvironmentBinaries,
+} from '@/modules/binaries';
+import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
+import { PermissionGuide } from '@/modules/permissionGuide/PermissionGuide';
+import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
+import { BUILD_CHANNEL, UPDATE_SERVER_URL } from '@/modules/updater/configs';
+import type { IServiceModule, ServiceLifecycle, ServiceModule } from '@/services';
+import LocalDatabaseService from '@/services/LocalDatabaseSrv';
 import { createLogger } from '@/utils/logger';
+import * as electronIs from '@/utils/platform';
+import { refreshShellPath } from '@/utils/shellPath';
 
 import { BrowserManager } from './browser/BrowserManager';
 import { backendProxyProtocolManager } from './infrastructure/BackendProxyProtocolManager';
+import { BinaryManager } from './infrastructure/BinaryManager';
+import { CoreUpdateManager } from './infrastructure/coreOta/CoreUpdateManager';
 import { I18nManager } from './infrastructure/I18nManager';
 import { IoCContainer } from './infrastructure/IoCContainer';
 import { LocalFileProtocolManager } from './infrastructure/LocalFileProtocolManager';
 import { ProtocolManager } from './infrastructure/ProtocolManager';
 import { RendererUrlManager } from './infrastructure/RendererUrlManager';
+import { SecurityUpdatePolicy } from './infrastructure/SecurityUpdatePolicy';
 import { StaticFileServerManager } from './infrastructure/StaticFileServerManager';
 import { StoreManager } from './infrastructure/StoreManager';
-import { ToolDetectorManager } from './infrastructure/ToolDetectorManager';
-import { UpdaterManager } from './infrastructure/UpdaterManager';
+import type { UpdaterManager } from './infrastructure/UpdaterManager';
 import { MenuManager } from './ui/MenuManager';
 import { ShortcutManager } from './ui/ShortcutManager';
 import { TrayManager } from './ui/TrayManager';
 
 const logger = createLogger('core:App');
+const mainProcessStartedAt = Date.now() - process.uptime() * 1000;
 
 export type IPCEventMap = Map<string, { controller: any; methodName: string }>;
 export type ShortcutMethodMap = Map<string, () => Promise<void>>;
@@ -53,25 +63,36 @@ type Class<T> = new (...args: any[]) => T;
 const importAll = (r: any) => Object.values(r).map((v: any) => v.default);
 
 export class App {
+  startupUpdatePending = !!shellInfo?.startupUpdate;
   browserManager: BrowserManager;
   menuManager: MenuManager;
   i18n: I18nManager;
   storeManager: StoreManager;
-  updaterManager: UpdaterManager;
+  updaterManager!: UpdaterManager;
   shortcutManager: ShortcutManager;
   trayManager: TrayManager;
   staticFileServerManager: StaticFileServerManager;
   protocolManager: ProtocolManager;
   rendererUrlManager: RendererUrlManager;
+  coreUpdateManager: CoreUpdateManager;
   localFileProtocolManager: LocalFileProtocolManager;
-  toolDetectorManager: ToolDetectorManager;
+  binaryManager: BinaryManager;
   screenCaptureManager: ScreenCaptureManager;
+  permissionGuide: PermissionGuide;
   chromeFlags: string[] = ['OverlayScrollbar', 'FluentOverlayScrollbar', 'FluentScrollbar'];
 
   /**
    * whether app is in quiting
    */
   isQuiting: boolean = false;
+
+  /**
+   * Set while UpdaterManager is handing an installed update over to
+   * electron-updater. It closes every window first, which on Linux would
+   * otherwise trip the `window-all-closed` quit below and kill the process
+   * before `quitAndInstall()` ever runs.
+   */
+  isInstallingUpdate: boolean = false;
 
   get appStoragePath() {
     const storagePath = this.storeManager.get('storagePath');
@@ -84,6 +105,7 @@ export class App {
   }
 
   constructor() {
+    enableManagedProcesses();
     logger.info('----------------------------------------------');
     // Log system information
     logger.info(`  OS: ${os.platform()} (${os.arch()})`);
@@ -91,13 +113,17 @@ export class App {
     logger.info(` RAM: ${Math.round(os.totalmem() / 1024 / 1024 / 1024)} GB`);
     logger.info(`PATH: ${app.getAppPath()}`);
     logger.info(` lng: ${app.getLocale()}`);
-    logger.info(` bin: ${binDir}`);
+    logger.info(` res: ${binDir}`);
+    logger.info(`core: ${shellInfo?.source} ${shellInfo?.coreDir} abi=${shellInfo?.abi}`);
+    for (const line of shellInfo?.log ?? []) logger.info(`shell: ${line}`);
     logger.info('----------------------------------------------');
     logger.info('Starting LobeHub...');
 
-    // Append bundled binaries and CLI wrapper directories to PATH for tool resolution
+    // Append the CLI wrapper directory to PATH so spawned shells can resolve
+    // `lobehub` / `lh` / `lobe`. Managed binary dirs (e.g. agent-browser) are
+    // augmented separately by `binaryManager.augmentPath()` during bootstrap.
     const pathSep = process.platform === 'win32' ? ';' : ':';
-    process.env.PATH = `${process.env.PATH}${pathSep}${binDir}${pathSep}${getCliWrapperDir()}`;
+    process.env.PATH = `${process.env.PATH}${pathSep}${getCliWrapperDir()}`;
 
     logger.debug('Initializing App');
     // Initialize store manager
@@ -126,6 +152,8 @@ export class App {
 
     logger.debug(`Loading ${controllers.length} controllers`);
     controllers.forEach((controller) => this.addController(controller));
+    this.initializeBootstrapIpc();
+    this.initializeBootProfileIpc();
 
     // load services
     const services: IServiceModule[] = importAll(
@@ -140,16 +168,27 @@ export class App {
     this.i18n = new I18nManager(this);
     this.browserManager = new BrowserManager(this);
     this.menuManager = new MenuManager(this);
-    this.updaterManager = new UpdaterManager(this);
     this.shortcutManager = new ShortcutManager(this);
     this.trayManager = new TrayManager(this);
     this.staticFileServerManager = new StaticFileServerManager(this);
     this.protocolManager = new ProtocolManager(this);
-    this.toolDetectorManager = new ToolDetectorManager(this);
+    this.binaryManager = new BinaryManager(this);
     this.screenCaptureManager = new ScreenCaptureManager(this);
+    this.permissionGuide = new PermissionGuide(this);
 
-    // Register built-in tool detectors
-    this.registerBuiltinToolDetectors();
+    this.coreUpdateManager = new CoreUpdateManager(this);
+    this.coreUpdateManager.initialize();
+    app.on('web-contents-created', (_event, webContents) => {
+      webContents.on('render-process-gone', () => {
+        this.coreUpdateManager.handleRendererCrash();
+      });
+      webContents.on('destroyed', () => {
+        this.coreUpdateManager.handleRendererDestroyed(webContents.id);
+      });
+    });
+
+    // Register built-in binary specs
+    this.registerBuiltinBinarySpecs();
 
     // Configure renderer loading strategy (dev server vs static export)
     // should register before app ready
@@ -164,6 +203,8 @@ export class App {
 
     // Unified handling of before-quit event
     app.on('before-quit', this.handleBeforeQuit);
+    process.on('SIGTERM', () => app.quit());
+    process.on('SIGINT', () => app.quit());
 
     // Initialize theme mode from store
     this.initializeThemeMode();
@@ -194,31 +235,29 @@ export class App {
   }
 
   /**
-   * Register built-in tool detectors for content search and file search
+   * Register built-in binary specs the BinaryManager knows about.
    */
-  private registerBuiltinToolDetectors() {
-    logger.debug('Registering built-in tool detectors');
+  private registerBuiltinBinarySpecs() {
+    logger.debug('Registering built-in binary specs');
 
-    const detectorCategories: Partial<Record<ToolCategory, IToolDetector[]>> = {
-      'runtime-environment': runtimeEnvironmentDetectors,
-      'cli-agents': cliAgentDetectors,
-      'ast-search': astSearchDetectors,
-      'browser-automation': browserAutomationDetectors,
-      'content-search': contentSearchDetectors,
-      'file-search': fileSearchDetectors,
+    const binaryCategories: Partial<Record<BinaryCategory, BinarySpec[]>> = {
+      'runtime-environment': runtimeEnvironmentBinaries,
+      'cli-agents': cliAgentBinaries,
+      'ast-search': astSearchBinaries,
+      'browser-automation': browserAutomationBinaries,
+      'content-search': contentSearchBinaries,
+      'file-search': fileSearchBinaries,
     };
 
-    for (const [category, detectors] of Object.entries(detectorCategories)) {
-      if (detectors) {
-        for (const detector of detectors) {
-          this.toolDetectorManager.register(detector, category as ToolCategory);
+    for (const [category, specs] of Object.entries(binaryCategories)) {
+      if (specs) {
+        for (const spec of specs) {
+          this.binaryManager.register(spec, category as BinaryCategory);
         }
       }
     }
 
-    logger.info(
-      `Registered ${this.toolDetectorManager.getRegisteredTools().length} tool detectors`,
-    );
+    logger.info(`Registered ${this.binaryManager.getRegistered().length} binary specs`);
   }
 
   bootstrap = async () => {
@@ -227,66 +266,181 @@ export class App {
     const isSingle = app.requestSingleInstanceLock();
     if (!isSingle) {
       logger.info('Another instance is already running, exiting');
+      // `app.exit(0)` only *initiates* shutdown — without returning, the rest
+      // of this async bootstrap kept running: the duplicate instance went on
+      // to start the IPC server, gateway connection and shell services, so a
+      // machine could briefly run two live device processes for one user and
+      // both answered gateway tool calls (observed as the same runCommand
+      // executing twice with two independent process trees). Stop here.
       app.exit(0);
+      return;
     }
 
     this.initDevBranding();
 
-    //  ==============
-    await this.ipcServer.start();
-    logger.debug('IPC server started');
+    // The CLI socket is independent from renderer navigation. Start it in
+    // parallel instead of placing it on the first-window critical path.
+    const ipcServerPromise = this.ipcServer
+      .start()
+      .then(() => {
+        logger.debug('IPC server started');
+      })
+      .catch((error) => {
+        logger.error('Failed to start IPC server:', error);
+      });
 
-    // Initialize app
+    // Reach Electron ready state, then create the main BrowserWindow before
+    // native menus, local-file services, tray and updater initialization.
     await this.makeAppReady();
+    if (shellInfo?.startupUpdate) {
+      const ready = await shellInfo.startupUpdate.run(
+        this.coreUpdateManager.checkBeforeFirstLaunch,
+      );
+      if (!ready) return;
+    }
+    this.startupUpdatePending = false;
+    await this.browserManager.initializeBrowsers();
+    this.prewarmLocalDatabaseAfterNavigation();
+    await this.runControllerHooks('afterAppReady');
+
+    const initializeNativeShell = async () => {
+      await Promise.all([
+        this.i18n.init(),
+        this.staticFileServerManager.initialize(),
+        ipcServerPromise,
+        this.getUpdaterManager(),
+      ]);
+      this.menuManager.initialize();
+    };
+
+    // Set global application exit state and lifecycle listeners immediately.
+    this.isQuiting = false;
+
+    app.on('window-all-closed', this.handleWindowAllClosed);
+
+    app.on('activate', this.onActivate);
+
+    // Deep links should be actionable as soon as the main window exists.
+    void this.protocolManager.processPendingUrls().catch((error) => {
+      logger.error('Failed to process pending protocol URLs:', error);
+    });
+
+    // Work that can trigger disk, network, native permission, or UI setup is
+    // delayed until Chromium presents its first frame, preventing contention
+    // with bundle parsing and the first React commit.
+    void this.initializeAfterFirstFrame(initializeNativeShell).catch((error) => {
+      logger.error('Post-first-frame initialization failed:', error);
+    });
+
+    logger.info('Application bootstrap scheduled');
+  };
+
+  private initializeAfterFirstFrame = async (initializeNativeShell: () => Promise<void>) => {
+    await this.browserManager.waitForMainWindowFirstFrame();
+
+    // Security policy IO must never delay the first usable window.
+    if (shellInfo?.startupUpdate) {
+      void shellInfo.startupUpdate
+        .checkSecurity(
+          new SecurityUpdatePolicy({
+            channel: BUILD_CHANNEL,
+            coreVersion: () => this.coreUpdateManager.getStatus().running,
+            feedBaseUrl: (UPDATE_SERVER_URL ?? '')
+              .replace(/\/(stable|nightly|canary|beta)\/?$/, '')
+              .replace(/\/$/, ''),
+            fetchImpl: (url, init) => net.fetch(url, init),
+            platform: process.platform as 'darwin' | 'linux' | 'win32',
+            publicKey: shellInfo.publicKey,
+            shellVersion: shellInfo.shellVersion,
+            userData: app.getPath('userData'),
+          }),
+        )
+        .catch((error) => {
+          logger.error('Background security update check failed:', error);
+        });
+    }
+
+    // GUI-launched apps do not inherit the user's login-shell PATH. Resolve it
+    // asynchronously after the first frame so shell startup never blocks the
+    // main process -> renderer navigation critical path.
+    void refreshShellPath().catch((error) => {
+      logger.warn('Failed to refresh PATH from the login shell:', error);
+    });
+
+    await Promise.all([initializeNativeShell(), this.runControllerHooks('afterFirstFrame')]);
+    this.shortcutManager.initialize();
 
     // Generate CLI wrapper for terminal usage
     generateCliWrapper().catch((error) => {
       logger.warn('Failed to generate CLI wrapper:', error);
     });
 
-    // Initialize i18n. Note: app.getLocale() must be called after app.whenReady() to get the correct value
-    await this.i18n.init();
-    this.menuManager.initialize();
+    // Surface previously-installed managed binaries on PATH so spawned shells
+    // (and child agents) can resolve them without going through the manager.
+    this.binaryManager.augmentPath().catch((error) => {
+      logger.warn('Failed to augment PATH with managed binaries:', error);
+    });
 
-    // Initialize static file manager
-    await this.staticFileServerManager.initialize();
-
-    // Initialize global shortcuts: globalShortcut must be called after app.whenReady()
-    this.shortcutManager.initialize();
-
-    await this.browserManager.initializeBrowsers();
+    // Lazy-install agent-browser in the background — keeps the installer
+    // light (no bundled binary) while still making the CLI available shortly
+    // after first launch. Errors are non-fatal; the Settings panel exposes a
+    // manual retry via `binaryService.detect / ensure` later.
+    this.binaryManager.ensure('agent-browser').catch((error) => {
+      logger.warn('[agent-browser] background ensure failed:', error);
+    });
 
     // Initialize tray manager on all platforms (macOS menu bar, Windows / Linux tray).
     this.trayManager.initializeTrays();
 
     // Initialize updater manager
     await this.updaterManager.initialize();
+    this.coreUpdateManager.startScheduledChecks();
+    this.screenCaptureManager.prewarmPermissionCheck();
 
-    // Set global application exit state
-    this.isQuiting = false;
+    logger.info('Post-first-frame initialization completed');
+  };
 
-    app.on('window-all-closed', () => {
-      if (electronIs.windows() || process.platform === 'linux') {
-        logger.info(`All windows closed, quitting application (${process.platform})`);
-        app.quit();
+  private prewarmLocalDatabaseAfterNavigation = () => {
+    // BrowserManager starts the initial loadURL call while constructing the main
+    // window. Yield one event-loop turn so Chromium can begin serving navigation
+    // requests before node:sqlite performs its synchronous open and migrations.
+    setImmediate(() => {
+      if (this.isQuiting) return;
+
+      const startedAt = performance.now();
+      try {
+        this.getService(LocalDatabaseService).initialize();
+        logger.debug(
+          `Local database prewarm completed in ${(performance.now() - startedAt).toFixed(2)}ms`,
+        );
+      } catch (error) {
+        logger.warn('Local database prewarm failed:', error);
       }
     });
-
-    app.on('activate', this.onActivate);
-
-    // Process any pending protocol URLs after everything is ready
-    await this.protocolManager.processPendingUrls();
-
-    logger.info('Application bootstrap completed');
   };
 
   getService<T>(serviceClass: Class<T>): T {
-    return this.services.get(serviceClass);
+    return this.services.get(serviceClass) as T;
   }
 
   getController<T>(controllerClass: Class<T>): T {
     return this.controllers.get(controllerClass);
   }
+
+  private updaterManagerPromise?: Promise<UpdaterManager>;
+
+  getUpdaterManager = async (): Promise<UpdaterManager> => {
+    if (this.updaterManager) return this.updaterManager;
+
+    this.updaterManagerPromise ??= import('./infrastructure/UpdaterManager').then(
+      ({ UpdaterManager }) => {
+        this.updaterManager = new UpdaterManager(this);
+        return this.updaterManager;
+      },
+    );
+
+    return this.updaterManagerPromise;
+  };
 
   /**
    * Handle protocol request by dispatching to registered handlers
@@ -332,55 +486,47 @@ export class App {
    */
   private makeAppReady = async () => {
     logger.debug('Preparing application ready state');
-    this.controllers.forEach((controller) => {
-      if (typeof controller.beforeAppReady === 'function') {
+    await Promise.all(
+      [...this.controllers.values()].map(async (controller) => {
+        if (typeof controller.beforeAppReady !== 'function') return;
+
         try {
-          controller.beforeAppReady();
+          await controller.beforeAppReady();
         } catch (error) {
           logger.error(`Error in controller.beforeAppReady:`, error);
           console.error(`[App] Error in controller.beforeAppReady:`, error);
         }
-      }
-    });
+      }),
+    );
 
     // refs: https://github.com/lobehub/lobe-chat/pull/7883
     // https://github.com/electron/electron/issues/46538#issuecomment-2808806722
     app.commandLine.appendSwitch('gtk-version', '3');
 
+    app.commandLine.appendSwitch('enable-precise-memory-info');
     app.commandLine.appendSwitch('enable-features', this.chromeFlags.join(','));
 
     logger.debug('Waiting for app to be ready');
     await app.whenReady();
     logger.debug('Application ready');
 
-    await this.installReactDevtools();
-
-    this.controllers.forEach((controller) => {
-      if (typeof controller.afterAppReady === 'function') {
-        try {
-          controller.afterAppReady();
-        } catch (error) {
-          logger.error(`Error in controller.afterAppReady:`, error);
-          console.error(`[App] Error in controller.beforeAppReady:`, error);
-        }
-      }
-    });
     logger.info('Application ready state completed');
   };
 
-  /**
-   * Development only: install React DevTools extension into Electron's devtools.
-   */
-  private installReactDevtools = async () => {
-    if (!isDev) return;
+  private runControllerHooks = async (hookName: 'afterAppReady' | 'afterFirstFrame') => {
+    await Promise.all(
+      [...this.controllers.values()].map(async (controller) => {
+        const hook = controller[hookName];
+        if (typeof hook !== 'function') return;
 
-    try {
-      const name = await installExtension(REACT_DEVELOPER_TOOLS);
-
-      logger.info(`Installed DevTools extension: ${name}`);
-    } catch (error) {
-      logger.warn('Failed to install React DevTools extension', error);
-    }
+        try {
+          await hook.call(controller);
+        } catch (error) {
+          logger.error(`Error in controller.${hookName}:`, error);
+          console.error(`[App] Error in controller.${hookName}:`, error);
+        }
+      }),
+    );
   };
 
   // ============= helper ============= //
@@ -392,7 +538,7 @@ export class App {
   /**
    * all services in app
    */
-  private services = new Map<Class<any>, any>();
+  private services = new Map<Class<any>, ServiceModule & ServiceLifecycle>();
 
   private ipcServer: ElectronIPCServer;
   private ipcServerEventMap: IPCEventMap = new Map();
@@ -455,11 +601,91 @@ export class App {
       };
     });
 
-    this.ipcServer = new ElectronIPCServer(name, ipcServerEvents);
+    // Socket path is derived from this id (`${id}-electron-ipc.sock`). Keep the
+    // package name by default; override with LOBE_IPC_ID so concurrent dev
+    // instances get distinct sockets instead of the last one hijacking the path.
+    const ipcId = process.env.LOBE_IPC_ID || name;
+    this.ipcServer = new ElectronIPCServer(ipcId, ipcServerEvents);
   }
 
-  // Add before-quit handler function
-  private handleBeforeQuit = () => {
+  private initializeBootstrapIpc() {
+    ipcMain.on('desktop:get-bootstrap-identity', (event) => {
+      const controller = this.getController(RemoteServerConfigCtr);
+      event.returnValue = controller?.getDesktopBootstrapIdentity() ?? {
+        isIdentityResolved: false,
+      };
+    });
+  }
+
+  private initializeBootProfileIpc() {
+    ipcMain.on('desktop:boot-profile-ready', (_event, payload: DesktopBootProfilePayload) => {
+      if (process.env.LOBE_DESKTOP_BOOT_PROFILE !== '1') return;
+
+      const values = [
+        payload?.navigationStartedAt,
+        payload?.domContentLoadedMs,
+        payload?.loadingScreenRemovedMs,
+        payload?.firstVisibleFrameMs,
+      ];
+      if (!values.every((value) => Number.isFinite(value) && value >= 0)) return;
+
+      const processToNavigationMs = payload.navigationStartedAt - mainProcessStartedAt;
+      const navigationToDomContentLoadedMs = payload.domContentLoadedMs;
+      const domContentLoadedToLoadingRemovedMs =
+        payload.loadingScreenRemovedMs - payload.domContentLoadedMs;
+      const loadingRemovedToVisibleFrameMs =
+        payload.firstVisibleFrameMs - payload.loadingScreenRemovedMs;
+
+      console.info(
+        `__LOBE_DESKTOP_BOOT_PROFILE__${JSON.stringify({
+          domContentLoadedToLoadingRemovedMs,
+          loadingRemovedToVisibleFrameMs,
+          navigationToDomContentLoadedMs,
+          processToNavigationMs,
+          totalMs: processToNavigationMs + payload.firstVisibleFrameMs,
+        })}`,
+      );
+    });
+  }
+
+  /**
+   * Windows and Linux quit once the last window goes away — except while an
+   * update is being installed. `UpdaterManager.installNow()` closes every
+   * window before handing over to `autoUpdater.quitAndInstall()`, so quitting
+   * here would end the process first and the downloaded package would silently
+   * never be applied. That is a Linux-only failure today: macOS does not quit
+   * on `window-all-closed`, and installNow() skips the close loop on Windows.
+   */
+  handleWindowAllClosed = () => {
+    if (this.isInstallingUpdate) {
+      logger.info('All windows closed while installing an update, keeping the process alive');
+      return;
+    }
+
+    if (electronIs.windows() || process.platform === 'linux') {
+      logger.info(`All windows closed, quitting application (${process.platform})`);
+      app.quit();
+    }
+  };
+
+  private quitReady = false;
+  private quitCleanup?: Promise<void>;
+
+  private handleBeforeQuit = (event: Electron.Event) => {
+    if (this.quitReady) return;
+    event.preventDefault();
+    this.isQuiting = true;
+    this.quitCleanup ??= shutdownManagedProcesses()
+      .catch((error) => logger.error('Process shutdown failed:', error))
+      .then(() => {
+        this.destroyOnQuit();
+        this.quitReady = true;
+        // Let the cancelled native termination return before requesting another quit.
+        setImmediate(() => app.quit());
+      });
+  };
+
+  private destroyOnQuit = () => {
     logger.info('Application is preparing to quit');
     this.isQuiting = true;
 
@@ -469,6 +695,10 @@ export class App {
     }
 
     // Execute cleanup operations
+    for (const service of this.services.values()) {
+      service.destroy?.();
+    }
+
     this.staticFileServerManager.destroy();
   };
 }

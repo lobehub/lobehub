@@ -1,10 +1,19 @@
+import { parse } from '@lobechat/conversation-flow';
+import { type UIChatMessage } from '@lobechat/types';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { type ConversationContext, type ConversationHooks } from '../types';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
+import {
+  type ComposerTarget,
+  type ConversationContext,
+  type ConversationHooks,
+  createComposerTarget,
+} from '../types';
 import { type State } from './initialState';
 import { initialState } from './initialState';
 import { type DataAction } from './slices/data/action';
-import { dataSlice } from './slices/data/action';
+import { chatTranscriptState, dataSlice } from './slices/data/action';
 import { type GenerationAction } from './slices/generation/action';
 import { generationSlice } from './slices/generation/action';
 import { type InputAction } from './slices/input/action';
@@ -35,8 +44,15 @@ export type ConversationStore = Store;
 // ===== Store Creator =====
 
 export interface CreateStoreParams {
+  composerTarget?: ComposerTarget;
   context: ConversationContext;
   hooks?: ConversationHooks;
+  /**
+   * A static transcript (a render gallery, a share snapshot). Held by this
+   * store and never synced; without it the store mirrors the chat store bucket
+   * of `context`, read at creation so a mount paints its rows on the first frame.
+   */
+  messages?: UIChatMessage[];
   skipFetch?: boolean;
 }
 
@@ -45,12 +61,22 @@ type CreateStore = (
 ) => StateCreator<Store, [['zustand/devtools', never]]>;
 
 export const createStoreAction: CreateStore =
-  ({ context, hooks = {}, skipFetch }) =>
+  ({ composerTarget, context, hooks = {}, messages, skipFetch }) =>
   (...params) => ({
     ...initialState,
+    composerTarget: composerTarget ?? createComposerTarget(messageMapKey(context)),
     context,
     hooks,
-    skipFetch,
+    ...(messages
+      ? {
+          dbMessages: messages,
+          displayMessages: parse(messages, undefined, { threadId: context.threadId ?? undefined })
+            .flatList,
+          messagesInit: true,
+          skipFetch: true,
+          transcriptSource: 'static' as const,
+        }
+      : { ...chatTranscriptState(context, skipFetch, []), skipFetch }),
     // ===== Slices =====
     ...dataSlice(...params),
     ...generationSlice(...params),

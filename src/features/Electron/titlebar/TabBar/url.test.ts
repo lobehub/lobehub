@@ -27,6 +27,14 @@ describe('normalizeTabUrl', () => {
     expect(normalizeTabUrl('/agent/abc?a=1#section')).toBe('/agent/abc?a=1');
   });
 
+  it('drops the hash fragment when there is no search string', () => {
+    expect(normalizeTabUrl('/settings/agent#llm')).toBe('/settings/agent');
+  });
+
+  it('treats two anchors of the same page as one tab identity', () => {
+    expect(normalizeTabUrl('/agent/abc#msg_1')).toBe(normalizeTabUrl('/agent/abc#msg_2'));
+  });
+
   it('makes equivalent URLs collapse to the same id', () => {
     expect(normalizeTabUrl('/agent/abc?a=1&b=2')).toBe(normalizeTabUrl('/agent/abc?b=2&a=1'));
   });
@@ -49,6 +57,34 @@ describe('parseAgentTabContext', () => {
       agentId: 'abc',
       topicId: 't1',
     });
+  });
+
+  it('parses a workspace agent url', () => {
+    expect(parseAgentTabContext('/acme/agent/abc')).toEqual({
+      agentId: 'abc',
+      topicId: null,
+      workspaceSlug: 'acme',
+    });
+  });
+
+  it('parses a workspace agent topic path url', () => {
+    expect(parseAgentTabContext('/acme/agent/abc/tpc_xyz')).toEqual({
+      agentId: 'abc',
+      topicId: 'tpc_xyz',
+      workspaceSlug: 'acme',
+    });
+  });
+
+  it('parses workspace topic from the search param', () => {
+    expect(parseAgentTabContext('/acme/agent/abc?topic=t1')).toEqual({
+      agentId: 'abc',
+      topicId: 't1',
+      workspaceSlug: 'acme',
+    });
+  });
+
+  it('ignores the hash fragment when reading the agent id', () => {
+    expect(parseAgentTabContext('/agent/abc#msg_1')).toEqual({ agentId: 'abc', topicId: null });
   });
 
   it('returns null for non-agent urls', () => {

@@ -1,6 +1,3 @@
-// Executor (client-side — depends on app stores/services)
-export { lobeAgentExecutor } from './executor';
-
 // Inspector components (customized tool call headers)
 export { LobeAgentInspectors } from './Inspector';
 

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import type { PermissionItem } from '@/database/schemas';
-
+import type { PublicPermission } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
 
@@ -27,7 +26,7 @@ export const PermissionsListQuerySchema = z
   .extend(PaginationQuerySchema.shape);
 
 export type PermissionsListResponse = PaginationQueryResponse<{
-  permissions: PermissionItem[];
+  permissions: PublicPermission[];
 }>;
 
 // ==================== Permission CRUD Types ====================

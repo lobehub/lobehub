@@ -1,13 +1,17 @@
 export default {
   'actions.discord': 'Go to Discord for feedback',
   'actions.home': 'Return to Home',
-  'actions.retry': 'Log in Again',
+  'actions.retry': 'Sign in Again',
   'codes.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER':
     'This account is already linked to another user',
   'codes.ACCOUNT_NOT_FOUND': 'Account not found',
   'codes.CREDENTIAL_ACCOUNT_NOT_FOUND': 'Credential account does not exist',
   'codes.DELETED_ACCOUNT_EMAIL':
-    'This email has been associated with a deleted account and cannot be used for registration',
+    'This email is still in the account deletion cooldown period. You can sign up again 31 days after deletion is complete.',
+  'codes.DELETED_ACCOUNT_EMAIL_WITH_RETRY_AFTER_DAYS_one':
+    'This email is still in the account deletion cooldown period. You can sign up again in about {{count}} day.',
+  'codes.DELETED_ACCOUNT_EMAIL_WITH_RETRY_AFTER_DAYS_other':
+    'This email is still in the account deletion cooldown period. You can sign up again in about {{count}} days.',
   'codes.EMAIL_CAN_NOT_BE_UPDATED': 'Email cannot be updated for this account',
   'codes.EMAIL_NOT_ALLOWED': 'Email not allowed for registration',
   'codes.EMAIL_NOT_FOUND':
@@ -28,7 +32,7 @@ export default {
   'codes.PASSWORD_TOO_SHORT': 'Password is too short',
   'codes.PROVIDER_NOT_FOUND': 'Identity provider configuration not found',
   'codes.RATE_LIMIT_EXCEEDED': 'Too many requests, please try again later',
-  'codes.SESSION_EXPIRED': 'Session has expired, please log in again',
+  'codes.SESSION_EXPIRED': 'Session has expired, please sign in again',
   'codes.SOCIAL_ACCOUNT_ALREADY_LINKED': 'This social account is already linked to another user',
   'codes.TEMPORARY_EMAIL_NOT_ALLOWED':
     'Temporary email addresses are not supported. Please use a regular email address. Repeated attempts may block this network.',

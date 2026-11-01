@@ -10,22 +10,45 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { warnAttachmentFailures } from '../attachmentDelivery';
 import {
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
+  type ChatPatchOptions,
   ClientFactory,
   messengerContentText,
   type PlatformClient,
   type PlatformMessenger,
+  type ReplyTargets,
   type UsageStats,
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
 import { DiscordApi } from './api';
-import { patchDiscordForwardedInteractions, patchDiscordThreadRecovery } from './patch';
+import { isSoloDiscordBotThread } from './chatComposition';
+import { DISCORD_BOT_TOKEN_PATTERN, DISCORD_PUBLIC_KEY_PATTERN } from './const';
+import {
+  collectDiscordMentionNames,
+  resolveDiscordMentions,
+  sanitizeDiscordUserInput,
+} from './mentions';
+import {
+  patchDiscordForwardedInteractions,
+  patchDiscordMentionThreads,
+  patchDiscordMessageEdits,
+} from './patch';
 import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
 
 const log = debug('bot-platform:discord:bot');
+
+/** `discord:<guild>:<channel>` with a real guild: not a DM, not already inside a thread. */
+const isTopLevelGuildChannel = (threadId: string): boolean => {
+  const [platform, guildId, channelId, discordThreadId] = threadId.split(':');
+
+  return (
+    platform === 'discord' && !!guildId && guildId !== '@me' && !!channelId && !discordThreadId
+  );
+};
 
 const CONNECTED_STATUS_TTL_BUFFER_MS = 60 * 1000;
 const DEFAULT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
@@ -55,12 +78,17 @@ function isSubscribableThread(platformThreadId: string): boolean {
   return guildId === '@me' || !!discordThreadId;
 }
 
+const BOT_NAMES_TTL_MS = 60 * 60 * 1000;
+const BOT_NAMES_RETRY_MS = 60 * 1000;
+
 class DiscordGatewayClient implements PlatformClient {
   readonly id = 'discord';
   readonly applicationId: string;
 
   private abort = new AbortController();
   private bot: ChatBot<any> | null = null;
+  private botNames?: { expiresAt: number; names: string[] };
+  private guildNicknames = new Map<string, { expiresAt: number; nickname?: string }>();
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;
   private discord: DiscordApi;
@@ -98,11 +126,7 @@ class DiscordGatewayClient implements PlatformClient {
         this.bot = null;
       }
 
-      const adapter = createDiscordAdapter({
-        applicationId: this.config.applicationId,
-        botToken: this.config.credentials.botToken,
-        publicKey: this.config.credentials.publicKey,
-      });
+      const adapter = this.buildAdapter();
 
       const { Chat, ConsoleLogger } = await import('chat');
 
@@ -209,19 +233,67 @@ class DiscordGatewayClient implements PlatformClient {
 
   // --- Runtime Operations ---
 
-  applyChatPatches(chatBot: ChatBot<any>): void {
+  applyChatPatches(chatBot: ChatBot<any>, options?: ChatPatchOptions): void {
     patchDiscordForwardedInteractions(chatBot);
-    patchDiscordThreadRecovery(chatBot);
+    patchDiscordMessageEdits(chatBot);
+    if (options?.deferMentionThread) {
+      patchDiscordMentionThreads(chatBot, options.deferMentionThread);
+    }
   }
 
   createAdapter(): Record<string, any> {
     return {
-      discord: createDiscordAdapter({
-        applicationId: this.config.applicationId,
-        botToken: this.config.credentials.botToken,
-        publicKey: this.config.credentials.publicKey,
-      }),
+      discord: this.buildAdapter(),
     };
+  }
+
+  /**
+   * `@chat-adapter/discord` falls back to `userName: "bot"` and never resolves
+   * the real bot name, while chat-sdk's `detectMention` treats `@<userName>`
+   * in the message text as a mention. Without an explicit name, any message
+   * containing a literal "@bot" counts as an @-mention of EVERY Discord bot in
+   * the thread. Real mentions are matched by the adapter through
+   * `data.mentions` / `<@applicationId>`, so the text fallback only needs a
+   * per-bot name that natural text never contains.
+   */
+  private buildAdapter(): DiscordAdapter {
+    return createDiscordAdapter({
+      applicationId: this.config.applicationId,
+      botToken: this.config.credentials.botToken,
+      publicKey: this.config.credentials.publicKey,
+      userName: `lobehub-discord-${this.config.applicationId}`,
+    });
+  }
+
+  /**
+   * Add the triggering user to the auto-created reply thread so Discord
+   * notifies them and the thread shows up in their client. Only applies to
+   * guild threads (4-segment composite); DMs and top-level channels deliver
+   * in place. Best-effort: a failure (missing permission, user left the
+   * guild) must never affect the reply flow.
+   */
+  async ensureThreadMember(platformThreadId: string, platformUserId: string): Promise<void> {
+    const parts = platformThreadId.split(':');
+    // Format: discord:guildId:channelId:discordThreadId
+    if (parts.length !== 4 || parts[1] === '@me' || !parts[3] || !platformUserId) return;
+
+    try {
+      await this.discord.addThreadMember(parts[3], platformUserId);
+      log('ensureThreadMember: added user %s to thread %s', platformUserId, parts[3]);
+    } catch (error) {
+      log('ensureThreadMember: failed (non-fatal): %O', error);
+    }
+  }
+
+  async isSoloBotConversation(platformThreadId: string): Promise<boolean> {
+    const parts = platformThreadId.split(':');
+    // Only real guild threads have a member list scoped narrowly enough to
+    // establish 1:1 composition. DMs are already handled by thread.isDM;
+    // top-level guild channels stay mention-only because Discord has no
+    // per-channel member list and GUILD_MEMBERS is a privileged intent.
+    if (parts.length !== 4 || parts[1] === '@me' || !parts[3]) return false;
+
+    return isSoloDiscordBotThread(this.discord, this.applicationId, parts[3]);
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
@@ -237,7 +309,8 @@ class DiscordGatewayClient implements PlatformClient {
           await discord.createMessage(channelId, text);
           return;
         }
-        const files = await materializeAttachmentsForDiscord(attachments);
+        const { failures, files } = await materializeAttachmentsForDiscord(attachments);
+        warnAttachmentFailures('bot-platform:discord:reply', failures);
         if (files.length === 0) {
           await discord.createMessage(channelId, text);
           return;
@@ -302,8 +375,7 @@ class DiscordGatewayClient implements PlatformClient {
     const directAttachments = (message as any).attachments as DirectAttachment[] | undefined;
     const raw = (message as any).raw as Record<string, any> | undefined;
     const refAttachments = raw?.referenced_message?.attachments as
-      | DiscordRefAttachment[]
-      | undefined;
+      DiscordRefAttachment[] | undefined;
 
     log(
       'extractFiles: msgId=%s, direct=%d, referenced=%d',
@@ -418,12 +490,101 @@ class DiscordGatewayClient implements PlatformClient {
     return [];
   }
 
-  sanitizeUserInput(text: string): string {
-    return text.replaceAll(new RegExp(`<@!?${this.applicationId}>\\s*`, 'g'), '').trim();
+  resolveMentions(text: string, message?: unknown): string {
+    return resolveDiscordMentions(text, collectDiscordMentionNames(message), this.applicationId);
+  }
+
+  sanitizeUserInput(text: string, message?: unknown): string {
+    return sanitizeDiscordUserInput(text, this.applicationId, message);
   }
 
   shouldSubscribe(threadId: string): boolean {
     return isSubscribableThread(threadId);
+  }
+
+  shouldExpireIdleTopic(threadId: string): boolean {
+    // Only DMs are an unbounded stream; a guild thread is one conversation.
+    const [, guildId, , discordThreadId] = threadId.split(':');
+    return guildId === '@me' || !discordThreadId;
+  }
+
+  /**
+   * What people call the bot: its account names and, for a guild conversation, its nickname in
+   * that server ("Nasa" for an account named "Shadow Arvin"). The account names are read once an
+   * hour: renaming a bot is rare, and each read is a REST call. A failed refresh keeps serving the
+   * last known names and waits a minute before asking again, so an outage costs one request a
+   * minute rather than one per message.
+   */
+  getBotNames = async (platformThreadId?: string): Promise<string[]> => {
+    const [names, nickname] = await Promise.all([
+      this.getAccountNames(),
+      this.getGuildNickname(platformThreadId?.split(':')[1]),
+    ]);
+
+    return nickname && !names.includes(nickname) ? [...names, nickname] : names;
+  };
+
+  private getAccountNames = async (): Promise<string[]> => {
+    const now = Date.now();
+    if (this.botNames && this.botNames.expiresAt > now) return this.botNames.names;
+
+    try {
+      const names = await this.discord.getBotNames();
+      this.botNames = { expiresAt: now + BOT_NAMES_TTL_MS, names };
+
+      return names;
+    } catch (error) {
+      if (!this.botNames) throw error;
+      log('getBotNames refresh failed, keeping the last known names: %O', error);
+      this.botNames = { ...this.botNames, expiresAt: now + BOT_NAMES_RETRY_MS };
+
+      return this.botNames.names;
+    }
+  };
+
+  /**
+   * The bot's nickname in one server, read once an hour per server like the account names. A server
+   * nickname is optional, so a failed read only loses it: it keeps the last known value and waits
+   * a minute before asking again.
+   */
+  private getGuildNickname = async (guildId: string | undefined): Promise<string | undefined> => {
+    if (!guildId || guildId === '@me') return undefined;
+
+    const now = Date.now();
+    const cached = this.guildNicknames.get(guildId);
+    if (cached && cached.expiresAt > now) return cached.nickname;
+
+    try {
+      const nickname = await this.discord.getGuildNickname(guildId, this.applicationId);
+      this.guildNicknames.set(guildId, { expiresAt: now + BOT_NAMES_TTL_MS, nickname });
+
+      return nickname;
+    } catch (error) {
+      log('getGuildNickname failed for guild %s: %O', guildId, error);
+      this.guildNicknames.set(guildId, {
+        expiresAt: now + BOT_NAMES_RETRY_MS,
+        nickname: cached?.nickname,
+      });
+
+      return cached?.nickname;
+    }
+  };
+
+  /**
+   * A message at the top level of a guild channel can be answered in the channel, or in a thread
+   * spawned off it and named after its subject. DMs and messages inside a thread have no choice.
+   */
+  getReplyTargets(
+    threadId: string,
+    message: { id?: string; raw?: unknown },
+  ): ReplyTargets | undefined {
+    if (!isTopLevelGuildChannel(threadId)) return undefined;
+
+    return {
+      channel: threadId,
+      namesThread: true,
+      openThread: (name) => this.openThreadForChannelWake(threadId, message.raw, name),
+    };
   }
 
   /**
@@ -450,19 +611,19 @@ class DiscordGatewayClient implements PlatformClient {
   async openThreadForChannelWake(
     threadId: string,
     messageRaw: unknown,
+    name?: string,
   ): Promise<string | undefined> {
-    const parts = threadId.split(':');
-    if (parts.length !== 3 || parts[0] !== 'discord' || parts[1] === '@me') return undefined;
-    const [, guildId, channelId] = parts;
-    if (!channelId) return undefined;
+    if (!isTopLevelGuildChannel(threadId)) return undefined;
+    const [, guildId, channelId] = threadId.split(':');
     const raw = messageRaw as Record<string, unknown> | undefined;
     const messageId = typeof raw?.id === 'string' ? raw.id : undefined;
     if (!messageId) return undefined;
 
-    // Mirror chat-sdk's @-mention auto-thread name format (see
-    // chat-adapter discord/createDiscordThread) so operators see a
-    // consistent thread title regardless of which path opened it.
-    const threadName = `Thread ${new Date().toLocaleString()}`;
+    // Without a name, mirror chat-sdk's @-mention auto-thread name format
+    // (see chat-adapter discord/createDiscordThread) so operators see a
+    // consistent thread title regardless of which path opened it; the
+    // callback later renames it after the topic title.
+    const threadName = name?.trim() || `Thread ${new Date().toLocaleString()}`;
     try {
       const result = await this.discord.startThreadFromMessage(channelId, messageId, threadName);
       const newThreadId = `discord:${guildId}:${channelId}:${result.id}`;
@@ -507,6 +668,22 @@ export class DiscordClientFactory extends ClientFactory {
     if (!credentials.botToken) errors.push({ field: 'botToken', message: 'Bot Token is required' });
     if (!credentials.publicKey)
       errors.push({ field: 'publicKey', message: 'Public Key is required' });
+
+    if (errors.length > 0) return { errors, valid: false };
+
+    // Name the actual problem before spending a round-trip on it — a
+    // malformed public key can't be caught by the API call at all, and a
+    // malformed token would come back as a generic auth failure.
+    if (!new RegExp(DISCORD_PUBLIC_KEY_PATTERN).test(credentials.publicKey))
+      errors.push({
+        field: 'publicKey',
+        message: 'Public Key must be a 64-character hex string',
+      });
+    if (!new RegExp(DISCORD_BOT_TOKEN_PATTERN).test(credentials.botToken))
+      errors.push({
+        field: 'botToken',
+        message: 'Bot Token must be three dot-separated segments, as shown in the Discord portal',
+      });
 
     if (errors.length > 0) return { errors, valid: false };
 

@@ -1,9 +1,8 @@
 'use client';
 
-import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
-import { Loader2Icon, PencilIcon } from 'lucide-react';
-import { memo } from 'react';
+import { Button, cssVar, Flexbox, Icon, Spin, Text, Tooltip } from '@lobehub/ui';
+import { CloudAlertIcon, CloudOffIcon, PencilIcon } from 'lucide-react';
+import { type CSSProperties, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
@@ -11,18 +10,27 @@ import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
 import { usePageEditorStore } from './store';
+import { usePageLockedByOther } from './usePageLockedByOther';
+import { usePageLockedBySelf } from './usePageLockedBySelf';
+
+const labelStyle: CSSProperties = { color: 'inherit', fontSize: 12, maxWidth: 160 };
 
 /**
- * Edit-lock status line at the top of the page body: a "checking…" hint while
- * the lock resolves (page read-only meanwhile), then "someone else is editing"
- * if another member holds it. Renders nothing once the page is confirmed free —
- * a personal page then looks exactly the same (no edit-mode controls).
+ * Compact edit-lock status for the page Header (top-right): a "checking…" hint
+ * while the lock resolves, then "someone else is editing" once another member
+ * holds it. Stays anchored in the header so the status is always visible as the
+ * user scrolls the body. The body Alert ({@link LockedAlert}) carries the
+ * prominent explanation; this is the persistent at-a-glance badge.
+ *
+ * Renders nothing once the page is confirmed free — a personal page then looks
+ * exactly the same (no edit-mode controls).
  */
 const EditingIndicator = memo(() => {
   const { t } = useTranslation('file');
   const documentId = usePageEditorStore((s) => s.documentId);
   const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
-  const isLockedByOther = usePageEditorStore((s) => s.isLockedByOther);
+  const isLockedByOther = usePageLockedByOther();
+  const isLockedBySelf = usePageLockedBySelf();
   const isLockPending = usePageEditorStore((s) => s.isLockPending);
   const lockHolderId = usePageEditorStore((s) => s.lockHolderId);
   // Our own save was just rejected by the lock — treat as locked even if the
@@ -31,33 +39,80 @@ const EditingIndicator = memo(() => {
     documentId ? editorSelectors.saveBlockedByLock(documentId)(s) : false,
   );
   const holder = useAuthorInfo(lockHolderId ?? undefined);
+  const collabStatus = usePageEditorStore((s) => s.collab?.status);
+  const retryCollab = usePageEditorStore((s) => s.collab?.retry);
+  const isAgentEditing = useDocumentStore((s) =>
+    documentId ? editorSelectors.isAgentEditing(documentId)(s) : false,
+  );
 
-  if (!isWorkspacePage) return null;
+  if (isAgentEditing) {
+    return (
+      <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
+        <Spin size="small" />
+        <Text ellipsis style={labelStyle}>
+          {t('pageEditor.agentEditing')}
+        </Text>
+      </Flexbox>
+    );
+  }
 
-  const lockedByOther = isLockedByOther || saveBlockedByLock;
+  if (collabStatus === 'error') {
+    return (
+      <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorWarning }}>
+        <Icon icon={CloudAlertIcon} size={14} />
+        <Text ellipsis style={labelStyle}>
+          {t('pageEditor.collab.status.error')}
+        </Text>
+        {retryCollab && (
+          <Button size={'small'} type={'text'} onClick={retryCollab}>
+            {t('pageEditor.collab.retry')}
+          </Button>
+        )}
+      </Flexbox>
+    );
+  }
 
-  if (!lockedByOther) {
+  if (collabStatus === 'connecting' || collabStatus === 'offline') {
+    const offline = collabStatus === 'offline';
+    return (
+      <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
+        {offline ? <Icon icon={CloudOffIcon} size={14} /> : <Spin size="small" />}
+        <Text ellipsis style={labelStyle}>
+          {t(offline ? 'pageEditor.collab.status.offline' : 'pageEditor.collab.status.connecting')}
+        </Text>
+      </Flexbox>
+    );
+  }
+  if (collabStatus || !isWorkspacePage) return null;
+
+  const locked = isLockedByOther || isLockedBySelf || saveBlockedByLock;
+
+  if (!locked) {
     if (!isLockPending) return null;
 
     return (
       <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
-        <Icon spin icon={Loader2Icon} size={14} />
-        <Text ellipsis style={{ color: 'inherit', fontSize: 12, maxWidth: 240 }}>
+        <Spin size="small" />
+        <Text ellipsis style={labelStyle}>
           {t('pageEditor.editMode.checking')}
         </Text>
       </Flexbox>
     );
   }
 
-  const label = holder?.fullName
-    ? t('pageEditor.editMode.lockedByOther', { name: holder.fullName })
-    : t('pageEditor.editMode.lockedBySomeone');
+  // Same user, different session — show the self-aware label instead of the
+  // collaborator-blocked one (which uses the user's own name and reads wrong).
+  const label = isLockedBySelf
+    ? t('pageEditor.editMode.lockedBySelf')
+    : holder?.fullName
+      ? t('pageEditor.editMode.lockedByOther', { name: holder.fullName })
+      : t('pageEditor.editMode.lockedBySomeone');
 
   return (
     <Tooltip title={label}>
       <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
         <Icon icon={PencilIcon} size={14} />
-        <Text ellipsis style={{ color: 'inherit', fontSize: 12, maxWidth: 240 }}>
+        <Text ellipsis style={labelStyle}>
           {label}
         </Text>
       </Flexbox>

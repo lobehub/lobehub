@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -46,7 +46,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface ColumnResizeHandleProps {
-  column: 'name' | 'date' | 'size';
+  column: 'name' | 'date' | 'size' | 'uploader';
   currentWidth: number;
   maxWidth: number;
   minWidth: number;

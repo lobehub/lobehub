@@ -1,20 +1,22 @@
 'use client';
 
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { resolveConnectorCatalogItem } from '@lobechat/const';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar } from '@lobehub/ui';
 import { CheckCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   mcpStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import type { InstallPluginParams } from '../../types';
@@ -30,13 +32,15 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
   ({ args }) => {
     const { identifier, source } = args;
     const { t } = useTranslation('chat');
+    const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
+    const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
     // Tool store selectors
     const isPluginInstalled = useToolStore((s) => pluginSelectors.isPluginInstalled(identifier)(s));
 
-    // Get Klavis server state
-    const klavisServer = useToolStore((s) =>
-      klavisStoreSelectors.getServers(s).find((srv) => srv.identifier === identifier),
+    // Get Composio server state
+    const composioServer = useToolStore((s) =>
+      composioStoreSelectors.getServers(s).find((srv) => srv.identifier === identifier),
     );
 
     // Get LobehubSkill server state
@@ -52,12 +56,14 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
       s.builtinTools.find((tool) => tool.identifier === identifier),
     );
 
-    // Check if it's a Klavis tool
-    const klavisTypeInfo = KLAVIS_SERVER_TYPES.find((t) => t.identifier === identifier);
-    const isKlavis = source === 'official' && !!klavisTypeInfo;
+    const connector = resolveConnectorCatalogItem(identifier, {
+      composio: isComposioEnabled,
+      lobehub: isLobehubSkillEnabled,
+    });
+    const composioAppInfo = connector?.type === 'composio' ? connector.serverType : undefined;
+    const isComposio = source === 'official' && !!composioAppInfo;
 
-    // Check if it's a LobehubSkill provider
-    const lobehubSkillProviderInfo = LOBEHUB_SKILL_PROVIDERS.find((p) => p.id === identifier);
+    const lobehubSkillProviderInfo = connector?.type === 'lobehub' ? connector.provider : undefined;
     const isLobehubSkill = source === 'official' && !!lobehubSkillProviderInfo;
 
     // Render success state (already installed)
@@ -76,22 +82,22 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
           <CheckCircle size={20} style={{ color: 'var(--lobe-success-6)' }} />
           <Flexbox gap={4}>
             <span style={{ fontWeight: 600 }}>
-              {isKlavis || isLobehubSkill
+              {isComposio || isLobehubSkill
                 ? t('agentBuilder.installPlugin.connectedAndEnabled')
                 : t('agentBuilder.installPlugin.installedAndEnabled')}
             </span>
             <span style={{ color: 'var(--lobe-text-secondary)', fontSize: 12 }}>
-              {klavisTypeInfo?.label || lobehubSkillProviderInfo?.label || identifier}
+              {composioAppInfo?.label || lobehubSkillProviderInfo?.label || identifier}
             </span>
           </Flexbox>
         </Flexbox>
       );
     }
 
-    // Render Klavis tool
-    if (isKlavis) {
-      const icon = typeof klavisTypeInfo?.icon === 'string' ? klavisTypeInfo.icon : undefined;
-      const isPendingAuth = klavisServer?.status === KlavisServerStatus.PENDING_AUTH;
+    // Render Composio tool
+    if (isComposio) {
+      const icon = typeof composioAppInfo?.icon === 'string' ? composioAppInfo.icon : undefined;
+      const isPendingAuth = composioServer?.status === ComposioServerStatus.PENDING_AUTH;
 
       return (
         <Flexbox
@@ -101,7 +107,7 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
           <Flexbox horizontal align="center" gap={12}>
             {icon ? (
               <img
-                alt={klavisTypeInfo?.label || identifier}
+                alt={composioAppInfo?.label || identifier}
                 height={40}
                 src={icon}
                 style={{ borderRadius: 8 }}
@@ -112,8 +118,8 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
             )}
             <Flexbox flex={1} gap={4}>
               <Flexbox horizontal align="center" gap={8}>
-                <span style={{ fontWeight: 600 }}>{klavisTypeInfo?.label || identifier}</span>
-                <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>Klavis</span>
+                <span style={{ fontWeight: 600 }}>{composioAppInfo?.label || identifier}</span>
+                <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>Composio</span>
               </Flexbox>
               <span style={{ color: 'var(--lobe-text-secondary)', fontSize: 12 }}>
                 {isPendingAuth

@@ -777,6 +777,622 @@
       "when": 1780832120210,
       "tag": "0110_add_verify_tables_and_ai_infra_id",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1781883177374,
+      "tag": "0111_workspace_device_and_ai_infra_surrogate_pk",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1781953132733,
+      "tag": "0112_add_verify_evidence_and_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1781964552445,
+      "tag": "0113_add_verify_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1782009459420,
+      "tag": "0114_add_verify_run_scenario_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1782954350516,
+      "tag": "0115_add_workspace_private_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1783164982287,
+      "tag": "0116_add_task_connector_message_and_verify_updates",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1783760291530,
+      "tag": "0117_workspace_user_settings_and_device_share",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1783773134101,
+      "tag": "0118_workspace_user_settings_surrogate_pk",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1784101324965,
+      "tag": "0119_add_acceptances",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1784130423992,
+      "tag": "0120_oidc_clients_governance",
+      "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1784209244697,
+      "tag": "0121_add_work_registry_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1784258432422,
+      "tag": "0122_verify_visibility_and_check_user_decision",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1784296516822,
+      "tag": "0123_resource_permissions_and_messenger_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1784554877720,
+      "tag": "0124_agent_quota_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1784642643318,
+      "tag": "0125_add_stats_activity_created_at_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1784648819431,
+      "tag": "0126_agent_quota_workspace_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1784716592911,
+      "tag": "0127_add_topic_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1784898202325,
+      "tag": "0128_notifications_add_workspace_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1784941780510,
+      "tag": "0129_workspace_members_unique_active_owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1785044468256,
+      "tag": "0130_notifications_add_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1785648308270,
+      "tag": "0131_agents_add_name_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1785715746144,
+      "tag": "0132_add_agent_labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1786032217905,
+      "tag": "0133_common_veda",
+      "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1786064297919,
+      "tag": "0134_add_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1786117168564,
+      "tag": "0135_api_keys_add_scopes",
+      "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1786138599832,
+      "tag": "0136_projects_add_identifier",
+      "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1786151567302,
+      "tag": "0137_agent_history_jobs_payload",
+      "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1786166809665,
+      "tag": "0138_agent_history_job_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1786316226126,
+      "tag": "0139_projects_add_coordinator_agent",
+      "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1786545606298,
+      "tag": "0140_productive_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1786766455568,
+      "tag": "0141_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1786791246437,
+      "tag": "0142_expertise_domain_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1786847279485,
+      "tag": "0143_resource_transfer_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1786968214710,
+      "tag": "0144_notifications_add_metadata_column",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1787141104502,
+      "tag": "0145_agents_add_identity_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1787188183549,
+      "tag": "0146_acceptance_project_association",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1787239313202,
+      "tag": "0147_resource_permissions_per_member_subject",
+      "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1787376421190,
+      "tag": "0148_goal_graph",
+      "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "7",
+      "when": 1787542746291,
+      "tag": "0149_goals_recovery_and_document_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1787736410876,
+      "tag": "0150_agent_interventions_and_live_activity",
+      "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "7",
+      "when": 1787815769048,
+      "tag": "0151_document_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1788016606062,
+      "tag": "0152_trash_goal_traces_eval_dataset",
+      "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1788108760793,
+      "tag": "0153_fts_search_sync_outbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 154,
+      "version": "7",
+      "when": 1788141397076,
+      "tag": "0154_goal_node_task_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "7",
+      "when": 1788177029327,
+      "tag": "0155_document_likes",
+      "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "7",
+      "when": 1788281814640,
+      "tag": "0156_project_working_directories",
+      "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1788399005304,
+      "tag": "0157_add_metrics_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 158,
+      "version": "7",
+      "when": 1788457369087,
+      "tag": "0158_file_upload_reservations",
+      "breakpoints": true
+    },
+    {
+      "idx": 159,
+      "version": "7",
+      "when": 1788751998345,
+      "tag": "0159_task_activities",
+      "breakpoints": true
+    },
+    {
+      "idx": 160,
+      "version": "7",
+      "when": 1788849739068,
+      "tag": "0160_acceptance_check_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 161,
+      "version": "7",
+      "when": 1789038060245,
+      "tag": "0161_acceptance_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 162,
+      "version": "7",
+      "when": 1789308031904,
+      "tag": "0162_fts_capture_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 163,
+      "version": "7",
+      "when": 1789468414007,
+      "tag": "0163_environments",
+      "breakpoints": true
+    },
+    {
+      "idx": 164,
+      "version": "7",
+      "when": 1789483504676,
+      "tag": "0164_document_comment_selection_anchor",
+      "breakpoints": true
+    },
+    {
+      "idx": 165,
+      "version": "7",
+      "when": 1789610500888,
+      "tag": "0165_expertise_rejection_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "7",
+      "when": 1789816134383,
+      "tag": "0166_device_architecture",
+      "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "7",
+      "when": 1789835190230,
+      "tag": "0167_user_deletion_fk_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 168,
+      "version": "7",
+      "when": 1789892818833,
+      "tag": "0168_scm_integration",
+      "breakpoints": true
+    },
+    {
+      "idx": 169,
+      "version": "7",
+      "when": 1790152852202,
+      "tag": "0169_works_share_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 170,
+      "version": "7",
+      "when": 1790215059199,
+      "tag": "0170_acceptance_comment_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1790354510012,
+      "tag": "0171_expertise_lessons_order_enforcement",
+      "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1790630241509,
+      "tag": "0172_expertise_hits_source_message",
+      "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1790854414712,
+      "tag": "0173_agent_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "7",
+      "when": 1791109715438,
+      "tag": "0174_widgets_dashboards",
+      "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1791169090046,
+      "tag": "0175_environment_visibility_and_build_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 176,
+      "version": "7",
+      "when": 1791652556178,
+      "tag": "0176_trash_project_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 177,
+      "version": "7",
+      "when": 1791660970899,
+      "tag": "0177_agent_accounts_live_unique_and_goal_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 178,
+      "version": "7",
+      "when": 1791724037738,
+      "tag": "0178_workspace_teams",
+      "breakpoints": true
+    },
+    {
+      "idx": 179,
+      "version": "7",
+      "when": 1791738372458,
+      "tag": "0179_distinct_intervention_callbacks",
+      "breakpoints": true
+    },
+    {
+      "idx": 180,
+      "version": "7",
+      "when": 1792048616001,
+      "tag": "0180_task_archived_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 181,
+      "version": "7",
+      "when": 1792164852926,
+      "tag": "0181_linear_integration",
+      "breakpoints": true
+    },
+    {
+      "idx": 182,
+      "version": "7",
+      "when": 1792246871224,
+      "tag": "0182_project_coordinator_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 183,
+      "version": "7",
+      "when": 1792606514901,
+      "tag": "0183_project_order_and_agent_signals",
+      "breakpoints": true
+    },
+    {
+      "idx": 184,
+      "version": "7",
+      "when": 1792830037847,
+      "tag": "0184_channel_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 185,
+      "version": "7",
+      "when": 1792857768178,
+      "tag": "0185_signal_decisions_and_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 186,
+      "version": "7",
+      "when": 1792919636489,
+      "tag": "0186_project_sites_and_members",
+      "breakpoints": true
+    },
+    {
+      "idx": 187,
+      "version": "7",
+      "when": 1792987514341,
+      "tag": "0187_channel_preserve_active_writer",
+      "breakpoints": true
+    },
+    {
+      "idx": 188,
+      "version": "7",
+      "when": 1793034171659,
+      "tag": "0188_workspace_member_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 189,
+      "version": "7",
+      "when": 1793075261489,
+      "tag": "0189_channel_soft_delete",
+      "breakpoints": true
+    },
+    {
+      "idx": 190,
+      "version": "7",
+      "when": 1793084535893,
+      "tag": "0190_channel_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 191,
+      "version": "7",
+      "when": 1793116364829,
+      "tag": "0191_linear_issue_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 192,
+      "version": "7",
+      "when": 1793201098555,
+      "tag": "0192_user_favorites",
+      "breakpoints": true
+    },
+    {
+      "idx": 193,
+      "version": "7",
+      "when": 1793247094452,
+      "tag": "0193_goal_file_shares_memory_structure_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 194,
+      "version": "7",
+      "when": 1793260018928,
+      "tag": "0194_document_histories_attribution",
+      "breakpoints": true
+    },
+    {
+      "idx": 195,
+      "version": "7",
+      "when": 1793336966391,
+      "tag": "0195_memory_columns_account_logins_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 196,
+      "version": "7",
+      "when": 1793337113351,
+      "tag": "0196_memory_large_table_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 197,
+      "version": "7",
+      "when": 1793371200635,
+      "tag": "0197_channel_jobs_message_member_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 198,
+      "version": "7",
+      "when": 1793450092790,
+      "tag": "0198_goal_visibility",
+      "breakpoints": true
     }
   ],
   "version": "6"

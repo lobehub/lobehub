@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { Flexbox, Highlighter, Snippet, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
@@ -17,9 +18,6 @@ const AuthRequiredState = ({
 
   return (
     <GuideShell
-      headerDescription={
-        <Text type="secondary">{t('cliAuthGuide.desc', { name: config.title })}</Text>
-      }
       icon={<config.icon size={24} />}
       title={t('cliAuthGuide.title', { name: config.title })}
       variant={variant}
@@ -28,20 +26,29 @@ const AuthRequiredState = ({
           showDocs
           docsUrl={docsUrl}
           openDocsLabel={t('cliAuthGuide.actions.openDocs')}
-          openSystemToolsLabel={t('cliAuthGuide.actions.openSystemTools')}
+          openSystemToolsLabel={t(
+            isDesktop
+              ? 'cliAuthGuide.actions.openSystemTools'
+              : 'cliAuthGuide.actions.openCloudCredentials',
+          )}
           onOpenSystemTools={onOpenSystemTools}
         />
       }
+      headerDescription={
+        <Text type="secondary">{t('cliAuthGuide.desc', { name: config.title })}</Text>
+      }
     >
-      <Flexbox gap={6}>
-        <Text strong style={{ fontSize: 12 }}>
-          {t('cliAuthGuide.runCommand')}
-        </Text>
-        <Snippet language={'bash'}>{config.signInCommand}</Snippet>
-      </Flexbox>
+      {isDesktop && (
+        <Flexbox gap={6}>
+          <Text strong style={{ fontSize: 12 }}>
+            {t('cliAuthGuide.runCommand')}
+          </Text>
+          <Snippet language={'bash'}>{config.signInCommand}</Snippet>
+        </Flexbox>
+      )}
 
       <Text style={{ fontSize: 12 }} type="secondary">
-        {t('cliAuthGuide.afterLogin')}
+        {t(isDesktop ? 'cliAuthGuide.afterLogin' : 'cliAuthGuide.cloudAfterUpdate')}
       </Text>
 
       {rawErrorDetails && (

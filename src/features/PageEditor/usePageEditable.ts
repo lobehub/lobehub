@@ -1,10 +1,12 @@
 'use client';
 
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
 import { usePageEditorStore } from './store';
+import { usePageLockedByOther } from './usePageLockedByOther';
 
 /**
  * Whether the current user can type into the page right now.
@@ -18,7 +20,7 @@ export const usePageEditable = (): boolean => {
   const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const documentId = usePageEditorStore((s) => s.documentId);
   const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
-  const isLockedByOther = usePageEditorStore((s) => s.isLockedByOther);
+  const isLockedByOther = usePageLockedByOther();
   // Read-only until the lock resolves, so the user can't start typing on a page
   // that turns out to be locked and get bounced mid-edit. Only workspace pages
   // lock — personal pages are always immediately editable (no lock, no pending).
@@ -29,6 +31,35 @@ export const usePageEditable = (): boolean => {
     documentId ? editorSelectors.saveBlockedByLock(documentId)(s) : false,
   );
   const pendingLock = isWorkspacePage && isLockPending;
+  // A workspace member whose General access on this page is view level can't
+  // edit it (defaults permissive while loading — server enforces).
+  const { canEditResource } = useResourceAccess(
+    'document',
+    isWorkspacePage && documentId ? documentId : undefined,
+  );
 
-  return hasEditPermission && !isLockedByOther && !pendingLock && !saveBlockedByLock;
+  // An agent command is writing the stored page (no collaboration room).
+  const isAgentEditing = useDocumentStore((s) =>
+    documentId ? editorSelectors.isAgentEditing(documentId)(s) : false,
+  );
+
+  const collab = usePageEditorStore((s) => s.collab);
+  if (collab) {
+    // Editable once the room synced; offline edits merge when it reconnects.
+    return (
+      hasEditPermission &&
+      canEditResource &&
+      collab.access === 'edit' &&
+      (collab.status === 'synced' || collab.status === 'offline')
+    );
+  }
+
+  return (
+    hasEditPermission &&
+    canEditResource &&
+    !isLockedByOther &&
+    !pendingLock &&
+    !saveBlockedByLock &&
+    !isAgentEditing
+  );
 };

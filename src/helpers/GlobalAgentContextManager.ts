@@ -1,6 +1,12 @@
 export interface LobeGlobalAgentContext {
+  /** CPU architecture reported by the desktop main process (e.g. 'arm64', 'x64'). */
+  arch?: string;
+
   // Other potential context
   currentTime?: string;
+
+  /** Human-readable name of the shell that runCommand uses (Windows: PowerShell/cmd). */
+  defaultShell?: string;
 
   // App's data directory
   // Paths commonly used by agents

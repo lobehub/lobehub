@@ -1,4 +1,12 @@
 {
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["4684H589ZU.com.lobehub.app"],
+        "components": [{ "/": "/agent-approval" }]
+      }
+    ]
+  },
   "webcredentials": {
     "apps": ["4684H589ZU.com.lobehub.app"]
   }

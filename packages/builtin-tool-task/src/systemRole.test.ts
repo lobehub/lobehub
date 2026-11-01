@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+
+import { systemPrompt } from './systemRole';
+
+describe('systemPrompt', () => {
+  it('prefers stable ids without rejecting user identifiers', () => {
+    expect(systemPrompt).toContain(
+      'use the stable id returned by createTask/listTasks in subsequent calls',
+    );
+    expect(systemPrompt).toContain('User-provided identifiers remain accepted');
+    expect(systemPrompt).toContain(
+      'Use the display identifier in user-facing URLs, e.g. /task/T-3',
+    );
+  });
+  it('does not instruct the task tool to run the goal workflow', () => {
+    expect(systemPrompt).not.toContain('**createGoal**');
+  });
+
+  it('teaches member assignment: resolve ids via listWorkspaceMembers, coexisting assignees', () => {
+    expect(systemPrompt).toContain('**listWorkspaceMembers**');
+    expect(systemPrompt).toContain('first call listWorkspaceMembers');
+    expect(systemPrompt).toContain('Never guess or fabricate a user id');
+    // Agent (executor) and member (human owner) are independent sides now.
+    expect(systemPrompt).toContain('can coexist');
+    expect(systemPrompt).toContain('Setting one never clears the other');
+    expect(systemPrompt).not.toContain('cannot be started with runTask/runTasks');
+  });
+
+  it('embeds instruction images as markdown instead of bare urls', () => {
+    expect(systemPrompt).toContain('![alt](https://...)');
+    expect(systemPrompt).toContain('a bare URL renders as a plain link');
+    expect(systemPrompt).toContain('Never pass a bare URL');
+  });
+
+  it('starts a configured cron schedule by default without running it immediately', () => {
+    expect(systemPrompt).toContain(
+      'start its schedule by default with updateTaskStatus(identifier, "scheduled")',
+    );
+    // Guard against re-arming running or already scheduled tasks: updateStatus
+    // interrupts in-flight runs when leaving 'running', and re-entering
+    // 'scheduled' resets the maxExecutions counting window.
+    expect(systemPrompt).toContain('neither currently running nor already scheduled');
+    expect(systemPrompt).toContain('Never call updateTaskStatus on a currently running task');
+    expect(systemPrompt).toContain(
+      're-calling updateTaskStatus would reset its execution-count window',
+    );
+    expect(systemPrompt).toContain('Do NOT call runTask just to start the schedule');
+    // Draft/paused intent must be an explicit 'paused' status: the cron
+    // dispatcher picks up schedule-mode tasks in any non-excluded status,
+    // including 'backlog', so merely leaving the task unstarted is not enough.
+    expect(systemPrompt).toContain('call updateTaskStatus(identifier, "paused") instead');
+  });
+
+  it('lets an automation tick complete its task only when the instruction end condition is met', () => {
+    expect(systemPrompt).toContain('NEVER set it to canceled or failed');
+    expect(systemPrompt).toContain('an end condition the instruction itself defines');
+    expect(systemPrompt).toContain('Do not ask the user to stop the loop instead');
+    expect(systemPrompt).not.toContain('NEVER call updateTaskStatus with "completed"');
+  });
+});

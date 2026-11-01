@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import { useIsWorkspaceLoading } from '@/business/client/hooks/useIsWorkspaceLoading';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';

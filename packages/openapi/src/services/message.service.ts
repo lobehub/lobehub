@@ -1,13 +1,20 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 
+import type { FileItem, SessionItem, TopicItem } from '@/database/schemas';
 import { messages, messagesFiles } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
 import { FileService as CoreFileService } from '@/server/services/file';
 
 import { BaseService } from '../common/base.service';
-import { processPaginationConditions } from '../helpers/pagination';
+import {
+  projectPublicFile,
+  projectPublicMessage,
+  projectPublicSession,
+  projectPublicTopic,
+} from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
+import { evalPagination as processPaginationConditions } from '../types/eval-resource.type';
 import type {
   MessageListResponse,
   MessageResponse,
@@ -53,23 +60,23 @@ export class MessageService extends BaseService {
 
     return await Promise.all(
       messages.map(async (message) => {
-        const messageWithoutFiles = { ...message };
-        delete (messageWithoutFiles as any).filesToMessages;
-
         return {
-          ...messageWithoutFiles,
+          ...projectPublicMessage(message),
           files: await Promise.all(
             message.filesToMessages?.map(async ({ file }) => {
+              const publicFile = projectPublicFile(file as FileItem);
               if (file.url.startsWith('http')) {
-                return file;
+                return publicFile;
               }
 
               return {
-                ...file,
+                ...publicFile,
                 url: await this.coreFileService.getFullFileUrl(file.url),
               };
             }) ?? [],
           ),
+          session: message.session ? projectPublicSession(message.session as SessionItem) : null,
+          topic: message.topic ? projectPublicTopic(message.topic as TopicItem) : null,
         };
       }),
     );
@@ -148,6 +155,27 @@ export class MessageService extends BaseService {
     this.log('info', '统计消息数量', { query, userId: this.userId });
 
     try {
+      if (query.threadId || query.topicId) {
+        if (!query.topicId) throw this.createValidationError('topicId is required with threadId');
+        if (query.userId || query.topicIds)
+          throw this.createValidationError('Use topicId without userId or topicIds');
+        const permission = await this.resolveOperationPermission('MESSAGE_READ', {
+          targetTopicId: query.topicId,
+        });
+        if (!permission.isPermitted)
+          throw this.createAuthorizationError('No permission to read topic messages');
+        const [row] = await this.db
+          .select({ count: count() })
+          .from(messages)
+          .where(
+            and(
+              this.buildWorkspaceWhere(messages),
+              eq(messages.topicId, query.topicId),
+              query.threadId ? eq(messages.threadId, query.threadId) : undefined,
+            ),
+          );
+        return { count: row.count };
+      }
       // Count by user ID (requires special permission check)
       if (query.userId) {
         return await this.countMessagesByUserId(query.userId);
@@ -284,6 +312,10 @@ export class MessageService extends BaseService {
         conditions.push(this.buildWorkspaceWhere(messages));
       }
 
+      if (request.threadId) {
+        if (!request.topicId) throw this.createValidationError('topicId is required with threadId');
+        conditions.push(eq(messages.threadId, request.threadId));
+      }
       if (request.role) {
         conditions.push(eq(messages.role, request.role));
       }
@@ -301,7 +333,7 @@ export class MessageService extends BaseService {
       const listQuery = this.db.query.messages.findMany({
         limit,
         offset,
-        orderBy: asc(messages.createdAt),
+        orderBy: [asc(messages.createdAt), asc(messages.id)],
         where: whereExpr,
         with: {
           filesToMessages: {

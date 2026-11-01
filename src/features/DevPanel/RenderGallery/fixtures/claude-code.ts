@@ -8,7 +8,7 @@ const linearIssueApiName = 'mcp__claude_ai_Linear__save_issue';
 const linearIssueResult = {
   description:
     '## 背景\n\n当前客户端侧有三种 agent runtime 路径，它们都在处理同一类 agent run 生命周期，但生命周期控制点不一致。\n\n## 目标\n\n建立一套共享的 post-complete hooks，让 queue message、topic title、Agent Signal、unread completion 和 notification 都通过同一入口收敛。',
-  id: 'LOBE-10205',
+  id: 'TEST-0000',
   links: [
     {
       title: 'PR #15766: refactor(chat): unify agent run lifecycle',
@@ -17,7 +17,7 @@ const linearIssueResult = {
   ],
   state: { name: 'In Review' },
   title: '统一三种客户端 Agent Runtime 的 run 生命周期 hooks',
-  url: 'https://linear.app/lobehub/issue/LOBE-10205',
+  url: 'https://linear.app/lobehub/issue/TEST-0000',
 };
 
 export default defineFixtures({
@@ -40,6 +40,14 @@ export default defineFixtures({
       name: 'Edit',
     },
     {
+      description: 'Create a new git worktree or enter an existing one.',
+      name: 'EnterWorktree',
+    },
+    {
+      description: 'Leave the active Claude Code worktree and optionally remove it.',
+      name: 'ExitWorktree',
+    },
+    {
       description: 'Find files by glob pattern.',
       name: 'Glob',
     },
@@ -54,6 +62,10 @@ export default defineFixtures({
     {
       description: 'Schedule when to resume work.',
       name: 'ScheduleWakeup',
+    },
+    {
+      description: 'Send a message to a peer agent.',
+      name: 'SendMessage',
     },
     {
       description: 'Run a Claude Code skill.',
@@ -109,6 +121,168 @@ export default defineFixtures({
     },
   ],
   fixtures: {
+    askUserQuestion: variants([
+      {
+        args: {
+          questions: [
+            {
+              header: 'Audit level',
+              options: [
+                {
+                  description:
+                    'Fastest, offline, full-coverage baseline. Scans structural issues (missing states / branches / patterns) from code alone.',
+                  label: 'L1 only (read code)',
+                },
+                {
+                  description:
+                    'Also boots the app and screenshots key surfaces to confirm visual hierarchy and rendered states. Medium cost.',
+                  label: 'L1 + L2 (screenshots)',
+                },
+                {
+                  description:
+                    'Adds a real user journey with performance traces (CLS/LCP). Needs a running environment and login. High cost.',
+                  label: 'L1 + L2 + L3',
+                },
+              ],
+              question: 'How deep should this audit round go?',
+            },
+            {
+              header: 'Scope',
+              multiSelect: true,
+              options: [
+                {
+                  description: 'The chat conversation pane and message renders.',
+                  label: 'Chat surface',
+                },
+                {
+                  description: 'Settings pages, providers, and model configuration.',
+                  label: 'Settings',
+                },
+                {
+                  description: 'Onboarding and first-run flows.',
+                  label: 'Onboarding',
+                },
+              ],
+              question: 'Which surfaces should the audit cover?',
+            },
+          ],
+        },
+        label: 'Multi question',
+        pluginState: {
+          askUserAnswers: {
+            'How deep should this audit round go?': 'L1 + L2 (screenshots)',
+            'Which surfaces should the audit cover?': ['Chat surface', 'Onboarding'],
+          },
+        },
+      },
+      {
+        args: {
+          questions: [
+            {
+              header: 'Approach',
+              options: [
+                {
+                  description: 'Ship the minimal fix now and file a follow-up for the refactor.',
+                  label: 'Minimal fix',
+                },
+                {
+                  description: 'Refactor the module properly before fixing. Slower but cleaner.',
+                  label: 'Refactor first',
+                },
+              ],
+              question: 'How should I handle the legacy module?',
+            },
+          ],
+        },
+        label: 'Single question',
+        pluginState: {
+          askUserAnswers: { 'How should I handle the legacy module?': 'Minimal fix' },
+        },
+      },
+      {
+        args: {
+          questions: [
+            {
+              header: 'Approach',
+              options: [
+                {
+                  description: 'Ship the minimal fix now and file a follow-up for the refactor.',
+                  label: 'Minimal fix',
+                },
+                {
+                  description: 'Refactor the module properly before fixing. Slower but cleaner.',
+                  label: 'Refactor first',
+                },
+              ],
+              question: 'How should I handle the legacy module?',
+            },
+          ],
+        },
+        label: 'Freeform reply',
+        pluginState: {
+          askUserAnswers: {
+            __freeform__:
+              "Neither — delete the module, nothing calls it any more. I'll confirm with a grep first.",
+          },
+        },
+      },
+      {
+        args: {
+          questions: [
+            {
+              header: 'Approach',
+              options: [
+                {
+                  description: 'Ship the minimal fix now and file a follow-up for the refactor.',
+                  label: 'Minimal fix',
+                },
+              ],
+              question: 'How should I handle the legacy module?',
+            },
+          ],
+        },
+        // No `askUserAnswers` — an older message persisted before structured
+        // storage, or a skipped/cancelled flow. Exercises the placeholder row.
+        label: 'No structured answer',
+      },
+      {
+        // Four questions: the Inspector caps its header chips at 3 and folds the
+        // rest into `+N` so the row can't crowd out the tool's own actions.
+        args: {
+          questions: [
+            {
+              header: 'Audit level',
+              options: [{ description: 'Read the code only.', label: 'L1 only' }],
+              question: 'How deep should this audit round go?',
+            },
+            {
+              header: 'Scope',
+              options: [{ description: 'The chat conversation pane.', label: 'Chat surface' }],
+              question: 'Which surfaces should the audit cover?',
+            },
+            {
+              header: 'Report target',
+              options: [{ description: 'Publish to the verify channel.', label: '/verify' }],
+              question: 'Where should the report go?',
+            },
+            {
+              header: 'On failure',
+              options: [{ description: 'Leave the environment up for inspection.', label: 'Stop' }],
+              question: 'If a check fails, roll back automatically?',
+            },
+          ],
+        },
+        label: 'Inspector overflow (4 questions)',
+        pluginState: {
+          askUserAnswers: {
+            'How deep should this audit round go?': 'L1 only',
+            'If a check fails, roll back automatically?': 'Stop',
+            'Where should the report go?': '/verify',
+            'Which surfaces should the audit cover?': 'Chat surface',
+          },
+        },
+      },
+    ]),
     Agent: single({
       args: {
         prompt:
@@ -168,6 +342,44 @@ export default defineFixtures({
         old_string: "path: 'tasks',",
       },
     }),
+    EnterWorktree: variants([
+      {
+        args: { name: 'worktree-icon-in-worktree' },
+        content:
+          'Created worktree at /workspace/.claude/worktrees/worktree-icon-in-worktree on branch worktree-worktree-icon-in-worktree.',
+        label: 'Create named',
+      },
+      {
+        args: {
+          path: '/workspace/.claude/worktrees/existing-feature-with-a-long-descriptive-name',
+        },
+        content:
+          'Entered existing worktree at /workspace/.claude/worktrees/existing-feature-with-a-long-descriptive-name.',
+        label: 'Enter existing',
+      },
+      {
+        args: {},
+        content: 'Created worktree with a generated name.',
+        label: 'Create generated',
+      },
+    ]),
+    ExitWorktree: variants([
+      {
+        args: { action: 'keep' },
+        content: 'Left the worktree. The worktree and branch remain on disk.',
+        label: 'Keep on disk',
+      },
+      {
+        args: { action: 'remove' },
+        content: 'Removed the worktree and branch.',
+        label: 'Remove clean',
+      },
+      {
+        args: { action: 'remove', discard_changes: true },
+        content: 'Removed the worktree and discarded 3 files and 1 commit.',
+        label: 'Discard changes',
+      },
+    ]),
     Glob: single({
       args: { path: 'src/routes', pattern: '**/index.tsx' },
       content: 'src/routes/(main)/agent/index.tsx\nsrc/routes/(main)/devtools/index.tsx',
@@ -196,6 +408,33 @@ export default defineFixtures({
         reason: 'Recheck the failing build once dependencies finish installing.',
       },
     }),
+    SendMessage: variants([
+      {
+        args: {
+          content:
+            'Please return your full findings now: the context engine entry/pipeline (file paths, function names, line numbers) so I can synthesize the report.',
+          message:
+            'Please return your full findings now: the context engine entry/pipeline (file paths, function names, line numbers) so I can synthesize the report.',
+          recipient: 'a48b23013d11aacd4',
+          summary: 'Retrieve context engine findings',
+          to: 'a48b23013d11aacd4',
+          type: 'message',
+        },
+        content: JSON.stringify({
+          message: 'Message queued for delivery to a48b23013d11aacd4 at its next tool round.',
+          success: true,
+        }),
+        label: 'Queued for delivery',
+      },
+      {
+        args: {
+          message: 'Wrap up when you can — no rush, just checking in on the migration status.',
+          to: 'context-engine',
+        },
+        content: '',
+        label: 'No summary, no result yet',
+      },
+    ]),
     Skill: single({
       args: { skill: 'codebase-search' },
       content: 'Use ripgrep first, then open only the relevant files to keep context sharp.',
@@ -418,7 +657,7 @@ export default defineFixtures({
     }),
     [linearIssueApiName]: single({
       args: {
-        id: 'LOBE-10205',
+        id: 'TEST-0000',
         links: linearIssueResult.links,
         state: 'In Review',
       },

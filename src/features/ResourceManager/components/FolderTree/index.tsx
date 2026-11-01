@@ -1,9 +1,7 @@
 'use client';
 
-import { CaretDownFilled } from '@ant-design/icons';
-import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { FolderIcon, FolderOpenIcon } from 'lucide-react';
+import { ActionIcon, createStaticStyles, cx, Flexbox, Icon } from '@lobehub/ui';
+import { ChevronDownIcon, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { memo, useCallback } from 'react';
 
@@ -94,7 +92,7 @@ export const FolderTreeItemComponent = memo<FolderTreeItemProps>(
             transition={{ duration: 0.2, ease: 'easeInOut' }}
           >
             <ActionIcon
-              icon={CaretDownFilled as any}
+              icon={ChevronDownIcon}
               size={'small'}
               onClick={(e) => {
                 e.stopPropagation();

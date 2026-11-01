@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { isExplorerItemSelected } from '@/routes/(main)/resource/features/store/selectors';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import type { FileListItem } from '@/types/files';
 
 import { useExplorerSelectionActions } from '../hooks/useExplorerSelection';
@@ -16,9 +16,20 @@ interface VirtualizedFileListProps {
     date: number;
     name: number;
     size: number;
+    uploader: number;
   };
   data: FileListItem[];
   hasMore: boolean;
+  /**
+   * Viewport height. Defaults to the folder list's viewport-derived height; a
+   * consumer inside a sized flex container passes `'100%'` to fill it.
+   */
+  height?: string;
+  /** Next-page loader; defaults to the folder list's. */
+  loadMore?: () => Promise<void>;
+  /** Failure of a page past the head, rendered as a retry row in the footer. */
+  loadMoreError?: unknown;
+  showUploader?: boolean;
   virtuosoRef: RefObject<VirtuosoHandle | null>;
 }
 
@@ -26,10 +37,15 @@ const VirtualizedFileList = ({
   columnWidths,
   data,
   hasMore,
+  height = 'calc(100vh - 100px)',
+  loadMore,
+  loadMoreError,
+  showUploader = true,
   virtuosoRef,
 }: VirtualizedFileListProps) => {
   const {
     clearSelectAllState,
+    isItemSelectable,
     selectAllState,
     selectedFileIds,
     setSelectedFileIds,
@@ -39,6 +55,9 @@ const VirtualizedFileList = ({
     columnWidths,
     dataLength: data.length,
     hasMore,
+    loadMore,
+    loadMoreError,
+    showUploader,
   });
   const dataRef = useRef<FileListItem[]>(data);
   const lastSelectedIndexRef = useRef<number | null>(null);
@@ -66,7 +85,10 @@ const VirtualizedFileList = ({
         const currentSelected = useResourceManagerStore.getState().selectedFileIds;
         const start = Math.min(lastSelectedIndexRef.current, clickedIndex);
         const end = Math.max(lastSelectedIndexRef.current, clickedIndex);
-        const rangeIds = dataRef.current.slice(start, end + 1).map((item) => item.id);
+        const rangeIds = dataRef.current
+          .slice(start, end + 1)
+          .filter(isItemSelectable)
+          .map((item) => item.id);
         const nextSelected = new Set(currentSelected);
 
         for (const rangeId of rangeIds) {
@@ -80,7 +102,7 @@ const VirtualizedFileList = ({
 
       lastSelectedIndexRef.current = clickedIndex;
     },
-    [clearSelectAllState, setSelectedFileIds, toggleItemSelection],
+    [clearSelectAllState, isItemSelectable, setSelectedFileIds, toggleItemSelection],
   );
 
   return (
@@ -93,27 +115,41 @@ const VirtualizedFileList = ({
       initialItemCount={30}
       overscan={48 * 5}
       ref={virtuosoRef}
-      style={{ height: 'calc(100vh - 100px)' }}
+      style={{ height }}
       itemContent={useCallback(
         (index: number, item: FileListItem) => {
           if (!item) return null;
+
+          const selectable = isItemSelectable(item);
 
           return (
             <FileListItemComponent
               columnWidths={columnWidths}
               index={index}
               key={item.id}
-              selected={isExplorerItemSelected({
-                id: item.id,
-                selectAllState,
-                selectedIds: selectedFileIds,
-              })}
+              selectable={selectable}
+              showUploader={showUploader}
+              selected={
+                selectable &&
+                isExplorerItemSelected({
+                  id: item.id,
+                  selectAllState,
+                  selectedIds: selectedFileIds,
+                })
+              }
               onSelectedChange={handleSelectionChange}
               {...item}
             />
           );
         },
-        [columnWidths, handleSelectionChange, selectAllState, selectedFileIds],
+        [
+          columnWidths,
+          handleSelectionChange,
+          isItemSelectable,
+          selectAllState,
+          selectedFileIds,
+          showUploader,
+        ],
       )}
     />
   );

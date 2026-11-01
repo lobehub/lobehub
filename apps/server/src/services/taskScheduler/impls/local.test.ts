@@ -29,14 +29,19 @@ describe('LocalTaskScheduler', () => {
       const callback = vi.fn().mockResolvedValue(undefined);
       scheduler.setExecutionCallback(callback);
 
-      await scheduler.scheduleNextTopic({ delay: 5, taskId: 'task-1', userId: 'user-1' });
+      await scheduler.scheduleNextTopic({
+        delay: 5,
+        taskId: 'task-1',
+        tickToken: 'generation-1',
+        userId: 'user-1',
+      });
 
       expect(callback).not.toHaveBeenCalled();
 
       await vi.advanceTimersByTimeAsync(5000);
 
       expect(callback).toHaveBeenCalledOnce();
-      expect(callback).toHaveBeenCalledWith('task-1', 'user-1');
+      expect(callback).toHaveBeenCalledWith('task-1', 'user-1', 'generation-1');
     });
 
     it('should execute callback immediately when delay is 0', async () => {

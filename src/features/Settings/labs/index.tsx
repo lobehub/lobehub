@@ -1,0 +1,169 @@
+'use client';
+
+import { isDesktop } from '@lobechat/const';
+import { Alert, Flexbox, Switch, Tag, Tooltip } from '@lobehub/ui';
+import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
+import { FlaskConicalIcon } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AsyncError from '@/components/AsyncError';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { FORM_STYLE } from '@/const/layoutTokens';
+import SettingHeader from '@/features/Settings/features/SettingHeader';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
+
+import { LAB_FEATURES, type LabFeatureItem, type LabStage } from './features';
+
+const StageTag = memo<{ stage: LabStage }>(({ stage }) => {
+  const { t } = useTranslation('labs');
+
+  return (
+    <Tooltip title={t(`stage.${stage}.desc`)}>
+      <Tag color={stage === 'alpha' ? 'warning' : 'info'} size={'small'}>
+        {t(`stage.${stage}.label`)}
+      </Tag>
+    </Tooltip>
+  );
+});
+
+const LabsForm = memo(() => {
+  const { t: tLabs } = useTranslation('labs');
+
+  const [isPreferenceInit, isUserStateInit, isUserStateInitError, refreshUserState, updateLab] =
+    useUserStore((s) => [
+      preferenceSelectors.isPreferenceInit(s),
+      s.isUserStateInit,
+      s.isUserStateInitError,
+      s.refreshUserState,
+      s.updateLab,
+    ]);
+  const labChecked = useUserStore((s) =>
+    LAB_FEATURES.map(({ flag }) => labPreferSelectors[flag](s)),
+  );
+  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableWorkspace);
+  const form = useForm();
+
+  // Cross-surface experiments. Platform-specific ones (Electron main-process
+  // features) live in the Desktop group; workspace experiments only show to
+  // users with workspace access. Everything else is General.
+  const generalItems = LAB_FEATURES.filter(
+    (feature) => !feature.desktopOnly && !feature.workspaceOnly,
+  );
+  const workspaceItems = enableWorkspace
+    ? LAB_FEATURES.filter((feature) => feature.workspaceOnly)
+    : [];
+  // Desktop-only experiments: local agent runtimes, iMessage bridge, and the
+  // in-app browser (renderer-retained Electron webviews).
+  const desktopItems = LAB_FEATURES.filter((feature) => feature.desktopOnly);
+
+  if (!isUserStateInit) {
+    // A failed user-state init must show error + Retry, not a permanent skeleton
+    if (isUserStateInitError)
+      return (
+        <AsyncError
+          error={isUserStateInitError}
+          variant={'block'}
+          onRetry={() => refreshUserState()}
+        />
+      );
+    // Same groups as the loaded form: General always, Workspace with workspace
+    // access, Desktop only in Electron.
+    return (
+      <SettingsSectionSkeleton
+        groups={[
+          { rows: generalItems.length, titleWidth: 72 },
+          ...(workspaceItems.length > 0 ? [{ rows: workspaceItems.length, titleWidth: 72 }] : []),
+          ...(isDesktop ? [{ rows: desktopItems.length, titleWidth: 72 }] : []),
+        ]}
+      />
+    );
+  }
+
+  const checkedByFlag = Object.fromEntries(
+    LAB_FEATURES.map(({ flag }, index) => [flag, labChecked[index]]),
+  );
+
+  const toFormItem = ({ flag, i18nKey, stage }: LabFeatureItem): FormFieldProps => ({
+    children: (
+      <Switch
+        checked={checkedByFlag[flag]}
+        loading={!isPreferenceInit}
+        onChange={(next: boolean) => updateLab({ [flag]: next })}
+      />
+    ),
+    desc: tLabs(`features.${i18nKey}.desc`),
+    label: (
+      <SettingsSearchAnchor id={`labs-${flag}`}>
+        <Flexbox horizontal align={'center'} gap={8}>
+          {tLabs(`features.${i18nKey}.title`)}
+          <StageTag stage={stage} />
+        </Flexbox>
+      </SettingsSearchAnchor>
+    ),
+    minWidth: undefined,
+  });
+
+  const items: FormGroupItem[] = [
+    {
+      children: generalItems.map((item) => toFormItem(item)),
+      title: tLabs('group.general'),
+    },
+  ];
+
+  if (workspaceItems.length > 0) {
+    items.push({
+      children: workspaceItems.map((item) => toFormItem(item)),
+      title: tLabs('group.workspace'),
+    });
+  }
+
+  // The Desktop group only renders in the Electron shell — all its experiments
+  // are main-process features that do not exist on web.
+  if (isDesktop) {
+    items.push({
+      children: desktopItems.map((item) => toFormItem(item)),
+      title: tLabs('group.desktop'),
+    });
+  }
+
+  return (
+    <Form
+      collapsible={false}
+      form={form}
+      items={items}
+      itemsType={'group'}
+      variant={'filled'}
+      {...FORM_STYLE}
+    />
+  );
+});
+
+interface PageProps {
+  showSettingHeader?: boolean;
+}
+
+const Page = ({ showSettingHeader = true }: PageProps) => {
+  const { t: tLabs } = useTranslation('labs');
+
+  return (
+    <>
+      {showSettingHeader && <SettingHeader title={tLabs('title')} />}
+      <Flexbox gap={16}>
+        <Alert
+          showIcon
+          icon={FlaskConicalIcon}
+          title={tLabs('description')}
+          type={'info'}
+          variant={'filled'}
+        />
+        <LabsForm />
+      </Flexbox>
+    </>
+  );
+};
+
+export default Page;

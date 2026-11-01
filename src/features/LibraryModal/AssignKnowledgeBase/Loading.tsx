@@ -1,12 +1,11 @@
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { memo } from 'react';
 
-const Loading = memo(() => {
+const Loading = () => {
   return (
     <Flexbox>
-      <Skeleton paragraph={{ rows: 8 }} title={false} />
+      <Skeleton.Text rows={8} />
     </Flexbox>
   );
-});
+};
 
 export default Loading;

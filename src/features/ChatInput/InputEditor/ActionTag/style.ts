@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 import { TAG_MARGIN_INLINE_END } from '../constants';
 
@@ -29,6 +29,15 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   agentSkillTag: css`
     ${colored(cssVar.colorSuccess, cssVar.borderRadius)}
+  `,
+  clickable: css`
+    cursor: pointer;
+    border-radius: ${cssVar.borderRadius};
+    transition: background 0.2s;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
   commandTag: css`
     ${colored(cssVar.purple, cssVar.borderRadius)}

@@ -1,0 +1,152 @@
+import { getFilePathDisplayInfo } from '@lobechat/shared-tool-ui/components';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { createElement } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { useChatStore } from '@/store/chat';
+
+import EditedFilesCard, {
+  AGGREGATE_EDITED_FILE_ICON_SIZE,
+  getEditedFileIconName,
+  getEditedFilesCardMode,
+  SINGLE_EDITED_FILE_ICON_SIZE,
+} from './index';
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: { path?: string }) =>
+      options?.path ? `${key}:${options.path}` : key,
+  }),
+}));
+
+const conversationState = { context: { agentShareId: undefined as string | undefined } };
+
+vi.mock('../../store', () => ({
+  useConversationStore: (selector: (s: unknown) => unknown) => selector(conversationState),
+}));
+
+afterEach(() => {
+  conversationState.context.agentShareId = undefined;
+  useChatStore.setState({ activeTopicId: undefined });
+});
+
+const singleEntry = {
+  diffTexts: [
+    'diff --git a/Acceptance/index.tsx b/Acceptance/index.tsx\n--- a/Acceptance/index.tsx\n+++ b/Acceptance/index.tsx\n@@ -1 +1 @@\n-old\n+new',
+  ],
+  kind: 'modified' as const,
+  linesAdded: 7,
+  linesDeleted: 2,
+  path: '/workspace/Acceptance/index.tsx',
+  sandboxBacked: false,
+  sourceToolCallIds: ['tool-1'],
+};
+
+describe('getEditedFilesCardMode', () => {
+  it('uses the dedicated direct summary for a single edited file', () => {
+    expect(getEditedFilesCardMode(1)).toBe('single');
+  });
+
+  it('uses the collapsible aggregate for multiple edited files', () => {
+    expect(getEditedFilesCardMode(2)).toBe('aggregate');
+  });
+});
+
+describe('getEditedFileIconName', () => {
+  it('uses the edited file basename to select its file-type icon', () => {
+    expect(getEditedFileIconName('/workspace/Acceptance/index.tsx')).toBe('index.tsx');
+  });
+});
+
+describe('getFilePathDisplayInfo', () => {
+  it('keeps the parent directory and basename for long absolute paths', () => {
+    expect(getFilePathDisplayInfo('/very/long/workspace/Acceptance/index.tsx')).toEqual({
+      displayPath: 'Acceptance/index.tsx',
+      isImage: false,
+      name: 'index.tsx',
+    });
+  });
+
+  it('marks image files so they render a lucide image icon instead of a file-type icon', () => {
+    expect(getFilePathDisplayInfo('/workspace/tmp/r24-studio-crop.PNG')).toEqual({
+      displayPath: 'tmp/r24-studio-crop.PNG',
+      isImage: true,
+      name: 'r24-studio-crop.PNG',
+    });
+  });
+});
+
+describe('SINGLE_EDITED_FILE_ICON_SIZE', () => {
+  it('matches the height of the two-line title block beside it', () => {
+    expect(SINGLE_EDITED_FILE_ICON_SIZE).toBe(40);
+  });
+});
+
+describe('AGGREGATE_EDITED_FILE_ICON_SIZE', () => {
+  it('matches the single-file card so stacked cards share one icon scale', () => {
+    expect(AGGREGATE_EDITED_FILE_ICON_SIZE).toBe(40);
+  });
+});
+
+describe('SingleEditedFileCard', () => {
+  it('groups line deltas below the title and exposes the diff action as a secondary control', () => {
+    render(createElement(EditedFilesCard, { entries: [singleEntry] }));
+
+    const title = screen.getByText('editedFiles.singleTitle:Acceptance/index.tsx');
+    const action = screen.getByRole('button', { name: 'editedFiles.viewChanges' });
+    const summary = title.parentElement;
+
+    expect(summary).toHaveTextContent('+7');
+    expect(summary).toHaveTextContent('-2');
+    expect(summary).not.toContainElement(action);
+    expect(action.closest('[data-view-changes]')).not.toBeNull();
+    expect(action).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(action);
+    expect(action).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'editedFiles.hideChanges' })).toBeInTheDocument();
+  });
+});
+
+describe('EditedFilesCard open action', () => {
+  const sandboxEntry = {
+    ...singleEntry,
+    path: '/home/user/price_history.html',
+    sandboxBacked: true,
+  };
+  const singleTitle = 'editedFiles.singleTitle:user/price_history.html';
+
+  it('opens a sandbox file preview from the header for the topic owner', () => {
+    useChatStore.setState({ activeTopicId: 'tpc_1' });
+    render(createElement(EditedFilesCard, { entries: [sandboxEntry] }));
+
+    expect(screen.getByText(singleTitle).closest('[role="button"]')).not.toBeNull();
+  });
+
+  // Regression: the share visitor page's portal hosts no LocalFile
+  // view, so the header click used to push an invisible view and do nothing.
+  // Without a preview it falls back to the diff snapshot instead.
+  it('expands the diff from the header on the agent-share visitor page', () => {
+    conversationState.context.agentShareId = 'share_1';
+    useChatStore.setState({ activeTopicId: 'tpc_1' });
+    render(createElement(EditedFilesCard, { entries: [sandboxEntry] }));
+
+    const header = screen.getByText(singleTitle).closest('[role="button"]')!;
+    expect(header).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(header);
+    expect(header).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  // Regression (T-965): a Claude Code edit outside the working directory had
+  // neither a preview nor a diff, so its card silently ignored clicks.
+  it('states that a file with no preview and no diff cannot be opened', () => {
+    render(
+      createElement(EditedFilesCard, {
+        entries: [{ ...singleEntry, diffTexts: [], path: '/tmp/spec-20322/spec.md' }],
+      }),
+    );
+
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByText('editedFiles.previewUnavailable')).toBeInTheDocument();
+  });
+});

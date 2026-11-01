@@ -30,6 +30,22 @@ const createEmptyReceiptActivityForTest = (): ReceiptActivityDigest => ({
 });
 
 describe('deriveSelfReviewSignals', () => {
+  it('promotes matching review ideas across days into a recurring signal', () => {
+    const signals = deriveSelfReviewSignals({
+      documentActivity: createEmptyDocumentActivityForTest(),
+      feedbackActivity: createEmptyFeedbackActivityForTest(),
+      receiptActivity: {
+        ...createEmptyReceiptActivityForTest(),
+        duplicateGroups: [{ count: 3, key: 'deck-workflow', receiptIds: ['r1', 'r2', 'r3'] }],
+      },
+      toolActivity: [],
+    });
+
+    expect(signals).toContainEqual(
+      expect.objectContaining({ kind: 'recurring_review_idea', strength: 'strong' }),
+    );
+  });
+
   /**
    * @example
    * Tool activity by itself is telemetry only and should stay weak.

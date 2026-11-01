@@ -1,6 +1,22 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PublicUrlFetchModule from '../publicUrlFetch';
+
+// These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
+// for real, which has nothing to do with what they assert. Its own behaviour is
+// covered in publicUrlFetch.test.ts.
+vi.mock('../publicUrlFetch', async () => ({
+  // Spread the real module: a full mock silently drops every export it
+  // does not name, so adding one to publicUrlFetch breaks suites that
+  // never cared about it.
+  ...(await vi.importActual<typeof PublicUrlFetchModule>('../publicUrlFetch')),
+  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
+    dispose: async () => undefined,
+    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  }),
+}));
+
 const MessageItemType = vi.hoisted(() => ({
   FILE: 4,
   IMAGE: 1,
@@ -16,13 +32,22 @@ const WechatUploadMediaType = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobechat/chat-adapter-wechat', () => ({
+  getWechatTextSendCount: (text: string) => Math.max(1, Math.ceil(text.length / 2000)),
   MessageItemType,
   WechatUploadMediaType,
 }));
 
 const mockRedisGet = vi.hoisted(() => vi.fn().mockResolvedValue(null));
+// Window bookkeeping commands used by contextWindow (legacy-token seeding path).
+const mockWindowRedis = vi.hoisted(() => ({
+  expire: vi.fn().mockResolvedValue(1),
+  hgetall: vi.fn().mockResolvedValue({}),
+  hincrby: vi.fn().mockResolvedValue(9),
+  hset: vi.fn().mockResolvedValue(1),
+  pttl: vi.fn().mockResolvedValue(-1),
+}));
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
-  getAgentRuntimeRedisClient: () => ({ get: mockRedisGet }),
+  getAgentRuntimeRedisClient: () => ({ get: mockRedisGet, ...mockWindowRedis }),
 }));
 
 const { WechatMessageService } = await import('./service');
@@ -57,6 +82,29 @@ describe('WechatMessageService.sendMessage', () => {
     expect(api.sendMessage).toHaveBeenCalledWith('user-1@im.wechat', 'hello', '');
     expect(api.uploadCdnMedia).not.toHaveBeenCalled();
     expect(api.sendItem).not.toHaveBeenCalled();
+  });
+
+  it('consumes one send-window credit per long-text chunk', async () => {
+    const api = makeApi();
+    const service = new WechatMessageService(api as any, 'app-1');
+    mockWindowRedis.hgetall.mockResolvedValueOnce({
+      refreshedAt: '1',
+      remaining: '10',
+      token: 'ctx-1',
+    });
+    mockWindowRedis.hincrby.mockResolvedValueOnce(7);
+
+    await service.sendMessage({
+      channelId: 'user-1@im.wechat',
+      content: 'a'.repeat(4500),
+      platform: 'wechat',
+    });
+
+    expect(mockWindowRedis.hincrby).toHaveBeenCalledWith(
+      'wechat:ctx-window:app-1:user-1@im.wechat',
+      'remaining',
+      -3,
+    );
   });
 
   it('uploads + sends attachments as separate iLink items (text + image)', async () => {
@@ -115,6 +163,47 @@ describe('WechatMessageService.sendMessage', () => {
     expect(api.sendMessage).not.toHaveBeenCalled();
     expect(api.uploadCdnMedia).toHaveBeenCalledTimes(1);
     expect(api.sendItem).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an attachment whose bytes could not be fetched instead of swallowing it', async () => {
+    // Regression: the runtime returned `success: true` while the file never
+    // left the server, so the model told the user "see attached".
+    const api = makeApi();
+    const service = new WechatMessageService(api as any, 'app-1');
+    const error = new TypeError('fetch failed');
+    (error as any).cause = new TypeError('Invalid IP address: undefined');
+    vi.mocked(fetch).mockRejectedValueOnce(error);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const result = await service.sendMessage({
+        attachments: [
+          { fetchUrl: 'https://app.example.com/f/file_1', name: 'report.docx', type: 'file' },
+        ],
+        channelId: 'user-3@im.wechat',
+        content: 'docx attached',
+        platform: 'wechat',
+      });
+
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+      expect(api.sendItem).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        attachmentFailures: [
+          {
+            detail: 'fetch failed: fetch failed (Invalid IP address: undefined)',
+            name: 'report.docx',
+            reason: 'source-unavailable',
+            type: 'file',
+          },
+        ],
+        attachmentsDelivered: 0,
+        channelId: 'user-3@im.wechat',
+        platform: 'wechat',
+      });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('report.docx'));
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('fetches attachments delivered as fetchUrl', async () => {

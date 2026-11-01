@@ -16,7 +16,7 @@ import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
  * `replaceMessages` (stale / out-of-order DB snapshot) or an optimistic
  * `internal_dispatchMessage updateMessage{tools}` can momentarily drop an
  * assistant's `tools[]` while the tool row + parentId survive (the extreme of
- * the "7→6 次技能调用" tools[] regression).
+ * the "7→6 tool-calls" tools[] regression).
  *
  * Fixing this at the RAW bucket write boundary — not only inside `parse` — keeps
  * `dbMessagesMap` (the Source of Truth that optimistic updates read & mutate)

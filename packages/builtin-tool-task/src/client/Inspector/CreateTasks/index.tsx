@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -66,21 +66,19 @@ export const CreateTasksInspector = memo<
 
   if (isArgumentsStreaming && count === 0) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-task.apiName.createTasks')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-task.apiName.createTasks')}
+        </span>
       </div>
     );
   }
 
   return (
-    <div
-      style={{ flexWrap: 'wrap', gap: 6 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{t('builtins.lobe-task.apiName.createTasks')}</span>
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 6 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-task.apiName.createTasks')}
+      </span>
       {count > 0 && (
         <span className={styles.countBadge}>
           {t('builtins.lobe-task.createTasks.count', { count })}

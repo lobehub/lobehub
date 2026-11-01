@@ -1,6 +1,7 @@
 import type { Argument, Command } from 'commander';
 
-const ROOT_ALIASES = ['lobe', 'lobehub'];
+import { CLI_BIN_ALIASES as ROOT_ALIASES } from '../constants/identity';
+
 const HELP_COMMAND_NAME = 'help';
 
 interface DefinitionItem {
@@ -76,7 +77,10 @@ function formatManualHeader(command: Command) {
 }
 
 function formatNameSection(command: Command) {
-  return ['NAME', `  ${buildCommandPath(command).join(' ')} - ${command.description()}`].join('\n');
+  return [
+    'NAME',
+    `  ${buildCommandPath(command).join(' ')} - ${command.summary() || command.description()}`,
+  ].join('\n');
 }
 
 function formatSynopsisSection(root: Command, command: Command) {
@@ -93,8 +97,12 @@ function formatAliasesSection(command: Command) {
 
 function formatDescriptionSection(command: Command) {
   const description = command.description() || 'No description available.';
+  const body = description
+    .split('\n')
+    .map((line) => (line ? `  ${line}` : ''))
+    .join('\n');
 
-  return ['DESCRIPTION', `  ${description}`].join('\n');
+  return ['DESCRIPTION', body].join('\n');
 }
 
 function formatArgumentsSection(command: Command) {

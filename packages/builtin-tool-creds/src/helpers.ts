@@ -7,6 +7,16 @@ export interface CredSummary {
   description?: string;
   key: string;
   name: string;
+  /**
+   * Only populated when the list comes from a workspace's merged
+   * organization-scoped view (org-owned creds + members' shared creds):
+   * 'organization' for a credential the workspace created directly, 'user'
+   * for one a member shared in. The AI needs this to tell the user whose
+   * credential it's actually using — never silently treat a member's shared
+   * key as if the workspace owns it. Absent entirely for a personal-only list.
+   */
+  ownerDisplayName?: string;
+  ownerType?: 'organization' | 'user';
   type: CredType;
 }
 
@@ -41,7 +51,13 @@ export const groupCredsByType = (creds: CredSummary[]): Record<CredType, CredSum
  */
 const formatCred = (cred: CredSummary): string => {
   const desc = cred.description ? ` - ${cred.description}` : '';
-  return `  - ${cred.name} (key: ${cred.key})${desc}`;
+  const ownership =
+    cred.ownerType === 'user'
+      ? ` [shared by ${cred.ownerDisplayName ?? 'a workspace member'}]`
+      : cred.ownerType === 'organization'
+        ? ' [workspace credential]'
+        : '';
+  return `  - ${cred.name} (key: ${cred.key})${desc}${ownership}`;
 };
 
 /**
@@ -86,23 +102,54 @@ export const injectCredsContext = (content: string, context: UserCredsContext): 
     .replaceAll('{{SETTINGS_URL}}', context.settingsUrl);
 };
 
-// ==================== Klavis Services ====================
+// ==================== Composio Services ====================
 
 /**
- * Summary of a Klavis service for display in the tool prompt
+ * Summary of a Composio service for display in the tool prompt
  */
-export interface KlavisServiceSummary {
+export interface ComposioServiceSummary {
   description?: string;
   identifier: string;
   name: string;
 }
 
+export interface ComposioAppTypeLike {
+  identifier: string;
+  label: string;
+}
+
 /**
- * Generate the Klavis services list string for injection into the prompt
+ * Drops services the agent has disabled (tri-state `agents.plugins`) from a
+ * Composio service list. Shared by both the client (contextEngineering.ts)
+ * and server (callLlm.ts) prompt-building paths so a disabled integration
+ * never surfaces as "connected — use tools directly" in either one.
  */
-export const generateKlavisServicesList = (
-  connected: KlavisServiceSummary[],
-  available: KlavisServiceSummary[],
+export const excludeDisabledComposioServices = <T extends { identifier: string }>(
+  services: T[],
+  disabledIds: Set<string>,
+): T[] => services.filter((s) => !disabledIds.has(s.identifier));
+
+/**
+ * Builds the "available to connect" list: every known Composio app type
+ * that's neither already connected nor disabled for this agent. The client
+ * and server paths compute this identically off the static
+ * `COMPOSIO_APP_TYPES` catalog, so it's extracted once here.
+ */
+export const resolveAvailableComposioServices = (
+  appTypes: ComposioAppTypeLike[],
+  connectedIds: Set<string>,
+  disabledIds: Set<string>,
+): ComposioServiceSummary[] =>
+  appTypes
+    .filter((t) => !connectedIds.has(t.identifier) && !disabledIds.has(t.identifier))
+    .map((t) => ({ identifier: t.identifier, name: t.label }));
+
+/**
+ * Generate the Composio services list string for injection into the prompt
+ */
+export const generateComposioServicesList = (
+  connected: ComposioServiceSummary[],
+  available: ComposioServiceSummary[],
 ): string => {
   if (connected.length === 0 && available.length === 0) {
     return '';
@@ -114,20 +161,20 @@ export const generateKlavisServicesList = (
     const items = connected
       .map(
         (s) =>
-          `  - ${s.name} (identifier: ${s.identifier}) — Authorized via Klavis OAuth. Use ${s.identifier} tools directly.`,
+          `  - ${s.name} (identifier: ${s.identifier}) — Authorized via Composio OAuth. Use ${s.identifier} tools directly.`,
       )
       .join('\n');
-    sections.push(`**Connected Klavis Services (authorized, use tools directly):**\n${items}`);
+    sections.push(`**Connected Composio Services (authorized, use tools directly):**\n${items}`);
   }
 
   if (available.length > 0) {
     const items = available
       .map(
         (s) =>
-          `  - ${s.name} (identifier: ${s.identifier}) — Use \`connectKlavisService\` to connect.`,
+          `  - ${s.name} (identifier: ${s.identifier}) — Use \`connectComposioService\` to connect.`,
       )
       .join('\n');
-    sections.push(`**Available Klavis Services (not yet connected):**\n${items}`);
+    sections.push(`**Available Composio Services (not yet connected):**\n${items}`);
   }
 
   return sections.join('\n\n');

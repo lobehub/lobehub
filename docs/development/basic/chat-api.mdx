@@ -1,8 +1,8 @@
 ---
-title: Chat API Client-Server Interaction Logic
+title: Chat API Internals and Client-Server Interaction
 description: >-
-  Explore the client-server interaction logic of LobeHub Chat API, including
-  event sequences and core components.
+  Understand LobeHub internal chat flows, runtimes, and client-server
+  interactions. This is a source development guide, not a public API tutorial.
 tags:
   - Chat API
   - Client-Server Interaction
@@ -11,11 +11,24 @@ tags:
   - MCP
 ---
 
-# Chat API Client-Server Interaction Logic
+# Chat API Internals and Client-Server Interaction
 
-This document explains the implementation logic of
-LobeHub Chat API in client-server interactions,
-including event sequences and core components involved.
+This page is for developers changing or debugging LobeHub source code. It explains internal chat flows, event sequences, and core components.
+
+<Callout type="warning">
+  This is not a public REST API or SDK integration guide. `/webapi/chat/[provider]`, internal tRPC
+  routes, store actions, and ChatService are application implementation details, not a stable
+  external integration contract. Do not infer public authentication, request formats, or
+  compatibility guarantees from the sequence diagram below.
+</Callout>
+
+For CLI, public API, or TypeScript SDK integration, start with [Choose a Development Path](/docs/development/start#choose-a-development-path). The snippets below explain internal control flow; they are not standalone client examples. Compare them with the source for your version.
+
+## Scope
+
+The diagram below focuses on the client-side Agent loop. See [Client-Side vs Server-Side Execution](#client-side-vs-server-side-execution) for server execution. Different transports and execution scenarios do not necessarily follow an identical path.
+
+Here, a "preset task" is an internal helper that calls a model directly. It is not a user-created Task or Scheduled automation. For user-facing work records, see [Task](/docs/usage/getting-started/task).
 
 ## Interaction Sequence Diagram
 
@@ -70,26 +83,23 @@ sequenceDiagram
 ### 1. Client Initiates Request
 
 After the user sends a message, `sendMessage()`
-(`src/store/chat/slices/aiChat/actions/conversationLifecycle.ts`)
+(`src/store/chat/slices/agentRun/actions/entries/conversationLifecycle.ts`)
 creates the user message and assistant message placeholder,
 then calls `executeClientAgent()`.
 
 ### 2. Agent Runtime Drives the Loop
 
-Agent Runtime is the **core execution engine**
-of the entire chat flow. Every chat interaction
-(from simple Q\&A to complex multi-step tool calling)
-is driven by the `AgentRuntime.step()` loop.
+The client-side Agent chat flow described here is driven by the `AgentRuntime.step()` loop. Preset tasks described below call the model directly and bypass this loop.
 
 **Initialization**
-(`src/store/chat/slices/aiChat/actions/streamingExecutor.ts`):
+(`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`):
 
 1. Resolve agent config (model, provider, plugin list, etc.)
 2. Create the tool registry via `createAgentToolsEngine()`
 3. Create `GeneralChatAgent` (the "brain" that decides
    what to do next) and `AgentRuntime` (the "engine"
    that executes instructions)
-4. Inject custom executors via `createAgentExecutors()`
+4. Bind the shared package executors to client transports via `createClientRuntimeExecutors()`
 
 **Execution Loop**:
 
@@ -132,7 +142,7 @@ the executor calls ChatService:
   receives the request
 - Calls `initModelRuntimeFromDB` to read user's provider
   config from the database and initialize ModelRuntime
-- A tRPC route `src/server/routers/lambda/aiChat.ts`
+- A tRPC route `apps/server/src/routers/lambda/aiChat.ts`
   also exists for server-side message sending
   and structured output scenarios
 
@@ -169,7 +179,7 @@ executed directly via local executors.
 - Frontend calls `MCPService` (`src/services/mcp.ts`)
   via the `invokeMCPTypePlugin` method
 - Supports three connection modes:
-  stdio, HTTP (streamable-http/SSE), and cloud (Klavis)
+  stdio, HTTP (streamable-http/SSE), and cloud (Composio)
 - MCP tool registration and discovery is managed
   through MCP server configuration
 
@@ -326,14 +336,14 @@ depends on the scenario:
   continue generation, group orchestration decisions.
   The loop runs in the browser, entry point is
   `executeClientAgent()`
-  (`src/store/chat/slices/aiChat/actions/streamingExecutor.ts`)
+  (`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`)
 - **Server-side loop** (queue/local):
   Group chat supervisor agent, sub-agent tasks,
   API/Cron triggers. The loop runs on the server,
   streaming events to the client via SSE, entry point is
   `AgentRuntimeService.executeStep()`
-  (`src/server/services/agentRuntime/AgentRuntimeService.ts`),
-  tRPC route at `src/server/routers/lambda/aiAgent.ts`
+  (`apps/server/src/services/agentRuntime/AgentRuntimeService/executeStep/index.ts`),
+  tRPC route at `apps/server/src/routers/lambda/aiAgent.ts`
 
 ## Model Runtime
 

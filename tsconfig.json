@@ -26,8 +26,9 @@
       "@/config/*": ["./packages/app-config/src/*", "./src/config/*"],
       "@/locales/*": ["./packages/locales/src/*", "./src/locales/*"],
       "@/business/server/*": ["./packages/business-server/src/*", "./src/business/server/*"],
-      "@/server/*": ["./apps/server/src/*", "./src/server/*"],
+      "@/server/*": ["./apps/server/src/*"],
       "@/*": ["./src/*"],
+      "~base-ui-stubs": ["./tests/mocks/baseUiStubs.tsx"],
       "~test-utils": ["./tests/utils.tsx"]
     },
     "plugins": [
@@ -40,11 +41,15 @@
     "node_modules",
     "apps/desktop/**",
     "apps/mobile/**",
+    "apps/share/**",
+    "apps/workbench/**",
     "tmp",
     "temp",
     ".temp",
     "e2e/**",
-    "knip.ts"
+    "knip.ts",
+    "packages/alint/fixtures/**",
+    "packages/*/alint/fixtures/**"
   ],
   "include": [
     "src/**/*.d.ts",
@@ -56,11 +61,12 @@
     "tests/**/*.d.ts",
     "tests/**/*.ts",
     "tests/**/*.tsx",
-    "scripts/**/*.ts",
-    "scripts/**/*.mts",
-    "scripts/**/*.cts",
     "apps/server/**/*.ts",
     "apps/server/**/*.tsx",
+    "scripts/elasticsearchReindex/**/*.ts",
+    "scripts/elasticsearchSync/**/*.ts",
+    "scripts/installFtsSearchSyncCapture/**/*.ts",
+    "scripts/pgSearchCleanup/**/*.ts",
     "*.ts",
     "*.mts",
     "*.cts",

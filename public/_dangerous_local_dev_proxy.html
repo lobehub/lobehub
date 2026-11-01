@@ -123,6 +123,11 @@
               var srcPath = script.src.startsWith('http')
                 ? new URL(script.src).pathname
                 : script.src;
+              // StyleX's dev runtime fetches its CSS root-relative, which here is
+              // this page's origin, so swap in the shim that fetches from `host`.
+              if (srcPath.indexOf('virtual:stylex:runtime') !== -1) {
+                srcPath = '/@id/virtual:lobe-stylex-dev-css';
+              }
               s.src = new URL(srcPath, host).toString();
             } else if (script.textContent) {
               s.textContent = script.textContent.replace(

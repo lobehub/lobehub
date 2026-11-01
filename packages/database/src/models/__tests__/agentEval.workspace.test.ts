@@ -92,12 +92,12 @@ describe('Agent eval workspace scope', () => {
       name: 'Workspace dataset',
     });
 
-    await expect(personalDatasetModel.query(personalBenchmark.id)).resolves.toEqual([
-      expect.objectContaining({ id: personalDataset.id }),
-    ]);
-    await expect(workspaceDatasetModel.query(workspaceBenchmark.id)).resolves.toEqual([
-      expect.objectContaining({ id: workspaceDataset.id }),
-    ]);
+    await expect(
+      personalDatasetModel.query({ benchmarkId: personalBenchmark.id }),
+    ).resolves.toEqual([expect.objectContaining({ id: personalDataset.id })]);
+    await expect(
+      workspaceDatasetModel.query({ benchmarkId: workspaceBenchmark.id }),
+    ).resolves.toEqual([expect.objectContaining({ id: workspaceDataset.id })]);
     await expect(personalDatasetModel.findById(personalDataset.id)).resolves.toMatchObject({
       id: personalDataset.id,
       workspaceId: null,

@@ -14,9 +14,7 @@ export const binDir = app.isPackaged
   ? path.join(process.resourcesPath, 'bin')
   : path.join(resourcesDir, 'bin');
 
-const appPath = app.getAppPath();
-
-export const rendererDir = path.join(appPath, 'dist', 'renderer');
+export const rendererDir = path.join(mainDir, '../renderer');
 
 export const userDataDir = app.getPath('userData');
 

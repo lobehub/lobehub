@@ -3,13 +3,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { resolveCliDirName } from '../constants/identity';
+
 export interface StoredCredentials {
   accessToken: string;
   expiresAt?: number; // Unix timestamp (seconds)
   refreshToken?: string;
 }
 
-const LOBEHUB_DIR_NAME = process.env.LOBEHUB_CLI_HOME || '.lobehub';
+const LOBEHUB_DIR_NAME = resolveCliDirName();
 const CREDENTIALS_DIR = path.join(os.homedir(), LOBEHUB_DIR_NAME);
 const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
 

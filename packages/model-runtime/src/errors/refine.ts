@@ -9,16 +9,24 @@ import { matchErrorPattern } from './match';
 /**
  * Codes whose message is worth running through `matchErrorPattern`.
  *
- * Besides the `ProviderBizError` upstream catch-all, this covers the two
- * fallback wrappers `formatErrorForState` produces for un-typed throws: a raw
- * `Error` is wrapped as `InternalServerError` (HTTP 500) and any other value as
+ * Besides the `ProviderBizError` upstream catch-all, this covers the fallback
+ * wrappers `formatErrorForState` produces for un-typed throws: a raw `Error` is
+ * wrapped as `InternalServerError` (HTTP 500) and any other value as
  * `AgentRuntimeError`. They must be pattern-refinable so persistence-layer
  * throws (`Failed query: …`) and state-store drops reach the registry — without
  * them those land as a bare, un-classified 500.
+ *
+ * `UpstreamHttpError` is itself a fallback bucket — it's what the status
+ * fallback below emits for a 4xx whose message matched nothing. It must stay
+ * refinable too: `formatErrorForState` is idempotent and re-enriches an
+ * already-normalized error, so a code demoted to `UpstreamHttpError` on an inner
+ * pass would otherwise be frozen there. Keeping it open lets a later pass (or a
+ * historical batch-rewrite) still upgrade it once the message is recognizable.
  */
 const PATTERN_REFINABLE_CODES = new Set<string>([
   AgentRuntimeErrorType.AgentRuntimeError,
   AgentRuntimeErrorType.ProviderBizError,
+  AgentRuntimeErrorType.UpstreamHttpError,
   String(ChatErrorType.InternalServerError),
 ]);
 
@@ -40,9 +48,10 @@ const STATUS_REFINABLE_CODES = new Set<string>([AgentRuntimeErrorType.ProviderBi
  */
 const codeFromHttpStatus = (status: number | undefined): ILobeAgentRuntimeErrorType | undefined => {
   if (!status) return undefined;
-  // 429 / 402 have unambiguous semantics worth special-casing.
+  // These statuses have unambiguous semantics worth special-casing.
   if (status === 429) return AgentRuntimeErrorType.RateLimitExceeded;
   if (status === 402) return AgentRuntimeErrorType.InsufficientQuota;
+  if (status === 413) return AgentRuntimeErrorType.RequestBodyTooLarge;
   if (status >= 500 && status <= 599) return AgentRuntimeErrorType.ProviderServiceUnavailable;
   // Any other client error with no usable message → the bare-HTTP bucket.
   if (status >= 400 && status <= 499) return AgentRuntimeErrorType.UpstreamHttpError;

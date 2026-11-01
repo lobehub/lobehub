@@ -1,0 +1,82 @@
+'use client';
+
+import { Block, Flexbox, Table, type TableColumn, Text } from '@lobehub/ui';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { ModelIcon } from '@/components/LobeIcons';
+import { AgentModelBreakdownTableSkeleton } from '@/components/Skeleton/AgentStatistics';
+import { type AgentUsageModelRow } from '@/types/usage/usageRecord';
+import { formatNumber, formatUsageValue } from '@/utils/format';
+
+interface ModelBreakdownProps {
+  isLoading?: boolean;
+  rows: AgentUsageModelRow[];
+}
+
+const ModelBreakdown = memo<ModelBreakdownProps>(({ rows, isLoading }) => {
+  const { t } = useTranslation('spend');
+
+  const columns: TableColumn<AgentUsageModelRow>[] = [
+    {
+      dataIndex: 'model',
+      key: 'model',
+      render: (model: string, record: AgentUsageModelRow) => (
+        <Flexbox horizontal align={'center'} gap={8}>
+          <ModelIcon model={model} size={20} />
+          <Flexbox>
+            <Text ellipsis>{model}</Text>
+            <Text fontSize={12} type={'secondary'}>
+              {record.provider}
+            </Text>
+          </Flexbox>
+        </Flexbox>
+      ),
+      title: t('usageStats.breakdown.model'),
+    },
+    {
+      align: 'right',
+      dataIndex: 'requests',
+      key: 'requests',
+      render: (value: number) => formatNumber(value),
+      title: t('usageStats.breakdown.requests'),
+    },
+    {
+      align: 'right',
+      dataIndex: 'totalTokens',
+      key: 'totalTokens',
+      render: (value: number) => formatUsageValue(value),
+      title: t('usageStats.breakdown.totalTokens'),
+    },
+    {
+      align: 'right',
+      dataIndex: 'cost',
+      key: 'cost',
+      render: (value: number) => `$${formatNumber(value, 2)}`,
+      title: t('usageStats.breakdown.cost'),
+    },
+  ];
+
+  return (
+    <Block gap={16} variant={'borderless'}>
+      <Text fontSize={16} weight={500}>
+        {t('usageStats.breakdown.title')}
+      </Text>
+      {/* First load shows the route skeleton's table rows instead of a spinner over "No data". */}
+      {isLoading && rows.length === 0 ? (
+        <AgentModelBreakdownTableSkeleton />
+      ) : (
+        <Table<AgentUsageModelRow>
+          columns={columns}
+          dataSource={rows}
+          loading={isLoading}
+          pagination={false}
+          rowKey={'id'}
+          size={'middle'}
+        />
+      )}
+    </Block>
+  );
+});
+
+export default ModelBreakdown;

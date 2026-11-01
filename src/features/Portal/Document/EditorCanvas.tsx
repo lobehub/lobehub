@@ -4,13 +4,13 @@ import { useEditor } from '@lobehub/editor/react';
 import { memo } from 'react';
 
 import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
-import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
+
+import { useResolvedDocumentId } from './documentViewContext';
 
 const EditorCanvas = memo(() => {
   const editor = useEditor();
 
-  const documentId = useChatStore(chatPortalSelectors.portalDocumentId);
+  const documentId = useResolvedDocumentId();
 
   return <SharedEditorCanvas documentId={documentId} editor={editor} sourceType="notebook" />;
 });

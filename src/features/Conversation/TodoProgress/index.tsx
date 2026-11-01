@@ -1,8 +1,7 @@
 'use client';
 
 import { type StepContextTodos } from '@lobechat/types';
-import { Checkbox, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Checkbox, createStaticStyles, cssVar, cx, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -74,7 +73,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   listContainer: css`
-    overflow: hidden;
+    overflow: hidden auto;
+    overscroll-behavior-y: contain;
+
+    /* The rows are Base UI Checkbox labels, which are inline-flex. In a plain
+       block container they lay out as INLINE boxes — two or three short todos
+       share a line and the list wraps like prose. A column flex container
+       blockifies them, so one todo is one row again. */
+    display: flex;
+    flex-direction: column;
 
     margin-block-start: 8px;
     padding-block: 4px;

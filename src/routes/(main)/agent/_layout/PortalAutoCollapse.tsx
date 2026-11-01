@@ -11,7 +11,7 @@ import { useGlobalStore } from '@/store/global';
  * Restores the previous state when Portal closes.
  */
 const PortalAutoCollapse = memo(() => {
-  const showPortal = useChatStore(chatPortalSelectors.showPortal);
+  const showPortal = useChatStore(chatPortalSelectors.showStandalonePortal);
   const savedShowLeftPanelRef = useRef<boolean | null>(null);
 
   useEffect(() => {

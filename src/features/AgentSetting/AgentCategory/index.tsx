@@ -17,10 +17,10 @@ const AgentCategory = memo<CategoryContentProps>(({ setTab, tab }) => {
     <Menu
       compact
       selectable
+      activeKey={tab}
       items={cateItems}
-      selectedKeys={[tab as any]}
       onClick={({ key }) => {
-        setTab(key as ChatSettingsTabs);
+        setTab(String(key) as ChatSettingsTabs);
       }}
     />
   );

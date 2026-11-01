@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewGenerationBatch } from '../../schemas';
-import { generationBatches, generations, generationTopics, users } from '../../schemas';
+import { generationBatches, generations, generationTopics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GenerationBatchModel } from '../generationBatch';
 
@@ -15,21 +15,26 @@ const serverDB: LobeChatDatabase = await getTestDB();
 // Mock FileService
 const mockGetFullFileUrl = vi.fn();
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: mockGetFullFileUrl,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      getFullFileUrl: mockGetFullFileUrl,
+    };
+  }),
 }));
 
 // Mock GenerationModel
 const mockTransformGeneration = vi.fn();
 vi.mock('../generation', () => ({
-  GenerationModel: vi.fn().mockImplementation(() => ({
-    transformGeneration: mockTransformGeneration,
-  })),
+  GenerationModel: vi.fn(function () {
+    return {
+      transformGeneration: mockTransformGeneration,
+    };
+  }),
 }));
 
 const userId = 'generation-batch-test-user-id';
 const otherUserId = 'other-user-id';
+const workspaceId = 'generation-batch-workspace';
 const generationBatchModel = new GenerationBatchModel(serverDB, userId);
 
 // Test data
@@ -98,6 +103,12 @@ beforeEach(async () => {
   // Clear database and create test users
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Generation Batch Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
 
   // Create test topic
   await serverDB.insert(generationTopics).values(testTopic);
@@ -220,6 +231,29 @@ describe('GenerationBatchModel', () => {
       const results = await generationBatchModel.findByTopicId('non-existent-topic');
       expect(results).toHaveLength(0);
     });
+
+    it('should not return batches from another member private workspace topic', async () => {
+      await serverDB.insert(generationTopics).values({
+        id: 'private-topic-in-workspace',
+        title: 'Private Workspace Topic',
+        type: 'image',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      await serverDB.insert(generationBatches).values({
+        ...testBatch,
+        id: 'private-topic-batch',
+        generationTopicId: 'private-topic-in-workspace',
+        userId,
+        workspaceId,
+      });
+
+      const otherMemberModel = new GenerationBatchModel(serverDB, otherUserId, workspaceId);
+      const results = await otherMemberModel.findByTopicId('private-topic-in-workspace');
+
+      expect(results).toHaveLength(0);
+    });
   });
 
   describe('findByTopicIdWithGenerations', () => {
@@ -305,6 +339,40 @@ describe('GenerationBatchModel', () => {
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe(userBatch.id);
     });
+
+    it('should not include batches when the parent workspace topic is private to another member', async () => {
+      await serverDB.insert(generationTopics).values({
+        id: 'private-topic-with-generations',
+        title: 'Private Topic with Generations',
+        type: 'image',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      const [createdBatch] = await serverDB
+        .insert(generationBatches)
+        .values({
+          ...testBatch,
+          id: 'private-topic-with-generations-batch',
+          generationTopicId: 'private-topic-with-generations',
+          userId,
+          workspaceId,
+        })
+        .returning();
+      await serverDB.insert(generations).values({
+        ...testGeneration,
+        generationBatchId: createdBatch.id,
+        userId,
+        workspaceId,
+      });
+
+      const otherMemberModel = new GenerationBatchModel(serverDB, otherUserId, workspaceId);
+      const results = await otherMemberModel.findByTopicIdWithGenerations(
+        'private-topic-with-generations',
+      );
+
+      expect(results).toHaveLength(0);
+    });
   });
 
   describe('queryGenerationBatchesByTopicIdWithGenerations', () => {
@@ -344,7 +412,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform config imageUrls through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -363,7 +431,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform single config imageUrl through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -383,7 +451,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform both imageUrl and imageUrls when both are present', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -408,7 +476,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform config endImageUrl through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -429,7 +497,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform config with both imageUrl and endImageUrl through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -456,7 +524,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should handle config without imageUrls', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -644,6 +712,36 @@ describe('GenerationBatchModel', () => {
       });
       expect(stillExists).toBeDefined();
     });
+
+    it('should not delete a batch from another member private workspace topic', async () => {
+      await serverDB.insert(generationTopics).values({
+        id: 'private-topic-delete',
+        title: 'Private Topic Delete',
+        type: 'image',
+        userId,
+        visibility: 'private',
+        workspaceId,
+      });
+      const [createdBatch] = await serverDB
+        .insert(generationBatches)
+        .values({
+          ...testBatch,
+          id: 'private-topic-delete-batch',
+          generationTopicId: 'private-topic-delete',
+          userId,
+          workspaceId,
+        })
+        .returning();
+
+      const otherMemberModel = new GenerationBatchModel(serverDB, otherUserId, workspaceId);
+      const result = await otherMemberModel.delete(createdBatch.id);
+
+      expect(result).toBeUndefined();
+      const stillExists = await serverDB.query.generationBatches.findFirst({
+        where: eq(generationBatches.id, createdBatch.id),
+      });
+      expect(stillExists).toBeDefined();
+    });
   });
 
   describe('user isolation security tests', () => {
@@ -685,7 +783,7 @@ describe('GenerationBatchModel', () => {
 
   describe('External service integration', () => {
     it('should call FileService with correct parameters', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -720,7 +818,7 @@ describe('GenerationBatchModel', () => {
     it('should handle FileService errors gracefully', async () => {
       mockGetFullFileUrl.mockRejectedValue(new Error('FileService error'));
 
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -733,5 +831,36 @@ describe('GenerationBatchModel', () => {
         generationBatchModel.queryGenerationBatchesByTopicIdWithGenerations(testTopic.id),
       ).rejects.toThrow('FileService error');
     });
+  });
+});
+
+describe('GenerationBatchModel guards', () => {
+  it('rejects a batch for a topic the caller cannot see', async () => {
+    await serverDB
+      .insert(generationTopics)
+      .values({ id: 'guard-foreign-topic', title: 'Not yours', userId: otherUserId });
+
+    await expect(
+      generationBatchModel.create({ ...testBatch, generationTopicId: 'guard-foreign-topic' }),
+    ).rejects.toThrow('Generation topic not found');
+
+    const rows = await serverDB
+      .select()
+      .from(generationBatches)
+      .where(eq(generationBatches.generationTopicId, 'guard-foreign-topic'));
+    expect(rows).toEqual([]);
+  });
+
+  it('collects only the urls an asset actually carries when deleting', async () => {
+    const batch = await generationBatchModel.create(testBatch);
+    await serverDB.insert(generations).values([
+      { asset: null, generationBatchId: batch.id, userId },
+      { asset: { coverUrl: 'cover-only.png', type: 'video' }, generationBatchId: batch.id, userId },
+    ]);
+
+    const result = await generationBatchModel.delete(batch.id);
+
+    expect(result?.deletedBatch.id).toBe(batch.id);
+    expect(result?.filesToDelete).toEqual(['cover-only.png']);
   });
 });

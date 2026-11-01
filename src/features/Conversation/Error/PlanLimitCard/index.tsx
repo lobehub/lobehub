@@ -1,7 +1,6 @@
 import { BRANDING_URL } from '@lobechat/business-const';
 import { ChatErrorType, Plans } from '@lobechat/types';
-import { Button, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,7 +10,6 @@ import { ErrorActionContainer, FormAction } from '../style';
 import {
   getBudgetContextFromErrorBody,
   getNextUpgradePlan,
-  isFableCampaignLimitContext,
   isKnownPlan,
   type PlanLimitPricingBasis,
 } from './budget';
@@ -23,7 +21,10 @@ const CREDIT_UNIT = 1_000_000;
 const PLAN_TITLE_KEYS = {
   [Plans.Free]: 'plans.plan.free.title',
   [Plans.Hobby]: 'plans.plan.hobby.title',
+  [Plans.Max]: 'plans.plan.max.title',
+  [Plans.Plus]: 'plans.plan.plus.title',
   [Plans.Premium]: 'plans.plan.premium.title',
+  [Plans.Pro]: 'plans.plan.pro.title',
   [Plans.Starter]: 'plans.plan.starter.title',
   [Plans.Ultimate]: 'plans.plan.ultimate.title',
 } as const satisfies Record<Plans, string>;
@@ -94,39 +95,22 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
   const { t } = useTranslation('subscription');
 
   const context = getBudgetContextFromErrorBody(errorBody);
-  const isFableCampaign = isFableCampaignLimitContext(context);
   const isInsufficientBudget = errorType === ChatErrorType.InsufficientBudgetForModel;
 
   const planAtError = isKnownPlan(context?.planAtError) ? context.planAtError : Plans.Free;
 
   const getPlanTitle = (plan: Plans) => t(PLAN_TITLE_KEYS[plan]);
 
-  let title: string;
-  let description: string;
-  let upgradeLabel: string;
-
-  if (isFableCampaign) {
-    // Hobby has no credit allowance to restore, so skip the plan recommendation
-    const targetPlan = context?.planAtError === Plans.Hobby ? undefined : Plans.Starter;
-
-    title = t('limitation.fableCampaign.title');
-    description = t('limitation.fableCampaign.desc');
-    upgradeLabel = targetPlan
-      ? t('limitation.fableCampaign.upgradeToPlan', { plan: getPlanTitle(targetPlan) })
-      : t('limitation.fableCampaign.upgrade');
-  } else {
-    const nextPlan = getNextUpgradePlan(planAtError);
-
-    title = isInsufficientBudget
-      ? t('limitation.insufficientBudget.title')
-      : t('limitation.limited.title');
-    description = isInsufficientBudget
-      ? t(getBudgetDescriptionKey(context?.pricingBasis))
-      : t('limitation.limited.desc', { plan: getPlanTitle(planAtError) });
-    upgradeLabel = nextPlan
-      ? t('limitation.limited.upgradeToPlan', { plan: getPlanTitle(nextPlan) })
-      : t('limitation.limited.upgrade');
-  }
+  const nextPlan = getNextUpgradePlan(planAtError);
+  const title = isInsufficientBudget
+    ? t('limitation.insufficientBudget.title')
+    : t('limitation.limited.title');
+  const description = isInsufficientBudget
+    ? t(getBudgetDescriptionKey(context?.pricingBasis))
+    : t('limitation.limited.desc', { plan: getPlanTitle(planAtError) });
+  const upgradeLabel = nextPlan
+    ? t('limitation.limited.upgradeToPlan', { plan: getPlanTitle(nextPlan) })
+    : t('limitation.limited.upgrade');
 
   const facts = (
     [

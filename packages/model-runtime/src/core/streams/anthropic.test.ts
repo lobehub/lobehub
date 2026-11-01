@@ -64,13 +64,16 @@ describe('AnthropicStream', () => {
     const onStartMock = vi.fn();
     const onTextMock = vi.fn();
     const onCompletionMock = vi.fn();
+    const onFinalMock = vi.fn();
 
     const protocolStream = AnthropicStream(mockAnthropicStream, {
       callbacks: {
         onStart: onStartMock,
         onText: onTextMock,
         onCompletion: onCompletionMock,
+        onFinal: onFinalMock,
       },
+      payload: { apiMode: 'messages', model: 'claude-opus-4-8', provider: 'anthropic' },
     });
 
     const decoder = new TextDecoder();
@@ -100,6 +103,19 @@ describe('AnthropicStream', () => {
     expect(onTextMock).toHaveBeenNthCalledWith(1, 'Hello');
     expect(onTextMock).toHaveBeenNthCalledWith(2, ' world!');
     expect(onCompletionMock).toHaveBeenCalledTimes(1);
+    expect(onFinalMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usageMissingDiagnostics: {
+          apiMode: 'messages',
+          finishReason: 'stop',
+          hasUsageMetadata: false,
+          model: 'claude-opus-4-8',
+          provider: 'anthropic',
+          source: 'anthropic_messages',
+          terminalEventType: 'message_delta',
+        },
+      }),
+    );
   });
 
   it('should handle tool use event and ReadableStream input', async () => {
@@ -231,7 +247,7 @@ describe('AnthropicStream', () => {
 
         'id: msg_017aTuY86wNxth5TE544yqJq',
         'event: usage',
-        'data: {"inputCacheMissTokens":457,"totalInputTokens":457,"totalOutputTokens":84,"totalTokens":541}\n',
+        'data: {"inputCacheMissTokens":457,"totalInputTokens":457,"totalOutputTokens":83,"totalTokens":540}\n',
       ].map((item) => `${item}\n`),
     );
 
@@ -389,7 +405,7 @@ describe('AnthropicStream', () => {
 
         'id: msg_0175ryA67RbGrnRrGBXFQEYK',
         'event: usage',
-        'data: {"inputCacheMissTokens":485,"totalInputTokens":485,"totalOutputTokens":154,"totalTokens":639}\n',
+        'data: {"inputCacheMissTokens":485,"totalInputTokens":485,"totalOutputTokens":150,"totalTokens":635}\n',
         'id: msg_0175ryA67RbGrnRrGBXFQEYK',
         'event: stop',
         'data: "message_stop"\n',
@@ -476,7 +492,7 @@ describe('AnthropicStream', () => {
         'data: "end_turn"\n',
         'id: msg_01Vxc4yQTEjkDSba3N3BMbH8',
         'event: usage',
-        'data: {"inputCacheMissTokens":6,"inputCachedTokens":17918,"inputWriteCacheTokens":457,"totalInputTokens":18381,"totalOutputTokens":3224,"totalTokens":21605}\n',
+        'data: {"inputCacheMissTokens":6,"inputCachedTokens":17918,"inputWriteCacheTokens":457,"totalInputTokens":18381,"totalOutputTokens":3222,"totalTokens":21603}\n',
 
         'id: msg_01Vxc4yQTEjkDSba3N3BMbH8',
         'event: stop',
@@ -607,7 +623,7 @@ describe('AnthropicStream', () => {
           'data: "end_turn"\n',
           'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
           'event: usage',
-          'data: {"inputCacheMissTokens":46,"totalInputTokens":46,"totalOutputTokens":365,"totalTokens":411}\n',
+          'data: {"inputCacheMissTokens":46,"inputCachedTokens":0,"totalInputTokens":46,"totalOutputTokens":354,"totalTokens":400}\n',
           'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
           'event: stop',
           'data: "message_stop"\n',
@@ -767,7 +783,7 @@ describe('AnthropicStream', () => {
           'data: "end_turn"\n',
           'id: msg_019q32esPvu3TftzZnL6JPys',
           'event: usage',
-          'data: {"inputCacheMissTokens":92,"totalInputTokens":92,"totalOutputTokens":263,"totalTokens":355}\n',
+          'data: {"inputCacheMissTokens":92,"inputCachedTokens":0,"totalInputTokens":92,"totalOutputTokens":259,"totalTokens":351}\n',
           'id: msg_019q32esPvu3TftzZnL6JPys',
           'event: stop',
           'data: "message_stop"\n',
@@ -857,6 +873,7 @@ describe('AnthropicStream', () => {
         index: 0,
         delta: { type: 'abc', abc: '123' },
       },
+      { type: 'message_stop' },
     ];
 
     const mockReadableStream = new ReadableStream({
@@ -898,6 +915,9 @@ describe('AnthropicStream', () => {
         'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
         'event: data',
         'data: {"type":"content_block_delta","index":0,"delta":{"type":"abc","abc":"123"}}\n',
+        'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
+        'event: stop',
+        'data: "message_stop"\n',
       ].map((item) => `${item}\n`),
     );
   });

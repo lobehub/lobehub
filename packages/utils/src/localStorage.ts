@@ -32,7 +32,17 @@ export class AsyncLocalStorage<State> {
     localStorage.setItem(this.storageKey, JSON.stringify({ ...data, ...state }));
   }
 
+  getFromLocalStorageSync(key: StorageKey = this.storageKey): State {
+    if (typeof localStorage === 'undefined') return {} as State;
+
+    try {
+      return JSON.parse(localStorage.getItem(key) || '{}');
+    } catch {
+      return {} as State;
+    }
+  }
+
   async getFromLocalStorage(key: StorageKey = this.storageKey): Promise<State> {
-    return JSON.parse(localStorage.getItem(key) || '{}');
+    return this.getFromLocalStorageSync(key);
   }
 }

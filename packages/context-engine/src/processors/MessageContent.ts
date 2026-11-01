@@ -1,5 +1,7 @@
+import { createMediaFileRef } from '../const/mediaRef';
 import { filesPrompts } from '@lobechat/prompts';
-import type { MessageContentPart } from '@lobechat/types';
+import type { ChatAudioItem, MessageContentPart } from '@lobechat/types';
+import { normalizeAudioDurationMs } from '../utils/audio';
 import { imageUrlToBase64 } from '@lobechat/utils/imageToBase64';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 import { isDesktopLocalStaticServerUrl } from '@lobechat/utils/url';
@@ -12,6 +14,7 @@ declare module '../types' {
   interface PipelineContextMetadataOverrides {
     assistantMessagesProcessed?: number;
     messageContentProcessed?: number;
+    toolMessagesProcessed?: number;
     userMessagesProcessed?: number;
   }
 }
@@ -25,7 +28,60 @@ const log = debug('context-engine:processor:MessageContentProcessor');
  * in the payload causes provider-side 400s (e.g. DeepSeek rejects the
  * `image_url` variant outright — see ).
  */
-export const VISION_DOWNGRADE_PLACEHOLDER = '[image omitted: not supported by this model]';
+export const VISION_DOWNGRADE_PLACEHOLDER =
+  '[image omitted: native vision is not supported. Do not infer or describe the image. If the request depends on it, use an available visual-analysis tool before answering; otherwise state that the image cannot be inspected.]';
+
+/**
+ * AVIF must stay as a media ref even when the active model supports vision.
+ * Model capability flags do not describe per-format support, while Analyze Media
+ * normalizes AVIF at its request boundary.
+ */
+const requiresVisualAnalysis = (mediaType: unknown): boolean =>
+  typeof mediaType === 'string' && mediaType.split(';', 1)[0].trim().toLowerCase() === 'image/avif';
+
+/**
+ * Image formats no vision API accepts. Agent-mode uploads skip the chat
+ * file-type whitelist, so an SVG still lands in `imageList`; sending it as an
+ * `image_url` part makes every request in that topic fail with a 400.
+ * Provider-specific formats (e.g. HEIC on Gemini) stay with each provider's
+ * context builder, and images without a known type keep the previous behavior.
+ */
+const NON_VISION_IMAGE_TYPES = new Set(['image/svg+xml']);
+
+const getUnsupportedVisionImageType = (image: {
+  mimeType?: string;
+  url?: string;
+}): string | undefined => {
+  const mimeType =
+    image.mimeType ||
+    (typeof image.url === 'string' ? parseDataUri(image.url).mimeType : undefined);
+  if (!mimeType) return;
+
+  const normalized = mimeType.split(';', 1)[0].trim().toLowerCase();
+  return NON_VISION_IMAGE_TYPES.has(normalized) ? normalized : undefined;
+};
+
+const createUnsupportedImageFormatPlaceholder = (mimeType: string) =>
+  `[image omitted: ${mimeType} is not a supported vision input format. Do not infer or describe the image. If the request depends on it, read the attached file with an available tool.]`;
+
+/**
+ * Heterogeneous-agent image uploads mirror each persisted image URL into tool
+ * text as `![mediaType](url)`. Non-vision models must receive only the opaque
+ * media ref, otherwise they can copy the signed URL into a later tool call.
+ */
+const stripUploadedImageMarkdown = (
+  content: string,
+  images: Array<{ mediaType?: unknown; url: string }>,
+): string => {
+  let sanitized = content;
+
+  for (const image of images) {
+    if (typeof image.mediaType !== 'string') continue;
+    sanitized = sanitized.replaceAll(`![${image.mediaType}](${image.url})`, '');
+  }
+
+  return sanitized.trim();
+};
 
 /**
  * Deserialize content string to message content parts
@@ -49,11 +105,20 @@ export interface FileContextConfig {
   enabled?: boolean;
   /** Whether to include file URLs in file context prompts */
   includeFileUrl?: boolean;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (see `planAttachmentPreviews`).
+   */
+  previewFileIds?: string[];
 }
 
 export interface MessageContentConfig {
+  /** Whether `readAttachment` is in the request's tool set, so oversized file previews can name it */
+  canReadAttachment?: boolean;
   /** File context configuration */
   fileContext?: FileContextConfig;
+  /** Function to check if audio input is supported */
+  isCanUseAudio?: (model: string, provider: string) => boolean | undefined;
   /** Function to check if video is supported */
   isCanUseVideo?: (model: string, provider: string) => boolean | undefined;
   /** Function to check if vision is supported */
@@ -65,6 +130,12 @@ export interface MessageContentConfig {
 }
 
 export interface UserMessageContentPart {
+  audio_url?: {
+    codec?: string;
+    durationMs?: number;
+    mimeType?: string;
+    url: string;
+  };
   googleThoughtSignature?: string;
   image_url?: {
     detail?: string;
@@ -73,7 +144,7 @@ export interface UserMessageContentPart {
   signature?: string;
   text?: string;
   thinking?: string;
-  type: 'text' | 'image_url' | 'thinking' | 'video_url';
+  type: 'text' | 'image_url' | 'thinking' | 'video_url' | 'audio_url';
   video_url?: {
     url: string;
   };
@@ -86,11 +157,15 @@ export interface UserMessageContentPart {
 export class MessageContentProcessor extends BaseProcessor {
   readonly name = 'MessageContentProcessor';
 
+  private readonly previewFileIds?: ReadonlySet<string>;
+
   constructor(
     private config: MessageContentConfig,
     options: ProcessorOptions = {},
   ) {
     super(options);
+    const previewFileIds = config.fileContext?.previewFileIds;
+    if (previewFileIds?.length) this.previewFileIds = new Set(previewFileIds);
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
@@ -99,6 +174,7 @@ export class MessageContentProcessor extends BaseProcessor {
     let processedCount = 0;
     let userMessagesProcessed = 0;
     let assistantMessagesProcessed = 0;
+    let toolMessagesProcessed = 0;
 
     // Process the content of each message
     for (let i = 0; i < clonedContext.messages.length; i++) {
@@ -119,6 +195,12 @@ export class MessageContentProcessor extends BaseProcessor {
             assistantMessagesProcessed++;
             processedCount++;
           }
+        } else if (message.role === 'tool') {
+          updatedMessage = await this.processToolMessage(message);
+          if (updatedMessage !== message) {
+            toolMessagesProcessed++;
+            processedCount++;
+          }
         }
 
         if (updatedMessage !== message) {
@@ -135,9 +217,10 @@ export class MessageContentProcessor extends BaseProcessor {
     clonedContext.metadata.messageContentProcessed = processedCount;
     clonedContext.metadata.userMessagesProcessed = userMessagesProcessed;
     clonedContext.metadata.assistantMessagesProcessed = assistantMessagesProcessed;
+    clonedContext.metadata.toolMessagesProcessed = toolMessagesProcessed;
 
     log(
-      `Message content processing completed, processed ${processedCount} messages (user: ${userMessagesProcessed}, assistant: ${assistantMessagesProcessed})`,
+      `Message content processing completed, processed ${processedCount} messages (user: ${userMessagesProcessed}, assistant: ${assistantMessagesProcessed}, tool: ${toolMessagesProcessed})`,
     );
 
     return this.markAsExecuted(clonedContext);
@@ -150,10 +233,12 @@ export class MessageContentProcessor extends BaseProcessor {
     // Check if images, videos or files need processing
     const hasImages = message.imageList && message.imageList.length > 0;
     const hasVideos = message.videoList && message.videoList.length > 0;
+    const hasAudios = message.audioList && message.audioList.length > 0;
     const hasFiles = message.fileList && message.fileList.length > 0;
 
     const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
     const canUseVideo = !!this.config.isCanUseVideo?.(this.config.model, this.config.provider);
+    const canUseAudio = !!this.config.isCanUseAudio?.(this.config.model, this.config.provider);
 
     // Historical messages may already be stored in multimodal parts form
     // (content is an array of {type, text|image_url|video_url}). Those parts
@@ -166,7 +251,7 @@ export class MessageContentProcessor extends BaseProcessor {
     const needsArrayRewrite = contentIsArray && arrayImageUrlCount > 0 && !canUseVision;
 
     // Fast path: nothing to transform — plain text content passes through.
-    if (!hasImages && !hasVideos && !hasFiles && !needsArrayRewrite) {
+    if (!hasImages && !hasVideos && !hasAudios && !hasFiles && !needsArrayRewrite) {
       return {
         ...message,
         content: message.content,
@@ -201,23 +286,36 @@ export class MessageContentProcessor extends BaseProcessor {
       (!canUseVision && hasImages ? message.imageList.length : 0) +
       (!canUseVision ? arrayImageUrlCount : 0);
 
-    if (imageDowngradeCount > 0) {
-      const placeholders = Array.from(
-        { length: imageDowngradeCount },
-        () => VISION_DOWNGRADE_PLACEHOLDER,
-      ).join('\n');
+    const unsupportedImageTypes: string[] = [];
+    const visionImageList = canUseVision
+      ? (message.imageList || []).filter((image: { mimeType?: string; url?: string }) => {
+          const unsupportedType = getUnsupportedVisionImageType(image);
+          if (unsupportedType) unsupportedImageTypes.push(unsupportedType);
+          return !unsupportedType;
+        })
+      : [];
+
+    const placeholders = [
+      ...Array.from({ length: imageDowngradeCount }, () => VISION_DOWNGRADE_PLACEHOLDER),
+      ...unsupportedImageTypes.map(createUnsupportedImageFormatPlaceholder),
+    ].join('\n');
+
+    if (placeholders) {
       textContent = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
     }
 
-    // Add file context (if file context is enabled and has files, images or videos)
-    if ((hasFiles || hasImages || hasVideos) && this.config.fileContext?.enabled) {
+    // Add file context (if file context is enabled and has files, images, videos or audios)
+    if ((hasFiles || hasImages || hasVideos || hasAudios) && this.config.fileContext?.enabled) {
       const filesContext = filesPrompts({
         // File access URLs are needed by sandbox/code tools that fetch attachments from text.
         // Call sites can still disable them for environments such as desktop local files.
         addUrl: this.config.fileContext.includeFileUrl ?? true,
+        audioList: message.audioList || [],
+        canReadAttachment: this.config.canReadAttachment,
         fileList: message.fileList,
         imageList: message.imageList || [],
         messageId: message.id,
+        previewFileIds: this.previewFileIds,
         videoList: message.videoList || [],
       });
 
@@ -235,8 +333,8 @@ export class MessageContentProcessor extends BaseProcessor {
     }
 
     // Process image content (legacy imageList path)
-    if (hasImages && canUseVision) {
-      const imageContentParts = await this.processImageList(message.imageList || []);
+    if (visionImageList.length > 0) {
+      const imageContentParts = await this.processImageList(visionImageList);
       contentParts.push(...imageContentParts);
     }
 
@@ -253,18 +351,27 @@ export class MessageContentProcessor extends BaseProcessor {
       contentParts.push(...videoContentParts);
     }
 
-    // Explicitly return fields, keeping only necessary message fields
-    const hasFileContext = (hasFiles || hasImages || hasVideos) && this.config.fileContext?.enabled;
-    const hasVisionContent = (hasImages || arrayImageUrlCount > 0) && canUseVision;
-    const hasVideoContent = hasVideos && canUseVideo;
+    // Process audio content
+    if (hasAudios && canUseAudio) {
+      const audioContentParts = await this.processAudioList(message.audioList || []);
+      contentParts.push(...audioContentParts);
+    }
 
-    // If only text content and no file context added and no vision/video content, return plain text
+    // Explicitly return fields, keeping only necessary message fields
+    const hasFileContext =
+      (hasFiles || hasImages || hasVideos || hasAudios) && this.config.fileContext?.enabled;
+    const hasVisionContent = (visionImageList.length > 0 || arrayImageUrlCount > 0) && canUseVision;
+    const hasVideoContent = hasVideos && canUseVideo;
+    const hasAudioContent = hasAudios && canUseAudio;
+
+    // If only text content and no file context added and no vision/video/audio content, return plain text
     if (
       contentParts.length === 1 &&
       contentParts[0].type === 'text' &&
       !hasFileContext &&
       !hasVisionContent &&
-      !hasVideoContent
+      !hasVideoContent &&
+      !hasAudioContent
     ) {
       return {
         content: contentParts[0].text,
@@ -310,7 +417,12 @@ export class MessageContentProcessor extends BaseProcessor {
       const contentParts: UserMessageContentPart[] = [
         {
           signature: message.reasoning!.signature,
-          thinking: message.reasoning!.content,
+          // Signature-only reasoning (e.g. Claude 5 `thinking.display: 'omitted'`)
+          // has no thinking text. Emit an explicit empty string instead of
+          // `undefined`, which JSON serialization drops entirely — strict
+          // Anthropic-compatible endpoints (e.g. DeepSeek) reject thinking parts
+          // missing the `thinking` field with 400 `missing field 'thinking'`.
+          thinking: message.reasoning!.content ?? '',
           type: 'thinking',
         },
         {
@@ -420,6 +532,100 @@ export class MessageContentProcessor extends BaseProcessor {
   }
 
   /**
+   * Process tool message content.
+   *
+   * Tool messages carry the results of tool calls. When a tool returns images
+   * (e.g. `readFile` on an image file), they're carried on `pluginState.images`
+   * — the same convention as the CC `Read`-on-image echo, where each entry is
+   * `{ url, mediaType, ... }` after upload. Convert them to `image_url` content
+   * parts so vision-capable models can actually inspect the tool result, and
+   * downgrade to text-only when the active model lacks vision — non-vision
+   * providers reject `image_url` parts outright.
+   *
+   * `pluginState` (not `imageList`) is used because the builtin-tool result
+   * pipeline already persists `result.state` onto the tool message's
+   * `pluginState`, so no extra wiring is needed to carry tool-produced images.
+   *
+   * Tool messages MUST keep `tool_call_id` (and `name`): providers pair the
+   * result with the originating tool call by it.
+   */
+  private async processToolMessage(message: any): Promise<any> {
+    const rawImages = message.pluginState?.images;
+
+    // Forward provider-readable HTTP(S) and inline image URLs to vision models.
+    // Pre-upload entries (`data` without `url`) and legacy non-http(s) URLs
+    // (e.g. desktop-only `localfile://` previews) cannot reach the send path.
+    const images = Array.isArray(rawImages)
+      ? rawImages.flatMap((image: any, index: number) =>
+          typeof image?.url === 'string' && /^(?:data:image\/|https?:)/i.test(image.url)
+            ? [{ ...image, sourceIndex: index }]
+            : [],
+        )
+      : [];
+
+    // Fast path: no usable images — plain text tool result passes through unchanged.
+    if (images.length === 0) return message;
+
+    const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
+    const fallbackImages = canUseVision
+      ? images.filter((image) => requiresVisualAnalysis(image.mediaType))
+      : images;
+    const visionImages = canUseVision
+      ? images.filter((image) => !requiresVisualAnalysis(image.mediaType))
+      : [];
+
+    // Normalize text content (historical messages may already be multimodal).
+    let textContent = '';
+    if (typeof message.content === 'string') {
+      textContent = message.content;
+    } else if (Array.isArray(message.content)) {
+      textContent = message.content
+        .filter((part: any) => part?.type === 'text' && typeof part.text === 'string')
+        .map((part: any) => part.text)
+        .join('\n\n');
+    }
+
+    // Native vision unavailable or image format unsupported: surface stable
+    // opaque refs so the model can call the visual-analysis fallback.
+    // The signed URL stays out of model-visible text, which prevents the model
+    // from copying opaque image data between tool calls.
+    let processedTextContent = textContent;
+    if (fallbackImages.length > 0) {
+      const fallbackTextContent = stripUploadedImageMarkdown(textContent, fallbackImages);
+      const placeholders = fallbackImages
+        .map(({ sourceIndex, url }) => {
+          // Inline image data is safe to send as a structured vision input but
+          // must never be copied into text or exposed as a reusable media ref.
+          if (!message.id || !/^https?:/i.test(url)) return VISION_DOWNGRADE_PLACEHOLDER;
+
+          const ref = createMediaFileRef({
+            index: sourceIndex,
+            messageId: message.id,
+            type: 'image',
+          });
+
+          return `[image omitted: native vision is not supported. Media ref: ${ref}. Do not infer or describe the image. Use an available visual-analysis tool with this ref before answering.]`;
+        })
+        .join('\n');
+      processedTextContent = fallbackTextContent
+        ? `${fallbackTextContent}\n\n${placeholders}`
+        : placeholders;
+    }
+
+    if (visionImages.length === 0) return { ...message, content: processedTextContent };
+
+    const contentParts: UserMessageContentPart[] = [];
+
+    if (processedTextContent) {
+      contentParts.push({ text: processedTextContent, type: 'text' });
+    }
+
+    contentParts.push(...(await this.processImageList(visionImages)));
+
+    return { ...message, content: contentParts };
+  }
+
+  /**
    * Convert MessageContentPart[] (internal format) to OpenAI-compatible UserMessageContentPart[]
    *
    * When `canUseVision` is false, image parts are replaced by a text placeholder
@@ -503,6 +709,29 @@ export class MessageContentProcessor extends BaseProcessor {
   }
 
   /**
+   * Process audio list
+   */
+  private async processAudioList(audioList: ChatAudioItem[]): Promise<UserMessageContentPart[]> {
+    if (!audioList || audioList.length === 0) {
+      return [];
+    }
+
+    return audioList.map((audio) => {
+      const durationMs = normalizeAudioDurationMs(audio.durationMs);
+
+      return {
+        audio_url: {
+          ...(audio.codec ? { codec: audio.codec } : {}),
+          ...(durationMs === undefined ? {} : { durationMs }),
+          ...(audio.mimeType ? { mimeType: audio.mimeType } : {}),
+          url: audio.url,
+        },
+        type: 'audio_url',
+      } as UserMessageContentPart;
+    });
+  }
+
+  /**
    * Validate content part format
    */
   private validateContentPart(part: UserMessageContentPart): boolean {
@@ -520,6 +749,14 @@ export class MessageContentProcessor extends BaseProcessor {
       }
       case 'video_url': {
         return !!(part.video_url && part.video_url.url);
+      }
+      case 'audio_url': {
+        return !!(
+          part.audio_url &&
+          part.audio_url.url &&
+          (part.audio_url.durationMs === undefined ||
+            normalizeAudioDurationMs(part.audio_url.durationMs) === part.audio_url.durationMs)
+        );
       }
       default: {
         return false;

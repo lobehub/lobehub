@@ -12,7 +12,8 @@ import type { ErrorAttribution, ErrorCategory, ErrorSeverity } from './taxonomy'
 export type CloudErrorCode =
   | typeof ChatErrorType.FreePlanLimit
   | typeof ChatErrorType.InsufficientBudgetForModel
-  | typeof ChatErrorType.LobeHubModelDeprecated;
+  | typeof ChatErrorType.LobeHubModelDeprecated
+  | typeof ChatErrorType.SubscriptionPlanLimit;
 
 /** Every code the spec table can classify. */
 export type SpecErrorCode = CloudErrorCode | ILobeAgentRuntimeErrorType;
@@ -49,6 +50,9 @@ export interface ErrorCodeSpec {
 
   /** Whether transport-level retry is allowed. */
   retryable: boolean;
+
+  /** Whether RouterRuntime may continue with a different route option. */
+  routeFallback?: boolean;
 
   severity: ErrorSeverity;
 }
@@ -191,6 +195,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'LobeHub Cloud balance is positive but below the model’s estimated cost.',
   },
+  [ChatErrorType.SubscriptionPlanLimit]: {
+    code: ChatErrorType.SubscriptionPlanLimit,
+    numericId: 2903,
+    category: 'quota',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 402,
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'LobeHub Cloud paid-plan allowance reached, or the plan tier does not cover the requested model.',
+  },
 
   // ─── 3xxx Capacity ────────────────────────────────────────────────────
   [AgentRuntimeErrorType.RateLimitExceeded]: {
@@ -269,6 +285,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 400,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
     description: 'Prompt + tool payload exceeds the model context window.',
   },
@@ -302,8 +319,33 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 400,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
     description: 'Upstream rejected the request as malformed (bad JSON / schema / parameters).',
+  },
+  [AgentRuntimeErrorType.RequestBodyTooLarge]: {
+    code: AgentRuntimeErrorType.RequestBodyTooLarge,
+    numericId: 4006,
+    category: 'request',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    routeFallback: false,
+    countAsFailure: false,
+    description: 'Upstream rejected the serialized request body as too large.',
+  },
+  [AgentRuntimeErrorType.ExceededImageLimit]: {
+    code: AgentRuntimeErrorType.ExceededImageLimit,
+    numericId: 4007,
+    category: 'request',
+    severity: 'info',
+    attribution: 'user',
+    httpStatus: 400,
+    retryable: false,
+    routeFallback: true,
+    countAsFailure: false,
+    description: 'Upstream rejected the request for exceeding its per-request image count limit.',
   },
   // —— Cloud-only (tier 9) ——
   [ChatErrorType.LobeHubModelDeprecated]: {
@@ -342,6 +384,42 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: true,
     countAsFailure: false,
     description: 'Connection timeout / network drop talking to the provider.',
+  },
+  [AgentRuntimeErrorType.RemoteMediaDownloadTimeout]: {
+    code: AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+    numericId: 6002,
+    category: 'network',
+    severity: 'warning',
+    attribution: 'system',
+    httpStatus: 504,
+    retryable: false,
+    routeFallback: true,
+    countAsFailure: false,
+    description: 'Provider timed out while downloading a remote image or file URL.',
+  },
+  [AgentRuntimeErrorType.ClientLlmExecutorLost]: {
+    code: AgentRuntimeErrorType.ClientLlmExecutorLost,
+    numericId: 6003,
+    category: 'network',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 504,
+    retryable: true,
+    countAsFailure: false,
+    description:
+      'The user device running a relayed model request went silent (closed, refreshed or disconnected) mid-stream.',
+  },
+  [AgentRuntimeErrorType.ClientLlmTimeout]: {
+    code: AgentRuntimeErrorType.ClientLlmTimeout,
+    numericId: 6004,
+    category: 'network',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 504,
+    retryable: true,
+    countAsFailure: false,
+    description:
+      'A relayed model request on the user device missed its first-output or total deadline.',
   },
 
   // ─── 7xxx Stream / Runtime ────────────────────────────────────────────
@@ -431,6 +509,21 @@ export const ERROR_CODE_SPECS: SpecMap = {
       'State-store (Redis / Upstash) read failed: a blocking read (XREAD / BLPOP) aborted because the caller disconnected ("ERR caller gone"), or the operation\'s agent state could not be loaded ("Agent state not found for operation …"). System-side — counts as a failure.',
   },
 
+  [AgentRuntimeErrorType.HarnessJsonParseError]: {
+    code: AgentRuntimeErrorType.HarnessJsonParseError,
+    numericId: 7008,
+    category: 'stream',
+    severity: 'error',
+    attribution: 'harness',
+    httpStatus: 500,
+    // Deterministic: the same corrupt payload re-parses to the same failure, so
+    // a transport retry only re-burns the run's tokens.
+    retryable: false,
+    countAsFailure: true,
+    description:
+      'A harness-side `JSON.parse` threw on data the harness produced or stored ("… in JSON at position N" / "Unexpected end of JSON input") — a serialization bug, not an upstream response.',
+  },
+
   // ─── 8xxx Provider (catch-all) ────────────────────────────────────────
   [AgentRuntimeErrorType.AgentRuntimeError]: {
     code: AgentRuntimeErrorType.AgentRuntimeError,
@@ -464,6 +557,7 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'provider',
     httpStatus: 471,
     retryable: false,
+    routeFallback: false,
     countAsFailure: true,
     description: 'Image-generation provider returned no image.',
   },
@@ -541,8 +635,9 @@ export const ERROR_CODE_SPECS: SpecMap = {
     attribution: 'user',
     httpStatus: 471,
     retryable: false,
+    routeFallback: false,
     countAsFailure: false,
-    description: 'Image-generation provider blocked the request due to content policy.',
+    description: 'Provider blocked the request or generated output due to content policy.',
   },
   [AgentRuntimeErrorType.UpstreamGatewayError]: {
     code: AgentRuntimeErrorType.UpstreamGatewayError,
@@ -592,13 +687,23 @@ export const ERROR_CODE_SPECS: SpecMap = {
     // `ProviderNoImageGenerated` (provider attribution, status 471).
     attribution: 'provider',
     httpStatus: 471,
-    // Retryable — re-issuing the same request usually yields a real response.
-    // The call_llm retry loop relies on this flag to re-attempt empty turns
-    // before they ever surface as a terminal error.
-    retryable: true,
+    // A retry is a new, potentially billable provider request. Surface the
+    // empty response immediately and let the user decide whether to retry.
+    retryable: false,
     countAsFailure: true,
     description:
-      'Model returned an empty completion (no content, no tool calls, ~0 output tokens), usually after a stalled tool loop.',
+      'Provider returned a completion with no user-visible content, tool calls, images, or grounding.',
+  },
+  [AgentRuntimeErrorType.ModelRefusal]: {
+    code: AgentRuntimeErrorType.ModelRefusal,
+    numericId: 8015,
+    category: 'provider',
+    severity: 'warning',
+    attribution: 'provider',
+    httpStatus: 471,
+    retryable: false,
+    countAsFailure: false,
+    description: 'Provider explicitly refused to produce an otherwise empty completion.',
   },
 
   // ─── 9xxx Config ──────────────────────────────────────────────────────
@@ -657,6 +762,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'Provider connection check failed during setup.',
+  },
+  [AgentRuntimeErrorType.ClientLlmExecutorUnavailable]: {
+    code: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,
+    numericId: 9007,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 409,
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'The model is only reachable from the user device and no open LobeHub client picked up the request.',
   },
 };
 

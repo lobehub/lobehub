@@ -1,172 +1,125 @@
 'use client';
 
+import {
+  type AskUserDraft,
+  type AskUserQuestionArgs,
+  AskUserQuestionView,
+  DEFAULT_COUNTDOWN_MS,
+  DRAFT_PLUGIN_STATE_KEY,
+  SUBMIT_ACK_TIMEOUT_MS,
+  useAskUserForm,
+} from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Button, Flexbox, Icon, Tabs, Text, TextArea } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { ArrowLeft, Check, PenLine, Send, X } from 'lucide-react';
-import { memo } from 'react';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { CircleAlert } from 'lucide-react';
+import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AskUserQuestionArgs } from '../../../types';
-import { formatRemaining, isQuestionAnswered } from './draft';
-import QuestionPanel from './QuestionPanel';
-import { useAskUserForm } from './useAskUserForm';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  // "Or type directly" / "Back to options" link — slim secondary text that
-  // sits alongside Skip in the action bar; matches the `lobe-user-interaction`
-  // escape-toggle styling so the two flows feel like the same control.
-  escapeLink: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-
-    transition: color 0.12s ease;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-}));
+import { useConversationStore } from '@/features/Conversation/store';
+import { dataSelectors } from '@/features/Conversation/store/slices/data/selectors';
+import { useChatStore } from '@/store/chat';
 
 /**
  * CC AskUserQuestion intervention component.
  *
- * Pure form — `onInteractionAction` ({type:'submit'|'skip'}) is the only
- * outbound side effect. The framework's `handleInteractionAction` (or the
- * hetero branch the chat conversation wires up) marks
- * `pluginIntervention.status` and forwards the answer to CC over IPC.
+ * A thin host wrapper around the shared `useAskUserForm` + `AskUserQuestionView`
+ * (in `@lobechat/shared-tool-ui/ask-user`). This wrapper owns the two
+ * app-coupled bits the shared module intentionally does not:
+ *   - draft persistence — read from / written to the tool message's
+ *     `pluginState.askUserDraft` via the conversation + chat stores, so HMR,
+ *     remounts, and tab switches resume where the user left off, and
+ *   - i18n — the `labels` built from CC's `claudeCode.askUserQuestion.*` keys.
  *
- * Answering a question
- * - Pick one of the numbered options, or
- * - Write your own in the trailing input. Single-select treats the two as
- *   mutually exclusive (typing clears the pick and vice-versa); multi-select
- *   appends the custom text as an extra entry alongside the checked options.
- *
- * Layout
- * - One question → renders the question + options directly, no tab strip.
- * - Multiple questions → top tab bar (Q1, Q2, …), one panel at a time. Picking
- *   an answer auto-advances to the next unanswered question.
- *
- * State, handlers, and draft persistence all live in `useAskUserForm`; this
- * component is just the view.
+ * Everything else (pick/custom/escape/auto-advance/submit, the countdown, the
+ * timeout fallback, and the `__freeform__` bridge) lives in the shared hook.
  */
 const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestionArgs>>((props) => {
   const { t } = useTranslation('tool');
-  const {
-    activeQuestion,
-    activeTab,
-    custom,
-    escapeActive,
-    escapeText,
-    expired,
-    handleCustomChange,
-    handleEscapeTextChange,
-    handleEscapeToggle,
-    handleSkip,
-    handleSubmit,
-    handleToggle,
-    isMulti,
-    isSubmitDisabled,
-    picks,
-    questions,
-    remainingMs,
-    setActiveTab,
-    submitting,
-  } = useAskUserForm(props);
+  const { actionsPortalTarget, args, disabled, messageId, onInteractionAction } = props;
+
+  // Persisted draft — read from the tool message's pluginState so the form
+  // stays where the user left it across unmount / HMR / refresh.
+  const persistedDraft = useConversationStore((s) => {
+    const msg = dataSelectors.getDbMessageById(messageId)(s);
+    return (msg?.pluginState as { [DRAFT_PLUGIN_STATE_KEY]?: unknown })?.[DRAFT_PLUGIN_STATE_KEY];
+  });
+  // The producer stamps its own ask-user deadline onto the durable tool row.
+  // Hand it to the form so the countdown tracks the clock that actually
+  // decides when the answer stops being deliverable, instead of restarting on
+  // every remount and outliving the blocked producer.
+  const deadlineAt = useConversationStore((s) => {
+    const msg = dataSelectors.getDbMessageById(messageId)(s);
+    const stored = (
+      msg?.pluginState as { heterogeneousIntervention?: { deadline?: unknown } } | undefined
+    )?.heterogeneousIntervention?.deadline;
+    return typeof stored === 'number' ? stored : undefined;
+  });
+  const context = useConversationStore((s) => s.context);
+  const checkQuestionSubmission = useChatStore((s) => s.checkQuestionSubmission);
+  const submissionPhase = useChatStore((s) => s.questionSubmissions[messageId]);
+  const resolving = useConversationStore(
+    (s) => dataSelectors.getDbMessageById(messageId)(s)?.pluginIntervention?.resolving === true,
+  );
+  const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
+  const writeDraft = useCallback(
+    (draft: AskUserDraft) => setInterventionDraft(messageId, draft),
+    [messageId, setInterventionDraft],
+  );
+
+  const form = useAskUserForm({
+    args,
+    countdownMs: DEFAULT_COUNTDOWN_MS,
+    deadlineAt,
+    disabled,
+    onInteractionAction,
+    persistedDraft,
+    writeDraft,
+  });
+
+  // Stream events normally settle the card. Revalidate a missed ACK after
+  // remount or reconnect without asking the user to inspect runtime state.
+  useEffect(() => {
+    if (!resolving) return;
+    const reconcile = () => void checkQuestionSubmission(messageId, context);
+    const timer = window.setTimeout(reconcile, SUBMIT_ACK_TIMEOUT_MS);
+    window.addEventListener('online', reconcile);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('online', reconcile);
+    };
+  }, [checkQuestionSubmission, context, messageId, resolving]);
+
+  const labels = {
+    customPlaceholder: t('claudeCode.askUserQuestion.customOption.placeholder'),
+    escapeBack: t('claudeCode.askUserQuestion.escape.back'),
+    escapeEnter: t('claudeCode.askUserQuestion.escape.enter'),
+    escapePlaceholder: t('claudeCode.askUserQuestion.escape.placeholder'),
+    multiSelectTag: t('claudeCode.askUserQuestion.multiSelectTag'),
+    recommendedTag: t('claudeCode.askUserQuestion.recommendedTag'),
+    skip: t('claudeCode.askUserQuestion.skip'),
+    submit: t('claudeCode.askUserQuestion.submit'),
+    supplementEnter: t('claudeCode.askUserQuestion.supplement.enter'),
+    supplementPlaceholder: t('claudeCode.askUserQuestion.supplement.placeholder'),
+    timeExpired: t('claudeCode.askUserQuestion.timeExpired'),
+    timeExpiredNoAnswer: t('claudeCode.askUserQuestion.timeExpiredNoAnswer'),
+    timeRemaining: (time: string) => t('claudeCode.askUserQuestion.timeRemaining', { time }),
+  };
 
   return (
-    <Flexbox gap={12}>
-      {!escapeActive && isMulti && (
-        <Tabs
-          compact
-          activeKey={activeTab}
-          items={questions.map((q, idx) => {
-            const done = isQuestionAnswered(q, picks, custom);
-            return {
-              key: String(idx),
-              label: (
-                <Flexbox horizontal align="center" gap={6}>
-                  <Text>Q{idx + 1}</Text>
-                  {done && <Icon icon={Check} size={12} />}
-                </Flexbox>
-              ),
-            };
-          })}
-          onChange={(key) => setActiveTab(key as string)}
-        />
+    <Flexbox gap={8}>
+      {(form.submissionFailed ||
+        submissionPhase === 'failed' ||
+        submissionPhase === 'uncertain') && (
+        <Text fontSize={12} role="alert" type="danger">
+          <Icon icon={CircleAlert} size={14} /> {t('askUserQuestion.submitFailed')}
+        </Text>
       )}
-
-      {escapeActive ? (
-        <TextArea
-          autoSize={{ maxRows: 8, minRows: 3 }}
-          disabled={expired || submitting}
-          placeholder={t('claudeCode.askUserQuestion.escape.placeholder')}
-          value={escapeText}
-          variant="filled"
-          onChange={(e) => handleEscapeTextChange(e.target.value)}
-        />
-      ) : (
-        activeQuestion && (
-          <QuestionPanel
-            answer={picks[activeQuestion.question]}
-            customValue={custom[activeQuestion.question] ?? ''}
-            disabled={expired || submitting}
-            question={activeQuestion}
-            onCustomChange={handleCustomChange}
-            onToggle={handleToggle}
-          />
-        )
-      )}
-
-      <Flexbox horizontal align="center" gap={8} justify="space-between">
-        <Flexbox horizontal align="center" gap={12}>
-          {escapeActive ? (
-            <Text
-              className={styles.escapeLink}
-              fontSize={12}
-              type="secondary"
-              onClick={expired || submitting ? undefined : handleEscapeToggle}
-            >
-              <Icon icon={ArrowLeft} size={12} />
-              {t('claudeCode.askUserQuestion.escape.back')}
-            </Text>
-          ) : (
-            <Text
-              className={styles.escapeLink}
-              fontSize={12}
-              type="secondary"
-              onClick={expired || submitting ? undefined : handleEscapeToggle}
-            >
-              {t('claudeCode.askUserQuestion.escape.enter')}
-              <Icon icon={PenLine} size={12} />
-            </Text>
-          )}
-          <Text fontSize={12} type="secondary">
-            {expired
-              ? t('claudeCode.askUserQuestion.timeExpired')
-              : t('claudeCode.askUserQuestion.timeRemaining', {
-                  time: formatRemaining(remainingMs),
-                })}
-          </Text>
-        </Flexbox>
-        <Flexbox horizontal gap={8}>
-          <Button disabled={submitting} icon={X} onClick={handleSkip}>
-            {t('claudeCode.askUserQuestion.skip')}
-          </Button>
-          <Button
-            disabled={isSubmitDisabled}
-            icon={Send}
-            loading={submitting}
-            type="primary"
-            onClick={handleSubmit}
-          >
-            {t('claudeCode.askUserQuestion.submit')}
-          </Button>
-        </Flexbox>
-      </Flexbox>
+      <AskUserQuestionView
+        {...form}
+        showCountdown
+        actionsPortalTarget={actionsPortalTarget}
+        labels={labels}
+      />
     </Flexbox>
   );
 });

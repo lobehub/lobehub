@@ -1,0 +1,11 @@
+{
+  "name": "@lobechat/alint",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LobeHub alint rule set: model-backed lint rules, calibration fixtures, and CI annotation helpers",
+  "type": "module",
+  "scripts": {
+    "setup": "bun setup.ts",
+    "test": "vitest run"
+  }
+}

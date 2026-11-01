@@ -1,71 +1,32 @@
-import { type TableProps } from 'antd';
-import { ConfigProvider, Table } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { memo } from 'react';
+import { Table, type TableProps } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 
-const prefixCls = 'ant';
+import { sx } from '@/styles/sx';
 
-const styles = createStaticStyles(({ css }) => ({
-  hoverToActive: css`
-    opacity: 0.6;
+import styles from './InlineTable.module.css';
 
-    &:hover {
-      opacity: 1;
-    }
-  `,
-  table: css`
-    .${prefixCls}-table {
-      background: transparent;
-
-      th,
-      td {
-        border: none !important;
-        font-size: 13px;
-      }
-
-      .${prefixCls}-table-cell:before {
-        display: none;
-      }
-    }
-
-    tr {
-      td:first-child,
-      th:first-child {
-        padding-inline-start: 24px !important;
-      }
-
-      td:last-child,
-      th:last-child {
-        padding-inline-end: 24px !important;
-      }
-    }
-  `,
-}));
-
-const InlineTable = memo<TableProps & { hoverToActive?: boolean }>(
-  ({ hoverToActive, className, ...rest }) => {
-    return (
-      <ConfigProvider
-        theme={{
-          components: {
-            Table: {
-              headerBg: cssVar.colorFillQuaternary,
-              headerBorderRadius: 0,
-            },
-          },
-        }}
-      >
-        <Table
-          bordered={false}
-          className={cx(styles.table, hoverToActive && styles.hoverToActive, className)}
-          pagination={false}
-          scroll={{ x: 'max-content' }}
-          size={'small'}
-          {...rest}
-        />
-      </ConfigProvider>
-    );
+const hoverStyles = stylex.create({
+  hoverToActive: {
+    opacity: { 'default': 0.6, ':hover': 1 },
   },
+});
+
+export type InlineTableProps<T> = TableProps<T> & { hoverToActive?: boolean };
+
+const InlineTable = <T extends object>({
+  hoverToActive,
+  className,
+  ...rest
+}: InlineTableProps<T>) => (
+  <Table<T>
+    pagination={false}
+    size={'small'}
+    className={
+      sx([hoverToActive && hoverStyles.hoverToActive], cx(styles.table, className)).className
+    }
+    {...rest}
+  />
 );
 
 export default InlineTable;

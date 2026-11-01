@@ -6,6 +6,7 @@ import urlJoin from 'url-join';
 
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useFetchActiveTopicDetail } from '@/hooks/useFetchActiveTopicDetail';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -18,7 +19,7 @@ import AllTopicsDrawer from '../AllTopicsDrawer';
 import ByTimeMode from '../TopicListContent/ByTimeMode';
 import FlatMode from '../TopicListContent/FlatMode';
 
-const TopicList = memo(() => {
+const TopicList = memo<{ showEmptyAction?: boolean }>(({ showEmptyAction = true }) => {
   const { t } = useTranslation('topic');
   const router = useQueryRoute();
   const topicLength = useChatStore((s) => topicSelectors.currentTopicLength(s));
@@ -32,13 +33,14 @@ const TopicList = memo(() => {
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
 
   useFetchChatTopics();
+  useFetchActiveTopicDetail();
 
   // Show skeleton when current session's topic data is not yet loaded
   if (isUndefinedTopics) return <SkeletonList />;
 
   return (
     <>
-      {topicLength === 0 && activeGroupId && (
+      {showEmptyAction && topicLength === 0 && activeGroupId && (
         <EmptyNavItem
           title={t('actions.addNewTopic')}
           onClick={() => {

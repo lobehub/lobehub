@@ -9,15 +9,21 @@ import {
   isDesktop,
 } from '@lobechat/const';
 import {
+  agentDisplayName,
   type AgentMode,
+  type AgentProfile,
   type KnowledgeItem,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
   type MetaData,
   type RuntimeEnvConfig,
 } from '@lobechat/types';
-import { KnowledgeType } from '@lobechat/types';
-import { VoiceList } from '@lobehub/tts';
+import {
+  getActivePluginIds,
+  getDisabledPluginIds,
+  getWorkingDirEffectivePath,
+  KnowledgeType,
+} from '@lobechat/types';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
@@ -33,6 +39,13 @@ const currentAgentData = (s: AgentStoreState) =>
   s.activeAgentId ? s.agentMap[s.activeAgentId] : undefined;
 
 const currentAgentTitle = (s: AgentStoreState) => currentAgentData(s)?.title;
+
+/**
+ * The label to show for the active agent: personal name first, role as the
+ * fallback. Use this for rendering; `currentAgentTitle` stays the raw role for
+ * anything that edits or reasons about it.
+ */
+const currentAgentDisplayName = (s: AgentStoreState) => agentDisplayName(currentAgentData(s));
 
 const getDefaultAvatarByAgentId = (s: AgentStoreState, agentId?: string) => {
   const inboxAgentId = builtinAgentSelectors.inboxAgentId(s);
@@ -50,6 +63,12 @@ const currentAgentBackgroundColor = (s: AgentStoreState) =>
 
 const currentAgentTags = (s: AgentStoreState) => currentAgentData(s)?.tags || [];
 
+const currentAgentAuthorId = (s: AgentStoreState) => currentAgentData(s)?.userId;
+
+const currentAgentCreatedAt = (s: AgentStoreState) => currentAgentData(s)?.createdAt;
+
+const currentAgentVisibility = (s: AgentStoreState) => currentAgentData(s)?.visibility;
+
 /**
  * Get complete meta data for the current agent
  * Used to replace sessionMetaSelectors.currentAgentMeta
@@ -61,6 +80,7 @@ const currentAgentMeta = (s: AgentStoreState): MetaData => {
     backgroundColor: data?.backgroundColor || DEFAULT_BACKGROUND_COLOR,
     description: data?.description || undefined,
     marketIdentifier: data?.marketIdentifier || undefined,
+    name: data?.name || undefined,
     tags: data?.tags,
     title: data?.title || undefined,
   };
@@ -81,10 +101,36 @@ const getAgentMetaById =
       backgroundColor: data.backgroundColor || DEFAULT_BACKGROUND_COLOR,
       description: data.description || undefined,
       marketIdentifier: data.marketIdentifier || undefined,
+      name: data.name || undefined,
       tags: data.tags,
       title: data.title || undefined,
     };
   };
+
+/**
+ * Full-body artwork of the agent's character, or `undefined` when it has none.
+ * Kept out of {@link getAgentMetaById} because `MetaData` is shared with
+ * sessions and groups, which have no character sheet.
+ */
+/**
+ * The avatar actually stored on the agent — unlike {@link getAgentMetaById},
+ * which substitutes a default so every surface has something to render. Use
+ * this to decide whether there is anything to remove.
+ */
+const getAgentStoredAvatarById =
+  (agentId: string) =>
+  (s: AgentStoreState): string | undefined =>
+    s.agentMap[agentId]?.avatar || undefined;
+
+const getAgentProfileById =
+  (agentId: string) =>
+  (s: AgentStoreState): AgentProfile | undefined =>
+    s.agentMap[agentId]?.profile ?? undefined;
+
+const getAgentFullBodyArtworkById =
+  (agentId: string) =>
+  (s: AgentStoreState): string | undefined =>
+    s.agentMap[agentId]?.profile?.fullBodyArtwork || undefined;
 
 // ==========   Config   ============== //
 
@@ -120,10 +166,29 @@ const currentAgentModelProvider = (s: AgentStoreState) => {
   return config?.provider || DEFAULT_PROVIDER;
 };
 
+/**
+ * Pinned plugin identifiers for the current agent — disabled entries are
+ * excluded. Matches the pre-tri-state semantics where array-membership meant
+ * pinned; consumers that need the disabled set use `getDisabledPluginIds`
+ * directly.
+ */
 const currentAgentPlugins = (s: AgentStoreState) => {
   const config = currentAgentConfig(s);
 
-  return config?.plugins || [];
+  return getActivePluginIds(config?.plugins);
+};
+
+/**
+ * Disabled plugin identifiers for the current agent. Consumers that build a
+ * tool/skill candidate pool (not just the "always whitelisted" rule map)
+ * need this to actually drop a disabled entry from the pool — being absent
+ * from `currentAgentPlugins` alone doesn't stop it from being present (and
+ * explicit-activation-eligible) in an unfiltered manifest source.
+ */
+const currentAgentDisabledPlugins = (s: AgentStoreState) => {
+  const config = currentAgentConfig(s);
+
+  return getDisabledPluginIds(config?.plugins);
 };
 
 /**
@@ -153,28 +218,8 @@ const currentAgentTTS = (s: AgentStoreState): LobeAgentTTSConfig => {
   return config?.tts || DEFAUTT_AGENT_TTS_CONFIG;
 };
 
-const currentAgentTTSVoice =
-  (lang: string) =>
-  (s: AgentStoreState): string => {
-    const { voice, ttsService } = currentAgentTTS(s);
-    const voiceList = new VoiceList(lang);
-    let currentVoice;
-    switch (ttsService) {
-      case 'openai': {
-        currentVoice = voice.openai || (VoiceList.openaiVoiceOptions?.[0].value as string);
-        break;
-      }
-      case 'edge': {
-        currentVoice = voice.edge || (voiceList.edgeVoiceOptions?.[0].value as string);
-        break;
-      }
-      case 'microsoft': {
-        currentVoice = voice.microsoft || (voiceList.microsoftVoiceOptions?.[0].value as string);
-        break;
-      }
-    }
-    return currentVoice || 'alloy';
-  };
+const currentAgentTTSVoice = (s: AgentStoreState): string =>
+  currentAgentTTS(s).voice?.openai || 'alloy';
 
 const currentEnabledKnowledge = (s: AgentStoreState) => {
   const knowledgeBases = currentAgentKnowledgeBases(s);
@@ -225,7 +270,16 @@ const currentKnowledgeIds = (s: AgentStoreState) => {
 };
 
 const isAgentConfigLoading = (s: AgentStoreState) =>
-  !s.activeAgentId || !s.agentMap[s.activeAgentId];
+  // A not-found agent never lands in `agentMap` — treat it as settled so the
+  // UI renders the 404 card instead of an endless skeleton.
+  !s.activeAgentId || (!s.agentMap[s.activeAgentId] && !s.agentNotFoundMap[s.activeAgentId]);
+
+/**
+ * The active agent's config fetch settled on `null` — the agent doesn't exist
+ * or the caller lost access (e.g. a workspace agent switched back to private).
+ */
+const isCurrentAgentNotFound = (s: AgentStoreState): boolean =>
+  !!s.activeAgentId && !!s.agentNotFoundMap[s.activeAgentId];
 
 /**
  * Fetch error for the active agent's config (undefined when none).
@@ -295,7 +349,7 @@ const currentAgentWorkingDirectory =
     const agencyConfig = currentAgentConfig(s)?.agencyConfig;
     const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
     const agentChoice = targetDeviceId
-      ? agencyConfig?.workingDirByDevice?.[targetDeviceId]
+      ? getWorkingDirEffectivePath(agencyConfig?.workingDirByDevice?.[targetDeviceId])
       : undefined;
 
     return agentChoice ?? s.localAgentWorkingDirectoryMap[activeAgentId] ?? homePath;
@@ -311,9 +365,6 @@ const isCurrentAgentExternal = (s: AgentStoreState): boolean => !currentAgentDat
 const isCurrentAgentHeterogeneous = (s: AgentStoreState): boolean =>
   !!currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider;
 
-const canCurrentAgentPublishToCommunity = (s: AgentStoreState): boolean =>
-  !!currentAgentData(s) && !isCurrentAgentHeterogeneous(s);
-
 const currentAgentHeterogeneousProviderType = (s: AgentStoreState) =>
   currentAgentConfig(s)?.agencyConfig?.heterogeneousProvider?.type;
 
@@ -323,12 +374,23 @@ const currentAgentExecutionTarget = (s: AgentStoreState) =>
 const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
   s.agentDocumentsMap[agentId];
 
+/** The agent a user-chosen slug names, as known locally (persisted copy first). */
+const getAgentIdBySlug = (slug?: string | null) => (s: AgentStoreState) =>
+  slug ? s.agentSlugIdMap[slug] : undefined;
+
+/** The server confirmed the slug's agent in this session (not only the persisted copy). */
+const isAgentSlugConfirmed = (slug?: string | null) => (s: AgentStoreState) =>
+  !!slug && !!s.agentSlugIdMap[slug] && s.agentSlugIdReplica.entries[slug]?.source === 'server';
+
+const heteroServerDefaultCapability = (s: AgentStoreState) => s.heteroServerDefaultCapability;
+
 export const agentSelectors = {
-  canCurrentAgentPublishToCommunity,
   currentAgentExecutionTarget,
   currentAgentHeterogeneousProviderType,
+  currentAgentAuthorId,
   currentAgentAvatar,
   currentAgentBackgroundColor,
+  currentAgentCreatedAt,
   currentAgentConfig,
   currentAgentConfigError,
   currentAgentDescription,
@@ -337,6 +399,7 @@ export const agentSelectors = {
   currentAgentRuntimeEnvConfig,
   currentAgentMeta,
   currentAgentMode,
+  currentAgentDisabledPlugins,
   currentAgentModel,
   currentAgentModelProvider,
   currentAgentPlugins,
@@ -344,14 +407,22 @@ export const agentSelectors = {
   currentAgentTTS,
   currentAgentTTSVoice,
   currentAgentTags,
+  currentAgentDisplayName,
   currentAgentTitle,
+  currentAgentVisibility,
   currentAgentWorkingDirectory,
   currentEnabledKnowledge,
   currentKnowledgeIds,
   displayableAgentPlugins,
   getAgentConfigById,
   getAgentDocumentsById,
+  getAgentIdBySlug,
+  heteroServerDefaultCapability,
+  isAgentSlugConfirmed,
+  getAgentFullBodyArtworkById,
   getAgentMetaById,
+  getAgentProfileById,
+  getAgentStoredAvatarById,
   getAgentSlugById,
   hasEnabledKnowledge,
   hasEnabledKnowledgeBases,
@@ -361,6 +432,7 @@ export const agentSelectors = {
   inboxAgentModel,
   isAgentConfigError,
   isAgentConfigLoading,
+  isCurrentAgentNotFound,
   isAgentModeEnabled,
   isCurrentAgentExternal,
   isCurrentAgentHeterogeneous,

@@ -1,7 +1,9 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { lazy, memo, Suspense, useState } from 'react';
+
+import { ArticleSkeleton } from '@/components/Skeleton';
 
 import Agents from './Agents';
 import Header from './Header';
@@ -13,12 +15,12 @@ const Schema = lazy(() => import('./Schema'));
 
 const TabSkeleton = () => (
   <Flexbox gap={16}>
-    <Skeleton active paragraph={{ rows: 4 }} />
+    <ArticleSkeleton rows={4} />
   </Flexbox>
 );
 
 interface SkillDetailInnerProps {
-  type: 'builtin' | 'klavis' | 'lobehub';
+  type: 'builtin' | 'composio' | 'lobehub';
 }
 
 const SkillDetailInner = memo<SkillDetailInnerProps>(({ type }) => {

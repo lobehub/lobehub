@@ -1,0 +1,348 @@
+'use client';
+
+import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
+import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react';
+import { memo } from 'react';
+
+import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
+
+const styles = createStaticStyles(({ css }) => ({
+  dotOffline: css`
+    flex: none;
+
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorTextQuaternary};
+  `,
+  dotOnline: css`
+    flex: none;
+
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorSuccess};
+    box-shadow: 0 0 0 2px ${cssVar.colorSuccessBg};
+  `,
+  status: css`
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  `,
+  option: css`
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    align-items: center;
+
+    min-width: 0;
+  `,
+  optionDescription: css`
+    font-size: 12px;
+    line-height: 16px;
+    color: ${cssVar.colorTextDescription};
+  `,
+  optionIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 24px;
+    height: 24px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    color: ${cssVar.colorText};
+
+    background: ${cssVar.colorBgElevated};
+  `,
+  optionName: css`
+    overflow: hidden;
+
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    color: ${cssVar.colorText};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  selectItem: css`
+    min-height: 40px;
+  `,
+  selectPopup: css`
+    max-width: calc(100vw - 24px);
+  `,
+  selectValue: css`
+    > span {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+    }
+  `,
+  triggerIcon: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
+    height: 20px;
+
+    color: ${cssVar.colorTextSecondary};
+  `,
+  triggerLabel: css`
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    align-items: center;
+
+    min-width: 0;
+  `,
+  triggerName: css`
+    overflow: hidden;
+    flex: 1;
+
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+}));
+
+export const SHARED_EXECUTION_TARGETS = ['auto', 'device', 'none', 'sandbox'] as const;
+
+export const isSharedExecutionTarget = (
+  target: DeviceExecutionTarget | undefined,
+): target is Exclude<DeviceExecutionTarget, 'local'> =>
+  !!target &&
+  SHARED_EXECUTION_TARGETS.includes(target as (typeof SHARED_EXECUTION_TARGETS)[number]);
+
+export const executionTargetValue = (target: DeviceExecutionTarget, deviceId?: string) =>
+  target === 'device' && deviceId ? `device:${deviceId}` : `target:${target}`;
+
+export const parseExecutionTargetValue = (
+  value: string,
+): { deviceId?: string; target: DeviceExecutionTarget } | undefined => {
+  if (value.startsWith('device:')) {
+    const deviceId = value.slice('device:'.length);
+    return deviceId ? { deviceId, target: 'device' } : undefined;
+  }
+
+  if (!value.startsWith('target:')) return undefined;
+  const target = value.slice('target:'.length) as DeviceExecutionTarget;
+  return ['auto', 'local', 'none', 'sandbox'].includes(target) ? { target } : undefined;
+};
+
+export interface ExecutionTargetSelection {
+  deviceId?: string;
+  target: DeviceExecutionTarget;
+}
+
+/**
+ * Resolve the execution target an agent currently points at.
+ *
+ * Shared by the Agent Profile picker (which renders it) and the Permission page
+ * (which can only fix a target that actually resolves) so the two surfaces
+ * cannot disagree about what "no environment picked yet" means. A `device`
+ * target whose bound device is gone — unshared, deleted, still loading —
+ * resolves to `undefined` rather than a dangling selection.
+ */
+export const resolveExecutionTargetSelection = ({
+  boundDeviceId,
+  configuredTarget,
+  devices,
+  isHeterogeneous,
+}: {
+  boundDeviceId?: string;
+  configuredTarget?: DeviceExecutionTarget;
+  devices: DeviceListItem[];
+  isHeterogeneous: boolean;
+}): ExecutionTargetSelection | undefined => {
+  if (configuredTarget === 'device') {
+    const boundDevice = devices.find((device) => device.deviceId === boundDeviceId);
+    return boundDevice ? { deviceId: boundDevice.deviceId, target: 'device' } : undefined;
+  }
+
+  if (isSharedExecutionTarget(configuredTarget)) return { target: configuredTarget };
+
+  // Built-in-runtime agents default to "no environment" when nothing is stored;
+  // heterogeneous ones genuinely have no selection until the author picks one.
+  return configuredTarget === undefined && !isHeterogeneous ? { target: 'none' } : undefined;
+};
+
+export const groupExecutionTargetDevices = (devices: DeviceListItem[] | undefined) => ({
+  personal: (devices ?? []).filter((device) => device.scope === 'personal'),
+  privateWorkspace: (devices ?? []).filter(
+    (device) => device.scope === 'workspace' && device.visibility === 'private',
+  ),
+  publicWorkspace: (devices ?? []).filter(
+    (device) => device.scope === 'workspace' && device.visibility === 'public',
+  ),
+  workspace: (devices ?? []).filter(
+    (device) => device.scope === 'workspace' && device.visibility !== 'private',
+  ),
+});
+
+/**
+ * The devices an agent's runs can actually reach.
+ *
+ * A deviceId encodes the identity it was enrolled under
+ * (`sha256(machineUUID + userId)` for personal, `… + workspace:<id>` for
+ * workspace), so the two pools are not interchangeable: a workspace agent
+ * cannot resolve a personal machine, nor a personal agent a workspace one.
+ * Offering the other pool would let a user pin a machine the run can never use
+ * — and a Task makes that worse than a chat, because its scheduled runs execute
+ * under the workspace principal rather than whoever is looking at it.
+ *
+ * Order is the picker's: the workspace pool lists private rows before public
+ * ones, the personal pool is flat.
+ */
+export const devicePoolForAgent = (
+  devices: DeviceListItem[] | undefined,
+  workspaceAgent: boolean,
+): DeviceListItem[] => {
+  const { personal, privateWorkspace, workspace } = groupExecutionTargetDevices(devices);
+
+  return workspaceAgent ? [...privateWorkspace, ...workspace] : personal;
+};
+
+/**
+ * The devices a Task may pin.
+ *
+ * Narrower than {@link devicePoolForAgent} for a workspace agent: a Task's
+ * scheduled and heartbeat runs execute as the task's creator, and a private
+ * workspace device is only resolvable by the member who enrolled it
+ * (`DeviceModel.findWorkspaceDeviceById`). A collaborator's private machine
+ * pinned on a shared task is therefore unreachable for automation — and the
+ * creator's private machine is unreachable for a collaborator's manual run — so
+ * only public workspace devices are offered.
+ */
+export const devicePoolForTask = (
+  devices: DeviceListItem[] | undefined,
+  workspaceAgent: boolean,
+): DeviceListItem[] => {
+  const { personal, publicWorkspace } = groupExecutionTargetDevices(devices);
+
+  return workspaceAgent ? publicWorkspace : personal;
+};
+
+interface ExecutionTargetIconProps {
+  devicePlatform?: string | null;
+  size?: number;
+  target: DeviceExecutionTarget;
+}
+
+export const ExecutionTargetIcon = memo<ExecutionTargetIconProps>(
+  ({ devicePlatform, size = 14, target }) => {
+    switch (target) {
+      case 'auto': {
+        return <Icon icon={SparklesIcon} size={size} />;
+      }
+      case 'device': {
+        return <>{getDeviceIcon(devicePlatform, size)}</>;
+      }
+      case 'local': {
+        return <Icon icon={LaptopIcon} size={size} />;
+      }
+      case 'none': {
+        return <Icon icon={MonitorOffIcon} size={size} />;
+      }
+      case 'sandbox': {
+        return <Icon icon={BoxIcon} size={size} />;
+      }
+    }
+  },
+);
+
+ExecutionTargetIcon.displayName = 'ExecutionTargetPicker.ExecutionTargetIcon';
+
+interface ExecutionTargetDeviceStatusProps {
+  offlineLabel: string;
+  online: boolean;
+  onlineLabel: string;
+  /**
+   * Shown instead of offline for a row restored from the persisted device list
+   * (`onlineUnknown`): its `online: false` is a placeholder until the server
+   * confirms presence.
+   */
+  unknown?: boolean;
+  unknownLabel: string;
+}
+
+export const ExecutionTargetDeviceStatus = memo<ExecutionTargetDeviceStatusProps>(
+  ({ offlineLabel, online, onlineLabel, unknown, unknownLabel }) => (
+    <span className={styles.status}>
+      <span
+        aria-hidden
+        className={unknown ? styles.dotOffline : online ? styles.dotOnline : styles.dotOffline}
+      />
+      <span>{unknown ? unknownLabel : online ? onlineLabel : offlineLabel}</span>
+    </span>
+  ),
+);
+
+ExecutionTargetDeviceStatus.displayName = 'ExecutionTargetPicker.ExecutionTargetDeviceStatus';
+
+/** Select slots for execution-environment pickers that render {@link ExecutionTargetLabel}. */
+export const executionTargetSelectClassNames = {
+  item: styles.selectItem,
+  popup: styles.selectPopup,
+  value: styles.selectValue,
+};
+
+interface ExecutionTargetLabelProps {
+  compact?: boolean;
+  description: string;
+  device?: DeviceListItem;
+  label: string;
+  offlineLabel: string;
+  onlineLabel: string;
+  target: DeviceExecutionTarget;
+  unknownLabel: string;
+}
+
+export const ExecutionTargetLabel = memo<ExecutionTargetLabelProps>(
+  ({ compact, description, device, label, offlineLabel, onlineLabel, target, unknownLabel }) => {
+    const icon = <ExecutionTargetIcon devicePlatform={device?.platform} target={target} />;
+    const secondary = device ? (
+      <ExecutionTargetDeviceStatus
+        offlineLabel={offlineLabel}
+        online={device.online}
+        onlineLabel={onlineLabel}
+        unknown={device.onlineUnknown}
+        unknownLabel={unknownLabel}
+      />
+    ) : (
+      description
+    );
+
+    if (compact) {
+      return (
+        <span className={styles.triggerLabel}>
+          <span aria-hidden className={styles.triggerIcon}>
+            {icon}
+          </span>
+          <span className={styles.triggerName}>{label}</span>
+          {device ? <span className={styles.optionDescription}>{secondary}</span> : null}
+        </span>
+      );
+    }
+
+    return (
+      <span className={styles.option}>
+        <span aria-hidden className={styles.optionIcon}>
+          {icon}
+        </span>
+        <Flexbox flex={1} style={{ minWidth: 0 }}>
+          <span className={styles.optionName}>{label}</span>
+          <span className={styles.optionDescription}>{secondary}</span>
+        </Flexbox>
+      </span>
+    );
+  },
+);
+
+ExecutionTargetLabel.displayName = 'ExecutionTargetPicker.ExecutionTargetLabel';

@@ -23,11 +23,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('agent-group command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -78,6 +73,15 @@ describe('agent-group command', () => {
   });
 
   describe('view', () => {
+    it('prints null instead of crashing for a missing group with --json', async () => {
+      mockTrpcClient.group.getGroupDetail.query.mockResolvedValue(null);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'agent-group', 'view', 'missing', '--json']);
+
+      expect(consoleSpy).toHaveBeenCalledWith('null');
+    });
+
     it('should view group details', async () => {
       mockTrpcClient.group.getGroupDetail.query.mockResolvedValue({
         agents: [{ id: 'a1', title: 'Agent 1' }],

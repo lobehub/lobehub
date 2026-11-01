@@ -3,10 +3,12 @@ import {
   BrainCircuit,
   FilePenIcon,
   Image,
+  LayoutDashboardIcon,
   LibraryBigIcon,
   ListTodoIcon,
   Settings,
   ShapesIcon,
+  TargetIcon,
   Video,
 } from 'lucide-react';
 
@@ -108,6 +110,24 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
     pathPrefix: '/tasks',
   },
   {
+    cmdkKey: 'tab.goals',
+    electronKey: 'navigation.goals',
+    icon: TargetIcon,
+    id: 'goals',
+    keywords: ['goals', 'objective', 'target', 'agent'],
+    path: '/goals',
+    pathPrefix: '/goals',
+  },
+  {
+    cmdkKey: 'tab.dashboard',
+    electronKey: 'navigation.dashboard',
+    icon: LayoutDashboardIcon,
+    id: 'dashboard',
+    keywords: ['dashboard', 'monitor', 'metrics', 'widget'],
+    path: '/dashboard',
+    pathPrefix: '/dashboard',
+  },
+  {
     cmdkKey: 'cmdk.settings',
     electronKey: 'navigation.settings',
     icon: Settings,
@@ -126,9 +146,35 @@ export const getRouteById = (id: string): NavigationRoute | undefined =>
   NAVIGATION_ROUTES.find((r) => r.id === id);
 
 /**
- * Get navigable routes for CMDK (excludes settings which has separate handling)
+ * Get navigable routes for CMDK (excludes settings which has separate handling).
+ *
+ * Image and video share a single "Generation" destination in the app sidebar
+ * (see useNavLayout's bottomMenuItems → tab.generation → /image), so the command
+ * palette mirrors that: one "Generation" entry pointing at /image, instead of
+ * separate "Image" / "AI Video" entries. The merged keywords keep both image and
+ * video terms searchable, and reusing tab.generation keeps the label in sync with
+ * the sidebar across every locale.
  */
 export const getNavigableRoutes = (): NavigationRoute[] =>
   NAVIGATION_ROUTES.filter((r) =>
-    ['community', 'video', 'image', 'resource', 'page', 'memory'].includes(r.id),
+    ['community', 'image', 'resource', 'page', 'memory'].includes(r.id),
+  ).map((r) =>
+    r.id === 'image'
+      ? {
+          ...r,
+          cmdkKey: 'tab.generation',
+          keywords: [
+            'generation',
+            'generate',
+            'image',
+            'painting',
+            'art',
+            'draw',
+            'video',
+            'seedance',
+            'kling',
+          ],
+          keywordsKey: undefined,
+        }
+      : r,
   );

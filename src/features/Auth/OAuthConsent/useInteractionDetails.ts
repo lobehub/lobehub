@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 
+import { authKeys } from '@/libs/swr/keys';
 import type { OidcInteractionDetailsResponse, OidcInteractionErrorResponse } from '@/types/oidc';
 
 export class InteractionDetailsError extends Error {
@@ -31,7 +32,7 @@ export const fetchInteractionDetails = async (
 
 export const useInteractionDetails = (uid?: string) =>
   useSWR(
-    uid ? ['oidc-interaction', uid] : null,
+    uid ? authKeys.oidcInteraction(uid) : null,
     ([, id]: [string, string]) => fetchInteractionDetails(id),
     {
       revalidateOnFocus: false,

@@ -1,15 +1,14 @@
-import { ActionIcon, Block } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { ActionIcon, Block, createStaticStyles, cx } from '@lobehub/ui';
 import { MaximizeIcon, MinimizeIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import SkeletonBar from '@/components/Skeleton/Bar';
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { type QueryTagsResult } from '@/database/models/userMemory';
 import dynamic from '@/libs/next/dynamic';
 
 const TagCloudCanvas = dynamic(() => import('./TagCloudCanvas'), {
-  loading: () => <Loading debugId={'TagCloud'} />,
+  loading: () => <SkeletonBar height={400} radius={12} />,
   ssr: false,
 });
 

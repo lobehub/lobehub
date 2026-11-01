@@ -6,7 +6,7 @@ import type {
   SelfReviewProposalBaseSnapshot,
   SelfReviewProposalPlan,
 } from './review/proposal';
-import type { ToolWriteResult } from './tools/shared';
+import type { SkillTargetSnapshot, ToolWriteResult } from './tools/shared';
 import type {
   ActionPlan,
   ActionStatus as ActionStatusValue,
@@ -226,19 +226,29 @@ const getBaseSnapshot = (value: unknown): SelfReviewProposalBaseSnapshot | undef
   return {
     absent: getBoolean(record.absent),
     agentDocumentId: pickTrimmedString(record.agentDocumentId),
+    agentId: pickTrimmedString(record.agentId),
     contentHash: pickTrimmedString(record.contentHash),
+    promptHash: pickTrimmedString(record.promptHash),
     documentId: pickTrimmedString(record.documentId),
     documentUpdatedAt: pickTrimmedString(record.documentUpdatedAt),
     managed: getBoolean(record.managed),
     skillName: pickTrimmedString(record.skillName),
     targetTitle: pickTrimmedString(record.targetTitle),
-    targetType: record.targetType === 'skill' ? 'skill' : undefined,
+    targetType:
+      record.targetType === 'skill' || record.targetType === 'agent_prompt'
+        ? record.targetType
+        : undefined,
     writable: getBoolean(record.writable),
   };
 };
 
-const getBaseSnapshots = (value: unknown): SelfReviewProposalBaseSnapshot[] =>
-  Array.isArray(value) ? value.flatMap((item) => getBaseSnapshot(item) ?? []) : [];
+const getBaseSnapshots = (value: unknown): SkillTargetSnapshot[] =>
+  Array.isArray(value)
+    ? value.flatMap((item) => {
+        const snapshot = getBaseSnapshot(item);
+        return snapshot?.targetType === 'skill' ? [snapshot as SkillTargetSnapshot] : [];
+      })
+    : [];
 
 const toActionStatus = (status: ToolWriteResult['status']): ActionStatusValue => {
   if (status === 'applied') return ActionStatus.Applied;
@@ -377,14 +387,17 @@ const toEvidenceRefs = (value: unknown): ActionPlan['evidenceRefs'] =>
 
 const toTarget = (value: unknown): ActionTarget | undefined => {
   const record = toRecordOrEmpty(value);
+  const agentId = pickTrimmedString(record.agentId);
   const memoryId = pickTrimmedString(record.memoryId);
   const skillDocumentId = pickTrimmedString(record.skillDocumentId);
   const skillName = pickTrimmedString(record.skillName);
   const targetReadonly = getBoolean(record.targetReadonly);
 
-  if (!memoryId && !skillDocumentId && !skillName && targetReadonly === undefined) return;
+  if (!agentId && !memoryId && !skillDocumentId && !skillName && targetReadonly === undefined)
+    return;
 
   return {
+    ...(agentId ? { agentId } : {}),
     ...(memoryId ? { memoryId } : {}),
     ...(skillDocumentId ? { skillDocumentId } : {}),
     ...(skillName ? { skillName } : {}),
@@ -410,11 +423,22 @@ const toApplyMode = (value: unknown, outcome: ToolOutcome) => {
 const toConfidence = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
 
-const toSkillOperation = (value: unknown, userId: string): ActionPlan['operation'] => {
+const toDomainOperation = (value: unknown, userId: string): ActionPlan['operation'] => {
   const record = toRecordOrEmpty(value);
-  if (record.domain !== 'skill') return;
-
   const input = toRecordOrEmpty(record.input);
+
+  if (record.domain === 'agent' && record.operation === 'refine_prompt') {
+    const agentId = pickTrimmedString(input.agentId);
+    const systemRole = pickTrimmedString(input.systemRole);
+    if (!agentId || !systemRole) return;
+    return {
+      domain: 'agent',
+      input: { agentId, systemRole, userId: pickTrimmedString(input.userId) ?? userId },
+      operation: 'refine_prompt',
+    };
+  }
+
+  if (record.domain !== 'skill') return;
 
   if (record.operation === 'create') {
     return {
@@ -472,6 +496,7 @@ const getRawActionType = (value: unknown): ActionPlan['actionType'] | undefined 
     value === 'write_memory' ||
     value === 'create_skill' ||
     value === 'refine_skill' ||
+    value === 'refine_prompt' ||
     value === 'consolidate_skill' ||
     value === 'noop' ||
     value === 'proposal_only'
@@ -505,7 +530,7 @@ const getCompleteBaseSnapshot = ({
     };
   }
 
-  if (actionType === 'refine_skill') return baseSnapshot;
+  if (actionType === 'refine_skill' || actionType === 'refine_prompt') return baseSnapshot;
 
   return baseSnapshot;
 };
@@ -530,7 +555,7 @@ const getProjectionActionFromRaw = ({
 
   if (!actionType || actionType === 'proposal_only') return;
 
-  const operation = toSkillOperation(record.operation, userId);
+  const operation = toDomainOperation(record.operation, userId);
   const target = toTarget(record.target);
   const baseSnapshot = getCompleteBaseSnapshot({
     actionType,
@@ -549,7 +574,9 @@ const getProjectionActionFromRaw = ({
           ? `skill:${target.skillName}`
           : target?.memoryId
             ? `memory:${target.memoryId}`
-            : actionType),
+            : target?.agentId
+              ? `agent-prompt:${target.agentId}`
+              : actionType),
     evidenceRefs: toEvidenceRefs(record.evidenceRefs),
     idempotencyKey,
     rationale:
@@ -578,7 +605,7 @@ const getProjectionActionFromRaw = ({
     };
   }
 
-  if (actionType === 'refine_skill') {
+  if (actionType === 'refine_skill' || actionType === 'refine_prompt') {
     if (!baseSnapshot) return;
 
     return {
@@ -723,6 +750,14 @@ const getProjectionAction = ({
       ...(getSkillRefineOperation(args, userId)
         ? { operation: getSkillRefineOperation(args, userId) }
         : {}),
+    };
+  }
+
+  if (actionType === 'refine_prompt') {
+    return {
+      ...baseAction,
+      actionType,
+      baseSnapshot: baseSnapshot ?? { targetType: 'agent_prompt' },
     };
   }
 

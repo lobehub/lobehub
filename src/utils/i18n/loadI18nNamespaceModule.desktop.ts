@@ -3,36 +3,37 @@ import type {
   LoadI18nNamespaceModuleWithFallbackParams,
 } from './loadI18nNamespaceModule';
 
-// eager: true — all locale JSON inlined at build time, synchronous access at runtime
-const defaultModules = import.meta.glob<{ default: Record<string, unknown> }>(
+type NamespaceModule = { default: Record<string, unknown> };
+type NamespaceLoaderMap = Record<string, () => Promise<NamespaceModule>>;
+
+const defaultLoaders = import.meta.glob([
   '/packages/locales/src/default/*.ts',
-  { eager: true },
-);
-const localeModules = import.meta.glob<{ default: Record<string, unknown> }>('/locales/*/*.json', {
-  eager: true,
-});
+  '!/packages/locales/src/default/*.vite.ts',
+  '!/packages/locales/src/default/index.ts',
+]) as NamespaceLoaderMap;
+const localeLoaders = import.meta.glob('/locales/*/*.json') as NamespaceLoaderMap;
 
 const getDefaultKey = (ns: string) => `/packages/locales/src/default/${ns}.ts`;
 const getLocaleKey = (lng: string, ns: string) => `/locales/${lng}/${ns}.json`;
 
 export const loadI18nNamespaceModule = async (
   params: LoadI18nNamespaceModuleParams,
-): Promise<{ default: Record<string, unknown> }> => {
+): Promise<NamespaceModule> => {
   const { defaultLang, normalizeLocale, lng, ns } = params;
 
   if (lng === defaultLang) {
-    const mod = defaultModules[getDefaultKey(ns)];
-    if (!mod) throw new Error(`Missing default namespace: ${ns}`);
-    return mod;
+    const load = defaultLoaders[getDefaultKey(ns)];
+    if (!load) throw new Error(`Missing default namespace: ${ns}`);
+    return load();
   }
 
   const normalizedLng = normalizeLocale(lng);
-  const localeMod = localeModules[getLocaleKey(normalizedLng, ns)];
-  if (localeMod) return localeMod;
+  const loadLocale = localeLoaders[getLocaleKey(normalizedLng, ns)];
+  if (loadLocale) return loadLocale();
 
-  const defaultMod = defaultModules[getDefaultKey(ns)];
-  if (!defaultMod) throw new Error(`Missing default namespace: ${ns}`);
-  return defaultMod;
+  const loadDefault = defaultLoaders[getDefaultKey(ns)];
+  if (!loadDefault) throw new Error(`Missing default namespace: ${ns}`);
+  return loadDefault();
 };
 
 export type {
@@ -42,14 +43,14 @@ export type {
 
 export const loadI18nNamespaceModuleWithFallback = async (
   params: LoadI18nNamespaceModuleWithFallbackParams,
-): Promise<{ default: Record<string, unknown> }> => {
+): Promise<NamespaceModule> => {
   const { onFallback, ...rest } = params;
   try {
     return await loadI18nNamespaceModule(rest);
   } catch (error) {
     onFallback?.({ error, lng: rest.lng, ns: rest.ns });
-    const defaultMod = defaultModules[getDefaultKey(rest.ns)];
-    if (!defaultMod) throw error;
-    return defaultMod;
+    const loadDefault = defaultLoaders[getDefaultKey(rest.ns)];
+    if (!loadDefault) throw error;
+    return loadDefault();
   }
 };

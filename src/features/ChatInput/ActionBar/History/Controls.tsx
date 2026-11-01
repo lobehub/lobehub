@@ -1,8 +1,7 @@
-import { type FormItemProps } from '@lobehub/ui';
-import { Form, SliderWithInput } from '@lobehub/ui';
-import { Form as AntdForm, Switch } from 'antd';
+import { SliderWithInput, Switch } from '@lobehub/ui';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import { debounce } from 'es-toolkit/compat';
-import { memo, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
@@ -11,13 +10,14 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 
-interface ControlsProps {
-  setUpdating: (updating: boolean) => void;
-  updating: boolean;
+interface HistoryValues {
+  enableHistoryCount?: boolean;
+  historyCount?: number;
 }
-const Controls = memo<ControlsProps>(({ updating, setUpdating }) => {
+
+const Controls = () => {
   const { t } = useTranslation('setting');
-  const [form] = AntdForm.useForm();
+  const [updating, setUpdating] = useState(false);
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
 
@@ -26,22 +26,38 @@ const Controls = memo<ControlsProps>(({ updating, setUpdating }) => {
     chatConfigByIdSelectors.getEnableHistoryCountById(agentId)(s),
   ]);
 
+  const handleValuesChange = useMemo(
+    () =>
+      debounce(async (values) => {
+        setUpdating(true);
+        try {
+          await updateAgentChatConfig(values);
+        } finally {
+          setUpdating(false);
+        }
+      }, 500),
+    [updateAgentChatConfig],
+  );
+
+  useEffect(() => () => handleValuesChange.cancel(), [handleValuesChange]);
+
+  const form = useForm<HistoryValues>({
+    initialValues: { enableHistoryCount, historyCount },
+    onValuesChange: handleValuesChange,
+  });
+
   // Sync external store updates to the form without remounting to keep Switch animation
   useEffect(() => {
-    form?.setFieldsValue({
-      enableHistoryCount,
-      historyCount,
-    });
+    form.setValues({ enableHistoryCount, historyCount });
   }, [enableHistoryCount, historyCount, form]);
 
-  const items: FormItemProps[] = [
+  const items: FormFieldProps<HistoryValues>[] = [
     {
       children: <Switch loading={updating} size={'small'} />,
       label: t('settingChat.enableHistoryCount.title'),
       layout: 'horizontal',
       minWidth: undefined,
       name: 'enableHistoryCount',
-      valuePropName: 'checked',
     },
     {
       children: (
@@ -60,8 +76,8 @@ const Controls = memo<ControlsProps>(({ updating, setUpdating }) => {
           }}
         />
       ),
+      bare: true,
       name: 'historyCount',
-      noStyle: true,
     },
   ];
 
@@ -70,22 +86,13 @@ const Controls = memo<ControlsProps>(({ updating, setUpdating }) => {
       form={form}
       items={items}
       itemsType={'flat'}
-      initialValues={{
-        enableHistoryCount,
-        historyCount,
-      }}
       styles={{
         group: {
           background: 'transparent',
         },
       }}
-      onValuesChange={debounce(async (values) => {
-        setUpdating(true);
-        await updateAgentChatConfig(values);
-        setUpdating(false);
-      }, 500)}
     />
   );
-});
+};
 
 export default Controls;

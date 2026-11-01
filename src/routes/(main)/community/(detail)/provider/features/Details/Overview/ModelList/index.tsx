@@ -1,14 +1,13 @@
 'use client';
 
-import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Block, Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, Block, cssVar, Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import InlineTable from '@/components/InlineTable';
+import { ModelIcon } from '@/components/LobeIcons';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { formatPriceByCurrency, formatTokenNumber } from '@/utils/format';
@@ -49,7 +48,7 @@ const ModelList = memo(() => {
                   </WorkspaceLink>
                 );
               },
-              sorter: (a, b) => a.displayName.localeCompare(b.displayName),
+              sorter: (a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''),
               title: t('providers.modelName'),
               width: 200,
             },
@@ -78,7 +77,6 @@ const ModelList = memo(() => {
               key: 'maxOutput',
               render: (_, record) =>
                 record.maxOutput ? formatTokenNumber(record.maxOutput) : '--',
-              showSorterTooltip: false,
               sorter: (a, b) => (a.maxOutput || 0) - (b.maxOutput || 0),
               title: (
                 <Tooltip title={t('models.providerInfo.maxOutputTooltip')}>
@@ -88,7 +86,6 @@ const ModelList = memo(() => {
               width: 120,
             },
             {
-              dataIndex: 'inputPrice',
               key: 'inputPrice',
               render: (_, record) => {
                 const inputRate = getTextInputUnitRate(record.pricing);
@@ -96,7 +93,6 @@ const ModelList = memo(() => {
                   ? '$' + formatPriceByCurrency(inputRate, record.pricing?.currency)
                   : '--';
               },
-              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aRate = getTextInputUnitRate(a.pricing) || 0;
                 const bRate = getTextInputUnitRate(b.pricing) || 0;
@@ -110,7 +106,6 @@ const ModelList = memo(() => {
               width: 100,
             },
             {
-              dataIndex: 'outputPrice',
               key: 'outputPrice',
               render: (_, record) => {
                 const outputRate = getTextOutputUnitRate(record.pricing);
@@ -118,7 +113,6 @@ const ModelList = memo(() => {
                   ? '$' + formatPriceByCurrency(outputRate, record.pricing?.currency)
                   : '--';
               },
-              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aRate = getTextOutputUnitRate(a.pricing) || 0;
                 const bRate = getTextOutputUnitRate(b.pricing) || 0;
@@ -133,7 +127,6 @@ const ModelList = memo(() => {
             },
             {
               align: 'right',
-              dataIndex: 'action',
               key: 'action',
               render: (_, record) => {
                 return (

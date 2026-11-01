@@ -2,18 +2,31 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { CLI_CONFIG_DIR_NAME } from '../constants/identity';
+
 export interface TaskEntry {
   agentId?: string;
-  agentType: 'hermes' | 'openclaw';
+  /**
+   * Heterogeneous agent type. Covers remote platform agents (`hermes`,
+   * `openclaw`) and local CLI agents (`devin`, `claude-code`, `codex`, …)
+   * dispatched through `lh connect` device gateway.
+   */
+  agentType: string;
   operationId: string;
+  parentOperationId?: string;
   pid: number;
   startedAt: string;
   taskId: string;
   topicId: string;
+  /**
+   * Workspace that owns the dispatched topic. Persisted so the cancel-time
+   * notify still scopes to the right workspace after the daemon restarts.
+   */
+  workspaceId?: string;
 }
 
 function getRegistryPath(): string {
-  return path.join(os.homedir(), '.lobehub', 'task-registry.json');
+  return path.join(os.homedir(), CLI_CONFIG_DIR_NAME, 'task-registry.json');
 }
 
 function readRegistry(): Record<string, TaskEntry> {

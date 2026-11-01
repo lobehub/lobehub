@@ -1,9 +1,9 @@
-import { Image } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Image } from '@lobehub/ui';
 import type { ComponentProps } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { localFileKeys } from '@/libs/swr/keys';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 
 import { resolveMarkdownRelativeAssetPath } from './Body.helpers';
@@ -27,7 +27,12 @@ const MarkdownImage = memo<MarkdownImageProps>(
 
     const { data: preview } = useClientDataSWR<LocalFilePreview>(
       resolvedPath
-        ? ['local-markdown-image-preview', deviceId ?? 'local', resolvedPath, workingDirectory]
+        ? localFileKeys.preview({
+            accept: 'image',
+            deviceId,
+            filePath: resolvedPath,
+            workingDirectory,
+          })
         : null,
       () =>
         projectFileService.getLocalFilePreview({

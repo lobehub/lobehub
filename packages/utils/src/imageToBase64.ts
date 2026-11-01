@@ -1,6 +1,9 @@
 import { Buffer } from 'buffer.js';
 
 import { resolveMimeTypeFromBytes } from './imageMimeType';
+import { readBlobWithLimit } from './readBlobWithLimit';
+
+export { readBlobWithLimit } from './readBlobWithLimit';
 
 export const imageToBase64 = ({
   size,
@@ -40,12 +43,18 @@ export const imageToBase64 = ({
   return canvas.toDataURL(type);
 };
 
+export interface ImageUrlToBase64Options {
+  /** Abort the download once the response exceeds this many bytes. */
+  maxBytes?: number;
+}
+
 /**
  * Convert image URL to base64
  * Uses SSRF-safe fetch on server-side to prevent SSRF attacks
  */
 export const imageUrlToBase64 = async (
   imageUrl: string,
+  options: ImageUrlToBase64Options = {},
 ): Promise<{ base64: string; mimeType: string }> => {
   try {
     const isServer = typeof window === 'undefined';
@@ -55,7 +64,9 @@ export const imageUrlToBase64 = async (
       ? await import('@lobechat/ssrf-safe-fetch').then((m) => m.ssrfSafeFetch(imageUrl))
       : await fetch(imageUrl);
 
-    const blob = await res.blob();
+    const blob = options.maxBytes
+      ? await readBlobWithLimit(res, options.maxBytes)
+      : await res.blob();
     const arrayBuffer = await blob.arrayBuffer();
     const mimeType = await resolveMimeTypeFromBytes(blob.type, arrayBuffer);
 

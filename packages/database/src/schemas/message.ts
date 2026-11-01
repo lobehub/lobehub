@@ -19,7 +19,7 @@ import {
 import { createInsertSchema } from 'drizzle-zod';
 
 import { idGenerator } from '../utils/idGenerator';
-import { timestamps, varchar255 } from './_helpers';
+import { softDeleteColumns, timestamps, varchar255 } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { files } from './file';
@@ -108,8 +108,8 @@ export const messages = pgTable(
     metadata: jsonb('metadata'),
     /**
      * Token usage + cost for this message, promoted out of `metadata.usage`
-     * into a dedicated column. `metadata.usage` stays the source of truth during
-     * the dual-write transition; new reads/aggregations should target this column.
+     * into a dedicated column. New writes target this column exclusively;
+     * readers may temporarily fall back to `metadata.usage` for legacy rows.
      */
     usage: jsonb('usage').$type<ModelUsage>(),
 
@@ -150,12 +150,15 @@ export const messages = pgTable(
       onDelete: 'cascade',
     }),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (table) => [
     index('messages_created_at_idx').on(table.createdAt),
     uniqueIndex('message_client_id_user_unique').on(table.clientId, table.userId),
     index('messages_topic_id_idx').on(table.topicId),
+    index('messages_topic_id_updated_at_idx').on(table.topicId, table.updatedAt),
     index('messages_parent_id_idx').on(table.parentId),
     index('messages_quota_id_idx').on(table.quotaId),
 
@@ -172,6 +175,8 @@ export const messages = pgTable(
     index('messages_workspace_id_idx').on(table.workspaceId),
   ],
 );
+
+export type MessageItem = typeof messages.$inferSelect;
 
 // if the message container a plugin
 export const messagePlugins = pgTable(

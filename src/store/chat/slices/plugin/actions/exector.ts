@@ -1,12 +1,17 @@
+import { isWorkSkillProvider } from '@lobechat/types';
+
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { useToolStore } from '@/store/tool';
 import { type ChatToolPayload } from '@/types/message';
+import { stashWorkIntent } from '@/utils/clientWorkIntentStash';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 /**
  * Context for remote tool execution, derived from the invoking message
  */
 export interface RemoteToolExecutorContext {
+  /** Stable tool call ID */
+  sourceToolCallId?: string;
   /** Topic ID from the message that triggered this tool call */
   topicId?: string;
 }
@@ -34,33 +39,27 @@ const createFailedResult = (
   success: false,
 });
 
-export const klavisExecutor: RemoteToolExecutor = async (p, _context) => {
-  // payload.identifier is now the storage identifier (e.g., 'google-calendar')
+export const composioExecutor: RemoteToolExecutor = async (p, _context) => {
   const identifier = p.identifier;
-  const klavisServers = useToolStore.getState().servers || [];
-  const server = klavisServers.find((s) => s.identifier === identifier);
+  const composioServers = useToolStore.getState().composioServers || [];
+  const server = composioServers.find((s) => s.identifier === identifier);
 
   if (!server) {
-    return createFailedResult(`Klavis server not found: ${identifier}`);
+    return createFailedResult(`Composio server not found: ${identifier}`);
   }
 
-  // Parse arguments
   const args = safeParseJSON(p.arguments) || {};
 
-  // Call Klavis tool via store action — pass identifier for precise permission gate lookup
-  const result = await useToolStore.getState().callKlavisTool({
+  const result = await useToolStore.getState().callComposioTool({
     identifier,
-    serverUrl: server.serverUrl,
     toolArgs: args,
-    toolName: p.apiName,
+    toolSlug: p.apiName,
   });
 
   if (!result.success) {
-    return createFailedResult(result.error || 'Klavis tool execution failed');
+    return createFailedResult(result.error || 'Composio tool execution failed');
   }
 
-  // result.data is MCPToolCallProcessedResult from server
-  // Convert to MCPToolCallResult format
   const toolResult = result.data;
   if (toolResult) {
     return {
@@ -71,7 +70,7 @@ export const klavisExecutor: RemoteToolExecutor = async (p, _context) => {
     };
   }
 
-  return createFailedResult('Klavis tool returned empty result');
+  return createFailedResult('Composio tool returned empty result');
 };
 
 export const lobehubSkillExecutor: RemoteToolExecutor = async (p, context) => {
@@ -94,6 +93,20 @@ export const lobehubSkillExecutor: RemoteToolExecutor = async (p, context) => {
     return createFailedResult(
       result.error || `LobeHub Skill tool ${provider} ${p.apiName} execution failed`,
     );
+  }
+
+  if (isWorkSkillProvider(provider)) {
+    // Stash the Work-registration intent (carrying the UNTRUNCATED result data)
+    // keyed by toolCallId; `call_tool` drains it and registers the Work ONCE the
+    // tool call's cumulative cost is known, instead of registering cost-less here
+    // and back-filling. The runtime supplies provenance + cost at persist time.
+    stashWorkIntent(context?.sourceToolCallId, {
+      args,
+      data: result.data,
+      provider,
+      toolName: p.apiName,
+      type: 'skill',
+    });
   }
 
   // Convert to MCPToolCallResult format

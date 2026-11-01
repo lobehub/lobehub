@@ -50,6 +50,7 @@ const copyRun = (run: SubagentRun): SubagentRun => ({
   ...run,
   lifetimeToolCallIds: new Set(run.lifetimeToolCallIds),
   toolState: copyToolState(run.toolState),
+  turnIds: new Set(run.turnIds),
 });
 
 /** Clone the runs map, deep-copying only the run we're about to mutate. */
@@ -60,13 +61,47 @@ const withRun = (
 ): SubagentRunsState => {
   const runs = new Map(state.runs);
   runs.set(parentToolCallId, run);
-  return { runs };
+  return { ...state, runs };
 };
 
-const withoutRun = (state: SubagentRunsState, parentToolCallId: string): SubagentRunsState => {
+/**
+ * Finalize bookkeeping: drop the live run AND remember its `parentToolCallId` in
+ * `finalizedParents` so a replayed first-event never re-creates the (now
+ * `Active`) thread. The remembered set is what makes thread creation idempotent
+ * across cold-replica retries / double IPC delivery — keyed by the DB-homed
+ * `sourceToolCallId`, independent of whether the live `runs` map still holds it.
+ * The run's tail is kept as a resume anchor in case the subagent wakes up again.
+ */
+const markRunFinalized = (
+  state: SubagentRunsState,
+  parentToolCallId: string,
+  run: SubagentRun,
+): SubagentRunsState => {
   const runs = new Map(state.runs);
   runs.delete(parentToolCallId);
-  return { runs };
+  const finalizedParents = new Set(state.finalizedParents);
+  finalizedParents.add(parentToolCallId);
+  const finalizedRuns = new Map(state.finalizedRuns);
+  finalizedRuns.set(parentToolCallId, {
+    lastChainParentId: run.lastChainParentId,
+    lifetimeToolCallIds: run.lifetimeToolCallIds,
+    threadId: run.threadId,
+    turnIds: run.turnIds,
+  });
+  return { ...state, finalizedParents, finalizedRuns, runs };
+};
+
+/** Move a resumed parent from the finalized set back into the live runs. */
+const markRunReopened = (
+  state: SubagentRunsState,
+  parentToolCallId: string,
+  run: SubagentRun,
+): SubagentRunsState => {
+  const finalizedParents = new Set(state.finalizedParents);
+  finalizedParents.delete(parentToolCallId);
+  const finalizedRuns = new Map(state.finalizedRuns);
+  finalizedRuns.delete(parentToolCallId);
+  return withRun({ ...state, finalizedParents, finalizedRuns }, parentToolCallId, run);
 };
 
 const SUBAGENT_TITLE_MAX = 80;
@@ -82,14 +117,62 @@ interface ReduceResult {
  * run, the next state, and any structural intents (thread + message creates,
  * prior-turn flush). The returned `run` is a fresh copy safe to mutate further
  * by the caller before it calls `withRun` to fold it back into state.
+ *
+ * When the parent already FINALIZED (its thread is `Active`, tracked in
+ * `finalizedParents`), only a turn the thread has never seen resumes it: the
+ * thread reopens and the turn chains onto its tail. Anything else is a stale
+ * replay of a completed spawn — re-creating its thread would duplicate it — so
+ * this returns `run: null` and the caller drops the event.
  */
 const ensureRun = (
   state: SubagentRunsState,
   subCtx: SubagentEventContext,
   ctx: SubagentReduceCtx,
-): { intents: SubagentIntent[]; run: SubagentRun; state: SubagentRunsState } => {
+): { intents: SubagentIntent[]; run: SubagentRun | null; state: SubagentRunsState } => {
   const intents: SubagentIntent[] = [];
   const existing = state.runs.get(subCtx.parentToolCallId);
+
+  // ─── Finalized spawn: resume on a new turn, otherwise a stale replay → no-op ───
+  if (!existing && state.finalizedParents.has(subCtx.parentToolCallId)) {
+    const anchor = state.finalizedRuns.get(subCtx.parentToolCallId);
+    const turnId = subCtx.subagentMessageId;
+    if (!anchor || !turnId || anchor.turnIds.has(turnId)) {
+      return { intents, run: null, state };
+    }
+
+    const assistantId = ctx.newId('message');
+    intents.push(
+      { kind: 'reopenThread', threadId: anchor.threadId },
+      {
+        agentId: ctx.agentId,
+        content: '',
+        kind: 'createMessage',
+        messageId: assistantId,
+        parentId: anchor.lastChainParentId,
+        role: 'assistant',
+        subagentMessageId: turnId,
+        threadId: anchor.threadId,
+        topicId: ctx.topicId,
+      },
+    );
+
+    const run: SubagentRun = {
+      accContent: '',
+      accReasoning: '',
+      currentAssistantId: assistantId,
+      currentSubagentMessageId: turnId,
+      lastChainParentId: assistantId,
+      lifetimeToolCallIds: new Set(anchor.lifetimeToolCallIds),
+      threadId: anchor.threadId,
+      toolState: emptyToolState(),
+      turnIds: new Set([...anchor.turnIds, turnId]),
+    };
+    return {
+      intents,
+      run,
+      state: markRunReopened(state, subCtx.parentToolCallId, run),
+    };
+  }
 
   // ─── First event for this parent → lazy-create Thread + seed + assistant ───
   if (!existing) {
@@ -130,6 +213,7 @@ const ensureRun = (
         messageId: firstAssistantId,
         parentId: userMsgId,
         role: 'assistant',
+        subagentMessageId: subCtx.subagentMessageId,
         threadId,
         topicId: ctx.topicId,
       },
@@ -144,6 +228,7 @@ const ensureRun = (
       lifetimeToolCallIds: new Set(),
       threadId,
       toolState: emptyToolState(),
+      turnIds: new Set(subCtx.subagentMessageId ? [subCtx.subagentMessageId] : []),
     };
     return { intents, run, state: withRun(state, subCtx.parentToolCallId, run) };
   }
@@ -170,12 +255,14 @@ const ensureRun = (
       messageId: nextAssistantId,
       parentId: run.lastChainParentId,
       role: 'assistant',
+      subagentMessageId: subCtx.subagentMessageId,
       threadId: run.threadId,
       topicId: ctx.topicId,
     });
 
     run.currentAssistantId = nextAssistantId;
     run.currentSubagentMessageId = subCtx.subagentMessageId;
+    run.turnIds.add(subCtx.subagentMessageId);
     run.lastChainParentId = nextAssistantId;
     run.toolState = emptyToolState();
     run.accContent = '';
@@ -233,7 +320,7 @@ const finalizeRun = (
 
   intents.push({ kind: 'finalizeThread', threadId: run.threadId });
 
-  return { intents, state: withoutRun(state, parentToolCallId) };
+  return { intents, state: markRunFinalized(state, parentToolCallId, run) };
 };
 
 /** Find the run that owns an inner tool_call id (lifetime lookup). */
@@ -257,6 +344,8 @@ const reduceTextChunk = (
   const ensured = ensureRun(state, subCtx, ctx);
   const run = ensured.run;
   const intents = ensured.intents;
+  // Stale replay of a finalized spawn — drop without re-creating its thread.
+  if (!run) return { intents, state: ensured.state };
 
   if (kind === 'text') run.accContent += chunk;
   else run.accReasoning += chunk;
@@ -280,31 +369,43 @@ const reduceToolsChunk = (
   const ensured = ensureRun(state, subCtx, ctx);
   const run = ensured.run;
   const intents = ensured.intents;
-
-  for (const tool of tools) run.lifetimeToolCallIds.add(tool.id);
+  // Stale replay of a finalized spawn — drop without re-creating its thread.
+  if (!run) return { intents, state: ensured.state };
 
   const newToolMsgIds: string[] = [];
   for (const tool of tools) {
-    if (!run.toolState.persistedIds.has(tool.id)) {
-      run.toolState.persistedIds.add(tool.id);
-      run.toolState.payloads.push({
-        apiName: tool.apiName,
-        arguments: tool.arguments,
-        id: tool.id,
-        identifier: tool.identifier,
-        type: tool.type,
-      });
-      const toolMessageId = ctx.newId('message');
-      run.toolState.toolMsgIdByCallId.set(tool.id, toolMessageId);
-      newToolMsgIds.push(toolMessageId);
-    }
+    // Run-lifetime de-dupe FIRST: a tool already persisted anywhere in this run
+    // must never be re-created. Per-turn `persistedIds` is reset on every turn
+    // boundary — and starts empty after a cold-replica rehydration — so it alone
+    // would let a replayed / continued `tools_calling` mint a SECOND tool message
+    // for an id the run already wrote (duplicate inner-tool row in the thread).
+    // `lifetimeToolCallIds` survives turn boundaries and is restored from DB on
+    // rehydration, so it is the durable de-dupe key. (Checked BEFORE the
+    // add-to-lifetime loop below, which would otherwise mark this batch's ids as
+    // already-seen and skip everything.)
+    if (run.lifetimeToolCallIds.has(tool.id)) continue;
+    if (run.toolState.persistedIds.has(tool.id)) continue;
+    run.toolState.persistedIds.add(tool.id);
+    run.toolState.payloads.push({
+      apiName: tool.apiName,
+      arguments: tool.arguments,
+      id: tool.id,
+      identifier: tool.identifier,
+      type: tool.type,
+    });
+    const toolMessageId = ctx.newId('message');
+    run.toolState.toolMsgIdByCallId.set(tool.id, toolMessageId);
+    newToolMsgIds.push(toolMessageId);
   }
+
+  for (const tool of tools) run.lifetimeToolCallIds.add(tool.id);
 
   intents.push({
     assistantMessageId: run.currentAssistantId,
     content: run.accContent || undefined,
     kind: 'persistToolBatch',
     reasoning: run.accReasoning || undefined,
+    subagentMessageId: run.currentSubagentMessageId || undefined,
     threadId: run.threadId,
     tools: run.toolState.payloads.map((p) => ({
       isNew: newToolMsgIds.includes(run.toolState.toolMsgIdByCallId.get(p.id)!),
@@ -313,9 +414,11 @@ const reduceToolsChunk = (
     })),
   });
 
-  // Chain the next turn's assistant off the LAST tool message of this batch.
-  const lastToolMsgId = newToolMsgIds.at(-1);
-  if (lastToolMsgId) run.lastChainParentId = lastToolMsgId;
+  // Chain rule: the next turn's assistant parents off the
+  // prior assistant (the spine), NOT this batch's last tool — so
+  // `lastChainParentId` stays at `currentAssistantId` here, tools become inline
+  // children, and the read side reconstructs the zigzag. (Subagent threads have
+  // no signal/reactive turns, so there is no tool-anchor exception.)
 
   return { intents, state: withRun(ensured.state, subCtx.parentToolCallId, run) };
 };
@@ -347,6 +450,33 @@ export const reduce = (
     }
     if (data.chunkType === 'reasoning' && typeof data.reasoning === 'string' && data.reasoning) {
       return reduceTextChunk(state, subCtx, 'reasoning', data.reasoning, ctx);
+    }
+    if (
+      data.chunkType === 'tool_state' &&
+      data.snapshotMode === 'replace' &&
+      typeof data.toolCallId === 'string' &&
+      data.toolCallId.length > 0 &&
+      Number.isInteger(data.snapshotSeq) &&
+      data.snapshotSeq > 0 &&
+      typeof data.pluginState === 'object' &&
+      data.pluginState !== null &&
+      !Array.isArray(data.pluginState)
+    ) {
+      const owner = findRunByInnerToolCallId(state, data.toolCallId);
+      if (!owner) return { intents: [], state };
+
+      return {
+        intents: [
+          {
+            kind: 'updateToolState',
+            pluginState: data.pluginState,
+            snapshotSeq: data.snapshotSeq,
+            threadId: owner.run.threadId,
+            toolCallId: data.toolCallId,
+          },
+        ],
+        state,
+      };
     }
     if (data.chunkType === 'tools_calling') {
       const tools = (data.toolsCalling as ToolCallPayload[] | undefined) ?? [];
@@ -400,6 +530,7 @@ export const reduce = (
           messageId: run.currentAssistantId,
           model: data.model,
           provider: data.provider,
+          subagentMessageId: run.currentSubagentMessageId || undefined,
           threadId: run.threadId,
           usage: data.usage,
         },

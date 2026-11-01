@@ -1,18 +1,33 @@
-import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
+import { randomUUID } from 'node:crypto';
+
+import {
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  HTML_DOCUMENT_FILE_TYPE,
+} from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
 import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
+import { sliceHead } from '@lobechat/prompts/textWindow';
+import type { DocumentAccessScope, FileAccessScope } from '@lobechat/types';
+import {
+  ordinaryDocumentAccessScope,
+  ordinaryFileAccessScope,
+  stripAgentShareDocumentProvenance,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
-import { DocumentModel } from '@/database/models/document';
+import { DocumentModel, type DocumentQuerySortBy } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
+import { diffAddedMentionUserIds } from '@/server/utils/documentMentions';
 import { type LobeDocument } from '@/types/document';
 
 import { EditLockService } from '../editLock';
@@ -35,6 +50,61 @@ import type {
 
 const log = debug('lobe-chat:service:document');
 
+/**
+ * Upper bound, in characters, of parsed file text stored in `documents.content`.
+ *
+ * Parsing raw CSV exports, logs, or sparse spreadsheets can yield 100+ MiB of text. Rows that large
+ * slow every read of the document, overflow the model context when attached, and cannot be synced
+ * to full-text search. The original file stays in storage for tools that process it directly.
+ */
+export const PARSED_FILE_CONTENT_MAX_CHARS = 5_000_000;
+
+type ParsedFileDocument = Awaited<ReturnType<typeof loadFile>>;
+
+const PAGE_CLOSE_TAG = '\n</page>';
+
+/**
+ * PDF loaders wrap each page in `<page ...>...</page>`. A cut inside a page leaves an opening tag
+ * with no closing tag (or a half-written tag at the tail), which previews and `readAttachment`
+ * would expose as malformed markup. Close the cut page, or drop a half-written opening tag, while
+ * staying within the cap. Page tags are kept rather than stripped so page numbers survive.
+ */
+const closeCutPage = (content: string): string => {
+  const open = content.lastIndexOf('<page');
+  if (open === -1 || open < content.lastIndexOf('</page>')) return content;
+
+  const openEnd = content.indexOf('>', open);
+  if (openEnd === -1) return content.slice(0, open).trimEnd();
+
+  const bodyEnd = Math.max(openEnd + 1, content.length - PAGE_CLOSE_TAG.length);
+  const body = content.slice(0, bodyEnd).replace(/<\/?(?:p(?:a(?:ge?)?)?)?$/, '');
+  return `${body}${PAGE_CLOSE_TAG}`;
+};
+
+/**
+ * Truncates oversized parsed text before it is stored. `pages` repeats the full text, so it is
+ * dropped for truncated documents; `metadata` records the original length.
+ */
+export const capParsedFileDocument = (fileDocument: ParsedFileDocument): ParsedFileDocument => {
+  if (fileDocument.content.length <= PARSED_FILE_CONTENT_MAX_CHARS) return fileDocument;
+
+  const head = sliceHead(fileDocument.content, PARSED_FILE_CONTENT_MAX_CHARS);
+  // Only the PDF loader emits page wrappers; other text may contain a literal `<page` to keep.
+  const content = fileDocument.fileType === 'pdf' ? closeCutPage(head) : head;
+  return {
+    ...fileDocument,
+    content,
+    metadata: {
+      ...fileDocument.metadata,
+      originalCharCount: fileDocument.content.length,
+      truncated: true,
+    },
+    pages: undefined,
+    totalCharCount: content.length,
+    totalLineCount: content.split('\n').length,
+  };
+};
+
 const normalizeParseFileError = (error: unknown) => {
   if (error instanceof UnsupportedFileTypeError) {
     return new TRPCError({
@@ -53,17 +123,35 @@ export class DocumentService {
   private documentModel: DocumentModel;
   private documentHistoryServiceInstance?: DocumentHistoryService;
   private fileServiceInstance?: FileService;
+  private knowledgeBaseModel: KnowledgeBaseModel;
   private editLockService: EditLockService;
   private db: LobeChatDatabase;
+  private callerAgentVisibility?: 'private' | 'public' | null;
+  private documentAccessScope: DocumentAccessScope;
 
   private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+    documentAccessScope: DocumentAccessScope = ordinaryDocumentAccessScope,
+  ) {
     this.userId = userId;
     this.db = db;
     this.workspaceId = workspaceId;
+    this.callerAgentVisibility = callerAgentVisibility;
+    this.documentAccessScope = documentAccessScope;
     this.fileModel = new FileModel(db, userId, workspaceId);
-    this.documentModel = new DocumentModel(db, userId, workspaceId);
+    this.knowledgeBaseModel = new KnowledgeBaseModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(
+      db,
+      userId,
+      workspaceId,
+      callerAgentVisibility,
+      documentAccessScope,
+    );
     this.editLockService = new EditLockService(userId);
   }
 
@@ -83,6 +171,21 @@ export class DocumentService {
     return this.documentHistoryServiceInstance;
   }
 
+  /**
+   * Whether a document participates in collaborative edit locking. Only
+   * workspace documents other members can actually open need the lock:
+   * a `visibility: 'private'` row is creator-only (buildWorkspaceWhere hides it
+   * from everyone else), so locking it can only ever conflict the creator with
+   * themselves — e.g. a stale lease left behind by a publish → unpublish flip
+   * turning every autosave into a CONFLICT loop. NULL visibility is treated as
+   * public, mirroring buildWorkspaceWhere.
+   */
+  private isCollaborativeDocument(
+    doc: Pick<DocumentItem, 'visibility' | 'workspaceId'> | null | undefined,
+  ): boolean {
+    return Boolean(this.workspaceId && doc?.workspaceId && doc.visibility !== 'private');
+  }
+
   private async deleteFileRecordAndStorage(fileId: string) {
     const file = await this.fileModel.delete(fileId);
     if (!file?.url || file.url.startsWith('internal://')) return;
@@ -95,7 +198,7 @@ export class DocumentService {
    */
   async createDocument(params: {
     content?: string;
-    editorData: Record<string, any>;
+    editorData?: Record<string, any>;
     fileType?: string;
     knowledgeBaseId?: string;
     metadata?: Record<string, any>;
@@ -103,6 +206,7 @@ export class DocumentService {
     rawData?: string;
     slug?: string;
     title: string;
+    visibility?: 'private' | 'public';
   }): Promise<DocumentItem> {
     const {
       content,
@@ -110,14 +214,42 @@ export class DocumentService {
       title,
       fileType = CUSTOM_DOCUMENT_FILE_TYPE,
       metadata,
-      knowledgeBaseId,
-      parentId,
       slug,
+      visibility,
     } = params;
+    // Agent tool calls often fill optional ids with "" — that means "unset".
+    // Passed through, it reaches the `parent_id` / `knowledge_base_id` FKs and
+    // fails the insert with an opaque `Failed query` error.
+    const knowledgeBaseId = params.knowledgeBaseId?.trim() || undefined;
+    const parentId = params.parentId?.trim() || undefined;
+    const sanitizedMetadata = stripAgentShareDocumentProvenance(metadata);
 
     // Calculate character and line counts
     const totalCharCount = content?.length || 0;
     const totalLineCount = content?.split('\n').length || 0;
+
+    // Resolve visibility upfront so the KB mirror file uses the same policy
+    // as the document. A library-root document inherits the KB visibility;
+    // parent documents remain navigation-only and do not pass visibility or
+    // ACL to children. Without a library or an explicit value it stays
+    // undefined, so the row takes the schema default (`'public'` — workspace
+    // documents are shared unless asked otherwise). Personal mode ignores the
+    // column but still checks the library exists, so a wrong id fails as
+    // NOT_FOUND instead of a foreign-key violation.
+    let resolvedVisibility: 'private' | 'public' | undefined = visibility;
+    if (knowledgeBaseId) {
+      const knowledgeBase = await this.knowledgeBaseModel.findById(
+        knowledgeBaseId,
+        this.callerAgentVisibility,
+      );
+      if (!knowledgeBase) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Knowledge base not found: ${knowledgeBaseId}`,
+        });
+      }
+      if (this.workspaceId) resolvedVisibility = knowledgeBase.visibility;
+    }
 
     let fileId: string | null = null;
 
@@ -128,11 +260,12 @@ export class DocumentService {
         {
           fileType,
           knowledgeBaseId,
-          metadata,
+          metadata: sanitizedMetadata,
           name: title,
           parentId,
           size: totalCharCount,
           url: `internal://document/placeholder`, // Placeholder URL
+          ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
         },
         false, // Do not insert to global files
       );
@@ -142,8 +275,8 @@ export class DocumentService {
     // Store knowledgeBaseId in metadata for folders (which don't have fileId)
     const finalMetadata =
       knowledgeBaseId && fileType === CUSTOM_FOLDER_FILE_TYPE
-        ? { ...metadata, knowledgeBaseId }
-        : metadata;
+        ? { ...sanitizedMetadata, knowledgeBaseId }
+        : sanitizedMetadata;
 
     const document = await this.documentModel.create({
       content,
@@ -161,9 +294,43 @@ export class DocumentService {
       title,
       totalCharCount,
       totalLineCount,
+      ...(resolvedVisibility ? { visibility: resolvedVisibility } : {}),
     });
 
     return document;
+  }
+
+  /**
+   * Publish one private document to the workspace. Thin wrapper around
+   * `DocumentModel.publishToWorkspace`, with a side-effect notification so any
+   * other workspace member with the page open (referencing chip, etc.) sees
+   * the new visibility on the next refresh.
+   */
+  async publishToWorkspace(documentId: string): Promise<{ documentIds: string[] }> {
+    return this.setVisibility(documentId, 'public');
+  }
+
+  /**
+   * Flip one document's `visibility`. Thin wrapper around
+   * `DocumentModel.setVisibility`, plus a side-effect notification so any
+   * other workspace member with the page open (referencing chip, editor
+   * placeholder, etc.) sees the new visibility on the next refresh — same
+   * pattern as `publishToWorkspace`.
+   */
+  async setVisibility(
+    documentId: string,
+    visibility: 'private' | 'public',
+  ): Promise<{ documentIds: string[] }> {
+    const result = await this.documentModel.setVisibility(documentId, visibility);
+
+    if (this.workspaceId) {
+      void publishResourceEvent(
+        { id: documentId, type: 'document' },
+        { actorId: this.userId, type: 'doc.updated' },
+      );
+    }
+
+    return result;
   }
 
   /**
@@ -173,13 +340,14 @@ export class DocumentService {
   async createDocuments(
     documents: Array<{
       content?: string;
-      editorData: Record<string, any>;
+      editorData?: Record<string, any>;
       fileType?: string;
       knowledgeBaseId?: string;
       metadata?: Record<string, any>;
       parentId?: string;
       slug?: string;
       title: string;
+      visibility?: 'private' | 'public';
     }>,
   ): Promise<DocumentItem[]> {
     // Create all documents in parallel for better performance
@@ -192,10 +360,14 @@ export class DocumentService {
    * Query documents with pagination
    */
   async queryDocuments(params?: {
+    creator?: 'others' | 'self';
     current?: number;
+    excludeKnowledgeBaseIds?: string[];
     fileTypes?: string[];
     pageSize?: number;
+    sortBy?: DocumentQuerySortBy;
     sourceTypes?: string[];
+    standaloneOnly?: boolean;
   }) {
     return this.documentModel.query(params);
   }
@@ -216,18 +388,41 @@ export class DocumentService {
    * always report as unlocked.
    */
   async acquireDocumentLock(id: string): Promise<DocumentLockResult> {
-    if (!this.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+    return this.acquireDocumentLockWithOwner(id, this.userId);
+  }
 
-    const prevHolder = await this.editLockService.getActiveHolder('document', id);
-    const result = await this.editLockService.acquire('document', id);
+  async acquireDocumentLockWithOwner(id: string, ownerId: string): Promise<DocumentLockResult> {
+    if (!this.workspaceId)
+      return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
+
+    // Creator-only (private-visibility) documents never take a lease — see
+    // isCollaborativeDocument. Refusing here keeps a stale client from minting
+    // a lock the write guards would then trip over.
+    const doc = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(doc))
+      return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
+
+    const prevHolder = await this.editLockService.getActiveLock('document', id);
+    const result = await this.editLockService.acquire('document', id, ownerId);
 
     // Broadcast only on a holder edge (first claim / takeover). This method also
     // serves the periodic heartbeat, so a steady-state refresh (same holder)
     // must not emit an event.
-    if ((result.holderId ?? null) !== (prevHolder ?? null)) {
+    if (
+      (result.holderId ?? null) !== (prevHolder?.userId ?? null) ||
+      (result.ownerId ?? null) !== (prevHolder?.ownerId ?? null)
+    ) {
       void publishResourceEvent(
         { id, type: 'document' },
-        { actorId: this.userId, data: { holderId: result.holderId }, type: 'lock.changed' },
+        {
+          actorId: this.userId,
+          data: {
+            expiresAt: result.expiresAt?.toISOString() ?? null,
+            holderId: result.holderId,
+            ownerId: result.ownerId,
+          },
+          type: 'lock.changed',
+        },
       );
     }
 
@@ -238,13 +433,26 @@ export class DocumentService {
    * Read-only peek of the current edit lock (does not acquire). Lets a client
    * render a workspace page read-only on open when another member holds it.
    */
-  async getDocumentLock(id: string): Promise<DocumentLockResult> {
-    if (!this.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
-    const holder = await this.editLockService.getActiveHolder('document', id);
+  async getDocumentLock(id: string, ownerId?: string): Promise<DocumentLockResult> {
+    if (!this.workspaceId)
+      return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
+    // Private-visibility documents always read as unlocked (no lease can be
+    // taken on them), so a viewer of a just-unpublished page is never stranded
+    // read-only behind a leftover lease.
+    const doc = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(doc))
+      return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
+    const holder = await this.editLockService.getActiveLock('document', id);
+    const lockedByOther = holder
+      ? holder.ownerId
+        ? holder.ownerId !== ownerId
+        : holder.userId !== this.userId
+      : false;
     return {
-      expiresAt: null,
-      holderId: holder ?? null,
-      lockedByOther: Boolean(holder) && holder !== this.userId,
+      expiresAt: holder?.expiresAt ?? null,
+      holderId: holder?.userId ?? null,
+      lockedByOther,
+      ownerId: holder?.ownerId ?? null,
     };
   }
 
@@ -252,16 +460,93 @@ export class DocumentService {
    * Release the edit lock if the current user holds it. No-op in personal mode.
    */
   async releaseDocumentLock(id: string): Promise<void> {
+    return this.releaseDocumentLockWithOwner(id, this.userId);
+  }
+
+  async releaseDocumentLockWithOwner(id: string, ownerId: string): Promise<void> {
     if (!this.workspaceId) return;
     // Only broadcast "unlocked" when we actually released our own lock — if the
     // lease had expired and another member took over, the lock is still held and
     // a bogus holderId:null would wrongly flip their viewers to editable.
-    const released = await this.editLockService.release('document', id);
+    const released = await this.editLockService.release('document', id, ownerId);
     if (!released) return;
     void publishResourceEvent(
       { id, type: 'document' },
-      { actorId: this.userId, data: { holderId: null }, type: 'lock.changed' },
+      {
+        actorId: this.userId,
+        data: { expiresAt: null, holderId: null, ownerId: null },
+        type: 'lock.changed',
+      },
     );
+  }
+
+  /**
+   * Run a server-initiated read-modify-write (e.g. a Page Agent tool) under the
+   * collaborative edit lock. Acquiring the lock up front — rather than only
+   * checking it at persist time like {@link updateDocument} — serializes agent
+   * writes against other workspace members and rejects when someone else is
+   * actively editing, so an agent can no longer silently clobber a human's
+   * in-progress edits or another concurrent agent write.
+   *
+   * No-op in personal mode (no workspace → no collaboration → no lock). When
+   * Redis is down the underlying lock degrades to "unlocked" (fail-open), so
+   * this never blocks a write.
+   */
+  async runWithDocumentLock<T>(id: string, fn: (lockOwnerId?: string) => Promise<T>): Promise<T> {
+    if (!this.workspaceId) {
+      // Diagnostic: distinguishes "no-op because workspaceId is
+      // missing at runtime" from "lock actually evaluated".
+      log('runWithDocumentLock skip: no workspaceId (id=%s userId=%s)', id, this.userId);
+      return fn();
+    }
+
+    // Creator-only (private-visibility) documents have no collaborators to
+    // serialize against — run without a lease, same as personal mode.
+    const targetDoc = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(targetDoc)) {
+      log('runWithDocumentLock skip: non-collaborative doc (id=%s userId=%s)', id, this.userId);
+      return fn();
+    }
+
+    // If this user's live editor already holds the lease, ride along on the
+    // same ownerId so the acquire below is a pure heartbeat. Stealing the lock
+    // with a fresh `server:UUID` would silently rewrite the lease's ownerId,
+    // demote the user's saves through the owner-scoped write guard, and on the
+    // finally release leave a window where another member could grab the free
+    // lock. When we're truly claiming a lock, mint a server-scoped owner id
+    // we can identify in release.
+    const holderBefore = await this.editLockService.getActiveLock('document', id);
+    const heldBeforeByUser = holderBefore?.userId === this.userId;
+    const ownerId =
+      heldBeforeByUser && holderBefore?.ownerId ? holderBefore.ownerId : `server:${randomUUID()}`;
+
+    const lock = await this.acquireDocumentLockWithOwner(id, ownerId);
+    // Diagnostic: surfaces workspaceId/holder/acquire for debugging lock issues.
+    log(
+      'runWithDocumentLock: id=%s userId=%s ws=%s holderBefore=%s acquired=%o',
+      id,
+      this.userId,
+      this.workspaceId,
+      holderBefore?.userId,
+      lock,
+    );
+    if (lock.lockedByOther) {
+      throw new TRPCError({
+        cause: { data: { code: 'DocumentLocked' } },
+        code: 'CONFLICT',
+        message: 'Document is being edited by another user',
+      });
+    }
+
+    try {
+      return await fn(ownerId);
+    } finally {
+      // Only release a lease we freshly claimed. When the same user already
+      // held it, leave their session alive — releasing would briefly flip
+      // their editor to read-only and let another member grab the lock in
+      // the gap before the next client heartbeat.
+      if (!heldBeforeByUser) await this.releaseDocumentLockWithOwner(id, ownerId);
+    }
   }
 
   async listDocumentHistory(
@@ -292,6 +577,7 @@ export class DocumentService {
     documentId: string,
     editorData: Record<string, any>,
     saveSource: DocumentHistorySaveSource,
+    lockOwnerId?: string,
   ): Promise<SaveDocumentHistoryResult> {
     const currentDocument = await this.documentModel.findById(documentId);
     if (!currentDocument) {
@@ -301,10 +587,12 @@ export class DocumentService {
     // Same collaborative edit-lock guard as updateDocument: don't record a
     // history snapshot for a workspace document another member is editing, so a
     // locked-out actor (e.g. a Copilot mutation that will itself be rejected)
-    // can't pollute the version timeline.
-    if (this.workspaceId) {
-      const blockedBy = await this.editLockService.getBlockingHolder('document', documentId);
-      if (blockedBy) {
+    // can't pollute the version timeline. The lock holder forwards its
+    // `lockOwnerId` so it can still snapshot its own page (e.g. the pre-mutation
+    // snapshot a Copilot edit takes) without being blocked by its own lease.
+    if (this.isCollaborativeDocument(currentDocument)) {
+      const canWrite = await this.editLockService.canWrite('document', documentId, lockOwnerId);
+      if (!canWrite) {
         throw new TRPCError({
           cause: { data: { code: 'DocumentLocked' } },
           code: 'CONFLICT',
@@ -315,14 +603,14 @@ export class DocumentService {
 
     const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);
     const savedAt = new Date();
-    await this.documentHistoryService.createHistory({
+    const history = await this.documentHistoryService.createHistory({
       documentId,
       editorData: normalizedEditorData,
       saveSource,
       savedAt,
     });
 
-    return { savedAt };
+    return { historyId: history.id, savedAt };
   }
 
   /**
@@ -331,22 +619,23 @@ export class DocumentService {
   async trySaveCurrentDocumentHistory(
     documentId: string,
     saveSource: DocumentHistorySaveSource,
+    editorDataOverride?: Record<string, any>,
   ): Promise<SaveDocumentHistoryResult | undefined> {
     try {
       const currentDocument = await this.documentModel.findById(documentId);
-      const editorData = currentDocument?.editorData;
+      const editorData = editorDataOverride ?? currentDocument?.editorData;
       if (!isValidEditorData(editorData)) return undefined;
 
       const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);
       const savedAt = new Date();
-      await this.documentHistoryService.createHistory({
+      const history = await this.documentHistoryService.createHistory({
         documentId,
         editorData: normalizedEditorData,
         saveSource,
         savedAt,
       });
 
-      return { savedAt };
+      return { historyId: history.id, savedAt };
     } catch (error) {
       console.error('[DocumentService] Failed to save current document history:', error);
       return undefined;
@@ -356,9 +645,13 @@ export class DocumentService {
   /**
    * Delete document (recursively deletes children if it's a folder)
    */
-  async deleteDocument(id: string) {
+  async deleteDocument(id: string, options?: { restrictToCreator?: boolean }) {
     const document = await this.documentModel.findById(id);
     if (!document) return;
+    // Descendants created by other members are skipped, not deleted — their
+    // parentId FK is `set null`, so they get promoted to root instead of being
+    // destroyed by a non-owner's folder delete.
+    if (options?.restrictToCreator && document.userId !== this.userId) return;
 
     // If it's a folder, recursively delete all children first
     if (document.fileType === CUSTOM_FOLDER_FILE_TYPE) {
@@ -371,7 +664,7 @@ export class DocumentService {
 
       // Recursively delete all children
       for (const child of children) {
-        await this.deleteDocument(child.id);
+        await this.deleteDocument(child.id, options);
       }
 
       // Also delete all files in this folder
@@ -383,6 +676,7 @@ export class DocumentService {
       });
 
       for (const file of childFiles) {
+        if (options?.restrictToCreator && file.userId !== this.userId) continue;
         await this.deleteFileRecordAndStorage(file.id);
       }
     }
@@ -399,9 +693,18 @@ export class DocumentService {
   /**
    * Delete multiple documents in batch
    */
-  async deleteDocuments(ids: string[]) {
+  async deleteDocuments(ids: string[], options?: { restrictToCreator?: boolean }) {
+    let targetIds = ids;
+
+    // Workspace bulk deletes from non-owner members only target rows they
+    // created; the restriction also applies to each folder's recursive cascade.
+    if (options?.restrictToCreator) {
+      const rows = await this.documentModel.findByIds(ids);
+      targetIds = rows.filter((row) => row.userId === this.userId).map((row) => row.id);
+    }
+
     // Delete each document (which handles recursive deletion for folders)
-    await Promise.all(ids.map((id) => this.deleteDocument(id)));
+    await Promise.all(targetIds.map((id) => this.deleteDocument(id, options)));
   }
 
   /**
@@ -411,7 +714,13 @@ export class DocumentService {
     let changed = false;
     const result = await this.db.transaction(async (tx) => {
       const transactionDb = tx as unknown as LobeChatDatabase;
-      const documentModel = new DocumentModel(transactionDb, this.userId, this.workspaceId);
+      const documentModel = new DocumentModel(
+        transactionDb,
+        this.userId,
+        this.workspaceId,
+        this.callerAgentVisibility,
+        this.documentAccessScope,
+      );
       const fileModel = new FileModel(transactionDb, this.userId, this.workspaceId);
       const documentHistoryService = new DocumentHistoryService(
         transactionDb,
@@ -424,6 +733,34 @@ export class DocumentService {
         throw new Error(`Document not found: ${id}`);
       }
 
+      // Optimistic-concurrency predicate for the client's CONFLICT recovery:
+      // the retry asserts the exact version it verified. Re-read the row with
+      // FOR UPDATE so the check-and-write is atomic inside this transaction —
+      // an interleaved save from another session either commits first (and
+      // fails this predicate) or blocks until we commit.
+      if (params.expectedUpdatedAt !== undefined) {
+        const [row] = await transactionDb
+          .select({ updatedAt: documents.updatedAt })
+          .from(documents)
+          .where(eq(documents.id, id))
+          .for('update');
+        if (!row?.updatedAt || row.updatedAt.getTime() !== params.expectedUpdatedAt.getTime()) {
+          throw new TRPCError({
+            cause: { data: { code: 'DocumentVersionMismatch' } },
+            code: 'CONFLICT',
+            message: 'Document has been updated by another session',
+          });
+        }
+      }
+
+      // An HTML document's body is its content alone: rich-text editorData sent
+      // with it (or with the write that makes it HTML) is never persisted, and
+      // any the page carried before is cleared. Left behind, that pre-HTML JSON
+      // is what the editor would load and save if the page turned rich-text again.
+      const isHtmlDocument =
+        (params.fileType ?? currentDocument.fileType) === HTML_DOCUMENT_FILE_TYPE;
+      const editorDataParam = isHtmlDocument ? undefined : params.editorData;
+
       // Accepted-view projections used only for historyAppended comparison and
       // for the "before" snapshot written into history. The persisted editorData
       // keeps any pending diff nodes — they're only normalized when the user
@@ -432,12 +769,15 @@ export class DocumentService {
         (currentDocument.editorData ?? {}) as Record<string, any>,
       );
       const nextEditorDataAccepted =
-        params.editorData === undefined
-          ? undefined
-          : normalizeEditorDataDiffNodes(params.editorData);
+        editorDataParam === undefined ? undefined : normalizeEditorDataDiffNodes(editorDataParam);
       const historyAppended =
         nextEditorDataAccepted !== undefined &&
         !isEqual(nextEditorDataAccepted, currentEditorDataAccepted);
+      // Mentions are diffed on the accepted view so a chip inside a pending
+      // AI diff block only pings once the suggestion is accepted.
+      const addedMentionUserIds = historyAppended
+        ? diffAddedMentionUserIds(currentEditorDataAccepted, nextEditorDataAccepted)
+        : [];
 
       // Collaborative edit lock guard: reject writes to a workspace document that
       // another member is actively editing, so concurrent edits can't clobber
@@ -445,12 +785,21 @@ export class DocumentService {
       // (title/emoji) pass through, since the autosave always re-sends the
       // unchanged body. The lease auto-expires in Redis; when Redis is down this
       // returns null (fail-open) so the lock can't block saving.
+      // Switching a page into or out of HTML replaces the body other members see
+      // (and clears its editorData), so it is a body change even with no content.
+      const htmlTypeChanged =
+        isHtmlDocument !== (currentDocument.fileType === HTML_DOCUMENT_FILE_TYPE);
       const contentChanged =
         historyAppended ||
+        htmlTypeChanged ||
         (params.content !== undefined && params.content !== currentDocument.content);
-      if (this.workspaceId && contentChanged) {
-        const blockedBy = await this.editLockService.getBlockingHolder('document', id);
-        if (blockedBy) {
+      if (
+        contentChanged &&
+        params.origin !== 'room-projection' &&
+        this.isCollaborativeDocument(currentDocument)
+      ) {
+        const canWrite = await this.editLockService.canWrite('document', id, params.lockOwnerId);
+        if (!canWrite) {
           throw new TRPCError({
             cause: { data: { code: 'DocumentLocked' } },
             code: 'CONFLICT',
@@ -467,8 +816,10 @@ export class DocumentService {
         updates.totalLineCount = params.content.split('\n').length;
       }
 
-      if (params.editorData !== undefined) {
-        updates.editorData = params.editorData;
+      if (editorDataParam !== undefined) {
+        updates.editorData = editorDataParam;
+      } else if (isHtmlDocument && currentDocument.editorData != null) {
+        updates.editorData = null;
       }
 
       if (params.fileType !== undefined) {
@@ -491,21 +842,24 @@ export class DocumentService {
       // The lock lease is refreshed by the client heartbeat (acquireDocumentLock),
       // so a save does not need to touch it.
 
-      let savedAt: Date | undefined;
+      const rowUpdated = Object.keys(updates).length > 0 || historyAppended;
+      let updatedAt = currentDocument.updatedAt;
+      if (rowUpdated) {
+        const committedVersion = await documentModel.update(id, updates as Partial<DocumentItem>);
+        if (!committedVersion) throw new Error(`Document not found: ${id}`);
+        updatedAt = committedVersion;
+      }
 
+      const savedAt = historyAppended ? updatedAt : undefined;
       if (historyAppended) {
-        savedAt = new Date();
         await documentHistoryService.createHistory({
+          ...params.history,
           breakAutosaveWindow: params.breakAutosaveWindow,
           documentId: id,
           editorData: currentEditorDataAccepted,
           saveSource: params.saveSource ?? 'autosave',
-          savedAt,
+          savedAt: updatedAt,
         });
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await documentModel.update(id, updates as Partial<DocumentItem>);
       }
 
       if ((params.title !== undefined || params.parentId !== undefined) && currentDocument.fileId) {
@@ -515,12 +869,14 @@ export class DocumentService {
         await fileModel.update(currentDocument.fileId, fileUpdates);
       }
 
-      changed = Object.keys(updates).length > 0 || historyAppended;
+      changed = rowUpdated;
 
       return {
+        ...(addedMentionUserIds.length > 0 ? { addedMentionUserIds } : {}),
         historyAppended,
         id,
         savedAt,
+        updatedAt,
       };
     });
 
@@ -546,8 +902,17 @@ export class DocumentService {
     log(`${logPrefix} Starting to parse file as document, path: ${filePath}`);
 
     try {
-      // Use loadFile to load file content
-      const fileDocument = await loadFile(filePath);
+      const loaded = await loadFile(filePath);
+      // Strip <page> wrappers before capping: a cut inside a page would leave an opening tag with
+      // no closing tag, which the strip regex can no longer match.
+      const fileDocument = capParsedFileDocument(
+        loaded.content.includes('<page')
+          ? {
+              ...loaded,
+              content: loaded.content.replaceAll(/<page[^>]*>([\S\s]*?)<\/page>/g, '$1').trim(),
+            }
+          : loaded,
+      );
 
       log(`${logPrefix} File parsed successfully %O`, {
         fileType: fileDocument.fileType,
@@ -560,11 +925,7 @@ export class DocumentService {
         file.name.replace(/\.(pdf|docx?|md|markdown)$/i, '') ||
         'Untitled';
 
-      // Clean up content - remove <page> tags if present
-      let cleanContent = fileDocument.content;
-      if (cleanContent.includes('<page')) {
-        cleanContent = cleanContent.replaceAll(/<page[^>]*>([\S\s]*?)<\/page>/g, '$1').trim();
-      }
+      const cleanContent = fileDocument.content;
 
       const document = await this.documentModel.create({
         content: cleanContent,
@@ -591,22 +952,34 @@ export class DocumentService {
   }
 
   /**
-   * Parse file content
+   * Parse file content.
    *
+   * Idempotent: returns the document already stored for the file, and serializes
+   * the cache write per file so two concurrent calls cannot both insert one.
+   *
+   * The database handle must not be an open transaction — the advisory lock is
+   * transaction scoped, so a nested call would hold it until the outer
+   * transaction commits instead of releasing it after the insert.
    */
-  async parseFile(fileId: string): Promise<LobeDocument> {
+  async parseFile(
+    fileId: string,
+    accessScope: FileAccessScope = ordinaryFileAccessScope,
+  ): Promise<LobeDocument> {
     // Idempotent: return existing document if already parsed
-    const existingDoc = await this.documentModel.findByFileId(fileId);
+    const existingDoc = await this.documentModel.findByFileId(fileId, accessScope);
     if (existingDoc) return existingDoc as LobeDocument;
 
-    const { filePath, file, cleanup } = await this.fileService.downloadFileToLocal(fileId);
+    const { filePath, file, cleanup } = await this.fileService.downloadFileToLocal(
+      fileId,
+      accessScope,
+    );
 
     const logPrefix = `[${file.name}]`;
     log(`${logPrefix} Starting to parse file, path: ${filePath}`);
 
     try {
       // Use loadFile to load file content
-      const fileDocument = await loadFile(filePath);
+      const fileDocument = capParsedFileDocument(await loadFile(filePath));
 
       log(`${logPrefix} File parsed successfully %O`, {
         fileType: fileDocument.fileType,
@@ -619,19 +992,49 @@ export class DocumentService {
         file.name.replace(/\.(pdf|docx?|md|markdown)$/i, '') ||
         'Untitled';
 
-      const document = await this.documentModel.create({
-        content: fileDocument.content,
-        fileId,
-        fileType: CUSTOM_DOCUMENT_FILE_TYPE, // Use custom/document for all parsed files
-        filename: title,
-        metadata: fileDocument.metadata,
-        pages: fileDocument.pages,
-        parentId: file.parentId,
-        source: file.url,
-        sourceType: 'file',
-        title,
-        totalCharCount: fileDocument.totalCharCount,
-        totalLineCount: fileDocument.totalLineCount,
+      const document = await this.db.transaction(async (tx) => {
+        // The existence check above ran before the download and the parse, so
+        // another request can have published its own row for this file in the
+        // meantime. Serialize the write per file so two concurrent `parseFile`
+        // calls cannot both insert one. `hashtext` returns int4 while
+        // `pg_advisory_xact_lock` takes bigint, so cast. Under the default READ
+        // COMMITTED isolation the re-check below takes a fresh snapshot once the
+        // lock is granted, so it sees whatever the holder committed. The parse
+        // itself stays outside the transaction: it downloads and reads the whole
+        // file, and holding a connection that long would turn every large upload
+        // into pool pressure.
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${`parseFile:${fileId}`})::bigint)`,
+        );
+
+        const transactionDb = tx as unknown as LobeChatDatabase;
+        const transactionDocumentModel = new DocumentModel(
+          transactionDb,
+          this.userId,
+          this.workspaceId,
+          this.callerAgentVisibility,
+          this.documentAccessScope,
+        );
+
+        // Whoever inserted first wins; discard this parse rather than adding a
+        // second document for the same file.
+        const raced = await transactionDocumentModel.findByFileId(fileId, accessScope);
+        if (raced) return raced;
+
+        return transactionDocumentModel.create({
+          content: fileDocument.content,
+          fileId,
+          fileType: CUSTOM_DOCUMENT_FILE_TYPE, // Use custom/document for all parsed files
+          filename: title,
+          metadata: fileDocument.metadata,
+          pages: fileDocument.pages,
+          parentId: file.parentId,
+          source: file.url,
+          sourceType: 'file',
+          title,
+          totalCharCount: fileDocument.totalCharCount,
+          totalLineCount: fileDocument.totalLineCount,
+        });
       });
 
       return document as LobeDocument;

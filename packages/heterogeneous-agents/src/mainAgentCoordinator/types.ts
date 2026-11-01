@@ -1,3 +1,6 @@
+import type { AgentInterventionRequestData } from '@lobechat/agent-gateway-client';
+import type { ToolIntervention } from '@lobechat/types';
+
 import type { PersistToolBatchEntry, SubagentRunsState } from '../subagentCoordinator';
 import { createSubagentRunsState } from '../subagentCoordinator';
 import type { ExternalSignalContext, ToolCallPayload } from '../types';
@@ -28,11 +31,17 @@ import type { ExternalSignalContext, ToolCallPayload } from '../types';
  * `reduce` call is the only entry point both engines need.
  *
  * The CHAIN RULE lives here and is authoritative for both engines:
- *   the next turn's assistant parents off the last tool message of the most
- *   recent tool-bearing turn (`lastToolMsgIdEver`), falling back to the current
- *   assistant only when no tool has ever been seen. This keeps the rendered
- *   chain a linear `asst → tool → asst → tool …` zigzag even across toolless
- *   reactive (signal-tagged) turns.
+ * the next turn's assistant parents off the most recent NON-tool,
+ * NON-signal main-thread message — the run's "spine" (`lastSpineMessageId`) —
+ * so the persisted shape is `user → asst → asst …` with tools as inline
+ * children. The read side (`conversation-flow`) reconstructs the
+ * `asst → tool → asst` zigzag from this. The one exception is signal-tagged
+ * reactive turns (Monitor stdout pushes), which parent off the run's most
+ * recent tool (`lastToolMsgIdEver`) so the reader renders them as tool-child
+ * callbacks rather than spine turns. On a cold serverless replica the spine
+ * pointer is recovered from the DB (most recent non-tool main message), which
+ * is fork-resistant — it does NOT depend on the in-memory current-assistant
+ * pointer that can regress mid-run.
  */
 
 // ─── Reducer state ───
@@ -51,6 +60,19 @@ export interface MainAgentTurnToolState {
   toolMsgIdByCallId: Map<string, string>;
 }
 
+export type MainAgentInterventionTransition =
+  'cancelled' | 'pending' | 'resolved' | 'session_ended' | 'timed_out';
+
+/** Latest durable projection for one intervention correlation id. */
+export interface MainAgentInterventionState {
+  intervention: ToolIntervention;
+  /** Original request metadata, retained so terminal business hooks stay typed. */
+  request?: AgentInterventionRequestData;
+  /** User-resolution id echoed by the producer on its terminal ACK. */
+  resolutionRequestId?: string;
+  transition: MainAgentInterventionTransition;
+}
+
 /**
  * Per-run main-agent state. Lifetime spans the whole CLI run. Designed to be
  * fully RE-HYDRATABLE from the DB so a stateless server replica can project it
@@ -63,16 +85,40 @@ export interface MainAgentRunState {
   accReasoning: string;
   /** The main-agent assistant message currently being appended to. */
   currentAssistantId: string;
+  /**
+   * CC `message.id` of the turn currently open on `currentAssistantId`. The
+   * turn's idempotency key: a `stream_start { newStep }` whose `messageId`
+   * EQUALS this is a replay of an already-opened turn (e.g. a BatchIngester
+   * retry reprocessed on a cold serverless replica, where `processedKeys` is
+   * empty) and must NOT mint a second assistant. Recovered on a cold replica
+   * from the current assistant's `metadata.mainMessageId`. Undefined for the
+   * host-seeded first turn (which never opens via `newStep`, so can't fork).
+   */
+  currentMainMessageId: string | undefined;
   /** Set once a terminal event has been reduced (idempotent finalize). */
   ended: boolean;
+  /** Request/terminal state buffered independently from tool-event ordering. */
+  interventionsByCallId: Map<string, MainAgentInterventionState>;
+  /** Highest seen reasoning snapshot sequence (replace-mode de-dup). */
+  lastReasoningSnapshotSeq: number;
+  /**
+   * Chain rule: the most recent NON-tool, NON-signal
+   * main-thread message — the run's spine. The next NORMAL turn's assistant
+   * parents off this (signal-tagged reactive turns parent off `lastToolMsgIdEver`
+   * instead). Advances on every normal turn; a signal turn does NOT advance it,
+   * so a normal continuation after a Monitor-callback burst re-mounts on the
+   * pre-callback spine assistant, not on a callback. Seeded to the placeholder
+   * assistant; recovered from the DB on a cold replica (fork-resistant).
+   */
+  lastSpineMessageId: string;
   /** Highest seen text snapshot sequence (replace-mode de-dup). */
   lastTextSnapshotSeq: number;
   /**
-   * Run-lifetime id of the most recent main-agent tool message. This is the
-   * chain-rule fallback: a new turn whose PRIOR turn produced no tools (e.g. a
-   * Monitor-stdout reactive reply) re-mounts onto this tool rather than onto
-   * the toolless assistant, so the rendered chain stays a linear zigzag.
-   * Only advances on tool batches; never reset across turns.
+   * Run-lifetime id of the most recent main-agent tool message. Since
+   * this anchors ONLY signal-tagged reactive turns (Monitor
+   * stdout pushes) onto a tool, so the reader renders them as tool-child
+   * callbacks; normal turns parent off `lastSpineMessageId`. Only advances on
+   * tool batches; never reset across turns.
    */
   lastToolMsgIdEver: string | undefined;
   /** Nested subagent runs — delegated to `reduceSubagentRuns`. */
@@ -97,9 +143,13 @@ export const createMainAgentRunState = (seedAssistantId: string): MainAgentRunSt
   accContent: '',
   accReasoning: '',
   currentAssistantId: seedAssistantId,
+  currentMainMessageId: undefined,
   ended: false,
+  lastSpineMessageId: seedAssistantId,
+  lastReasoningSnapshotSeq: 0,
   lastTextSnapshotSeq: 0,
   lastToolMsgIdEver: undefined,
+  interventionsByCallId: new Map(),
   subagents: createSubagentRunsState(),
   toolState: { payloads: [], persistedIds: new Set(), toolMsgIdByCallId: new Map() },
   turnMetadata: {},
@@ -119,6 +169,8 @@ export interface MainAgentReduceCtx {
   agentId?: string | null;
   /** Allocate a prefixed id (`thd_…` / `msg_…`). Deterministic counter in tests. */
   newId: (kind: 'message' | 'thread') => string;
+  /** Persisted tools across all turns and subagent threads, owned by the interpreter. */
+  toolMessageIds?: ReadonlyMap<string, string>;
   topicId: string | null;
 }
 
@@ -140,7 +192,9 @@ export type MainAgentIntent =
   | PersistAssistantIntent
   | MainStreamContentIntent
   | MainPersistToolBatchIntent
+  | MainUpdateToolStateIntent
   | MainResolveToolResultIntent
+  | MainSetToolInterventionIntent
   | MainRecordUsageIntent
   | SetErrorIntent;
 
@@ -148,6 +202,13 @@ export type MainAgentIntent =
 export interface CreateAssistantIntent {
   agentId?: string | null;
   kind: 'createAssistant';
+  /**
+   * CC `message.id` of the turn this assistant represents. The interpreter
+   * stamps it on `metadata.mainMessageId` so a cold replica can recover
+   * {@link MainAgentRunState.currentMainMessageId} and dedupe a replayed
+   * `newStep` (mirrors the subagent path's `metadata.subagentMessageId`).
+   */
+  mainMessageId?: string;
   messageId: string;
   /** Last known model carried from the prior turn (real model lands via usage). */
   model?: string;
@@ -196,6 +257,14 @@ export interface MainPersistToolBatchIntent {
   tools: PersistToolBatchEntry[];
 }
 
+/** Replace the live/durable plugin state for a still-running main-agent tool. */
+export interface MainUpdateToolStateIntent {
+  kind: 'updateToolState';
+  pluginState: Record<string, unknown>;
+  snapshotSeq: number;
+  toolCallId: string;
+}
+
 /**
  * Resolve a main-agent tool_result. The interpreter looks up the tool-message
  * id from its `toolCallId → messageId` map (the run-global one, DB-backed on
@@ -206,6 +275,12 @@ export interface MainResolveToolResultIntent {
   isError: boolean;
   kind: 'resolveToolResult';
   pluginState?: Record<string, any>;
+  toolCallId: string;
+}
+
+/** Persist one intervention state transition on its correlated tool row. */
+export interface MainSetToolInterventionIntent extends MainAgentInterventionState {
+  kind: 'setToolIntervention';
   toolCallId: string;
 }
 

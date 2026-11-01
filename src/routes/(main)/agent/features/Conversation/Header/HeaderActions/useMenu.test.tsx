@@ -2,10 +2,14 @@
  * @vitest-environment happy-dom
  */
 import { act, render, renderHook, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useMenu } from './useMenu';
+
+const favoriteMenuItemMock = vi.hoisted(() =>
+  vi.fn((target?: unknown) => (target ? { key: 'toggleFavorite', label: 'favorite.add' } : null)),
+);
+vi.mock('@/features/Favorites', () => ({ useFavoriteMenuItem: favoriteMenuItemMock }));
 
 const messageSuccessMock = vi.hoisted(() => vi.fn());
 const modalConfirmMock = vi.hoisted(() => vi.fn());
@@ -16,9 +20,28 @@ const autoRenameTopicTitleMock = vi.hoisted(() => vi.fn());
 const removeTopicMock = vi.hoisted(() => vi.fn());
 const updateTopicTitleMock = vi.hoisted(() => vi.fn());
 const useLocationMock = vi.hoisted(() => vi.fn());
+const labState = vi.hoisted(() => ({ enableTopicBugReport: false }));
+const bugReportTargetMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/business/client/hooks/useAuthorInfo', () => ({
   useAuthorInfo: () => ({ fullName: 'Miao Miao' }),
+}));
+
+vi.mock('@/business/client/hooks/useTopicBugReportMenuItem', () => ({
+  useTopicBugReportMenuItem: (target: unknown) => {
+    bugReportTargetMock(target);
+    return { key: 'reportProblem', label: 'topic:actions.reportProblem' };
+  },
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: typeof labState) => unknown) => selector(labState),
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableTopicBugReport: (state: typeof labState) => state.enableTopicBugReport,
+  },
 }));
 
 vi.mock('@/components/RenameModal', () => ({
@@ -29,21 +52,24 @@ vi.mock('@/const/version', () => ({
   isDesktop: true,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Block: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => null,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+vi.mock('@/features/Conversation/useAgentContext', () => ({
+  useAgentContext: () => ({ agentId: 'agent-1', topicId: 'topic-1' }),
 }));
 
-vi.mock('antd', () => ({
-  App: {
-    useApp: () => ({
-      message: { success: messageSuccessMock },
-      modal: { confirm: modalConfirmMock },
-    }),
-  },
-}));
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<{ App: Record<string, unknown> } & Record<string, unknown>>();
+
+  return {
+    ...actual,
+    App: {
+      ...actual.App,
+      useApp: () => ({
+        message: { success: messageSuccessMock },
+        modal: { confirm: modalConfirmMock },
+      }),
+    },
+  };
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -51,15 +77,15 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useLocation: useLocationMock,
   useParams: () => ({}),
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
   topicSelectors: {
-    currentActiveTopic: (state: Record<string, unknown>) => state.activeTopic,
-    currentTopicWorkingDirectory: (state: Record<string, unknown>) => state.workingDirectory,
+    getTopicById: (id: string) => (state: { topics: Record<string, unknown> }) => state.topics[id],
+    getTopicWorkingDirectory: () => (state: Record<string, unknown>) => state.workingDirectory,
   },
 }));
 
@@ -67,12 +93,19 @@ vi.mock('@/store/chat', () => ({
   useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       activeAgentId: 'agent-1',
-      activeTopic: {
-        favorite: false,
-        id: 'topic-1',
-        title: 'Topic 1',
-        updatedAt: '2026-05-27T00:15:00.000Z',
-        userId: 'user-1',
+      activeTopicId: 'topic-other-pane',
+      topics: {
+        'topic-1': {
+          favorite: false,
+          id: 'topic-1',
+          title: 'Topic 1',
+          updatedAt: '2026-05-27T00:15:00.000Z',
+          userId: 'user-1',
+        },
+        'topic-other-pane': {
+          id: 'topic-other-pane',
+          title: 'Other pane topic',
+        },
       },
       autoRenameTopicTitle: autoRenameTopicTitleMock,
       favoriteTopic: favoriteTopicMock,
@@ -106,20 +139,47 @@ const isActionItem = (
 } => !!item && typeof item === 'object' && 'key' in item;
 
 describe('Conversation header action menu', () => {
-  it('includes the desktop popup-window action for the active topic', () => {
+  afterEach(() => {
+    labState.enableTopicBugReport = false;
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(document, 'execCommand');
+  });
+
+  it('copies the displayed topic ID without the Clipboard API', async () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+    vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue(undefined as never);
+    let copiedText: string | undefined;
+    const copy = vi.fn(() => {
+      copiedText = (document.activeElement as HTMLTextAreaElement).value;
+      return true;
+    });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: copy });
+    const { result } = renderHook(() => useMenu());
+    const item = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'copySessionId');
+    if (!isActionItem(item)) throw new Error('Expected copy action');
+
+    await item.onClick?.();
+
+    expect(copy).toHaveBeenCalledWith('copy');
+    expect(copiedText).toBe('topic-1');
+    expect(document.querySelector('textarea')).toBeNull();
+  });
+  it('reuses the sidebar open-in-new-window action for the active topic', () => {
     useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
 
     const { result } = renderHook(() => useMenu());
 
-    const popupItem = result.current.menuItems.find(
-      (item) => isActionItem(item) && item.key === 'openInPopupWindow',
-    );
+    const popupItem = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'openInNewWindow');
 
     expect(popupItem).toBeDefined();
     if (!isActionItem(popupItem)) {
       throw new Error('Expected popup menu item to be a clickable action item');
     }
-    expect(popupItem?.label).toBe('topic:inPopup.title');
+    expect(popupItem?.label).toBe('topic:actions.openInNewWindow');
 
     act(() => {
       popupItem?.onClick?.();
@@ -133,9 +193,9 @@ describe('Conversation header action menu', () => {
 
     const { result } = renderHook(() => useMenu());
 
-    const popupItem = result.current.menuItems.find(
-      (item) => isActionItem(item) && item.key === 'openInPopupWindow',
-    );
+    const popupItem = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'openInNewWindow');
 
     expect(popupItem).toBeUndefined();
   });
@@ -145,9 +205,9 @@ describe('Conversation header action menu', () => {
 
     const { result } = renderHook(() => useMenu());
 
-    const topicInfoItem = result.current.menuItems.find(
-      (item) => isActionItem(item) && item.key === 'topic-info',
-    );
+    const topicInfoItem = result.current
+      .menuItems()
+      .find((item) => isActionItem(item) && item.key === 'topic-info');
 
     expect(topicInfoItem).toBeUndefined();
     expect(result.current.menuHeader).toBeDefined();
@@ -156,5 +216,67 @@ describe('Conversation header action menu', () => {
 
     expect(screen.getByText('topic:info.title')).toBeInTheDocument();
     expect(screen.getByText(/Miao Miao.*topic:info.updatedAt/)).toBeInTheDocument();
+  });
+
+  it('offers the problem report only when its lab is on', () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+    const findReportItem = (items: unknown[]) =>
+      items.find((item) => isActionItem(item) && item.key === 'reportProblem');
+
+    const { rerender, result } = renderHook(() => useMenu());
+    expect(findReportItem(result.current.menuItems())).toBeUndefined();
+
+    labState.enableTopicBugReport = true;
+    rerender();
+
+    expect(findReportItem(result.current.menuItems())).toBeDefined();
+    expect(bugReportTargetMock).toHaveBeenLastCalledWith({
+      agentId: 'agent-1',
+      threadId: undefined,
+      topicId: 'topic-1',
+    });
+  });
+
+  it('leads the topic-actions group with Share only when the caller provides it', () => {
+    useLocationMock.mockReturnValue({ pathname: '/agent/agent-1' });
+    const onShare = vi.fn();
+    const keysOf = (items: unknown[]) =>
+      items.map((item) => (isActionItem(item) ? item.key : undefined)).filter(Boolean);
+
+    const { result: personal } = renderHook(() => useMenu());
+    expect(keysOf(personal.current.menuItems())).not.toContain('share');
+
+    const { result } = renderHook(() => useMenu({ share: { disabled: true, onClick: onShare } }));
+    const items = result.current.menuItems();
+    const keys = keysOf(items);
+    expect(keys.slice(keys.indexOf('share'), keys.indexOf('share') + 2)).toEqual([
+      'share',
+      'copyWorkingDirectory',
+    ]);
+
+    const shareItem = items.find((item) => isActionItem(item) && item.key === 'share');
+    expect(shareItem).toMatchObject({ disabled: true, label: 'common:share' });
+    if (!isActionItem(shareItem)) throw new Error('Expected share action');
+    shareItem.onClick?.();
+    expect(onShare).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Favorites for the open topic beside Pin, without the hotkey', () => {
+    const { result } = renderHook(() => useMenu());
+
+    const keys = result.current
+      .menuItems()
+      .map((item) => (item && 'key' in item ? item.key : undefined));
+    expect(keys.slice(0, 2)).toEqual(['favorite', 'toggleFavorite']);
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      {
+        path: '/agent/agent-1/topic-1',
+        snapshotReady: true,
+        targetId: 'topic-1',
+        title: 'Topic 1',
+        type: 'topic',
+      },
+      { showHotkey: false },
+    );
   });
 });

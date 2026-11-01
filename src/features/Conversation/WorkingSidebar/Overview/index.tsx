@@ -1,0 +1,564 @@
+'use client';
+
+import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Empty,
+  Flexbox,
+  Icon,
+  Skeleton,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
+import { SkillsIcon } from '@lobehub/ui/icons';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  BoxesIcon,
+  ClipboardListIcon,
+  FilesIcon,
+  FileTextIcon,
+  GitBranchIcon,
+  GitForkIcon,
+  LaptopIcon,
+  RefreshCwIcon,
+  TriangleAlertIcon,
+} from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import RingLoadingIcon from '@/components/RingLoading';
+import {
+  getCiVisual,
+  getPullRequestState,
+  PR_STATE_VISUAL,
+} from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
+import ThreadListSection from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList/ThreadListSection';
+import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
+import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
+import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
+import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
+import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
+import { gitService } from '@/services/git';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { dbMessageSelectors } from '@/store/chat/selectors';
+import {
+  useFetchGitAheadBehind,
+  useFetchGitBranch,
+  useFetchGitWorktrees,
+  useReviewPatches,
+} from '@/store/device';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+
+import GoalSection from '../GoalSection';
+import ProgressSection from '../ProgressSection';
+import DeviceStatusSection from './DeviceStatusSection';
+import {
+  collectChangeStats,
+  isLinkedWorktreeCheckout,
+  shouldShowCiLabel,
+  shouldShowGitSkeleton,
+} from './overviewData';
+import OverviewHeader from './OverviewHeader';
+import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
+import PortSwitcher from './PortSwitcher';
+import { sectionStyles } from './sectionStyles';
+
+const styles = createStaticStyles(({ css }) => ({
+  body: css`
+    overflow-y: auto;
+  `,
+  emptyWorkspace: css`
+    padding-block: 28px 30px;
+    padding-inline: 20px;
+  `,
+}));
+
+interface OverviewProps {
+  active: boolean;
+  agentId?: string;
+  /** Routes file / git RPCs; empty for "This device", which reads over IPC. */
+  deviceId?: string;
+  environmentAvailable: boolean;
+  onOpenTab: (tab: string) => void;
+  onRefreshPullRequest: () => Promise<unknown>;
+  /** Parent-owned so the Overview row and the on-demand PR tab cannot disagree. */
+  pullRequest?: DeviceGitLinkedPullRequest | null;
+  repoType?: string;
+  sourcePath?: string;
+  /** The bound machine whose live status to show, local desktop included. */
+  statusDeviceId?: string;
+  workingDirectory?: string;
+}
+
+const pathBasename = (path: string) => path.replaceAll('\\', '/').split('/').findLast(Boolean);
+
+const Overview = memo<OverviewProps>(
+  ({
+    active,
+    agentId,
+    deviceId,
+    environmentAvailable,
+    onOpenTab,
+    onRefreshPullRequest,
+    pullRequest,
+    repoType,
+    sourcePath,
+    statusDeviceId,
+    workingDirectory,
+  }) => {
+    const { t } = useTranslation('chat');
+    const { t: tDevice } = useTranslation('device');
+    const { t: tCommon } = useTranslation('common');
+    const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+    const tunnelsEnabled = useUserStore(labPreferSelectors.enableDeviceTunnel);
+    const topicId = useChatStore((s) => s.activeTopicId);
+    const threadId = useChatStore((s) => s.activeThreadId);
+    const works = useChatStore((s) =>
+      getAllWorkSummaries(dbMessageSelectors.activeDbMessages(s), threadId),
+    );
+
+    const gitPath = active && repoType ? workingDirectory : undefined;
+    const isGithub = repoType === 'github';
+    const {
+      data: branchData,
+      error: branchError,
+      isConfirmed: branchConfirmed,
+      isLoading: branchLoading,
+      mutate: mutateBranch,
+    } = useFetchGitBranch(deviceId, gitPath);
+    const branch = branchData?.branch;
+    const detached = branchData?.detached;
+    const {
+      data: aheadBehind,
+      error: aheadBehindError,
+      isConfirmed: aheadBehindConfirmed,
+      mutate: mutateAheadBehind,
+    } = useFetchGitAheadBehind(deviceId, gitPath);
+    const {
+      data: reviewData,
+      error: reviewError,
+      isLoading: reviewLoading,
+      mutate: mutateReview,
+    } = useReviewPatches(gitPath, 'unstaged', undefined, deviceId, active);
+    const {
+      data: worktreesData,
+      isConfirmed: worktreesConfirmed,
+      isLoading: worktreesLoading,
+      mutate: mutateWorktrees,
+    } = useFetchGitWorktrees(deviceId, gitPath);
+    const worktrees = worktreesData ?? [];
+    const [switcherOpen, setSwitcherOpen] = useState(false);
+    const [pulling, setPulling] = useState(false);
+    const [pushing, setPushing] = useState(false);
+
+    const changeStats = useMemo(() => collectChangeStats(reviewData), [reviewData]);
+
+    const gitError = branchError || aheadBehindError || reviewError;
+    // Stale-first: the small git reads are replicas (`@/store/device/gitStatus`),
+    // so after a reload they paint from the persisted copy while the rest (e.g.
+    // the diff patches) are still in flight. Only fall back to the skeleton when
+    // nothing at all is there yet; rows whose own read is pending render a
+    // placeholder instead.
+    const isGitLoading = shouldShowGitSkeleton({
+      hasData:
+        branchData !== undefined ||
+        aheadBehind !== undefined ||
+        reviewData !== undefined ||
+        worktreesData !== undefined,
+      loading: branchLoading || reviewLoading || worktreesLoading,
+    });
+    const changesPending = reviewData === undefined && reviewLoading;
+    const visibleWorks = works.slice(0, 3);
+    const directoryName = workingDirectory ? pathBasename(workingDirectory) : undefined;
+    const hasWorkspace = environmentAvailable && !!workingDirectory;
+
+    const isLinkedWorktree = isLinkedWorktreeCheckout(workingDirectory, worktrees);
+
+    const refreshGit = useCallback(async () => {
+      await Promise.all([
+        mutateBranch(),
+        mutateAheadBehind(),
+        mutateReview(),
+        mutateWorktrees(),
+        onRefreshPullRequest(),
+      ]);
+    }, [mutateBranch, mutateAheadBehind, mutateReview, mutateWorktrees, onRefreshPullRequest]);
+
+    // Flip the displayed branch instantly on checkout; the switcher's
+    // onAfterCheckout reconciles once the checkout lands (same as GitStatus).
+    const handleOptimisticCheckout = useCallback(
+      (nextBranch: string) => {
+        void mutateBranch({ branch: nextBranch, detached: false }, { revalidate: false });
+      },
+      [mutateBranch],
+    );
+
+    const syncBusy = pulling || pushing;
+    // The branch and its counts may be stale-first paints from the last
+    // session. Checkout, pull and push assume both still describe the live
+    // branch, so they stay inert until this session confirms both reads — a
+    // faster branch probe must not enable sync against the previous branch's
+    // ahead/behind snapshot.
+    const actionsBlocked = syncBusy || !branchConfirmed || !aheadBehindConfirmed;
+
+    const handlePull = useCallback(async () => {
+      if (syncBusy || !workingDirectory) return;
+      setPulling(true);
+      try {
+        const result = await gitService.pullGitBranch({ deviceId, path: workingDirectory });
+        if (result.success) {
+          if (result.noop) {
+            toast.info(tDevice('workingDirectory.pullNoop'));
+          } else {
+            toast.success(tDevice('workingDirectory.pullSuccess'));
+          }
+          await refreshGit();
+        } else {
+          toast.error(result.error || tDevice('workingDirectory.pullFailed'));
+        }
+      } finally {
+        setPulling(false);
+      }
+    }, [deviceId, refreshGit, syncBusy, tDevice, workingDirectory]);
+
+    const handlePush = useCallback(async () => {
+      if (syncBusy || !workingDirectory) return;
+      setPushing(true);
+      try {
+        const result = await gitService.pushGitBranch({ deviceId, path: workingDirectory });
+        if (result.success) {
+          if (result.noop) {
+            toast.info(tDevice('workingDirectory.pushNoop'));
+          } else {
+            toast.success(tDevice('workingDirectory.pushSuccess'));
+          }
+          await refreshGit();
+        } else {
+          toast.error(result.error || tDevice('workingDirectory.pushFailed'));
+        }
+      } finally {
+        setPushing(false);
+      }
+    }, [deviceId, refreshGit, syncBusy, tDevice, workingDirectory]);
+
+    const ciStatus = pullRequest?.ciStatus;
+    const ci = pullRequest ? getCiVisual(ciStatus) : undefined;
+    const prVisual = pullRequest ? PR_STATE_VISUAL[getPullRequestState(pullRequest)] : undefined;
+
+    const showAhead = !!aheadBehind?.hasUpstream && aheadBehind.ahead > 0;
+    const showBehind = !!aheadBehind?.hasUpstream && aheadBehind.behind > 0;
+
+    // The branch picker routes through the worktree list, so both reads must be
+    // confirmed before either picker may act on them.
+    const pickersReady = branchConfirmed && worktreesConfirmed;
+    const canSwitchBranch = !detached && !!agentId && !!workingDirectory && pickersReady;
+    const branchRow = (
+      <OverviewRow
+        icon={GitBranchIcon}
+        interactive={canSwitchBranch}
+        title={detached ? tDevice('workingDirectory.detachedHead', { sha: branch ?? '' }) : branch}
+        trailing={canSwitchBranch ? <PickerGlyph /> : undefined}
+        value={
+          detached ? (
+            <>
+              <span className={rowStyles.num}>{branch}</span>
+              {t('workingPanel.overview.branch.detached')}
+            </>
+          ) : (
+            branch
+          )
+        }
+      />
+    );
+
+    const gitRows = (
+      <>
+        {branch &&
+          (canSwitchBranch ? (
+            <BranchSwitcher
+              agentId={agentId}
+              currentBranch={branch}
+              deviceId={deviceId}
+              isGithub={isGithub}
+              open={switcherOpen}
+              path={workingDirectory}
+              placement={'bottomLeft'}
+              sourcePath={sourcePath ?? workingDirectory}
+              worktrees={worktrees}
+              onAfterCheckout={() => void refreshGit()}
+              onExternalRefresh={refreshGit}
+              onOpenChange={setSwitcherOpen}
+              onOptimisticCheckout={handleOptimisticCheckout}
+            >
+              {branchRow}
+            </BranchSwitcher>
+          ) : (
+            branchRow
+          ))}
+
+        {showBehind && (
+          <OverviewRow
+            icon={ArrowDownIcon}
+            iconColor={cssVar.colorError}
+            iconSize={14}
+            value={t('workingPanel.overview.sync.behind', { count: aheadBehind!.behind })}
+            trailing={
+              pulling ? (
+                <RingLoadingIcon size={12} />
+              ) : (
+                <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.pull')}</span>
+              )
+            }
+            onClick={actionsBlocked ? undefined : handlePull}
+          />
+        )}
+        {showAhead && (
+          <OverviewRow
+            icon={ArrowUpIcon}
+            iconColor={cssVar.colorInfo}
+            iconSize={14}
+            value={t('workingPanel.overview.sync.ahead', { count: aheadBehind!.ahead })}
+            trailing={
+              pushing ? (
+                <RingLoadingIcon size={12} />
+              ) : (
+                <span className={rowStyles.rowAction}>{t('workingPanel.overview.sync.push')}</span>
+              )
+            }
+            onClick={actionsBlocked ? undefined : handlePush}
+          />
+        )}
+
+        {isLinkedWorktree && branch && workingDirectory && agentId && (
+          <WorktreeSwitcher
+            agentId={agentId}
+            currentBranch={branch}
+            detached={detached}
+            deviceId={deviceId}
+            disabled={!pickersReady}
+            isGithub={isGithub}
+            path={workingDirectory}
+            placement={'bottomLeft'}
+            sourcePath={sourcePath ?? workingDirectory}
+            worktrees={worktrees}
+            onWorktreesChange={mutateWorktrees}
+          >
+            <OverviewRow
+              icon={GitForkIcon}
+              interactive={pickersReady}
+              title={sourcePath ?? workingDirectory}
+              trailing={pickersReady ? <PickerGlyph /> : undefined}
+              value={t('workingPanel.overview.worktree.of', {
+                name: pathBasename(sourcePath ?? workingDirectory),
+              })}
+            />
+          </WorktreeSwitcher>
+        )}
+
+        <OverviewRow
+          icon={ClipboardListIcon}
+          trailing={
+            changesPending ? (
+              <RingLoadingIcon size={12} />
+            ) : changeStats.files > 0 ? (
+              <>
+                <span className={rowStyles.changeAdditions}>+{changeStats.additions}</span>
+                <span className={rowStyles.changeDeletions}>−{changeStats.deletions}</span>
+              </>
+            ) : (
+              t('workingPanel.overview.changes.none')
+            )
+          }
+          value={
+            changeStats.files > 0
+              ? t('workingPanel.pr.reason.localDirty', { count: changeStats.files })
+              : t('workingPanel.overview.changes')
+          }
+          onClick={() => onOpenTab('review')}
+        />
+
+        {pullRequest && prVisual && ci && (
+          <Tooltip title={`#${pullRequest.number} ${pullRequest.title}`}>
+            <div>
+              <OverviewRow
+                icon={prVisual.icon}
+                iconColor={prVisual.color}
+                trailing={
+                  <span
+                    className={sectionStyles.pill}
+                    style={{ background: `color-mix(in srgb,  12%, transparent)`, color: ci.color }}
+                  >
+                    <Icon icon={ci.icon} size={12} />
+                    {shouldShowCiLabel(ciStatus)
+                      ? t(
+                          `workingPanel.overview.ci.${ciStatus as 'failure' | 'pending'}` as 'workingPanel.overview.ci.failure',
+                        )
+                      : null}
+                  </span>
+                }
+                value={
+                  <>
+                    <span className={rowStyles.num}>#{pullRequest.number}</span>
+                    {pullRequest.title}
+                  </>
+                }
+                onClick={() => onOpenTab('pr')}
+              />
+            </div>
+          </Tooltip>
+        )}
+      </>
+    );
+
+    const workspaceSection = repoType ? (
+      isGitLoading ? (
+        <div className={sectionStyles.skeleton}>
+          <Skeleton.Text rows={3} />
+        </div>
+      ) : gitError ? (
+        <OverviewRow
+          danger
+          icon={TriangleAlertIcon}
+          iconColor={cssVar.colorError}
+          value={t('workingPanel.overview.environmentError')}
+          trailing={
+            <Button
+              icon={<Icon icon={RefreshCwIcon} size={12} />}
+              size={'small'}
+              onClick={() => void refreshGit()}
+            >
+              {tCommon('retry')}
+            </Button>
+          }
+        />
+      ) : (
+        gitRows
+      )
+    ) : null;
+
+    return (
+      <Flexbox className={styles.body}>
+        {hasWorkspace && (
+          <>
+            <OverviewHeader
+              deviceId={deviceId}
+              error={!!gitError}
+              name={directoryName!}
+              path={workingDirectory}
+              repoType={repoType}
+              onClick={() => onOpenTab('files')}
+            />
+            <Flexbox className={sectionStyles.section}>
+              {workspaceSection}
+              {/* Outside the git rows: a dev server runs in plain folders too. */}
+              {tunnelsEnabled && deviceId && (
+                <PortSwitcher
+                  active={active}
+                  deviceId={deviceId}
+                  workingDirectory={workingDirectory}
+                />
+              )}
+            </Flexbox>
+          </>
+        )}
+
+        {/* The bound machine's live state, as its device card shows it. */}
+        {statusDeviceId && <DeviceStatusSection active={active} deviceId={statusDeviceId} />}
+
+        <TopicBackgroundActivity topicId={topicId} />
+        {environmentAvailable && !workingDirectory && (
+          <Empty
+            className={cx(sectionStyles.section, styles.emptyWorkspace)}
+            description={t('workingPanel.overview.workspace.emptyDesc')}
+            icon={LaptopIcon}
+            title={t('workingPanel.overview.workspace.empty')}
+          />
+        )}
+
+        <GoalSection className={sectionStyles.section} />
+        <ProgressSection className={sectionStyles.section} />
+
+        {visibleWorks.length > 0 && (
+          <Flexbox className={sectionStyles.section}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              className={sectionStyles.sectionHeader}
+              justify={'space-between'}
+            >
+              <span className={sectionStyles.sectionTitle}>
+                {t('workingPanel.overview.outputs')}
+              </span>
+              <Button
+                outdent={'end'}
+                size={'small'}
+                type={'text'}
+                onClick={() => onOpenTab('works')}
+              >
+                {t('workingPanel.overview.viewAll')}
+              </Button>
+            </Flexbox>
+            {visibleWorks.map((work) => (
+              <WorkSummaryCard item={work} key={work.id} variant={'inline'} />
+            ))}
+          </Flexbox>
+        )}
+
+        {!environmentAvailable && !topicId && visibleWorks.length === 0 && (
+          <Empty
+            className={sectionStyles.section}
+            description={t('workingPanel.overview.empty')}
+            icon={BoxesIcon}
+            title={t('workingPanel.overview.emptyTitle')}
+          />
+        )}
+
+        {/* Thread rows open in the Portal; the list labels itself as subagents and
+            sits in its own section so the resource rows below aren't grouped under it. */}
+        {topicId && <ThreadListSection topicId={topicId} />}
+
+        <Flexbox className={sectionStyles.section}>
+          {hasWorkspace && (
+            <OverviewRow
+              weak
+              icon={FilesIcon}
+              iconSize={15}
+              trailing={<ChevronRight />}
+              value={t('workingPanel.overview.files')}
+              onClick={() => onOpenTab('files')}
+            />
+          )}
+          <OverviewRow
+            weak
+            icon={SkillsIcon}
+            iconSize={15}
+            trailing={<ChevronRight />}
+            value={t('workingPanel.resources.filter.skills')}
+            onClick={() => onOpenTab('skills')}
+          />
+          {!isHetero && (
+            <OverviewRow
+              weak
+              icon={FileTextIcon}
+              iconSize={15}
+              trailing={<ChevronRight />}
+              value={t('workingPanel.resources.filter.documents')}
+              onClick={() => onOpenTab('documents')}
+            />
+          )}
+        </Flexbox>
+      </Flexbox>
+    );
+  },
+);
+
+Overview.displayName = 'WorkingSidebarOverview';
+
+export default Overview;

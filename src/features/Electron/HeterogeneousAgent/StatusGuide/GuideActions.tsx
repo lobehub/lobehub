@@ -11,6 +11,7 @@ interface GuideActionsProps {
   openDocsLabel?: string;
   openSystemToolsLabel?: string;
   retryLabel?: string;
+  retryPrimary?: boolean;
   showDocs?: boolean;
 }
 
@@ -21,6 +22,7 @@ const GuideActions = ({
   openDocsLabel,
   openSystemToolsLabel,
   retryLabel,
+  retryPrimary = false,
   showDocs = false,
 }: GuideActionsProps) => {
   const showDocsButton = showDocs && Boolean(docsUrl && openDocsLabel);
@@ -32,7 +34,12 @@ const GuideActions = ({
   return (
     <Flexbox horizontal gap={8} justify="flex-end" style={{ flexWrap: 'wrap' }}>
       {showRetryButton && (
-        <Button icon={<RotateCcw size={14} />} size="small" onClick={onRetry}>
+        <Button
+          icon={<RotateCcw size={14} />}
+          size="small"
+          type={retryPrimary ? 'primary' : undefined}
+          onClick={onRetry}
+        >
           {retryLabel}
         </Button>
       )}

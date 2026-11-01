@@ -5,6 +5,11 @@ import { createContextForInteractionDetails } from '@/libs/oidc-provider/http-ad
 import { OIDCService } from '.';
 import { getOIDCProvider } from './oidcProvider';
 
+const dbMocks = vi.hoisted(() => ({
+  findFirstClient: vi.fn(),
+  findFirstUser: vi.fn(),
+}));
+
 vi.mock('@/libs/oidc-provider/http-adapter', () => ({
   createContextForInteractionDetails: vi.fn(),
 }));
@@ -13,12 +18,45 @@ vi.mock('./oidcProvider', () => ({
   getOIDCProvider: vi.fn(),
 }));
 
+vi.mock('@lobechat/database', () => ({
+  getServerDB: vi.fn(async () => ({
+    select: vi.fn(function (fields: Record<string, unknown>) {
+      return {
+        from: vi.fn(function () {
+          return {
+            where: vi.fn(() => ({
+              limit: vi.fn(async () => {
+                const record = await ('userId' in fields
+                  ? dbMocks.findFirstClient()
+                  : dbMocks.findFirstUser());
+
+                return record ? [record] : [];
+              }),
+            })),
+          };
+        }),
+      };
+    }),
+  })),
+}));
+
+vi.mock('@lobechat/database/schemas', () => ({
+  oidcClients: { id: 'id', name: 'name', policyUri: 'policyUri', userId: 'userId' },
+  users: { fullName: 'fullName', id: 'id', username: 'username' },
+}));
+
+vi.mock('@/libs/oidc-provider/config', () => ({
+  defaultClients: [{ client_id: 'lobehub-desktop' }],
+}));
+
 const createMockProvider = () => {
   const grantCtor = Object.assign(
-    vi.fn().mockImplementation((payload) => ({
-      ...payload,
-      destroy: vi.fn(),
-    })),
+    vi.fn().mockImplementation(function (payload) {
+      return {
+        ...payload,
+        destroy: vi.fn(),
+      };
+    }),
     { find: vi.fn() },
   );
 
@@ -125,7 +163,9 @@ describe('OIDCService', () => {
     provider.Grant.find.mockResolvedValue(staleGrant as any);
 
     const createdGrant = { accountId: 'account-2', clientId: 'client-1' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants('account-2', 'client-1', 'grant-2');
@@ -138,7 +178,9 @@ describe('OIDCService', () => {
   it('findOrCreateGrants should create new grant when no existing id is provided', async () => {
     const provider = createMockProvider();
     const createdGrant = { accountId: 'account-3', clientId: 'client-3' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants('account-3', 'client-3');
@@ -152,7 +194,9 @@ describe('OIDCService', () => {
     const provider = createMockProvider();
     provider.Grant.find.mockResolvedValue(undefined);
     const createdGrant = { accountId: 'account-4', clientId: 'client-4' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants('account-4', 'client-4', 'grant-missing');
@@ -172,7 +216,9 @@ describe('OIDCService', () => {
     provider.Grant.find.mockResolvedValue(staleGrant as any);
 
     const createdGrant = { accountId: 'account-5', clientId: 'client-5' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants(
@@ -196,7 +242,9 @@ describe('OIDCService', () => {
     provider.Grant.find.mockResolvedValue(staleGrant as any);
 
     const createdGrant = { accountId: 'account-6', clientId: 'client-6' };
-    provider.Grant.mockImplementation(() => createdGrant as any);
+    provider.Grant.mockImplementation(function () {
+      return createdGrant as any;
+    });
 
     const service = new OIDCService(provider as any);
     const grant = await service.findOrCreateGrants('account-6', 'client-6', 'grant-error');
@@ -228,5 +276,72 @@ describe('OIDCService', () => {
 
     expect(provider.Client.find).toHaveBeenCalledWith('client-missing');
     expect(metadata).toBeUndefined();
+  });
+
+  it('getConsentClientMetadata should mark first-party clients without a DB lookup', async () => {
+    const provider = createMockProvider();
+    provider.Client.find.mockResolvedValue({
+      metadata: () => ({
+        client_name: 'LobeHub Desktop',
+        logo_uri: 'https://example.com/logo.png',
+      }),
+    });
+
+    const service = new OIDCService(provider as any);
+    const metadata = await service.getConsentClientMetadata('lobehub-desktop');
+
+    expect(metadata).toEqual({
+      clientName: 'LobeHub Desktop',
+      isFirstParty: true,
+      logo: 'https://example.com/logo.png',
+      policyUri: undefined,
+    });
+    expect(dbMocks.findFirstClient).not.toHaveBeenCalled();
+  });
+
+  it('getConsentClientMetadata should resolve the developer name for third-party clients', async () => {
+    const provider = createMockProvider();
+    provider.Client.find.mockResolvedValue({
+      metadata: () => ({ policy_uri: 'https://third.party/privacy' }),
+    });
+    dbMocks.findFirstClient.mockResolvedValue({
+      name: 'Third Party App',
+      policyUri: null,
+      userId: 'user-1',
+    });
+    dbMocks.findFirstUser.mockResolvedValue({ fullName: 'Jane Doe', username: 'jane' });
+
+    const service = new OIDCService(provider as any);
+    const metadata = await service.getConsentClientMetadata('lca_thirdparty');
+
+    expect(metadata).toEqual({
+      clientName: 'Third Party App',
+      developerName: 'Jane Doe',
+      isFirstParty: false,
+      logo: undefined,
+      policyUri: 'https://third.party/privacy',
+    });
+  });
+
+  it('getConsentClientMetadata should omit developerName when the owner has no name', async () => {
+    const provider = createMockProvider();
+    provider.Client.find.mockResolvedValue({ metadata: () => ({}) });
+    dbMocks.findFirstClient.mockResolvedValue({
+      name: 'Nameless App',
+      policyUri: 'https://nameless.app/privacy',
+      userId: 'user-2',
+    });
+    dbMocks.findFirstUser.mockResolvedValue({ fullName: null, username: null });
+
+    const service = new OIDCService(provider as any);
+    const metadata = await service.getConsentClientMetadata('lca_nameless');
+
+    expect(metadata).toEqual({
+      clientName: 'Nameless App',
+      developerName: undefined,
+      isFirstParty: false,
+      logo: undefined,
+      policyUri: 'https://nameless.app/privacy',
+    });
   });
 });

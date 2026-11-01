@@ -1,7 +1,7 @@
 import { type LobeAgentConfig } from '@lobechat/types';
 import { type PartialDeep } from 'type-fest';
 
-import { chatGroupService } from '@/services/chatGroup';
+import { chatGroupService, type GroupMemberConfig } from '@/services/chatGroup';
 import { getAgentStoreState } from '@/store/agent';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
 
@@ -23,6 +23,19 @@ export class ChatGroupMemberAction {
   addAgentsToGroup = async (groupId: string, agentIds: string[]) => {
     await chatGroupService.addAgentsToGroup(groupId, agentIds);
     await this.#get().refreshGroupDetail(groupId);
+  };
+
+  /**
+   * Create a blank virtual agent that lives only inside the group and add it as a member.
+   * Returns the new agent id so the caller can navigate to it.
+   */
+  createAgentInGroup = async (
+    groupId: string,
+    config?: GroupMemberConfig,
+  ): Promise<string | undefined> => {
+    const { agentIds } = await chatGroupService.batchCreateAgentsInGroup(groupId, [config ?? {}]);
+    await this.#get().refreshGroupDetail(groupId);
+    return agentIds[0];
   };
 
   removeAgentFromGroup = async (groupId: string, agentId: string) => {

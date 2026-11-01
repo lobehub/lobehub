@@ -1,16 +1,21 @@
 'use client';
 
-import { ActionIcon, Button, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
-import { useTheme } from 'antd-style';
-import { MoreHorizontalIcon, PlayIcon, Settings2Icon } from 'lucide-react';
+import { DropdownMenu, Flexbox, Icon, useTheme } from '@lobehub/ui';
+import { ActionIcon, Button, Divider, type ModalInstance } from '@lobehub/ui';
+import { MoreHorizontalIcon, PlayIcon, Settings2Icon, UsersIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
+import { useAgentGroupTransferToMemberMenuItem } from '@/business/client/hooks/useAgentGroupTransferToMemberMenuItem';
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { EditingIndicator, type EditLockClient, useEditLock } from '@/features/EditLock';
 import { EditorCanvas } from '@/features/EditorCanvas';
+import AccessLevelTag from '@/features/ResourcePermission/AccessLevelTag';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -18,9 +23,8 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
-import AgentSettings from '../AgentSettings';
+import { openGroupAgentSettingsModal } from '../AgentSettings';
 import AutoSaveHint from '../Header/AutoSaveHint';
-import GroupPublishButton from '../Header/GroupPublishButton';
 import GroupForkTag from './GroupForkTag';
 import GroupHeader from './GroupHeader';
 import GroupStatusTag from './GroupStatusTag';
@@ -37,14 +41,75 @@ const groupLockClient: EditLockClient = {
 
 const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
-  const { allowed: canEdit } = usePermission('edit_own_content');
+  const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const theme = useTheme();
-  const [showAgentSetting, setShowAgentSetting] = useState(false);
+  const { gid } = useParams<{ gid: string }>();
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
+  const hasActiveWorkspace = useHasActiveWorkspace();
+  const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
   const router = useQueryRoute();
+  // The profile page keeps its active tab in `?tab=`; the permission page has no
+  // tabs, so navigate without carrying the query over (unlike `router.push`).
+  const navigate = useWorkspaceAwareNavigate();
   const transferMenuItems = useAgentGroupTransferMenuItem(groupId ?? undefined);
+  const transferToMemberItem = useAgentGroupTransferToMemberMenuItem(groupId ?? undefined);
+  // A workspace member whose General access on this group is view/use level
+  // can't edit it (defaults permissive while loading — server enforces).
+  const { canEditResource } = useResourceAccess(
+    'agentGroup',
+    currentGroup?.visibility === 'private' ? undefined : (groupId ?? undefined),
+  );
+  const canEdit = hasEditPermission && canEditResource;
+
+  // Member-permission entry lives inside the "..." menu and opens the dedicated
+  // page, matching the agent profile header. Shown for private groups too: the
+  // creator sets there what members get the moment the group is published.
+  const showPermissionPageEntry = hasActiveWorkspace && !!groupId;
+  const moreMenuItems = useMemo(() => {
+    const permissionMenuItem = showPermissionPageEntry
+      ? {
+          // Same gate the page itself applies (ResourceConfigAccessGate):
+          // without edit-level access it redirects straight back with a toast,
+          // so an enabled entry here is a click into a dead end. Disabled, not
+          // hidden — the member can still see the action exists.
+          disabled: !canEdit,
+          icon: <Icon icon={UsersIcon} />,
+          key: 'permission',
+          label: t('permission.page.entry', { ns: 'setting' }),
+          onClick: () => {
+            if (!canEdit || !groupId) return;
+            navigate(urlJoin('/group', groupId, 'permission'));
+          },
+        }
+      : null;
+
+    return [
+      permissionMenuItem,
+      permissionMenuItem && (transferMenuItems?.length || transferToMemberItem)
+        ? ({ type: 'divider' } as const)
+        : null,
+      ...(transferMenuItems ?? []),
+      transferToMemberItem,
+    ].filter(Boolean);
+  }, [
+    canEdit,
+    groupId,
+    navigate,
+    showPermissionPageEntry,
+    t,
+    transferMenuItems,
+    transferToMemberItem,
+  ]);
+
+  const settingsModalRef = useRef<ModalInstance | null>(null);
+  useEffect(
+    () => () => {
+      settingsModalRef.current?.close();
+      settingsModalRef.current = null;
+    },
+    [],
+  );
 
   // Collaborative edit lock for workspace groups (same model as pages): read-only
   // when another member is editing; acquired implicitly on the first edit.
@@ -126,6 +191,14 @@ const GroupProfile = memo(() => {
             <GroupStatusTag />
             <GroupVersionReviewTag />
             <GroupForkTag />
+            <AccessLevelTag
+              resourceType={'agentGroup'}
+              resourceId={
+                hasActiveWorkspace && currentGroup?.visibility !== 'private'
+                  ? (groupId ?? undefined)
+                  : undefined
+              }
+            />
           </Flexbox>
         </Flexbox>
         {/* Header: Group Avatar + Title */}
@@ -148,9 +221,8 @@ const GroupProfile = memo(() => {
           >
             {t('startConversation')}
           </Button>
-          <GroupPublishButton />
-          {!!transferMenuItems?.length && (
-            <DropdownMenu items={transferMenuItems}>
+          {moreMenuItems.length > 0 && (
+            <DropdownMenu items={moreMenuItems}>
               <ActionIcon
                 icon={MoreHorizontalIcon}
                 size={'small'}
@@ -167,14 +239,15 @@ const GroupProfile = memo(() => {
             onClick={() => {
               if (!canEdit) return;
 
-              setShowAgentSetting(true);
+              settingsModalRef.current?.close();
+              settingsModalRef.current = openGroupAgentSettingsModal();
             }}
           >
             {t('advancedSettings')}
           </Button>
         </Flexbox>
       </Flexbox>
-      <Divider />
+      <Divider style={{ marginBlock: 24 }} />
       {/* Group Content Editor */}
       <EditingIndicator
         holderId={lock.lockedByOther ? lock.holderId : null}
@@ -189,8 +262,6 @@ const GroupProfile = memo(() => {
         placeholder={t('group.profile.contentPlaceholder', { ns: 'chat' })}
         onContentChange={onContentChange}
       />
-      {/* Advanced Settings Modal */}
-      <AgentSettings open={showAgentSetting} onCancel={() => setShowAgentSetting(false)} />
     </>
   );
 });

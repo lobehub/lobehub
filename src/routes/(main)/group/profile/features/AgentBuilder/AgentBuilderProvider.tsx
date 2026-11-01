@@ -1,11 +1,11 @@
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
+import { useParams } from 'react-router';
 
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 interface AgentBuilderProviderProps {
   agentId: string;
@@ -21,39 +21,32 @@ const AgentBuilderProvider = memo<AgentBuilderProviderProps>(({ agentId, childre
   // Use activeTopicId from chatStore (synced with URL query 'bt' via ProfileHydration)
   const activeTopicId = useChatStore((s) => s.activeTopicId);
 
+  // The group being configured comes from the ROUTE, not the global store: the
+  // send path samples its fallback (`activeGroupId`) after async preflight work,
+  // so switching groups while a send is starting would hand the server the newly
+  // active group and let the tool runtime stamp the wrong one.
+  const { gid } = useParams<{ gid: string }>();
+
   // Build conversation context for group agent builder
   // Using group_agent_builder scope with groupId for per-group message isolation
-  const context = useMemo<MessageMapKeyInput>(
+  const context = useMemo<MessageMapKeyInput & { editingGroupId?: string }>(
     () => ({
       agentId,
+      // NOT `groupId`: that would key the builder's messages into the group's
+      // own chat bucket. `editingGroupId` is ignored by `messageMapKey` and only
+      // travels to the server as `ExecAgentAppContext.editingGroupId`.
+      editingGroupId: gid,
       scope: 'group_agent_builder',
       topicId: activeTopicId,
     }),
-    [agentId, activeTopicId],
+    [agentId, activeTopicId, gid],
   );
-
-  // Get messages from ChatStore based on context
-  const chatKey = useMemo(
-    () => (context ? messageMapKey(context) : null),
-    [context?.agentId, context?.groupId, context?.topicId],
-  );
-
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const messages = useChatStore((s) => (chatKey ? s.dbMessagesMap[chatKey] : undefined));
 
   // Get operation state for reactive updates
   const operationState = useOperationState(context);
 
   return (
-    <ConversationProvider
-      context={context}
-      hasInitMessages={!!messages}
-      messages={messages}
-      operationState={operationState}
-      onMessagesChange={(msgs, ctx) => {
-        replaceMessages(msgs, { context: ctx });
-      }}
-    >
+    <ConversationProvider context={context} operationState={operationState}>
       {children}
     </ConversationProvider>
   );

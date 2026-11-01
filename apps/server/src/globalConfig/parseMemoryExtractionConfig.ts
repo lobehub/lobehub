@@ -16,6 +16,15 @@ const MEMORY_LAYERS: GlobalMemoryLayer[] = [
   'preference',
 ];
 
+const DEFAULT_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM = 25;
+
+// NOTICE: Hard per-user, per-run fan-out ceiling. A single user with a large backlog of
+// un-extracted topics must never enqueue an unbounded flood of process-topic runs (we have seen a
+// single user back up 650k+ QStash messages). flowControl only caps concurrency, not queue depth,
+// so this count cap is the actual backlog guard. Remaining topics stay "un-extracted" and are
+// picked up by later hourly runs, so the cap self-drains without dropping data.
+const DEFAULT_WORKFLOW_MAX_TOPICS_PER_USER_PER_RUN = 100;
+
 const parseTokenLimitEnv = (value?: string) => {
   if (value === undefined) return undefined;
   const parsed = Number(value);
@@ -23,6 +32,15 @@ const parseTokenLimitEnv = (value?: string) => {
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
 
   return Math.floor(parsed);
+};
+
+const parsePositiveIntegerEnv = (value: string | undefined, fallback: number) => {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+
+  return parsed;
 };
 
 // NOTICE:
@@ -47,6 +65,8 @@ export type MemoryLayerExtractorConfig = MemoryLayerExtractorPublicConfig &
 
 export interface MemoryExtractionPrivateConfig {
   agentBenchmarkLoCoMo: MemoryAgentConfig;
+  /** Memory consolidation (contexts / dossiers); falls back to the persona writer. */
+  agentConsolidation: MemoryAgentConfig;
   agentGateKeeper: MemoryAgentConfig;
   agentGateKeeperPreferredModels?: string[];
   agentGateKeeperPreferredProviders?: string[];
@@ -55,6 +75,11 @@ export interface MemoryExtractionPrivateConfig {
   agentLayerExtractorPreferredProviders?: string[];
   agentPersonaWriter: MemoryAgentConfig;
   concurrency?: number;
+  /**
+   * UTC hour at which the hourly run also starts the incremental consolidation of every
+   * consolidated user; undefined disables it.
+   */
+  consolidationNightlyHourUtc?: number;
   embedding: MemoryAgentConfig;
   embeddingPreferredModels?: string[];
   embeddingPreferredProviders?: string[];
@@ -77,6 +102,12 @@ export interface MemoryExtractionPrivateConfig {
     headers?: Record<string, string>;
   };
   whitelistUsers?: string[];
+  workflow?: {
+    /** Hard cap on topics fanned out per user per run; guards against QStash backlog storms. */
+    maxTopicsPerUserPerRun: number;
+    /** Maximum active process-user-topics workflow workers across all users. */
+    processUserTopicsParallelism: number;
+  };
 }
 
 const parseGateKeeperAgent = (): MemoryAgentConfig => {
@@ -188,6 +219,25 @@ const parsePersonaWriterAgent = (
   };
 };
 
+const parseConsolidationAgent = (fallback: MemoryAgentConfig): MemoryAgentConfig => {
+  const provider = process.env.MEMORY_USER_MEMORY_CONSOLIDATION_PROVIDER;
+  // Credentials only carry over when the provider is not overridden to a different one.
+  const inherit = !provider || provider.toLowerCase() === (fallback.provider || '').toLowerCase();
+
+  return {
+    apiKey:
+      process.env.MEMORY_USER_MEMORY_CONSOLIDATION_API_KEY ??
+      (inherit ? fallback.apiKey : undefined),
+    baseURL:
+      process.env.MEMORY_USER_MEMORY_CONSOLIDATION_BASE_URL ??
+      (inherit ? fallback.baseURL : undefined),
+    contextLimit: fallback.contextLimit,
+    language: process.env.MEMORY_USER_MEMORY_CONSOLIDATION_LANGUAGE ?? fallback.language,
+    model: process.env.MEMORY_USER_MEMORY_CONSOLIDATION_MODEL || fallback.model,
+    provider: provider || fallback.provider,
+  };
+};
+
 const parseExtractorAgentObservabilityS3 = () => {
   const accessKeyId = process.env.MEMORY_USER_MEMORY_EXTRACTOR_S3_ACCESS_KEY_ID;
   const secretAccessKey = process.env.MEMORY_USER_MEMORY_EXTRACTOR_S3_SECRET_ACCESS_KEY;
@@ -234,6 +284,12 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
   const agentBenchmarkLoCoMo = parseBenchmarkLoCoMoAgent(agentGateKeeper);
   const agentLayerExtractor = parseLayerExtractorAgent(agentGateKeeper.model);
   const agentPersonaWriter = parsePersonaWriterAgent(agentGateKeeper.model);
+  const agentConsolidation = parseConsolidationAgent(agentPersonaWriter);
+  const nightlyHourRaw = process.env.MEMORY_USER_MEMORY_CONSOLIDATION_NIGHTLY_HOUR ?? '18';
+  const consolidationNightlyHourUtc =
+    /^\d+$/.test(nightlyHourRaw) && Number(nightlyHourRaw) < 24
+      ? Number(nightlyHourRaw)
+      : undefined;
   const embedding = parseEmbeddingAgent(
     agentLayerExtractor.model,
     agentLayerExtractor.provider || DEFAULT_MINI_PROVIDER,
@@ -250,6 +306,14 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
         ? Number(concurrencyRaw)
         : undefined
       : undefined;
+  const processUserTopicsParallelism = parsePositiveIntegerEnv(
+    process.env.MEMORY_USER_MEMORY_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM,
+    DEFAULT_WORKFLOW_PROCESS_USER_TOPICS_PARALLELISM,
+  );
+  const maxTopicsPerUserPerRun = parsePositiveIntegerEnv(
+    process.env.MEMORY_USER_MEMORY_WORKFLOW_MAX_TOPICS_PER_USER_PER_RUN,
+    DEFAULT_WORKFLOW_MAX_TOPICS_PER_USER_PER_RUN,
+  );
 
   const whitelistUsers = process.env.MEMORY_USER_MEMORY_WHITELIST_USERS?.split(',')
     .filter(Boolean)
@@ -304,6 +368,8 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     agentLayerExtractor,
     agentLayerExtractorPreferredModels,
     agentLayerExtractorPreferredProviders,
+    agentConsolidation,
+    consolidationNightlyHourUtc,
     agentPersonaWriter,
     concurrency,
     embedding,
@@ -317,6 +383,10 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
       headers: webhookHeaders,
     },
     whitelistUsers,
+    workflow: {
+      maxTopicsPerUserPerRun,
+      processUserTopicsParallelism,
+    },
   };
 };
 

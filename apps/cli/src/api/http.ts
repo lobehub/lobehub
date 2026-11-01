@@ -1,7 +1,9 @@
-import { getValidToken } from '../auth/refresh';
-import { CLI_API_KEY_ENV } from '../constants/auth';
+import { describeTokenLookup, getValidToken } from '../auth/refresh';
+import { CLI_API_KEY_ENV, readCliApiKeyEnv } from '../constants/auth';
+import { CLI_PRIMARY_BIN } from '../constants/identity';
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
+import { withWorkspaceHeader } from './workspace';
 
 export interface AuthInfo {
   accessToken: string;
@@ -10,29 +12,52 @@ export interface AuthInfo {
   serverUrl: string;
 }
 
-export async function getAuthInfo(): Promise<AuthInfo> {
+export async function getAuthInfo(workspaceId?: string): Promise<AuthInfo> {
+  const serverUrl = resolveServerUrl();
+  const envJwt = process.env.LOBEHUB_JWT;
+  if (envJwt) {
+    return {
+      accessToken: envJwt,
+      headers: withWorkspaceHeader(
+        {
+          'Content-Type': 'application/json',
+          'Oidc-Auth': envJwt,
+        },
+        workspaceId,
+      ),
+      serverUrl,
+    };
+  }
+
   const result = await getValidToken();
-  if (!result) {
-    if (process.env[CLI_API_KEY_ENV]) {
+  if (result.status !== 'ok') {
+    if (readCliApiKeyEnv()) {
       log.error(
         `API key auth from ${CLI_API_KEY_ENV} is not supported for /webapi/* routes. Run OIDC login instead.`,
       );
       process.exit(1);
     }
 
-    log.error("No authentication found. Run 'lh login' first.");
+    const report = describeTokenLookup(result);
+    log.error(
+      report
+        ? `${report.detail} ${report.fix}`
+        : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first.`,
+    );
     process.exit(1);
   }
 
-  const accessToken = result!.credentials.accessToken;
-  const serverUrl = resolveServerUrl();
+  const accessToken = result.credentials.accessToken;
 
   return {
     accessToken,
-    headers: {
-      'Content-Type': 'application/json',
-      'Oidc-Auth': accessToken,
-    },
+    headers: withWorkspaceHeader(
+      {
+        'Content-Type': 'application/json',
+        'Oidc-Auth': accessToken,
+      },
+      workspaceId,
+    ),
     serverUrl,
   };
 }
@@ -55,23 +80,41 @@ export interface AgentStreamAuthInfo {
   tokenType: AgentStreamTokenType;
 }
 
-export async function getAgentStreamAuthInfo(): Promise<AgentStreamAuthInfo> {
+export interface AgentStreamAuthOptions {
+  /**
+   * `false` for the auth resolver a socket reconnect calls.
+   *
+   * Exiting is right before a command has produced anything: there is no
+   * outcome to report and no channel to report it on. It is wrong for a
+   * reconnect in the middle of a run — the stored access token may still
+   * authenticate the journal and the status endpoint, and the caller has its
+   * own polling fallback. Throwing lets the transport fail as a Gateway
+   * problem and hand control back instead of killing the process.
+   */
+  exitOnMissing?: boolean;
+}
+
+export async function getAgentStreamAuthInfo(
+  workspaceId?: string,
+  options: AgentStreamAuthOptions = {},
+): Promise<AgentStreamAuthInfo> {
+  const { exitOnMissing = true } = options;
   const serverUrl = resolveServerUrl();
 
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) {
     return {
-      headers: { 'Oidc-Auth': envJwt },
+      headers: withWorkspaceHeader({ 'Oidc-Auth': envJwt }, workspaceId),
       serverUrl,
       token: envJwt,
       tokenType: 'jwt',
     };
   }
 
-  const envApiKey = process.env[CLI_API_KEY_ENV];
+  const envApiKey = readCliApiKeyEnv();
   if (envApiKey) {
     return {
-      headers: { 'X-API-Key': envApiKey },
+      headers: withWorkspaceHeader({ 'X-API-Key': envApiKey }, workspaceId),
       serverUrl,
       token: envApiKey,
       tokenType: 'apiKey',
@@ -79,8 +122,14 @@ export async function getAgentStreamAuthInfo(): Promise<AgentStreamAuthInfo> {
   }
 
   const result = await getValidToken();
-  if (!result) {
-    log.error(`No authentication found. Run 'lh login' first, or set ${CLI_API_KEY_ENV}.`);
+  if (result.status !== 'ok') {
+    const report = describeTokenLookup(result);
+    const message = report
+      ? `${report.detail} ${report.fix}`
+      : `No authentication found. Run '${CLI_PRIMARY_BIN} login' first, or set ${CLI_API_KEY_ENV}.`;
+    if (!exitOnMissing) throw new Error(message);
+
+    log.error(message);
     process.exit(1);
 
     return {
@@ -92,9 +141,17 @@ export async function getAgentStreamAuthInfo(): Promise<AgentStreamAuthInfo> {
   }
 
   return {
-    headers: { 'Oidc-Auth': result.credentials.accessToken },
+    headers: withWorkspaceHeader({ 'Oidc-Auth': result.credentials.accessToken }, workspaceId),
     serverUrl,
     token: result.credentials.accessToken,
     tokenType: 'jwt',
   };
 }
+
+/**
+ * Auth for a stream that may reconnect mid-run: same resolution as
+ * {@link getAgentStreamAuthInfo}, but a missing or unrefreshable credential
+ * throws instead of ending the process.
+ */
+export const resolveAgentStreamAuthInfo = (workspaceId?: string) =>
+  getAgentStreamAuthInfo(workspaceId, { exitOnMissing: false });

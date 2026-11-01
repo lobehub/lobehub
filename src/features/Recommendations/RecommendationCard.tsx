@@ -1,29 +1,31 @@
-import { Block, Button, Flexbox, Tag, Text } from '@lobehub/ui';
-import { App, Divider } from 'antd';
-import { cssVar, cx } from 'antd-style';
+import { Block, Button, cssVar, cx, Divider, Flexbox, Tag, Text, toast } from '@lobehub/ui';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
+import { homeType } from '@/features/Home/components/homeType';
 
+import { RECOMMENDATION_ICON_SIZE } from './iconSize';
 import { styles } from './style';
 
 interface RecommendationCardProps {
+  /** Rail rendering: one scannable line, the CTA is the row itself. */
+  compact?: boolean;
   ctaKey: string;
   descriptionKey: string;
   i18nValues?: Record<string, string>;
-  icon: ReactNode;
   /** Async handler for the primary CTA. */
   onAction: () => Promise<void>;
+  renderIcon: (size: number) => ReactNode;
   tagKey?: string;
   titleKey: string;
 }
 
 export const RecommendationCard = memo<RecommendationCardProps>(
-  ({ ctaKey, descriptionKey, i18nValues, icon, onAction, tagKey, titleKey }) => {
+  ({ compact, ctaKey, descriptionKey, i18nValues, onAction, renderIcon, tagKey, titleKey }) => {
     const { t } = useTranslation('home');
-    const { message } = App.useApp();
+
     const [loading, setLoading] = useState(false);
 
     const title = t(titleKey, { defaultValue: '', ...i18nValues });
@@ -38,11 +40,25 @@ export const RecommendationCard = memo<RecommendationCardProps>(
         await onAction();
       } catch (error) {
         console.error('[recommendations] action failed:', error);
-        message.error(t('common.error', { defaultValue: 'Something went wrong' }));
+        toast.error(t('common.error', { defaultValue: 'Something went wrong' }));
       } finally {
         setLoading(false);
       }
-    }, [loading, message, onAction, t]);
+    }, [loading, onAction, t]);
+
+    if (compact)
+      return (
+        <Button className={styles.compactRow} loading={loading} type={'text'} onClick={handleClick}>
+          <Flexbox horizontal align={'flex-start'} gap={10} style={{ width: '100%' }}>
+            <Flexbox flex={'none'} paddingBlock={2}>
+              {renderIcon(RECOMMENDATION_ICON_SIZE.compact)}
+            </Flexbox>
+            <Text className={cx(homeType.itemTitleProse, styles.compactTitle)} style={{ flex: 1 }}>
+              {title}
+            </Text>
+          </Flexbox>
+        </Button>
+      );
 
     return (
       <Block
@@ -59,13 +75,13 @@ export const RecommendationCard = memo<RecommendationCardProps>(
             gap={8}
             style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}
           >
-            {icon}
+            {renderIcon(RECOMMENDATION_ICON_SIZE.regular)}
             <Text ellipsis fontSize={16} weight={500}>
               {title}
             </Text>
           </Flexbox>
         </Flexbox>
-        <Divider dashed style={{ marginBlock: 0 }} />
+        <Divider dashed />
         {description.trim().length > 0 ? <BriefCardSummary summary={description} /> : null}
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
           <Flexbox horizontal align={'center'} gap={8}>
@@ -77,7 +93,6 @@ export const RecommendationCard = memo<RecommendationCardProps>(
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>
             <Button
-              shadow
               className={briefStyles.actionBtnPrimary}
               loading={loading}
               shape={'round'}

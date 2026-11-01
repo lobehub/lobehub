@@ -1,18 +1,11 @@
-import React, { memo } from 'react';
+import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
-import { NavPanelPortal } from '@/features/NavPanel';
-import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import MemorySidebarContent from './Content';
 
-import Header from './Header';
-
-const Sidebar = memo(() => {
-  return (
-    <NavPanelPortal navKey="memory">
-      <SideBarLayout header={<Header />} />
-    </NavPanelPortal>
-  );
-});
-
-Sidebar.displayName = 'MemorySidebar';
+const Sidebar = () => (
+  <NavPanelPortal navKey="memory">
+    <MemorySidebarContent />
+  </NavPanelPortal>
+);
 
 export default Sidebar;

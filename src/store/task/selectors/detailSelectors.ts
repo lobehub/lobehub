@@ -1,4 +1,12 @@
-import type { TaskDetailData } from '@lobechat/types';
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
+import type {
+  HeterogeneousProviderConfig,
+  TaskDetailData,
+  TaskVerifyConfig,
+} from '@lobechat/types';
+import { isTaskArchiveBlocked, resolveHeterogeneousRuntimeConfig } from '@lobechat/types';
+
+import type { SaveStatus } from '@/types/saveState';
 
 import type { TaskStoreState } from '../initialState';
 
@@ -7,7 +15,10 @@ const activeTaskId = (s: TaskStoreState) => s.activeTaskId;
 const activeTaskDetail = (s: TaskStoreState): TaskDetailData | undefined =>
   s.activeTaskId ? s.taskDetailMap[s.activeTaskId] : undefined;
 
-const taskDetailById = (id: string) => (s: TaskStoreState) => s.taskDetailMap[id];
+const activeTaskDatabaseId = (s: TaskStoreState) => activeTaskDetail(s)?.id;
+
+const taskDetailById = (ref: string) => (s: TaskStoreState) =>
+  s.taskDetailMap[s.taskRefIndex?.[ref] ?? ref];
 
 const isTaskDetailLoading = (s: TaskStoreState): boolean =>
   !s.activeTaskId || !s.taskDetailMap[s.activeTaskId];
@@ -18,7 +29,28 @@ const activeTaskStatus = (s: TaskStoreState) => activeTaskDetail(s)?.status;
 
 const activeTaskPriority = (s: TaskStoreState) => activeTaskDetail(s)?.priority ?? 0;
 
+const activeTaskVisibility = (s: TaskStoreState): 'private' | 'public' =>
+  activeTaskDetail(s)?.visibility ?? 'public';
+
+const activeTaskCreatedByUserId = (s: TaskStoreState) => activeTaskDetail(s)?.createdByUserId;
+
+const activeTaskArchivedAt = (s: TaskStoreState) => activeTaskDetail(s)?.archivedAt;
+
+const isActiveTaskArchiveBlocked = (s: TaskStoreState) => {
+  const detail = activeTaskDetail(s);
+  if (!detail) return false;
+  return isTaskArchiveBlocked({
+    automationMode: detail.automationMode,
+    heartbeatInterval: detail.heartbeat?.interval,
+    schedulePattern: detail.schedule?.pattern,
+    status: detail.status,
+  });
+};
+
 const activeTaskInstruction = (s: TaskStoreState) => activeTaskDetail(s)?.instruction;
+
+const activeTaskInstructionRevision = (s: TaskStoreState) =>
+  (s.activeTaskId ? s.taskInstructionRevisionMap[s.activeTaskId] : undefined) ?? 0;
 
 const activeTaskEditorData = (s: TaskStoreState) => activeTaskDetail(s)?.editorData;
 
@@ -28,6 +60,10 @@ const activeTaskDescription = (s: TaskStoreState) => activeTaskDetail(s)?.descri
 
 const activeTaskAgentId = (s: TaskStoreState) => activeTaskDetail(s)?.agentId;
 
+// Human assignee (workspace member). `detail.userId` is populated from the
+// server-side `tasks.assignee_user_id` column.
+const activeTaskAssigneeUserId = (s: TaskStoreState) => activeTaskDetail(s)?.userId;
+
 // TODO: Once the frontend store switches to reading from detail.model / detail.provider returned by the backend getTaskDetail procedure
 const activeTaskModel = (s: TaskStoreState) =>
   activeTaskDetail(s)?.config?.model as string | undefined;
@@ -35,11 +71,37 @@ const activeTaskModel = (s: TaskStoreState) =>
 const activeTaskProvider = (s: TaskStoreState) =>
   activeTaskDetail(s)?.config?.provider as string | undefined;
 
+/**
+ * Selects the assignee's effective external runtime settings for the next Task run.
+ *
+ * Use when:
+ * - Rendering Task configuration in detail and portal surfaces.
+ *
+ * Expects:
+ * - The Task assignee's provider, rather than an unrelated active chat Agent.
+ *
+ * Returns:
+ * - Runtime, model, effort and speed with their sources; undefined for ordinary Agents.
+ */
+const activeTaskRuntimeConfig =
+  (provider: HeterogeneousProviderConfig | undefined) => (s: TaskStoreState) => {
+    if (!provider) return undefined;
+    const model = activeTaskModel(s);
+    // Task snapshots can identify the runtime (codex/openai) rather than its
+    // native model. Match dispatch's guard before constructing a model pin.
+    return resolveHeterogeneousRuntimeConfig(
+      provider,
+      isHeterogeneousAgentModelId(model) ? undefined : { model, provider: activeTaskProvider(s) },
+    );
+  };
+
 const activeTaskSubtasks = (s: TaskStoreState) => activeTaskDetail(s)?.subtasks ?? [];
 
 const activeTaskDependencies = (s: TaskStoreState) => activeTaskDetail(s)?.dependencies ?? [];
 
 const activeTaskParent = (s: TaskStoreState) => activeTaskDetail(s)?.parent;
+
+const activeTaskGoal = (s: TaskStoreState) => activeTaskDetail(s)?.goal;
 
 // Periodic execution interval (seconds); 0 or undefined means not configured
 const activeTaskPeriodicInterval = (s: TaskStoreState) =>
@@ -60,7 +122,13 @@ const activeTaskScheduleMaxExecutions = (s: TaskStoreState) =>
 
 const activeTaskCheckpoint = (s: TaskStoreState) => activeTaskDetail(s)?.checkpoint;
 
-const activeTaskReview = (s: TaskStoreState) => activeTaskDetail(s)?.review;
+// Read the RESOLVED verify config that getTaskDetail populates via
+// TaskModel.getVerifyConfig (which includes the legacy `config.review` fallback
+// during migration) — not the raw `config.verify`. Reading raw config.verify
+// would return undefined for a legacy review-only task, so the panel would open
+// as unconfigured and the first autosave could clobber the old settings.
+const activeTaskVerifyConfig = (s: TaskStoreState): TaskVerifyConfig | undefined =>
+  activeTaskDetail(s)?.verify ?? undefined;
 
 const activeTaskWorkspace = (s: TaskStoreState) => activeTaskDetail(s)?.workspace ?? [];
 
@@ -87,14 +155,33 @@ const canCancelActiveTask = (s: TaskStoreState): boolean => {
   return ['backlog', 'paused', 'running', 'scheduled'].includes(detail.status);
 };
 
-const taskSaveStatus = (s: TaskStoreState) => s.taskSaveStatus;
+// Save status is keyed per task, so switching tasks reads the target task's own
+// status (defaulting to 'idle') instead of a stale 'failed' from a prior task.
+const taskSaveStatus = (s: TaskStoreState): SaveStatus =>
+  (s.activeTaskId ? s.taskSaveStatusMap[s.activeTaskId] : undefined) ?? 'idle';
 
 const activeTopicDrawerTopicId = (s: TaskStoreState) => s.activeTopicDrawerTopicId;
 
+/**
+ * Which agent the open run drawer talks to. A run opened from a task detail
+ * inherits the task's agent; one opened from the home inbox carries its own,
+ * since the topic may have no parent task.
+ */
+const topicDrawerAgentId = (s: TaskStoreState) =>
+  s.activeTopicDrawerAgentId ?? activeTaskAgentId(s);
+
+const topicDrawerTitle = (s: TaskStoreState) => s.activeTopicDrawerTitle;
+
+const topicDrawerFocusRequest = (s: TaskStoreState) => s.activeTopicDrawerFocusRequest;
+
 export const taskDetailSelectors = {
   activeTaskAgentId,
+  activeTaskAssigneeUserId,
   activeTaskAutomationMode,
   activeTaskCheckpoint,
+  activeTaskArchivedAt,
+  activeTaskCreatedByUserId,
+  activeTaskDatabaseId,
   activeTaskModel,
   activeTaskDependencies,
   activeTaskDescription,
@@ -104,25 +191,33 @@ export const taskDetailSelectors = {
   activeTaskFiles,
   activeTaskId,
   activeTaskInstruction,
+  activeTaskInstructionRevision,
   activeTaskName,
+  activeTaskGoal,
   activeTaskParent,
   activeTaskPeriodicInterval,
   activeTaskPriority,
   activeTaskProvider,
-  activeTaskReview,
+  activeTaskRuntimeConfig,
   activeTaskScheduleMaxExecutions,
   activeTaskSchedulePattern,
   activeTaskScheduleTimezone,
   activeTaskStatus,
   activeTaskSubtasks,
   activeTaskTopicCount,
+  activeTaskVerifyConfig,
+  activeTaskVisibility,
   activeTaskWorkspace,
   activeTaskWorkspaceId,
   activeTopicDrawerTopicId,
   canCancelActiveTask,
+  isActiveTaskArchiveBlocked,
   canPauseActiveTask,
   canRunActiveTask,
   isTaskDetailLoading,
   taskDetailById,
   taskSaveStatus,
+  topicDrawerAgentId,
+  topicDrawerFocusRequest,
+  topicDrawerTitle,
 };

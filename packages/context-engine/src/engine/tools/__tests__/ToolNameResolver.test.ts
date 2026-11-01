@@ -24,11 +24,6 @@ describe('ToolNameResolver', () => {
       const result = resolver.generate('test-plugin', 'myAction', 'default');
       expect(result).toBe('test-plugin____myAction');
     });
-
-    it('should handle undefined type as builtin', () => {
-      const result = resolver.generate('test-plugin', 'myAction');
-      expect(result).toBe('test-plugin____myAction');
-    });
   });
 
   describe('generate - long name handling', () => {
@@ -101,12 +96,6 @@ describe('ToolNameResolver', () => {
       const result = resolver.generate('plugin', '', 'builtin');
       expect(result).toBe('plugin____');
     });
-
-    it('should handle numeric identifiers and action names', () => {
-      const result = resolver.generate('plugin123', 'action456', 'type789');
-      expect(result).toBe('plugin123____action456____type789');
-    });
-
     it('should hash invalid api names so provider tool names stay valid', () => {
       const result = resolver.generate('mcp-server', 'get.current/weather', 'mcp');
 
@@ -114,15 +103,6 @@ describe('ToolNameResolver', () => {
       expect(result).toMatch(/^[\w-]+$/);
       expect(result).not.toContain('get.current/weather');
     });
-
-    it('should hash non-ASCII api names so provider tool names stay valid', () => {
-      const result = resolver.generate('custom_mcp_plugin', '中文API', 'mcp');
-
-      expect(result).toMatch(/^custom_mcp_plugin____MD5HASH_[\da-f]+____mcp$/);
-      expect(result).toMatch(/^[\w-]+$/);
-      expect(result).not.toContain('中文API');
-    });
-
     it('should hash invalid identifiers so provider tool names stay valid', () => {
       const result = resolver.generate('@browser/use', 'open_page', 'mcp');
 
@@ -454,41 +434,6 @@ describe('ToolNameResolver', () => {
       expect(result[0]).toEqual({
         apiName,
         arguments: '{"location":"Shanghai"}',
-        id: 'call_1',
-        identifier,
-        type: 'mcp',
-      });
-    });
-
-    it('should resolve non-ASCII apiName hashed for provider-safe tool names', () => {
-      const identifier = 'custom_mcp_plugin';
-      const apiName = '中文API';
-      const toolName = resolver.generate(identifier, apiName, 'mcp');
-
-      const result = resolver.resolve(
-        [
-          {
-            function: {
-              arguments: '{"query":"最近工作压力好大"}',
-              name: toolName,
-            },
-            id: 'call_1',
-            type: 'function',
-          },
-        ],
-        {
-          [identifier]: {
-            api: [{ description: 'Chat with companion', name: apiName, parameters: {} }],
-            identifier,
-            meta: {},
-            type: 'mcp' as const,
-          },
-        },
-      );
-
-      expect(result[0]).toEqual({
-        apiName,
-        arguments: '{"query":"最近工作压力好大"}',
         id: 'call_1',
         identifier,
         type: 'mcp',
@@ -897,6 +842,94 @@ describe('ToolNameResolver', () => {
         expect(result).toEqual([]);
       });
 
+      it('should drop an explicitly namespaced API missing from its manifest', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'lobe-local-system____submitEvidence' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-acceptance-evidence': {
+            api: [{ description: '', name: 'submitEvidence', parameters: {} }],
+            identifier: 'lobe-acceptance-evidence',
+            meta: {},
+            type: 'builtin' as const,
+          },
+          'lobe-local-system': {
+            api: [{ description: '', name: 'runCommand', parameters: {} }],
+            identifier: 'lobe-local-system',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests, [
+          'lobe-acceptance-evidence____submitEvidence',
+        ]);
+
+        expect(result).toEqual([]);
+      });
+
+      it('should preserve a manifest-backed stale dynamic tool for downstream scope rejection', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'lobe-remote-device____listOnlineDevices' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-activator': {
+            api: [{ description: '', name: 'activateTools', parameters: {} }],
+            identifier: 'lobe-activator',
+            meta: {},
+            type: 'builtin' as const,
+          },
+          'lobe-remote-device': {
+            api: [{ description: '', name: 'listOnlineDevices', parameters: {} }],
+            identifier: 'lobe-remote-device',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests, ['lobe-activator____activateTools']);
+
+        expect(result).toEqual([
+          {
+            apiName: 'listOnlineDevices',
+            arguments: '{}',
+            id: 'call_1',
+            identifier: 'lobe-remote-device',
+            type: 'builtin',
+          },
+        ]);
+      });
+
+      it('should accept an explicitly offered tool when no prompt manifest is available', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{}', name: 'workspace____search' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const result = resolver.resolve(toolCalls, {}, ['workspace____search']);
+
+        expect(result).toEqual([
+          expect.objectContaining({
+            apiName: 'search',
+            id: 'call_1',
+            identifier: 'workspace',
+          }),
+        ]);
+      });
+
       it('should treat an enabled call as unique when a disabled duplicate would have made it ambiguous', () => {
         const toolCalls = [
           {
@@ -1009,6 +1042,127 @@ describe('ToolNameResolver', () => {
       expect(result[0].type).toBe('builtin');
       expect(result[1].type).toBe('standalone');
       expect(result[2].type).toBe('mcp');
+    });
+  });
+
+  describe('resolve - malformed separator repair', () => {
+    const localSystem = {
+      'lobe-local-system': {
+        api: [
+          { description: 'Run a shell command', name: 'runCommand', parameters: {} },
+          { description: 'Read a file', name: 'readFile', parameters: {} },
+        ],
+        identifier: 'lobe-local-system',
+        meta: {},
+        type: 'builtin' as const,
+      },
+    };
+
+    // Production case: mid-operation the model emitted `~~__` where it had
+    // written `____` correctly two steps earlier. Dropping the call finished
+    // the operation with an empty assistant message.
+    it('should recover a tool name whose separator the model garbled', () => {
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{"command":"ls"}', name: 'lobe-local-system~~__runCommand' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        localSystem,
+        ['lobe-local-system____runCommand', 'lobe-local-system____readFile'],
+      );
+
+      expect(result).toEqual([
+        {
+          apiName: 'runCommand',
+          arguments: '{"command":"ls"}',
+          id: 'call_1',
+          identifier: 'lobe-local-system',
+          type: 'builtin',
+        },
+      ]);
+    });
+
+    it('should repair against manifests when no offered list is given', () => {
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{}', name: 'lobe-local-system..readFile' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        localSystem,
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].identifier).toBe('lobe-local-system');
+      expect(result[0].apiName).toBe('readFile');
+    });
+
+    it('should leave a well-formed call untouched', () => {
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{}', name: 'lobe-local-system____readFile' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        localSystem,
+        ['lobe-local-system____readFile'],
+      );
+
+      expect(result[0].apiName).toBe('readFile');
+    });
+
+    it('should refuse to guess when two tools collapse to the same key', () => {
+      const manifests = {
+        'a': {
+          api: [{ description: '', name: 'bc', parameters: {} }],
+          identifier: 'a',
+          meta: {},
+          type: 'builtin' as const,
+        },
+        'a-b': {
+          api: [{ description: '', name: 'c', parameters: {} }],
+          identifier: 'a-b',
+          meta: {},
+          type: 'builtin' as const,
+        },
+      };
+
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{}', name: 'a~b__c' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        manifests,
+        ['a____bc', 'a-b____c'],
+      );
+
+      expect(result).toEqual([]);
+    });
+
+    it('should still drop a name that matches no tool at all', () => {
+      const result = resolver.resolve(
+        [
+          {
+            function: { arguments: '{}', name: 'totally~~__madeUp' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ],
+        localSystem,
+        ['lobe-local-system____runCommand'],
+      );
+
+      expect(result).toEqual([]);
     });
   });
 

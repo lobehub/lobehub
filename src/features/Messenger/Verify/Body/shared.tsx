@@ -1,15 +1,13 @@
 'use client';
 
-import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Block, Button, createStaticStyles, Flexbox, Icon, Select, Text, toast } from '@lobehub/ui';
 import { AlertTriangleIcon, CheckCircle2Icon, LinkIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { ProductLogo } from '@/components/Branding';
+import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -162,7 +160,7 @@ export interface ConfirmCardProps {
 export const ConfirmCard = memo<ConfirmCardProps>(
   ({ blockingNotice, infoRows, onSuccess, platform, randomId, userAvatar }) => {
     const { t } = useTranslation('messenger');
-    const { message } = App.useApp();
+
     const enableWorkspaceScopes = useServerConfigStore(
       (s) =>
         serverConfigSelectors.enableBusinessFeatures(s) && s.featureFlags.enableWorkspace === true,
@@ -171,7 +169,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     // First-level scope selector — personal plus every workspace the user
     // belongs to. Picking a scope just filters the agent list below; the
     // backend derives the binding's workspace from the chosen agent on confirm.
-    const scopesSWR = useSWR(enableWorkspaceScopes ? 'messenger:bindingScopes' : null, () =>
+    const scopesSWR = useSWR(enableWorkspaceScopes ? messengerKeys.bindingScopes() : null, () =>
       messengerService.listBindingScopes(),
     );
     const [scope, setScope] = useState<string>(PERSONAL_SCOPE);
@@ -188,7 +186,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
 
     // Scope-aware agent list. The SWR key matches AgentSelect's so the fetch is
     // shared (single request per scope) and stays in sync as the scope changes.
-    const agentsSWR = useSWR(['messenger:agentsForBinding', scopeWorkspaceId], () =>
+    const agentsSWR = useSWR(messengerKeys.agentsForBinding(scopeWorkspaceId), () =>
       messengerService.listAgentsForBinding(scopeWorkspaceId),
     );
 
@@ -231,7 +229,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
         await messengerService.confirmLink({ initialAgentId: selectedAgentId, randomId });
         onSuccess();
       } catch (error) {
-        message.error(getMessengerErrorMessage(error, t, 'verify.error.generic'));
+        toast.error(getMessengerErrorMessage(error, t, 'verify.error.generic'));
       } finally {
         setConfirming(false);
       }
@@ -328,10 +326,11 @@ ConfirmCard.displayName = 'MessengerVerifyConfirmCard';
 export interface SuccessCardProps {
   /** Pre-built deep link back to the bot. When omitted, the CTA is hidden. */
   openBotUrl?: string | null;
+  platform: MessengerPlatform;
   platformLabel: string;
 }
 
-export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platformLabel }) => {
+export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platform, platformLabel }) => {
   const { t } = useTranslation('messenger');
 
   return (
@@ -345,11 +344,23 @@ export const SuccessCard = memo<SuccessCardProps>(({ openBotUrl, platformLabel }
         subtitle={t('verify.success.description', { platform: platformLabel })}
         title={t('verify.success.title')}
       />
-      {openBotUrl && (
-        <Button block href={openBotUrl} size="large" target="_blank" type="primary">
-          {t('verify.success.openBot', { platform: platformLabel })}
+      <Flexbox gap={12} style={{ width: '100%' }}>
+        {openBotUrl && (
+          <Button block href={openBotUrl} size="large" target="_blank" type="primary">
+            {t('verify.success.openBot', { platform: platformLabel })}
+          </Button>
+        )}
+        {/* Mirror the Slack/Discord install callback's landing page so every
+            platform's flow ends back on its Messenger settings tab. */}
+        <Button
+          block
+          href={`/settings/messenger/${platform}`}
+          size="large"
+          type={openBotUrl ? 'default' : 'primary'}
+        >
+          {t('verify.success.backToLobeHub')}
         </Button>
-      )}
+      </Flexbox>
     </Flexbox>
   );
 });

@@ -12,10 +12,8 @@
 ```plaintext
 apps/desktop/src/main/
 ├── appBrowsers.ts              # Core window management
-├── controllers/
-│   └── BrowserWindowsCtr.ts    # Window controller
-└── modules/
-    └── browserWindowManager.ts # Window manager module
+└── controllers/
+    └── BrowserWindowsCtr.ts    # Window controller
 ```
 
 ## Window Creation

@@ -1,13 +1,16 @@
-import { Typography } from '@lobehub/ui';
+import { Divider, Typography } from '@lobehub/ui';
 import { Image } from '@lobehub/ui/mdx';
-import { Divider } from 'antd';
 import { Fragment, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
+import { type Components } from 'react-markdown';
 import useSWR from 'swr';
 import urlJoin from 'url-join';
 
 import { CustomMDX } from '@/components/mdx';
+import CollapsibleSection from '@/components/mdx/CollapsibleSection';
+import remarkCollapsibleSections from '@/components/mdx/remarkCollapsibleSections';
 import { OFFICIAL_SITE } from '@/const/url';
+import { changelogKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type Locales } from '@/locales/resources';
 import { type ChangelogIndexItem } from '@/types/changelog';
@@ -24,7 +27,7 @@ interface PostItemProps extends ChangelogIndexItem {
 }
 
 const PostItem = ({ id, versionRange, locale, showDivider = true }: PostItemProps) => {
-  const { data } = useSWR([`changelog-post-${id}`, locale], async () => {
+  const { data } = useSWR(changelogKeys.post(id, locale), async () => {
     return await lambdaClient.changelog.getPostById.query({ id, locale });
   });
 
@@ -32,7 +35,7 @@ const PostItem = ({ id, versionRange, locale, showDivider = true }: PostItemProp
 
   return (
     <>
-      {showDivider && <Divider />}
+      {showDivider && <Divider style={{ marginBlock: 24 }} />}
       <Typography headerMultiple={0.2}>
         <a
           href={urlJoin(OFFICIAL_SITE, '/changelog', id)}
@@ -53,7 +56,11 @@ const PostItem = ({ id, versionRange, locale, showDivider = true }: PostItemProp
           />
         )}
         <Suspense fallback={<div>Loading...</div>}>
-          <CustomMDX source={data.content} />
+          <CustomMDX
+            components={{ 'collapsible-section': CollapsibleSection } as Components}
+            remarkPlugins={[remarkCollapsibleSections]}
+            source={data.content}
+          />
         </Suspense>
         <VersionTag range={versionRange} />
       </Typography>
