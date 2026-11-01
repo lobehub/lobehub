@@ -20,6 +20,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '../task';
 import {
   getLinearIssuesByIds,
+  getLinearProjectTeamIds,
   LINEAR_PAGE_SIZE,
   type LinearIssue,
   type LinearIssueFilter,
@@ -226,8 +227,8 @@ export class LinearIssueSyncService {
 
   /**
    * Sync every issue matching a filter, then close the tasks of linked issues
-   * in the same team that the filter no longer matches because Linear closed
-   * them.
+   * in the filter's teams (for a project, every team it belongs to) that the
+   * filter no longer matches because Linear closed them.
    *
    * With `startAfter`, reading resumes at that cursor (a continuing run), and
    * the closing pass is left to a run that reads from the start, since this
@@ -288,10 +289,28 @@ export class LinearIssueSyncService {
     if (options.startAfter) return result;
 
     // Linked issues the filter missed: closed since, or moved out of the project.
+    // A link is stored under its issue's own team, which for a project filter
+    // can be any team the project belongs to, not just the filter's team.
     const seen = new Set(issues.map((issue) => issue.id));
-    const unseen = (await this.linkModel.findByContainer('linear', filter.teamId)).filter(
-      (link) => !seen.has(link.externalId),
-    );
+    const teamIds = new Set([filter.teamId, ...issues.map((issue) => issue.team.id)]);
+    if (filter.linearProjectId) {
+      // Best effort: a deleted project still leaves the teams already known.
+      const projectTeamIds = await getLinearProjectTeamIds(
+        accessToken,
+        filter.linearProjectId,
+      ).catch((error) => {
+        log('project teams lookup failed: %O', error);
+        return [];
+      });
+      for (const id of projectTeamIds) teamIds.add(id);
+    }
+    const unseen = (
+      await Promise.all(
+        [...teamIds].map((teamId) => this.linkModel.findByContainer('linear', teamId)),
+      )
+    )
+      .flat()
+      .filter((link) => !seen.has(link.externalId));
     if (unseen.length > 0) {
       const open = await this.taskModel.findByIds(unseen.map((link) => link.taskId));
       const openTaskIds = new Set(
