@@ -5215,6 +5215,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           parentId: 'assistant-msg-123',
           pluginError: 'blocked_by_security_privacy',
           pluginIntervention: {
+            runtimeType: 'server',
             rejectedReason: 'blocked_by_security_privacy',
             status: 'rejected',
           },
@@ -5284,14 +5285,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       // Should create two aborted tool messages
       expect(mockMessageModel.create).toHaveBeenCalledTimes(2);
-
       // First tool message
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'agent-123',
           content: 'Tool execution was aborted by user.',
           parentId: 'assistant-msg-123',
-          pluginIntervention: { status: 'aborted' },
+          pluginIntervention: { runtimeType: 'server', status: 'aborted' },
           role: 'tool',
           threadId: 'thread-123',
           tool_call_id: 'tool-call-1',
@@ -5305,7 +5305,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           agentId: 'agent-123',
           content: 'Tool execution was aborted by user.',
           parentId: 'assistant-msg-123',
-          pluginIntervention: { status: 'aborted' },
+          pluginIntervention: { runtimeType: 'server', status: 'aborted' },
           role: 'tool',
           threadId: 'thread-123',
           tool_call_id: 'tool-call-2',
