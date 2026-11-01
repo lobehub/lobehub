@@ -14,7 +14,8 @@ const styles = stylex.create({
   container: {
     padding: '12px',
     borderRadius: cssVar.borderRadius,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   dangerText: { fontSize: '13px', color: cssVar.colorError },
   header: { color: cssVar.colorWarning },

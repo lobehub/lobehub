@@ -20,7 +20,8 @@ const styles = stylex.create({
     fontSize: '12px',
     fontWeight: 500,
     color: cssVar.colorSuccess,
-    background: cssVar.colorSuccessBg,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
   },
   moreBadge: { flexShrink: 0, fontSize: '12px', color: cssVar.colorTextTertiary },
   previewChip: {
@@ -37,7 +38,8 @@ const styles = stylex.create({
     color: cssVar.colorText,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   separator: { flexShrink: 0, color: cssVar.colorTextQuaternary },
 });

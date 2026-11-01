@@ -17,7 +17,8 @@ const styles = stylex.create({
     paddingBlock: '4px',
     paddingInline: '8px',
     borderRadius: '8px',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
 });
 

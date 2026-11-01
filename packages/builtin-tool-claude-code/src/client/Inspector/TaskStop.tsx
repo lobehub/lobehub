@@ -26,7 +26,8 @@ const styles = stylex.create({
     color: cssVar.colorText,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
 });
 

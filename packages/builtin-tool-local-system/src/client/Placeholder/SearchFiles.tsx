@@ -13,7 +13,8 @@ const styles = stylex.create({
     borderRadius: '8px',
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
-    background: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
   },
 });
 

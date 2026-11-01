@@ -16,7 +16,8 @@ const styles = stylex.create({
     justifyContent: 'center',
     minHeight: '180px',
     padding: '20px',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   header: {
     minWidth: '0',

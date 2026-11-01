@@ -9,7 +9,12 @@ import { memo } from 'react';
 import type { CallAgentParams } from '../../../types';
 
 const styles = stylex.create({
-  container: { padding: '12px', borderRadius: '8px', background: cssVar.colorFillQuaternary },
+  container: {
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
   instruction: { fontSize: '13px', color: cssVar.colorTextSecondary },
 });
 

@@ -31,7 +31,8 @@ const styles = stylex.create({
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '180px',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   error: { color: cssVar.colorError },
   header: {
@@ -87,13 +88,15 @@ const styles = stylex.create({
     borderRadius: '999px',
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   video: {
     display: 'block',
     width: '100%',
     maxHeight: '560px',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
 });
 

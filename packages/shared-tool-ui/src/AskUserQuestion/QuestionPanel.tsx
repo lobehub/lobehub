@@ -22,7 +22,8 @@ const styles = stylex.create({
     lineHeight: '22px',
     color: cssVar.colorTextSecondary,
     textAlign: 'center',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
 });
 

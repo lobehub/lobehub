@@ -17,7 +17,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: '12px',
-    background: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
   },
   empty: { padding: '24px', color: cssVar.colorTextTertiary, textAlign: 'center' },
   item: {

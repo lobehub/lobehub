@@ -10,7 +10,11 @@ import { useTranslation } from 'react-i18next';
 import type { DeviceAttachment } from '../../../ExecutionRuntime/types';
 
 const styles = stylex.create({
-  activated: { color: cssVar.colorSuccess, background: cssVar.colorSuccessBg },
+  activated: {
+    color: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
   badge: {
     display: 'inline-flex',
     gap: '4px',
@@ -29,7 +33,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: cssVar.borderRadius,
-    background: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
   },
   details: {
     overflow: 'hidden',
@@ -54,7 +59,8 @@ const styles = stylex.create({
     height: '32px',
     borderRadius: '8px',
     color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   listItem: {
     paddingBlock: '10px',
@@ -82,7 +88,8 @@ const styles = stylex.create({
   },
   statusDotOnline: {
     borderStyle: 'none',
-    background: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
     boxShadow: `0 0 0 3px ${cssVar.colorSuccessBg}`,
   },
 });

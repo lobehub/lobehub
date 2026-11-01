@@ -15,7 +15,8 @@ const styles = stylex.create({
   mode: {
     paddingBlockEnd: '1px',
     color: cssVar.colorText,
-    background: `linear-gradient(to top, ${cssVar.colorWarningBg} 40%, transparent 40%)`,
+    backgroundImage: `linear-gradient(to top, ${cssVar.colorWarningBg} 40%, transparent 40%)`,
+    backgroundColor: 'transparent',
   },
 });
 

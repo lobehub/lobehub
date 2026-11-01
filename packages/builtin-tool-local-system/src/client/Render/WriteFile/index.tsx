@@ -12,7 +12,12 @@ import { LocalFile, LocalFolder } from '@/features/LocalFile';
 
 const styles = stylex.create({
   container: { paddingBlock: '4px' },
-  previewBox: { overflow: 'hidden', borderRadius: '8px', background: cssVar.colorFillTertiary },
+  previewBox: {
+    overflow: 'hidden',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
 });
 
 const buildNewFilePatch = (filePath: string, content: string) => {

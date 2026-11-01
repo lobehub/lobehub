@@ -18,7 +18,8 @@ const styles = stylex.create({
     color: cssVar.colorText,
     wordBreak: 'break-word',
     whiteSpace: 'pre-wrap',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
 });
 

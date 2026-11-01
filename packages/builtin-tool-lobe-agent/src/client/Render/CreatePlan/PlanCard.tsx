@@ -19,7 +19,8 @@ const styles = stylex.create({
     maxHeight: `${MAX_CONTENT_HEIGHT}px`,
     padding: '12px',
     borderRadius: cssVar.borderRadius,
-    background: cssVar.colorFillQuaternary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
   },
   header: {
     cursor: 'pointer',

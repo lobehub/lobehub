@@ -22,13 +22,15 @@ const styles = stylex.create({
     paddingBlock: '8px',
     paddingInline: '12px',
     borderRadius: cssVar.borderRadiusLG,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   resultBox: {
     paddingBlock: '8px',
     paddingInline: '12px',
     borderRadius: cssVar.borderRadiusLG,
-    background: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
   },
 });
 

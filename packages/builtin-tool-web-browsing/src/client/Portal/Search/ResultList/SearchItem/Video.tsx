@@ -14,7 +14,8 @@ const styles = stylex.create({
     padding: '8px',
     borderRadius: '8px',
     color: 'initial',
-    background: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
   },
   desc: {
     overflow: 'hidden',

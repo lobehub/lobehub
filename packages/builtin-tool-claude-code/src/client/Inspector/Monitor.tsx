@@ -23,7 +23,8 @@ const styles = stylex.create({
     paddingBlock: '2px',
     paddingInline: '10px',
     borderRadius: '999px',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   command: {
     overflow: 'hidden',

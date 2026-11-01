@@ -21,7 +21,8 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
 });
 

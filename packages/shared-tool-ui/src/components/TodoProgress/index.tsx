@@ -40,7 +40,8 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   header: {
     display: 'flex',
@@ -51,7 +52,8 @@ const styles = stylex.create({
     borderBlockEndWidth: '1px',
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
-    background: cssVar.colorFillQuaternary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
   },
   headerCount: {
     flexShrink: 0,
@@ -61,7 +63,8 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   headerDetail: {
     overflow: 'hidden',

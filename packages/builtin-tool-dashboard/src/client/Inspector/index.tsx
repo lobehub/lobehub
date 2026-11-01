@@ -34,10 +34,19 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
-  failed: { color: cssVar.colorError, background: cssVar.colorErrorBg },
-  succeeded: { color: cssVar.colorSuccess, background: cssVar.colorSuccessBg },
+  failed: {
+    color: cssVar.colorError,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
+  },
+  succeeded: {
+    color: cssVar.colorSuccess,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
+  },
 });
 
 type Props = BuiltinInspectorProps<Record<string, any>, any>;

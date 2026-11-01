@@ -20,7 +20,8 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   modeChip: {
     flexShrink: 0,
@@ -29,7 +30,8 @@ const styles = stylex.create({
     borderRadius: '999px',
     fontSize: '12px',
     color: cssVar.colorInfo,
-    background: cssVar.colorInfoBg,
+    backgroundColor: cssVar.colorInfoBg,
+    backgroundImage: 'none',
   },
   separator: { flexShrink: 0, color: cssVar.colorTextQuaternary },
 });

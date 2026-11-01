@@ -20,7 +20,8 @@ const styles = stylex.create({
     borderRadius: '16px',
     fontSize: '28px',
     lineHeight: 1,
-    background: cssVar.colorFillQuaternary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
   },
   chip: {
     display: 'inline-flex',
@@ -30,7 +31,8 @@ const styles = stylex.create({
     borderRadius: '999px',
     fontSize: '12px',
     color: cssVar.colorText,
-    background: cssVar.colorFillQuaternary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
   },
   detailCard: {
     padding: '16px',
@@ -38,7 +40,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: '12px',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   name: {
     overflow: 'hidden',

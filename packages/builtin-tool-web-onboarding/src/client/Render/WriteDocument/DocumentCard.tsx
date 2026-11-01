@@ -14,7 +14,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: '16px',
-    background: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
   },
   content: { paddingInline: '16px', fontSize: '14px' },
   header: {

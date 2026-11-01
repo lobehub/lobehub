@@ -29,7 +29,8 @@ const styles = stylex.create({
     borderRadius: '999px',
     fontSize: '12px',
     color: cssVar.colorText,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   toolName: { overflow: 'hidden', minWidth: '0', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   tools: {

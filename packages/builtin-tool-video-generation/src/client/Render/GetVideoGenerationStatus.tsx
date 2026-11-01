@@ -16,7 +16,8 @@ const styles = stylex.create({
     width: '100%',
     maxHeight: '560px',
     borderRadius: '8px',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
 });
 

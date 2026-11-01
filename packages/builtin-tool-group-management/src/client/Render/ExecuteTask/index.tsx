@@ -17,7 +17,8 @@ const styles = stylex.create({
     paddingBlock: '8px',
     paddingInline: '12px',
     borderRadius: cssVar.borderRadius,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   timeout: { fontSize: '12px', color: cssVar.colorTextTertiary },
 });

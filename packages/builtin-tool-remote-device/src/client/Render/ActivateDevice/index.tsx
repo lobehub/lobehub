@@ -24,7 +24,8 @@ const styles = stylex.create({
     borderRadius: cssVar.borderRadius,
     fontSize: cssVar.fontSize,
     color: cssVar.colorWarningText,
-    background: cssVar.colorWarningBg,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
   },
 });
 

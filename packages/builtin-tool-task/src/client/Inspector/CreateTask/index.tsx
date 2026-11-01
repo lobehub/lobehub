@@ -28,7 +28,8 @@ const styles = stylex.create({
     color: cssVar.colorText,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   identifierChip: {
     flexShrink: 0,
@@ -38,7 +39,8 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   subtaskTag: {
     display: 'inline-flex',
@@ -54,7 +56,8 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '11px',
     color: cssVar.colorTextTertiary,
-    background: 'transparent',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
   },
 });
 

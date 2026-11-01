@@ -26,7 +26,8 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
     color: cssVar.colorSuccess,
-    background: cssVar.colorSuccessBg,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
   },
   assigneeAvatar: { flexShrink: 0 },
   assigneeChip: {
@@ -43,7 +44,8 @@ const styles = stylex.create({
     borderRadius: '999px',
     fontSize: '12px',
     color: cssVar.colorText,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   assigneeName: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   chip: {
@@ -60,7 +62,8 @@ const styles = stylex.create({
     color: cssVar.colorText,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   group: { display: 'inline-flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' },
   identifierChip: {
@@ -71,7 +74,8 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '12px',
     color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   label: { flexShrink: 0, fontSize: '12px', color: cssVar.colorTextTertiary },
   removeChip: {
@@ -86,7 +90,8 @@ const styles = stylex.create({
     fontSize: '12px',
     color: cssVar.colorError,
     textDecoration: 'line-through',
-    background: 'transparent',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
   },
 });
 

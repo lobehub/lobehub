@@ -27,7 +27,8 @@ const styles = stylex.create({
     color: cssVar.colorText,
     wordBreak: 'break-word',
     whiteSpace: 'pre-wrap',
-    background: cssVar.colorSuccessBg,
+    backgroundColor: cssVar.colorSuccessBg,
+    backgroundImage: 'none',
   },
   block: { display: 'flex', flexDirection: 'column', gap: '6px' },
   count: {
@@ -52,7 +53,8 @@ const styles = stylex.create({
     fontFamily: cssVar.fontFamilyCode,
     fontSize: '11px',
     color: cssVar.colorTextTertiary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   removed: {
     overflow: 'auto',
@@ -73,7 +75,8 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     wordBreak: 'break-word',
     whiteSpace: 'pre-wrap',
-    background: cssVar.colorErrorBg,
+    backgroundColor: cssVar.colorErrorBg,
+    backgroundImage: 'none',
   },
 });
 

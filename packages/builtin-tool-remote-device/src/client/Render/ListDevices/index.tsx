@@ -18,7 +18,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: cssVar.borderRadius,
-    background: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
   },
   empty: {
     paddingBlock: '12px',
@@ -29,7 +30,8 @@ const styles = stylex.create({
     borderRadius: cssVar.borderRadius,
     fontSize: cssVar.fontSize,
     color: cssVar.colorTextDescription,
-    background: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
   },
 });
 

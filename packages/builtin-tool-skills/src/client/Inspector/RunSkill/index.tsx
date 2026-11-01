@@ -65,7 +65,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: '999px',
-    background: cssVar.colorBgContainer,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
   },
   skillIcon: { flexShrink: 0, color: cssVar.colorTextDescription },
   skillName: {

@@ -17,7 +17,8 @@ const styles = stylex.create({
     paddingBlock: '4px',
     paddingInline: '16px',
     borderRadius: '8px',
-    background: cssVar.colorFillQuaternary,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
   },
   description: {
     overflow: 'hidden',

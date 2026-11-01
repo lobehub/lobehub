@@ -17,7 +17,8 @@ const styles = stylex.create({
     paddingBlock: '10px',
     paddingInline: '12px',
     borderRadius: '8px',
-    background: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundColor: { 'default': cssVar.colorFillQuaternary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
     transition: 'background 0.2s',
   },
   agentDescription: {

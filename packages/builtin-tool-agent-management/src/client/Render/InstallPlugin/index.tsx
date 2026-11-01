@@ -10,7 +10,12 @@ import { useTranslation } from 'react-i18next';
 import type { InstallPluginParams, InstallPluginState } from '../../../types';
 
 const styles = stylex.create({
-  container: { padding: '12px', borderRadius: '8px', background: cssVar.colorFillQuaternary },
+  container: {
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
   label: { fontSize: '12px', fontWeight: 500, color: cssVar.colorTextSecondary },
   statusFail: { fontSize: '13px', fontWeight: 500, color: cssVar.colorError },
   statusSuccess: { fontSize: '13px', fontWeight: 500, color: cssVar.colorSuccess },

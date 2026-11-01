@@ -27,7 +27,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorFillSecondary,
     borderRadius: cssVar.borderRadiusLG,
-    background: cssVar.colorBgElevated,
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
   },
   cardSkipped: { opacity: 0.65 },
   description: {
@@ -53,7 +54,8 @@ const styles = stylex.create({
     borderRadius: '999px',
     fontSize: '11px',
     color: cssVar.colorTextTertiary,
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   title: {
     overflow: 'hidden',

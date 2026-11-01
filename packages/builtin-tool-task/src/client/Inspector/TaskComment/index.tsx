@@ -36,7 +36,8 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   contentChip: {
     overflow: 'hidden',
@@ -53,7 +54,8 @@ const styles = stylex.create({
     color: cssVar.colorText,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
 });
 

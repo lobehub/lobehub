@@ -9,7 +9,12 @@ import { memo } from 'react';
 import type { UpdateAgentParams } from '../../../types';
 
 const styles = stylex.create({
-  container: { padding: '12px', borderRadius: '8px', background: cssVar.colorFillQuaternary },
+  container: {
+    padding: '12px',
+    borderRadius: '8px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
   field: { marginBlockEnd: { 'default': '8px', ':last-child': '0' } },
   label: {
     marginBlockEnd: '4px',

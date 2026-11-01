@@ -25,7 +25,8 @@ const styles = stylex.create({
     fontSize: '12px',
     color: cssVar.colorError,
     textDecoration: 'line-through',
-    background: 'transparent',
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
   },
 });
 

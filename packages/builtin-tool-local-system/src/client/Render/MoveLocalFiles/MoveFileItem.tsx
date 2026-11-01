@@ -12,7 +12,8 @@ const styles = stylex.create({
     paddingInline: '12px',
     borderRadius: cssVar.borderRadius,
     transition: 'all 0.2s ease',
-    background: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
   },
   path: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px', wordBreak: 'break-all' },
 });
