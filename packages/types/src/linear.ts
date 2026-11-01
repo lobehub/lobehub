@@ -72,6 +72,11 @@ export interface LinearIssueLinkMetadata {
   projectName?: string;
   stateName?: string;
   stateType?: LinearIssueStateType;
+  /**
+   * Linear comments already copied onto the task, so syncing again adds only
+   * new ones. Sync bookkeeping, not display: a display refresh keeps it.
+   */
+  syncedCommentIds?: string[];
   teamKey?: string;
 }
 
@@ -118,12 +123,16 @@ export type LinearSyncSkipReason =
   | 'closed'
   /** Writing the task failed; the next sync retries it. */
   | 'failed'
+  /** The task was synced, but its Linear comments were not; the next sync retries them. */
+  | 'commentsFailed'
   /** Picked for import, but Linear no longer returns it (deleted, or not visible). */
   | 'missing';
 
 export interface LinearSyncResult {
   /** Tasks closed because their issue was completed or canceled in Linear. */
   closed: number;
+  /** Linear comments copied onto tasks as task comments. Absent in older results. */
+  commentsImported?: number;
   created: number;
   /** Tasks edited in LobeHub, so their name, instruction and priority were kept. */
   keptLocalEdits: number;
@@ -190,6 +199,8 @@ export interface LinearSyncJobMetadata {
   rounds?: number;
   /** The saved rule being run (`kind: 'rule'`). */
   ruleId?: string;
+  /** Copy each issue's Linear comments onto its task as task comments. */
+  syncComments?: boolean;
 }
 
 export interface LinearSyncJobView {

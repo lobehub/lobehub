@@ -119,6 +119,8 @@ export default {
   'linear.sync.job.runningIssues': 'Syncing {{count}} issues…',
   'linear.sync.job.runningRule': 'Syncing everything the rule matches…',
   'linear.sync.job.skipReason.closed': 'Closed in Linear and never imported',
+  'linear.sync.job.skipReason.commentsFailed':
+    'Task synced, but its comments could not be; the next sync retries them',
   'linear.sync.job.skipReason.failed': 'Could not be written; the next sync retries it',
   'linear.sync.job.skipReason.missing': 'No longer in Linear, or not visible to this connection',
   'linear.sync.job.skipReason.running': 'Task is running, so it was not closed',
@@ -145,6 +147,7 @@ export default {
   'linear.sync.modal.saveRule': 'Save as rule and sync all',
   'linear.sync.modal.saveRuleHint':
     'Sync every issue matching these filters now, and keep the filters to sync again later',
+  'linear.sync.modal.syncComments': 'Also sync Linear comments into task activity',
   'linear.sync.modal.title': 'Import issues from {{account}}',
   'linear.sync.project.connect': 'Connect Linear',
   'linear.sync.project.description':
@@ -155,6 +158,7 @@ export default {
   'linear.sync.projectHint':
     'To sync issues into a project, open the project and go to Settings → Advanced.',
   'linear.sync.result.closed': '{{count}} closed',
+  'linear.sync.result.commentsImported': '{{count}} comments added',
   'linear.sync.result.created': '{{count}} created',
   'linear.sync.result.keptLocalEdits': '{{count}} kept local edits',
   'linear.sync.result.skipped': '{{count}} skipped',

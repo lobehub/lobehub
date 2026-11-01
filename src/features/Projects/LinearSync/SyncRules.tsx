@@ -1,7 +1,16 @@
 'use client';
 
 import type { LinearConnectionView, LinearSyncJobView, LinearSyncRuleView } from '@lobechat/types';
-import { ActionIcon, Button, confirmModal, Flexbox, Icon, Text, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Checkbox,
+  confirmModal,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { RefreshCwIcon, Trash2Icon } from 'lucide-react';
@@ -60,6 +69,8 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
   const isViewer = useIsWorkspaceViewer();
   const viewerHint = isViewer ? t('linear.sync.viewerDisabled') : undefined;
   const [starting, setStarting] = useState<string | null>(null);
+  // Applies to the next run of any rule; re-running fills in comments tasks lack.
+  const [syncComments, setSyncComments] = useState(true);
   const runningRuleIds = new Set(
     jobs.filter(isActiveLinearSyncJob).flatMap((job) => (job.ruleId ? [job.ruleId] : [])),
   );
@@ -83,7 +94,7 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
   const runRule = async (rule: LinearSyncRuleView) => {
     setStarting(rule.id);
     try {
-      await linearService.startRuleSync(rule.id);
+      await linearService.startRuleSync(rule.id, { syncComments });
       onJobStarted();
     } catch (error) {
       toast.error(linearSyncErrorMessage(error, t));
@@ -111,7 +122,17 @@ const SyncRules = memo<SyncRulesProps>(({ connections, jobs, onJobStarted, proje
 
   return (
     <Flexbox gap={8}>
-      <Text type={'secondary'}>{t('linear.sync.rules.title')}</Text>
+      <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+        <Text type={'secondary'}>{t('linear.sync.rules.title')}</Text>
+        <Checkbox
+          checked={syncComments}
+          disabled={isViewer}
+          textProps={{ fontSize: 12, type: 'secondary' }}
+          onChange={setSyncComments}
+        >
+          {t('linear.sync.modal.syncComments')}
+        </Checkbox>
+      </Flexbox>
       <div {...stylex.props(styles.list)}>
         {rules.map((rule, index) => {
           // A disconnected workspace's rule can still be deleted, not run.

@@ -9,19 +9,22 @@ import { TaskModel } from '@/database/models/task';
 import { TaskExternalLinkModel } from '@/database/models/taskExternalLink';
 import { tasks, users } from '@/database/schemas';
 
+import { LinearApiError } from '../client';
 import type * as IssuesModule from '../issues';
-import type { LinearIssue } from '../issues';
+import type { LinearIssue, LinearIssueComment } from '../issues';
 import { LinearIssueSyncService, MAX_TASKS_CREATED_PER_SYNC } from '../issueSync';
 
 const linear = vi.hoisted(() => ({
   getLinearIssuesByIds: vi.fn(),
   getLinearProjectTeamIds: vi.fn(),
+  listLinearIssueComments: vi.fn(),
   listLinearIssues: vi.fn(),
 }));
 vi.mock('../issues', async (importOriginal) => ({
   ...(await importOriginal<typeof IssuesModule>()),
   getLinearIssuesByIds: linear.getLinearIssuesByIds,
   getLinearProjectTeamIds: linear.getLinearProjectTeamIds,
+  listLinearIssueComments: linear.listLinearIssueComments,
   listLinearIssues: linear.listLinearIssues,
 }));
 
@@ -551,5 +554,143 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
 
     expect(result).toMatchObject({ keptLocalEdits: 0, updated: 1 });
     expect((await linkedTask('1'))?.name).toBe('Renamed twice');
+  });
+});
+
+describe('LinearIssueSyncService comments (real PostgreSQL)', () => {
+  const comment = (
+    overrides: Partial<LinearIssueComment> & { id: string; issueId: string },
+  ): LinearIssueComment => ({
+    body: `Comment ${overrides.id}`,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    url: `https://linear.app/acme/issue/ENG-1#comment-${overrides.id}`,
+    user: { displayName: 'JianXu', name: 'Jian Xu' },
+    ...overrides,
+  });
+
+  /** Serve these comments for whichever issues are asked about. */
+  const serveComments = (comments: LinearIssueComment[]) =>
+    linear.listLinearIssueComments.mockImplementation(async (_token: string, ids: string[]) =>
+      comments.filter((item) => ids.includes(item.issueId!)),
+    );
+
+  const commentsOf = async (externalId: string) => {
+    const task = await linkedTask(externalId);
+    return task ? new TaskModel(db, userId).getComments(task.id) : [];
+  };
+
+  const states = [...filter.stateTypes];
+
+  it('copies an imported issue’s comments onto its task, credited and in Linear’s time', async () => {
+    serve([issue({ id: '1' })]);
+    serveComments([
+      comment({ createdAt: '2026-02-01T00:00:00.000Z', id: 'c2', issueId: '1', parentId: 'c1' }),
+      comment({ createdAt: '2026-01-01T00:00:00.000Z', id: 'c1', issueId: '1' }),
+    ]);
+
+    const result = await new LinearIssueSyncService(db, userId).importIssues(TOKEN, ['1'], {
+      syncComments: true,
+    });
+
+    expect(result).toMatchObject({ commentsImported: 2, created: 1 });
+    const comments = await commentsOf('1');
+    // Written in the order Linear returned them, each at its Linear time.
+    expect(comments.map((item) => item.createdAt.toISOString())).toEqual([
+      '2026-01-01T00:00:00.000Z',
+      '2026-02-01T00:00:00.000Z',
+    ]);
+    expect(comments[0]).toMatchObject({
+      authorUserId: userId,
+      content:
+        '> **JianXu** on [Linear](https://linear.app/acme/issue/ENG-1#comment-c1)\n\nComment c1',
+    });
+    expect(comments[1].content).toContain('**JianXu** replied on');
+  });
+
+  it('adds only new comments when synced again, even after the link is refreshed', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    serveComments([comment({ id: 'c1', issueId: '1' })]);
+    await service.syncByFilter(TOKEN, { ...filter, stateTypes: states }, { syncComments: true });
+
+    // Linear changed the issue too, so the link's display metadata is rewritten.
+    serve([issue({ id: '1', title: 'Renamed', updatedAt: '2026-10-02T00:00:00.000Z' })]);
+    serveComments([comment({ id: 'c1', issueId: '1' }), comment({ id: 'c2', issueId: '1' })]);
+    const second = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(second).toMatchObject({ commentsImported: 1, updated: 1 });
+
+    const third = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+    expect(third.commentsImported).toBeUndefined();
+    expect((await commentsOf('1')).map((item) => item.content)).toEqual([
+      expect.stringContaining('Comment c1'),
+      expect.stringContaining('Comment c2'),
+    ]);
+  });
+
+  it('fills in comments of tasks imported without them', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' }), issue({ id: '2' })]);
+    serveComments([comment({ id: 'c1', issueId: '1' }), comment({ id: 'c2', issueId: '2' })]);
+
+    const first = await service.syncByFilter(TOKEN, { ...filter, stateTypes: states });
+    expect(first.commentsImported).toBeUndefined();
+    expect(linear.listLinearIssueComments).not.toHaveBeenCalled();
+    expect(await commentsOf('1')).toHaveLength(0);
+
+    const again = await service.importIssues(TOKEN, ['1', '2'], { syncComments: true });
+
+    expect(again).toMatchObject({ commentsImported: 2, created: 0 });
+    expect(await commentsOf('1')).toHaveLength(1);
+    expect(await commentsOf('2')).toHaveLength(1);
+  });
+
+  it('leaves out issues it did not import and tasks the caller cannot see', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    await service.importIssues(TOKEN, ['1']);
+    const task = await linkedTask('1');
+    await db
+      .update(tasks)
+      .set({ deletedAt: new Date(), isDeleted: true })
+      .where(eq(tasks.id, task!.id));
+
+    serve([issue({ id: '1' }), issue({ id: '2', state: { name: 'Done', type: 'completed' } })]);
+    serveComments([comment({ id: 'c1', issueId: '1' }), comment({ id: 'c2', issueId: '2' })]);
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result.commentsImported).toBeUndefined();
+    expect(linear.listLinearIssueComments).not.toHaveBeenCalled();
+  });
+
+  it('keeps the run when comments cannot be read, and fails it on a revoked token', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    linear.listLinearIssueComments.mockRejectedValue(new LinearApiError('rate limited', 429));
+
+    const result = await service.importIssues(TOKEN, ['1'], { syncComments: true });
+
+    expect(result).toMatchObject({
+      created: 1,
+      skipped: [{ identifier: 'ENG-1', reason: 'commentsFailed' }],
+      skippedCount: 1,
+    });
+    expect(result.commentsImported).toBeUndefined();
+
+    linear.listLinearIssueComments.mockRejectedValue(new LinearApiError('revoked', 401));
+    await expect(service.importIssues(TOKEN, ['1'], { syncComments: true })).rejects.toThrow(
+      'revoked',
+    );
   });
 });

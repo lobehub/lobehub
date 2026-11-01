@@ -70,4 +70,48 @@ describe('TaskExternalLinkModel', () => {
     ).toEqual([]);
     expect(await shared.findByContainer('linear', 'team-1')).toHaveLength(1);
   });
+
+  it('appends synced comment ids and keeps them when display metadata is replaced', async () => {
+    const model = new TaskExternalLinkModel(db, userId);
+    const task = await new TaskModel(db, userId).create({ instruction: 'one' });
+    const created = await model.create({
+      ...link(task.id),
+      metadata: { assigneeName: 'Ada', stateName: 'Todo' },
+    });
+
+    await model.addSyncedCommentIds(created.id, ['c1', 'c2']);
+    await model.addSyncedCommentIds(created.id, ['c3']);
+    await model.addSyncedCommentIds(created.id, []);
+    // A display refresh built from a read taken before the ids were recorded.
+    await model.update(created.id, { metadata: { stateName: 'Done' } });
+
+    const [current] = await model.findByExternalIds('linear', ['issue-1']);
+    expect(current.metadata).toEqual({
+      stateName: 'Done',
+      syncedCommentIds: ['c1', 'c2', 'c3'],
+    });
+  });
+
+  it('replaces display metadata of a link without synced comments as is', async () => {
+    const model = new TaskExternalLinkModel(db, userId);
+    const task = await new TaskModel(db, userId).create({ instruction: 'one' });
+    const created = await model.create({ ...link(task.id), metadata: { assigneeName: 'Ada' } });
+
+    await model.update(created.id, { metadata: { stateName: 'Done' } });
+
+    const [current] = await model.findByExternalIds('linear', ['issue-1']);
+    expect(current.metadata).toEqual({ stateName: 'Done' });
+  });
+
+  it('does not record comment ids on a link outside the scope', async () => {
+    const task = await new TaskModel(db, userId).create({ instruction: 'one' });
+    const created = await new TaskExternalLinkModel(db, userId).create(link(task.id));
+
+    await new TaskExternalLinkModel(db, otherUserId).addSyncedCommentIds(created.id, ['c1']);
+
+    const [current] = await new TaskExternalLinkModel(db, userId).findByExternalIds('linear', [
+      'issue-1',
+    ]);
+    expect(current.metadata).toEqual({});
+  });
 });
