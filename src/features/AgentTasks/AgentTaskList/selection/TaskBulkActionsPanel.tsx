@@ -322,24 +322,27 @@ const TaskBulkActionsPanel = memo<TaskBulkActionsPanelProps>(({ onClose, tasks }
                   value={'unassigned none'}
                   onSelect={() => act({ kind: 'update', patch: { assigneeAgentId: null } })}
                 />
-                {agents.map((agent) => (
-                  <Item
-                    disabled={disabled}
-                    key={agent.id}
-                    label={agentDisplayName(agent)}
-                    value={`agent ${agent.id} ${agentDisplayName(agent)}`}
-                    icon={
-                      <AgentAvatar
-                        agentId={agent.id}
-                        avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
-                        name={agentDisplayName(agent)}
-                        shape={'square'}
-                        size={20}
-                      />
-                    }
-                    onSelect={() => act({ kind: 'update', patch: { assigneeAgentId: agent.id } })}
-                  />
-                ))}
+                {agents.map((agent) => {
+                  const name = agentDisplayName(agent) ?? agent.id;
+                  return (
+                    <Item
+                      disabled={disabled}
+                      key={agent.id}
+                      label={name}
+                      value={`agent ${agent.id} ${name}`}
+                      icon={
+                        <AgentAvatar
+                          agentId={agent.id}
+                          avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
+                          name={name}
+                          shape={'square'}
+                          size={20}
+                        />
+                      }
+                      onSelect={() => act({ kind: 'update', patch: { assigneeAgentId: agent.id } })}
+                    />
+                  );
+                })}
               </Command.Group>
             )}
           </Command.List>
