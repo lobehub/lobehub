@@ -26,6 +26,7 @@ import { EditorCanvas } from '@/features/EditorCanvas';
 import { seedAttachments } from '@/features/EditorCanvas/attachmentRegistry';
 import {
   getAttachmentFileIdsFromEditor,
+  hasIncompleteEditorAttachments,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { LinearFileCard } from '@/features/EditorCanvas/LinearFilePlugin';
@@ -109,7 +110,8 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
   );
 
   const handleSave = useCallback(async () => {
-    if (!commentId || submitting) return;
+    // A still-uploading image would be saved as its local `blob:` preview URL.
+    if (!commentId || submitting || hasIncompleteEditorAttachments(editor)) return;
     const next = String(editor?.getDocument?.('markdown') ?? '').trim();
     const json = editor?.getDocument?.('json') as unknown;
     const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
