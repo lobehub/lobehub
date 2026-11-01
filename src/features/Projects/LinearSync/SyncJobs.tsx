@@ -128,7 +128,12 @@ const SyncJobs = memo<SyncJobsProps>(({ canStop, jobs, onChanged, projectId, rul
                 {detailOf(job)}
               </Text>
             </Flexbox>
-            {canStop && isActiveLinearSyncJob(job) && job.error !== 'canceled' ? (
+            {/* Only a rule run goes on round after round; an import of picked
+                issues is one round that cannot be cut short. */}
+            {canStop &&
+            job.kind === 'rule' &&
+            isActiveLinearSyncJob(job) &&
+            job.error !== 'canceled' ? (
               <Button
                 icon={<Icon icon={CircleStopIcon} />}
                 loading={stopping === job.id}

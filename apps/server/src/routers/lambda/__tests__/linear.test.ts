@@ -528,6 +528,24 @@ describe('linearRouter', () => {
         expect((await caller({ userId }).startRuleSync({ ruleId: rule.id })).id).not.toBe(id);
       });
 
+      it('does not offer to stop an import of picked issues', async () => {
+        const connection = await connect({ userId });
+        mocks.getToken.mockResolvedValue('token');
+        mocks.runSync.mockResolvedValue({ ok: true });
+        const { id } = await caller({ userId }).startImport({
+          connectionId: connection.id,
+          issueIds: ['issue-1'],
+          projectId,
+        });
+
+        expect(await caller({ userId }).cancelSync({ jobId: id, projectId })).toEqual({
+          canceled: false,
+        });
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, id, kind: 'issues', status: 'pending' },
+        ]);
+      });
+
       it("does not stop another user's run", async () => {
         mocks.syncByFilter.mockResolvedValue(round(100, true, '100'));
         const { id } = await startRule();

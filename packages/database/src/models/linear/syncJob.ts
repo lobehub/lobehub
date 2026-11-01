@@ -135,7 +135,7 @@ export class LinearSyncJobModel {
   };
 
   /**
-   * Stop a job of this project that has not finished. One still queued ends
+   * Stop a rule run of this project that has not finished. One still queued ends
    * at once. One running is marked as stopping and stays active, so the rule
    * cannot start again while its round still writes; that round finishes the
    * tasks it is writing, then the job ends without starting another. Returns
@@ -162,6 +162,8 @@ export class LinearSyncJobModel {
           projectCondition(scope, projectId),
           inArray(asyncTasks.status, ACTIVE_STATUSES),
           isNull(asyncTasks.error),
+          // An import of picked issues is a single round; it cannot be cut short.
+          sql`${asyncTasks.metadata} ->> 'kind' = 'rule'`,
         ),
       )
       .returning({ id: asyncTasks.id });
