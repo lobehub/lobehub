@@ -858,7 +858,7 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       throw new Error('Eval Memory requires an initialized attempt reference');
     }
     if (context.evalMemory) {
-      const service = new AgentEvalMemoryService(
+      const service = await new AgentEvalMemoryService(
         context.serverDB,
         context.userId,
         context.workspaceId,

@@ -24,12 +24,14 @@ import { withResolvedEnvironments } from './caseEnvironment';
 import { ensureCasePlugins } from './casePlugins';
 import { selectCases } from './caseSelection';
 import { EVAL_HISTORY_TAIL_METADATA_KEY } from './constants';
+import { createEvalRunDeps } from './deps';
 import type { EvalRunDeps } from './types';
 
 const EVAL_HISTORY_MESSAGE_BATCH_SIZE = 500;
 
 /** Thrown when a caller-supplied run id exists with non-equivalent create params. */
 export const RUN_CREATE_ID_CONFLICT = 'Run id already exists with different create parameters';
+export const RUN_EMPTY_SELECTION = 'Select at least one test case';
 
 /** Stable JSON stringify: sorts object keys recursively, drops undefined. */
 const stableStringify = (value: unknown): string => {
@@ -171,18 +173,27 @@ export async function createRun(
     await deps.testCaseModel.findByDatasetId(datasetId),
   );
   const testCases = isExternal ? datasetCases : selectCases(datasetCases, config?.caseSelection);
+  if (!isExternal && testCases.length === 0) throw new Error(RUN_EMPTY_SELECTION);
   await ensureCasePlugins(deps, datasetId, testCases);
 
   const { mode: _mode, ...restParams } = params;
-  let run;
   try {
-    run = await deps.runModel.create({
-      ...restParams,
-      datasetId,
-      targetAgentId,
-      config,
-      // External runs start claimable; internal runs wait for `startRun`.
-      status: isExternal ? 'pending' : 'idle',
+    // An idempotent retry must only see a run once all its case setup exists.
+    // Keep every model used by that setup on the same transaction connection.
+    return await deps.db.transaction(async (tx) => {
+      const txDeps = createEvalRunDeps(tx, deps.userId, deps.workspaceId);
+      const run = await txDeps.runModel.create({
+        ...restParams,
+        datasetId,
+        targetAgentId,
+        config,
+        // External runs start claimable; internal runs wait for `startRun`.
+        status: isExternal ? 'pending' : 'idle',
+      });
+
+      if (!isExternal) await createRunTopics(txDeps, run, testCases);
+      if (params.experimentId) await txDeps.experimentModel.touch(params.experimentId);
+      return run;
     });
   } catch (error) {
     // Race-safe idempotency: a concurrent create with the same caller id won
@@ -198,20 +209,6 @@ export async function createRun(
     }
     throw error;
   }
-
-  if (params.experimentId) {
-    await deps.experimentModel.touch(params.experimentId);
-  }
-
-  // External runs create Topics/RunTopics on demand (per executed case).
-  if (isExternal) return run;
-
-  // Pre-create Topics and RunTopics for all test cases (status='pending')
-  if (testCases.length > 0) {
-    await createRunTopics(deps, run, testCases);
-  }
-
-  return run;
 }
 
 /**

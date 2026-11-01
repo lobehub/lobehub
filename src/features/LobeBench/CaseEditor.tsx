@@ -17,6 +17,7 @@ import { X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { buildCaseContent } from '@/features/LobeBench/caseEditorContent';
 import { getCaseRules, getCaseTitle } from '@/features/LobeBench/lobeBench';
 import { type LobeBenchCase, ownEnvironmentOf } from '@/features/LobeBench/useLobeBench';
 import { useClientDataSWR } from '@/libs/swr';
@@ -135,15 +136,13 @@ const CaseEditor = memo<CaseEditorProps>(
           .split('\n')
           .map((line) => line.trim())
           .filter(Boolean);
-        const content = {
-          ...(category.trim() && { category: category.trim() }),
-          ...(Object.keys(environment).length > 0 && { environment }),
-          ...(testCase?.content?.expected && { expected: testCase.content.expected }),
-          input: input.trim(),
-          ...(turns.length > 0 && {
-            messages: turns.filter((turn) => turn.content.trim()),
-          }),
-        };
+        const content = buildCaseContent({
+          category,
+          environment,
+          expected: testCase?.content?.expected,
+          input,
+          turns,
+        });
         const evalConfig = ruleLines.length > 0 ? { judgePrompt: ruleLines.join('\n') } : null;
         const evalMode = ruleLines.length > 0 ? ('rule-checklist' as const) : null;
         const metadata = {

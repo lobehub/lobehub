@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentEvalRunModel, AgentEvalRunTopicModel } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
-import { agentEvalTestCases, messages, topics } from '@/database/schemas';
+import { agentEvalEnvironments, agentEvalTestCases, messages, topics } from '@/database/schemas';
+import { AgentEvalMemoryService } from '@/server/services/agentEvalMemory';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import type * as AgentEvalRunWorkflowModule from '@/server/workflows/agentEvalRun';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
@@ -72,6 +73,12 @@ describe('AgentEvalRunService', () => {
       'should allow timeout trajectory resume when run status is %s',
       async (status) => {
         const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
+        await new AgentEvalMemoryService(serverDB, userId).prepare({
+          fixture: {},
+          runId: run.id,
+          testCaseId: testCase.id,
+          topicId: topic.id,
+        });
 
         await new AgentEvalRunModel(serverDB, userId).update(run.id, { status });
         await markTopicTimeout({ runId: run.id, testCaseId: testCase.id, topicId: topic.id });
@@ -179,6 +186,13 @@ describe('AgentEvalRunService', () => {
       const threadModel = new ThreadModel(serverDB, userId);
       const errorThread = await threadModel.create({ topicId: topic.id, type: 'eval' });
       const passedThread = await threadModel.create({ topicId: topic.id, type: 'eval' });
+      await new AgentEvalMemoryService(serverDB, userId).prepare({
+        fixture: {},
+        runId: run.id,
+        testCaseId: testCase.id,
+        topicId: topic.id,
+        threadId: errorThread!.id,
+      });
 
       await new AgentEvalRunTopicModel(serverDB, userId).updateByRunAndTopic(run.id, topic.id, {
         evalResult: {
@@ -214,6 +228,13 @@ describe('AgentEvalRunService', () => {
       const threadModel = new ThreadModel(serverDB, userId);
       const errorThread = await threadModel.create({ topicId: topic.id, type: 'eval' });
       const passedThread = await threadModel.create({ topicId: topic.id, type: 'eval' });
+      await new AgentEvalMemoryService(serverDB, userId).prepare({
+        fixture: {},
+        runId: run.id,
+        testCaseId: testCase.id,
+        topicId: topic.id,
+        threadId: errorThread!.id,
+      });
 
       await new AgentEvalRunTopicModel(serverDB, userId).updateByRunAndTopic(run.id, topic.id, {
         evalResult: {
@@ -252,6 +273,88 @@ describe('AgentEvalRunService', () => {
     });
   });
 
+  describe.each([false, true])('Memory resume preflight (threaded=%s)', (threaded) => {
+    it.each(['unknown', 'changed'] as const)(
+      'reports %s fixture before scheduling or changing history',
+      async (kind) => {
+        const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
+        await new AgentEvalRunModel(serverDB, userId).update(run.id, {
+          config: { k: threaded ? 2 : 1 },
+          status: 'failed',
+        });
+        const thread = threaded
+          ? await new ThreadModel(serverDB, userId).create({ topicId: topic.id, type: 'eval' })
+          : undefined;
+        const target = { runId: run.id, testCaseId: testCase.id, threadId: thread?.id };
+        if (kind === 'changed') {
+          await new AgentEvalMemoryService(serverDB, userId).prepare({
+            ...target,
+            topicId: topic.id,
+            fixture: {},
+          });
+          const environment = { memory: { seededAt: '2024-05-01T12:00:00.000Z' } };
+          if (threaded) {
+            const [shared] = await serverDB
+              .insert(agentEvalEnvironments)
+              .values({
+                config: environment,
+                name: 'Changed shared fixture',
+                userId,
+              })
+              .returning();
+            await serverDB
+              .update(agentEvalTestCases)
+              .set({ environmentId: shared.id })
+              .where(eq(agentEvalTestCases.id, testCase.id));
+          } else {
+            await serverDB
+              .update(agentEvalTestCases)
+              .set({
+                content: { ...testCase.content, environment },
+              })
+              .where(eq(agentEvalTestCases.id, testCase.id));
+          }
+        }
+        const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+        await runTopicModel.updateByRunAndTopic(run.id, topic.id, {
+          status: 'timeout',
+          evalResult: {
+            error: 'original evidence',
+            ...(thread && { threads: [{ status: 'timeout', threadId: thread.id }] }),
+          },
+        });
+        const [message] = await serverDB
+          .insert(messages)
+          .values({
+            role: 'assistant',
+            content: 'partial history',
+            topicId: topic.id,
+            userId,
+          })
+          .returning();
+        const before = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
+        const beforeMetadata = (await serverDB.select().from(topics))[0].metadata;
+        const service = new AgentEvalRunService(serverDB, userId);
+        const check = await service.canResumeTrajectory(target);
+        expect(check).toMatchObject({
+          canResume: false,
+          reason: expect.stringContaining(
+            kind === 'unknown' ? 'rerun this case' : 'Cannot change Memory fixture',
+          ),
+        });
+        expect(await service.getResumableCases(run.id)).toMatchObject([
+          { testCaseId: testCase.id, threadId: thread?.id, canResume: false, reason: check.reason },
+        ]);
+        await expect(service.resumeTrajectory(target)).rejects.toThrow(check.reason);
+        expect(AgentEvalRunWorkflow.triggerResumeAgentTrajectory).not.toHaveBeenCalled();
+        expect(AgentEvalRunWorkflow.triggerResumeThreadTrajectory).not.toHaveBeenCalled();
+        expect(await runTopicModel.findByRunAndTestCase(run.id, testCase.id)).toEqual(before);
+        expect((await serverDB.select().from(topics))[0].metadata).toEqual(beforeMetadata);
+        expect(await serverDB.select().from(messages)).toContainEqual(message);
+      },
+    );
+  });
+
   describe('getResumableCases', () => {
     it('should include pass@k cases that have resumable threads', async () => {
       const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
@@ -264,6 +367,13 @@ describe('AgentEvalRunService', () => {
       const threadModel = new ThreadModel(serverDB, userId);
       const errorThread = await threadModel.create({ topicId: topic.id, type: 'eval' });
       const passedThread = await threadModel.create({ topicId: topic.id, type: 'eval' });
+      await new AgentEvalMemoryService(serverDB, userId).prepare({
+        fixture: {},
+        runId: run.id,
+        testCaseId: testCase.id,
+        topicId: topic.id,
+        threadId: errorThread!.id,
+      });
 
       await new AgentEvalRunTopicModel(serverDB, userId).updateByRunAndTopic(run.id, topic.id, {
         evalResult: {
@@ -299,6 +409,12 @@ describe('AgentEvalRunService', () => {
   describe('resumeTrajectory', () => {
     it('should only trigger workflow for a timed-out pass@1 trajectory without mutating state', async () => {
       const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
+      await new AgentEvalMemoryService(serverDB, userId).prepare({
+        fixture: {},
+        runId: run.id,
+        testCaseId: testCase.id,
+        topicId: topic.id,
+      });
 
       await serverDB
         .update(agentEvalTestCases)
@@ -395,6 +511,13 @@ describe('AgentEvalRunService', () => {
       const threadModel = new ThreadModel(serverDB, userId);
       const thread = await threadModel.create({ topicId: topic.id, type: 'eval' });
       const otherThread = await threadModel.create({ topicId: topic.id, type: 'eval' });
+      await new AgentEvalMemoryService(serverDB, userId).prepare({
+        fixture: {},
+        runId: run.id,
+        testCaseId: testCase.id,
+        topicId: topic.id,
+        threadId: thread!.id,
+      });
 
       await new AgentEvalRunTopicModel(serverDB, userId).updateByRunAndTopic(run.id, topic.id, {
         evalResult: {
@@ -496,6 +619,12 @@ describe('AgentEvalRunService', () => {
   describe('executeResumedTrajectory', () => {
     it('should claim a timeout trajectory, switch run back to running, and store operationId', async () => {
       const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
+      await new AgentEvalMemoryService(serverDB, userId).prepare({
+        fixture: {},
+        runId: run.id,
+        testCaseId: testCase.id,
+        topicId: topic.id,
+      });
 
       await new AgentEvalRunModel(serverDB, userId).update(run.id, { status: 'failed' });
       await markTopicTimeout({ runId: run.id, testCaseId: testCase.id, topicId: topic.id });
@@ -539,6 +668,12 @@ describe('AgentEvalRunService', () => {
 
     it('does not double-count LLM calls when the completion hook runs locally', async () => {
       const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
+      await new AgentEvalMemoryService(serverDB, userId).prepare({
+        fixture: {},
+        runId: run.id,
+        testCaseId: testCase.id,
+        topicId: topic.id,
+      });
       const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
 
       await new AgentEvalRunModel(serverDB, userId).update(run.id, { status: 'failed' });
@@ -582,6 +717,34 @@ describe('AgentEvalRunService', () => {
 
       const refreshed = await runTopicModel.findByRunAndTestCase(run.id, testCase.id);
       expect((refreshed?.evalResult as any)?.llmCalls).toBe(7);
+    });
+
+    it('keeps prior timeout evidence when the original Memory fixture was not recorded', async () => {
+      const { run, testCase, topic } = await setupEvalChain({ totalCases: 1 });
+      const runModel = new AgentEvalRunModel(serverDB, userId);
+      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
+      await runModel.update(run.id, { status: 'failed' });
+      const before = await markTopicTimeout({
+        runId: run.id,
+        testCaseId: testCase.id,
+        topicId: topic.id,
+      });
+      await expect(
+        new AgentEvalRunService(serverDB, userId).executeResumedTrajectory({
+          appContext: { topicId: topic.id },
+          parentMessageId: 'parent-message-id',
+          runId: run.id,
+          testCaseId: testCase.id,
+          topicId: topic.id,
+          userId,
+        }),
+      ).resolves.toMatchObject({
+        status: 'cancelled',
+        reason: expect.stringContaining('rerun this case instead of resuming'),
+      });
+      expect(await runTopicModel.findByRunAndTestCase(run.id, testCase.id)).toEqual(before);
+      expect((await runModel.findById(run.id))?.status).toBe('failed');
+      expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
     it('should cancel when the trajectory is not resumable', async () => {
@@ -659,6 +822,14 @@ describe('AgentEvalRunService', () => {
           testCaseId: testCase.id,
         },
       } as any);
+
+      await new AgentEvalMemoryService(serverDB, userId).prepare({
+        fixture: {},
+        runId: run.id,
+        testCaseId: testCase.id,
+        threadId: thread!.id,
+        topicId: topic.id,
+      });
 
       mockExecAgent.mockResolvedValue({ operationId: 'op-thread-resume-1' });
 

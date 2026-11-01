@@ -58,8 +58,13 @@ export const runBenchmarkHandler = async (context: WorkflowContext<RunBenchmarkP
   log('Total test cases: %d', allTestCaseIds.length);
 
   if (allTestCaseIds.length === 0) {
+    if (!dryRun && run.config?.executionMode !== 'external') {
+      await runStep(context, 'agent-eval-run:fail-empty-selection', () =>
+        runModel.finalize(runId, { status: 'failed' }, { startedAt: run.startedAt }),
+      );
+    }
     return {
-      error: 'No test cases in dataset',
+      error: 'No test cases selected for this run',
       success: false,
       totalTestCases: 0,
     };

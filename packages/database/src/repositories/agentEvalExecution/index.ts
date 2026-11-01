@@ -1,6 +1,6 @@
 import { and, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
-import { agentEvalRuns, agentEvalRunTopics, threads } from '../../schemas';
+import { agentEvalRuns, agentEvalRunTopics, threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
@@ -127,6 +127,134 @@ export class AgentEvalExecutionRepo {
   batchMarkAborted = (runId: string) => this.markStopped(runId);
 
   batchMarkTimeout = (runId: string, timeoutMs: number) => this.markStopped(runId, timeoutMs);
+
+  /**
+   * Allocate and bind a pass@k attempt set atomically. Retried dispatches read
+   * that same set; a failure before commit leaves the parent pending and no
+   * orphan threads. The lock order matches Stop and execution claims.
+   */
+  prepareThreadExecutions = async (params: {
+    expectedExecutionId?: string;
+    k: number;
+    runId: string;
+    sourceMessageId?: string;
+    testCaseId: string;
+    topicId: string;
+  }) =>
+    this.db.transaction(async (tx) => {
+      const [parent] = await tx
+        .select()
+        .from(agentEvalRunTopics)
+        .where(
+          and(
+            this.ownership(),
+            eq(agentEvalRunTopics.runId, params.runId),
+            eq(agentEvalRunTopics.topicId, params.topicId),
+            eq(agentEvalRunTopics.testCaseId, params.testCaseId),
+          ),
+        )
+        .for('update');
+      if (
+        !parent ||
+        !['pending', 'running'].includes(parent.status ?? '') ||
+        parent.evalResult?.completionReason === 'aborted' ||
+        parent.evalResult?.executionId !== params.expectedExecutionId
+      )
+        return undefined;
+      const [run] = await tx
+        .select()
+        .from(agentEvalRuns)
+        .where(
+          and(
+            eq(agentEvalRuns.id, params.runId),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              agentEvalRuns,
+            ),
+          ),
+        )
+        .for('update');
+      if (!run || run.status === 'aborted') return undefined;
+      const [topic] = await tx
+        .select({ id: topics.id })
+        .from(topics)
+        .where(
+          and(
+            eq(topics.id, params.topicId),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+          ),
+        );
+      if (!topic) return undefined;
+
+      let threadIds = parent.evalResult?.threads?.map((attempt) => attempt.threadId);
+      if (parent.status === 'pending') {
+        if (threadIds?.length) throw new Error('Pending case already has an attempt set');
+        const created = await tx
+          .insert(threads)
+          .values(
+            Array.from({ length: params.k }, () => ({
+              metadata: {
+                executionId: crypto.randomUUID(),
+                status: 'pending',
+                testCaseId: params.testCaseId,
+              },
+              sourceMessageId: params.sourceMessageId,
+              status: 'active' as const,
+              topicId: params.topicId,
+              type: 'eval' as const,
+              userId: parent.userId,
+              workspaceId: parent.workspaceId,
+            })),
+          )
+          .returning({ id: threads.id });
+        threadIds = created.map((thread) => thread.id);
+        await tx
+          .update(agentEvalRunTopics)
+          .set({
+            evalResult: {
+              ...parent.evalResult,
+              threads: threadIds.map((threadId) => ({ status: 'running' as const, threadId })),
+            },
+            status: 'running',
+          })
+          .where(
+            and(
+              this.ownership(),
+              eq(agentEvalRunTopics.runId, params.runId),
+              eq(agentEvalRunTopics.topicId, params.topicId),
+            ),
+          );
+      }
+      if (!threadIds || threadIds.length !== params.k)
+        throw new Error('Running case has an incomplete attempt set');
+      const attempts = await tx
+        .select()
+        .from(threads)
+        .where(
+          and(
+            inArray(threads.id, threadIds),
+            eq(threads.topicId, params.topicId),
+            eq(threads.type, 'eval'),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads),
+          ),
+        );
+      if (attempts.length !== threadIds.length)
+        throw new Error('Running case has missing attempts');
+      return {
+        pendingThreads: attempts
+          .filter(
+            (attempt) =>
+              attempt.metadata?.status === 'pending' &&
+              !attempt.metadata.startedAt &&
+              !attempt.metadata.completedAt,
+          )
+          .map((attempt) => ({
+            executionId: attempt.metadata?.executionId as string | undefined,
+            threadId: attempt.id,
+          })),
+        threadIds,
+      };
+    });
 
   /** Claim exactly one generation before creating an operation or resuming it. */
   claimExecution = async (params: {

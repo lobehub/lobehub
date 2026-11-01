@@ -43,6 +43,15 @@ export async function executeResumedTrajectory(
     return { reason: resumeCheck.reason, status: 'cancelled' as const, topicId };
   }
 
+  // Validate the original fixture before the resume claim can reset prior evidence.
+  const memory = await prepareTrialMemory(deps, {
+    environment,
+    resume: true,
+    runId,
+    testCaseId,
+    topicId,
+  });
+
   // Look up the pre-created RunTopic and reset it for resume
   log(
     'executeResumedTrajectory: run=%s testCase=%s topicId=%s parentMessageId=%s',
@@ -88,7 +97,6 @@ export async function executeResumedTrajectory(
   const db = deps.db;
 
   try {
-    const memory = await prepareTrialMemory(deps, { environment, runId, testCaseId, topicId });
     const execResult = await aiAgentService.execAgent({
       agentId: targetAgentId,
       appContext: { ...appContext, suppressSignal: true },
@@ -209,6 +217,16 @@ export async function executeResumedThreadTrajectory(
     return { reason: resumeCheck.reason, status: 'cancelled' as const, threadId, topicId };
   }
 
+  // Keep the prior attempt evidence intact if its original fixture is unknown or changed.
+  const memory = await prepareTrialMemory(deps, {
+    environment,
+    resume: true,
+    runId,
+    testCaseId,
+    threadId,
+    topicId,
+  });
+
   // Look up the pre-created RunTopic and reset it for resume
   const executionId = crypto.randomUUID();
   const claimed = await deps.executionRepo.claimExecution({
@@ -252,13 +270,6 @@ export async function executeResumedThreadTrajectory(
   const db = deps.db;
 
   try {
-    const memory = await prepareTrialMemory(deps, {
-      environment,
-      runId,
-      testCaseId,
-      threadId,
-      topicId,
-    });
     const execResult = await aiAgentService.execAgent({
       agentId: targetAgentId,
       appContext: { ...appContext, suppressSignal: true },

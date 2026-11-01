@@ -340,7 +340,7 @@ describe('AgentEvalRunService', () => {
       expect(topic.metadata?.evalHistoryTailMessageId).toBe(restored.at(-1)?.id);
     });
 
-    it('should handle dataset with no test cases', async () => {
+    it('rejects an internal run on a dataset with no test cases', async () => {
       const benchmarkModel = new AgentEvalBenchmarkModel(serverDB, userId);
       const benchmark = await benchmarkModel.create({
         identifier: 'empty-benchmark',
@@ -360,13 +360,9 @@ describe('AgentEvalRunService', () => {
         .returning();
 
       const service = new AgentEvalRunService(serverDB, userId);
-      const run = await service.createRun({ datasetId: dataset.id, name: 'Empty Test' });
-
-      const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
-      const runTopics = await runTopicModel.findByRunId(run.id);
-
-      expect(runTopics).toHaveLength(0);
-      expect(run.id).toBeTruthy();
+      await expect(
+        service.createRun({ datasetId: dataset.id, name: 'Empty Test' }),
+      ).rejects.toThrow('Select at least one test case');
     });
   });
 });

@@ -11,6 +11,7 @@ import {
   assertRunCaseCompatibility,
   EvalCaseCompatibilityError,
 } from '@/server/services/agentEvalRun/caseCompatibility';
+import { RUN_EMPTY_SELECTION } from '@/server/services/agentEvalRun/createRun';
 import { EvalResumeConflictError } from '@/server/services/agentEvalRun/resumeTarget';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
@@ -97,6 +98,9 @@ export const runRouter = router({
         }
         if (pgError?.message === CASE_AGENT_MODEL_REQUIRED) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: CASE_AGENT_MODEL_REQUIRED });
+        }
+        if (pgError?.message === RUN_EMPTY_SELECTION) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: RUN_EMPTY_SELECTION });
         }
         // The id is taken by a run this caller cannot see, or by one created with
         // other parameters: say so without describing the other run.

@@ -3,10 +3,15 @@ import type { EvalRunTopicResult, EvalThreadResult } from '@lobechat/types';
 import pMap from 'p-map';
 
 import type { ThreadModel } from '@/database/models/thread';
+import {
+  AgentEvalMemoryService,
+  EvalMemoryFixtureConflictError,
+} from '@/server/services/agentEvalMemory';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
 import { resolveTopicAgentId } from './caseAgent';
 import { assertRunCaseCompatibility, EvalCaseCompatibilityError } from './caseCompatibility';
+import { withResolvedEnvironment } from './caseEnvironment';
 import { loadTrajectoryData } from './trajectory';
 import type { EvalRunDeps } from './types';
 import { getCaseId, log } from './utils';
@@ -102,17 +107,29 @@ export async function canResumeTrajectory(
     }
   }
 
-  // pass@1 resumes track steps on the runTopic; pass@k uses per-thread metadata above.
-  if (k > 1) return { canResume: true as const };
-
-  // Reject if the previous run already exhausted maxSteps
-  const maxSteps = run.config?.maxSteps;
-  const prevSteps = runTopic.evalResult?.steps ?? 0;
-  if (maxSteps && prevSteps >= maxSteps) {
-    log('canResumeTrajectory: rejected — prevSteps=%d >= maxSteps=%d', prevSteps, maxSteps);
-    return { canResume: false, reason: resumeLimitReachedReason };
+  // pass@1 tracks steps on the runTopic; pass@k uses per-thread metadata above.
+  if (k === 1) {
+    const maxSteps = run.config?.maxSteps;
+    const prevSteps = runTopic.evalResult?.steps ?? 0;
+    if (maxSteps && prevSteps >= maxSteps) {
+      log('canResumeTrajectory: rejected — prevSteps=%d >= maxSteps=%d', prevSteps, maxSteps);
+      return { canResume: false, reason: resumeLimitReachedReason };
+    }
   }
 
+  if (!runTopic.testCase) return { canResume: false, reason: invalidResumeTargetReason };
+  const testCase = await withResolvedEnvironment(deps, runTopic.testCase);
+  try {
+    await new AgentEvalMemoryService(deps.db, deps.userId, deps.workspaceId).assertResumeFixture({
+      fixture: testCase.content.environment?.memory ?? {},
+      ...params,
+      topicId: runTopic.topicId,
+    });
+  } catch (error) {
+    if (error instanceof EvalMemoryFixtureConflictError)
+      return { canResume: false, reason: error.message };
+    throw error;
+  }
   return { canResume: true as const };
 }
 
@@ -288,6 +305,18 @@ async function resolveTrajectoryResumeTarget(
   const { envPrompt, environment, run, testCase } = loaded;
   const runTopic = await deps.runTopicModel.findByRunAndTestCase(params.runId, params.testCaseId);
   if (!runTopic?.topicId) throw new Error('RunTopic topicId is required');
+
+  try {
+    await new AgentEvalMemoryService(deps.db, deps.userId, deps.workspaceId).assertResumeFixture({
+      fixture: environment?.memory ?? {},
+      ...params,
+      topicId: runTopic.topicId,
+    });
+  } catch (error) {
+    if (error instanceof EvalMemoryFixtureConflictError)
+      throw new EvalResumeConflictError(error.message);
+    throw error;
+  }
 
   log(
     'resolveTrajectoryResumeTarget: topicId=%s runTopic.status=%s',

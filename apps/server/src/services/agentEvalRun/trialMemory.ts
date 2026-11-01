@@ -18,6 +18,7 @@ import type { EvalRunDeps } from './types';
 
 export interface TrialMemoryTarget {
   environment?: EvalCaseEnvironment;
+  resume?: boolean;
   runId: string;
   testCaseId: string;
   threadId?: string;
@@ -30,6 +31,7 @@ export const prepareTrialMemory = (
 ): Promise<EvalMemoryReference> =>
   new AgentEvalMemoryService(deps.db, deps.userId, deps.workspaceId).prepare({
     fixture: target.environment?.memory ?? {},
+    resume: target.resume,
     runId: target.runId,
     testCaseId: target.testCaseId,
     threadId: target.threadId,

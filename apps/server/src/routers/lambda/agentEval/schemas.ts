@@ -56,7 +56,19 @@ export const evalCaseEnvironmentSchema = z
       .string()
       .refine((value) => !Number.isNaN(Date.parse(value)), 'sessionDate must be an ISO date')
       .optional(),
-    timezone: z.string().trim().min(1).optional(),
+    timezone: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((value) => {
+        try {
+          new Intl.DateTimeFormat('en-US', { timeZone: value });
+          return true;
+        } catch {
+          return false;
+        }
+      }, 'timezone must be a supported time zone')
+      .optional(),
     // Which connectors are forwarded and with what timeout. Where they are
     // forwarded to is the server's trusted mock (EVAL_TOOL_MOCK_BASE_URL); an
     // `endpoint` supplied here is rejected rather than trusted.

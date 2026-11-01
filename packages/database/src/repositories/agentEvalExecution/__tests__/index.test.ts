@@ -163,3 +163,65 @@ describe('AgentEvalExecutionRepo ownership', () => {
     expect(await claim(chain)).toBeUndefined();
   });
 });
+
+describe('AgentEvalExecutionRepo pass@k allocation', () => {
+  const pendingChain = async (options: Parameters<typeof setup>[0] = {}) => {
+    const chain = await setup(options);
+    await db.delete(threads).where(eq(threads.id, chain.thread.id));
+    await db
+      .update(agentEvalRuns)
+      .set({ status: 'running' })
+      .where(eq(agentEvalRuns.id, chain.run.id));
+    await db
+      .update(agentEvalRunTopics)
+      .set({ status: 'pending' })
+      .where(eq(agentEvalRunTopics.runId, chain.run.id));
+    return chain;
+  };
+  const prepare = (
+    chain: Awaited<ReturnType<typeof setup>>,
+    workspaceId?: string,
+    expectedExecutionId = 'old',
+  ) =>
+    new AgentEvalExecutionRepo(db, owner, workspaceId).prepareThreadExecutions({
+      expectedExecutionId,
+      k: 2,
+      runId: chain.run.id,
+      testCaseId: chain.testCase.id,
+      topicId: chain.topic.id,
+    });
+
+  it('rejects a parent association whose run is outside the workspace', async () => {
+    const chain = await pendingChain({
+      parentWorkspace: workspace,
+      runWorkspace: foreignWorkspace,
+    });
+    expect(await prepare(chain, workspace)).toBeUndefined();
+    expect(await db.select().from(threads).where(eq(threads.topicId, chain.topic.id))).toEqual([]);
+  });
+
+  it('rejects a stale parent generation without allocating threads', async () => {
+    const chain = await pendingChain();
+    expect(await prepare(chain, undefined, 'stale')).toBeUndefined();
+    expect(await db.select().from(threads).where(eq(threads.topicId, chain.topic.id))).toEqual([]);
+  });
+
+  it('reuses a single attempt set in an authorized workspace with the stable parent owner', async () => {
+    const chain = await pendingChain({ parentWorkspace: workspace, runWorkspace: workspace });
+    const repo = new AgentEvalExecutionRepo(db, other, workspace);
+    const input = {
+      expectedExecutionId: 'old',
+      k: 2,
+      runId: chain.run.id,
+      testCaseId: chain.testCase.id,
+      topicId: chain.topic.id,
+    };
+    const first = await repo.prepareThreadExecutions(input);
+    const retried = await repo.prepareThreadExecutions(input);
+    expect(first?.threadIds).toHaveLength(2);
+    expect(retried?.threadIds).toEqual(first?.threadIds);
+    const saved = await db.select().from(threads).where(eq(threads.topicId, chain.topic.id));
+    expect(saved).toHaveLength(2);
+    expect(saved.every((row) => row.userId === owner && row.workspaceId === workspace)).toBe(true);
+  });
+});

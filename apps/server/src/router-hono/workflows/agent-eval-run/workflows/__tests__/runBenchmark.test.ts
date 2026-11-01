@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   filterTestCasesNeedingExecution: vi.fn(),
   findByDatasetId: vi.fn(),
   findById: vi.fn(),
+  finalize: vi.fn(),
   triggerPaginateTestCases: vi.fn(),
   update: vi.fn(),
 }));
@@ -16,6 +17,7 @@ vi.mock('@/database/server', () => ({ getServerDB: vi.fn().mockResolvedValue({})
 vi.mock('@/database/models/agentEval', () => ({
   AgentEvalRunModel: class {
     findById = mocks.findById;
+    finalize = mocks.finalize;
     update = mocks.update;
   },
   AgentEvalTestCaseModel: class {
@@ -49,6 +51,41 @@ describe('runBenchmarkHandler', () => {
       async (_db, { testCaseIds }) => testCaseIds,
     );
   });
+
+  it('settles a previously created empty internal run with a generation-guarded failure', async () => {
+    const startedAt = new Date('2026-11-01T12:00:00Z');
+    mocks.findById.mockResolvedValue({
+      config: { caseSelection: { caseIds: ['a', 'b', 'c'], mode: 'exclude' } },
+      datasetId: 'ds-1',
+      startedAt,
+      status: 'pending',
+    });
+
+    expect(await runBenchmarkHandler(context({}))).toMatchObject({
+      success: false,
+      totalTestCases: 0,
+    });
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      'run-1',
+      { status: 'failed' },
+      { startedAt: startedAt.toISOString() },
+    );
+    expect(mocks.triggerPaginateTestCases).not.toHaveBeenCalled();
+  });
+
+  it.each([{ dryRun: true }, { external: true }])(
+    'does not settle empty dry or external runs (%j)',
+    async ({ dryRun, external }) => {
+      mocks.findById.mockResolvedValue({
+        config: { executionMode: external ? 'external' : 'internal' },
+        datasetId: 'ds-1',
+        status: 'pending',
+      });
+      mocks.findByDatasetId.mockResolvedValue([]);
+      await runBenchmarkHandler(context({ dryRun }));
+      expect(mocks.finalize).not.toHaveBeenCalled();
+    },
+  );
 
   it('counts only the cases the run selected as totalCases', async () => {
     mocks.findById.mockResolvedValue({

@@ -86,67 +86,30 @@ export async function executeMultiThreadTrajectory(
     throw new Error(`RunTopic not found for run=${runId} testCase=${testCaseId}`);
   }
 
-  if (runTopic.status && runTopic.status !== 'pending') return;
-
   const topicId = runTopic.topicId;
   const topic = await deps.topicModel.findById(topicId);
   const historyTailMessageId = topic?.metadata?.[EVAL_HISTORY_TAIL_METADATA_KEY];
-  const sourceMessageId =
-    typeof historyTailMessageId === 'string' ? historyTailMessageId : undefined;
-
-  // Update status from 'pending' to 'running'
-  const started = await deps.runTopicModel.updateByRunAndTopic(
+  const prepared = await deps.executionRepo.prepareThreadExecutions({
+    expectedExecutionId: runTopic.evalResult?.executionId,
+    k,
     runId,
+    sourceMessageId: typeof historyTailMessageId === 'string' ? historyTailMessageId : undefined,
+    testCaseId,
     topicId,
-    {
-      status: 'running',
-    },
-    { executionId: runTopic.evalResult?.executionId, status: 'pending' },
-  );
-  if (!started) return;
+  });
+  if (!prepared) return;
+  const { pendingThreads, threadIds } = prepared;
 
-  // Create K threads in the topic
-  const threadIds: string[] = [];
-  for (let i = 0; i < k; i++) {
-    const thread = await deps.threadModel.create({
-      metadata: { executionId: crypto.randomUUID(), status: 'pending', testCaseId },
-      sourceMessageId,
-      topicId,
-      type: 'eval',
-    });
-    if (thread) threadIds.push(thread.id);
-  }
-
-  const ready = await deps.runTopicModel.updateByRunAndTopic(
-    runId,
-    topicId,
-    {
-      evalResult: {
-        // Persist thread ids before fan-out so pass@k UIs can render attempts immediately.
-        ...(runTopic.evalResult as EvalRunTopicResult | null),
-        threads: threadIds.map((threadId) => ({
-          status: 'running' as const,
-          threadId,
-        })),
-      } satisfies EvalRunTopicResult,
-    },
-    { executionId: runTopic.evalResult?.executionId },
-  );
-
-  if (!ready) return;
-
-  // Trigger K run-thread-trajectory workflows with a bounded fan-out. Every
-  // thread above is already persisted as running, so one failed dispatch must
-  // not stop the rest from being attempted; the first failure is rethrown once
-  // all triggers have settled, matching the previous Promise.all rejection.
+  // Retry only unclaimed attempts from the persisted set. A delivery may have
+  // succeeded even if its response failed; the queued executionId makes the
+  // child's claim idempotent in that case. Attempt every trigger before throwing.
   let firstTriggerError: { error: unknown } | undefined;
   await pMap(
-    threadIds,
-    async (threadId) => {
+    pendingThreads,
+    async ({ executionId, threadId }) => {
       try {
-        const thread = await deps.threadModel.findById(threadId);
         await AgentEvalRunWorkflow.triggerRunThreadTrajectory({
-          executionId: thread?.metadata?.executionId as string | undefined,
+          executionId,
           runId,
           testCaseId,
           threadId,

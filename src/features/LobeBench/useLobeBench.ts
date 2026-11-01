@@ -67,10 +67,10 @@ export const useLobeBenchRuns = (benchmarkIds: string[], config?: PollConfig) =>
     benchmarkIds.length > 0 ? ['lobe-bench/runs', ...benchmarkIds] : null,
     async () => {
       const lists = await Promise.all(
-        benchmarkIds.map((benchmarkId) => agentEvalService.listRuns({ benchmarkId })),
+        benchmarkIds.map((benchmarkId) => agentEvalService.listAllRuns({ benchmarkId })),
       );
       return lists
-        .flatMap((list) => unwrapList<AgentEvalRunListItem>(list))
+        .flat()
         .sort(
           (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
         );
@@ -82,7 +82,7 @@ export const useLobeBenchRuns = (benchmarkIds: string[], config?: PollConfig) =>
 export const useExperimentRuns = (experimentId: string | undefined, config?: PollConfig) =>
   useClientDataSWR<AgentEvalRunListItem[]>(
     experimentId ? ['lobe-bench/experiment-runs', experimentId] : null,
-    async () => unwrapList<AgentEvalRunListItem>(await agentEvalService.listRuns({ experimentId })),
+    () => agentEvalService.listAllRuns({ experimentId }),
     config,
   );
 

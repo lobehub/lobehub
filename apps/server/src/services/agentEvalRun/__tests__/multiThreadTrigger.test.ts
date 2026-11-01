@@ -12,15 +12,18 @@ vi.mock('@/server/workflows/agentEvalRun', () => ({
 vi.mock('@/server/services/aiAgent', () => ({ AiAgentService: vi.fn() }));
 
 const createDeps = () => {
-  let next = 0;
   return {
+    executionRepo: {
+      prepareThreadExecutions: vi.fn().mockImplementation(async ({ k }) => ({
+        pendingThreads: Array.from({ length: k }, (_, i) => ({
+          executionId: `queued-generation-${i}`,
+          threadId: `thread-${i}`,
+        })),
+        threadIds: Array.from({ length: k }, (_, i) => `thread-${i}`),
+      })),
+    },
     runTopicModel: {
       findByRunAndTestCase: vi.fn().mockResolvedValue({ evalResult: null, topicId: 'topic-1' }),
-      updateByRunAndTopic: vi.fn().mockResolvedValue({}),
-    },
-    threadModel: {
-      create: vi.fn().mockImplementation(async () => ({ id: `thread-${next++}` })),
-      findById: vi.fn().mockResolvedValue({ metadata: { executionId: 'queued-generation' } }),
     },
     topicModel: { findById: vi.fn().mockResolvedValue({ metadata: {} }) },
     userId: 'user-1',

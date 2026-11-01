@@ -1,4 +1,5 @@
 import type {
+  AgentEvalRunListItem,
   BenchmarkMockStatus,
   EvalCaseEnvironment,
   EvalConfig,
@@ -283,8 +284,27 @@ class AgentEvalService {
   }
 
   // ============ Run ============
-  async listRuns(params: { benchmarkId?: string; datasetId?: string; experimentId?: string }) {
+  async listRuns(params: {
+    benchmarkId?: string;
+    datasetId?: string;
+    experimentId?: string;
+    limit?: number;
+    offset?: number;
+  }) {
     return lambdaClient.agentEval.listRuns.query(params);
+  }
+
+  /** Complete run list for summaries and actions that must cover every run. */
+  async listAllRuns(params: { benchmarkId?: string; datasetId?: string; experimentId?: string }) {
+    const runs = new Map<string, AgentEvalRunListItem>();
+    const limit = 100;
+    for (let offset = 0; ; offset += limit) {
+      const { data } = await this.listRuns({ ...params, limit, offset });
+      // Concurrent inserts can shift an offset boundary between requests.
+      for (const run of data) runs.set(run.id, run);
+      // listRuns.total currently counts this page, not all matching runs.
+      if (data.length < limit) return [...runs.values()];
+    }
   }
 
   async getRunDetails(id: string) {

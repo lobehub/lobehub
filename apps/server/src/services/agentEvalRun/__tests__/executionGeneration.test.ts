@@ -6,6 +6,7 @@ import { AgentEvalRunModel, AgentEvalRunTopicModel } from '@/database/models/age
 import { ThreadModel } from '@/database/models/thread';
 import { AgentEvalExecutionRepo } from '@/database/repositories/agentEvalExecution';
 import { agentEvalDatasets, agentEvalTestCases, messages } from '@/database/schemas';
+import { AgentEvalMemoryService } from '@/server/services/agentEvalMemory';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { EvalResumeConflictError } from '@/server/services/agentEvalRun/resumeTarget';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
@@ -91,6 +92,13 @@ async function activeCase(threaded: boolean) {
         : undefined,
     },
     status: 'running',
+  });
+  await new AgentEvalMemoryService(serverDB, userId).prepare({
+    fixture: {},
+    runId: chain.run.id,
+    testCaseId: chain.testCase.id,
+    threadId: thread?.id,
+    topicId: chain.topic.id,
   });
   const callback = (executionId?: string) => ({
     executionId,

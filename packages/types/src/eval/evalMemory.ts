@@ -57,7 +57,8 @@ export interface EvalMemoryEntry {
 export interface EvalMemorySnapshot {
   attemptId: string;
   entries: EvalMemoryEntry[];
-  fixtureHash: string;
+  /** Null for legacy attempts whose initial fixture provenance was not recorded. */
+  fixtureHash: string | null;
 }
 
 /** Stored attempt memory, including the ownership and vector fields omitted from UI snapshots. */

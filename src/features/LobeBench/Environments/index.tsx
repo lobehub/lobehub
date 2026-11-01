@@ -27,6 +27,8 @@ import { isBuiltInRow } from '@/features/LobeBench/lobeBench';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentEvalService } from '@/services/agentEval';
 
+import { saveEnvironment } from './saveEnvironment';
+
 const styles = stylex.create({
   container: {
     overflowY: 'auto',
@@ -242,21 +244,7 @@ const LobeBenchEnvironments = memo(() => {
     if (!config) return;
     setSaving(true);
     try {
-      if (editing?.row) {
-        await agentEvalService.updateEnvironment({
-          config,
-          description: description.trim() || null,
-          id: editing.row.id,
-          name: name.trim(),
-        });
-      } else {
-        await agentEvalService.createEnvironment({
-          config,
-          description: description.trim() || undefined,
-          identifier: `env-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
-          name: name.trim(),
-        });
-      }
+      await saveEnvironment({ config, description, name, row: editing?.row });
       await refresh();
       toast.success(t('lobeBench.environments.editor.saved'));
       setEditing(undefined);
@@ -277,8 +265,6 @@ const LobeBenchEnvironments = memo(() => {
         testCaseCount: 0,
       },
     });
-    // A duplicate is a new environment: clear the id so saving creates it.
-    setEditing((state) => (state?.row ? { row: { ...state.row, id: '' } } : state));
   };
 
   const remove = () => {

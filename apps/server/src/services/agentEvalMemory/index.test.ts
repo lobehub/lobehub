@@ -6,7 +6,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { AgentEvalRunTopicModel } from '@/database/models/agentEval';
 import { UserMemoryPreferenceModel } from '@/database/models/userMemory/preference';
-import { agentEvalMemories, topics, users } from '@/database/schemas';
+import {
+  agentEvalMemories,
+  agentEvalRuns,
+  agentEvalRunTopics,
+  threads,
+  topics,
+  users,
+  workspaces,
+} from '@/database/schemas';
 import { cleanupDB, setupEvalChain, userId } from '@/server/services/agentEvalRun/__tests__/_setup';
 import { memoryRuntime } from '@/server/services/toolExecution/serverRuntimes/memory';
 
@@ -380,6 +388,145 @@ describe('AgentEvalMemoryService', () => {
     ).rejects.toThrow('Cannot change Memory fixture');
   });
 
+  it('keeps empty fixture initialization durable across resume and agent writes', async () => {
+    const params = await trial();
+    const service = new AgentEvalMemoryService(db, userId);
+    const reference = await service.prepare({ ...params, fixture: {} });
+    const runtime = await runtimeFor(reference, params.topicId);
+    await runtime.addPreferenceMemory(preference('Tea', 'Prefers oolong tea.'));
+    await db.update(agentEvalRunTopics).set({ evalResult: null });
+
+    expect(await service.prepare({ ...params, fixture: {}, resume: true })).toEqual(reference);
+    await expect(service.prepare({ ...params, fixture })).rejects.toThrow(
+      'Cannot change Memory fixture',
+    );
+    expect((await service.snapshot(params)).entries).toMatchObject([
+      { source: 'agent', title: 'Tea' },
+    ]);
+    expect((await runtime.queryTaxonomyOptions({ include: ['categories'] })).state).toMatchObject({
+      categories: [{ count: 1, layers: ['preference'], value: 'health' }],
+    });
+    expect(
+      await service.getPersonaDocument(reference, { topicId: params.topicId }),
+    ).toBeUndefined();
+  });
+
+  it('resumes known legacy fixture rows but refuses to guess an unrecorded empty fixture', async () => {
+    const params = await trial();
+    const service = new AgentEvalMemoryService(db, userId);
+    await expect(service.prepare({ ...params, fixture: {}, resume: true })).rejects.toThrow(
+      'rerun this case instead of resuming',
+    );
+    expect(await service.snapshot(params)).toMatchObject({ entries: [], fixtureHash: null });
+    const reference = await service.prepare({ ...params, fixture });
+    // A prior release stored provenance only on nonempty fixture rows.
+    await db.update(topics).set({ metadata: null }).where(eq(topics.id, params.topicId));
+    expect(await service.prepare({ ...params, fixture, resume: true })).toEqual(reference);
+    expect((await service.snapshot(params)).entries).toHaveLength(2);
+    expect(mocks.embed).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps agent-written evidence with explicitly unknown legacy fixture provenance', async () => {
+    const params = await trial();
+    const service = new AgentEvalMemoryService(db, userId);
+    const reference = await service.prepare({ ...params, fixture: {} });
+    await (
+      await runtimeFor(reference, params.topicId)
+    ).addPreferenceMemory(preference('Tea', 'Prefers oolong tea.'));
+    // Simulate an attempt prepared before empty fixtures had a marker.
+    await db.update(topics).set({ metadata: null }).where(eq(topics.id, params.topicId));
+    expect(await service.snapshot(params)).toMatchObject({
+      entries: [{ source: 'agent', title: 'Tea' }],
+      fixtureHash: null,
+    });
+    await expect(service.prepare({ ...params, fixture: {}, resume: true })).rejects.toThrow(
+      'rerun this case instead of resuming',
+    );
+  });
+
+  it('lets workspace collaborators share the stable attempt owner across all Memory operations', async () => {
+    const params = await trial();
+    const collaborator = 'eval-memory-collaborator';
+    const workspaceId = 'eval-memory-workspace';
+    await db.insert(users).values({ id: collaborator });
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Eval workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    await db.update(agentEvalRuns).set({ workspaceId }).where(eq(agentEvalRuns.id, params.runId));
+    await db.update(agentEvalRunTopics).set({ workspaceId });
+    await db.update(topics).set({ workspaceId, metadata: { evalHistoryTailMessageId: 'keep' } });
+    const [thread] = await db
+      .insert(threads)
+      .values({
+        topicId: params.topicId,
+        type: 'eval',
+        userId: collaborator,
+        workspaceId,
+      })
+      .returning();
+    const target = { ...params, threadId: thread.id };
+    const service = new AgentEvalMemoryService(db, collaborator, workspaceId);
+    const reference = await service.prepare({ ...target, fixture });
+    const runtime = await runtimeFor(reference, params.topicId, {
+      threadId: thread.id,
+      userId: collaborator,
+      workspaceId,
+    });
+    expect((await runtime.searchUserMemory({ queries: ['shellfish'] })).state).toMatchObject({
+      preferences: [{ conclusionDirectives: 'Do not recommend shellfish.' }],
+    });
+    expect(
+      await service.getPersonaDocument(reference, { topicId: params.topicId, threadId: thread.id }),
+    ).toMatchObject({ persona: 'User is allergic to shellfish.' });
+    await runtime.addPreferenceMemory(preference('Tea', 'Prefers oolong tea.'));
+    expect(
+      await new AgentEvalMemoryService(db, userId, workspaceId).prepare({ ...target, fixture }),
+    ).toEqual(reference);
+    expect((await service.snapshot(target)).entries).toHaveLength(3);
+    expect((await db.select().from(agentEvalMemories)).every((row) => row.userId === userId)).toBe(
+      true,
+    );
+    expect(mocks.initModelRuntimeFromDB.mock.calls.every((call) => call[1] === userId)).toBe(true);
+    expect((await db.select().from(topics))[0].metadata?.evalHistoryTailMessageId).toBe('keep');
+    await expect(
+      new AgentEvalMemoryService(db, collaborator, 'another-workspace').prepare({
+        ...target,
+        fixture,
+      }),
+    ).rejects.toThrow('not found');
+    await expect(new AgentEvalMemoryService(db, collaborator).snapshot(target)).rejects.toThrow(
+      'not found',
+    );
+  });
+
+  it("uses the new topic creator when a collaborator reruns another member's run", async () => {
+    const params = await trial();
+    const collaborator = 'eval-memory-rerun-collaborator';
+    const workspaceId = 'eval-memory-rerun-workspace';
+    await db.insert(users).values({ id: collaborator });
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Eval workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
+    await db.update(agentEvalRuns).set({ workspaceId }).where(eq(agentEvalRuns.id, params.runId));
+    await db.update(agentEvalRunTopics).set({ userId: collaborator, workspaceId });
+    await db.update(topics).set({ userId: collaborator, workspaceId });
+    const service = new AgentEvalMemoryService(db, userId, workspaceId);
+    await service.prepare({ ...params, fixture });
+    expect((await service.snapshot(params)).entries).toHaveLength(2);
+    expect(
+      (await db.select().from(agentEvalMemories)).every((row) => row.userId === collaborator),
+    ).toBe(true);
+    expect(mocks.initModelRuntimeFromDB.mock.calls.every((call) => call[1] === collaborator)).toBe(
+      true,
+    );
+  });
+
   it('updates and removes identities, keeping removed ones as evidence', async () => {
     const params = await trial();
     const service = new AgentEvalMemoryService(db, userId);
@@ -463,7 +610,10 @@ describe('AgentEvalMemoryService', () => {
     const other = await anotherAttempt(params);
     mocks.embed.mockRejectedValueOnce(new Error('invalid api key'));
     await expect(service.prepare({ ...other, fixture })).rejects.toThrow('invalid api key');
-    expect((await service.snapshot(other)).entries).toEqual([]);
+    expect(await service.snapshot(other)).toMatchObject({ entries: [], fixtureHash: null });
+    expect(
+      await db.select().from(agentEvalMemories).where(eq(agentEvalMemories.topicId, other.topicId)),
+    ).toEqual([]);
   });
 
   it('rejects oversized fixtures, foreign trials and non-eval topics before writing', async () => {
