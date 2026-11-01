@@ -18,12 +18,18 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * the token is the only identity that can reach it. Only a Task run has a
  * round to file into.
  *
- * Renewal copies the minted claims, so a run never gains either later.
+ * `caller:act` lets the agent's own `lh` commands use ordinary user endpoints
+ * as the user who started the run, in the run's workspace, while the run lasts.
+ * Without it they were refused, and on a shared device the only other identity
+ * at hand is the login of whoever enrolled it.
+ *
+ * Renewal copies the minted claims, so a run never gains any of them later.
  */
 export const heteroOperationCapabilities = (
   prompt: unknown,
   options: { channel?: boolean; taskId?: string } = {},
 ): HeteroOperationCapability[] => [
+  'caller:act',
   'hetero:ingest',
   ...(options.channel ? (['channel:read'] as const) : []),
   'hetero:finish',

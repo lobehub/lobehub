@@ -17,6 +17,7 @@ describe('heteroOperationCapabilities', () => {
     // Every hetero run used to carry it, so text met during a normal coding run
     // could drive `lh goal create --conversation` and start uncapped work.
     expect(heteroOperationCapabilities('fix the build')).toEqual([
+      'caller:act',
       'hetero:ingest',
       'hetero:finish',
       'hetero:intervention:read',
