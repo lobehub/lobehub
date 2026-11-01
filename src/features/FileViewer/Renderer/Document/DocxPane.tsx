@@ -1,12 +1,13 @@
 'use client';
 
+import './DocxPane.css';
+
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import Loading from '@/components/Loading/CircleLoading';
 
-import moduleStyles from './DocxPane.module.css';
 import { collectDocxSections, type DocxSection } from './docxSections';
 import PaneFooter from './PaneFooter';
 
@@ -98,7 +99,7 @@ const DocxPane = memo<DocxPaneProps>(({ blob, onError }) => {
   return (
     <div {...stylex.props(styles.wrapper)}>
       <div
-        className={`${stylex.props(styles.scroll).className} ${moduleStyles.scroll}`}
+        className={`${stylex.props(styles.scroll).className} ${'lobe-docx-pane-f4c06479-scroll'}`}
         ref={scrollRef}
       >
         {loading && <Loading />}

@@ -1,3 +1,5 @@
+import './styles.css';
+
 import type { DocumentCommentJson } from '@lobechat/types';
 import type { IEditor } from '@lobehub/editor';
 import type { EditorProps } from '@lobehub/editor/react';
@@ -14,7 +16,6 @@ import {
 } from '@/features/Portal/TopicComments/editorUtils';
 import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
 
-import moduleStyles from './styles.module.css';
 import { useFreezeHeightWhileResizingImage } from './useFreezeHeightWhileResizingImage';
 
 export type DocumentCommentEditorValue = TopicCommentEditorValue;
@@ -94,8 +95,8 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
       <div
         ref={rootRef}
         className={cx(
-          moduleStyles.commentEditor,
-          flush && moduleStyles.commentEditorFlush,
+          'lobe-document-comments-2aa32e1f-comment-editor',
+          flush && 'lobe-document-comments-2aa32e1f-comment-editor-flush',
           mentionPlainClassName,
         )}
       >

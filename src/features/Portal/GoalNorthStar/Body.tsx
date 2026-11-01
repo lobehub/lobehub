@@ -1,5 +1,7 @@
 'use client';
 
+import './Body.css';
+
 import { LineChart } from '@lobehub/charts';
 import {
   Button,
@@ -31,7 +33,6 @@ import { useGoalNodeSelect } from '@/features/AgentGoals/ProcessControl/useGoalP
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
-import moduleStyles from './Body.module.css';
 import { useNorthStarCard } from './useNorthStarCard';
 
 /**
@@ -166,7 +167,7 @@ const NorthStarDetail = memo<{ goalId: string; metricKey: string }>(({ goalId, m
           <LineChart
             autoMinValue
             categories={['value', 'target']}
-            className={moduleStyles.chart}
+            className={'lobe-body-53f5b50e-chart'}
             colors={chartColors}
             data={chartRows}
             height={200}

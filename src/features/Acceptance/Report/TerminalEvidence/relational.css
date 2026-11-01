@@ -1,0 +1,20 @@
+.lobe-relational-0c7e78c1-fold-header:hover [data-fold-title] {
+  color: var(--lobe-color-text);
+}
+
+.lobe-relational-0c7e78c1-facts dt {
+  color: var(--lobe-color-text-tertiary);
+}
+
+.lobe-relational-0c7e78c1-facts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--lobe-color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+@media (width <= 767px) {
+  .lobe-relational-0c7e78c1-facts dd + dt {
+    margin-block-start: 6px;
+  }
+}

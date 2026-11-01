@@ -2,7 +2,7 @@
    its DOM. Keep them centered with a gap. "safe center" falls back to
    flex-start when the page is wider than the pane, so the left edge stays
    reachable by horizontal scroll. */
-.scroll :global(.docx-wrapper) {
+.lobe-docx-pane-f4c06479-scroll .docx-wrapper {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -13,7 +13,7 @@
   background: transparent;
 }
 
-.scroll :global(.docx-wrapper > section.docx) {
+.lobe-docx-pane-f4c06479-scroll .docx-wrapper > section.docx {
   margin-block-end: 0;
   border-radius: 4px;
   box-shadow: var(--lobe-box-shadow-tertiary);

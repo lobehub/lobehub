@@ -1,3 +1,5 @@
+import './styles.css';
+
 import type { DocumentCommentItem } from '@lobechat/types';
 import { ChatInput, ChatInputActionBar, useEditor } from '@lobehub/editor/react';
 import {
@@ -37,7 +39,6 @@ import DocumentCommentEditor, {
 import type { DocumentCommentUpdateHandler } from './optimistic';
 import { isOptimisticDocumentComment } from './optimistic';
 import { COMMENT_INPUT_MAX_HEIGHT, HIGHLIGHTED_CLASS_NAMES, styles } from './styles';
-import moduleStyles from './styles.module.css';
 
 interface CommentCardProps {
   comment: DocumentCommentItem;
@@ -71,7 +72,7 @@ const hasDocumentCommentEditorData = (editorData: DocumentCommentItem['editorDat
 const CommentContent = memo<
   Pick<DocumentCommentItem, 'content' | 'editorData'> & { compact?: boolean }
 >(({ compact, content, editorData }) => (
-  <div className={moduleStyles.commentContent}>
+  <div className={'lobe-document-comments-2aa32e1f-comment-content'}>
     {hasDocumentCommentEditorData(editorData) ? (
       <RichTextMessage editorState={editorData} variant={'default'} />
     ) : (
