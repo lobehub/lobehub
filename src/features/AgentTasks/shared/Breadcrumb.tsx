@@ -1,3 +1,5 @@
+import './breadcrumb.css';
+
 import { agentDisplayName } from '@lobechat/types';
 import { Breadcrumb as BaseBreadcrumb, Icon, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
@@ -10,7 +12,6 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useTaskStore } from '@/store/task';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
-import styles from './breadcrumb.module.css';
 import { taskDetailPath } from './taskDetailPath';
 import { useAgentDisplayMeta } from './useAgentDisplayMeta';
 
@@ -138,7 +139,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
 
   return (
     <BaseBreadcrumb
-      className={styles.breadcrumb}
+      className={'lobe-breadcrumb-30cde0ed-breadcrumb'}
       separator={<Icon icon={ChevronRight} />}
       items={[
         // On a phone the header's back button already leads up, and there is

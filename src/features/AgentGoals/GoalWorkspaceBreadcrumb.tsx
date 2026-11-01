@@ -1,11 +1,12 @@
 'use client';
 
+import '@/features/AgentTasks/shared/breadcrumb.css';
+
 import { Breadcrumb, Icon, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import breadcrumbStyles from '@/features/AgentTasks/shared/breadcrumb.module.css';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -35,7 +36,7 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
 
   return (
     <Breadcrumb
-      className={breadcrumbStyles.breadcrumb}
+      className={'lobe-breadcrumb-30cde0ed-breadcrumb'}
       separator={<Icon icon={ChevronRight} />}
       items={
         goalsEnabled

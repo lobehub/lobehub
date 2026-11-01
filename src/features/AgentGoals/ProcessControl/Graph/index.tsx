@@ -1,6 +1,7 @@
 'use client';
 
 import '@xyflow/react/dist/style.css';
+import './canvas.css';
 
 import type { GoalGraphEdge } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
@@ -74,7 +75,6 @@ import {
   verdictChecks,
 } from './batchModel';
 import { batchStageId, batchStages, layoutBatchScope } from './batchScopeLayout';
-import moduleStyles from './canvas.module.css';
 import { edgeDirection } from './edgeRouting';
 import ExperimentGroup, { type ExperimentGroupData } from './ExperimentGroup';
 import { batchContainerStatus } from './experimentStatus';
@@ -1178,7 +1178,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
             <Canvas
               {...props}
               fullscreen
-              className={cx(moduleStyles.canvas, moduleStyles.full)}
+              className={cx('lobe-canvas-e3dae3fb-canvas', 'lobe-canvas-e3dae3fb-full')}
               collapsed={collapsed}
               graph={scopedGraph}
               hiddenKinds={hiddenKinds}
@@ -1243,7 +1243,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       <ReactFlowProvider>
         <Canvas
           {...props}
-          className={moduleStyles.canvas}
+          className={'lobe-canvas-e3dae3fb-canvas'}
           collapsed={collapsed}
           fullscreen={false}
           graph={scopedGraph}

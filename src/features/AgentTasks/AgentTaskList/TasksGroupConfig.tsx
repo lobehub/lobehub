@@ -1,3 +1,5 @@
+import './TasksGroupConfig.css';
+
 import { ActionIcon, Flexbox, Icon, Popover, Select, Switch, Tabs } from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import {
@@ -22,7 +24,6 @@ import type {
   TaskOrderBy,
 } from './listViewOptions';
 import { TASK_COMPLETED_FILTERS } from './listViewOptions';
-import styles from './TasksGroupConfig.module.css';
 
 /** A display control the active collection fixes, so it has nothing to change. */
 export type TaskListPinnedOption = 'ordering' | 'showSubTasks';
@@ -258,7 +259,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
         }
       />
       <Form
-        className={styles.form}
+        className={'lobe-tasks-group-config-4e0dc256-form'}
         form={form}
         items={viewMode === 'kanban' ? boardFormItems : formItems}
         itemsType={'flat'}

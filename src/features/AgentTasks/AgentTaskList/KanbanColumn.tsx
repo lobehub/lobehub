@@ -1,3 +1,5 @@
+import './KanbanColumn.css';
+
 import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { TaskStatus } from '@lobechat/types';
 import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
@@ -19,7 +21,6 @@ import {
   getKanbanCreateTaskModalProps,
   type KanbanColumnCreateDefaults,
 } from './kanbanBoardModel';
-import moduleStyles from './KanbanColumn.module.css';
 import type { TaskGroupMeta } from './listViewOptions';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
@@ -35,8 +36,11 @@ const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: TaskList
 
     return (
       <div
-        className={cx(moduleStyles.card, isDragging && moduleStyles.dragging)}
         ref={setNodeRef}
+        className={cx(
+          'lobe-kanban-column-14c7298e-card',
+          isDragging && 'lobe-kanban-column-14c7298e-dragging',
+        )}
         {...listeners}
         {...attributes}
       >
@@ -270,7 +274,10 @@ const KanbanColumn = memo<KanbanColumnProps>(
         <div className={stylex.props(styles.body).className}>
           {loading ? (
             Array.from({ length: 3 }).map((_, index) => (
-              <div className={moduleStyles.card} key={`kanban-skeleton-${columnKey}-${index}`}>
+              <div
+                className={'lobe-kanban-column-14c7298e-card'}
+                key={`kanban-skeleton-${columnKey}-${index}`}
+              >
                 <TaskItemSkeleton variant={'compact'} />
               </div>
             ))

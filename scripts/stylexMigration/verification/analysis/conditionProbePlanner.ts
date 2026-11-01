@@ -1,3 +1,4 @@
+import type { CaptureRoot } from '../browser/surfaces';
 import type { FixtureProbe } from '../pipeline/probePlanner';
 import type { WidthCondition } from './conditionPartitions';
 import { matchesWidth, partitionWidthCells } from './conditionPartitions';
@@ -33,9 +34,8 @@ export interface ConditionRequirement {
 export const readConditionHostInPage = (selectors: {
   'hover'?: string;
   'focus-visible'?: string;
+  'roots'?: CaptureRoot[];
 }) => {
-  const root = document.querySelector('[data-case-root]');
-  if (!root) throw new Error('CONDITION_ROOT_MISSING');
   const keys = new Map<Element, string>();
   const walk = (element: Element, key: string) => {
     keys.set(element, key);
@@ -43,16 +43,20 @@ export const readConditionHostInPage = (selectors: {
       .filter((child) => !['LINK', 'META', 'SCRIPT', 'STYLE'].includes(child.tagName))
       .forEach((child, index) => walk(child, `${key}.${index}`));
   };
-  walk(root, 'root');
+  for (const surface of selectors.roots ?? [{ selector: '[data-case-root]', keyPrefix: '' }]) {
+    const root = document.querySelector(surface.selector);
+    if (!root) throw new Error('CONDITION_ROOT_MISSING');
+    walk(root, `${surface.keyPrefix}root`);
+  }
   const host = document.querySelector('[data-component-mount]')?.firstElementChild;
   if (!host || !keys.has(host)) throw new Error('CONTROLLED_CONTAINER_MISSING');
   return {
     hostKey: keys.get(host)!,
     hostWritingMode: getComputedStyle(host).writingMode,
     legacyTriggerKeys: Object.fromEntries(
-      Object.entries(selectors).map(([state, selector]) => [
+      (['hover', 'focus-visible'] as const).map((state) => [
         state,
-        selector ? keys.get(document.querySelector(selector)!) : undefined,
+        selectors[state] ? keys.get(document.querySelector(selectors[state])!) : undefined,
       ]),
     ),
   };

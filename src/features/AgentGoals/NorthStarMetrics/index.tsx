@@ -1,5 +1,7 @@
 'use client';
 
+import './index.css';
+
 import { SparkAreaChart } from '@lobehub/charts';
 import { Button, Flexbox, Icon, Skeleton, Text, Tooltip, useTheme } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -16,7 +18,6 @@ import { goalSelectors, useGoalStore } from '@/store/goal';
 
 import { handleCardKeyDown } from './cardKeyboard';
 import { openDeclareMetricModal } from './DeclareMetricModal';
-import moduleStyles from './index.module.css';
 import MetBadge from './MetBadge';
 import { buildNorthStarCards, formatMetricValue, type NorthStarCard } from './northStar';
 import { openRecordObservationModal } from './RecordObservationModal';
@@ -98,7 +99,7 @@ const MetricCard = memo<{ canEdit: boolean; card: NorthStarCard; goalId: string 
             <SparkAreaChart
               autoMinValue
               categories={['value', 'target']}
-              className={moduleStyles.spark}
+              className={'lobe-north-star-metrics-94e4dc78-spark'}
               // The chart ids its SVG gradient by the color string, so it needs a
               // literal theme color: a `var(--…)` id breaks the `url(#…)` fill.
               colors={[card.met ? theme.colorSuccess : theme.colorInfo, theme.colorTextQuaternary]}

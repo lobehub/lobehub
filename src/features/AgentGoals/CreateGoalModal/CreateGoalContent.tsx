@@ -1,5 +1,7 @@
 'use client';
 
+import './CreateGoalContent.css';
+
 import { resolveGoalAttemptBudget } from '@lobechat/builtin-tool-goal';
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
 import { GOAL_TITLE_MAX_LENGTH } from '@lobechat/const/goal';
@@ -50,7 +52,6 @@ import { shinyTextStyles } from '@/styles';
 import { sx } from '@/styles/sx';
 
 import GoalAgentPill from '../GoalAgentPill';
-import moduleStyles from './CreateGoalContent.module.css';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
 import {
@@ -599,7 +600,12 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         <Flexbox className={stylex.props(styles.body).className}>
           <Flexbox className={stylex.props(styles.reviewSection).className} gap={10}>
             <Flexbox
-              className={sx([styles.instructionEditor], moduleStyles.instructionEditor).className}
+              className={
+                sx(
+                  [styles.instructionEditor],
+                  'lobe-create-goal-content-a69e0085-instruction-editor',
+                ).className
+              }
             >
               <EditorCanvas
                 disabled={!canCreate}
