@@ -45,6 +45,7 @@ import {
   ConnectorOwnershipInjector,
   ContextSelectionsInjector,
   DiscordContextProvider,
+  DocumentReferenceContextInjector,
   EvalContextSystemInjector,
   ExpertiseContextInjector,
   ForceFinishSummaryInjector,
@@ -200,6 +201,7 @@ export class MessagesEngine {
       initialContext,
       stepContext,
       topicReferences,
+      documentReferences,
       enableSystemDate,
       timezone,
     } = this.params;
@@ -468,6 +470,11 @@ export class MessagesEngine {
       new TopicReferenceContextInjector({
         enabled: !!(topicReferences && topicReferences.length > 0),
         topicReferences,
+      }),
+      // Document Reference context (dragged/referenced agent documents to last user message)
+      new DocumentReferenceContextInjector({
+        documentReferences,
+        enabled: !!(documentReferences && documentReferences.length > 0),
       }),
 
       // =============================================

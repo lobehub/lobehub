@@ -231,6 +231,9 @@ export const buildServerCallLlmContext = async ({
     }),
     enableAgentMode,
     ...(facts.step.topicReferences && { topicReferences: facts.step.topicReferences }),
+    ...(facts.step.documentReferences && {
+      documentReferences: facts.step.documentReferences,
+    }),
     ...(facts.step.onboardingContext && { onboardingContext: facts.step.onboardingContext }),
   };
 
