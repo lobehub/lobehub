@@ -506,10 +506,11 @@ describe('reasoning effort declarations', () => {
   });
 
   // LOBE-14979: M3.1 Flash ran at the upstream default (max) while the control showed high.
-  it('defaults MiniMax-M3.1-Flash to high', () => {
+  // Card defaults follow the upstream's documented default, so the control now shows max.
+  it('defaults MiniMax-M3.1-Flash to the upstream default (max)', () => {
     const model = LOBE_DEFAULT_MODEL_LIST.find(
       (entry) => entry.providerId === 'minimax' && entry.id === 'MiniMax-M3.1-Flash',
     );
-    expect(model?.settings?.reasoningEffort?.default).toBe('high');
+    expect(model?.settings?.reasoningEffort?.default).toBe('max');
   });
 });
