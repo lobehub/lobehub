@@ -38,11 +38,11 @@ export class TopicAnalysisModel {
 
   /**
    * Insert the analysis, or replace the existing one for the same topic and
-   * taxonomy version. A replacement is accepted only while the analyzed snapshot
+   * taxonomy version. Either write is accepted only while the analyzed snapshot
    * is still the topic's newest eligible message (the same fence the summary
-   * write uses), so an overlapping run that saw older messages is rejected, while
-   * a fresh analysis after the newest message was deleted is not. Returns
-   * `undefined` when rejected.
+   * write uses): an analysis whose messages were edited, removed or overtaken
+   * while it ran is rejected, while a fresh analysis after the newest message was
+   * deleted is not. Returns `undefined` when rejected.
    */
   save = async ({
     lastMessageId,
@@ -51,6 +51,16 @@ export class TopicAnalysisModel {
     topicId,
     usage,
   }: SaveTopicAnalysisParams) => {
+    const isCurrent = this.isSnapshotCurrent(topicId, lastMessageId, lastMessageUpdatedAt);
+
+    // The insert branch has no WHERE of its own, so check the fence up front;
+    // the conflict branch re-checks it atomically inside the same statement.
+    const [current] = await this.db
+      .select({ ok: sql<number>`1` })
+      .from(topics)
+      .where(and(eq(topics.id, topicId), isCurrent));
+    if (!current) return;
+
     const values = {
       ...usage,
       category: result.category,
@@ -75,45 +85,50 @@ export class TopicAnalysisModel {
       })
       .onConflictDoUpdate({
         set: { ...values, updatedAt: new Date() },
-        setWhere: and(
-          exists(
-            this.db
-              .select({ id: messages.id })
-              .from(messages)
-              .where(
-                and(
-                  eq(messages.topicId, topicId),
-                  topicSummaryEligibleMessage,
-                  eq(messages.id, lastMessageId),
-                  eq(messages.updatedAt, lastMessageUpdatedAt),
-                ),
-              ),
-          ),
-          notExists(
-            this.db
-              .select({ id: messages.id })
-              .from(messages)
-              .where(
-                and(
-                  eq(messages.topicId, topicId),
-                  topicSummaryEligibleMessage,
-                  or(
-                    gt(messages.updatedAt, lastMessageUpdatedAt),
-                    and(
-                      eq(messages.updatedAt, lastMessageUpdatedAt),
-                      gt(messages.id, lastMessageId),
-                    ),
-                  ),
-                ),
-              ),
-          ),
-        ),
+        setWhere: isCurrent,
         target: [topicAnalyses.topicId, topicAnalyses.taxonomyVersion],
       })
       .returning();
 
     return row;
   };
+
+  /** The snapshot message is unchanged and no newer eligible message exists. */
+  private isSnapshotCurrent = (
+    topicId: string,
+    lastMessageId: string,
+    lastMessageUpdatedAt: Date,
+  ) =>
+    and(
+      exists(
+        this.db
+          .select({ id: messages.id })
+          .from(messages)
+          .where(
+            and(
+              eq(messages.topicId, topicId),
+              topicSummaryEligibleMessage,
+              eq(messages.id, lastMessageId),
+              eq(messages.updatedAt, lastMessageUpdatedAt),
+            ),
+          ),
+      ),
+      notExists(
+        this.db
+          .select({ id: messages.id })
+          .from(messages)
+          .where(
+            and(
+              eq(messages.topicId, topicId),
+              topicSummaryEligibleMessage,
+              or(
+                gt(messages.updatedAt, lastMessageUpdatedAt),
+                and(eq(messages.updatedAt, lastMessageUpdatedAt), gt(messages.id, lastMessageId)),
+              ),
+            ),
+          ),
+      ),
+    );
 
   /**
    * Read the topic's rolled-up token and cost totals plus live message counts.

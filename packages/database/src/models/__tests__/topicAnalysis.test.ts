@@ -35,12 +35,11 @@ const T2 = new Date('2026-10-30T11:00:00Z');
 const snapshot = { lastMessageId: 'msg_1', lastMessageUpdatedAt: T1 };
 const newerSnapshot = { lastMessageId: 'msg_2', lastMessageUpdatedAt: T2 };
 
-/** The replace fence checks the analyzed snapshot against the topic's live messages. */
-const insertMessages = () =>
-  serverDB.insert(messages).values([
-    { content: 'first', id: 'msg_1', role: 'user', topicId, updatedAt: T1, userId },
-    { content: 'second', id: 'msg_2', role: 'assistant', topicId, updatedAt: T2, userId },
-  ]);
+/** A newer reply on the personal topic; msg_1 is seeded in beforeEach. */
+const addNewerMessage = () =>
+  serverDB
+    .insert(messages)
+    .values({ content: 'second', id: 'msg_2', role: 'assistant', topicId, updatedAt: T2, userId });
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -52,6 +51,18 @@ beforeEach(async () => {
   await serverDB.insert(topics).values([
     { id: topicId, userId },
     { id: workspaceTopicId, userId, workspaceId },
+  ]);
+  await serverDB.insert(messages).values([
+    { content: 'first', id: 'msg_1', role: 'user', topicId, updatedAt: T1, userId },
+    {
+      content: 'ws',
+      id: 'msg_ws',
+      role: 'user',
+      topicId: workspaceTopicId,
+      updatedAt: T1,
+      userId,
+      workspaceId,
+    },
   ]);
 });
 
@@ -84,7 +95,7 @@ describe('TopicAnalysisModel', () => {
   });
 
   it('replaces the analysis for the same taxonomy version instead of duplicating it', async () => {
-    await insertMessages();
+    await addNewerMessage();
     await personalModel.save({ ...snapshot, result: result(), topicId });
     await personalModel.save({
       ...newerSnapshot,
@@ -103,7 +114,7 @@ describe('TopicAnalysisModel', () => {
   });
 
   it('rejects an overlapping run that analyzed an older snapshot', async () => {
-    await insertMessages();
+    await addNewerMessage();
     await personalModel.save({
       ...newerSnapshot,
       result: result({ category: 'research' }),
@@ -120,7 +131,7 @@ describe('TopicAnalysisModel', () => {
   });
 
   it('accepts a fresh analysis after the newest message was removed', async () => {
-    await insertMessages();
+    await addNewerMessage();
     await personalModel.save({
       ...newerSnapshot,
       result: result({ category: 'research' }),
@@ -138,6 +149,23 @@ describe('TopicAnalysisModel', () => {
     });
   });
 
+  it('does not record a first analysis whose messages changed while it ran', async () => {
+    await serverDB
+      .update(messages)
+      .set({ content: 'edited', updatedAt: T2 })
+      .where(eq(messages.id, 'msg_1'));
+
+    expect(await personalModel.save({ ...snapshot, result: result(), topicId })).toBeUndefined();
+    expect(await serverDB.select().from(topicAnalyses)).toHaveLength(0);
+  });
+
+  it('does not record a first analysis whose messages were all removed', async () => {
+    await serverDB.update(messages).set({ isDeleted: true }).where(eq(messages.id, 'msg_1'));
+
+    expect(await personalModel.save({ ...snapshot, result: result(), topicId })).toBeUndefined();
+    expect(await serverDB.select().from(topicAnalyses)).toHaveLength(0);
+  });
+
   it('keeps one row per taxonomy version', async () => {
     await personalModel.save({ ...snapshot, result: result(), topicId });
     await personalModel.save({ ...snapshot, result: result({ taxonomyVersion: 'v2' }), topicId });
@@ -147,7 +175,12 @@ describe('TopicAnalysisModel', () => {
   });
 
   it('scopes reads to the owner and workspace', async () => {
-    await workspaceModel.save({ ...snapshot, result: result(), topicId: workspaceTopicId });
+    await workspaceModel.save({
+      lastMessageId: 'msg_ws',
+      lastMessageUpdatedAt: T1,
+      result: result(),
+      topicId: workspaceTopicId,
+    });
 
     expect((await workspaceModel.findByTopic(workspaceTopicId, 'v1'))?.workspaceId).toBe(
       workspaceId,
@@ -169,6 +202,11 @@ describe('TopicAnalysisModel', () => {
   });
 
   describe('topic usage snapshot', () => {
+    beforeEach(async () => {
+      // Count only the messages each case inserts.
+      await serverDB.delete(messages);
+    });
+
     it('reads the topic totals and counts live messages by role', async () => {
       await serverDB
         .update(topics)
@@ -229,6 +267,9 @@ describe('TopicAnalysisModel', () => {
         userMessages: 3,
       };
 
+      await serverDB
+        .insert(messages)
+        .values({ content: 'first', id: 'msg_1', role: 'user', topicId, updatedAt: T1, userId });
       await personalModel.save({ ...snapshot, result: result(), topicId, usage });
 
       expect(await personalModel.findByTopic(topicId, 'v1')).toMatchObject(usage);
