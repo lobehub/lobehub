@@ -169,17 +169,17 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
     expect((await linkedTask('1'))?.status).toBe('completed');
   });
 
-  it('still syncs a project rule when its teams cannot be read', async () => {
-    linear.getLinearProjectTeamIds.mockRejectedValue(new Error('Entity not found: Project'));
+  it('fails a project rule whose teams cannot be read instead of narrowing the closing pass', async () => {
+    linear.getLinearProjectTeamIds.mockRejectedValue(new Error('Linear API error: timeout'));
     serve([issue({ id: '1', team: { id: 'team-lobe', key: 'LOBE' } })]);
 
-    const result = await new LinearIssueSyncService(db, userId).syncByFilter(TOKEN, {
-      linearProjectId: 'project-1',
-      stateTypes: [...filter.stateTypes],
-      teamId: 'team-pkg',
-    });
-
-    expect(result.created).toBe(1);
+    await expect(
+      new LinearIssueSyncService(db, userId).syncByFilter(TOKEN, {
+        linearProjectId: 'project-1',
+        stateTypes: [...filter.stateTypes],
+        teamId: 'team-pkg',
+      }),
+    ).rejects.toThrow('timeout');
   });
 
   it('does not interrupt a running task when its issue is closed', async () => {

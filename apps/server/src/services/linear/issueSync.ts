@@ -295,15 +295,11 @@ export class LinearIssueSyncService {
     const seen = new Set(issues.map((issue) => issue.id));
     const teamIds = new Set([filter.teamId, ...issues.map((issue) => issue.team.id)]);
     if (filter.linearProjectId) {
-      // Best effort: a deleted project still leaves the teams already known.
-      const projectTeamIds = await getLinearProjectTeamIds(
-        accessToken,
-        filter.linearProjectId,
-      ).catch((error) => {
-        log('project teams lookup failed: %O', error);
-        return [];
-      });
-      for (const id of projectTeamIds) teamIds.add(id);
+      // Let a failed lookup fail the run: skipping the project's other teams
+      // would leave their closed issues' tasks open without any sign of it.
+      for (const id of await getLinearProjectTeamIds(accessToken, filter.linearProjectId)) {
+        teamIds.add(id);
+      }
     }
     const unseen = (
       await pMap([...teamIds], (teamId) => this.linkModel.findByContainer('linear', teamId), {
