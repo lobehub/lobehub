@@ -7,14 +7,14 @@ import type {
 import { AsyncTaskStatus } from '@lobechat/types';
 import debug from 'debug';
 
-import { AsyncTaskModel } from '@/database/models/asyncTask';
 import type { LinearSyncJobRow } from '@/database/models/linear';
 import { LinearSyncJobModel, LinearSyncRuleModel } from '@/database/models/linear';
 import { ProjectModel } from '@/database/models/project';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { LinearApiError } from './client';
-import { LinearIssueSyncService } from './issueSync';
+import type { LinearFilterSyncResult } from './issueSync';
+import { LinearIssueSyncService, MAX_SKIPPED_ENTRIES } from './issueSync';
 import { getLinearAccessToken, LinearReconnectRequiredError } from './token';
 
 const log = debug('lobe-server:linear:sync-job');
@@ -39,23 +39,53 @@ export const LINEAR_SYNC_UNCLAIMED_MS = 2 * 60 * 1000;
 export const LINEAR_SYNC_MAX_ROUNDS = 50;
 
 /**
- * The outcome of a run that took several rounds. Each round re-reads the
- * issues before it, so counts of what a round only looked at (unchanged, kept
- * edits, skipped) come from the latest round, which saw the most; what a round
- * wrote happens once and adds up.
+ * The outcome of a run that took several rounds. What a round wrote happens
+ * once and adds up. A round that resumed at a cursor saw only issues after the
+ * earlier ones, so what it looked at (unchanged, kept edits, skipped) adds up
+ * too; a round that read from the start saw everything again, so those counts
+ * come from it alone.
  */
 export const mergeLinearSyncResults = (
   previous: LinearSyncResult | undefined,
   latest: LinearSyncResult,
-): LinearSyncResult =>
-  previous
-    ? {
-        ...latest,
-        closed: previous.closed + latest.closed,
-        created: previous.created + latest.created,
-        updated: previous.updated + latest.updated,
-      }
-    : latest;
+  { resumed }: { resumed: boolean },
+): LinearSyncResult => {
+  if (!previous) return latest;
+  const written = {
+    closed: previous.closed + latest.closed,
+    created: previous.created + latest.created,
+    updated: previous.updated + latest.updated,
+  };
+  if (!resumed) return { ...latest, ...written };
+  return {
+    ...latest,
+    ...written,
+    keptLocalEdits: previous.keptLocalEdits + latest.keptLocalEdits,
+    skipped: [...previous.skipped, ...latest.skipped].slice(0, MAX_SKIPPED_ENTRIES),
+    skippedCount:
+      (previous.skippedCount ?? previous.skipped.length) +
+      (latest.skippedCount ?? latest.skipped.length),
+    unchanged: previous.unchanged + latest.unchanged,
+  };
+};
+
+/**
+ * Where a rule run goes after a round: on from a cursor while it keeps
+ * finding issues, then once more from the start, which picks up issues Linear
+ * moved ahead of the cursor meanwhile and closes tasks whose issue was closed.
+ * `undefined`: the run is done.
+ */
+export const nextLinearSyncRound = (
+  startAfter: string | undefined,
+  round: LinearFilterSyncResult,
+): { cursor?: string } | undefined => {
+  if (round.truncated) {
+    const moved = round.resumeAfter !== undefined && round.resumeAfter !== startAfter;
+    // A round that neither created nor moved on would only repeat itself.
+    return round.created > 0 || moved ? { cursor: round.resumeAfter } : undefined;
+  }
+  return startAfter === undefined ? undefined : {};
+};
 
 export const toLinearSyncJobView = (
   row: LinearSyncJobRow,
@@ -105,16 +135,12 @@ class LinearSyncJobError extends Error {
  * runs. Linear is only read.
  */
 export class LinearSyncJobService {
-  private readonly asyncTaskModel: AsyncTaskModel;
-
   constructor(
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
     private readonly continueJob?: ContinueLinearSyncJob,
-  ) {
-    this.asyncTaskModel = new AsyncTaskModel(db, userId, workspaceId);
-  }
+  ) {}
 
   /** Run a recorded job to completion (async router side). */
   async run(taskId: string): Promise<void> {
@@ -130,40 +156,42 @@ export class LinearSyncJobService {
         log('heartbeat %s failed: %O', taskId, error),
       );
     }, LINEAR_SYNC_HEARTBEAT_MS);
+    // Every write below applies only while the job is still running, so a run
+    // the user stopped meanwhile stays stopped.
+    const finish = (set: Parameters<typeof LinearSyncJobModel.transition>[4]) =>
+      LinearSyncJobModel.transition(this.db, this.scope, taskId, [AsyncTaskStatus.Processing], {
+        duration: Date.now() - startedAt,
+        ...set,
+      });
     try {
       const round = await this.execute(metadata);
+      const roundResult = withoutResumePoint(round);
       const rounds = (metadata.rounds ?? 0) + 1;
-      const result = mergeLinearSyncResults(metadata.result, round);
+      const result = mergeLinearSyncResults(metadata.result, roundResult, {
+        resumed: metadata.cursor !== undefined,
+      });
       if (metadata.kind === 'rule' && metadata.ruleId) {
         await LinearSyncRuleModel.recordRun(this.db, metadata.ruleId, this.scope, result);
       }
       // A rule run that hit its per-round cap goes on by itself, so the user
-      // does not have to press Sync once per hundred issues. A round that
-      // created nothing would only repeat itself, so the run stops there.
-      if (
-        this.continueJob &&
-        metadata.kind === 'rule' &&
-        round.truncated &&
-        round.created > 0 &&
-        rounds < LINEAR_SYNC_MAX_ROUNDS
-      ) {
+      // does not have to press Sync once per hundred issues.
+      const next =
+        this.continueJob && metadata.kind === 'rule' && rounds < LINEAR_SYNC_MAX_ROUNDS
+          ? nextLinearSyncRound(metadata.cursor, round)
+          : undefined;
+      if (next) {
         log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
-        await this.continueJob(taskId, { ...metadata, result, rounds });
+        await this.continueJob!(taskId, { ...metadata, cursor: next.cursor, result, rounds });
         return;
       }
-      await this.asyncTaskModel.update(taskId, {
-        duration: Date.now() - startedAt,
-        metadata: { ...metadata, result, rounds },
+      await finish({
+        metadata: { ...metadata, cursor: undefined, result, rounds },
         status: AsyncTaskStatus.Success,
       });
     } catch (error) {
       const code = toErrorCode(error);
       log('sync %s failed (%s): %O', taskId, code, error);
-      await this.asyncTaskModel.update(taskId, {
-        duration: Date.now() - startedAt,
-        error: { code },
-        status: AsyncTaskStatus.Error,
-      });
+      await finish({ error: { code }, status: AsyncTaskStatus.Error });
     } finally {
       clearInterval(heartbeat);
     }
@@ -173,7 +201,9 @@ export class LinearSyncJobService {
     return { userId: this.userId, workspaceId: this.workspaceId ?? null };
   }
 
-  private async execute(metadata: LinearSyncJobMetadata): Promise<LinearSyncResult> {
+  private async execute(
+    metadata: LinearSyncJobMetadata,
+  ): Promise<LinearSyncResult | LinearFilterSyncResult> {
     const scope = this.scope;
     // The project may have been deleted or hidden since the job was queued.
     const project = await new ProjectModel(this.db, this.userId, this.workspaceId).findById(
@@ -197,10 +227,17 @@ export class LinearSyncJobService {
     return sync.syncByFilter(
       token,
       { linearProjectId: rule.linearProjectId, stateTypes: rule.stateTypes, teamId: rule.teamId },
-      options,
+      { ...options, startAfter: metadata.cursor },
     );
   }
 }
+
+/** A round's outcome as stored and shown; the resume point travels in the job's `cursor`. */
+const withoutResumePoint = (round: LinearFilterSyncResult): LinearSyncResult => {
+  const result = { ...round };
+  delete result.resumeAfter;
+  return result;
+};
 
 const toErrorCode = (error: unknown): LinearSyncJobErrorCode => {
   if (error instanceof LinearSyncJobError) return error.code;

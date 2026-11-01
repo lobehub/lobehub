@@ -84,6 +84,63 @@ export class LinearSyncJobModel {
       );
   };
 
+  /**
+   * Update a job only while it is still in one of `from`, so a write from a
+   * run that was stopped meanwhile cannot bring it back. Returns whether the
+   * job was updated.
+   */
+  static transition = async (
+    db: LobeChatDatabase,
+    scope: LinearConnectionScope,
+    taskId: string,
+    from: AsyncTaskStatus[],
+    set: Partial<
+      Pick<typeof asyncTasks.$inferInsert, 'duration' | 'error' | 'metadata' | 'status'>
+    >,
+  ): Promise<boolean> => {
+    const rows = await db
+      .update(asyncTasks)
+      .set({ ...set, updatedAt: new Date() })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          eq(asyncTasks.type, AsyncTaskType.LinearIssueSync),
+          inArray(asyncTasks.status, from),
+          buildWorkspaceWhere(
+            { userId: scope.userId, workspaceId: scope.workspaceId ?? undefined },
+            asyncTasks,
+          ),
+        ),
+      )
+      .returning({ id: asyncTasks.id });
+    return rows.length > 0;
+  };
+
+  /**
+   * Stop a job of this project that has not finished. A round already running
+   * completes the tasks it is writing, but no further round starts. Returns
+   * whether a job was stopped.
+   */
+  static cancel = async (
+    db: LobeChatDatabase,
+    scope: LinearConnectionScope,
+    projectId: string,
+    taskId: string,
+  ): Promise<boolean> => {
+    const rows = await db
+      .update(asyncTasks)
+      .set({ error: { code: 'canceled' }, status: AsyncTaskStatus.Error, updatedAt: new Date() })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          projectCondition(scope, projectId),
+          inArray(asyncTasks.status, ACTIVE_STATUSES),
+        ),
+      )
+      .returning({ id: asyncTasks.id });
+    return rows.length > 0;
+  };
+
   /** A run of this rule that has not finished yet, if any. */
   static findActiveForRule = async (
     db: LobeChatDatabase,

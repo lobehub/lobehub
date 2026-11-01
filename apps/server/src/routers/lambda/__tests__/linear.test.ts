@@ -61,6 +61,7 @@ vi.mock('@/server/services/linear/issueSync', () => ({
   LinearIssueSyncService: vi.fn().mockImplementation(function () {
     return { importIssues: mocks.importIssues, syncByFilter: mocks.syncByFilter };
   }),
+  MAX_SKIPPED_ENTRIES: 100,
 }));
 // The background half runs in the async router; here only the hand-off is seen.
 vi.mock('@/server/routers/async', () => ({
@@ -259,9 +260,14 @@ describe('linearRouter', () => {
     });
 
     describe('when a rule matches more issues than one round creates', () => {
-      const round = (created: number, truncated: boolean) => ({
+      const round = (
+        created: number,
+        truncated: boolean,
+        resumeAfter?: string,
+      ): typeof syncResult & Record<string, unknown> => ({
         ...syncResult,
         created,
+        resumeAfter,
         skipped: [{ identifier: `ENG-${created}`, reason: 'closed' as const }],
         skippedCount: 1,
         truncated,
@@ -290,24 +296,33 @@ describe('linearRouter', () => {
           continueLinearRuleSyncJob(serverDB, userId, undefined, taskId, metadata),
         );
 
+      const settle = async () => {
+        for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+      };
+
       /** Play the async router: run each hand-off until no new one is queued. */
       const drainHandOffs = async () => {
         const service = routerService();
         for (let handled = 0; handled < mocks.runSync.mock.calls.length; handled++) {
           await service.run(mocks.runSync.mock.calls[handled][0].taskId);
-          for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+          await settle();
         }
       };
 
-      it('keeps going in the background as one run, adding up what each round created', async () => {
+      const startAfterOfCalls = () =>
+        mocks.syncByFilter.mock.calls.map(([, , options]) => options.startAfter);
+
+      it('keeps going in the background as one run, reading on from where each round stopped', async () => {
         mocks.syncByFilter
-          .mockResolvedValueOnce(round(100, true))
-          .mockResolvedValueOnce(round(100, true))
-          .mockResolvedValueOnce(round(42, false));
+          .mockResolvedValueOnce(round(100, true, '100'))
+          .mockResolvedValueOnce(round(100, true, '200'))
+          .mockResolvedValueOnce(round(42, false))
+          // The closing sweep from the start finds nothing new.
+          .mockResolvedValueOnce(round(0, false));
         const { id, rule } = await startRule();
 
         await routerService().run(id);
-        for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+        await settle();
 
         // Queued again by itself, with the total so far; a click on Sync joins it.
         expect(mocks.runSync).toHaveBeenCalledTimes(2);
@@ -319,24 +334,27 @@ describe('linearRouter', () => {
 
         await drainHandOffs();
 
-        expect(mocks.syncByFilter).toHaveBeenCalledTimes(3);
+        // Each round resumes at the cursor the previous one returned, then one
+        // pass from the start picks up stragglers and closes what Linear closed.
+        expect(startAfterOfCalls()).toEqual([undefined, '100', '200', undefined]);
         const jobs = await caller({ userId }).listSyncJobs({ projectId });
         expect(jobs).toHaveLength(1);
         expect(jobs[0]).toMatchObject({
           error: null,
           id,
-          // Writes add up; what a round only looked at comes from the last one.
-          result: { created: 242, skippedCount: 1, truncated: false, unchanged: 7, updated: 3 },
+          // Writes add up; what the final full pass looked at stands for the run.
+          result: { created: 242, skippedCount: 1, truncated: false, unchanged: 7, updated: 4 },
           status: 'success',
         });
+        expect(jobs[0].result).not.toHaveProperty('resumeAfter');
         const [saved] = await caller({ userId }).listSyncRules({ projectId });
         expect(saved.lastResult).toMatchObject({ created: 242, truncated: false });
       });
 
-      it('stops when a round creates nothing, and asks to run again', async () => {
+      it('stops when a round neither creates nor moves on, and asks to run again', async () => {
         mocks.syncByFilter
-          .mockResolvedValueOnce(round(100, true))
-          .mockResolvedValueOnce(round(0, true));
+          .mockResolvedValueOnce(round(100, true, '100'))
+          .mockResolvedValueOnce(round(0, true, '100'));
         const { id } = await startRule();
 
         await drainHandOffs();
@@ -348,7 +366,8 @@ describe('linearRouter', () => {
       });
 
       it(`stops after ${LINEAR_SYNC_MAX_ROUNDS} rounds`, async () => {
-        mocks.syncByFilter.mockResolvedValue(round(100, true));
+        let page = 0;
+        mocks.syncByFilter.mockImplementation(async () => round(100, true, String(++page * 100)));
         const { id } = await startRule();
 
         await drainHandOffs();
@@ -364,7 +383,7 @@ describe('linearRouter', () => {
       });
 
       it('fails the run when the next round cannot be handed off', async () => {
-        mocks.syncByFilter.mockResolvedValue(round(100, true));
+        mocks.syncByFilter.mockResolvedValue(round(100, true, '100'));
         const { id } = await startRule();
         mocks.runSync.mockRejectedValue(
           new TRPCClientError('Invalid JWT token', {
@@ -383,6 +402,62 @@ describe('linearRouter', () => {
 
         expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
           { error: 'failed', id, status: 'error' },
+        ]);
+      });
+
+      it('can be stopped between rounds, keeping what was created', async () => {
+        mocks.syncByFilter.mockResolvedValue(round(100, true, '100'));
+        const { id } = await startRule();
+        await routerService().run(id);
+        await settle();
+
+        expect(await caller({ userId }).cancelSync({ jobId: id, projectId })).toEqual({
+          canceled: true,
+        });
+        await drainHandOffs();
+
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(1);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'canceled', id, result: { created: 100 }, status: 'error' },
+        ]);
+      });
+
+      it('stops after the round that is running when stopped, and starts no other', async () => {
+        const { id } = await startRule();
+        mocks.syncByFilter.mockImplementation(async () => {
+          await caller({ userId }).cancelSync({ jobId: id, projectId });
+          return round(100, true, '100');
+        });
+
+        await drainHandOffs();
+
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(1);
+        expect(mocks.runSync).toHaveBeenCalledTimes(1);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'canceled', id, status: 'error' },
+        ]);
+        // Stopped is not running: the rule can be started again.
+        expect(
+          (
+            await caller({ userId }).startRuleSync({
+              ruleId: (await caller({ userId }).listSyncRules({ projectId }))[0].id,
+            })
+          ).id,
+        ).not.toBe(id);
+      });
+
+      it("does not stop another user's run", async () => {
+        mocks.syncByFilter.mockResolvedValue(round(100, true, '100'));
+        const { id } = await startRule();
+
+        await expect(
+          caller({ userId: otherUserId }).cancelSync({ jobId: id, projectId: otherProjectId }),
+        ).resolves.toEqual({ canceled: false });
+        await expect(
+          caller({ userId: otherUserId }).cancelSync({ jobId: id, projectId }),
+        ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, id, status: 'pending' },
         ]);
       });
     });

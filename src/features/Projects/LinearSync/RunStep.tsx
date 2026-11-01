@@ -115,12 +115,13 @@ const RunStep = memo<RunStepProps>(({ actions, job, pendingIssueCount }) => {
   }
 
   if (job.status === 'error') {
+    const stopped = job.error === 'canceled';
     return (
       <Result
         extra={actions}
-        status={'error'}
+        status={stopped ? 'info' : 'error'}
         subTitle={linearSyncJobErrorMessage(job.error, t)}
-        title={t('linear.sync.job.failed')}
+        title={stopped ? t('linear.sync.job.stopped') : t('linear.sync.job.failed')}
       />
     );
   }

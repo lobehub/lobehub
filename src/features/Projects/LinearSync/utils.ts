@@ -63,6 +63,9 @@ export const linearSyncJobErrorMessage = (
     case 'timeout': {
       return t('linear.sync.job.error.timeout');
     }
+    case 'canceled': {
+      return t('linear.sync.job.error.canceled');
+    }
     default: {
       return t('linear.sync.error.generic');
     }

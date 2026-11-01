@@ -104,6 +104,7 @@ export default {
   'linear.sync.job.continuesInBackground':
     'The sync continues in the background. You will be notified when it ends.',
   'linear.sync.job.done': 'Sync finished',
+  'linear.sync.job.error.canceled': 'Stopped; tasks created before then are kept',
   'linear.sync.job.error.timeout':
     'The sync stopped making progress and was cut off. Start it again.',
   'linear.sync.job.error.unavailable':
@@ -123,6 +124,9 @@ export default {
   'linear.sync.job.skipReason.running': 'Task is running, so it was not closed',
   'linear.sync.job.skipReason.unavailable': 'Task is in the trash or not visible to you',
   'linear.sync.job.skippedTitle': '{{count}} skipped',
+  'linear.sync.job.stop': 'Stop',
+  'linear.sync.job.stopFailed': 'Could not stop the sync. Try again.',
+  'linear.sync.job.stopped': 'Sync stopped',
   'linear.sync.job.titleIssues': 'Import {{count}} issues',
   'linear.sync.job.titleRule': 'Rule: {{rule}}',
   'linear.sync.job.titleRuleDeleted': 'Rule (deleted)',

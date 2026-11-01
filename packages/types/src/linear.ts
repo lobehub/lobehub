@@ -154,11 +154,18 @@ export type LinearSyncJobErrorCode =
   | 'unavailable'
   /** No progress for too long; the run was likely cut off. */
   | 'timeout'
+  /** The user stopped it; tasks written before then are kept. */
+  | 'canceled'
   | 'failed';
 
 /** What a background sync was asked to do, kept on its `async_tasks` row. */
 export interface LinearSyncJobMetadata {
   connectionId: string;
+  /**
+   * Where the next round of a rule run resumes reading Linear, so a long run
+   * does not reread what earlier rounds covered. Absent: read from the start.
+   */
+  cursor?: string;
   /** Picked issues (`kind: 'issues'`). */
   issueIds?: string[];
   kind: 'issues' | 'rule';

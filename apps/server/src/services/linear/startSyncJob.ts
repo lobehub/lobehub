@@ -79,11 +79,15 @@ export const continueLinearRuleSyncJob = async (
   taskId: string,
   metadata: LinearSyncJobMetadata,
 ): Promise<void> => {
-  await new AsyncTaskModel(db, userId, workspaceId).update(taskId, {
-    metadata,
-    status: AsyncTaskStatus.Pending,
-  });
-  await dispatchJob(db, userId, workspaceId, taskId);
+  // A run the user stopped during this round is left stopped.
+  const queued = await LinearSyncJobModel.transition(
+    db,
+    { userId, workspaceId: workspaceId ?? null },
+    taskId,
+    [AsyncTaskStatus.Processing],
+    { metadata, status: AsyncTaskStatus.Pending },
+  );
+  if (queued) await dispatchJob(db, userId, workspaceId, taskId);
 };
 
 const recordJob = (
@@ -104,11 +108,15 @@ const dispatchJob = async (
   workspaceId: string | undefined,
   taskId: string,
 ) => {
+  // Only a job still waiting to be claimed; one the user stopped stays stopped.
   const fail = () =>
-    new AsyncTaskModel(db, userId, workspaceId).update(taskId, {
-      error: { code: 'failed' satisfies LinearSyncJobErrorCode },
-      status: AsyncTaskStatus.Error,
-    });
+    LinearSyncJobModel.transition(
+      db,
+      { userId, workspaceId: workspaceId ?? null },
+      taskId,
+      [AsyncTaskStatus.Pending],
+      { error: { code: 'failed' satisfies LinearSyncJobErrorCode }, status: AsyncTaskStatus.Error },
+    );
 
   // Kept alive past the response, so a rejected hand-off can still be retried
   // or reported; otherwise the job sits queued until the client gives up on it.
