@@ -367,11 +367,7 @@ const CaseTable = memo<CaseTableProps>(
                     <Button loading={busy} size={'small'} onClick={draftFromConversation}>
                       {t('lobeBench.case.fromConversation')}
                     </Button>
-                    <Button
-                      size={'small'}
-                      type={checked.size > 0 ? 'default' : 'primary'}
-                      onClick={() => setEditor({})}
-                    >
+                    <Button size={'small'} type={'default'} onClick={() => setEditor({})}>
                       {t('lobeBench.case.new')}
                     </Button>
                   </>
