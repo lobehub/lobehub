@@ -72,7 +72,12 @@ export class ServerMessageTransport implements MessageTransport {
 
   async createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
     try {
-      return await this.messageModel.create(params);
+      return await this.messageModel.create({
+        ...params,
+        ...(params.pluginIntervention && {
+          pluginIntervention: { ...params.pluginIntervention, runtimeType: 'server' },
+        }),
+      });
     } catch (error) {
       if (typeof params.parentId === 'string' && isMidOperationReferenceMissingError(error)) {
         throw createConversationParentMissingError(params.parentId, error);

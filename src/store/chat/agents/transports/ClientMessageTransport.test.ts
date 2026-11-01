@@ -39,6 +39,36 @@ describe('ClientMessageTransport', () => {
     vi.restoreAllMocks();
   });
 
+  it('persists the client origin without dropping shared intervention IDs', async () => {
+    const store = createStore();
+    const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
+    await transport.createToolMessage({
+      agentId: 'agent-1',
+      content: '',
+      role: 'tool',
+      pluginIntervention: {
+        batchId: 'operation-1:1:assistant',
+        operationId: 'operation-1',
+        status: 'pending',
+      },
+    });
+    expect(messageService.batchMutate).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'createMessage',
+          message: expect.objectContaining({
+            pluginIntervention: {
+              batchId: 'operation-1:1:assistant',
+              operationId: 'operation-1',
+              runtimeType: 'client',
+              status: 'pending',
+            },
+          }),
+        }),
+      ]),
+    );
+  });
+
   describe('query', () => {
     const projectedRow = {
       content: '',

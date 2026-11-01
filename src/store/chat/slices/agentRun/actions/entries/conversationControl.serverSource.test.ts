@@ -44,7 +44,9 @@ const seed = (serverSource = true) => {
     id: toolMessageId,
     plugin: { apiName: 'askUser', arguments: '{}', identifier: 'lobe-agent', type: 'builtin' },
     pluginIntervention: {
-      ...(serverSource && { batchId: 'server-batch', operationId: 'original-server-op' }),
+      batchId: serverSource ? 'server-batch' : 'client-op:1:assistant',
+      operationId: serverSource ? 'original-server-op' : 'client-op',
+      runtimeType: serverSource ? 'server' : 'client',
       status: 'pending',
     },
     role: 'tool',
@@ -177,13 +179,19 @@ describe('server-origin intervention with client-configured agent after reload',
     expect(store.executeGatewayAgent).not.toHaveBeenCalled();
   });
 
-  it('keeps a local question on the existing client execution path', async () => {
-    const store = seed(false);
-    await useChatStore.getState().submitToolInteraction(toolMessageId, { Color: 'Blue' }, context, {
-      createUserMessage: false,
-    });
-    expect(sourceMutation()).not.toHaveBeenCalled();
-    expect(store.executeClientAgent).toHaveBeenCalledOnce();
-    expect(store.optimisticUpdateMessagePlugin).toHaveBeenCalled();
-  });
+  it.each([false, true])(
+    'keeps a client question on its originating runtime even when gateway mode is %s',
+    async (gatewayEnabled) => {
+      const store = seed(false);
+      vi.mocked(store.isGatewayModeEnabled).mockReturnValue(gatewayEnabled);
+      await useChatStore
+        .getState()
+        .submitToolInteraction(toolMessageId, { Color: 'Blue' }, context, {
+          createUserMessage: false,
+        });
+      expect(sourceMutation()).not.toHaveBeenCalled();
+      expect(store.executeClientAgent).toHaveBeenCalledOnce();
+      expect(store.optimisticUpdateMessagePlugin).toHaveBeenCalled();
+    },
+  );
 });

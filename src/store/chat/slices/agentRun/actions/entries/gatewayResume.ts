@@ -27,13 +27,17 @@ export const shouldUseGatewayResume = async (
   toolMessageIds: string[],
   get: () => ChatStore,
 ): Promise<boolean> => {
+  const interventions = toolMessageIds.map(
+    (id) => dbMessageSelectors.getDbMessageById(id)(get())?.pluginIntervention,
+  );
   if (
-    toolMessageIds.some((id) => {
-      const message = dbMessageSelectors.getDbMessageById(id)(get());
-      return !!message?.pluginIntervention?.operationId && !!message.pluginIntervention.batchId;
-    })
+    interventions.some(
+      (source) => source?.runtimeType === 'server' && !!source.operationId && !!source.batchId,
+    )
   )
     return true;
+  if (interventions.length > 0 && interventions.every((source) => source?.runtimeType === 'client'))
+    return false;
 
   // A share run only ever executes on the server through the share gateway;
   // the visitor has no local runtime nor access to the owner's agent config.
