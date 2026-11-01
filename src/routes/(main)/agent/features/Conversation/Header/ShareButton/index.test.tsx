@@ -88,6 +88,15 @@ describe('Conversation ShareButton', () => {
     expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ disabled: false }));
   });
 
+  it('keeps the mobile share entry inside a workspace, where no header menu hosts it', () => {
+    mocks.workspaceId = 'ws-1';
+
+    const { getByTestId } = render(<ShareButton mobile />);
+
+    expect(getByTestId('share-popover')).toBeInTheDocument();
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ disabled: false }));
+  });
+
   it('hides the share entry inside a workspace, where comments take the slot', () => {
     mocks.workspaceId = 'ws-1';
 

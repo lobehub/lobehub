@@ -32,8 +32,10 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   // Hide share button when no topic exists (no messages sent yet)
   if (!topicId) return null;
   // Inside a workspace teammates already reach the topic and collaborate through
-  // comments, which take this header slot (TopicCommentButton) instead.
-  if (workspaceId) return null;
+  // comments, which take this desktop header slot (TopicCommentButton) while
+  // Share moves into the header "..." menu. The mobile header has no such menu,
+  // so it keeps the button as the only entry to the link-sharing popover.
+  if (workspaceId && !mobile) return null;
 
   const iconButton = (
     <ActionIcon
