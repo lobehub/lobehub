@@ -239,6 +239,19 @@ export class TaskLifecycleService {
         );
       }
 
+      // A follow-up may have reopened this run while the handoff and brief
+      // above were being written (the row was settled, so it reopens rather
+      // than takes over). The Task is then the follow-up's to settle: moving it
+      // now would pause or complete it under a run that is still going.
+      if (topicId && (await this.isSupersededReport(topicId, params.operationId))) {
+        log(
+          'onTopicComplete: op=%s was followed up on topic=%s mid-settle — leaving the Task to it',
+          params.operationId,
+          topicId,
+        );
+        return;
+      }
+
       // 5. Default post-tick transition.
       //    - Automation task whose own tick requested completion (the
       //      instruction's end condition was verified as met) → 'completed',

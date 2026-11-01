@@ -313,6 +313,46 @@ describe('a superseded run that completes while the follow-up takes over (real P
   });
 });
 
+describe('a follow-up that reopens the run while its last completion is still settling (real PostgreSQL)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('leaves the Task to the follow-up instead of pausing it under the live run', async () => {
+    const { task, taskOperationId, topicId } = await seedRunningTask();
+    const service = new TopicRunService(db, userId);
+    // Resolved while the old run still owns a `running` row.
+    const link = await service.resolveOwnableRun(topicId, {
+      replacesOperationId: taskOperationId,
+    });
+    await seedOperation(topicId, 'op-follow-up', { createdAt: at(45), status: 'running' });
+
+    // The old run settles the row first; the follow-up's takeover then misses
+    // and reopens the settled row, while the old completion is still running.
+    const realUpdate = TaskTopicModel.prototype.updateStatus;
+    vi.spyOn(TaskTopicModel.prototype, 'updateStatus').mockImplementationOnce(async function (
+      this: TaskTopicModel,
+      ...args
+    ) {
+      const written = await realUpdate.apply(this, args);
+      await expect(service.reopen({ link: link!, operationId: 'op-follow-up' })).resolves.toBe(
+        'reopened',
+      );
+      return written;
+    });
+
+    await complete(task, topicId, taskOperationId, 'done');
+
+    expect(await readRun(topicId)).toMatchObject({
+      operationId: 'op-follow-up',
+      status: 'running',
+    });
+    expect((await readTask(task.id))?.status).toBe('running');
+
+    // The follow-up is the run that settles the Task.
+    await complete(task, topicId, 'op-follow-up');
+    expect((await readTask(task.id))?.status).toBe('paused');
+  });
+});
+
 describe('reconcileInterruptedTaskRuns (real PostgreSQL)', () => {
   const staleBefore = new Date(T0.getTime() + ORPHANED_RUN_GRACE_MS);
 
