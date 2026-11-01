@@ -75,7 +75,7 @@ overrides:
   '@react-pdf/image': 3.0.4
   # 0.2.11 moved the optional `import('zod-openapi')` out of try/catch, which fails the Turbopack build.
   '@standard-community/standard-openapi': 0.2.10
-  '@types/react': 19.2.13
+  '@types/react': 19.2.18
   '@vitest/coverage-v8': 5.0.0
   baseline-browser-mapping: 2.10.31
   drizzle-orm: ^0.45.2
@@ -86,7 +86,7 @@ overrides:
   micromark-extension-gfm-autolink-literal: 2.1.0
   node-gyp: ^12.4.0
   pdfjs-dist: 5.4.530
-  react: 19.2.7
+  react: 19.2.9
   react-dom: 19.2.7
   's3rver>fast-xml-parser': 3.21.1
   stylelint-config-clean-order: 7.0.0

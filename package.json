@@ -184,7 +184,7 @@
     ]
   },
   "overrides": {
-    "@types/react": "19.2.13",
+    "@types/react": "19.2.18",
     "baseline-browser-mapping": "2.10.31",
     "better-auth": "1.6.33",
     "drizzle-orm": "^0.45.2",
@@ -452,7 +452,7 @@
     "query-string": "^9.5.0",
     "random-words": "^2.0.1",
     "rc-util": "^5.44.4",
-    "react": "19.2.7",
+    "react": "19.2.9",
     "react-confetti": "^6.4.0",
     "react-dom": "19.2.7",
     "react-fast-marquee": "^1.6.5",
@@ -541,7 +541,7 @@
     "@types/pdf-parse": "^1.1.5",
     "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.21.0",
-    "@types/react": "19.2.13",
+    "@types/react": "19.2.18",
     "@types/react-dom": "19.2.3",
     "@types/rtl-detect": "^1.0.3",
     "@types/semver": "^7.8.0",
