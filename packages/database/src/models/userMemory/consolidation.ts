@@ -668,15 +668,17 @@ export class UserMemoryConsolidationModel {
           else {
             const logBefore = !updatedDossiers.has(dossierId);
             updatedDossiers.add(dossierId);
+            const last =
+              existing.lastEvidenceAt && existing.lastEvidenceAt > dLast
+                ? existing.lastEvidenceAt
+                : dLast;
             await tx
               .update(userMemoriesDossiers)
               .set({
                 activityCount: existing.activityCount + d.members.length,
-                lastEvidenceAt:
-                  existing.lastEvidenceAt && existing.lastEvidenceAt > dLast
-                    ? existing.lastEvidenceAt
-                    : dLast,
+                lastEvidenceAt: last,
                 now: d.now,
+                status: deriveContextStatus(last, now),
                 summary: d.now,
                 updatedAt: now,
               })
