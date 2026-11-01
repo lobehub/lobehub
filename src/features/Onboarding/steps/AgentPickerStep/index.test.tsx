@@ -161,6 +161,21 @@ describe('AgentPickerStep', () => {
     });
   });
 
+  it('hands the target to onFinished instead of navigating, after tracking', async () => {
+    const onFinished = vi.fn();
+    render(<AgentPickerStep onBack={vi.fn()} onFinished={onFinished} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'agentPicker.skip' }));
+
+    await waitFor(() => expect(onFinished).toHaveBeenCalledWith('/'));
+    expect(navigate).not.toHaveBeenCalled();
+    expect(finishOnboarding).toHaveBeenCalledTimes(1);
+    expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
+      flow: 'classic',
+      targetUrl: '/',
+    });
+  });
+
   it('navigates to the stashed signup callbackUrl on finish and clears it', async () => {
     stashOnboardingCallbackUrl('?callbackUrl=%2Fagent%2Fabc%3Fmessage%3Dhi');
     render(<AgentPickerStep onBack={vi.fn()} />);

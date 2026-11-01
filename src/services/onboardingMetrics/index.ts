@@ -63,6 +63,7 @@ export type OnboardingStep =
   | 'prosettings'
   | 'response_language'
   | 'starter_tasks'
+  | 'taskkickoff'
   | 'telemetry'
   | 'welcome';
 
