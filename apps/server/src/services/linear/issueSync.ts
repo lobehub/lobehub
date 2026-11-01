@@ -9,6 +9,7 @@ import type {
   TaskItem,
 } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
 import {
@@ -305,9 +306,9 @@ export class LinearIssueSyncService {
       for (const id of projectTeamIds) teamIds.add(id);
     }
     const unseen = (
-      await Promise.all(
-        [...teamIds].map((teamId) => this.linkModel.findByContainer('linear', teamId)),
-      )
+      await pMap([...teamIds], (teamId) => this.linkModel.findByContainer('linear', teamId), {
+        concurrency: 5,
+      })
     )
       .flat()
       .filter((link) => !seen.has(link.externalId));
