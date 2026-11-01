@@ -10,10 +10,15 @@ import {
 } from './lint.bundleBoundaries.mjs';
 import { stylexMigrationOverrides } from './scripts/stylexMigration/oxlint.mjs';
 
+const [, uiRestrictedImportOptions] = restrictedImports.rules['no-restricted-imports'] as [
+  string,
+  { paths: { message: string; name: string }[]; patterns?: object[] },
+];
+
 const baseRestrictedImportOptions = {
-  ...restrictedImports.rules['no-restricted-imports'][1],
+  ...uiRestrictedImportOptions,
   patterns: [
-    ...(restrictedImports.rules['no-restricted-imports'][1].patterns ?? []),
+    ...(uiRestrictedImportOptions.patterns ?? []),
     {
       regex: '^@modelcontextprotocol/(?:sdk)(/|$)',
       message:
@@ -55,7 +60,7 @@ const shellRouterRestrictedPaths = [
 // subpath is Node-only (spawn, rpc, quota-sampler, ...). New entries are
 // Node-only until listed there, and the package's runtimeBoundary test keeps
 // the listed entries free of Node code.
-const heteroBrowserEntries = JSON.parse(
+const heteroBrowserEntries: string[] = JSON.parse(
   readFileSync(
     new URL('packages/heterogeneous-agents/browser-entries.json', import.meta.url),
     'utf8',
