@@ -14,6 +14,7 @@ import {
   workspaceMembers,
   workspaces,
 } from '@/database/schemas';
+import { continueLinearRuleSyncJob } from '@/server/services/linear/startSyncJob';
 import { LINEAR_SYNC_MAX_ROUNDS, LinearSyncJobService } from '@/server/services/linear/syncJob';
 
 import { linearRouter } from '../linear';
@@ -283,9 +284,15 @@ describe('linearRouter', () => {
         return { id, rule };
       };
 
+      /** The service as the async router builds it, able to queue the next round. */
+      const routerService = () =>
+        new LinearSyncJobService(serverDB, userId, undefined, (taskId, metadata) =>
+          continueLinearRuleSyncJob(serverDB, userId, undefined, taskId, metadata),
+        );
+
       /** Play the async router: run each hand-off until no new one is queued. */
       const drainHandOffs = async () => {
-        const service = new LinearSyncJobService(serverDB, userId);
+        const service = routerService();
         for (let handled = 0; handled < mocks.runSync.mock.calls.length; handled++) {
           await service.run(mocks.runSync.mock.calls[handled][0].taskId);
           for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
@@ -299,8 +306,7 @@ describe('linearRouter', () => {
           .mockResolvedValueOnce(round(42, false));
         const { id, rule } = await startRule();
 
-        const service = new LinearSyncJobService(serverDB, userId);
-        await service.run(id);
+        await routerService().run(id);
         for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
 
         // Queued again by itself, with the total so far; a click on Sync joins it.
@@ -372,7 +378,7 @@ describe('linearRouter', () => {
           } as any),
         );
 
-        await new LinearSyncJobService(serverDB, userId).run(id);
+        await routerService().run(id);
         for (let i = 0; i < 50; i++) await new Promise((resolve) => setImmediate(resolve));
 
         expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([

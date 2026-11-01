@@ -81,6 +81,16 @@ export const toLinearSyncJobView = (
   };
 };
 
+/**
+ * Queues the next round of a rule run. Supplied by the async router, which
+ * owns hand-offs; without it a run stops after one round and asks to be run
+ * again.
+ */
+export type ContinueLinearSyncJob = (
+  taskId: string,
+  metadata: LinearSyncJobMetadata,
+) => Promise<void>;
+
 class LinearSyncJobError extends Error {
   constructor(readonly code: LinearSyncJobErrorCode) {
     super(code);
@@ -101,6 +111,7 @@ export class LinearSyncJobService {
     private readonly db: LobeChatDatabase,
     private readonly userId: string,
     private readonly workspaceId?: string,
+    private readonly continueJob?: ContinueLinearSyncJob,
   ) {
     this.asyncTaskModel = new AsyncTaskModel(db, userId, workspaceId);
   }
@@ -130,19 +141,14 @@ export class LinearSyncJobService {
       // does not have to press Sync once per hundred issues. A round that
       // created nothing would only repeat itself, so the run stops there.
       if (
+        this.continueJob &&
         metadata.kind === 'rule' &&
         round.truncated &&
         round.created > 0 &&
         rounds < LINEAR_SYNC_MAX_ROUNDS
       ) {
         log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
-        // Imported here: the module hands jobs to the async router, which imports this one.
-        const { continueLinearRuleSyncJob } = await import('./startSyncJob');
-        await continueLinearRuleSyncJob(this.db, this.userId, this.workspaceId, taskId, {
-          ...metadata,
-          result,
-          rounds,
-        });
+        await this.continueJob(taskId, { ...metadata, result, rounds });
         return;
       }
       await this.asyncTaskModel.update(taskId, {
