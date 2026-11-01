@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Kütüphaneleri ara",
   "knowledgeBases.updateFailed": "Kütüphane güncellenemedi",
   "list.deleteAction": "Projeyi Sil",
-  "list.deleteConfirmDescription": "“{{name}}” silinsin mi? Proje görevleri, hedefleri, konuları ve bağlantıları kalıcı olarak kaldırılacak.",
-  "list.deleteConfirmTitle": "Proje silinsin mi?",
   "list.deleteError": "Proje silinemedi.",
   "list.deleteSuccess": "“{{name}}” silindi",
   "list.emptyDescription": "Hedefleri, görevleri ve kaynakları düzenlemek için ilk projenizi oluşturun.",
