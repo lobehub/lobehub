@@ -3,12 +3,12 @@
 import type { BuiltinRender, BuiltinRenderProps } from '@lobechat/types';
 import {
   Block,
+  createStaticStyles,
   Flexbox,
   Highlighter,
   Image,
   PreviewGroup,
   Text,
-  createStaticStyles,
 } from '@lobehub/ui';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';
@@ -155,6 +155,7 @@ const RENDER_BY_API: Record<BrowserMcpApi, BuiltinRender> = {
   readPage: PageDump as BuiltinRender,
   screenshot: Screenshot as BuiltinRender,
   scroll: PageAction as BuiltinRender,
+  setViewport: PageAction as BuiltinRender,
   snapshot: PageDump as BuiltinRender,
 };
 

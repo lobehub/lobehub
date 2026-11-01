@@ -1,5 +1,5 @@
 import * as stylex from '@stylexjs/stylex';
-import { type StyleXStyles } from '@stylexjs/stylex';
+import { type CompiledStyles, type InlineStyles, type StyleXArray } from '@stylexjs/stylex';
 import { type CSSProperties } from 'react';
 
 /**
@@ -12,11 +12,15 @@ import { type CSSProperties } from 'react';
  * specificity, so a plain class cannot override them. Components that let callers
  * restyle them take an `xstyle?: StyleXStyles` prop and pass it in `styles`.
  *
- * `styles` is typed as `StyleXStyles`, not `Parameters<typeof stylex.props>`:
- * `props` declares a `this` parameter, and the type-check resolves that derived
- * type to `never`, rejecting every call.
+ * Mirror props' exported argument types explicitly: StyleXStyles restricts CSS
+ * properties and rejects compiled custom properties and marker symbols. Deriving
+ * Parameters<typeof stylex.props> also resolves to never in Bun's checker.
  */
-export const sx = (styles: StyleXStyles, className?: string, style?: CSSProperties) => {
+type SxArgument = StyleXArray<
+  CompiledStyles | boolean | null | undefined | Readonly<[CompiledStyles, InlineStyles]>
+>;
+
+export const sx = (styles: SxArgument, className?: string, style?: CSSProperties) => {
   const props = stylex.props(styles);
   const mergedClassName = [props.className, className].filter(Boolean).join(' ');
   return {

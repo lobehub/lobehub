@@ -1,4 +1,10 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import {
+  applyWidgetParamValues,
+  BUILTIN_WIDGET_PRESETS,
+  findBuiltinWidgetPreset,
+  widgetParamValue,
+} from '@lobechat/widget-spec';
 
 import {
   type AddWidgetToDashboardParams,
@@ -16,6 +22,8 @@ import {
   type GetWidgetRunsParams,
   type GetWidgetRunsState,
   type ListDashboardsState,
+  type ListWidgetPresetsParams,
+  type ListWidgetPresetsState,
   type RequestPublishParams,
   type RequestPublishState,
   type UpdateDashboardParams,
@@ -261,18 +269,82 @@ export class DashboardExecutionRuntime {
     }
   }
 
+  async listWidgetPresets(
+    params: ListWidgetPresetsParams = {},
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const presets = BUILTIN_WIDGET_PRESETS.filter(
+      (preset) => !params.category || preset.category === params.category,
+    );
+    const state: ListWidgetPresetsState = {
+      presets: presets.map(({ category, id, title }) => ({ category, id, title })),
+    };
+    if (presets.length === 0) {
+      return { content: 'No presets in this category.', state, success: true };
+    }
+
+    const lines = presets.map((preset) => {
+      const settings = (preset.widget.manifest?.params ?? []).map((param) => {
+        const fallback = widgetParamValue(param);
+        const choices = param.options
+          ? ` one of ${param.options.map((o) => o.value).join('|')}`
+          : '';
+        return `${param.name} (${param.type}${choices}${param.required ? ', required' : ''}${fallback === undefined ? '' : `, default ${JSON.stringify(fallback)}`})`;
+      });
+      return [
+        `- ${preset.id} [${preset.category}] ${preset.title}: ${preset.description}`,
+        settings.length > 0 ? `  params: ${settings.join('; ')}` : '  params: none',
+      ].join('\n');
+    });
+    return {
+      content: [
+        'Presets you can install with createWidgetDraft({presetId, params}); then dry-run, request publish and place it as usual:',
+        ...lines,
+      ].join('\n'),
+      state,
+      success: true,
+    };
+  }
+
   async createWidgetDraft(params: CreateWidgetDraftParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const { description, title, ...content } = params;
+      const { description, params: values, presetId, title, ...explicit } = params;
+      const preset = presetId ? findBuiltinWidgetPreset(presetId) : undefined;
+      if (presetId && !preset)
+        throw new Error(`Unknown preset "${presetId}"; see listWidgetPresets`);
+
+      const base = preset?.widget;
+      const manifest = explicit.manifest ?? base?.manifest;
+      const content: WidgetVersionContent = {
+        ...base,
+        ...explicit,
+        manifest:
+          manifest?.params && values
+            ? { ...manifest, params: applyWidgetParamValues(manifest.params, values) }
+            : manifest,
+      } as WidgetVersionContent;
+      const name = title ?? preset?.title;
+      const definition = description ?? preset?.description;
+      if (
+        name === undefined ||
+        definition === undefined ||
+        !content.script ||
+        !content.runtime ||
+        !content.outputType
+      ) {
+        throw new Error(
+          'Pass title, description, script, runtime and outputType, or a presetId to install',
+        );
+      }
+
       const { version, widgetId } = await this.service.createWidgetDraft({
         content,
-        description,
-        title,
+        description: definition,
+        title: name,
       });
       const state: WidgetDraftState = { version: version.version, versionId: version.id, widgetId };
 
       return {
-        content: `Created widget "${title}" (${widgetId}) with draft ${versionLabel(version)}, version id ${version.id}. Nothing runs yet — call dryRunWidget to execute it.`,
+        content: `Created widget "${name}" (${widgetId})${preset ? ` from preset ${preset.id}` : ''} with draft ${versionLabel(version)}, version id ${version.id}. Nothing runs yet — call dryRunWidget to execute it.`,
         state,
         success: true,
       };

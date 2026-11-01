@@ -9,15 +9,6 @@ const meter = metrics.getMeter('server-services-bot-wake');
  */
 
 /**
- * Real evaluations of the `bot_wake` rollout flag (cache hits are not counted).
- * `result`: `on` | `off` | `error`. An `error` is treated as off, so the bot keeps its old behaviour.
- */
-export const botWakeRolloutCheckCounter = meter.createCounter('bot_wake_rollout_checks_total', {
-  description: 'Evaluations of the bot_wake rollout flag, by result.',
-  unit: '{check}',
-});
-
-/**
  * Wake decisions recorded for inbound bot messages.
  * Labels: `platform`, `entry_point`, `outcome` (wake|skip|defer), `reason`, `tag`.
  */
@@ -37,13 +28,10 @@ export const botWakeFailureCounter = meter.createCounter('bot_wake_failures_tota
 });
 
 /** Time to record one decision, including shadow policies and the database writes. */
-export const botWakeRecordDurationHistogram = meter.createHistogram(
-  'bot_wake_record_duration_ms',
-  {
-    description: 'Duration of recording one bot-wake decision.',
-    unit: 'ms',
-  },
-);
+export const botWakeRecordDurationHistogram = meter.createHistogram('bot_wake_record_duration_ms', {
+  description: 'Duration of recording one bot-wake decision.',
+  unit: 'ms',
+});
 
 /**
  * Per-policy verdicts inside recorded decisions, shadow ones included — the series that shows a

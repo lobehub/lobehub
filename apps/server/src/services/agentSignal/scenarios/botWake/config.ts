@@ -11,7 +11,9 @@ export const DEFAULT_WAKE_RULES: WakeRules = {
   denyChannels: [],
   // Off until the bot has duties: without the text there is nothing to judge a message against.
   // The decision model scores plain feature requests 0.65-0.76, so 0.8 let almost none through.
-  duties: { mode: 'enforce', threshold: 0.65 },
+  // `helpfulThreshold`: in a replay of reviewed decisions, 0.7 woke on twice as many of the wanted
+  // messages as the duty score alone, with about as many unwanted wakes.
+  duties: { helpfulThreshold: 0.7, mode: 'enforce', threshold: 0.65 },
   maxSilentWakes: 3,
   ownerPresenceSeconds: 120,
   scope: 'all',
@@ -125,6 +127,11 @@ const SettingsSchema = z
     customInstructionsEnabled: z.boolean().optional().catch(undefined),
     duties: z
       .object({
+        helpfulThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .catch(DEFAULT_WAKE_RULES.duties.helpfulThreshold),
         mode: mode.catch(DEFAULT_WAKE_RULES.duties.mode),
         text: z.string().catch(''),
         threshold: z.number().min(0).max(1).catch(DEFAULT_WAKE_RULES.duties.threshold),
@@ -176,7 +183,12 @@ export const BOT_WAKE_SETTING_KEYS = {
   denyChannels: 'botWakeDenyChannels',
   duties: 'botWakeDuties',
   dutiesThreshold: 'botWakeDutiesThreshold',
-  enabled: 'botWakeEnabled',
+  /**
+   * The off switch. Absent means on: every bot speaks up on its own unless its owner turned it
+   * off. It replaced `botWakeEnabled`, which the form saved as `false` for every bot while the
+   * switch was still hidden, so that key is retired rather than read.
+   */
+  disabled: 'botWakeDisabled',
   maxSilentWakes: 'botWakeMaxSilentWakes',
   ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
   pace: 'botWakePace',
@@ -191,6 +203,7 @@ export const BOT_WAKE_SETTING_KEYS = {
  * The parser never reads them; the form projection drops them, so the next save clears them.
  */
 const RETIRED_BOT_WAKE_SETTING_KEYS = new Set([
+  'botWakeEnabled',
   'botWakeClassifierInitiateEnabled',
   'botWakeClassifierInitiateThreshold',
   'botWakeProactiveEnabled',
@@ -213,7 +226,6 @@ const chosen = (values: Record<string, unknown>) =>
  * `flattenBotWakeSettings` is what carries a hand-written config into the form.
  */
 const BOT_WAKE_NESTED_PATHS: Array<{ key: string; path: string[] }> = [
-  { key: BOT_WAKE_SETTING_KEYS.enabled, path: ['enabled'] },
   { key: BOT_WAKE_SETTING_KEYS.customInstructions, path: ['customInstructions'] },
   {
     key: BOT_WAKE_SETTING_KEYS.customInstructionsEnabled,
@@ -365,12 +377,16 @@ export const flattenBotWakeSettings = (
   if (!isRecord(settings?.botWake)) return withPace(withInstructionsSwitch(settings));
 
   const nested = settings.botWake;
-  const flat = Object.fromEntries(
-    BOT_WAKE_NESTED_PATHS.flatMap(({ key, path }) => {
-      const value = readPath(nested, path);
-      return isChosen(value) ? [[key, value]] : [];
-    }),
-  );
+  const flat = {
+    ...Object.fromEntries(
+      BOT_WAKE_NESTED_PATHS.flatMap(({ key, path }) => {
+        const value = readPath(nested, path);
+        return isChosen(value) ? [[key, value]] : [];
+      }),
+    ),
+    // A hand-written config is off unless it says `enabled: true`; the flat key is the off switch.
+    [BOT_WAKE_SETTING_KEYS.disabled]: readPath(nested, ['enabled']) !== true,
+  };
   // Every flat key goes: the nested object is authoritative at runtime, so a stale flat value it
   // does not mention would otherwise become live the moment the nested object is dropped.
   const flatKeys = new Set<string>(Object.values(BOT_WAKE_SETTING_KEYS));
@@ -410,9 +426,9 @@ const gatherBotWakeSettings = (settings: Record<string, unknown> | null | undefi
     ...chosen({
       customInstructions: flat(k.customInstructions),
       customInstructionsEnabled: flat(k.customInstructionsEnabled),
-      enabled: flat(k.enabled),
       pace: flat(k.pace),
     }),
+    enabled: flat(k.disabled) !== true,
     ...(overrides && 'mode' in overrides ? { mode: overrides.mode } : {}),
     classifier: {
       ...chosen({ threshold: flat(k.classifierThreshold) }),
@@ -492,6 +508,7 @@ export const parseBotWakeSettings = (
         : raw.customInstructions?.trim().slice(0, MAX_CUSTOM_INSTRUCTIONS_LENGTH) || undefined,
     // No text, no duties: the judge is left out of the set, so nothing is asked of a model.
     duties: {
+      helpfulThreshold: raw.duties?.helpfulThreshold ?? DEFAULT_WAKE_RULES.duties.helpfulThreshold,
       mode: raw.duties?.mode ?? DEFAULT_WAKE_RULES.duties.mode,
       text: raw.duties?.text?.trim().slice(0, MAX_DUTIES_LENGTH) || undefined,
       threshold: raw.duties?.threshold ?? DEFAULT_WAKE_RULES.duties.threshold,

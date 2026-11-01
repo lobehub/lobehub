@@ -53,6 +53,11 @@ inputs:
     required: false
     default: ''
 
+outputs:
+  published:
+    description: Whether the appcast generation and upload step completed
+    value: ${{ steps.publish.outputs.published }}
+
 runs:
   using: composite
   steps:
@@ -113,6 +118,7 @@ runs:
         echo "SPARKLE_HISTORY_SCRIPT=$PKG_DIR/package/native/scripts/appcast-history.py" >> "$GITHUB_ENV"
 
     - name: Generate, sign and upload appcasts (EdDSA key lives only on a RAM disk)
+      id: publish
       if: steps.gate.outputs.enabled == 'true'
       shell: bash
       env:
@@ -155,3 +161,4 @@ runs:
           --history-script "$SPARKLE_HISTORY_SCRIPT" \
           --delta-bases "$DELTA_BASES" \
           --delta-history "$DELTA_HISTORY"
+        echo "published=true" >> "$GITHUB_OUTPUT"

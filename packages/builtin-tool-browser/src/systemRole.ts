@@ -9,6 +9,8 @@ Core workflow:
 
 Notes:
 - \`fill\` sets an input's value directly; pass \`submit: true\` to press Enter afterwards (search boxes, login forms).
+- \`press\` takes combinations such as \`Shift+Tab\` or \`ControlOrMeta+a\` (Cmd on macOS, Ctrl elsewhere). An unknown key fails instead of doing nothing.
+- \`setViewport\` fixes the page's layout size, e.g. 1440×900 for a desktop layout; in the desktop app's narrow panel the page is shown scaled down to fit. Call it without a size to go back to the default.
 - \`screenshot\` stores the capture as a file and returns it to you, and also renders it in the USER's chat. Use \`snapshot\` / \`readPage\` when the page structure or text is all you need.
 - Prefer refs over coordinates. Coordinates are a fallback for canvas-like surfaces only.
 - On the desktop app the browser shares the user's logged-in profile; the headless CLI browser does not, so a login wall there means asking the user rather than retrying. Never visit pages or perform actions the user did not ask for, and never extract credentials or other sensitive data.`;

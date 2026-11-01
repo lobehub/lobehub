@@ -26,7 +26,7 @@ import AcceptanceShare from './Header/AcceptanceShare';
 import AcceptanceStatusControl from './Header/AcceptanceStatusControl';
 import type { AcceptanceTabKey } from './Header/AcceptanceTabs';
 import AcceptanceTabs from './Header/AcceptanceTabs';
-import { acceptanceContentLayout } from './layout';
+import { acceptanceChecksLayout, acceptanceContentLayout } from './layout';
 import { flowPlanPhase } from './Plan/planReview';
 import AcceptanceDecision from './Review/AcceptanceDecision';
 import { AcceptanceRepair } from './Review/AcceptanceRepair';
@@ -44,6 +44,10 @@ const styles = createStaticStyles(({ css }) => ({
     @media (width <= 767px) {
       padding-inline: 16px;
     }
+  `,
+  checks: css`
+    width: 100%;
+    max-width: ${acceptanceChecksLayout.maxWidth}px;
   `,
   headerBand: css`
     flex: none;
@@ -158,11 +162,11 @@ export const AcceptanceOverview = ({
         ) : tab === 'checks' && gateDossier ? (
           <GateReview dossier={gateDossier} />
         ) : tab === 'checks' ? (
-          <>
+          <Flexbox className={styles.checks} gap={16}>
             <AcceptanceCheckInventory toolbar={<AcceptanceCheckOwnerToolbar />} />
             <ReviewerApprovalBar />
             <AcceptanceDecision onDraftToComposer={onDraftToComposer} />
-          </>
+          </Flexbox>
         ) : (
           <AcceptanceResources />
         )}

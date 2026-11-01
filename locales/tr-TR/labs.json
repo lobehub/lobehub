@@ -36,8 +36,6 @@
   "features.messageTextSelectionActions.title": "Mesaj Metni Seçim Eylemleri",
   "features.oauthApps.desc": "Kişisel ve çalışma alanı ayarlarında OAuth uygulama yönetimini göster. Bu özellik varsayılan olarak gizlidir.",
   "features.oauthApps.title": "OAuth Uygulamaları",
-  "features.persistentSandbox.desc": "Bulut sandbox'ının yazdığı dosyaları saklayın. Çalışma dizini oturum yenilemelerinden kurtulur ve konularınız arasında paylaşılır, sandbox ile birlikte silinmez. Ücretli bir plan gerektirir; büyük indirmeler ve bağımlılıklar hala /tmp içinde olmalıdır.",
-  "features.persistentSandbox.title": "Kalıcı Sandbox",
   "features.projects.desc": "Uzun vadeli hedefleri, kendi ajanları, bilgi tabanları ve görevleriyle özel çalışma alanlarında organize edin.",
   "features.projects.title": "Proje Çalışma Alanları",
   "features.selfLearning.desc": "Her bir ajanın gerçek uygulamalardan ne öğrendiğini gösterin — kural tabanı, hangi kuralların gerçekten kullanıldığını ve hangi katmanların hâlâ boş olduğunu.",

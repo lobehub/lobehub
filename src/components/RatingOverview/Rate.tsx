@@ -1,15 +1,15 @@
 import { Rate as BaseRate, type RateProps } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
-  rate: css`
-    display: flex;
-  `,
-}));
+import { sx } from '@/styles/sx';
+
+const styles = stylex.create({
+  rate: { display: 'flex' },
+});
 
 const Rate = memo<RateProps>(({ className, size = 16, ...props }) => (
-  <BaseRate allowHalf readOnly className={cx(styles.rate, className)} size={size} {...props} />
+  <BaseRate allowHalf readOnly size={size} {...sx([styles.rate], className)} {...props} />
 ));
 
 export default Rate;

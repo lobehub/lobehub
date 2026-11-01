@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openQuotaCalendarModal } from '@/features/AgentQuotaCalendar';
 import { cacheScope } from '@/libs/replica';
 import { hashQuotaSourceKey, quotaPanelResource } from '@/store/agentQuota/projection';
+import { useElectronStore } from '@/store/electron';
 
 import ClaudeCodeQuotaMenu from './ClaudeCodeQuotaMenu';
 import { createQuotaSourceKey } from './QuotaMenu';
@@ -82,7 +83,8 @@ vi.mock('@/libs/trpc/client', () => ({
 // path without each one stalling on a real HTTP request; individual tests can
 // hand it persisted accounts/windows.
 const mockQuotaService = vi.hoisted(() => ({
-  getLatestReadings: vi.fn(async (): Promise<unknown[]> => []),
+  getDeviceAccount: vi.fn(async (): Promise<{ accountId: string | null }> => ({ accountId: null })),
+  getLatestReadings: vi.fn(async (_accountId?: string): Promise<unknown[]> => []),
   ingestClaudeSnapshot: vi.fn(async () => undefined),
   ingestCodexSnapshot: vi.fn(async () => undefined),
   ingestKimiCodeSnapshot: vi.fn(async () => undefined),
@@ -90,6 +92,7 @@ const mockQuotaService = vi.hoisted(() => ({
   refreshKimiCodeQuota: vi.fn(),
   listAccounts: vi.fn(async (): Promise<unknown[]> => []),
   listBindings: vi.fn(async (): Promise<unknown[]> => []),
+  syncDeviceLogins: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/services/agentQuota', () => ({ agentQuotaService: mockQuotaService }));
@@ -213,6 +216,7 @@ beforeEach(() => {
   mockQuotaService.ingestKimiCodeSnapshot.mockClear();
   mockQuotaService.listAccounts.mockClear().mockResolvedValue([]);
   mockQuotaService.listBindings.mockClear().mockResolvedValue([]);
+  mockQuotaService.getDeviceAccount.mockClear().mockResolvedValue({ accountId: null });
   vi.mocked(openQuotaCalendarModal).mockClear();
 });
 
@@ -686,6 +690,31 @@ describe('ClaudeCodeQuotaMenu', () => {
 
     expect(await screen.findByText('92%')).toBeTruthy();
     expect(mockService.getClaudeCodeQuota).not.toHaveBeenCalled();
+  });
+
+  // Regression: a pick whose account was then disabled for the agent kept the
+  // panel on that account, though runs no longer use it.
+  it('does not show a device pick whose account left the agent rotation', async () => {
+    const now = Date.now() - 60_000;
+    mockQuotaService.listAccounts.mockResolvedValue([
+      persistedAccount(now),
+      { ...persistedAccount(now), externalAccountId: 'ext-2', id: 'acc-2' },
+    ]);
+    mockQuotaService.listBindings.mockResolvedValue([
+      { accountId: 'acc-1', agentId: 'agent-1', enabled: true, id: 'b1', role: 'pool' },
+      { accountId: 'acc-2', agentId: 'agent-1', enabled: true, id: 'b2', role: 'disabled' },
+    ]);
+    mockQuotaService.getDeviceAccount.mockResolvedValue({ accountId: 'acc-2' });
+    mockQuotaService.getLatestReadings.mockImplementation(async (accountId?: string) => [
+      { ...persistedSessionReading(now), utilization: accountId === 'acc-2' ? 50 : 8 },
+    ]);
+    vi.spyOn(useElectronStore.getState(), 'resolveGatewayDeviceId').mockResolvedValue('device-a');
+
+    render(<ClaudeCodeQuotaMenu />);
+
+    expect(await screen.findByText('92%')).toBeTruthy();
+    expect(mockQuotaService.getDeviceAccount).toHaveBeenCalledWith('agent-1', 'device-a');
+    expect(screen.queryByText('50%')).toBeNull();
   });
 
   it('refreshes from the live API when the newest persisted reading is stale', async () => {

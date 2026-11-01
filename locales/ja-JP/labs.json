@@ -36,8 +36,6 @@
   "features.messageTextSelectionActions.title": "メッセージテキスト選択アクション",
   "features.oauthApps.desc": "個人およびワークスペース設定でOAuthアプリ管理を表示します。この機能はデフォルトでは非表示です。",
   "features.oauthApps.title": "OAuthアプリ",
-  "features.persistentSandbox.desc": "クラウドサンドボックスが書き込むファイルを保持します。その作業ディレクトリはセッションのリサイクル後も維持され、トピック間で共有されます。サンドボックスと共に破棄されることはありません。有料プランが必要です。大規模なダウンロードや依存関係は依然として/tmpに属します。",
-  "features.persistentSandbox.title": "永続的なサンドボックス",
   "features.projects.desc": "長期的な目標を専用のワークスペースに整理し、それぞれに専用のエージェント、知識ベース、タスクを設定できます。",
   "features.projects.title": "プロジェクトワークスペース",
   "features.selfLearning.desc": "各エージェントが実際の実践から学んだ内容を表示します—そのルールベース、実際に使用されるルール、およびまだ空白のレイヤー。",
