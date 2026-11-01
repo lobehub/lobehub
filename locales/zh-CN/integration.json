@@ -72,7 +72,7 @@
   "linear.sync.filter.project": "Linear 项目",
   "linear.sync.filter.projectHint": "保持「全部项目」即包含团队内的所有 Issue。",
   "linear.sync.filter.states": "同步的 Issue 状态",
-  "linear.sync.filter.statesHint": "默认不包含已完成和已取消的 Issue。",
+  "linear.sync.filter.statesHint": "默认不包含已取消的 Issue。",
   "linear.sync.filter.statesSummary": "{{count}} 种状态",
   "linear.sync.filter.team": "Linear 团队",
   "linear.sync.filter.teamPlaceholder": "选择团队",
