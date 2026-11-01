@@ -200,7 +200,8 @@ const googleChatModels: AIChatModelCard[] = [
     // https://ai.google.dev/gemini-api/docs/latest-model
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['thinkingLevel3', 'urlContext'],
+      extendParams: ['urlContext'],
+      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },

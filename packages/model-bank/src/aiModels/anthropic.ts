@@ -114,7 +114,8 @@ const anthropicChatModels: AIChatModelCard[] = [
     // https://platform.claude.com/docs/en/models/sonnet-5-5/migration-guide#thinking-runs-by-default
     settings: {
       disabledParams: ['temperature', 'top_p'],
-      extendParams: ['disableContextCaching', 'opus47Effort'],
+      extendParams: ['disableContextCaching'],
+      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',

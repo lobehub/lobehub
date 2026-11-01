@@ -30,7 +30,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     releasedAt: '2026-10-23',
     settings: {
       disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
-      extendParams: ['kimiK3ReasoningEffort'],
+      reasoningEffort: { default: 'max', levels: ['low', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -62,7 +62,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     releasedAt: '2026-10-23',
     settings: {
       disabledParams: ['frequency_penalty', 'presence_penalty', 'temperature', 'top_p'],
-      extendParams: ['kimiK3ReasoningEffort'],
+      reasoningEffort: { default: 'max', levels: ['low', 'high', 'max'] },
     },
     type: 'chat',
   },
