@@ -15,9 +15,12 @@ export interface ConversationSections {
 
 const recentOwnerId = (recent: RecentItem): string | undefined => {
   if (recent.type !== 'topic') return;
-  if (recent.agentId) return recent.agentId;
-  // Group topics carry no agentId; their route names the group.
-  return recent.routePath.match(/\/group\/([^/?#]+)/)?.[1];
+  // Group topics created by `execGroupAgent` persist the supervisor's `agentId`
+  // *and* the group route, so the route decides ownership: reading `agentId`
+  // first credits the group's replies to the supervisor and the group row never
+  // picks up its own activity.
+  const groupId = recent.routePath.match(/\/group\/([^/?#]+)/)?.[1];
+  return groupId ?? recent.agentId ?? undefined;
 };
 
 const toTime = (value: Date | string) => new Date(value).getTime();

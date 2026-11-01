@@ -56,6 +56,26 @@ describe('buildConversationSections', () => {
     expect(recent[2].activeAt).toEqual(new Date('2026-10-02'));
   });
 
+  it('attributes a group topic that also carries the supervisor agentId to the group', () => {
+    const { recent } = buildConversationSections(
+      [agent('sup', '2026-09-01'), agent('g', '2026-09-01', { type: 'group' })],
+      [
+        topic({
+          agentId: 'sup',
+          lastAssistantMessage: 'group reply',
+          routePath: '/group/g/tpc_2',
+          updatedAt: '2026-10-05',
+        }),
+      ],
+    );
+
+    expect(recent.map((c) => c.item.id)).toEqual(['g', 'sup']);
+    expect(recent[0].preview).toBe('group reply');
+    // The supervisor only keeps its own timestamp and never shows the group's reply.
+    expect(recent[1].activeAt).toEqual(new Date('2026-09-01'));
+    expect(recent[1].preview).toBeUndefined();
+  });
+
   it('drops duplicate ids and falls back to the description', () => {
     const { recent } = buildConversationSections(
       [agent('a', '2026-10-01', { description: 'helps' }), agent('a', '2026-10-01')],
