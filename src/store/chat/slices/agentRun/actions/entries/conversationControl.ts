@@ -1,26 +1,16 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
-import { isHeterogeneousAgentModelId, MESSAGE_CANCEL_FLAT } from '@lobechat/const';
+import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
 import {
   type ChatTopicStatus,
   type ConversationContext,
   type MessageMetadata,
-  resolveAgentAgencyConfig,
   type UIChatMessage,
 } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
-import {
-  ensureAgentManagementAccess,
-  getRuntimeCanManageAgent,
-} from '@/helpers/agentManagementAccess';
-import {
-  applyTopicDeviceBinding,
-  getTopicBoundDeviceId,
-  resolveWorkspaceScoped,
-} from '@/helpers/executionTarget';
 import { lambdaClient } from '@/libs/trpc/client';
 import {
   type AgentInterventionSourceAction,
@@ -28,13 +18,7 @@ import {
   type ResolveAgentInterventionBySourceResult,
 } from '@/services/aiAgent';
 import { shareChatService } from '@/services/shareChat';
-import { getAgentStoreState } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { topicSelectors } from '@/store/chat/selectors';
-import {
-  type AgentRuntimeType,
-  selectRuntimeType,
-} from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
+import { type AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { type OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
@@ -42,14 +26,13 @@ import type { Operation } from '@/store/chat/slices/operation/types';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { getElectronStoreState } from '@/store/electron';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
 import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
 import { type RunScope } from '../lifecycle/types';
 import { readClientRunMessages } from './ensureFullHistoryForClientRun';
+import { shouldUseGatewayResume as resolveGatewayResume } from './gatewayResume';
 import { createInterventionProjection } from './interventionProjection';
 
 /**
@@ -224,89 +207,6 @@ export class ConversationControlActionImpl {
       }
     }
     return result;
-  };
-
-  /**
-   * Decide whether approve/reject/reject_continue should go through the
-   * Gateway resume path (new op carrying `resumeApproval`) instead of the
-   * local `executeClientAgent` path. Mirrors the "interrupt + new op"
-   * pattern from .
-   *
-   * Routes via `selectRuntimeType` so approve/reject align with how the
-   * conversation was dispatched at sendMessage time. Hetero resume is not yet
-   * implemented and falls through to client local resume — see .
-   *
-   * We deliberately do **not** look for a living `execServerAgentRuntime`
-   * op here. The server's `waiting_for_human` → `agent_runtime_end` signal
-   * marks the paused op `completed` client-side, and `startOperation` runs
-   * `cleanupCompletedOperations(30_000)` on every new op, which means the
-   * paused op is typically gone by the time the user clicks approve — so
-   * scanning for it would flip us back into client-mode against a live
-   * Gateway backend.
-   */
-  #shouldUseGatewayResume = async (context: ConversationContext): Promise<boolean> => {
-    // A share run only ever executes on the server through the share gateway;
-    // the visitor has no local runtime nor access to the owner's agent config.
-    if (context.agentShareId) return true;
-
-    const agentId = context.agentId;
-    if (!agentId) return false;
-
-    const agentState = getAgentStoreState();
-    const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
-    const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
-    const currentUserId = userProfileSelectors.userId(useUserStore.getState());
-    await ensureAgentManagementAccess({
-      agentId,
-      agentUserId: agent?.userId,
-      currentUserId,
-      visibility: agent?.visibility,
-      workspaceId: agent?.workspaceId,
-    });
-    const canManage = getRuntimeCanManageAgent({
-      agentId,
-      agentUserId: agent?.userId,
-      currentUserId,
-    });
-    const usesWorkspaceMemberSelection =
-      !!agent?.workspaceId && agent.visibility !== 'private' && !canManage;
-    const deviceOverride = agent?.workspaceId
-      ? useUserStore.getState().workspaceUserPreference.agentDeviceOverrides?.[agentId]
-      : undefined;
-    // Same topic machine binding as sendMessage, so the resume takes the path
-    // the paused run was dispatched on.
-    const { agencyConfig, workspaceScoped } = applyTopicDeviceBinding(
-      {
-        agencyConfig: resolveAgentAgencyConfig(agentConfig?.agencyConfig, deviceOverride, {
-          canManage,
-          visibility: agent?.visibility,
-          workspaceId: agent?.workspaceId,
-        }),
-        workspaceScoped: resolveWorkspaceScoped(usesWorkspaceMemberSelection, deviceOverride),
-      },
-      getTopicBoundDeviceId(
-        context.topicId ? topicSelectors.getTopicById(context.topicId)(this.#get()) : undefined,
-        agentId,
-      ),
-      getElectronStoreState().gatewayDeviceInfo?.deviceId,
-    );
-    const isGatewayMode = this.#get().isGatewayModeEnabled(agentId);
-    const heterogeneousProvider =
-      agencyConfig?.heterogeneousProvider ??
-      (!isGatewayMode && isHeterogeneousAgentModelId(agentConfig?.model)
-        ? { type: agentConfig.model }
-        : undefined);
-
-    return (
-      selectRuntimeType({
-        boundDeviceId: agencyConfig?.boundDeviceId,
-        executionTarget: agencyConfig?.executionTarget,
-        heterogeneousProvider,
-        isGatewayMode,
-        isWorkspaceAgent: !!agent?.workspaceId,
-        workspaceScoped,
-      }) === 'gateway'
-    );
   };
 
   /**
@@ -787,7 +687,11 @@ export class ConversationControlActionImpl {
       { status: 'approved' },
       optimisticContext,
     );
-    const shouldUseGatewayResume = await this.#shouldUseGatewayResume(effectiveContext);
+    const shouldUseGatewayResume = await resolveGatewayResume(
+      effectiveContext,
+      [toolMessageId],
+      this.#get,
+    );
 
     if (!shouldUseGatewayResume) {
       this.#writeTopicStatus(effectiveContext, 'active');
@@ -1034,7 +938,7 @@ export class ConversationControlActionImpl {
       threadId: this.#get().activeThreadId,
     };
 
-    if (!(await this.#shouldUseGatewayResume(effectiveContext))) {
+    if (!(await resolveGatewayResume(effectiveContext, toolMessageIds, this.#get))) {
       for (const toolMessageId of toolMessageIds) {
         await this.approveToolCalling(toolMessageId, '', effectiveContext);
       }
@@ -1138,7 +1042,11 @@ export class ConversationControlActionImpl {
     let resolvedOptions = options;
     let resolvedResponse = response;
     const shouldCreateUserMessage = resolvedOptions?.createUserMessage !== false;
-    const shouldUseGatewayResume = await this.#shouldUseGatewayResume(effectiveContext);
+    const shouldUseGatewayResume = await resolveGatewayResume(
+      effectiveContext,
+      [toolMessageId],
+      this.#get,
+    );
 
     if (!shouldUseGatewayResume) {
       this.#writeTopicStatus(effectiveContext, 'active');
@@ -1425,7 +1333,11 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
-    const shouldUseGatewayResume = await this.#shouldUseGatewayResume(effectiveContext);
+    const shouldUseGatewayResume = await resolveGatewayResume(
+      effectiveContext,
+      [toolMessageId],
+      this.#get,
+    );
 
     if (!shouldUseGatewayResume) {
       this.#writeTopicStatus(effectiveContext, 'active');
@@ -1611,7 +1523,11 @@ export class ConversationControlActionImpl {
 
     const toolMessage = dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get());
     if (!toolMessage) return;
-    const shouldUseGatewayStop = await this.#shouldUseGatewayResume(effectiveContext);
+    const shouldUseGatewayStop = await resolveGatewayResume(
+      effectiveContext,
+      [toolMessageId],
+      this.#get,
+    );
 
     const { operationId } = startOperation({
       type: 'cancelToolInteraction',
@@ -2017,7 +1933,11 @@ export class ConversationControlActionImpl {
       { rejectedReason: reason, status: 'rejected' },
       optimisticContext,
     );
-    const shouldUseGatewayResume = await this.#shouldUseGatewayResume(effectiveContext);
+    const shouldUseGatewayResume = await resolveGatewayResume(
+      effectiveContext,
+      [messageId],
+      this.#get,
+    );
 
     if (!shouldUseGatewayResume) this.#writeTopicStatus(effectiveContext, 'active');
 
@@ -2141,7 +2061,7 @@ export class ConversationControlActionImpl {
       { rejectedReason: reason, status: 'rejected' },
       { context: effectiveContext },
     );
-    if (await this.#shouldUseGatewayResume(effectiveContext)) {
+    if (await resolveGatewayResume(effectiveContext, [messageId], this.#get)) {
       const requestMetadata = this.#getRequestMetadataFromMessageChain(messageId);
       const toolCallId = toolMessage.tool_call_id;
       if (!toolCallId) {
