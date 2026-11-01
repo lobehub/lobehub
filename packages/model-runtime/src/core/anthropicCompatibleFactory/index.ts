@@ -21,6 +21,7 @@ import type {
 } from '../../types';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
+import { respondJsonAfterStream } from '../../utils/consumeStream';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugPayload, debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
@@ -699,10 +700,6 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           options?.signal,
         );
 
-        if (payload.responseMode === 'json') {
-          return Response.json(response);
-        }
-
         const stream = new ReadableStream<Anthropic.MessageStreamEvent>({
           start(controller) {
             const message = response as Anthropic.Message;
@@ -767,7 +764,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           },
         });
 
-        return StreamingResponse(
+        const streamingResponse = StreamingResponse(
           chatCompletion?.handleStream
             ? chatCompletion.handleStream(stream, {
                 callbacks: streamOptions.callbacks,
@@ -783,6 +780,10 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
             headers: options?.headers,
           },
         );
+
+        if (payload.responseMode === 'json')
+          return await respondJsonAfterStream(streamingResponse, response);
+        return streamingResponse;
       } catch (error) {
         throw this.handleError(error);
       }

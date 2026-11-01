@@ -335,6 +335,51 @@ describe('createAnthropicCompatibleRuntime', () => {
     expect(createClient.mock.calls[0][0]).not.toHaveProperty('modelIdMapping');
   });
 
+  it('reports usage through onFinal in JSON response mode and returns the raw message', async () => {
+    const message = {
+      content: [{ text: 'Hello', type: 'text' }],
+      id: 'msg_json',
+      model: 'test-model',
+      role: 'assistant',
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      type: 'message',
+      usage: { cache_read_input_tokens: 100, input_tokens: 11, output_tokens: 7 },
+    };
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({ max_tokens: 1024, messages: [], model: payload.model }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://api.example.com/anthropic',
+            messages: { create: vi.fn().mockResolvedValue(message) },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const onFinal = vi.fn();
+
+    const response = await new Runtime({ apiKey: 'test-key' }).chat(
+      {
+        messages: [{ content: 'hi', role: 'user' }],
+        model: 'test-model',
+        responseMode: 'json',
+        stream: false,
+      } as any,
+      { callback: { onFinal } },
+    );
+
+    expect(await response.json()).toEqual(message);
+    expect(onFinal).toHaveBeenCalledTimes(1);
+    expect(onFinal.mock.calls[0][0].usage).toMatchObject({
+      inputCachedTokens: 100,
+      totalInputTokens: 111,
+      totalOutputTokens: 7,
+    });
+  });
+
   it('should classify provider balance errors without a custom error handler', async () => {
     const messagesCreate = vi.fn().mockRejectedValue({
       error: {
