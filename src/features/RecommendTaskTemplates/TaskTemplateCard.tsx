@@ -29,15 +29,18 @@ import { useTaskTemplateCreate } from './useTaskTemplateCreate';
 import { useVisibleAuthSpecs } from './useVisibleAuthSpecs';
 
 interface TaskTemplateCardProps {
+  /** A click on the card creates the task instead of opening the detail modal. */
+  clickToCreate?: boolean;
   /** Rail rendering: one scannable line per suggestion, detail lives in the modal. */
   compact?: boolean;
   onCreated: (templateId: number) => void;
-  onDismiss: (templateId: number) => void;
+  /** Omit to hide the dismiss button. */
+  onDismiss?: (templateId: number) => void;
   template: TaskTemplate;
 }
 
 export const TaskTemplateCard = memo<TaskTemplateCardProps>(
-  ({ compact, template, onCreated, onDismiss }) => {
+  ({ clickToCreate, compact, template, onCreated, onDismiss }) => {
     const { t } = useTranslation('common');
 
     const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
@@ -61,7 +64,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       (event: MouseEvent) => {
         event.stopPropagation();
         if (loading || created) return;
-        onDismiss(template.id);
+        onDismiss?.(template.id);
       },
       [created, loading, onDismiss, template.id],
     );
@@ -75,9 +78,11 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     const handlePrimaryClick = useCallback(
       (event: MouseEvent) => {
         event.stopPropagation();
+        // The card body stays clickable while a create is in flight (`clickToCreate`).
+        if (loading || pendingCreate) return;
         handleAddTask();
       },
-      [handleAddTask],
+      [handleAddTask, loading, pendingCreate],
     );
 
     if (compact)
@@ -101,13 +106,15 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
               </Text>
             </Flexbox>
           </Button>
-          <ActionIcon
-            className={`${styles.dismissBtn} task-template-dismiss`}
-            icon={X}
-            size={'small'}
-            title={t('taskTemplate.action.dismiss.tooltip')}
-            onClick={handleDismiss}
-          />
+          {onDismiss && (
+            <ActionIcon
+              className={`${styles.dismissBtn} task-template-dismiss`}
+              icon={X}
+              size={'small'}
+              title={t('taskTemplate.action.dismiss.tooltip')}
+              onClick={handleDismiss}
+            />
+          )}
         </Flexbox>
       );
 
@@ -130,7 +137,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         padding={12}
         style={{ borderRadius: cssVar.borderRadiusLG, cursor: 'pointer' }}
         variant={'outlined'}
-        onClick={handleOpenDetail}
+        onClick={clickToCreate ? handlePrimaryClick : handleOpenDetail}
       >
         <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
           <Flexbox
@@ -163,15 +170,17 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
             </Flexbox>
           </Flexbox>
 
-          <Flexbox horizontal align={'center'} gap={8}>
-            <ActionIcon
-              className={`${styles.dismissBtn} task-template-dismiss`}
-              icon={X}
-              size={'small'}
-              title={t('taskTemplate.action.dismiss.tooltip')}
-              onClick={handleDismiss}
-            />
-          </Flexbox>
+          {onDismiss && (
+            <Flexbox horizontal align={'center'} gap={8}>
+              <ActionIcon
+                className={`${styles.dismissBtn} task-template-dismiss`}
+                icon={X}
+                size={'small'}
+                title={t('taskTemplate.action.dismiss.tooltip')}
+                onClick={handleDismiss}
+              />
+            </Flexbox>
+          )}
         </Flexbox>
         <Divider dashed />
         {description.trim().length > 0 ? <BriefCardSummary summary={description} /> : null}
