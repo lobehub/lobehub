@@ -4,10 +4,12 @@ import { Block, createModal, Flexbox, Input, Text, useModalContext } from '@lobe
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { t as translate } from 'i18next';
-import { memo, useEffect, useState } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { topicService } from '@/services/topic';
+import AsyncBoundary from '@/components/AsyncBoundary';
+import AsyncError from '@/components/AsyncError';
+import { useEvalStore } from '@/store/eval';
 
 const styles = stylex.create({
   row: {
@@ -18,13 +20,6 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
   },
 });
-
-interface PickableTopic {
-  agentTitle?: string | null;
-  id: string;
-  title: string | null;
-  updatedAt?: Date | number | string | null;
-}
 
 const formatDay = (value?: Date | number | string | null) => {
   if (!value) return '';
@@ -40,44 +35,29 @@ const ConversationPicker = memo<{ onPick: (topicId: string) => void }>(({ onPick
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
   const [keywords, setKeywords] = useState('');
-  const [topics, setTopics] = useState<PickableTopic[]>();
+  const [submittedQuery, setSubmittedQuery] = useState('');
+  const useFetchConversationTopics = useEvalStore((s) => s.useFetchConversationTopics);
+  const {
+    data: topics,
+    error,
+    isLoading,
+    isValidating,
+    mutate,
+  } = useFetchConversationTopics(submittedQuery);
+  // SWR retains the failure for the error surface; don't leave an unhandled rejection.
+  const retry = () => void mutate().catch(() => undefined);
 
-  const loadRecent = async () => {
-    const list = await topicService.getRecentTopics(30);
-    setTopics(
-      list
-        .filter((topic) => topic.type === 'agent')
-        .map((topic) => ({
-          agentTitle: topic.agent?.title,
-          id: topic.id,
-          title: topic.title,
-          updatedAt: topic.updatedAt,
-        })),
-    );
-  };
-
-  useEffect(() => {
-    loadRecent().catch(() => setTopics([]));
-  }, []);
-
-  const search = async () => {
+  const search = () => {
     const query = keywords.trim();
-    setTopics(undefined);
-    try {
-      if (!query) return await loadRecent();
-      const list = await topicService.searchTopics(query);
-      setTopics(
-        list.map((topic) => ({ id: topic.id, title: topic.title, updatedAt: topic.updatedAt })),
-      );
-    } catch {
-      setTopics([]);
-    }
+    if (query === submittedQuery) retry();
+    else setSubmittedQuery(query);
   };
 
   return (
     <Flexbox gap={12}>
       <Text type={'secondary'}>{t('lobeBench.case.fromConversation.hint')}</Text>
       <Input
+        aria-label={t('lobeBench.case.fromConversation.search')}
         placeholder={t('lobeBench.case.fromConversation.search')}
         value={keywords}
         variant={'filled'}
@@ -85,21 +65,33 @@ const ConversationPicker = memo<{ onPick: (topicId: string) => void }>(({ onPick
         onPressEnter={search}
       />
       <Block padding={4} style={{ maxHeight: 400, overflowY: 'auto' }} variant={'outlined'}>
-        {!topics ? (
-          <Text style={{ padding: 12 }} type={'secondary'}>
-            …
-          </Text>
-        ) : topics.length === 0 ? (
-          <Text style={{ padding: 12 }} type={'secondary'}>
-            {t('lobeBench.case.fromConversation.empty')}
-          </Text>
-        ) : (
-          topics.map((topic) => (
+        <AsyncBoundary
+          data={topics}
+          error={error}
+          errorVariant={'inline'}
+          isEmpty={topics?.length === 0}
+          isLoading={isLoading || (topics === undefined && isValidating)}
+          empty={
+            <Text style={{ padding: 12 }} type={'secondary'}>
+              {t('lobeBench.case.fromConversation.empty')}
+            </Text>
+          }
+          onRetry={retry}
+        >
+          {topics?.map((topic) => (
             <Flexbox
               className={stylex.props(styles.row).className}
               gap={2}
               key={topic.id}
+              role={'button'}
+              tabIndex={0}
               onClick={() => {
+                onPick(topic.id);
+                close();
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
                 onPick(topic.id);
                 close();
               }}
@@ -111,7 +103,10 @@ const ConversationPicker = memo<{ onPick: (topicId: string) => void }>(({ onPick
                 {[topic.agentTitle, formatDay(topic.updatedAt)].filter(Boolean).join(' · ')}
               </Text>
             </Flexbox>
-          ))
+          ))}
+        </AsyncBoundary>
+        {topics !== undefined && error && (
+          <AsyncError error={error} retrying={isValidating} variant={'inline'} onRetry={retry} />
         )}
       </Block>
     </Flexbox>

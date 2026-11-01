@@ -8,4 +8,5 @@ export * from './dataset';
 export * from './evalMemory';
 export * from './evaluation';
 export * from './ragas';
+export * from './rows';
 export * from './rubric';

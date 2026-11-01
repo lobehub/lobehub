@@ -55,7 +55,7 @@ export async function interruptEvalOperations(deps: EvalRunDeps, operationIds: s
 export async function abortRun(deps: EvalRunDeps, runId: string) {
   // Close the write gate before interrupting: interruption itself can deliver
   // completion callbacks. Keep partial results and operation ids for audit.
-  const stoppedTopics = await deps.runTopicModel.batchMarkAborted(runId);
+  const stoppedTopics = await deps.executionRepo.batchMarkAborted(runId);
 
   const operationIds: string[] = [];
   for (const rt of stoppedTopics) {
@@ -233,7 +233,7 @@ export async function checkAndHandleRunTimeout(
   }
 
   // Single SQL: mark pending topics where created_at + timeout < NOW() as 'timeout'
-  const timedOutRows = await deps.runTopicModel.batchMarkTimeout(run.id, perCaseTimeout);
+  const timedOutRows = await deps.executionRepo.batchMarkTimeout(run.id, perCaseTimeout);
   if (timedOutRows.length === 0) return false;
 
   const operations = timedOutRows

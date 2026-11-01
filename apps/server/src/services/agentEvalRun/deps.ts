@@ -12,6 +12,7 @@ import {
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { AgentEvalExecutionRepo } from '@/database/repositories/agentEvalExecution';
 import { AgentService } from '@/server/services/agent';
 
 import type { EvalRunDeps } from './types';
@@ -46,6 +47,7 @@ export const createEvalRunDeps = (
     db,
     environmentModel,
     experimentModel,
+    executionRepo: new AgentEvalExecutionRepo(db, userId, workspaceId),
     messageModel,
     runModel,
     runTopicModel,

@@ -186,7 +186,7 @@ const ContenderRanking = ({ benchmarkId, runs, sets }: ContenderRankingProps) =>
               {notes.join(' · ')}
             </Text>
           )}
-          <Button icon={Plus} size={'small'} type={'primary'} onClick={startExperiment}>
+          <Button icon={Plus} type={'primary'} onClick={startExperiment}>
             {t('lobeBench.benchmark.newExperiment')}
           </Button>
         </Flexbox>

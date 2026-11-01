@@ -20,7 +20,7 @@ export const hasUnverifiedEvalAttempts = () => sql<boolean>`
           where attempt ->> 'status' in ('error', 'timeout', 'judge_error', 'external', 'running', 'pending')
             or attempt ->> 'error' = 'No assistant output'
             or attempt ->> 'errorPhase' = 'judge'
-            or jsonb_typeof(attempt -> 'passed') is distinct from 'boolean'
+            or coalesce(jsonb_typeof(attempt -> 'passed'), '') <> 'boolean'
         )
         or (
           coalesce((${agentEvalRuns.config} ->> 'k')::integer, 1) > 1

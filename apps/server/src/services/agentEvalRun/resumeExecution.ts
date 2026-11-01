@@ -52,7 +52,7 @@ export async function executeResumedTrajectory(
     parentMessageId,
   );
   const executionId = crypto.randomUUID();
-  const claimed = await deps.runTopicModel.claimExecution({
+  const claimed = await deps.executionRepo.claimExecution({
     executionId,
     expectedExecutionId: params.expectedExecutionId,
     resume: true,
@@ -211,7 +211,7 @@ export async function executeResumedThreadTrajectory(
 
   // Look up the pre-created RunTopic and reset it for resume
   const executionId = crypto.randomUUID();
-  const claimed = await deps.runTopicModel.claimExecution({
+  const claimed = await deps.executionRepo.claimExecution({
     executionId,
     expectedExecutionId: params.expectedExecutionId,
     resume: true,
@@ -231,7 +231,7 @@ export async function executeResumedThreadTrajectory(
   const prevToolCalls = (currentThreadMeta.toolCalls as number | undefined) ?? 0;
   const prevTokens = (currentThreadMeta.tokens as number | undefined) ?? 0;
   const bindOperation = async (operationId: string) => {
-    const saved = await deps.runTopicModel.updateThreadMetadata(
+    const saved = await deps.executionRepo.updateThreadMetadata(
       runId,
       topicId,
       threadId,

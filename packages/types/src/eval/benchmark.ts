@@ -65,3 +65,22 @@ export interface AgentEvalBenchmarkListItem {
   runCount?: number;
   testCaseCount?: number;
 }
+
+/** Health of one engine behind the deployed benchmark mock service. */
+export interface BenchmarkMockUpstreamHealth {
+  cases?: number;
+  error?: string;
+  ok: boolean;
+  release?: string;
+  url: string;
+}
+
+/** One response shape for configured, unavailable and healthy mock services. */
+export interface BenchmarkMockStatus {
+  configured: boolean;
+  error?: string;
+  ok?: boolean;
+  status?: number;
+  tokenConfigured: boolean;
+  upstreams?: Record<string, BenchmarkMockUpstreamHealth>;
+}

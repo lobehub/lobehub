@@ -79,7 +79,7 @@ export const ExperimentResultsState = ({
             <Alert title={t('lobeBench.dashboard.missingRuns')} type={'warning'} />
           )}
           <Flexbox align={'flex-start'}>
-            <Button loading={retrying} size={'small'} onClick={onRetry}>
+            <Button loading={retrying} onClick={onRetry}>
               {t('error.retry', { ns: 'error' })}
             </Button>
           </Flexbox>

@@ -136,7 +136,7 @@ async function executeTrajectoryCore(
 
   const current = await deps.runTopicModel.findByRunAndTestCase(runId, testCaseId);
   const executionId = crypto.randomUUID();
-  const claimed = await deps.runTopicModel.claimExecution({
+  const claimed = await deps.executionRepo.claimExecution({
     executionId,
     expectedExecutionId: current?.evalResult?.executionId,
     runId,

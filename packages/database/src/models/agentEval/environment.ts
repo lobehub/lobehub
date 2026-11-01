@@ -1,11 +1,7 @@
-import type { EvalCaseEnvironment } from '@lobechat/types';
+import type { AgentEvalEnvironmentInsert, EvalCaseEnvironment } from '@lobechat/types';
 import { and, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
-import {
-  agentEvalEnvironments,
-  agentEvalTestCases,
-  type NewAgentEvalEnvironment,
-} from '../../schemas';
+import { agentEvalEnvironments, agentEvalTestCases } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
@@ -42,7 +38,7 @@ export class AgentEvalEnvironmentModel {
       agentEvalEnvironments,
     );
 
-  create = async (params: Omit<NewAgentEvalEnvironment, 'userId' | 'workspaceId'>) => {
+  create = async (params: Omit<AgentEvalEnvironmentInsert, 'userId' | 'workspaceId'>) => {
     const [result] = await this.db
       .insert(agentEvalEnvironments)
       .values({ ...params, userId: this.userId, workspaceId: this.workspaceId ?? null })

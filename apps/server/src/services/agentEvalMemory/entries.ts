@@ -1,6 +1,9 @@
-import type { EvalMemoryEntry, EvalMemoryFixture, EvalMemoryLayer } from '@lobechat/types';
-
-import type { AgentEvalMemoryItem } from '@/database/schemas';
+import type {
+  AgentEvalMemoryItem,
+  EvalMemoryEntry,
+  EvalMemoryFixture,
+  EvalMemoryLayer,
+} from '@lobechat/types';
 
 /** What a Memory entry is made of before it has an id, a clock and an embedding. */
 export interface EvalMemoryDraft {

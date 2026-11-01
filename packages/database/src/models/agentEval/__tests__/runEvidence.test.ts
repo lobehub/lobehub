@@ -129,6 +129,15 @@ describe('read-time evidence eligibility', () => {
         { error: 'No assistant output', passed: false, status: 'failed', threadId: '3' },
       ],
     },
+    ...[null, 'true', 1].map((value) => ({
+      name: `non-boolean verdict ${String(value)}`,
+      expected: true,
+      attempts: [
+        passed('1'),
+        passed('2'),
+        { status: 'passed', threadId: '3', passed: value } as unknown as EvalThreadResult,
+      ],
+    })),
     { name: 'missing attempt', expected: true, attempts: [passed('1'), passed('2')] },
     { name: 'missing run topic', expected: true, skipTopic: true },
     {

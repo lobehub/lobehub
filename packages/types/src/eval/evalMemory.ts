@@ -59,3 +59,29 @@ export interface EvalMemorySnapshot {
   entries: EvalMemoryEntry[];
   fixtureHash: string;
 }
+
+/** Stored attempt memory, including the ownership and vector fields omitted from UI snapshots. */
+export interface AgentEvalMemoryItem {
+  accessedAt: Date;
+  attemptId: string;
+  capturedAt: Date;
+  createdAt: Date;
+  details: string | null;
+  embedding: number[] | null;
+  fixtureHash: string | null;
+  id: string;
+  layer: EvalMemoryLayer;
+  memoryCategory: string | null;
+  memoryType: string | null;
+  payload: Record<string, unknown>;
+  removedReason: string | null;
+  runId: string;
+  source: 'agent' | 'fixture';
+  summary: string | null;
+  tags: string[] | null;
+  threadId: string | null;
+  title: string | null;
+  topicId: string;
+  updatedAt: Date;
+  userId: string;
+}

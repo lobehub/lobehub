@@ -266,6 +266,30 @@ describe('fixed Lobe Bench datasets', () => {
 });
 
 describe('seed retirement preserves execution evidence', () => {
+  it.each([
+    { label: 'SQL null', metadata: null, active: true },
+    { label: 'missing key', metadata: {}, active: true },
+    { label: 'JSON null', metadata: { retired: null }, active: true },
+    { label: 'boolean false', metadata: { retired: false }, active: true },
+    { label: 'string true', metadata: { retired: 'true' }, active: true },
+    { label: 'boolean true', metadata: { retired: true }, active: false },
+  ])('treats only boolean true as retired: $label', async ({ metadata, active }) => {
+    const dataset = await newDataset();
+    const [row] = await db
+      .insert(agentEvalTestCases)
+      .values({
+        content: { input: 'Question' },
+        datasetId: dataset.id,
+        metadata,
+        userId,
+      })
+      .returning();
+    expect((await cases.findByDatasetId(dataset.id)).map((item) => item.id)).toEqual(
+      active ? [row.id] : [],
+    );
+    expect(await cases.findById(row.id)).toBeDefined();
+  });
+
   it('keeps run topics, hides retired rows from catalog reads, and can reactivate the same id', async () => {
     const [dataset] = await db
       .insert(agentEvalDatasets)

@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
+import { AgentEvalExecutionRepo } from '../../../repositories/agentEvalExecution';
 import {
   agentEvalBenchmarks,
   agentEvalDatasets,
@@ -129,6 +130,35 @@ afterEach(async () => {
 });
 
 describe('AgentEvalRunTopicModel', () => {
+  it.each([undefined, null, '', 'done', 'aborted'])(
+    'guards completion reason %s without conflating missing and stopped',
+    async (completionReason) => {
+      await runTopicModel.batchCreate([
+        {
+          runId,
+          topicId: topicId1,
+          testCaseId: testCaseId1,
+          status: 'running',
+          evalResult: {
+            executionId: 'current',
+            ...(completionReason !== undefined && { completionReason }),
+          } as any,
+        },
+      ]);
+      const updated = await runTopicModel.updateByRunAndTopic(runId, topicId1, { score: 1 });
+      const merged = await runTopicModel.mergeExecutionResult(runId, topicId1, 'current', {
+        operationId: 'operation',
+      });
+      if (completionReason === 'aborted') {
+        expect(updated).toBeUndefined();
+        expect(merged).toBeUndefined();
+      } else {
+        expect(updated?.score).toBe(1);
+        expect(merged?.evalResult?.operationId).toBe('operation');
+      }
+    },
+  );
+
   describe('batchCreate', () => {
     it('should create multiple run topics', async () => {
       const params = [
@@ -526,7 +556,10 @@ describe('AgentEvalRunTopicModel', () => {
         .where(eq(agentEvalRunTopics.topicId, topicId2));
 
       // Timeout = 20 min (1_200_000 ms)
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       expect(rows).toHaveLength(2); // topic1 (30min) and topic2 (25min) > 20min
 
@@ -552,7 +585,10 @@ describe('AgentEvalRunTopicModel', () => {
         .set({ createdAt: sql`NOW() - interval '30 minutes'` })
         .where(eq(agentEvalRunTopics.runId, runId));
 
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       expect(rows).toHaveLength(1); // only topic2 (running), not topic1 (passed)
 
@@ -582,7 +618,10 @@ describe('AgentEvalRunTopicModel', () => {
         .set({ createdAt: sql`NOW() - interval '30 minutes'` })
         .where(eq(agentEvalRunTopics.runId, runId));
 
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       // Only the running topic should be marked
       expect(rows).toHaveLength(1);
@@ -603,7 +642,10 @@ describe('AgentEvalRunTopicModel', () => {
         { userId, runId, topicId: topicId2, testCaseId: testCaseId2, status: 'running' },
       ]);
 
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       expect(rows).toHaveLength(0);
     });
@@ -634,7 +676,10 @@ describe('AgentEvalRunTopicModel', () => {
         .update(agentEvalRunTopics)
         .set({ createdAt: sql`NOW() - interval '30 minutes'` });
 
-      const rows = await runTopicModel.batchMarkTimeout(runId, 1_200_000);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(
+        runId,
+        1_200_000,
+      );
 
       expect(rows).toHaveLength(1);
 
@@ -659,7 +704,7 @@ describe('AgentEvalRunTopicModel', () => {
         { userId, runId, topicId: topic3.id, testCaseId: testCaseId1, status: 'passed' },
       ]);
 
-      const rows = await runTopicModel.batchMarkAborted(runId);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkAborted(runId);
 
       expect(rows).toHaveLength(2); // pending + running, not passed
 
@@ -691,7 +736,7 @@ describe('AgentEvalRunTopicModel', () => {
           evalResult: evidence,
         },
       ]);
-      await runTopicModel.batchMarkAborted(runId);
+      await new AgentEvalExecutionRepo(serverDB, userId).batchMarkAborted(runId);
       expect(
         await runTopicModel.updateByRunAndTopic(runId, topicId1, {
           status: 'passed',
@@ -727,7 +772,7 @@ describe('AgentEvalRunTopicModel', () => {
         { userId, runId, topicId: topicId2, testCaseId: testCaseId2, status: 'failed' },
       ]);
 
-      const rows = await runTopicModel.batchMarkAborted(runId);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkAborted(runId);
 
       expect(rows).toHaveLength(0);
     });
@@ -753,7 +798,7 @@ describe('AgentEvalRunTopicModel', () => {
         },
       ]);
 
-      const rows = await runTopicModel.batchMarkAborted(runId);
+      const rows = await new AgentEvalExecutionRepo(serverDB, userId).batchMarkAborted(runId);
 
       expect(rows).toHaveLength(1);
 
@@ -780,11 +825,16 @@ describe('AgentEvalRunTopicModel', () => {
         .returning();
 
       expect(
-        await runTopicModel.updateThreadMetadata(runId, topicId1, thread.id, {
-          judgeError: undefined,
-          passed: true,
-          status: 'passed',
-        }),
+        await new AgentEvalExecutionRepo(serverDB, userId).updateThreadMetadata(
+          runId,
+          topicId1,
+          thread.id,
+          {
+            judgeError: undefined,
+            passed: true,
+            status: 'passed',
+          },
+        ),
       ).toEqual({ id: thread.id });
 
       const [saved] = await serverDB.select().from(threads).where(eq(threads.id, thread.id));

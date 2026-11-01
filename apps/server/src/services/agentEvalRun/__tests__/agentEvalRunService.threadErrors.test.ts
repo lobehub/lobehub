@@ -9,6 +9,7 @@ import {
   AgentEvalRunTopicModel,
 } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
+import { AgentEvalExecutionRepo } from '@/database/repositories/agentEvalExecution';
 import { agentEvalDatasets, agentEvalTestCases, messages, topics } from '@/database/schemas';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { AgentRuntimeService } from '@/server/services/agentRuntime/AgentRuntimeService';
@@ -219,10 +220,15 @@ describe('invalid output and Stop races', () => {
         threads: [{ passed: true, status: 'passed', threadId: threadIds[0] }],
       },
     });
-    await runTopicModel().updateThreadMetadata(run.id, topic.id, threadIds[1], {
-      operationId: 'attempt',
-      retained: 'audit',
-    });
+    await new AgentEvalExecutionRepo(serverDB, userId).updateThreadMetadata(
+      run.id,
+      topic.id,
+      threadIds[1],
+      {
+        operationId: 'attempt',
+        retained: 'audit',
+      },
+    );
     let resolveJudge!: (value: EvaluateResult) => void;
     let reachedJudge!: () => void;
     const entered = new Promise<void>((resolve) => {
@@ -264,9 +270,14 @@ describe('invalid output and Stop races', () => {
     const svc = new AgentEvalRunService(serverDB, userId);
     const { finish, run, threadIds, topic } = await setupTwoThreadCase(svc);
     await finish(0, 'completed');
-    await runTopicModel().updateThreadMetadata(run.id, topic.id, threadIds[0], {
-      operationId: 'late-id',
-    });
+    await new AgentEvalExecutionRepo(serverDB, userId).updateThreadMetadata(
+      run.id,
+      topic.id,
+      threadIds[0],
+      {
+        operationId: 'late-id',
+      },
+    );
     const thread = await new ThreadModel(serverDB, userId).findById(threadIds[0]);
     expect(thread?.metadata).toMatchObject({
       operationId: 'late-id',

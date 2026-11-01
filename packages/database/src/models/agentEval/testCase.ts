@@ -15,7 +15,7 @@ export const isRetiredEvalTestCase = (testCase: { metadata?: Record<string, unkn
 
 /** Retired rows remain available by id for historical runs, but leave the runnable catalog. */
 export const activeEvalTestCases = () =>
-  sql`${agentEvalTestCases.metadata} -> 'retired' IS DISTINCT FROM 'true'::jsonb`;
+  sql`COALESCE(${agentEvalTestCases.metadata} -> 'retired', 'null'::jsonb) <> 'true'::jsonb`;
 
 export class AgentEvalTestCaseModel {
   private userId: string;

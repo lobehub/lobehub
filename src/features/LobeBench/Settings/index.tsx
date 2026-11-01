@@ -1,5 +1,6 @@
 'use client';
 
+import type { BenchmarkMockStatus } from '@lobechat/types';
 import {
   Block,
   Button,
@@ -51,7 +52,7 @@ const styles = stylex.create({
 
 type Section = 'defaults' | 'judge' | 'mock';
 
-type MockStatus = Awaited<ReturnType<typeof agentEvalService.checkBenchmarkMock>> | undefined;
+type MockStatus = BenchmarkMockStatus | undefined;
 
 interface BuiltInSettingsProps {
   benchmark: { id: string; metadata?: Record<string, unknown> | null };

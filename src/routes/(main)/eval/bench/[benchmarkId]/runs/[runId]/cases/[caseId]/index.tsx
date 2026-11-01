@@ -8,6 +8,10 @@ import { useParams, useSearchParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import {
+  experimentContextSuffix,
+  parseExperimentId,
+} from '@/features/LobeBench/experimentNavigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
@@ -27,8 +31,8 @@ const CaseDetail = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   // Opened from a Lobe Bench experiment: "back" returns there and prev/next keep the context.
   const [searchParams] = useSearchParams();
-  const experimentId = searchParams.get('experiment');
-  const suffix = experimentId ? `?experiment=${experimentId}` : '';
+  const experimentId = parseExperimentId(searchParams.get('experiment'));
+  const suffix = experimentContextSuffix(experimentId);
   const useFetchRunDetail = useEvalStore((s) => s.useFetchRunDetail);
   const useFetchRunResults = useEvalStore((s) => s.useFetchRunResults);
   const isActive = useEvalStore(runSelectors.isRunActive(runId!));

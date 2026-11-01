@@ -1,3 +1,4 @@
+import type { BenchmarkMockStatus, BenchmarkMockUpstreamHealth } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -8,26 +9,6 @@ import { getEvalMockConfig } from '@/server/services/agentEvalRun/utils';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 
 const MOCK_CHECK_TIMEOUT_MS = 5000;
-
-/** What a mock reports for an engine it forwards a dataset to. */
-interface MockUpstreamHealth {
-  cases?: number;
-  error?: string;
-  ok: boolean;
-  release?: string;
-  url: string;
-}
-
-/** One shape for every outcome of checkBenchmarkMock, so the UI can read any field after narrowing on `configured`. */
-interface MockCheck {
-  /** Whether this server has a mock tool service configured (EVAL_TOOL_MOCK_BASE_URL). */
-  configured: boolean;
-  error?: string;
-  ok?: boolean;
-  status?: number;
-  tokenConfigured: boolean;
-  upstreams?: Record<string, MockUpstreamHealth>;
-}
 
 export const benchmarkRouter = router({
   // ============================================
@@ -82,7 +63,7 @@ export const benchmarkRouter = router({
    */
   checkBenchmarkMock: agentEvalProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
+    .query(async ({ ctx, input }): Promise<BenchmarkMockStatus> => {
       const benchmark = await ctx.benchmarkModel.findById(input.id);
       if (!benchmark) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Benchmark not found' });
@@ -93,7 +74,7 @@ export const benchmarkRouter = router({
       const mock = base ? getEvalMockConfig(benchmark) : undefined;
       const tokenConfigured = !!process.env.EVAL_TOOL_FORWARDING_TOKEN;
       if (!base || !mock) {
-        const unconfigured: MockCheck = { configured: false, tokenConfigured };
+        const unconfigured: BenchmarkMockStatus = { configured: false, tokenConfigured };
         return unconfigured;
       }
       const controller = new AbortController();
@@ -101,17 +82,17 @@ export const benchmarkRouter = router({
       try {
         const response = await fetch(`${base}/healthz`, { signal: controller.signal });
         // A mock may front other engines (one per case set); it reports them under `upstreams`.
-        let upstreams: Record<string, MockUpstreamHealth> | undefined;
+        let upstreams: Record<string, BenchmarkMockUpstreamHealth> | undefined;
         try {
           const body = (await response.json()) as {
-            upstreams?: Record<string, MockUpstreamHealth>;
+            upstreams?: Record<string, BenchmarkMockUpstreamHealth>;
           };
           if (body && typeof body.upstreams === 'object' && body.upstreams)
             upstreams = body.upstreams;
         } catch {
           // Not JSON: nothing more to report.
         }
-        const result: MockCheck = {
+        const result: BenchmarkMockStatus = {
           configured: true,
           ok: response.ok,
           status: response.status,
@@ -120,7 +101,7 @@ export const benchmarkRouter = router({
         };
         return result;
       } catch (error) {
-        const failed: MockCheck = {
+        const failed: BenchmarkMockStatus = {
           configured: true,
           error: error instanceof Error ? error.message : String(error),
           ok: false,

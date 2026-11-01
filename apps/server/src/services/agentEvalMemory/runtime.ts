@@ -15,6 +15,7 @@ import type {
   AddExperienceMemoryResult,
   AddIdentityMemoryResult,
   AddPreferenceMemoryResult,
+  AgentEvalMemoryItem,
   EvalMemoryLayer,
   EvalMemoryReference,
   QueryTaxonomyOptionsParams,
@@ -28,7 +29,7 @@ import { and, asc, eq, isNull, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { normalizeUserMemorySearchQueries } from '@/database/models/userMemory';
-import { agentEvalMemories, type AgentEvalMemoryItem } from '@/database/schemas';
+import { agentEvalMemories } from '@/database/schemas';
 import { getEvalAttemptId } from '@/server/services/agentEvalRun/utils';
 import {
   type MemorySearchEffort,

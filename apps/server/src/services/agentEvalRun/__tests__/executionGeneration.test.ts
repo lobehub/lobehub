@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentEvalRunModel, AgentEvalRunTopicModel } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
+import { AgentEvalExecutionRepo } from '@/database/repositories/agentEvalExecution';
 import { agentEvalDatasets, agentEvalTestCases, messages } from '@/database/schemas';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import { EvalResumeConflictError } from '@/server/services/agentEvalRun/resumeTarget';
@@ -132,7 +133,7 @@ describe.each([false, true])('execution generation isolation (threaded=%s)', (th
     async (stop) => {
       const c = await activeCase(threaded);
       if (stop === 'Stop') await service().abortRun(c.run.id);
-      else await rows().batchMarkTimeout(c.run.id, 1);
+      else await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(c.run.id, 1);
       const stopped = await c.current();
       expect(stopped?.evalResult?.executionId).not.toBe('old');
       expect(await c.resume(stopped?.evalResult?.executionId)).toMatchObject({ status: 'started' });
@@ -210,7 +211,7 @@ describe.each([false, true])('execution generation isolation (threaded=%s)', (th
 
   it('claims only one operation for concurrent Resume requests with the same observed generation', async () => {
     const c = await activeCase(threaded);
-    await rows().batchMarkTimeout(c.run.id, 1);
+    await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(c.run.id, 1);
     const stopped = await c.current();
     const results = await Promise.all([
       c.resume(stopped?.evalResult?.executionId),
@@ -238,7 +239,7 @@ describe('case and run boundary guards', () => {
 
   it('rejects a stale finalizer both while resumed execution is active and after it finishes', async () => {
     const c = await activeCase(false);
-    await rows().batchMarkTimeout(c.run.id, 1);
+    await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(c.run.id, 1);
     const oldRun = await runs().findById(c.run.id);
     const stopped = await c.current();
     await c.resume(stopped?.evalResult?.executionId);
@@ -296,7 +297,7 @@ describe('case and run boundary guards', () => {
 
   it('keeps a completion delivered before execAgent returns when binding the operation again', async () => {
     const c = await activeCase(false);
-    await rows().batchMarkTimeout(c.run.id, 1);
+    await new AgentEvalExecutionRepo(serverDB, userId).batchMarkTimeout(c.run.id, 1);
     mocks.exec.mockImplementationOnce(async (params) => {
       await params.onOperationCreated('early-operation');
       await params.hooks[0].handler({ reason: 'done', status: 'done' });

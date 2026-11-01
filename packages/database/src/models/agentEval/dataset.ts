@@ -1,12 +1,8 @@
+import type { AgentEvalTestCaseInsert } from '@lobechat/types';
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
-import {
-  agentEvalDatasets,
-  agentEvalTestCases,
-  type NewAgentEvalDataset,
-  type NewAgentEvalTestCase,
-} from '../../schemas';
+import { agentEvalDatasets, agentEvalTestCases, type NewAgentEvalDataset } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere, normalizeWorkspaceId } from '../../utils/workspace';
 import {
@@ -64,7 +60,7 @@ export class AgentEvalDatasetModel {
    */
   create = async (
     params: NewAgentEvalDataset,
-    cases?: Omit<NewAgentEvalTestCase, 'datasetId' | 'userId' | 'workspaceId'>[],
+    cases?: Omit<AgentEvalTestCaseInsert, 'datasetId' | 'userId' | 'workspaceId'>[],
   ) =>
     this.db.transaction(async (tx) => {
       const fixed = await isFixedLobeBenchDataset(tx, params);

@@ -131,6 +131,11 @@ export const isMessageListKey = (
 
 // ---- topic --------------------------------------------------------------
 export const topicKeys = {
+  evalPicker: def('topic:evalPicker', (query: string, limit: number) => [
+    'topic:evalPicker',
+    query,
+    limit,
+  ]),
   list: def('topic:list', (containerKey: string, opts: Record<string, unknown>) => [
     'topic:list',
     containerKey,

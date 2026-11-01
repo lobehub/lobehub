@@ -200,7 +200,7 @@ export async function executeThreadTrajectory(
     return { threadId, topicId };
   }
   const executionId = crypto.randomUUID();
-  const claimed = await deps.runTopicModel.claimExecution({
+  const claimed = await deps.executionRepo.claimExecution({
     executionId,
     expectedExecutionId: params.executionId,
     runId,
@@ -218,7 +218,7 @@ export async function executeThreadTrajectory(
   const userId = deps.userId;
   const db = deps.db;
   const bindOperation = async (operationId: string) => {
-    const saved = await deps.runTopicModel.updateThreadMetadata(
+    const saved = await deps.executionRepo.updateThreadMetadata(
       runId,
       topicId,
       threadId,
@@ -311,7 +311,7 @@ export async function executeThreadTrajectory(
     );
 
     // Mark the thread explicitly as error; aggregation and resume-target selection rely on metadata.status.
-    await deps.runTopicModel.updateThreadMetadata(
+    await deps.executionRepo.updateThreadMetadata(
       runId,
       topicId,
       threadId,
@@ -397,7 +397,7 @@ export async function recordThreadCompletion(
   }
 
   // 3. Write eval result to thread.metadata
-  const saved = await deps.runTopicModel.updateThreadMetadata(
+  const saved = await deps.executionRepo.updateThreadMetadata(
     runId,
     topicId,
     threadId,
@@ -773,7 +773,7 @@ export async function rejudgeTopicThreads(
       threadId: thread.id,
       topicId,
     });
-    await deps.runTopicModel.updateThreadMetadata(
+    await deps.executionRepo.updateThreadMetadata(
       runId,
       topicId,
       thread.id,

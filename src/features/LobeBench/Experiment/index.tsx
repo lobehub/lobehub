@@ -27,6 +27,7 @@ import { ExperimentCaseDetails } from '@/features/LobeBench/ExperimentCaseDetail
 import { ExperimentCaseRow, verdictStyle } from '@/features/LobeBench/ExperimentCaseRow';
 import { openExperimentEditModal } from '@/features/LobeBench/ExperimentEditModal';
 import { ExperimentGradingNotices } from '@/features/LobeBench/ExperimentGradingNotices';
+import { experimentContextSuffix } from '@/features/LobeBench/experimentNavigation';
 import {
   createExperimentResultsCsv,
   defaultExperimentCaseFilter,
@@ -1143,7 +1144,7 @@ const ExperimentDashboard = memo(() => {
                   unavailable: resultUnavailable(contender, openItem.id),
                   traceUrl:
                     run && benchmarkId
-                      ? `/eval/bench/${benchmarkId}/runs/${run.id}/cases/${openItem.id}?experiment=${experimentId}`
+                      ? `/eval/bench/${benchmarkId}/runs/${run.id}/cases/${openItem.id}${experimentContextSuffix(experimentId)}`
                       : undefined,
                 };
               })

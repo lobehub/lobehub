@@ -1,4 +1,5 @@
 import type {
+  BenchmarkMockStatus,
   EvalCaseEnvironment,
   EvalConfig,
   EvalRunInputConfig,
@@ -80,7 +81,7 @@ class AgentEvalService {
   }
 
   /** Whether the benchmark's mock tool service answers (and this server holds its token). */
-  async checkBenchmarkMock(id: string) {
+  async checkBenchmarkMock(id: string): Promise<BenchmarkMockStatus> {
     return lambdaClient.agentEval.checkBenchmarkMock.query({ id });
   }
 
