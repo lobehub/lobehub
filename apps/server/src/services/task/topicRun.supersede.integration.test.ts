@@ -2,9 +2,10 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import { agentOperations, tasks, taskTopics, topics, users } from '@/database/schemas';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { ORPHANED_RUN_GRACE_MS } from '@/server/services/taskLifecycle/reconcile';
@@ -276,6 +277,39 @@ describe('a follow-up that supersedes a live Task run (real PostgreSQL)', () => 
     const stored = await readTask(task.id);
     expect(stored?.status).toBe('running');
     expect(stored?.error).toBeNull();
+  });
+});
+
+describe('a superseded run that completes while the follow-up takes over (real PostgreSQL)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('loses the run row to the follow-up even when it passed the ownership check first', async () => {
+    const { task, taskOperationId, topicId } = await seedRunningTask();
+    const service = new TopicRunService(db, userId);
+    await seedOperation(topicId, 'op-follow-up', { createdAt: at(45), status: 'running' });
+
+    // The old run's completion checks ownership while it still owns the row…
+    const realCheck = TaskTopicModel.prototype.isSupersededOperation;
+    vi.spyOn(TaskTopicModel.prototype, 'isSupersededOperation').mockImplementationOnce(
+      async function (this: TaskTopicModel, ...args) {
+        const superseded = await realCheck.apply(this, args);
+        // …and the follow-up takes the row over right after that check.
+        const link = await service.resolveOwnableRun(topicId, {
+          replacesOperationId: taskOperationId,
+        });
+        await service.reopen({ link: link!, operationId: 'op-follow-up' });
+        return superseded;
+      },
+    );
+
+    await complete(task, topicId, taskOperationId, 'done');
+
+    // The follow-up's live run keeps the row, and the Task keeps running.
+    expect(await readRun(topicId)).toMatchObject({
+      operationId: 'op-follow-up',
+      status: 'running',
+    });
+    expect((await readTask(task.id))?.status).toBe('running');
   });
 });
 

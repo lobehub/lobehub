@@ -16,6 +16,19 @@ import { buildWorkspaceWhere } from '../utils/workspace';
 import { topicsOwnership } from './task/context';
 import { countOf } from './utils/rows';
 
+/**
+ * The run row is not owned by an operation newer than `operationId`: the
+ * condition {@link TaskTopicModel.isSupersededOperation} reads, written as a
+ * predicate on the row being updated.
+ */
+const notSupersededBy = (operationId: string) => sql`not exists (
+  select 1 from ${agentOperations} as row_operation, ${agentOperations} as reported_operation
+  where row_operation.id = ${taskTopics.operationId}
+    and reported_operation.id = ${operationId}
+    and row_operation.id <> reported_operation.id
+    and row_operation.created_at > reported_operation.created_at
+)`;
+
 /** The operation a run row names, and the one reporting on it. */
 const current = alias(agentOperations, 'current_operation');
 const reported = alias(agentOperations, 'reported_operation');
@@ -101,15 +114,41 @@ export class TaskTopicModel {
       .onConflictDoNothing();
   }
 
-  async updateStatus(taskId: string, topicId: string, status: string): Promise<void> {
-    await this.db
+  /**
+   * Write a run's status.
+   *
+   * With `reportedOperationId`, the write is the completion of that operation
+   * and lands only while no newer operation owns the row — see
+   * {@link isSupersededOperation}. The guard is part of the UPDATE itself, so a
+   * follow-up taking the row over between a completion's ownership check and
+   * this write still wins. Returns whether a row was written.
+   */
+  async updateStatus(
+    taskId: string,
+    topicId: string,
+    status: string,
+    options: { reportedOperationId?: string } = {},
+  ): Promise<boolean> {
+    const { reportedOperationId } = options;
+    const rows = await this.db
       .update(taskTopics)
       .set({ status })
-      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
+      .where(
+        and(
+          eq(taskTopics.taskId, taskId),
+          eq(taskTopics.topicId, topicId),
+          this.ownership(),
+          reportedOperationId ? notSupersededBy(reportedOperationId) : undefined,
+        ),
+      )
+      .returning({ topicId: taskTopics.topicId });
+
+    if (reportedOperationId && rows.length === 0) return false;
 
     if (TERMINAL_TOPIC_STATUSES.has(status)) {
       await this.markTopicEnded(topicId, status);
     }
+    return rows.length > 0;
   }
 
   /**

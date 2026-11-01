@@ -115,3 +115,33 @@ describe('TaskTopicModel.isSupersededOperation', () => {
     await expect(model().isSupersededOperation(topicId, 'op-missing')).resolves.toBe(false);
   });
 });
+
+describe('TaskTopicModel.updateStatus guarded by the reporting operation', () => {
+  it('refuses the write of an operation a newer one took the row over from', async () => {
+    await seed({ operationId: 'op-new' });
+    await seedOperation('op-old', new Date('2026-11-01T10:38:03Z'));
+    await seedOperation('op-new', new Date('2026-11-01T10:38:48Z'));
+
+    await expect(
+      model().updateStatus(taskId, topicId, 'completed', { reportedOperationId: 'op-old' }),
+    ).resolves.toBe(false);
+    expect((await readRun()).status).toBe('running');
+  });
+
+  it('writes for the operation the row names, and for a newer one it does not name yet', async () => {
+    await seed({ operationId: 'op-old' });
+    await seedOperation('op-old', new Date('2026-11-01T10:38:03Z'));
+    await seedOperation('op-new', new Date('2026-11-01T10:38:48Z'));
+
+    await expect(
+      model().updateStatus(taskId, topicId, 'failed', { reportedOperationId: 'op-old' }),
+    ).resolves.toBe(true);
+    expect((await readRun()).status).toBe('failed');
+
+    // The runner records a continued run only after its dispatch returns.
+    await expect(
+      model().updateStatus(taskId, topicId, 'completed', { reportedOperationId: 'op-new' }),
+    ).resolves.toBe(true);
+    expect((await readRun()).status).toBe('completed');
+  });
+});

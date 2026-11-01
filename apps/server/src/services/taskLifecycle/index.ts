@@ -172,7 +172,8 @@ export class TaskLifecycleService {
 
     if (reason === 'done') {
       // 1. Update topic status
-      if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'completed');
+      if (topicId && !(await this.settleRunRow(taskId, topicId, params.operationId, 'completed')))
+        return;
 
       // 2. Generate handoff summary + topic title (best-effort LLM synthesis).
       //    It also says which output the run delivered: its earlier report when
@@ -379,12 +380,16 @@ export class TaskLifecycleService {
         );
       }
     } else if (reason === 'error') {
-      if (topicId)
-        await this.taskTopicModel.updateStatus(
+      if (
+        topicId &&
+        !(await this.settleRunRow(
           taskId,
           topicId,
+          params.operationId,
           resolveFailedRunStatus(errorMessage),
-        );
+        ))
+      )
+        return;
 
       const errorText = errorMessage || 'Unknown error';
 
@@ -540,6 +545,31 @@ export class TaskLifecycleService {
     // next tick.
     const finalTask = await this.taskModel.findById(taskId);
     if (finalTask) await this.maybeRearmHeartbeat(finalTask, reason);
+  }
+
+  /**
+   * Write the run row's terminal status for this report, unless a newer
+   * operation took the row over — checked inside the write, so a takeover that
+   * lands after the early {@link isSupersededReport} check still wins.
+   *
+   * @returns `false` when the report was superseded and the lifecycle must stop.
+   */
+  private async settleRunRow(
+    taskId: string,
+    topicId: string,
+    operationId: string,
+    status: string,
+  ): Promise<boolean> {
+    const written = await this.taskTopicModel.updateStatus(taskId, topicId, status, {
+      reportedOperationId: operationId,
+    });
+    // Nothing written: either there is no row to keep honest (the runner has
+    // not recorded this run yet), or a newer run owns it.
+    if (written !== false) return true;
+    if (!(await this.isSupersededReport(topicId, operationId))) return true;
+
+    log('onTopicComplete: op=%s lost topic=%s to a follow-up mid-settle', operationId, topicId);
+    return false;
   }
 
   /**
