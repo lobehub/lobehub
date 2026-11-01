@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, inArray, ne, sql } from 'drizzle-orm';
 
 import { tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
@@ -43,12 +43,22 @@ export class TaskArchiveModel {
    * task is finished") can't archive a task that was reopened since.
    */
   async archive(id: string, options: { onlyStatuses?: string[] } = {}) {
-    const [task] = await this.db
+    const [task] = await this.archiveMany([id], options);
+    return task ?? null;
+  }
+
+  /**
+   * {@link archive} for many tasks in one guarded statement. Returns only the
+   * rows that were archived; a missing or blocked task is simply absent.
+   */
+  async archiveMany(ids: string[], options: { onlyStatuses?: string[] } = {}) {
+    if (ids.length === 0) return [];
+    return this.db
       .update(tasks)
       .set({ archivedAt: sql`COALESCE(${tasks.archivedAt}, now())`, updatedAt: new Date() })
       .where(
         and(
-          eq(tasks.id, id),
+          inArray(tasks.id, ids),
           this.ownership(),
           ne(tasks.status, 'running'),
           options.onlyStatuses ? inArray(tasks.status, options.onlyStatuses) : undefined,
@@ -58,16 +68,21 @@ export class TaskArchiveModel {
         ),
       )
       .returning();
-    return task ?? null;
   }
 
   /** Restore an archived task. Always allowed: it never hides work. */
   async unarchive(id: string) {
-    const [task] = await this.db
+    const [task] = await this.unarchiveMany([id]);
+    return task ?? null;
+  }
+
+  /** {@link unarchive} for many tasks in one statement. */
+  async unarchiveMany(ids: string[]) {
+    if (ids.length === 0) return [];
+    return this.db
       .update(tasks)
       .set({ archivedAt: null, updatedAt: new Date() })
-      .where(and(eq(tasks.id, id), this.ownership()))
+      .where(and(inArray(tasks.id, ids), this.ownership()))
       .returning();
-    return task ?? null;
   }
 }
