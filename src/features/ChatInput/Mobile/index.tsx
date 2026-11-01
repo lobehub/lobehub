@@ -1,5 +1,7 @@
 'use client';
 
+import './index.css';
+
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -14,7 +16,6 @@ import dynamic from '@/libs/next/dynamic';
 import ActionBar from '../ActionBar';
 import InputEditor from '../InputEditor';
 import SendArea from '../SendArea';
-import moduleStyles from './index.module.css';
 
 const FilePreview = dynamic(() => import('./FilePreview'), { ssr: false });
 
@@ -69,7 +70,11 @@ const DesktopChatInput = memo(() => {
                   gap={4}
                 >
                   <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
-                    <Flexbox horizontal align={'center'} className={moduleStyles.leftActions}>
+                    <Flexbox
+                      horizontal
+                      align={'center'}
+                      className={'lobe-mobile-92241386-left-actions'}
+                    >
                       <ActionBar disableCollapse />
                     </Flexbox>
                     <ComposerExpandButton />

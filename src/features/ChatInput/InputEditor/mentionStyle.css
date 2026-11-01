@@ -1,5 +1,3 @@
-/* stylelint-disable selector-pseudo-class-no-unknown -- CSS-modules :global() */
-
 /*
  * Override the default chip style from `@lobehub/editor`'s mention plugin so
  * @-mentions render as plain colored text, matching the look of other inline
@@ -9,11 +7,11 @@
  * wrapper. The yellow `.selected` highlight is kept so a mention picked for
  * deletion stays visible.
  */
-.mentionPlain span:has(> :global(.editor_mention)),
-.mentionPlain :global(.editor_mention) {
+.lobe-mention-style-3304531e-mention-plain span:has(> .editor_mention),
+.lobe-mention-style-3304531e-mention-plain .editor_mention {
   border: none;
 }
 
-.mentionPlain span:has(> :global(.editor_mention)):not(:global(.selected)) {
+.lobe-mention-style-3304531e-mention-plain span:has(> .editor_mention):not(.selected) {
   background: none;
 }

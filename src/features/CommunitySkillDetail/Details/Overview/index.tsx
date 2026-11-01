@@ -1,5 +1,7 @@
 'use client';
 
+import './Overview.css';
+
 import {
   Accordion,
   Block,
@@ -26,7 +28,6 @@ import { skillSelectors } from '@/store/discover/selectors';
 import { sx } from '@/styles/sx';
 
 import { useDetailActionContext, useDetailContext } from '../../DetailProvider';
-import moduleStyles from './Overview.module.css';
 import RelatedSkillCard from './RelatedSkillCard';
 
 const styles = stylex.create({
@@ -95,7 +96,7 @@ const Overview = memo(() => {
       {/* ABOUT */}
       <Flexbox gap={12}>
         <SectionLabel>{t('skills.details.overview.about')}</SectionLabel>
-        <div {...sx(styles.summary, moduleStyles.summary)}>
+        <div {...sx(styles.summary, 'lobe-overview-22f20c33-summary')}>
           <Markdown variant={'chat'}>{overview?.summary || description || ''}</Markdown>
         </div>
       </Flexbox>

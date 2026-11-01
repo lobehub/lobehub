@@ -1,5 +1,7 @@
 'use client';
 
+import './index.css';
+
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
 import { Center, cx, Flexbox, Skeleton, Text } from '@lobehub/ui';
@@ -31,7 +33,6 @@ import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
-import moduleStyles from './index.module.css';
 
 const styles = stylex.create({
   footnote: { fontSize: '10px' },
@@ -182,7 +183,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     // does not create a false gap after the microphone action.
     const leftSlotContent = (
       <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
-        <Flexbox horizontal align={'center'} className={moduleStyles.leftActions}>
+        <Flexbox horizontal align={'center'} className={'lobe-desktop-67d6876b-left-actions'}>
           {leftContent ?? (
             <ActionBar
               disableCollapse
@@ -206,10 +207,13 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const content = (
       <Flexbox
-        className={cx(moduleStyles.container, stylex.props(expand && styles.fullscreen).className)}
         gap={8}
         paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
         style={{ display: hidden ? 'none' : undefined }}
+        className={cx(
+          'lobe-desktop-67d6876b-container',
+          stylex.props(expand && styles.fullscreen).className,
+        )}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >

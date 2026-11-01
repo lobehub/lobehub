@@ -1,20 +1,18 @@
-/* stylelint-disable selector-pseudo-class-no-unknown -- CSS-modules :global() */
-
 /* `.show-on-hover` is a shared class name: SendArea's expand button opts in with it. */
-.container :global(.show-on-hover) {
+.lobe-desktop-67d6876b-container .show-on-hover {
   opacity: 0;
 }
 
-.container:hover :global(.show-on-hover) {
+.lobe-desktop-67d6876b-container:hover .show-on-hover {
   opacity: 1;
 }
 
-.leftActions {
+.lobe-desktop-67d6876b-left-actions {
   flex: none;
   min-width: 0;
 }
 
 /* The action bar renders its own items; keep them from flex-shrinking. */
-.leftActions > * {
+.lobe-desktop-67d6876b-left-actions > * {
   flex: none !important;
 }

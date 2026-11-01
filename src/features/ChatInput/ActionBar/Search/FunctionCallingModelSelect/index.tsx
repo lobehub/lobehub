@@ -1,3 +1,5 @@
+import './index.css';
+
 import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
@@ -6,8 +8,6 @@ import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { type WorkingModel } from '@/types/agent';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
-
-import styles from './index.module.css';
 
 interface ModelOption {
   label: ReactNode;
@@ -63,7 +63,7 @@ const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
     <TooltipGroup>
       <Select
         options={options}
-        popupClassName={styles.select}
+        popupClassName={'lobe-function-calling-model-select-85737e92-select'}
         popupMatchSelectWidth={false}
         value={`${value?.provider}/${value?.model}`}
         variant={'filled'}

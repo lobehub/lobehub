@@ -1,7 +1,10 @@
 'use client';
 
+import './index.css';
+
 import { type VoiceMessageRecording } from '@lobechat/types';
 import { Icon, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { ArrowUp, type LucideProps, RotateCcw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +13,6 @@ import { ChatInputAction } from '../ActionBar/components/ChatInputAction';
 import { useAgentId } from '../hooks/useAgentId';
 import { useEffectiveModel } from '../hooks/useEffectiveModel';
 import { useChatInputStore, useStoreApi } from '../store';
-import styles from './index.module.css';
 import { formatVoiceDuration } from './mediaRecorder';
 import { useIntentionalHover } from './useIntentionalHover';
 import {
@@ -19,6 +21,74 @@ import {
   useVoiceMessageCapability,
 } from './useVoiceMessageCapability';
 import { useVoiceMessageRecorder } from './useVoiceMessageRecorder';
+
+const stylesAtomic = stylex.create({
+  cancelButton: {
+    'cursor': 'default',
+    'position': 'relative',
+    'display': 'inline-flex',
+    'flex': 'none',
+    'alignItems': 'center',
+    'justifyContent': 'center',
+    'width': '32px',
+    'height': '32px',
+    'padding': '0',
+    'borderStyle': 'none',
+    'borderRadius': '9999px',
+    'color': { 'default': 'var(--lobe-color-text-secondary)', ':hover': 'var(--lobe-color-text)' },
+    'backgroundColor': {
+      'default': 'var(--lobe-color-fill-secondary)',
+      ':hover': 'var(--lobe-color-fill)',
+    },
+    'backgroundImage': { 'default': 'none', ':hover': 'none' },
+    'transition': {
+      'default': 'color 120ms ease,\n    background 120ms ease,\n    transform 120ms ease',
+      '@media (prefers-reduced-motion: reduce)': 'none',
+    },
+    'outlineWidth': { 'default': null, ':focus-visible': '2px' },
+    'outlineStyle': { 'default': null, ':focus-visible': 'solid' },
+    'outlineColor': { 'default': null, ':focus-visible': 'var(--lobe-color-primary)' },
+    'outlineOffset': { 'default': null, ':focus-visible': '2px' },
+    'transform': { 'default': null, ':active': 'scale(0.96)' },
+    '::after': {
+      content: { 'default': null, '@media (width <= 600px)': "''" },
+      position: { 'default': null, '@media (width <= 600px)': 'absolute' },
+      inset: { 'default': null, '@media (width <= 600px)': '-6px' },
+    },
+  },
+  pill: {
+    position: 'relative',
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    height: '100%',
+    borderRadius: '9999px',
+    backgroundColor: 'var(--lobe-color-fill-secondary)',
+    backgroundImage: 'none',
+  },
+  waveform: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 1,
+    inset: '0',
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendText: { overflow: 'hidden', minWidth: '0', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  progress: {
+    position: 'absolute',
+    zIndex: 3,
+    insetBlockEnd: '0',
+    insetInline: '6px',
+    overflow: 'hidden',
+    height: '2px',
+    borderRadius: '1px',
+    backgroundColor: 'var(--lobe-color-fill-secondary)',
+    backgroundImage: 'none',
+  },
+});
 
 const VoiceMessageIcon = ({
   ref,
@@ -66,7 +136,7 @@ export interface VoiceMessageControlProps {
 }
 
 const SendDots = () => (
-  <span aria-hidden className={styles.sendDots}>
+  <span aria-hidden className={'lobe-voice-message-91693b02-send-dots'}>
     {Array.from({ length: 4 }, (_, index) => (
       <i key={index} />
     ))}
@@ -98,16 +168,16 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
     return (
       <div
         aria-label={groupLabel}
-        className={styles.container}
+        className={'lobe-voice-message-91693b02-container'}
         data-testid="voice-message-recorder"
         role="group"
       >
-        <span aria-live="polite" className={styles.visuallyHidden}>
+        <span aria-live="polite" className={'lobe-voice-message-91693b02-visually-hidden'}>
           {statusAnnouncement}
         </span>
         <button
           aria-label={cancelLabel}
-          className={styles.cancelButton}
+          {...stylex.props(stylesAtomic['cancelButton'])}
           data-testid="voice-message-cancel"
           type="button"
           onClick={onCancel}
@@ -115,18 +185,18 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
           <Icon icon={X} size={17} />
         </button>
 
-        <div className={styles.pill} data-testid="voice-message-pill">
-          <span className={styles.visuallyHidden}>{durationLabel}</span>
+        <div {...stylex.props(stylesAtomic['pill'])} data-testid="voice-message-pill">
+          <span className={'lobe-voice-message-91693b02-visually-hidden'}>{durationLabel}</span>
 
           {errorText ? (
-            <span className={styles.error} title={errorText}>
+            <span className={'lobe-voice-message-91693b02-error'} title={errorText}>
               {errorText}
             </span>
           ) : (
-            <div aria-hidden className={styles.waveform}>
+            <div aria-hidden {...stylex.props(stylesAtomic['waveform'])}>
               {waveform.map((level, index) => (
                 <span
-                  className={styles.bar}
+                  className={'lobe-voice-message-91693b02-bar'}
                   key={index}
                   style={{ height: `${Math.max(4, Math.round(level * 18))}px` }}
                 />
@@ -137,7 +207,7 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
           <Tooltip title={tooltip}>
             <button
               aria-label={actionLabel}
-              className={styles.sendButton}
+              className={'lobe-voice-message-91693b02-send-button'}
               data-error={isRetry}
               data-expanded={expanded}
               data-hover-expanded={isHoverExpanded}
@@ -149,20 +219,23 @@ export const VoiceMessageControl = memo<VoiceMessageControlProps>(
               onPointerEnter={(event) => handlePointerEnter(event.pointerType)}
               onPointerLeave={(event) => handlePointerLeave(event.pointerType)}
             >
-              <span className={styles.sendLabel}>
+              <span className={'lobe-voice-message-91693b02-send-label'}>
                 <SendDots />
-                <span className={styles.sendText}>{actionText}</span>
+                <span {...stylex.props(stylesAtomic['sendText'])}>{actionText}</span>
                 <SendDots />
               </span>
-              <span className={styles.sendArrow}>
+              <span className={'lobe-voice-message-91693b02-send-arrow'}>
                 <Icon icon={isRetry ? RotateCcw : ArrowUp} size={18} />
               </span>
             </button>
           </Tooltip>
 
           {progress !== undefined && (
-            <div aria-hidden className={styles.progress}>
-              <div className={styles.progressValue} style={{ width: `${progress}%` }} />
+            <div aria-hidden {...stylex.props(stylesAtomic['progress'])}>
+              <div
+                className={'lobe-voice-message-91693b02-progress-value'}
+                style={{ width: `${progress}%` }}
+              />
             </div>
           )}
         </div>

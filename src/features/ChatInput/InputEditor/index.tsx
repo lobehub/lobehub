@@ -1,3 +1,5 @@
+import './index.css';
+
 import { isDesktop, TRACING_SCENARIOS } from '@lobechat/const';
 import { HotkeyEnum, KeyEnum } from '@lobechat/const/hotkeys';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
@@ -49,7 +51,6 @@ import {
   type InsertActionTagPayload,
   useSlashActionItems,
 } from './ActionTag';
-import styles from './index.module.css';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
@@ -60,7 +61,7 @@ import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
 import { useLocalFileTag } from './useLocalFileTag';
 import { useMentionCategories } from './useMentionCategories';
 
-const className = `${styles.editor} ${mentionPlainClassName}`;
+const className = `${'lobe-input-editor-38d9c0fc-editor'} ${mentionPlainClassName}`;
 
 // Single-line dimmed preview of the highlighted history entry, shown through the
 // editor's placeholder slot while the input is empty (history popup open).

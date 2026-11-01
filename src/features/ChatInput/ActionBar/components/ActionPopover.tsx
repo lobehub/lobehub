@@ -1,5 +1,7 @@
 'use client';
 
+import './ActionPopover.css';
+
 import { type PopoverProps } from '@lobehub/ui';
 import { Flexbox, Popover, Spin } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -8,8 +10,6 @@ import { memo, Suspense } from 'react';
 
 import DebugNode from '@/components/DebugNode';
 import { useIsMobile } from '@/hooks/useIsMobile';
-
-import styles from './ActionPopover.module.css';
 
 export interface ActionPopoverProps extends Omit<PopoverProps, 'title' | 'content' | 'children'> {
   children?: ReactNode;
@@ -44,8 +44,8 @@ const ActionPopover = memo<ActionPopoverProps>(
       typeof customClassNames === 'function' ? customClassNames : customClassNames;
     const contentClassName =
       typeof resolvedClassNames === 'object' && resolvedClassNames?.content
-        ? `${styles.popoverContent} ${resolvedClassNames.content}`
-        : styles.popoverContent;
+        ? `${'lobe-action-popover-3d63c815-popover-content'} ${resolvedClassNames.content}`
+        : 'lobe-action-popover-3d63c815-popover-content';
 
     // Properly handle styles (can be object or function)
     const resolvedStyles = typeof customStyles === 'function' ? customStyles : customStyles;
