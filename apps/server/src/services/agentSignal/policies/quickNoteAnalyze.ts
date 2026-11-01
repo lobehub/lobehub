@@ -28,8 +28,15 @@ import { AGENT_SIGNAL_POLICY_ACTION_TYPES, AGENT_SIGNAL_POLICY_SIGNAL_TYPES } fr
 /** Procedure domain of Quick Note Proposal reactions. */
 export const QUICK_NOTE_PROPOSAL_DOMAIN_KEY = 'quick_note:proposal';
 
-/** Dependencies of the Quick Note policy, bound to one user/workspace scope. */
-export interface QuickNotePolicyOptions {
+/**
+ * Quick Note processing operations the policy drives, bound to one user/workspace scope.
+ *
+ * Agent Signal only owns this contract. The implementation lives in the Quick Note domain and is
+ * injected by the composition root (the Agent Signal workflow runner), so `agentSignal` never
+ * imports `quickNote`: Quick Note itself enqueues Agent Signal sources, and a static import in the
+ * other direction closes an import cycle.
+ */
+export interface QuickNoteSignalProcessor {
   /** Completes a Run whose plan needs no follow-up Agent run. */
   completeWithoutGeneration: (runId: string) => Promise<unknown>;
   /** Starts the follow-up Agent run; returns its operation identity. */
@@ -58,6 +65,10 @@ export interface QuickNotePolicyOptions {
   >;
   /** Marks the note's current pending Proposals stale. */
   markProposalsStale: (quickNoteId: string) => Promise<unknown>;
+}
+
+/** Dependencies of the Quick Note policy, bound to one user/workspace scope. */
+export interface QuickNotePolicyOptions extends QuickNoteSignalProcessor {
   /** Procedure stores for reaction receipts; reactions are only traced when omitted. */
   procedure?: {
     now: () => number;

@@ -8,8 +8,6 @@ interface LoadIndexIntegrationModuleOptions {
   mockEmitSourceEvent?: Mock;
   mockInitModelRuntimeFromDB?: Mock;
   mockProjectObservability?: Mock;
-  /** Module factory for `@/server/services/quickNote`. */
-  mockQuickNoteModule?: () => Record<string, unknown>;
   mockRuntimeFactory?: Mock;
 }
 
@@ -52,7 +50,6 @@ const loadIndexIntegrationModule = async (options: LoadIndexIntegrationModuleOpt
   vi.doUnmock('../sources');
   vi.doUnmock('@/server/services/agentDocuments');
   vi.doUnmock('@/server/modules/ModelRuntime');
-  vi.doUnmock('@/server/services/quickNote');
 
   const persistAgentSignalObservability = vi.fn().mockResolvedValue(undefined);
   const isAgentSignalEnabledForUser = vi.fn().mockResolvedValue(options.featureGateEnabled ?? true);
@@ -68,10 +65,6 @@ const loadIndexIntegrationModule = async (options: LoadIndexIntegrationModuleOpt
     vi.doMock('@/server/modules/ModelRuntime', () => ({
       initModelRuntimeFromDB: options.mockInitModelRuntimeFromDB,
     }));
-  }
-
-  if (options.mockQuickNoteModule) {
-    vi.doMock('@/server/services/quickNote', options.mockQuickNoteModule);
   }
 
   if (options.mockEmitSourceEvent) {
@@ -403,11 +396,10 @@ describe('emitAgentSignalSourceEvent integration', () => {
           result: 'neutral',
         }),
       });
-      const QuickNoteProcessingService = vi.fn();
+      const judgeRun = vi.fn();
 
       const { emitAgentSignalSourceEvent } = await loadIndexIntegrationModule({
         mockInitModelRuntimeFromDB: initModelRuntimeFromDB,
-        mockQuickNoteModule: () => ({ QuickNoteProcessingService }),
       });
 
       const result = await emitAgentSignalSourceEvent(
@@ -417,6 +409,17 @@ describe('emitAgentSignalSourceEvent integration', () => {
           sourceType: 'agent.user.message',
         },
         { agentId: 'agent_1', db: {} as never, userId: 'user_1' },
+        {
+          policyOptions: {
+            quickNoteAnalyze: {
+              completeWithoutGeneration: vi.fn(),
+              dispatchGeneration: vi.fn(),
+              judgeContentChange: vi.fn(),
+              judgeRun,
+              markProposalsStale: vi.fn(),
+            },
+          },
+        },
       );
 
       if (!result || result.deduped) throw new Error('unexpected dedupe');
@@ -430,9 +433,121 @@ describe('emitAgentSignalSourceEvent integration', () => {
       ]);
 
       expect(trace).not.toMatch(/quick[-_]note/);
-      expect(QuickNoteProcessingService).not.toHaveBeenCalled();
+      expect(judgeRun).not.toHaveBeenCalled();
     },
   );
+
+  /**
+   * @example
+   * A Quick Note source reaching an entry that injected no Quick Note processor concludes without
+   * Quick Note work instead of crashing.
+   */
+  it(
+    'skips Quick Note sources safely when no Quick Note processor is injected',
+    { timeout: 10_000 },
+    async () => {
+      (globalThis as { __agentSignalRedisClient?: typeof mockRedis }).__agentSignalRedisClient =
+        mockRedis;
+      mockRedis.set.mockResolvedValue('OK');
+      mockRedis.del.mockResolvedValue(1);
+      mockRedis.hgetall.mockResolvedValue({});
+      mockRedis.hset.mockResolvedValue(1);
+      mockRedis.expire.mockResolvedValue(1);
+
+      const { emitAgentSignalSourceEvent } = await loadIndexIntegrationModule();
+
+      const result = await emitAgentSignalSourceEvent(
+        {
+          payload: {
+            quickNoteId: 'qn_1',
+            runId: 'run_qn_1',
+            sourceHistoryId: 'history_qn_1',
+            trigger: 'manual',
+            userId: 'user_1',
+          },
+          scopeKey: 'quick-note:qn_1',
+          sourceId: 'run_qn_1',
+          sourceType: 'quick_note.analyze.requested',
+        },
+        { db: {} as never, userId: 'user_1' },
+      );
+
+      if (!result || result.deduped) throw new Error('unexpected dedupe');
+
+      expect(result.orchestration.actions).toEqual([]);
+      expect(result.orchestration.results).toEqual([]);
+      expect(result.orchestration.emittedSignals).toEqual([]);
+    },
+  );
+
+  it('binds an injected Quick Note processor to the execution procedure stores', async () => {
+    const source = {
+      chain: { chainId: 'chain:qn', rootSourceId: 'run_qn_2' },
+      payload: {},
+      scopeKey: 'quick-note:qn_2',
+      sourceId: 'run_qn_2',
+      sourceType: 'quick_note.analyze.requested',
+      timestamp: 1_710_000_000_000,
+    };
+    const emitSourceEvent = vi.fn().mockResolvedValue({
+      deduped: false,
+      source,
+      trigger: { scopeKey: source.scopeKey, token: 'trigger:qn', windowEventCount: 1 },
+    });
+    const createDefaultAgentSignalPolicies = vi.fn().mockReturnValue([]);
+    const emitNormalized = vi.fn().mockResolvedValue({
+      status: 'completed',
+      trace: { actions: [], results: [], signals: [], source },
+    });
+    const procedure = {
+      now: () => 1,
+      receiptStore: { append: vi.fn() },
+      recordStore: { write: vi.fn() },
+    };
+    const processor = {
+      completeWithoutGeneration: vi.fn(),
+      dispatchGeneration: vi.fn(),
+      judgeContentChange: vi.fn(),
+      judgeRun: vi.fn(),
+      markProposalsStale: vi.fn(),
+    };
+
+    const { emitAgentSignalSourceEvent } = await loadIndexIntegrationModule({
+      mockCreateDefaultAgentSignalPolicies: createDefaultAgentSignalPolicies,
+      mockEmitSourceEvent: emitSourceEvent,
+      mockRuntimeFactory: vi.fn().mockReturnValue({ emitNormalized }),
+    });
+
+    await emitAgentSignalSourceEvent(
+      {
+        payload: {
+          quickNoteId: 'qn_2',
+          runId: 'run_qn_2',
+          sourceHistoryId: 'history_qn_2',
+          trigger: 'manual',
+          userId: 'user_1',
+        },
+        scopeKey: source.scopeKey,
+        sourceId: source.sourceId,
+        sourceType: 'quick_note.analyze.requested',
+      },
+      { db: {} as never, userId: 'user_1' },
+      { policyOptions: { procedure: procedure as never, quickNoteAnalyze: processor } },
+    );
+
+    expect(createDefaultAgentSignalPolicies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quickNoteAnalyze: {
+          ...processor,
+          procedure: {
+            now: procedure.now,
+            receiptStore: procedure.receiptStore,
+            recordStore: procedure.recordStore,
+          },
+        },
+      }),
+    );
+  });
 
   /**
    * @example

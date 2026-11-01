@@ -11,7 +11,6 @@ import type { AgentSignalSourceType } from '@lobechat/agent-signal/source';
 import { createSourceEvent } from '@lobechat/agent-signal/source';
 
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
-import { QuickNoteProcessingService } from '@/server/services/quickNote';
 
 import { acquireAgentSignalDailyBudget } from './budget';
 import type {
@@ -103,22 +102,21 @@ const buildRuntimeOrchestrationResult = (
   };
 };
 
+/**
+ * Binds the injected Quick Note processor to this execution's procedure stores.
+ *
+ * Returns `undefined` when the entry point supplied no processor, so the Quick Note policy is not
+ * installed and Quick Note sources conclude without processing.
+ */
 const createQuickNotePolicyOptions = (
-  context: AgentSignalExecutionContext,
+  quickNoteAnalyze: QuickNotePolicyOptions | undefined,
   procedure: NonNullable<CreateDefaultAgentSignalPoliciesOptions['procedure']>,
-): QuickNotePolicyOptions => {
-  // One service per source execution, so the decisions backend is resolved at most once.
-  let service: QuickNoteProcessingService | undefined;
-  const quickNote = () =>
-    (service ??= new QuickNoteProcessingService(context.db, context.userId, context.workspaceId));
+): QuickNotePolicyOptions | undefined => {
+  if (!quickNoteAnalyze) return undefined;
 
   return {
-    completeWithoutGeneration: async (runId) => quickNote().completeWithoutGeneration(runId),
-    dispatchGeneration: async (runId) => quickNote().dispatchGeneration(runId),
-    judgeContentChange: async (params) => quickNote().judgeContentChange(params),
-    judgeRun: async (runId) => quickNote().judgeRun(runId),
-    markProposalsStale: async (quickNoteId) => quickNote().markProposalsStale(quickNoteId),
-    procedure: {
+    ...quickNoteAnalyze,
+    procedure: quickNoteAnalyze.procedure ?? {
       now: procedure.now,
       receiptStore: procedure.receiptStore,
       recordStore: procedure.recordStore,
@@ -188,7 +186,10 @@ const createPolicyOptions = (
     classifierDiagnostics: policyOptions?.classifierDiagnostics,
     nightlyReview: policyOptions?.nightlyReview,
     procedure: procedurePolicyOptions,
-    quickNoteAnalyze: createQuickNotePolicyOptions(context, procedurePolicyOptions),
+    quickNoteAnalyze: createQuickNotePolicyOptions(
+      policyOptions?.quickNoteAnalyze,
+      procedurePolicyOptions,
+    ),
     selfFeedbackIntent: policyOptions?.selfFeedbackIntent,
     selfReflection: policyOptions?.selfReflection,
     userMemory: {

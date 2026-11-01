@@ -32,6 +32,7 @@ import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observab
 import type { GeneratedAgentSignalEmissionResult } from '@/server/services/agentSignal/orchestrator';
 import { executeAgentSignalSourceEvent } from '@/server/services/agentSignal/orchestrator';
 import { assembleFeedbackContext } from '@/server/services/agentSignal/policies/analyzeIntent/context/feedbackContextAssembler';
+import { isQuickNoteSourceType } from '@/server/services/agentSignal/quickNoteSources';
 import { createRedisRuntimeGuardBackend } from '@/server/services/agentSignal/runtime/backend/redisGuard';
 import { createServerSelfFeedbackIntentPolicyOptions } from '@/server/services/agentSignal/services/selfIteration/feedback/server';
 import {
@@ -43,6 +44,7 @@ import type { ClientRuntimeCompleteHydrationDiagnostic } from '@/server/services
 import { resolveClientRuntimeCompleteFeedbackSource } from '@/server/services/agentSignal/sources/hydration/clientRuntimeComplete';
 import type { ClientRuntimeStartHydrationDiagnostic } from '@/server/services/agentSignal/sources/hydration/clientRuntimeStart';
 import { resolveClientRuntimeStartFeedbackSource } from '@/server/services/agentSignal/sources/hydration/clientRuntimeStart';
+import { createQuickNoteSignalProcessor } from '@/server/services/quickNote/signalProcessor';
 import { runStep } from '@/server/workflows/step';
 
 import type { AgentSignalWorkflowRunPayload } from './types';
@@ -83,6 +85,12 @@ export interface AgentSignalWorkflowContext<TPayload = AgentSignalWorkflowRunPay
 /** Dependencies for executing one Agent Signal workflow payload. */
 export interface RunAgentSignalWorkflowDeps {
   createProcedurePolicyOptions?: typeof createServerProcedurePolicyOptions;
+  /**
+   * Builds the Quick Note processor for Quick Note sources. Injected here, at the composition
+   * root, because `agentSignal` must not import `quickNote` (Quick Note enqueues Agent Signal
+   * sources, so the reverse import closes a cycle).
+   */
+  createQuickNoteProcessor?: typeof createQuickNoteSignalProcessor;
   createRuntimeGuardBackend?: typeof createRedisRuntimeGuardBackend;
   createSelfFeedbackIntentPolicyOptions?: typeof createServerSelfFeedbackIntentPolicyOptions;
   createSelfReflectionPolicyOptions?: typeof createServerSelfReflectionPolicyOptions;
@@ -541,6 +549,8 @@ export const runAgentSignalWorkflow = async (
             deps.createProcedurePolicyOptions ?? createServerProcedurePolicyOptions;
           const createGuardBackend =
             deps.createRuntimeGuardBackend ?? createRedisRuntimeGuardBackend;
+          const createQuickNoteProcessor =
+            deps.createQuickNoteProcessor ?? createQuickNoteSignalProcessor;
           const snapshotStore = (deps.createSnapshotStore ?? createDefaultSnapshotStore)();
           let hydrationDiagnostic: WorkflowHydrationDiagnostic | undefined;
           let selfIterationEnabled = false;
@@ -633,6 +643,13 @@ export const runAgentSignalWorkflow = async (
                       workspaceId: payload.workspaceId,
                     })
                   : undefined;
+                const quickNoteAnalyze = isQuickNoteSourceType(normalizedSourceEvent.sourceType)
+                  ? createQuickNoteProcessor({
+                      db,
+                      userId: payload.userId,
+                      workspaceId: payload.workspaceId,
+                    })
+                  : undefined;
                 const executionResult = await runStep(
                   context,
                   `agent-signal:execute:${normalizedSourceEvent.sourceType}:${normalizedSourceEvent.sourceId}`,
@@ -649,6 +666,7 @@ export const runAgentSignalWorkflow = async (
                         policyOptions: {
                           ...(nightlyReview ? { nightlyReview } : {}),
                           ...(procedure ? { procedure } : {}),
+                          ...(quickNoteAnalyze ? { quickNoteAnalyze } : {}),
                           ...(selfFeedbackIntent ? { selfFeedbackIntent } : {}),
                           ...(selfReflection ? { selfReflection } : {}),
                           skillManagement: {
