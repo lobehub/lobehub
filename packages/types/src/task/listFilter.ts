@@ -15,9 +15,10 @@ import type { TaskStatus } from './index';
 export const TASK_LIST_FILTER_NONE = '__none__';
 
 /**
- * Prefix of an agent inside the `creator` set. A task an agent created is
- * credited to that agent (as Linear credits its own agents), otherwise to the
- * member who created it, so the two kinds of ids share one value set.
+ * Prefix of an agent inside the `creator` set, so member and agent ids share
+ * one value set. A member value matches every task that member created,
+ * including those their agents created for them; an agent value matches the
+ * tasks that agent created.
  */
 export const TASK_LIST_FILTER_AGENT_CREATOR_PREFIX = 'agent:';
 
@@ -79,8 +80,8 @@ export interface TaskListFilter {
   content?: string;
   createdAt?: TaskListFilterDate;
   /**
-   * Who created the task: `agent:<id>` (`toTaskListFilterAgentCreator`) when
-   * `createdByAgentId` is set, otherwise the member's `createdByUserId`.
+   * Member ids match `createdByUserId`; `agent:<id>` values
+   * (`toTaskListFilterAgentCreator`) match `createdByAgentId`.
    */
   creator?: TaskListFilterSet<string>;
   /** `priority`, a missing one counting as 0 ("no priority"). */
@@ -182,6 +183,19 @@ const matchesSet = <T extends number | string>(
   return set.operator === 'isNot' ? !included : included;
 };
 
+/** A task matches a creator value through its member or through its agent. */
+const matchesCreator = (
+  set: TaskListFilterSet<string> | undefined,
+  task: TaskListFilterTarget,
+): boolean => {
+  if (!set || set.values.length === 0) return true;
+  const included =
+    (!!task.createdByUserId && set.values.includes(task.createdByUserId)) ||
+    (!!task.createdByAgentId &&
+      set.values.includes(toTaskListFilterAgentCreator(task.createdByAgentId)));
+  return set.operator === 'isNot' ? !included : included;
+};
+
 const toTime = (value: Date | string | null | undefined): number | undefined => {
   if (!value) return undefined;
   const time = new Date(value).getTime();
@@ -225,13 +239,7 @@ export const matchesTaskListFilter = (
     matchesSet(filter.priority, task.priority ?? 0) &&
     matchesSet(filter.agent, task.assigneeAgentId, TASK_LIST_FILTER_NONE) &&
     matchesSet(filter.assignee, task.assigneeUserId, TASK_LIST_FILTER_NONE) &&
-    matchesSet(
-      filter.creator,
-      task.createdByAgentId
-        ? toTaskListFilterAgentCreator(task.createdByAgentId)
-        : task.createdByUserId,
-      TASK_LIST_FILTER_NONE,
-    ) &&
+    matchesCreator(filter.creator, task) &&
     matchesSet(filter.project, task.projectId, TASK_LIST_FILTER_NONE) &&
     matchesDate(filter.createdAt, task.createdAt, now) &&
     matchesDate(filter.updatedAt, task.updatedAt, now) &&

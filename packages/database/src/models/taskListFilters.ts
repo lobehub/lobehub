@@ -178,6 +178,30 @@ const buildSetCondition = (
   return or(...[matchesValue, matchesNone].filter((c): c is SQL => !!c));
 };
 
+/**
+ * Member values match `created_by_user_id`, `agent:<id>` values match
+ * `created_by_agent_id`; a task matches when either side does, so a member
+ * still finds the tasks their agents created. Mirrors `matchesTaskListFilter`.
+ */
+const buildCreatorCondition = (set: TaskListFilterSet<string> | undefined): SQL | undefined => {
+  if (!set || set.values.length === 0) return undefined;
+  const userIds = set.values.filter(
+    (value) => !value.startsWith(TASK_LIST_FILTER_AGENT_CREATOR_PREFIX),
+  );
+  const agentIds = set.values
+    .filter((value) => value.startsWith(TASK_LIST_FILTER_AGENT_CREATOR_PREFIX))
+    .map((value) => value.slice(TASK_LIST_FILTER_AGENT_CREATOR_PREFIX.length));
+  const matches = or(
+    ...[
+      userIds.length > 0 ? inArray(tasks.createdByUserId, userIds) : undefined,
+      agentIds.length > 0 ? inArray(tasks.createdByAgentId, agentIds) : undefined,
+    ].filter((condition): condition is SQL => !!condition),
+  )!;
+  // `created_by_agent_id` is NULL on member-made tasks; coalesce keeps NOT from
+  // turning that NULL into "unknown" and dropping the row.
+  return set.operator === 'isNot' ? not(sql`coalesce(${matches}, false)`) : matches;
+};
+
 /** A NULL timestamp (an unfinished task's `completedAt`) matches neither side. */
 const buildDateCondition = (
   column: PgColumn,
@@ -202,11 +226,7 @@ export const buildTaskFilterConditions = (filter: TaskListFilter, now?: number):
     buildSetCondition(sql`coalesce(${tasks.priority}, 0)`, filter.priority),
     buildSetCondition(tasks.assigneeAgentId, filter.agent),
     buildSetCondition(tasks.assigneeUserId, filter.assignee),
-    // An agent-created task is credited to the agent, as `matchesTaskListFilter` does.
-    buildSetCondition(
-      sql`case when ${tasks.createdByAgentId} is not null then ${TASK_LIST_FILTER_AGENT_CREATOR_PREFIX} || ${tasks.createdByAgentId} else ${tasks.createdByUserId} end`,
-      filter.creator,
-    ),
+    buildCreatorCondition(filter.creator),
     buildSetCondition(tasks.projectId, filter.project),
     buildDateCondition(tasks.createdAt, filter.createdAt, now),
     buildDateCondition(tasks.updatedAt, filter.updatedAt, now),

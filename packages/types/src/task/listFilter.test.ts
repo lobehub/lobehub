@@ -80,7 +80,7 @@ describe('matchesTaskListFilter', () => {
     expect(matchesTaskListFilter(task(), undefined, NOW)).toBe(true);
   });
 
-  it('credits an agent-created task to the agent, not the member', () => {
+  it('matches an agent-created task by its member and by its agent', () => {
     const byAgent = task({ createdByAgentId: 'agt_writer' });
     const byMember = { operator: 'is' as const, values: ['user_creator'] };
     const byWriter = {
@@ -89,9 +89,15 @@ describe('matchesTaskListFilter', () => {
     };
 
     expect(matchesTaskListFilter(task(), { creator: byMember }, NOW)).toBe(true);
-    expect(matchesTaskListFilter(byAgent, { creator: byMember }, NOW)).toBe(false);
+    expect(matchesTaskListFilter(byAgent, { creator: byMember }, NOW)).toBe(true);
     expect(matchesTaskListFilter(byAgent, { creator: byWriter }, NOW)).toBe(true);
     expect(matchesTaskListFilter(task(), { creator: byWriter }, NOW)).toBe(false);
+    expect(
+      matchesTaskListFilter(task(), { creator: { ...byWriter, operator: 'isNot' } }, NOW),
+    ).toBe(true);
+    expect(
+      matchesTaskListFilter(byAgent, { creator: { ...byMember, operator: 'isNot' } }, NOW),
+    ).toBe(false);
   });
 
   it('matches value sets with is / isNot', () => {

@@ -133,9 +133,14 @@ describe('TaskModel list filter', () => {
       [{ agent: { operator: 'isNot', values: [TASK_LIST_FILTER_NONE] } }, [alpha, beta, delta]],
       [{ assignee: { operator: 'is', values: [otherUserId] } }, [beta]],
       [{ assignee: { operator: 'is', values: [TASK_LIST_FILTER_NONE] } }, [gamma, delta, literal]],
-      // An agent-created task is credited to the agent, not the member behind it.
-      [{ creator: { operator: 'is', values: [userId] } }, [alpha, beta, gamma, literal]],
-      [{ creator: { operator: 'isNot', values: [userId] } }, [delta]],
+      // A member still finds the tasks their agents created for them…
+      [{ creator: { operator: 'is', values: [userId] } }, all],
+      [{ creator: { operator: 'isNot', values: [userId] } }, []],
+      // …and the agent value finds only what that agent created; NULL agents stay in `isNot`.
+      [
+        { creator: { operator: 'isNot', values: [toTaskListFilterAgentCreator('agt_filter_a')] } },
+        [alpha, beta, gamma, literal],
+      ],
       [
         { creator: { operator: 'is', values: [toTaskListFilterAgentCreator('agt_filter_a')] } },
         [delta],

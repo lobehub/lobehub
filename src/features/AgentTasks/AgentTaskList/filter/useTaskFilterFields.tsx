@@ -84,7 +84,8 @@ interface UseTaskFilterFieldsParams {
  * Everything the "Add filter" menu and the filter chips can offer on this
  * page, with display labels and icons for each value. Assignee and creator
  * list the workspace members, or just the signed-in user in personal mode;
- * the creator field also lists the agents, since an agent can create a task.
+ * the creator field also lists the agents. A member value also matches the
+ * tasks their agents created for them; an agent value narrows to that agent.
  */
 export const useTaskFilterFields = ({
   agentId,
