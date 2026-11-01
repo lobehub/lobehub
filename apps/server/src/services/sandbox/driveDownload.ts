@@ -211,12 +211,32 @@ try:
     else:
         done(ok=False, code="NOT_FOUND")
 
+    # Measured again right before sending: a file can grow after it was checked.
     size = os.fstat(upload_fd).st_size
+    if size > max_bytes:
+        done(ok=False, code="TOO_LARGE", bytes=size, files=1)
+
+    class Capped:
+        """The first size bytes and no more, whatever is appended meanwhile."""
+
+        def __init__(self, source):
+            self.source = source
+            self.remaining = size
+
+        def read(self, amount=-1):
+            if self.remaining <= 0:
+                return b""
+            amount = self.remaining if amount is None or amount < 0 else min(amount, self.remaining)
+            chunk = self.source.read(amount)
+            self.remaining -= len(chunk)
+            return chunk
+
     headers = dict(params.get("headers") or {})
     headers["Content-Length"] = str(size)
     headers["Content-Type"] = content_type
-    with os.fdopen(upload_fd, "rb") as body:
+    with os.fdopen(upload_fd, "rb") as source:
         upload_fd = None
+        body = Capped(source)
         request = urllib.request.Request(params["uploadUrl"], data=body, headers=headers, method="PUT")
         try:
             with urllib.request.urlopen(request, timeout=170) as response:
