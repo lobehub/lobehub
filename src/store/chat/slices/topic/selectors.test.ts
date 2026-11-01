@@ -323,6 +323,7 @@ describe('topicSelectors', () => {
         { id: 'task1', name: 'Task run', trigger: 'task' },
         { id: 'doc1', name: 'Doc chat', trigger: 'document' },
         { id: 'eval1', name: 'Eval', trigger: 'eval' },
+        { id: 'channel1', name: 'Channel run', trigger: 'channel' },
       ];
       const state = merge(initialStore, {
         activeAgentId: 'test',
@@ -343,11 +344,39 @@ describe('topicSelectors', () => {
   });
 
   describe('searchTopics', () => {
+    it('hides cached channel results while keeping their detail accessible', () => {
+      const channelTopic = { ...topicItems[0], id: 'channel1', trigger: 'channel' };
+      const state = merge(initialStore, {
+        activeAgentId: 'test',
+        activeTopicId: channelTopic.id,
+        searchTopics: [...topicItems, channelTopic],
+        topicDetailMap: { [channelTopic.id]: channelTopic },
+      });
+
+      expect(topicSelectors.searchTopics(state)).toEqual(topicItems);
+      expect(topicSelectors.currentActiveTopic(state)).toEqual(channelTopic);
+    });
+
     it('should return search topics if searching', () => {
       const searchTopics = [{ id: 'search1', name: 'Search 1' }];
       const state = merge(initialStore, { inSearchingMode: true, searchTopics });
       const topics = topicSelectors.searchTopics(state);
       expect(topics).toEqual(searchTopics);
+    });
+  });
+
+  describe('agentTopicsViewTopics', () => {
+    it('hides channel topics in the management list without hiding other trigger types', () => {
+      const taskTopic = { ...topicItems[0], id: 'task1', trigger: 'task' };
+      const channelTopic = { ...topicItems[0], id: 'channel1', trigger: 'channel' };
+      const state = merge(initialStore, {
+        activeAgentId: 'test',
+        agentTopicsViewMap: {
+          [topicMapKey({ agentId: 'test' })]: { items: [...topicItems, taskTopic, channelTopic] },
+        },
+      });
+
+      expect(topicSelectors.agentTopicsViewTopics(state)).toEqual([...topicItems, taskTopic]);
     });
   });
 
@@ -483,7 +512,7 @@ describe('topicSelectors', () => {
       // Check favorite group
       expect(grouped[0]).toEqual({
         id: 'favorite',
-        title: 'favorite', // This matches the mocked t function return
+        title: 'pinned', // This matches the mocked t function return
         children: topics.filter((t) => t.favorite),
       });
 
@@ -631,6 +660,19 @@ describe('topicSelectors', () => {
   });
 
   describe('displayTopicsForSidebar', () => {
+    it('does not pin an open channel topic back into the sidebar', () => {
+      const channelTopic = { ...topicItems[0], id: 'channel1', trigger: 'channel' };
+      const state = merge(initialStore, {
+        activeAgentId: 'test',
+        activeTopicId: channelTopic.id,
+        topicDataMap,
+        topicDetailMap: { [channelTopic.id]: channelTopic },
+      });
+
+      expect(topicSelectors.displayTopicsForSidebar(20)(state)).toEqual(topicItems);
+      expect(topicSelectors.currentActiveTopic(state)).toEqual(channelTopic);
+    });
+
     it('hides completed topics immediately when completed topics are excluded', () => {
       const now = Date.now();
       const state = merge(initialStore, {

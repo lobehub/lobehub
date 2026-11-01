@@ -11,6 +11,9 @@ import type { MessageListPage, MessageRoundCursor } from './cache';
  */
 export const MESSAGE_PAGE_ROW_BUDGET = 1000;
 
+// Client-mode reads keep the full budget: the client runtime replays the loaded rows as model history.
+export const GATEWAY_PAGE_ROW_BUDGET = 500;
+
 /** Page sizes for reading a topic forward from its first round. */
 export interface ForwardPageSize {
   countBudget: number;
@@ -34,7 +37,7 @@ export const toRoundCursorQueryInput = (
   cursor: MessageRoundCursor | null,
 ) => ({
   agentId: params.agentId,
-  countBudget: MESSAGE_PAGE_ROW_BUDGET,
+  countBudget: params.projectToolPayloads ? GATEWAY_PAGE_ROW_BUDGET : MESSAGE_PAGE_ROW_BUDGET,
   cursor,
   groupId: params.groupId,
   includeFileWorks: true,
@@ -59,10 +62,25 @@ export const toMessageListPage = (page: RoundCursorQueryResult): MessageListPage
 export const readMessagesByRoundCursor = async (
   params: RoundCursorReadParams,
   cursor: MessageRoundCursor | null,
-): Promise<MessageListPage> =>
-  toMessageListPage(
-    await lambdaClient.message.getMessagesByCursor.query(toRoundCursorQueryInput(params, cursor)),
-  );
+): Promise<MessageListPage> => {
+  const input = toRoundCursorQueryInput(params, cursor);
+  const page = toMessageListPage(await lambdaClient.message.getMessagesByCursor.query(input));
+
+  if (cursor === null) {
+    const key = primeKey(params);
+    if (input.countBudget < MESSAGE_PAGE_ROW_BUDGET && page.olderCursor)
+      partialHeadWindows.add(key);
+    else partialHeadWindows.delete(key);
+  }
+
+  return page;
+};
+
+const partialHeadWindows = new Set<string>();
+
+// A head page smaller than the client runtime's history window: a client-side run must reload it first.
+export const isPartialHeadWindow = (context: MessageListQueryContext): boolean =>
+  partialHeadWindows.has(primeKey(context));
 
 /** The `getMessagesByCursor` input for one forward page, starting after `cursor`. */
 export const toForwardRoundCursorQueryInput = (

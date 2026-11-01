@@ -1,20 +1,27 @@
+import { canStageDraftOn } from '@/features/Projects/WorkingDirectories/startProjectTopicDraft';
+
 interface DeviceDirectoryLike {
   deviceId?: string | null;
+  environmentId?: string | null;
   id: string;
   instanceId?: string | null;
+  permission?: string | null;
 }
 
 /**
- * The add-topic affordance on a device group is only safe when the modal can
- * preselect an instance-bound directory on THIS device — its picker lists
- * instance-bound directories only, so without one it silently falls back to
- * another device's directory and the topic would start on the wrong device.
+ * The add-topic affordance on a device group is only safe with a runnable
+ * directory on THIS device that the draft's agent may run on — otherwise the
+ * blank conversation would be staged somewhere the first send is refused, or
+ * on another device altogether.
  */
 export const findDeviceTopicDirectory = <T extends DeviceDirectoryLike>(
   directories: T[],
   deviceId?: string,
+  fixedDeviceId?: string | null,
 ): T | undefined =>
-  deviceId ? directories.find((d) => d.deviceId === deviceId && d.instanceId) : undefined;
+  deviceId
+    ? directories.find((d) => d.deviceId === deviceId && canStageDraftOn(d, fixedDeviceId))
+    : undefined;
 
 /**
  * A synthetic bucket (e.g. favorites) carries its own title and wins over any

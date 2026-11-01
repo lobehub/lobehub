@@ -171,6 +171,38 @@ describe('knowledgeBaseRouter', () => {
       });
     });
 
+    it('merges a cover into the stored settings without dropping other settings', async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        id: 'kb-1',
+        settings: { cover: 'preset:old', topK: 5 },
+        userId: 'test-user',
+        visibility: 'public',
+        workspaceId: 'workspace-active',
+      });
+
+      await caller.updateKnowledgeBase({ id: 'kb-1', value: { cover: 'preset:aurora' } });
+
+      expect(mockKnowledgeBaseModelUpdate).toHaveBeenCalledWith('kb-1', {
+        settings: { cover: 'preset:aurora', topK: 5 },
+      });
+    });
+
+    it('clears the cover back to the generated default on null', async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        id: 'kb-1',
+        settings: { cover: 'preset:old', topK: 5 },
+        userId: 'test-user',
+        visibility: 'public',
+        workspaceId: 'workspace-active',
+      });
+
+      await caller.updateKnowledgeBase({ id: 'kb-1', value: { cover: null } });
+
+      expect(mockKnowledgeBaseModelUpdate).toHaveBeenCalledWith('kb-1', {
+        settings: { topK: 5 },
+      });
+    });
+
     it('does not update a restricted library that the member cannot browse', async () => {
       routerMocks.assertKnowledgeBaseBrowsable.mockRejectedValue(new Error('denied'));
 

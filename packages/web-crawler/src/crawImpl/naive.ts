@@ -40,18 +40,20 @@ export const naive: CrawlImpl = async (url, { filterOptions }) => {
   let res: Response;
 
   try {
-    res = await withTimeout(
-      (signal) =>
-        ssrfSafeFetch(
-          url,
-          {
-            headers: mixinHeaders,
-            signal,
-          },
-          { maxContentLength: MAX_HTML_SIZE },
-        ),
-      DEFAULT_TIMEOUT,
-    );
+    res = await withTimeout(async (signal) => {
+      const streamed = await ssrfSafeFetch(
+        url,
+        {
+          headers: mixinHeaders,
+          signal,
+        },
+        { maxContentLength: MAX_HTML_SIZE },
+      );
+      // ssrfSafeFetch resolves at the headers; buffer the capped body under the same
+      // timeout so a server that keeps dripping bytes cannot stall the crawl.
+      const body = streamed.body ? await streamed.arrayBuffer() : null;
+      return new Response(body, streamed);
+    }, DEFAULT_TIMEOUT);
   } catch (e) {
     throw toFetchError(e);
   }

@@ -18,13 +18,14 @@ export type GoalCardTone = 'active' | 'canceled' | 'error' | 'paused' | 'waiting
 export type PlanStepState =
   | 'done'
   | 'failed'
-  | 'lost'
   | 'queued'
   | 'retired'
   | 'running'
+  | 'stalled'
   | 'stopped'
   | 'verifying'
-  | 'waiting';
+  | 'waiting'
+  | 'waitingQuota';
 
 export interface PlanStep {
   id: string;
@@ -64,7 +65,8 @@ export const planStepState = (view: GoalNodeView): PlanStepState => {
   if (view.decision) return 'waiting';
   if (status === 'active') {
     if (view.isVerifying) return 'verifying';
-    if (view.isStale) return 'lost';
+    if (view.isStale) return 'stalled';
+    if (view.quotaRetryAt) return 'waitingQuota';
     return 'running';
   }
   if (status === 'waiting' || view.blockers.length > 0) return 'waiting';

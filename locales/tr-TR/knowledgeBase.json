@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "Kütüphaneye Ekle",
   "addToKnowledgeBase.totalFiles": "{{count}} dosya seçildi",
   "createNew.confirm": "Yeni Oluştur",
+  "createNew.cover.label": "Kapak",
   "createNew.description.label": "Kütüphane Açıklaması (İsteğe Bağlı)",
   "createNew.description.placeholder": "Açıklama, LLM'nin kütüphanenizi daha iyi anlamasına yardımcı olur",
   "createNew.edit.confirm": "Değişiklikleri Kaydet",

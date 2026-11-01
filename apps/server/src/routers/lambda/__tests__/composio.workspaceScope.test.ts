@@ -15,6 +15,14 @@ vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
+const workspaceMocks = vi.hoisted(() => ({
+  getConnectorMemberManage: vi.fn(async () => 'all_members' as const),
+}));
+vi.mock('@/database/models/workspace', () => ({
+  WorkspaceModel: vi.fn(function () {
+    return workspaceMocks;
+  }),
+}));
 // A pre-configured auth config short-circuits the discovery branch.
 vi.mock('@/config/composio', () => ({ getServerComposioAuthConfigId: () => 'auth-cfg-1' }));
 vi.mock('@/libs/composio', () => ({
@@ -50,6 +58,7 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
 
   beforeEach(() => {
     vi.clearAllMocks();
+    workspaceMocks.getConnectorMemberManage.mockResolvedValue('all_members');
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
@@ -139,15 +148,41 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     expect(agentModelMock.existsOwnedById).toHaveBeenCalledWith('agent-1');
   });
 
-  it('blocks a non-owner member from overwriting another member’s workspace connection', async () => {
-    // buildWorkspaceWhere makes workspace rows writable workspace-wide; the
-    // row-level gate must stop a plain member from clobbering another member's
-    // Composio connection — before any remote account is created.
-    connectorModelMock.findScopedByIdentifier.mockResolvedValueOnce({
+  const memberCaller = () =>
+    composioRouter.createCaller({
+      serverDB: {},
+      userId: 'user_test',
+      workspaceId: 'ws-1',
+      workspaceRole: 'member',
+    } as any);
+
+  it('lets a member reconnect another member’s workspace connection by default', async () => {
+    // Shared connectors are co-maintained unless an admin restricted them.
+    connectorModelMock.findScopedByIdentifier.mockResolvedValue({
       id: 'conn-other',
       identifier: 'gmail',
       userId: 'another-user',
     });
+
+    await expect(
+      memberCaller().createConnection({ appSlug: 'gmail', identifier: 'gmail', label: 'Gmail' }),
+    ).resolves.toBeDefined();
+  });
+
+  it('blocks a member from connecting when admins restricted connector management', async () => {
+    // Checked before any remote Composio account is created — even for the
+    // member's own row and for a brand-new connection.
+    workspaceMocks.getConnectorMemberManage.mockResolvedValue('admins_only');
+
+    await expect(
+      memberCaller().createConnection({ appSlug: 'gmail', identifier: 'gmail', label: 'Gmail' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+  });
+
+  it('still lets a workspace admin connect when members are restricted', async () => {
+    workspaceMocks.getConnectorMemberManage.mockResolvedValue('admins_only');
 
     await expect(
       composioRouter
@@ -155,11 +190,9 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
           serverDB: {},
           userId: 'user_test',
           workspaceId: 'ws-1',
-          workspaceRole: 'member',
+          workspaceRole: 'admin',
         } as any)
         .createConnection({ appSlug: 'gmail', identifier: 'gmail', label: 'Gmail' }),
-    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-
-    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    ).resolves.toBeDefined();
   });
 });

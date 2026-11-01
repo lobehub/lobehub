@@ -1,4 +1,4 @@
-import type { SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
+import { isPersistentSandboxMode, type SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 
 import type { UnansweredUserTurn } from './unansweredUserTurns';
 import { formatUnansweredUserTurns } from './unansweredUserTurns';
@@ -24,9 +24,10 @@ export interface ConversationHistoryEntry {
  */
 /**
  * Where the run keeps its files. Absent or `ephemeral` renders the original
- * wording byte for byte; `persistent` describes the instance directory the
- * execution plane starts the run in — by its place in the workspace, never by
- * an absolute path, which is the plane's to choose.
+ * wording byte for byte; `drive` describes the folder on the user's drive and
+ * `persistent` the environment directory the execution plane starts the run in
+ * — by its place on the drive, never by an absolute path, which is the
+ * plane's to choose.
  */
 export interface CloudHeteroSandboxPlacement {
   /** Chosen subdirectory of the workspace, relative to its root. */
@@ -58,7 +59,7 @@ export function buildCloudHeteroContext(params: {
     sandbox,
     unansweredUserTurns,
   } = params;
-  const persistent = sandbox?.mode === 'persistent';
+  const persistent = isPersistentSandboxMode(sandbox?.mode);
 
   const parts: string[] = [];
 
@@ -74,10 +75,12 @@ export function buildCloudHeteroContext(params: {
   const placementLines: string[] = persistent
     ? [
         '## Cloud Workspace',
-        sandbox?.cwd
-          ? `You are running inside a LobeHub cloud sandbox. Your working directory is \`${sandbox.cwd}\`, a subdirectory of a **persistent workspace**: files written there survive session expiry and are still there in your next session.`
-          : 'You are running inside a LobeHub cloud sandbox. Your working directory is a **persistent workspace**: files written there survive session expiry and are shared with the other conversation topics that use this workspace.',
-        "The workspace root is above you. Its other subdirectories belong to this user's other topics — reachable with relative paths, but do not write into them unless the user asks.",
+        sandbox?.mode === 'drive'
+          ? sandbox.cwd
+            ? `You are running inside a LobeHub cloud sandbox. Your working directory is \`${sandbox.cwd}\`, a folder on the user's **network drive**: files written there survive session expiry and are still there in your next session. The machine itself starts fresh every session, so installed packages do not carry over.`
+            : "You are running inside a LobeHub cloud sandbox. Your working directory is the root of the user's **network drive**: files written there survive session expiry and are still there in your next session. The machine itself starts fresh every session, so installed packages do not carry over."
+          : `You are running inside a LobeHub cloud sandbox. Your working directory is ${sandbox?.cwd ? `\`${sandbox.cwd}\`, ` : ''}an **environment directory** on the user's drive: its files and the packages its setup installed survive session expiry and are restored in your next session.`,
+        'Other folders on the drive belong to other work — reachable with relative paths, but do not write into them unless the user asks.',
         'The workspace is network storage: fine for source files, results and notes, but slow for the thousands of small files a package install or a build writes. Install packages and build where the toolchain puts things by default.',
         '',
         '## Sandbox Persistence',

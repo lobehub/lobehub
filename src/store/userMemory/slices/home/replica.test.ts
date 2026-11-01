@@ -2,7 +2,7 @@
  * @vitest-environment happy-dom
  *
  * The memory home reads (persona + identity roles/tags) are two
- * `@lobechat/replica` single-value resources: the persisted copy paints before
+ * `local-replica` single-value resources: the persisted copy paints before
  * the network answers, the response confirms and persists it, a server
  * `null` persona is a real (persisted) absence, an unchanged revalidation does
  * not repaint, and the persona delete drops the value from the view and the

@@ -1,15 +1,14 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Markdown, Text } from '@lobehub/ui';
 import { Pencil } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 
+import { resolveTaskOpenTarget } from '../../../taskRef';
 import type { EditTaskParams, EditTaskState } from '../../../types';
 import {
   AssigneeInline,
@@ -81,6 +80,7 @@ export const EditTaskRender = memo<BuiltinRenderProps<EditTaskParams, EditTaskSt
       <TaskResultCard
         icon={Pencil}
         identifier={identifier}
+        taskId={resolveTaskOpenTarget(pluginState, params)}
         title={t('builtins.lobe-task.apiName.editTask')}
       >
         {hasAnyChange ? (

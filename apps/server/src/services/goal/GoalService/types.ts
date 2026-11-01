@@ -1,4 +1,9 @@
-import type { GoalCreateConfig, GoalNodeKind, GoalNodeStatus } from '@lobechat/types';
+import type {
+  GoalCreateConfig,
+  GoalNodeKind,
+  GoalNodeStatus,
+  GoalVisibility,
+} from '@lobechat/types';
 import type { GoalSeedTask } from '@lobechat/utils/goalSeeds';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -51,8 +56,10 @@ import type {
   setTaskModel,
   stopFencedTasks,
   updateRequirement,
+  updateTitle,
 } from './editing';
 import type {
+  archiveSignedOffTasks,
   close,
   deleteGoal,
   pause,
@@ -77,6 +84,7 @@ import type {
   collectAcceptances,
   collectAssignees,
   collectDeliveredAt,
+  collectQuotaWaits,
   collectRunHeartbeats,
   graph,
   listEvents,
@@ -155,6 +163,12 @@ export interface CreateGoalGraphInput {
    * `topic` subject so the conversation can find and show it.
    */
   topicId?: string;
+  /**
+   * Workspace visibility. Omitted, it follows the agents: a private goal or
+   * task agent makes the goal private, otherwise it is public. An explicit
+   * 'public' with a private agent is rejected.
+   */
+  visibility?: GoalVisibility;
 }
 
 export interface CreateGoalNodeInput {
@@ -184,6 +198,7 @@ export interface GoalServiceContext {
   readonly agentModel: AgentModel;
   answerClarifications: Bound<typeof answerClarifications>;
   answerReleaseGate: GoalReleaseReview['answerReleaseGate'];
+  archiveSignedOffTasks: Bound<typeof archiveSignedOffTasks>;
   attachTaskDeliverables: Bound<typeof attachTaskDeliverables>;
   bindTopic: Bound<typeof bindTopic>;
   readonly briefs: GoalBriefService;
@@ -193,6 +208,7 @@ export interface GoalServiceContext {
   collectAcceptances: Bound<typeof collectAcceptances>;
   collectAssignees: Bound<typeof collectAssignees>;
   collectDeliveredAt: Bound<typeof collectDeliveredAt>;
+  collectQuotaWaits: Bound<typeof collectQuotaWaits>;
   collectRolloutGate: Bound<typeof collectRolloutGate>;
   collectRunHeartbeats: Bound<typeof collectRunHeartbeats>;
   consumeCompletedTask: Bound<typeof consumeCompletedTask>;
@@ -269,6 +285,7 @@ export interface GoalServiceContext {
   tickOnce: Bound<typeof tickOnce>;
   transitionStatus: Bound<typeof transitionStatus>;
   updateRequirement: Bound<typeof updateRequirement>;
+  updateTitle: Bound<typeof updateTitle>;
   readonly userId: string;
   waitForDevice: Bound<typeof waitForDevice>;
   waitForQuotaReset: Bound<typeof waitForQuotaReset>;

@@ -1,7 +1,16 @@
 'use client';
 
-import { createStaticStyles, cssVar, Empty, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, type ModalInstance, Text, toast } from '@lobehub/ui';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  type ModalInstance,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ArrowLeftIcon, Clock3Icon } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
@@ -86,8 +95,7 @@ const HistoryPanel = memo(() => {
 
   const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
 
-  const markDirty = useDocumentStore((s) => s.markDirty);
-  const performSave = useDocumentStore((s) => s.performSave);
+  const restoreVersion = useDocumentStore((s) => s.restoreVersion);
   const lastUpdatedTime = useDocumentStore(
     (s) => editorSelectors.lastUpdatedTime(documentId!)(s) ?? null,
   );
@@ -177,12 +185,7 @@ const HistoryPanel = memo(() => {
             `page-editor-history-${documentId}`,
           );
 
-          editor.setDocument('json', JSON.stringify(result.editorData));
-          markDirty(documentId);
-          await performSave(documentId, undefined, {
-            restoreFromHistoryId: historyId,
-            saveSource: 'restore',
-          });
+          await restoreVersion(documentId, { editorData: result.editorData, historyId });
           onSuccess?.();
         } catch (error) {
           console.error('[PageEditor] Failed to restore history item:', error);

@@ -47,7 +47,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 
-import AgentCard, { cardStyles } from './AgentCard';
+import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
 import { flattenAgentBuckets } from './flattenBuckets';
 import ListConfig from './ListConfig';
@@ -454,10 +454,9 @@ const AgentViewAllPage = memo(() => {
   const renderCard = useCallback(
     (item: SidebarAgentItem) => (
       <AgentCard
-        author={item.userId ? authorByUserId.get(item.userId) : undefined}
         item={item}
         key={item.id}
-        showAuthor={showAuthor}
+        owner={showAuthor && item.userId ? authorByUserId.get(item.userId) : undefined}
         sidebarHidden={!isSidebarItemVisible(item)}
         onToggleSidebar={handleToggleSidebar}
       />
@@ -485,7 +484,6 @@ const AgentViewAllPage = memo(() => {
     createConnectAgentMenuItem,
     createGroupChatMenuItem,
     createMarketAgentMenuItem,
-    isMutatingAgent,
   } = useCreateMenuItems();
 
   // Creating from the Private tab lands the item in the private bucket, so
@@ -535,7 +533,13 @@ const AgentViewAllPage = memo(() => {
           />
         }
       />
-      <WideScreenContainer gap={16} paddingBlock={16} wrapperStyle={{ flex: 1, overflowY: 'auto' }}>
+      <WideScreenContainer
+        fullWidth
+        gap={16}
+        paddingBlock={16}
+        paddingInline={16}
+        wrapperStyle={{ flex: 1, overflowY: 'auto' }}
+      >
         {!isInit && !keyword.trim() && <AgentViewAllSidebarSectionSkeleton />}
         {isInit && !keyword.trim() && sidebarItems.length > 0 && (
           <SidebarAgentsSection items={sidebarItems} onToggleSidebar={handleToggleSidebar} />
@@ -589,7 +593,7 @@ const AgentViewAllPage = memo(() => {
             )}
             {canCreate ? (
               <DropdownMenu items={createMenuItems}>
-                <Button icon={PlusIcon} loading={isMutatingAgent}>
+                <Button icon={PlusIcon}>
                   <Icon icon={ChevronDownIcon} size={14} />
                 </Button>
               </DropdownMenu>
@@ -628,15 +632,13 @@ const AgentViewAllPage = memo(() => {
                       label={group.label}
                       onToggle={() => toggleGroupCollapsed(group.key)}
                     />
-                    {!collapsed && (
-                      <div className={cardStyles.grid}>{group.items.map(renderCard)}</div>
-                    )}
+                    {!collapsed && <AgentCardGrid>{group.items.map(renderCard)}</AgentCardGrid>}
                   </Flexbox>
                 );
               })}
             </Flexbox>
           ) : (
-            <div className={cardStyles.grid}>{filteredItems.map(renderCard)}</div>
+            <AgentCardGrid>{filteredItems.map(renderCard)}</AgentCardGrid>
           )
         ) : (
           // Grouped list shares the card branch's wrapper rhythm (outer gap 8,

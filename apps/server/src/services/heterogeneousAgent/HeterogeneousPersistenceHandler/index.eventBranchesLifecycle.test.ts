@@ -41,6 +41,8 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
 
       const asst = h.messages.get(h.assistantMessageId)!;
       expect(asst.content).toBe('final text');
+      // Completion callbacks must recover this run's reply, never an older topic reply.
+      expect(asst.metadata).toMatchObject({ operationId: h.operationId });
       expect(asst.reasoning).toEqual({ content: 'final reasoning' });
       expect(asst.model).toBe('claude-opus-4-7');
       expect(asst.provider).toBe('claude-code');

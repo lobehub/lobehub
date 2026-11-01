@@ -1,13 +1,13 @@
 import type { ListedWorkType, WorkSkillProvider } from '@lobechat/types';
 
 /**
- * `?works=` values: the per-type keys (task / document) plus the per-PROVIDER
+ * `?works=` values: the per-type keys (task / document / canvas) plus the per-PROVIDER
  * keys (linear / github) and a combined `all` view. The sidebar currently
  * exposes only the single `all` entry — the narrower keys stay parseable so
  * deep links keep working and per-category tabs can return without a URL
  * migration.
  */
-export type WorkGalleryKey = 'all' | 'document' | 'github' | 'linear' | 'task';
+export type WorkGalleryKey = 'all' | 'canvas' | 'document' | 'github' | 'linear' | 'task';
 
 /**
  * How a gallery key narrows the workspace Work list: `type` selects a Work type
@@ -23,6 +23,7 @@ const FILTER_BY_KEY = new Map<WorkGalleryKey, WorkGalleryFilter>([
   ['all', {}],
   ['task', { type: 'task' }],
   ['document', { type: 'document' }],
+  ['canvas', { type: 'canvas' }],
   ['linear', { provider: 'linear' }],
   ['github', { provider: 'github' }],
 ]);

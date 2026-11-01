@@ -9,6 +9,7 @@ import {
   requiredApiKeyScopeForTrpc,
   TRPC_NAMESPACE_API_KEY_RULES,
   TRPC_PROCEDURE_EXTRA_SCOPES,
+  TRPC_PROCEDURE_SCOPE_GRANTS,
 } from './apiKeyScope';
 
 describe('isValidApiKeyScope', () => {
@@ -168,6 +169,18 @@ describe('requiredApiKeyScopeForTrpc', () => {
     expect(requiredApiKeyScopeForTrpc('usage.reset', 'mutation')).toEqual({ blocked: true });
   });
 
+  it('opens a granted procedure without opening the rest of its namespace half', () => {
+    expect(requiredApiKeyScopeForTrpc('workspaceMember.updateProfile', 'mutation')).toEqual({
+      scopes: ['workspace:write'],
+    });
+    expect(requiredApiKeyScopeForTrpc('workspaceMember.updateRole', 'mutation')).toEqual({
+      blocked: true,
+    });
+    expect(requiredApiKeyScopeForTrpc('workspaceMember.invite', 'mutation')).toEqual({
+      blocked: true,
+    });
+  });
+
   it('blocks sensitive nested sub-surfaces regardless of the parent namespace', () => {
     expect(requiredApiKeyScopeForTrpc('market.creds.list', 'query')).toEqual({ blocked: true });
     expect(requiredApiKeyScopeForTrpc('market.creds.createKV', 'mutation')).toEqual({
@@ -181,6 +194,23 @@ describe('requiredApiKeyScopeForTrpc', () => {
     });
     expect(requiredApiKeyScopeForTrpc('aiAgent.issueGatewayUserToken', 'query')).toEqual({
       blocked: true,
+    });
+    // the GitHub picker reads the connected account through its OAuth grant
+    expect(requiredApiKeyScopeForTrpc('environment.listGithubRepositories', 'query')).toEqual({
+      blocked: true,
+    });
+    expect(requiredApiKeyScopeForTrpc('environment.listGithubBranches', 'query')).toEqual({
+      blocked: true,
+    });
+    // publishing exposes what an environment's directories captured on the drive
+    expect(requiredApiKeyScopeForTrpc('environment.setEnvironmentVisibility', 'mutation')).toEqual({
+      blocked: true,
+    });
+    expect(requiredApiKeyScopeForTrpc('environment.updateEnvironment', 'mutation')).toEqual({
+      scopes: ['agent:write'],
+    });
+    expect(requiredApiKeyScopeForTrpc('environment.listEnvironments', 'query')).toEqual({
+      scopes: ['agent:read'],
     });
     // the rest of the market surface keeps its agent scopes
     expect(requiredApiKeyScopeForTrpc('market.getAgentsByPlugin', 'query')).toEqual({
@@ -208,6 +238,15 @@ describe('requiredApiKeyScopeForTrpc', () => {
       }
       if (rule.read) expect(isValidApiKeyScope(rule.read)).toBe(true);
       if (rule.write) expect(isValidApiKeyScope(rule.write)).toBe(true);
+    }
+  });
+
+  it('every scope grant targets a registered, non-blocked namespace and a catalog scope', () => {
+    for (const [path, scope] of Object.entries(TRPC_PROCEDURE_SCOPE_GRANTS)) {
+      const rule = TRPC_NAMESPACE_API_KEY_RULES[path.split('.')[0]];
+      expect(rule).toBeDefined();
+      expect(rule).not.toBe('blocked');
+      expect(isValidApiKeyScope(scope)).toBe(true);
     }
   });
 

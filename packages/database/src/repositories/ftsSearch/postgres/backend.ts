@@ -46,8 +46,12 @@ export abstract class PostgresFtsSearchBackend implements FtsSearchBackend {
 
     if (entity === 'agents') return searchAgents(this.context, query, limit);
     if (entity === 'chatGroups') return searchChatGroups(this.context, query, limit);
-    if (entity === 'topics') return searchTopics(this.context, query, limit, filters.agentId);
-    if (entity === 'messages') return searchMessages(this.context, query, limit, filters.agentId);
+    if (entity === 'topics') {
+      return searchTopics(this.context, query, limit, filters.agentId, filters.timeRange);
+    }
+    if (entity === 'messages') {
+      return searchMessages(this.context, query, limit, filters.agentId, filters.timeRange);
+    }
     if (entity === 'files') {
       return searchFiles(this.context, query, limit, filters.excludeKnowledgeBaseIds);
     }
@@ -61,7 +65,13 @@ export abstract class PostgresFtsSearchBackend implements FtsSearchBackend {
         return searchFolders(this.context, query, limit, filters.excludeKnowledgeBaseIds);
       }
       if (filters.documentKind === 'page') {
-        return searchPages(this.context, query, limit, filters.excludeKnowledgeBaseIds);
+        return searchPages(
+          this.context,
+          query,
+          limit,
+          filters.excludeKnowledgeBaseIds,
+          filters.timeRange,
+        );
       }
       if (filters.documentKind === 'knowledgeBaseDocument') {
         return searchKnowledgeBaseDocuments(

@@ -3,9 +3,11 @@ import { MOVE_DOCUMENTS_MAX_IDS } from '@lobechat/builtin-tool-agent-documents';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { TaskModel } from '@/database/models/task';
 import { router } from '@/libs/trpc/lambda';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import { resolveTaskOrThrow } from '@/server/services/task/utils';
 
 import {
   agentDocumentProcedure,
@@ -155,6 +157,13 @@ export const toolDocumentsRouter = router({
         .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
+      if ('toolContext' in input && input.toolContext?.taskId) {
+        const task = await resolveTaskOrThrow(
+          new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+          input.toolContext.taskId,
+        );
+        input.toolContext = { ...input.toolContext, taskId: task.id };
+      }
       try {
         const doc = await ctx.agentDocumentService.createDocument(
           input.agentId,
@@ -213,6 +222,13 @@ export const toolDocumentsRouter = router({
         .and(agentDocumentToolTriggerSchema),
     )
     .mutation(async ({ ctx, input }) => {
+      if ('toolContext' in input && input.toolContext?.taskId) {
+        const task = await resolveTaskOrThrow(
+          new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+          input.toolContext.taskId,
+        );
+        input.toolContext = { ...input.toolContext, taskId: task.id };
+      }
       try {
         // Use the creator-facing finder: a visitor topic's title must not be
         // copied into a creator-owned document.

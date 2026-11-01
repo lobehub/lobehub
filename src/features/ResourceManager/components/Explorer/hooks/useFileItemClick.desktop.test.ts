@@ -118,7 +118,9 @@ describe('useFileItemClick (desktop shell)', () => {
     });
     await flushPanelOpenDelay();
 
-    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid&file=file_1');
+    const { pathname, search } = getTabRouter(TAB_ID)!.state.location;
+    expect(pathname).toBe('/resource/library/kb_1/file/file_1');
+    expect(search).toBe('?view=grid');
     expect(useResourceManagerStore.getState().mode).toBe('editor');
     expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
   });
@@ -144,7 +146,7 @@ describe('useFileItemClick (desktop shell)', () => {
 
   it('opens the page editor directly when clicking a page inside a knowledge base', async () => {
     const { result } = renderFileClick({
-      id: 'page_1',
+      id: 'docs_1',
       isFolder: false,
       isPage: true,
       libraryId: 'kb_1',
@@ -155,7 +157,9 @@ describe('useFileItemClick (desktop shell)', () => {
       result.current();
     });
 
-    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid&file=page_1');
+    const { pathname, search } = getTabRouter(TAB_ID)!.state.location;
+    expect(pathname).toBe('/resource/library/kb_1/docs/docs_1');
+    expect(search).toBe('?view=grid');
     expect(useResourceManagerStore.getState().mode).toBe('page');
     expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
   });
@@ -265,7 +269,9 @@ describe('useFileItemClick (desktop shell)', () => {
       result.current();
     });
 
-    expect(getTabRouter(TAB_ID)!.state.location.search).toBe('?view=grid&file=file_2');
+    const { pathname, search } = getTabRouter(TAB_ID)!.state.location;
+    expect(pathname).toBe('/resource/library/kb_1/file/file_2');
+    expect(search).toBe('?view=grid');
     expect(useResourceManagerStore.getState().mode).toBe('editor');
     expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
   });
@@ -284,27 +290,25 @@ describe('useFileItemClick (desktop shell)', () => {
     expect(useResourceManagerStore.getState().detailPanelId).toBeUndefined();
   });
 
-  it('preserves the tab url view preferences when selecting a page', async () => {
-    const { result } = renderFileClick({
-      id: 'page_1',
-      isFolder: false,
-      isPage: true,
-      libraryId: 'kb_1',
-    });
+  it('opens a library item by path on double click instead of writing ?file=', async () => {
+    const { result } = renderHook(
+      () => useFileItemDoubleClick({ id: 'docs_1', isPage: true, libraryId: 'kb_1' }),
+      { wrapper: shellWrapper },
+    );
 
     await act(async () => {
       result.current();
     });
 
-    const search = new URLSearchParams(getTabRouter(TAB_ID)!.state.location.search);
-    expect(search.get('file')).toBe('page_1');
-    expect(search.get('view')).toBe('grid');
+    const { pathname, search } = getTabRouter(TAB_ID)!.state.location;
+    expect(pathname).toBe('/resource/library/kb_1/docs/docs_1');
+    expect(search).toBe('?view=grid');
+    expect(useResourceManagerStore.getState().mode).toBe('page');
   });
 
-  it('leaves the permission page when selecting a page from the library sidebar', async () => {
-    setupActiveTab('/resource/library/kb_1/permission?view=grid');
+  it('preserves the tab url view preferences when selecting a page', async () => {
     const { result } = renderFileClick({
-      id: 'page_1',
+      id: 'docs_1',
       isFolder: false,
       isPage: true,
       libraryId: 'kb_1',
@@ -315,8 +319,27 @@ describe('useFileItemClick (desktop shell)', () => {
     });
 
     const { pathname, search } = getTabRouter(TAB_ID)!.state.location;
-    expect(pathname).toBe('/resource/library/kb_1');
-    expect(new URLSearchParams(search).get('file')).toBe('page_1');
+    expect(pathname).toBe('/resource/library/kb_1/docs/docs_1');
+    expect(new URLSearchParams(search).has('file')).toBe(false);
+    expect(new URLSearchParams(search).get('view')).toBe('grid');
+  });
+
+  it('leaves the permission page when selecting a page from the library sidebar', async () => {
+    setupActiveTab('/resource/library/kb_1/permission?view=grid');
+    const { result } = renderFileClick({
+      id: 'docs_1',
+      isFolder: false,
+      isPage: true,
+      libraryId: 'kb_1',
+    });
+
+    await act(async () => {
+      result.current();
+    });
+
+    const { pathname, search } = getTabRouter(TAB_ID)!.state.location;
+    expect(pathname).toBe('/resource/library/kb_1/docs/docs_1');
+    expect(new URLSearchParams(search).has('file')).toBe(false);
     expect(new URLSearchParams(search).get('view')).toBe('grid');
   });
 
@@ -326,7 +349,6 @@ describe('useFileItemClick (desktop shell)', () => {
       isFolder: true,
       libraryId: 'kb_1',
       isPage: false,
-      slug: 'folder-slug',
     });
 
     await act(async () => {
@@ -334,7 +356,7 @@ describe('useFileItemClick (desktop shell)', () => {
     });
 
     const { pathname, search } = getTabRouter(TAB_ID)!.state.location;
-    expect(pathname).toBe('/resource/library/kb_1/folder-slug');
+    expect(pathname).toBe('/resource/library/kb_1/folder/folder_1');
     expect(new URLSearchParams(search).has('file')).toBe(false);
     expect(screen.getByTestId('shell-search').textContent).toBe('');
   });

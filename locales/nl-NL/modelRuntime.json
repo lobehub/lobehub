@@ -1,6 +1,5 @@
 {
   "AccountDeactivated": "Uw account is gedeactiveerd of geschorst. Dit kan te maken hebben met beleid, beveiliging of een accountcontrole. Neem contact op met de ondersteuning van de provider voor hulp.",
-  "AgentRuntimeError": "Fout bij de uitvoering van het Lobe-taalmodel. Los het probleem op of probeer het opnieuw op basis van de onderstaande informatie.",
   "CapabilityNotSupported": "Sorry, dit model ondersteunt de gevraagde functionaliteit niet (zoals visuele invoer of het aanroepen van tools). Schakel over naar een model dat dit wel ondersteunt.",
   "ClientLlmExecutorLost": "Het apparaat dat {{provider}} uitvoert voor dit gesprek reageerde niet meer voordat het antwoord was voltooid — het kan zijn gesloten, vernieuwd of losgekoppeld. Houd het LobeHub-venster open en probeer het opnieuw.",
   "ClientLlmExecutorUnavailable": "{{provider}} kan alleen worden bereikt vanaf je eigen apparaat, maar geen open LobeHub-venster heeft het verzoek opgepikt. Open LobeHub op het apparaat waar {{provider}} draait en probeer het opnieuw.",

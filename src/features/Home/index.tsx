@@ -5,9 +5,14 @@ import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
 import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
-// Deep import, not the feature barrel: the inbox renderer loads lazily with
-// HomeInbox, and Home must not pull it into its own chunk for one provider.
+// Deep import, not the feature barrel: Home only needs the provider here.
 import { EntityLinkHostProvider } from '@/features/EntityLink/host';
+/**
+ * Static on purpose: HomeModeContent already imports the inbox statically, so a
+ * `lazy` wrapper saved no bytes and only suspended the rail for one frame on
+ * every refresh, painting it empty before the cards arrived.
+ */
+import HomeInbox from '@/features/HomeInbox';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -62,9 +67,6 @@ const clearOnboardingHomeModeParam = () => {
 // actually opened.
 const TopicChatDrawer = lazy(() => import('@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer'));
 const AcceptancePortalDrawer = lazy(() => import('./AcceptancePortalDrawer'));
-// The inbox renders markdown, briefs and an editor; keeping it lazy leaves the
-// greeting and the input box as the only static content of the home route.
-const HomeInbox = lazy(() => import('@/features/HomeInbox'));
 
 /** Trailing gutter that keeps the rail's cards off the page's scroll lane. */
 const RAIL_GUTTER = 14;
@@ -139,11 +141,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   // Collapsed, the content takes part of the vacated rail track and re-centers
   // on what is left, so the page reads wider without going full-bleed.
-  // An enabled rail can render no cards; reclaim its space without changing preferences.
   contentCollapsed: css`
     @media (width > 1100px) {
-      &[data-rail-collapsed='true'],
-      div:has(> #home-rail:empty) > & {
+      &[data-rail-collapsed='true'] {
         transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
         width: calc(100% + ${COLLAPSED_CONTENT_GAIN}px);
 
@@ -175,8 +175,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   heroCollapsed: css`
     @media (width > 1100px) {
-      &[data-rail-collapsed='true'],
-      div:has(> #home-rail:empty) > & {
+      &[data-rail-collapsed='true'] {
         transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
 
         &:dir(rtl) {
@@ -219,8 +218,7 @@ const styles = createStaticStyles(({ css }) => ({
         transform: translateX(-${COLLAPSED_CONTENT_OFFSET * 2}px);
       }
 
-      &[data-collapsed='true'],
-      div:has(> #home-rail:empty) > div > & {
+      &[data-collapsed='true'] {
         transform: none;
       }
     }
@@ -362,6 +360,15 @@ const Home = memo(() => {
   if (acceptancePortalOpen && !acceptanceDrawerMounted) setAcceptanceDrawerMounted(true);
   const railVisible = resolveRailVisibility({ hiddenWidgets, isLogin, showHomeRail, usageActive });
   const railCollapsed = !railVisible;
+  /**
+   * An enabled rail can settle with no cards; the main column then reclaims its
+   * space without changing the preference. Only the loaded inbox may report it:
+   * judging by an empty DOM node also matched while the lazy inbox was
+   * suspended and while its feeds were still loading, so every refresh painted one column first and
+   * slid back once the cards arrived.
+   */
+  const [railEmpty, setRailEmpty] = useState(false);
+  const contentCollapsed = railCollapsed || (isLogin && railEmpty);
   const portraitVisible = Boolean(isLogin && showHomePortrait);
 
   useEffect(() => {
@@ -403,13 +410,13 @@ const Home = memo(() => {
     <Flexbox className={styles.grid}>
       <div
         className={cx(styles.hero, portraitVisible && styles.heroWithSpeech, styles.heroCollapsed)}
-        data-rail-collapsed={railCollapsed}
+        data-rail-collapsed={contentCollapsed}
       >
         <div className={styles.header}>
           <HomeHeader />
         </div>
         {portraitVisible && (
-          <div className={styles.speech} data-collapsed={railCollapsed}>
+          <div className={styles.speech} data-collapsed={contentCollapsed}>
             {/* Keep the agent's line and artwork together in both header layouts. */}
             <div className={styles.bubbleSlot}>
               <PortraitBubble promo={promo} />
@@ -423,7 +430,7 @@ const Home = memo(() => {
 
       <Flexbox
         className={cx(styles.main, styles.content, styles.contentCollapsed)}
-        data-rail-collapsed={railCollapsed}
+        data-rail-collapsed={contentCollapsed}
         data-testid={'home-main'}
         gap={24}
       >
@@ -452,13 +459,11 @@ const Home = memo(() => {
           id={'home-rail'}
           inert={railCollapsed}
         >
-          <Suspense fallback={null}>
-            {/* The inbox reads assistant replies, which carry internal entity
-                links; only the acceptance drawer can show a detail here. */}
-            <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
-              <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
-            </EntityLinkHostProvider>
-          </Suspense>
+          {/* The inbox reads assistant replies, which carry internal entity
+              links; only the acceptance drawer can show a detail here. */}
+          <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+            <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} onRailEmptyChange={setRailEmpty} />
+          </EntityLinkHostProvider>
         </aside>
       )}
 

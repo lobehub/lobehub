@@ -63,14 +63,31 @@ export const createTopicDetailSlice = ({
     merge: (topic, confirmed) => (!topic || isEqual(topic, confirmed) ? undefined : topic),
     prepareHead: (topic, _current, topicId) => {
       const snapshot = topic && snapshots.get(topic);
-      // A local send, stop, or topic edit may overtake this read. Do not install
-      // an older marker over it, even if that local run has already finished.
+      const current = topicSelectors.getTopicById(topicId)(get());
+      // Local runs and explicit marker changes supersede this read, including
+      // a stop that finished before it returned. List hydration and unrelated
+      // topic edits can replace the row without invalidating its run state.
       if (
         snapshot &&
-        (snapshot.topic !== topicSelectors.getTopicById(topicId)(get()) ||
+        ((!!snapshot.topic && !current) ||
+          !isEqual(
+            snapshot.topic?.metadata?.runningOperation,
+            current?.metadata?.runningOperation,
+          ) ||
           snapshot.operationIds !== operationIds(topicId))
       )
         return undefined;
+      if (snapshot && snapshot.topic !== current) {
+        // Preserve newer local fields while still accepting the server's live
+        // marker. The linked entity fans that marker into any loaded lists.
+        if (current && topic?.metadata?.runningOperation) {
+          return {
+            ...current,
+            metadata: { ...current.metadata, runningOperation: topic.metadata.runningOperation },
+          };
+        }
+        return undefined;
+      }
       return topic;
     },
     set,

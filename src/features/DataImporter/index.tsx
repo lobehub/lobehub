@@ -4,8 +4,8 @@ import { type ErrorShape, type ImportFileUploadState } from '@lobechat/types';
 import { ImportStage } from '@lobechat/types';
 import { Button, Center, createStaticStyles, cx, toast, Upload } from '@lobehub/ui';
 import { ImportIcon } from 'lucide-react';
-import { type ReactNode } from 'react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
+import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DataStyleModal from '@/components/DataStyleModal';

@@ -11,6 +11,8 @@ import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { topicsOwnership } from './task/context';
+import { countOf } from './utils/rows';
 
 export const TERMINAL_TOPIC_STATUSES = new Set([
   'canceled',
@@ -33,15 +35,10 @@ export class TaskTopicModel {
     this.workspaceId = workspaceId;
   }
 
+  // Same rule as the other task child rows: a private run is visible to the
+  // member who ran it and to the task's creator.
   private ownership = () =>
-    buildWorkspaceWhere(
-      { userId: this.userId, workspaceId: this.workspaceId },
-      {
-        userId: taskTopics.userId,
-        visibility: taskTopics.visibility,
-        workspaceId: taskTopics.workspaceId,
-      },
-    );
+    topicsOwnership({ db: this.db, userId: this.userId, workspaceId: this.workspaceId });
 
   /** Look up the parent task's visibility so newly added topics mirror it. */
   private async getTaskVisibility(taskId: string): Promise<'private' | 'public'> {
@@ -153,8 +150,22 @@ export class TaskTopicModel {
       )
       .returning();
 
-    for (const topic of canceled) {
-      if (topic.topicId) await this.markTopicEnded(topic.topicId, 'canceled');
+    // One statement for every ended topic: callers run this inside a
+    // transaction holding task row locks, so a per-topic loop would stretch
+    // those locks over hundreds of sequential writes in a large batch.
+    const topicIds = canceled
+      .map((topic) => topic.topicId)
+      .filter((topicId): topicId is string => !!topicId);
+    if (topicIds.length > 0) {
+      await this.db
+        .update(topics)
+        .set({ completedAt: new Date() })
+        .where(
+          and(
+            inArray(topics.id, topicIds),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+          ),
+        );
     }
 
     return canceled;
@@ -374,10 +385,10 @@ export class TaskTopicModel {
     if (options?.triggers?.length) conditions.push(inArray(taskTopics.trigger, options.triggers));
 
     const rows = await this.db
-      .select({ value: count() })
+      .select({ count: count() })
       .from(taskTopics)
       .where(and(...conditions));
-    return rows[0]?.value ?? 0;
+    return countOf(rows, 'the task topic count');
   }
 
   async findByTaskId(taskId: string): Promise<TaskTopicItem[]> {
@@ -386,6 +397,15 @@ export class TaskTopicModel {
       .from(taskTopics)
       .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
       .orderBy(desc(taskTopics.seq));
+  }
+
+  async findByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
+    if (taskIds.length === 0) return [];
+
+    return this.db
+      .select()
+      .from(taskTopics)
+      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()));
   }
 
   async findRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
@@ -407,7 +427,9 @@ export class TaskTopicModel {
   async findWithDetails(taskId: string) {
     return this.db
       .select({
+        agentId: topics.agentId,
         createdAt: topics.createdAt,
+        groupId: topics.groupId,
         handoff: taskTopics.handoff,
         id: topics.id,
         metadata: topics.metadata,
@@ -511,10 +533,11 @@ export class TaskTopicModel {
     const byTask = rows.map((row) => ({
       runs: row.runs,
       taskId: row.taskId,
-      totalCost: Number(row.totalCost ?? 0),
-      totalInputTokens: Number(row.totalInputTokens ?? 0),
-      totalOutputTokens: Number(row.totalOutputTokens ?? 0),
-      totalTokens: Number(row.totalTokens ?? 0),
+      // Every sum is wrapped in coalesce(…, 0), so none of them is NULL.
+      totalCost: Number(row.totalCost),
+      totalInputTokens: Number(row.totalInputTokens),
+      totalOutputTokens: Number(row.totalOutputTokens),
+      totalTokens: Number(row.totalTokens),
     }));
 
     return {

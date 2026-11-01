@@ -704,7 +704,7 @@ describe('AgentSignalNightlyReviewModel', () => {
       ]);
     });
 
-    it('excludes messages inside an agent-share visitor topic from the nightly digest', async () => {
+    it('excludes agent-share visitor and Channel run messages from the nightly digest', async () => {
       // Agent-share visitor topics keep the creator's userId on both the topic
       // and its messages, but a non-null topics.senderId marks the topic as
       // visitor traffic that must not feed the creator's own nightly review.
@@ -729,6 +729,14 @@ describe('AgentSignalNightlyReviewModel', () => {
           title: 'Creator topic',
           userId: enabledUserId,
         },
+        // Channel run topics carry other members' Channel content.
+        {
+          agentId: 'nightly-share-agent',
+          id: 'nightly-channel-topic',
+          title: 'Channel run',
+          trigger: 'channel',
+          userId: enabledUserId,
+        },
       ]);
       await serverDB.insert(messages).values([
         {
@@ -749,6 +757,15 @@ describe('AgentSignalNightlyReviewModel', () => {
           topicId: 'nightly-creator-topic',
           userId: enabledUserId,
         },
+        {
+          agentId: 'nightly-share-agent',
+          content: 'channel reply',
+          createdAt: new Date('2026-05-03T14:00:00.000Z'),
+          id: 'nightly-channel-message',
+          role: 'assistant',
+          topicId: 'nightly-channel-topic',
+          userId: enabledUserId,
+        },
       ]);
 
       const model = new AgentSignalNightlyReviewModel(serverDB);
@@ -758,7 +775,7 @@ describe('AgentSignalNightlyReviewModel', () => {
         windowStart: new Date('2026-05-03T00:00:00.000Z'),
       });
 
-      // Only the creator's own message counts; the visitor's message is excluded
+      // Only the creator's own message counts; visitor and Channel messages are excluded
       expect(result).toEqual([
         {
           agentId: 'nightly-share-agent',

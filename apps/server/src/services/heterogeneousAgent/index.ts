@@ -10,7 +10,7 @@ import {
   classifyHeteroProcessFailure,
   isHeteroStatusGuideErrorData,
 } from '@lobechat/heterogeneous-agents/processFailure';
-import { ThreadStatus } from '@lobechat/types';
+import { type ChatMessageError, ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -22,6 +22,7 @@ import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { shouldRecordGatewayError } from '@/server/modules/AgentRuntime/gatewayErrorRecord';
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
@@ -297,10 +298,11 @@ export class HeterogeneousAgentService {
       );
     }
     for (const event of unpublished) {
-      // Each event already carries operationId; pass through unchanged so the
-      // wire shape on the WS side is identical to gateway-driven runs.
+      // Each event already carries operationId; the wire shape matches
+      // gateway-driven runs, which also name the step's assistant row on
+      // `stream_start` (see `publishData`).
       await this.streamEventManager.publishStreamEvent(operationId, {
-        data: event.data,
+        data: this.persistenceHandler.publishData(operationId, event),
         stepIndex: event.stepIndex,
         type: event.type,
       });
@@ -489,6 +491,27 @@ export class HeterogeneousAgentService {
       }
     }
 
+    // The gateway files an errored run on its error board from this event alone, so
+    // it carries the same `errorType` / `reasonDetail` / `recordError` contract as
+    // the LLM runtime's end event. Without them every CLI failure, including a
+    // user's own Claude Code / Codex session limit, was filed as an empty row.
+    const endData = {
+      agentType,
+      error,
+      operationId,
+      reason: result,
+      sessionId,
+      ...(result === 'error' && {
+        errorType: error?.type,
+        reasonDetail: error?.message,
+        recordError: shouldRecordGatewayError({
+          error: error as Pick<ChatMessageError, 'attribution' | 'countAsFailure'> | undefined,
+          errorType: error?.type,
+          provider: agentType,
+        }),
+      }),
+    };
+
     if (staleActiveOperationId) {
       log(
         'heteroFinish: settle stale finish topic=%s op=%s; current operation is %s',
@@ -509,13 +532,7 @@ export class HeterogeneousAgentService {
         log('heteroFinish: failed to settle stale operation row (non-fatal): %O', err);
       }
       await this.streamEventManager.publishStreamEvent(operationId, {
-        data: {
-          agentType,
-          error,
-          operationId,
-          reason: result,
-          sessionId,
-        },
+        data: endData,
         stepIndex: 0,
         type: 'agent_runtime_end',
       });
@@ -542,13 +559,7 @@ export class HeterogeneousAgentService {
     // if the CLI stream missed it. A stale callback that belongs to neither the
     // root operation nor one of its children returns above.
     await this.streamEventManager.publishStreamEvent(operationId, {
-      data: {
-        agentType,
-        error,
-        operationId,
-        reason: result,
-        sessionId,
-      },
+      data: endData,
       stepIndex: 0,
       type: 'agent_runtime_end',
     });

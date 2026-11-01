@@ -1,6 +1,7 @@
 import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { DecisionBooleanAnswer, DecisionRefusalAnswer } from '../../types';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { createRouterRuntime } from './createRuntime';
 
@@ -17,6 +18,7 @@ describe('createRouterRuntime decide', () => {
       model: 'jev',
     };
     const mockDecide = vi.fn().mockResolvedValue(decision);
+    const onRouteAttempt = vi.fn().mockResolvedValue(undefined);
 
     class MockRuntime implements LobeRuntimeAI {
       decide = mockDecide;
@@ -24,6 +26,7 @@ describe('createRouterRuntime decide', () => {
 
     const Runtime = createRouterRuntime({
       id: 'lobehub',
+      onRouteAttempt,
       routers: [
         {
           apiType: 'openai',
@@ -34,26 +37,38 @@ describe('createRouterRuntime decide', () => {
       ],
     });
 
-    const runtime = new Runtime({ userId: 'user-1' });
-    const metadata: Record<string, unknown> = { trigger: RequestTrigger.Api };
+    const runtime = new Runtime();
+    const metadata: Record<string, unknown> = {
+      traceId: 'signup-flow-1',
+      trigger: RequestTrigger.SignupEmailLLMReview,
+    };
 
-    await expect(
-      runtime.decide(
-        {
-          model: 'typesafe/jev-1.13',
-          questions: {
-            refund: {
-              criteria: { false: 'no', true: 'yes' },
-              instructions: 'Refund request?',
-              type: 'boolean',
-            },
+    const result = await runtime.decide(
+      {
+        model: 'typesafe/jev-1.13',
+        questions: {
+          refund: {
+            criteria: { false: 'no', true: 'yes' },
+            instructions: 'Refund request?',
+            type: 'boolean',
           },
-          state: 'Give me my money back',
         },
-        { metadata, user: 'user-1' },
-      ),
-    ).resolves.toEqual(decision);
+        state: 'Give me my money back',
+      },
+      { metadata },
+    );
+
+    expect(result).toEqual(decision);
+    const refund: DecisionBooleanAnswer | DecisionRefusalAnswer = result.answers.refund;
+    expect(refund.type).toBe('boolean');
+    if (refund.type === 'boolean') expect(refund.probability).toBe(0.9);
     expect(metadata.routeAttempt).toEqual(expect.objectContaining({ success: true }));
+    expect(onRouteAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ traceId: 'signup-flow-1' }),
+        userId: undefined,
+      }),
+    );
   });
 
   it('should reject decide when the matched runtime cannot decide', async () => {

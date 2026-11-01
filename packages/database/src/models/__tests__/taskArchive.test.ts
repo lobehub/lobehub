@@ -35,6 +35,23 @@ describe('TaskArchiveModel', () => {
     expect(again?.status).toBe('backlog');
   });
 
+  it('archives only a task still in one of the given statuses', async () => {
+    const tasks = new TaskModel(serverDB, userId);
+    const model = new TaskArchiveModel(serverDB, userId);
+    const task = await tasks.create({ instruction: 'Reopened task' });
+    await tasks.updateStatus(task.id, 'completed', { completedAt: new Date() });
+    // Reopened between the caller's read and its archive write.
+    await tasks.updateStatus(task.id, 'backlog');
+
+    expect(await model.archive(task.id, { onlyStatuses: ['completed', 'canceled'] })).toBeNull();
+    expect((await tasks.findById(task.id))?.archivedAt).toBeNull();
+
+    await tasks.updateStatus(task.id, 'canceled');
+    expect(
+      (await model.archive(task.id, { onlyStatuses: ['completed', 'canceled'] }))?.archivedAt,
+    ).toBeInstanceOf(Date);
+  });
+
   it('refuses a running task in the same statement', async () => {
     const tasks = new TaskModel(serverDB, userId);
     const model = new TaskArchiveModel(serverDB, userId);

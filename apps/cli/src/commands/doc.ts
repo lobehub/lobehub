@@ -6,6 +6,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 // ── Helpers ────────────────────────────────────────────────
@@ -55,7 +56,10 @@ export function registerDocCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(docs, fields);
+          outputJson(
+            withUrls(docs, await resolveUrlBuilder(client), resourcePath.document),
+            fields,
+          );
           return;
         }
 
@@ -93,7 +97,14 @@ export function registerDocCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(document, fields);
+        outputJson(
+          withUrl(
+            document,
+            await resolveUrlBuilder(client),
+            resourcePath.document(document as any),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -153,10 +164,9 @@ export function registerDocCommand(program: Command) {
           slug: options.slug,
           title: options.title,
         });
-        const pathname = options.kb
-          ? `/resource/library/${encodeURIComponent(options.kb)}?file=${encodeURIComponent(result.id)}`
-          : `/page/${encodeURIComponent(result.id)}`;
-        const url = buildUrl(pathname);
+        const url = buildUrl(
+          resourcePath.document({ id: result.id, knowledgeBaseId: options.kb })!,
+        );
 
         console.log(`${pc.green('✓')} Created document ${pc.bold(result.id)}`);
         console.log(`${pc.bold('document')}: ${url}`);
@@ -208,10 +218,9 @@ export function registerDocCommand(program: Command) {
       const urls = await Promise.all(
         created.map((document, index) => {
           const source = items[index];
-          const pathname = source?.knowledgeBaseId
-            ? `/resource/library/${encodeURIComponent(source.knowledgeBaseId)}?file=${encodeURIComponent(document.id)}`
-            : `/page/${encodeURIComponent(document.id)}`;
-          return buildUrl(pathname);
+          return buildUrl(
+            resourcePath.document({ id: document.id, knowledgeBaseId: source?.knowledgeBaseId })!,
+          );
         }),
       );
       console.log(`${pc.green('✓')} Created ${created.length} document(s)`);
@@ -365,7 +374,7 @@ export function registerDocCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(docs, fields);
+        outputJson(withUrls(docs, await resolveUrlBuilder(client), resourcePath.document), fields);
         return;
       }
 

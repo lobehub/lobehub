@@ -21,7 +21,7 @@ import debug from 'debug';
 import { and, eq, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
-import { DocumentModel } from '@/database/models/document';
+import { DocumentModel, type DocumentQuerySortBy } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
@@ -360,11 +360,14 @@ export class DocumentService {
    * Query documents with pagination
    */
   async queryDocuments(params?: {
+    creator?: 'others' | 'self';
     current?: number;
     excludeKnowledgeBaseIds?: string[];
     fileTypes?: string[];
     pageSize?: number;
+    sortBy?: DocumentQuerySortBy;
     sourceTypes?: string[];
+    standaloneOnly?: boolean;
   }) {
     return this.documentModel.query(params);
   }
@@ -790,7 +793,11 @@ export class DocumentService {
         historyAppended ||
         htmlTypeChanged ||
         (params.content !== undefined && params.content !== currentDocument.content);
-      if (contentChanged && this.isCollaborativeDocument(currentDocument)) {
+      if (
+        contentChanged &&
+        params.origin !== 'room-projection' &&
+        this.isCollaborativeDocument(currentDocument)
+      ) {
         const canWrite = await this.editLockService.canWrite('document', id, params.lockOwnerId);
         if (!canWrite) {
           throw new TRPCError({
@@ -846,6 +853,7 @@ export class DocumentService {
       const savedAt = historyAppended ? updatedAt : undefined;
       if (historyAppended) {
         await documentHistoryService.createHistory({
+          ...params.history,
           breakAutosaveWindow: params.breakAutosaveWindow,
           documentId: id,
           editorData: currentEditorDataAccepted,

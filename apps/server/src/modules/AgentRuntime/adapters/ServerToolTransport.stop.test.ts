@@ -174,3 +174,24 @@ describe('environment stop between tool steps', () => {
     },
   );
 });
+
+describe('what a server tool learns about the run', () => {
+  it('hands the tool who in the IM conversation asked for the run', async () => {
+    const fixture = setup([]);
+    const bot = {
+      applicationId: 'app-1',
+      isOwner: false,
+      platform: 'discord',
+      platformThreadId: 'discord:g1:c1',
+      senderExternalUserId: 'stranger-id',
+    };
+    fixture.state.principal = { actor: { bot } };
+
+    await fixture.step();
+
+    expect(fixture.execute).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ botContext: bot }),
+    );
+  });
+});

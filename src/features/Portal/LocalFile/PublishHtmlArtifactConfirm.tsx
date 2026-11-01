@@ -1,19 +1,11 @@
-import {
-  Accordion,
-  Button,
-  createModal,
-  Flexbox,
-  ScrollArea,
-  Text,
-  useModalContext,
-} from '@lobehub/ui';
+import { Accordion, Flexbox, Text } from '@lobehub/ui';
 import { t } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
+import { openPublishConfirm } from '@/components/PublishConfirmModal';
+
 import type { ReadyWorkspaceHtmlPublishPlan } from './prepareWorkspaceHtmlPublish';
 import { WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES } from './readWorkspaceAsset';
-
-const CONFIRM_BODY_MAX_HEIGHT = 'min(52vh, 360px)';
 
 const PathList = ({ items }: { items: string[] }) => (
   <Flexbox gap={4}>
@@ -25,7 +17,7 @@ const PathList = ({ items }: { items: string[] }) => (
   </Flexbox>
 );
 
-interface PublishHtmlArtifactConfirmContentProps {
+interface PublishHtmlArtifactDetailsProps {
   inlinedPaths: string[];
   inlineLimit: string;
   missing: string[];
@@ -35,7 +27,7 @@ interface PublishHtmlArtifactConfirmContentProps {
   uploadedPaths: string[];
 }
 
-const PublishHtmlArtifactConfirmContent = ({
+const PublishHtmlArtifactDetails = ({
   inlineLimit,
   inlinedPaths,
   missing,
@@ -43,128 +35,80 @@ const PublishHtmlArtifactConfirmContent = ({
   remotes,
   unsupported,
   uploadedPaths,
-}: PublishHtmlArtifactConfirmContentProps) => {
+}: PublishHtmlArtifactDetailsProps) => {
   const { t } = useTranslation('chat');
   const showDetails = [inlinedPaths, uploadedPaths, missing, oversized, remotes, unsupported].some(
     (list) => list.length > 0,
   );
 
+  if (!showDetails) return null;
+
   return (
-    <ScrollArea
-      disableContentFit
-      scrollFade
-      style={{ maxHeight: CONFIRM_BODY_MAX_HEIGHT, overflow: 'hidden' }}
-      viewportProps={{ style: { height: 'auto', maxHeight: CONFIRM_BODY_MAX_HEIGHT } }}
-    >
-      <Flexbox gap={8} style={{ paddingBlock: 12, paddingInline: 16 }}>
-        <Text>{t('workingPanel.localFile.publish.privacy')}</Text>
-        {showDetails && (
-          <Accordion
-            indicatorPlacement={'start'}
-            variant={'borderless'}
-            items={[
-              {
-                children: (
-                  <Flexbox gap={8} paddingBlock={'4px 0'}>
-                    {inlinedPaths.length > 0 && (
-                      <>
-                        <Text>
-                          {t('workingPanel.localFile.publish.inline', {
-                            count: inlinedPaths.length,
-                            limit: inlineLimit,
-                          })}
-                        </Text>
-                        <PathList items={inlinedPaths} />
-                      </>
-                    )}
-                    {uploadedPaths.length > 0 && (
-                      <>
-                        <Text>
-                          {t('workingPanel.localFile.publish.upload', {
-                            count: uploadedPaths.length,
-                          })}
-                        </Text>
-                        <PathList items={uploadedPaths} />
-                      </>
-                    )}
-                    {missing.length > 0 && (
-                      <Text type={'secondary'}>
-                        {t('workingPanel.localFile.publish.missing', { list: missing.join(', ') })}
-                      </Text>
-                    )}
-                    {oversized.length > 0 && (
-                      <Text type={'secondary'}>
-                        {t('workingPanel.localFile.publish.oversized', {
-                          list: oversized.join(', '),
-                        })}
-                      </Text>
-                    )}
-                    {unsupported.length > 0 && (
-                      <Text type={'secondary'}>
-                        {t('workingPanel.localFile.publish.unsupported', {
-                          list: unsupported.join(', '),
-                        })}
-                      </Text>
-                    )}
-                    {remotes.length > 0 && (
-                      <>
-                        <Text>{t('workingPanel.localFile.publish.remotes')}</Text>
-                        <PathList items={remotes} />
-                      </>
-                    )}
-                    <Text type={'secondary'}>{t('workingPanel.localFile.publish.dynamic')}</Text>
-                  </Flexbox>
-                ),
-                key: 'details',
-                title: (
-                  <Text fontSize={12} type={'secondary'} weight={500}>
-                    {t('workingPanel.localFile.publish.details')}
+    <Accordion
+      indicatorPlacement={'start'}
+      variant={'borderless'}
+      items={[
+        {
+          children: (
+            <Flexbox gap={8} paddingBlock={'4px 0'}>
+              {inlinedPaths.length > 0 && (
+                <>
+                  <Text>
+                    {t('workingPanel.localFile.publish.inline', {
+                      count: inlinedPaths.length,
+                      limit: inlineLimit,
+                    })}
                   </Text>
-                ),
-              },
-            ]}
-          />
-        )}
-        <Text type={'secondary'}>{t('workingPanel.localFile.publish.note')}</Text>
-      </Flexbox>
-    </ScrollArea>
-  );
-};
-
-const PublishHtmlArtifactConfirmFooter = ({
-  okText,
-  onOk,
-}: {
-  okText: string;
-  onOk: () => void;
-}) => {
-  const { t } = useTranslation('common');
-  const { close } = useModalContext();
-
-  return (
-    <Flexbox
-      horizontal
-      gap={8}
-      justify={'flex-end'}
-      style={{ paddingBlock: 12, paddingInline: 16 }}
-    >
-      <Button
-        onClick={() => {
-          close();
-        }}
-      >
-        {t('cancel')}
-      </Button>
-      <Button
-        type={'primary'}
-        onClick={() => {
-          close();
-          onOk();
-        }}
-      >
-        {okText}
-      </Button>
-    </Flexbox>
+                  <PathList items={inlinedPaths} />
+                </>
+              )}
+              {uploadedPaths.length > 0 && (
+                <>
+                  <Text>
+                    {t('workingPanel.localFile.publish.upload', {
+                      count: uploadedPaths.length,
+                    })}
+                  </Text>
+                  <PathList items={uploadedPaths} />
+                </>
+              )}
+              {missing.length > 0 && (
+                <Text type={'secondary'}>
+                  {t('workingPanel.localFile.publish.missing', { list: missing.join(', ') })}
+                </Text>
+              )}
+              {oversized.length > 0 && (
+                <Text type={'secondary'}>
+                  {t('workingPanel.localFile.publish.oversized', {
+                    list: oversized.join(', '),
+                  })}
+                </Text>
+              )}
+              {unsupported.length > 0 && (
+                <Text type={'secondary'}>
+                  {t('workingPanel.localFile.publish.unsupported', {
+                    list: unsupported.join(', '),
+                  })}
+                </Text>
+              )}
+              {remotes.length > 0 && (
+                <>
+                  <Text>{t('workingPanel.localFile.publish.remotes')}</Text>
+                  <PathList items={remotes} />
+                </>
+              )}
+              <Text type={'secondary'}>{t('workingPanel.localFile.publish.dynamic')}</Text>
+            </Flexbox>
+          ),
+          key: 'details',
+          title: (
+            <Text fontSize={12} type={'secondary'} weight={500}>
+              {t('workingPanel.localFile.publish.details')}
+            </Text>
+          ),
+        },
+      ]}
+    />
   );
 };
 
@@ -184,9 +128,9 @@ export const openWorkspaceHtmlPublishConfirm = ({
     { ns: 'chat' },
   );
 
-  createModal({
-    content: (
-      <PublishHtmlArtifactConfirmContent
+  openPublishConfirm({
+    details: (
+      <PublishHtmlArtifactDetails
         inlineLimit={`${WORKSPACE_HTML_ARTIFACT_INLINE_MAX_BYTES / 1024} KB`}
         inlinedPaths={plan.packed.inlinedPaths}
         missing={plan.gathered.missing}
@@ -196,11 +140,8 @@ export const openWorkspaceHtmlPublishConfirm = ({
         uploadedPaths={plan.packed.sidecars.map((file) => file.path)}
       />
     ),
-    footer: <PublishHtmlArtifactConfirmFooter okText={okText} onOk={onOk} />,
-    styles: {
-      content: { minHeight: 0, overflow: 'hidden', padding: 0 },
-    },
-    title: t('workingPanel.localFile.publish.confirmTitle', { ns: 'chat' }),
-    width: 420,
+    note: t('workingPanel.localFile.publish.note', { ns: 'chat' }),
+    okText,
+    onOk,
   });
 };

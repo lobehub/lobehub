@@ -28,6 +28,9 @@ import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
 import { resolveAgentDocumentsContext } from '@/services/agentDocument';
 import { aiAgentService } from '@/services/aiAgent';
+import { refreshChannelListIfEnabled } from '@/store/channel/refreshIfEnabled';
+import { refreshAgentDeviceBindings } from '@/store/device/agentDeviceBinding';
+import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 // Projection module only (no store import), so this does not cycle through the home store.
@@ -327,8 +330,14 @@ export class AgentSliceActionImpl {
           : randomAgentName(locale, await getSidebarAgentNames())),
     };
 
-    const result = await agentService.createAgent({ ...params, config });
+    // On desktop, name this machine so a direct Channel to a local Agent can run here.
+    const localDeviceId = isDesktop
+      ? await getElectronStoreState().resolveGatewayDeviceId()
+      : undefined;
+    const result = await agentService.createAgent({ ...params, config, localDeviceId });
     this.#get().invalidateAvailableAgents();
+    // The server opened the creator's direct Channel to the new Agent alongside it.
+    refreshChannelListIfEnabled();
 
     const userId = userProfileSelectors.userId(getUserStoreState());
 
@@ -478,6 +487,9 @@ export class AgentSliceActionImpl {
 
     try {
       await this.#get().optimisticUpdateAgentConfig(agentId, config, controller.signal, options);
+      // An execution-target or device change moves where the agent routes for
+      // the caller, which the sidebar presence dots cache per agent.
+      if (config.agencyConfig) void refreshAgentDeviceBindings();
     } finally {
       if (this.#updateAgentConfigControllers.get(agentId) === controller) {
         this.#updateAgentConfigControllers.delete(agentId);

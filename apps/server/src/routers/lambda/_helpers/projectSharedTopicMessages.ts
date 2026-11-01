@@ -1,3 +1,4 @@
+import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import {
   type AssistantContentBlock,
   ChatErrorType,
@@ -29,7 +30,7 @@ const projectAssistantContentBlock = (block: AssistantContentBlock): AssistantCo
 });
 
 const projectMessage = (message: UIChatMessage): UIChatMessage => ({
-  ...message,
+  ...omitToolWorkRegistration(message),
   children: message.children?.map(projectAssistantContentBlock),
   ...(message.columns && { columns: message.columns.map((column) => column.map(projectMessage)) }),
   compressedMessages: message.compressedMessages?.map(projectMessage),

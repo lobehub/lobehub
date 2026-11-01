@@ -2,7 +2,15 @@
 
 import type { TaskRunVerifySummary } from '@lobechat/types';
 import { cssVar, Icon, Tag } from '@lobehub/ui';
-import { CircleCheck, CircleDashed, CircleX, Loader2, TriangleAlert } from 'lucide-react';
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleX,
+  Loader2,
+  RefreshCw,
+  Stamp,
+  TriangleAlert,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +30,8 @@ const VERDICT_META = {
   failed: { color: cssVar.colorError, icon: CircleX, labelKey: 'failed' },
   passed: { color: cssVar.colorSuccess, icon: CircleCheck, labelKey: 'passed' },
   pending: { color: cssVar.colorTextTertiary, icon: CircleDashed, labelKey: 'pending' },
+  repairing: { color: cssVar.colorWarning, icon: RefreshCw, labelKey: 'repairing' },
+  review: { color: cssVar.colorWarning, icon: Stamp, labelKey: 'review' },
   running: { color: cssVar.colorInfo, icon: Loader2, labelKey: 'running', spin: true },
 } as const;
 
@@ -41,6 +51,14 @@ export const resolveVerdict = (status: string | null): VerdictKey => {
     case 'running':
     case 'verifying': {
       return 'running';
+    }
+    // Not passed, and a repair round has to deliver again. Reading it as
+    // "awaiting verification" hid that the round had already been judged.
+    case 'repairing': {
+      return 'repairing';
+    }
+    case 'delivered': {
+      return 'review';
     }
     // A verify session exists but has not produced a verdict — planned, or
     // waiting on the run it verifies.

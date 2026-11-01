@@ -16,9 +16,10 @@ import type {
 import { experimentOwner } from '@lobechat/utils/goalGraph';
 import { TRPCError } from '@trpc/server';
 
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
+import { GoalRepository } from '@/database/repositories/goal';
 
 import { collectStrandedDependents, GOAL_ACCEPTANCE_TASK_TITLE } from '../decideNextMove';
 import { answeredProblem, GoalManagerService, problemKey } from '../manager';
@@ -263,10 +264,10 @@ export const decide = async (
   // Serialized with `close`, which commits under this row lock: a goal that
   // ended while this answer was being written is left ended.
   await ctx.db.transaction(async (tx) => {
-    const current = await new GoalModel(tx, ctx.userId, ctx.workspaceId).lockById(goalId);
+    const current = await new GoalRepository(tx, ctx.userId, ctx.workspaceId).lockById(goalId);
     if (!current || GOAL_ENDED_STATUSES.has(current.status)) return;
     if (current.status === nextStatus) return;
-    await new GoalModel(tx, ctx.userId, ctx.workspaceId).updateStatus(goalId, nextStatus);
+    await new GoalRepository(tx, ctx.userId, ctx.workspaceId).updateStatus(goalId, nextStatus);
     await new GoalGraphModel(tx, ctx.userId, ctx.workspaceId, {
       id: GOAL_COORDINATOR_ACTOR_ID,
       type: 'system',
@@ -312,7 +313,12 @@ export const reopenForChanges = async (
   if (node?.status !== 'resolved') return undefined;
 
   const reason = comment ? `Changes requested: ${comment}` : 'Changes requested';
+  // A sign-off archived the Goal's finished Tasks (`archiveSignedOffTasks`);
+  // the runner refuses an archived Task, so the one being reworked comes back.
+  // Leave `completed` first: that archive only matches a finished Task, so one
+  // racing this reopen either lands before the unarchive or matches nothing.
   await ctx.taskModel.updateStatus(taskId, 'backlog', { error: null });
+  await new TaskArchiveModel(ctx.db, ctx.userId, ctx.workspaceId).unarchive(taskId);
   await ctx.graphModel.updateNodeStatus(goal.id, node.id, 'active', reason);
   await ctx.goalModel.update(goal.id, {
     config: {
@@ -427,7 +433,7 @@ export const openFailureDecision = async (
   gate: FailureGateOptions = {},
 ): Promise<GoalTickResult> => {
   return ctx.db.transaction(async (tx) => {
-    const currentGoal = await new GoalModel(tx, ctx.userId, ctx.workspaceId).lockById(
+    const currentGoal = await new GoalRepository(tx, ctx.userId, ctx.workspaceId).lockById(
       graph.goal.id,
     );
     const service = ctx.inTransaction(tx);

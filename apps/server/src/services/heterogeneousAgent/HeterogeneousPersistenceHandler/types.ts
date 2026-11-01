@@ -42,6 +42,12 @@ export interface OperationState {
   publishedKeys: Set<string>;
   /** User message answered by this operation, checked against its topic/thread before stamping. */
   sourceUserMessageId?: string;
+  /**
+   * Assistant row each main-agent `stream_start` resolved to, keyed by
+   * `eventKey`. Read when the event is published (stamped as
+   * `assistantMessage.id`) and dropped once its XADD succeeds.
+   */
+  streamStartAssistantIds: Map<string, string>;
   /** Isolation thread that owns this heterogeneous run, when applicable. */
   threadId: string | undefined;
   /**

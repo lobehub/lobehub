@@ -8,10 +8,10 @@ import {
 import type { GoalGraphSnapshot, GoalReportDispatch, GoalReportTrigger } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
-import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { GoalRepository } from '@/database/repositories/goal';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { TaskService } from '../task';
@@ -59,7 +59,7 @@ export class GoalReportService {
     // Claim the result under the goal row lock, so two coordinators reading the
     // same ended acceptance dispatch exactly one wrap-up.
     const claimed = await this.db.transaction(async (tx) => {
-      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const model = new GoalRepository(tx, this.userId, this.workspaceId);
       const goal = await model.lockById(goalId);
       if (!goal || goal.config?.report?.acceptanceKey === decision.key) return undefined;
 
@@ -211,7 +211,7 @@ export class GoalReportService {
     patch: Partial<GoalReportDispatch>,
   ) =>
     this.db.transaction(async (tx) => {
-      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const model = new GoalRepository(tx, this.userId, this.workspaceId);
       const goal = await model.lockById(goalId);
       const current = goal?.config?.report;
       // A newer result may have claimed the receipt meanwhile; leave it alone.

@@ -63,9 +63,16 @@ describe('collectDiscordMentionNames', () => {
 describe('resolveDiscordMentions', () => {
   const names = new Map([[SHADOW, 'Shadow Arvin']]);
 
-  it('replaces <@id> and <@!id> with @name', () => {
+  it('replaces <@id> and <@!id> with @name, keeping the token to mention them back', () => {
     expect(resolveDiscordMentions(`<@${SHADOW}> hi <@!${SHADOW}>`, names)).toBe(
-      '@Shadow Arvin hi @Shadow Arvin',
+      `@Shadow Arvin (<@${SHADOW}>) hi @Shadow Arvin (<@${SHADOW}>)`,
+    );
+  });
+
+  it('names the bot itself without its token', () => {
+    const withSelf = new Map([...names, [ME, 'Lobo']]);
+    expect(resolveDiscordMentions(`<@${ME}> 和 <@${SHADOW}>`, withSelf, ME)).toBe(
+      `@Lobo 和 @Shadow Arvin (<@${SHADOW}>)`,
     );
   });
 
@@ -87,7 +94,7 @@ describe('sanitizeDiscordUserInput', () => {
   it('keeps the other bot and the self mention mid-sentence readable', () => {
     const text = `<@${SHADOW}> 我搞了个 <@${ME}> 来抢你的活，你怎么说`;
     expect(sanitizeDiscordUserInput(text, ME, makeMessage(mentionsRaw))).toBe(
-      '@Shadow Arvin 我搞了个 @Lobo 来抢你的活，你怎么说',
+      `@Shadow Arvin (<@${SHADOW}>) 我搞了个 @Lobo 来抢你的活，你怎么说`,
     );
   });
 
@@ -101,6 +108,18 @@ describe('sanitizeDiscordUserInput', () => {
   it('falls back to dropping unresolvable self mentions when no mention payload exists', () => {
     expect(sanitizeDiscordUserInput(`hello <@${ME}>`, ME)).toBe('hello');
     expect(sanitizeDiscordUserInput(`hello <@${ME}> there`, ME)).toBe('hello there');
+  });
+
+  it('keeps a third person addressable when the bot is asked to hand something to them', () => {
+    const raw = {
+      mentions: [
+        { bot: true, global_name: null, id: ME, username: 'Lobo' },
+        { global_name: 'Arvin Xu', id: SHADOW, username: 'arvinxx' },
+      ],
+    };
+    expect(
+      sanitizeDiscordUserInput(`<@${ME}> 汇总一下给到<@${SHADOW}>`, ME, makeMessage(raw)),
+    ).toBe(`汇总一下给到@Arvin Xu (<@${SHADOW}>)`);
   });
 
   it('leaves other unresolvable mentions in place instead of dropping them', () => {

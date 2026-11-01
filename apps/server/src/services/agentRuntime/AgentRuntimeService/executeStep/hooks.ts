@@ -1,4 +1,5 @@
 import type { AgentState } from '@lobechat/agent-runtime';
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
@@ -48,7 +49,7 @@ export async function dispatchBeforeStepHooks(
               serializedContext: undefined,
               stepIndex,
               topicId: beforeStepOrigin.topicId,
-              turnCount: agentState?.stepCount || 0,
+              turnCount: getLlmCallCount(agentState),
             },
             sourceId: `${operationId}:before:${stepIndex}`,
             sourceType: 'runtime.before_step',
@@ -70,7 +71,7 @@ export async function dispatchBeforeStepHooks(
         finalState: agentState,
         operationId,
         stepIndex,
-        steps: agentState?.stepCount || 0,
+        steps: getLlmCallCount(agentState),
         userId: beforeStepOrigin.userId || deps.userId,
       },
       agentState?.host?.hooks,
@@ -131,7 +132,7 @@ export async function dispatchAfterStepHooks(
                 serializedContext: undefined,
                 stepIndex,
                 topicId: origin.topicId,
-                turnCount: stepResult.newState?.stepCount || 0,
+                turnCount: getLlmCallCount(stepResult.newState),
               },
               sourceId: `${operationId}:after:${stepIndex}`,
               sourceType: 'runtime.after_step',
@@ -164,7 +165,7 @@ export async function dispatchAfterStepHooks(
         stepCost: stepPresentationData.stepCost,
         stepIndex,
         stepType: stepPresentationData.stepType,
-        steps: stepResult.newState?.stepCount || 0,
+        steps: getLlmCallCount(stepResult.newState),
         thinking: stepPresentationData.thinking,
         toolCalls: stepResult.newState?.usage?.tools?.totalCalls,
         toolsCalling: stepPresentationData.toolsCalling,

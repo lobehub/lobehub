@@ -1,3 +1,4 @@
+import type { TaskCompletedWindow } from '@lobechat/builtin-tool-task';
 import type { TaskStatus } from '@lobechat/types';
 import { useMemo } from 'react';
 
@@ -156,6 +157,7 @@ export class TaskListSliceActionImpl {
     const params = {
       ...(query.agentId ? { assigneeAgentId: query.agentId } : {}),
       automated: query.automated,
+      ...(query.completedWithin && { completedWithin: query.completedWithin }),
       includeArchived: query.includeArchived,
       orderBy: query.orderBy,
       projectId: query.projectId,
@@ -172,6 +174,7 @@ export class TaskListSliceActionImpl {
     taskService.groupList({
       assigneeAgentId: query.agentId,
       ...(query.automated === undefined ? {} : { automated: query.automated }),
+      ...(query.completedWithin && { completedWithin: query.completedWithin }),
       excludeStatuses: query.excludeStatuses,
       ...(query.groupBy === 'status'
         ? { groups: DEFAULT_KANBAN_GROUPS }
@@ -207,15 +210,15 @@ export class TaskListSliceActionImpl {
   });
 
   /** The task (by identifier) as any loaded list or board holds it. */
-  internal_findCollectionTask = (identifier: string): CollectionTask | undefined => {
+  internal_findCollectionTask = (taskId: string): CollectionTask | undefined => {
     const { taskGroupListMap, taskListMap } = this.#get();
     for (const value of Object.values(taskListMap)) {
-      const task = value.items.find((item) => item.identifier === identifier);
+      const task = value.items.find((item) => item.id === taskId);
       if (task) return task;
     }
     for (const value of Object.values(taskGroupListMap)) {
       for (const group of value.groups) {
-        const task = group.tasks.find((item) => item.identifier === identifier);
+        const task = group.tasks.find((item) => item.id === taskId);
         if (task) return task;
       }
     }
@@ -230,18 +233,18 @@ export class TaskListSliceActionImpl {
    * every loaded collection exactly, card order included.
    */
   internal_beginCollectionTaskOptimistic = (
-    identifier: string,
+    taskId: string,
     fn: <T extends CollectionTask>(task: T) => T,
   ) => {
     const tokens = [
-      ...this.#taskList.beginEntityOptimistic<CollectionTask>(identifier, fn),
-      ...this.#taskGroupList.beginEntityOptimistic<CollectionTask>(identifier, fn),
+      ...this.#taskList.beginEntityOptimistic<CollectionTask>(taskId, fn),
+      ...this.#taskGroupList.beginEntityOptimistic<CollectionTask>(taskId, fn),
     ];
     return {
       commit: () => {
         tokens.forEach((token) => token.commit());
-        void this.#taskList.patchStoredEntity<CollectionTask>(identifier, fn);
-        void this.#taskGroupList.patchStoredEntity<CollectionTask>(identifier, fn);
+        void this.#taskList.patchStoredEntity<CollectionTask>(taskId, fn);
+        void this.#taskGroupList.patchStoredEntity<CollectionTask>(taskId, fn);
       },
       rollback: () => tokens.forEach((token) => token.rollback()),
     };
@@ -321,6 +324,8 @@ export class TaskListSliceActionImpl {
       agentId?: string;
       allAgents?: boolean;
       automated?: boolean;
+      /** Keep completed / canceled cards only when closed within this window. */
+      completedWithin?: TaskCompletedWindow;
       enabled?: boolean;
       excludeStatuses?: readonly TaskStatus[];
       groupBy?: TaskKanbanGroupBy;
@@ -339,6 +344,7 @@ export class TaskListSliceActionImpl {
       agentId,
       allAgents = false,
       automated,
+      completedWithin,
       enabled = true,
       excludeStatuses,
       groupBy = 'status',
@@ -354,6 +360,7 @@ export class TaskListSliceActionImpl {
       ? {
           agentId: allAgents || scope ? undefined : agentId,
           automated,
+          completedWithin,
           excludeStatuses: excludeStatuses?.length ? [...excludeStatuses].sort() : undefined,
           groupBy,
           includeArchived: includeArchived || undefined,
@@ -406,22 +413,36 @@ export class TaskListSliceActionImpl {
    * collection into the other.
    */
   useFetchMyTaskList = (options: {
+    /**
+     * Server-side look-back for completed / canceled tasks (the "Completed
+     * tasks" display option), cut before `limit` / `offset` like `statuses`.
+     */
+    completedWithin?: TaskCompletedWindow;
     enabled?: boolean;
     includeArchived?: boolean;
     limit?: number;
     offset?: number;
     scope: 'assigned' | 'created';
     /**
-     * Server-side status narrowing (the `hideCompleted` display option
+     * Server-side status narrowing (the "Completed tasks: None" display option
      * translated by `getVisibleTaskStatuses`). Applied before `limit` /
      * `offset` so a page can never come back empty while older unfinished
      * tasks exist; part of the query for the same reason as `scope`.
      */
     statuses?: TaskStatus[];
   }): TaskCollectionPageResult => {
-    const { enabled = true, includeArchived, limit, offset, scope, statuses } = options;
+    const {
+      completedWithin,
+      enabled = true,
+      includeArchived,
+      limit,
+      offset,
+      scope,
+      statuses,
+    } = options;
     return this.#useCollectionPage(
       {
+        completedWithin,
         // Archived rows are a different server page, like the status filter.
         includeArchived: includeArchived || undefined,
         limit,

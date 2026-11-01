@@ -26,6 +26,7 @@ import {
 } from './codexShellEnv';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
+import { prepareClaudeCodeLobeHubCli } from './lobeHubCliPlugin';
 import { getHeterogeneousAgentPresetEnv } from './presetEnv';
 import { assertSpawnableWorkingDirectory } from './workingDirectory';
 
@@ -40,6 +41,11 @@ export interface SpawnAgentOptions {
    * path or is wrapped by a launcher.
    */
   command?: string;
+  /**
+   * Version of the CLI being spawned, when the caller detected it. Claude Code
+   * gets the `lh` guide as a skill only on a version known to load one.
+   */
+  commandVersion?: string;
   /** Working directory for the spawned child. Defaults to `process.cwd()`. */
   cwd?: string;
   /** Create a dedicated Unix process group. Disable beneath a detached wrapper. */
@@ -479,7 +485,23 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     return spawnDroidAcpAgent(options, command, cwd);
   }
 
-  const inputPlan = await buildAgentInput(options.agentType, options.prompt, options.inputOptions);
+  // A run answering a LobeHub conversation (`lh hetero exec --topic`) gets the
+  // `lh` guide as a Claude Code skill rather than in the user's turn. The
+  // caller's env, not the inherited one: a standalone run nested inside some
+  // other conversation is not answering it.
+  const lobeHubCli =
+    options.agentType === 'claude-code' && options.env?.LOBEHUB_TOPIC_ID
+      ? await prepareClaudeCodeLobeHubCli(options.prompt, options.extraArgs, {
+          resumed: Boolean(options.resumeSessionId),
+          version: options.commandVersion,
+        })
+      : { args: [], prompt: options.prompt };
+  const promptPlan = await buildAgentInput(
+    options.agentType,
+    lobeHubCli.prompt,
+    options.inputOptions,
+  );
+  const inputPlan = { ...promptPlan, args: [...lobeHubCli.args, ...promptPlan.args] };
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     ...getHeterogeneousAgentPresetEnv(options.agentType),

@@ -85,4 +85,18 @@ describe('`lh verify` moved under `lh acceptance`', () => {
       'lh acceptance',
     );
   });
+
+  it('keeps `lh verify` out of help and the man page', () => {
+    const program = new Command();
+    registerVerifyCommand(program);
+    registerAcceptanceCommands(program);
+
+    const visible = program
+      .createHelp()
+      .visibleCommands(program)
+      .map((c) => c.name());
+
+    expect(visible).toContain('acceptance');
+    expect(visible).not.toContain('verify');
+  });
 });

@@ -1,13 +1,17 @@
+import { CreateAgentSchema } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { SessionModel } from '@/database/models/session';
-import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
+import { AgentModel } from '@/database/models/agent';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { AgentService } from '@/server/services/agent';
+import { resolveAgentReference } from '@/server/services/agent/resolveReference';
+import { createAgentDirectChannel } from '@/server/services/channel/defaultChannel';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { assertCanUseConversationTargets } from './_helpers/conversationResourceGuard';
 
 const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -15,57 +19,84 @@ const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
   return opts.next({
     ctx: {
-      sessionModel: new SessionModel(ctx.serverDB, ctx.userId, wsId),
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
+      agentService: new AgentService(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
-/**
- * @deprecated Session router is legacy. Use agent router for agent CRUD operations.
- * Session-based agent creation (createSession) should migrate
- * to agent.createAgent which uses agentModel.create directly.
- * Retains legacy session creation and session-shell updates for compatibility.
- */
+/** Native Session compatibility adapters. New clients should use the Agent router. */
 export const sessionRouter = router({
-  /** @deprecated Use agent.createAgent instead */
+  /** Native compatibility adapter: keep the Session envelope, create only an Agent. */
   createSession: sessionProcedure
-    .use(withScopedPermission('session:create'))
+    .use(withScopedPermission('agent:create'))
     .input(
       z.object({
-        config: insertAgentSchema
-          .omit({
-            chatConfig: true,
-            openingMessage: true,
-            openingQuestions: true,
-            plugins: true,
-            tags: true,
-            tts: true,
-          })
-          .passthrough()
-          .partial(),
-        session: insertSessionSchema.omit({ createdAt: true, updatedAt: true }).partial(),
+        // Zod strips redundant fields in full default Session configs. This is
+        // a user-configurable whitelist, never a database insert permission.
+        config: CreateAgentSchema.extend({
+          examples: z.unknown().optional(),
+          identifier: z.string().optional(),
+        }),
+        session: z.object({
+          groupId: z.string().nullish(),
+          pinned: z.boolean().optional(),
+        }),
         type: z.enum(['agent', 'group']),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const data = await ctx.sessionModel.create(input);
-
-      return data.id;
+      if (input.type !== 'agent') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Use agentGroup to create a group' });
+      }
+      const { examples, identifier, ...config } = input.config;
+      const groupId = input.session.groupId ?? config.sessionGroupId;
+      const { agentId } = await ctx.agentService.createAgent({
+        config: {
+          ...config,
+          fewShots: config.fewShots ?? examples,
+          marketIdentifier: config.marketIdentifier ?? identifier,
+          pinned: input.session.pinned,
+        },
+        groupId: groupId && groupId !== 'default' ? groupId : undefined,
+        visibility: config.visibility,
+      });
+      await createAgentDirectChannel({
+        agentId,
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      return agentId;
     }),
 
+  /** Native activity signal. Payload dates are accepted but never trusted. */
   updateSession: sessionProcedure
     .use(withScopedPermission('session:update'))
     .input(
       z.object({
         id: z.string(),
-        value: insertSessionSchema.partial(),
+        value: z
+          .object({
+            groupId: z.undefined().optional(),
+            pinned: z.undefined().optional(),
+            updatedAt: z.union([z.date(), z.number(), z.string()]).optional(),
+          })
+          .strict(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const session = await ctx.sessionModel.findByIdOrSlug(input.id);
-      if (session) assertWorkspaceRowManageable(ctx, session.userId, 'session');
-
-      return ctx.sessionModel.update(input.id, input.value);
+      const { agentId } = await resolveAgentReference(
+        input.id,
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      await assertCanUseConversationTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [{ agentId }],
+      );
+      return ctx.agentModel.touchUpdatedAt(agentId);
     }),
 });
 

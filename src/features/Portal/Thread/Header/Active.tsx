@@ -1,8 +1,10 @@
 import { resolveCCSubagentType } from '@lobechat/builtin-tool-claude-code/client';
-import { Avatar, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { agentDisplayName } from '@lobechat/types';
+import { cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import BubblesLoading from '@/components/BubblesLoading';
 import { LOADING_FLAT } from '@/const/message';
 import { useAgentStore } from '@/store/agent';
@@ -24,7 +26,14 @@ const Active = memo(() => {
 
   return (
     <Flexbox horizontal align={'center'} gap={8} style={{ marginInlineStart: 4 }}>
-      <Avatar {...agentMeta} size={24} />
+      <AgentAvatar
+        agentId={currentThread.agentId}
+        avatar={agentMeta.avatar}
+        background={agentMeta.backgroundColor}
+        name={agentDisplayName(agentMeta)}
+        shape={'circle'}
+        size={24}
+      />
       <Text
         className={oneLineEllipsis}
         ellipsis={true}

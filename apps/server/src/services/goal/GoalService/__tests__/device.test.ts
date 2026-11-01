@@ -18,7 +18,11 @@ import type { LobeChatDatabase } from '@/database/type';
 import { deviceGateway } from '../../../deviceGateway';
 import { TaskRunnerService } from '../../../taskRunner';
 import { MAX_QUOTA_RETRIES } from '../../machineRecovery';
-import { DEVICE_OFFLINE_GATE_REASON, MAX_DEVICE_OFFLINE_RETRIES } from '../../recoveryPolicy';
+import {
+  DEVICE_OFFLINE_GATE_REASON,
+  MAX_DEVICE_OFFLINE_RETRIES,
+  QUOTA_RESET_MARGIN_MS,
+} from '../../recoveryPolicy';
 import * as scheduler from '../../scheduler';
 import { LocalGoalScheduler } from '../../scheduler/impls';
 import { registerGoalServiceTestCleanup } from '../../testUtils';
@@ -466,6 +470,21 @@ describe('GoalService', () => {
       const after = await service.graph(graph.goal.id);
       expect(after.decisions).toHaveLength(0);
       expect(after.goal.config?.supervisorState?.incidents ?? []).toHaveLength(0);
+    });
+
+    it('tells the page when the held Task retries, so it does not read as lost', async () => {
+      // The held Task's run has ended and sends no heartbeat. Without the retry
+      // time the page judged it by heartbeat alone and called it lost.
+      const resetsAt = Date.now() + 2 * 60 * 60 * 1000;
+      const { created, graph, service } = await setup('Session limit on the page', resetsAt);
+      const nodeId = graph.nodes.find((node) => node.kind === 'task')!.id;
+
+      const snapshot = await service.graph(graph.goal.id);
+
+      expect(created.taskId).toBeDefined();
+      expect(snapshot.quotaRetryAt?.[nodeId]?.getTime()).toBe(
+        Math.floor(resetsAt / 1000) * 1000 + QUOTA_RESET_MARGIN_MS,
+      );
     });
 
     // The refusal's text names the limit, so its runs are uncharged and the

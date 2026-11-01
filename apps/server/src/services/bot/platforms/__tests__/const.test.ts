@@ -914,6 +914,25 @@ describe('extractWatchKeywordEntries', () => {
     ).toEqual([{ instruction: 'first instruction', keyword: 'bug' }]);
   });
 
+  it('keeps the name flag only when it is true, and on any duplicate that sets it', () => {
+    expect(
+      extractWatchKeywordEntries({
+        watchKeywords: [
+          { asName: true, instruction: 'Answer as the team bot', keyword: 'Canis' },
+          { asName: false, keyword: 'mobile' },
+          { asName: 'yes', keyword: 'deploy' },
+          { keyword: '倏昱' },
+          { asName: true, keyword: '倏昱' },
+        ],
+      }),
+    ).toEqual([
+      { asName: true, instruction: 'Answer as the team bot', keyword: 'canis' },
+      { instruction: undefined, keyword: 'mobile' },
+      { instruction: undefined, keyword: 'deploy' },
+      { asName: true, instruction: undefined, keyword: '倏昱' },
+    ]);
+  });
+
   it('returns entries with no instruction for the string and string[] fallbacks', () => {
     expect(extractWatchKeywordEntries({ watchKeywords: ['Bug', 'outage'] })).toEqual([
       { instruction: undefined, keyword: 'bug' },

@@ -13,12 +13,13 @@ import { gatewayEnv } from '@/envs/gateway';
 import { imageEnv } from '@/envs/image';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { langfuseEnv } from '@/envs/langfuse';
-import { sandboxEnv } from '@/envs/sandbox';
 import { toolsEnv } from '@/envs/tools';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { OIDC_ISSUER_PATH } from '@/libs/oidc-provider/routes';
 import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
 import { isLlmRelayDeploymentReady } from '@/server/modules/AgentRuntime/llmRelay/deployment';
+import { isPageCollabEnabled } from '@/server/services/pageCollab/config';
+import { getSandboxDeployment } from '@/server/services/sandbox/deployment';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 import { cleanObject } from '@/utils/object';
 
@@ -83,6 +84,9 @@ const getAiProviderSpecificConfig = () => {
     lmstudio: {
       fetchOnClient: getServerFetchOnClientOverride('lmstudio'),
     },
+    magpie: {
+      fetchOnClient: getServerFetchOnClientOverride('magpie'),
+    },
     ollama: {
       enabled: isDesktop ? true : undefined,
       fetchOnClient: getServerFetchOnClientOverride('ollama'),
@@ -146,6 +150,9 @@ export const getServerAiProviderConfig = async (provider: ModelProvider) => {
 export const getServerGlobalConfig = async () => {
   const { DEFAULT_AGENT_CONFIG } = getAppConfig();
 
+  const enableGatewayMode =
+    ENABLE_BUSINESS_FEATURES || (!!appEnv.ENABLE_AGENT_GATEWAY && !!appEnv.AGENT_GATEWAY_URL);
+
   const config: GlobalServerConfig = {
     aiProvider: await genServerAiProvidersConfig(getAiProviderSpecificConfig()),
     defaultAgent: {
@@ -160,13 +167,13 @@ export const getServerGlobalConfig = async () => {
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
     enableEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
     enableComposio: !!composioEnv.COMPOSIO_API_KEY,
-    enableGatewayMode:
-      ENABLE_BUSINESS_FEATURES || (!!appEnv.ENABLE_AGENT_GATEWAY && !!appEnv.AGENT_GATEWAY_URL),
+    enableGatewayMode,
     enableLobehubSkill: !!(appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID),
     enableMagicLink: authEnv.AUTH_ENABLE_MAGIC_LINK,
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
+    enablePageCollab: enableGatewayMode && isPageCollabEnabled(),
     enableUploadFileToServer: !!fileEnv.S3_SECRET_ACCESS_KEY,
     enableMultimodalUnderstanding: !!(
       toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
@@ -196,6 +203,7 @@ export const getServerGlobalConfig = async () => {
     oAuthSSOProviders: getBetterAuthSSOProviders(),
     // Same derivation as the provider's own issuer (`libs/oidc-provider/provider.ts`).
     ...(appEnv.APP_URL ? { oidcIssuer: urlJoin(appEnv.APP_URL, OIDC_ISSUER_PATH) } : undefined),
+    sandbox: getSandboxDeployment(),
     systemAgent: parseSystemAgent(appEnv.SYSTEM_AGENT),
     telemetry: {
       langfuse: langfuseEnv.ENABLE_LANGFUSE,
@@ -206,10 +214,6 @@ export const getServerGlobalConfig = async () => {
     // resolver's own function so both sides read the raw value identically —
     // unset/invalid stays `undefined`, i.e. the resolver's default 64.
     toolNameMaxLength: parseToolNameMaxLength(toolsEnv.TOOL_NAME_MAX_LENGTH),
-    // Lets the widget publish review match the sandbox's real egress contract:
-    // unless the Worker enforces per-host allowlists, declared hosts are
-    // advisory and the review must say any host is reachable.
-    widgetSandboxNetworkFormat: sandboxEnv.WIDGET_SANDBOX_NETWORK_FORMAT,
   };
 
   return config;

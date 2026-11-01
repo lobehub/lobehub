@@ -1,14 +1,24 @@
+import type { ClaudeCodeLocalAccount } from '@lobechat/electron-client-ipc';
+
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
 
 import type {
   QuotaAccount,
   QuotaBinding,
+  QuotaDeviceAccount,
   QuotaHistory,
   QuotaLatestReading,
   QuotaPanelSnapshot,
 } from './projection';
 
 export interface State {
+  /**
+   * Claude Code logins held on THIS desktop (default login + per-account
+   * profiles). `undefined` until listed, and always on the web.
+   */
+  claudeLocalAccounts?: ClaudeCodeLocalAccount[];
+  /** A browser sign-in started from the account manager is in progress. */
+  claudeLoginPending: boolean;
   /** Replica view of the quota account list (one entry, `QUOTA_ACCOUNTS_KEY`). */
   quotaAccountsMap: Record<string, QuotaAccount[]>;
   /** Replica bookkeeping of `quotaAccountsMap`. */
@@ -24,6 +34,10 @@ export interface State {
    * the matching flag is set.
    */
   quotaConfirmed: Record<string, true>;
+  /** Replica view of each agent's account choice per device, keyed `quotaDeviceAccountKey`. */
+  quotaDeviceAccountMap: Record<string, QuotaDeviceAccount>;
+  /** Replica bookkeeping of `quotaDeviceAccountMap`. */
+  quotaDeviceAccountReplica: ReplicaState<QuotaDeviceAccount>;
   /** Replica view of each account's calendar history, keyed by account id. */
   quotaHistoryMap: Record<string, QuotaHistory>;
   /** Replica bookkeeping of `quotaHistoryMap`. */
@@ -39,11 +53,15 @@ export interface State {
 }
 
 export const initialState: State = {
+  claudeLocalAccounts: undefined,
+  claudeLoginPending: false,
   quotaAccountsMap: {},
   quotaAccountsReplica: createReplicaState(),
   quotaBindingsMap: {},
   quotaBindingsReplica: createReplicaState(),
   quotaConfirmed: {},
+  quotaDeviceAccountMap: {},
+  quotaDeviceAccountReplica: createReplicaState(),
   quotaHistoryMap: {},
   quotaHistoryReplica: createReplicaState(),
   quotaPanelMap: {},

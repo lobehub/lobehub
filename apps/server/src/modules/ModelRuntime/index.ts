@@ -7,6 +7,7 @@ import {
   mergeModelRuntimeHooks,
   ModelRuntime,
   type ModelRuntimeHooks,
+  setInlineImageNormalizer,
 } from '@lobechat/model-runtime';
 import { isResponsesAPIModel } from '@lobechat/model-runtime/providers/openai/modelId';
 import { LobeVertexAI } from '@lobechat/model-runtime/vertexai';
@@ -40,6 +41,10 @@ import { ensureFreshOAuthToken } from '@/server/services/oauthDeviceFlow/refresh
 
 import { KeyVaultsGateKeeper } from '../KeyVaultsEncrypt';
 import apiKeyManager from './apiKeyManager';
+import { sharpInlineImageNormalizer } from './inlineImageNormalizer';
+
+// Server requests can re-encode oversized images instead of dropping them.
+setInlineImageNormalizer(sharpInlineImageNormalizer);
 
 export * from './trace';
 export type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
@@ -542,6 +547,44 @@ export const initModelRuntimeFromDB = async (
 
   // 6. Initialize ModelRuntime with the payload and hooks
   return initModelRuntimeWithUserPayload(provider, payload, { userId, workspaceId }, hooks);
+};
+
+/**
+ * The provider-level “使用 Responses API 规范” switch (`ai_providers.config.enableResponseApi`).
+ *
+ * The browser runtime resolves it per request in `services/chat#getChatCompletion`, which
+ * sets `apiMode` to `'responses'` or `'chatCompletion'`. A gateway / server-executed run
+ * builds its own chat payload and never sees that field, so the switch silently lost to
+ * the model default and every request landed on `/v1/chat/completions`. Resolving it from
+ * the provider row keeps both execution sites on the same wire protocol.
+ *
+ * `undefined` means the user never expressed a preference: the model-runtime decides
+ * (see `isResponsesAPIModel`), which is the pre-existing behaviour.
+ */
+export type ProviderResponseApiMode = 'responses' | 'chatCompletion';
+
+export const resolveProviderResponseApiMode = async (
+  db: LobeChatDatabase,
+  userId: string,
+  provider: string,
+  workspaceId?: string,
+): Promise<ProviderResponseApiMode | undefined> => {
+  try {
+    const providerConfig = await new AiProviderModel(db, userId, workspaceId).getAiProviderById(
+      provider,
+    );
+
+    const enableResponseApi = providerConfig?.config?.enableResponseApi;
+
+    if (typeof enableResponseApi !== 'boolean') return undefined;
+
+    return enableResponseApi ? 'responses' : 'chatCompletion';
+  } catch (error) {
+    // A provider-config read must never fail a run: fall back to the model default.
+    console.error('[ModelRuntime] Failed to resolve provider response api mode:', error);
+
+    return undefined;
+  }
 };
 
 export interface ServerDefaultHeterogeneousModelReference {

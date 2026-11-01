@@ -1,5 +1,6 @@
 import { type NavigateFunction } from 'react-router';
 
+import type { PageSectionScope } from './projection';
 import { initialPageCrudState, type PageCrudSliceState } from './slices/crud/initialState';
 import { initialPageListState, type PageListSliceState } from './slices/list/initialState';
 import {
@@ -15,6 +16,10 @@ export interface PageUiState {
   navigate?: NavigateFunction;
   /** Search keywords for filtering pages in the sidebar. */
   searchKeywords: string;
+  /** Whether a Docs sidebar section's full list is open beside the sidebar. */
+  sectionFullListOpen: boolean;
+  /** The section the full list shows; kept on close so the panel animates out intact. */
+  sectionFullListScope: PageSectionScope;
   /** Filter to show only pages not in any library. */
   showOnlyPagesNotInLibrary: boolean;
 }
@@ -34,5 +39,7 @@ export const initialState: PageState = {
   ...initialPageCrudState,
   ...initialPageSelectionState,
   searchKeywords: '',
+  sectionFullListOpen: false,
+  sectionFullListScope: 'mine',
   showOnlyPagesNotInLibrary: false,
 };

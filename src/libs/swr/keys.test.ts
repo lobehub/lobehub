@@ -1,4 +1,4 @@
-import { replicaKeys } from '@lobechat/replica';
+import { replicaKeys } from 'local-replica';
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 

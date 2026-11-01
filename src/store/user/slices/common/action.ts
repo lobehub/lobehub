@@ -1,9 +1,9 @@
 import { isDesktop } from '@lobechat/const';
-import type { ReplicaSlice } from '@lobechat/replica/zustand';
 import type { UserGeneralConfig } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
+import type { ReplicaSlice } from 'local-replica/zustand';
 import useSWR from 'swr';
+import { type SWRResponse } from 'swr';
 import { type PartialDeep } from 'type-fest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';

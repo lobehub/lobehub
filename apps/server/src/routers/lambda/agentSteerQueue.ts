@@ -9,6 +9,11 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
+import { resolveAgentSender } from '@/server/services/aiAgent/agentSenderResolver';
+import {
+  AgentRelayHopLimitError,
+  assertAgentRelayHop,
+} from '@/server/services/aiAgent/sourceAttribution';
 import type { QueuedFollowUp } from '@/server/services/aiAgent/steerQueue';
 import { findOwnLiveRuns, isRunAlive } from '@/server/services/aiAgent/steerQueue/liveRuns';
 import { redisService } from '@/server/services/redis';
@@ -26,7 +31,9 @@ const log = debug('lobe-lambda-router:agent-steer-queue');
 /**
  * A composer send queued behind the running turn: the fresh-send part of an
  * `aiAgent.execAgent` request. Resume / regenerate / supersede fields are not
- * accepted — a follow-up always starts a new turn of its own.
+ * accepted — a follow-up always starts a new turn of its own. `sourceOperationId`
+ * is accepted — another agent queueing through `lh topic send` — but resolved
+ * into the sender right away and never stored.
  */
 const QueuedRequestSchema = ExecAgentFieldsSchema.omit({
   autoStart: true,
@@ -38,8 +45,10 @@ const QueuedRequestSchema = ExecAgentFieldsSchema.omit({
   resumeApproval: true,
   resumeApprovals: true,
   resumeToolResult: true,
-  sourceOperationId: true,
+  requireDevice: true,
   steer: true,
+  supersedeLiveRun: true,
+  title: true,
 }).refine((data) => data.agentId || data.slug, {
   message: 'Either agentId or slug must be provided',
 });
@@ -114,7 +123,7 @@ export const agentSteerQueueRouter = router({
    * error means the outcome is unknown: retry with the same `id`.
    */
   append: steerQueueWriteProcedure.input(AppendSchema).mutation(async ({ input, ctx }) => {
-    const { streamFeatures, ...request } = input.request;
+    const { sourceOperationId, streamFeatures, ...request } = input.request;
     const topicId = request.appContext?.topicId;
     if (!topicId) return { queued: false as const, reason: 'idle' as const };
 
@@ -159,7 +168,24 @@ export const agentSteerQueueRouter = router({
     // run that ends later leaves entries bound to a live run alone.
     const [behindOperationId] = liveRuns;
 
+    // Resolved now, while the sending run is still in flight to vouch for it:
+    // the follow-up usually starts after that run has settled.
+    const agentSender =
+      sourceOperationId && request.agentId
+        ? await resolveAgentSender(
+            { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+            { destinationAgentId: request.agentId, sourceOperationId },
+          )
+        : undefined;
+    try {
+      assertAgentRelayHop(agentSender);
+    } catch (error) {
+      if (!(error instanceof AgentRelayHopLimitError)) throw error;
+      throw new TRPCError({ cause: error, code: 'TOO_MANY_REQUESTS', message: error.message });
+    }
+
     const entry: QueuedFollowUp = {
+      agentSender,
       audit: { clientIp: ctx.clientIp ?? undefined, userAgent: ctx.userAgent ?? undefined },
       composer: storedComposer(input.composer),
       createdAt: Date.now(),

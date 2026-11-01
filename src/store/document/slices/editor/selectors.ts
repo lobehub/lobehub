@@ -16,6 +16,9 @@ const documentById = (id: string) => (s: DocumentStore) => s.documents[id];
 
 const isDirty = (id: string) => (s: DocumentStore) => s.documents[id]?.isDirty ?? false;
 
+const isAgentEditing = (id: string) => (s: DocumentStore) =>
+  (s.documents[id]?.agentEditing ?? 0) > 0;
+
 const saveStatus = (id: string) => (s: DocumentStore) => s.documents[id]?.saveStatus ?? 'idle';
 
 const saveBlockedByLock = (id: string) => (s: DocumentStore) =>
@@ -102,6 +105,7 @@ export const editorSelectors = {
   documentById,
   editorData,
   hasDocument,
+  isAgentEditing,
   isDocumentLoading,
   isDirty,
   lastUpdatedTime,

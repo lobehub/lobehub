@@ -2,27 +2,30 @@
 
 import { buildAcceptanceRepairPrompt } from '@lobechat/prompts';
 import { Button, copyToClipboard, Flexbox, Text, toast } from '@lobehub/ui';
-import dayjs from 'dayjs';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useIsHydrated } from '@/hooks/useIsHydrated';
 import { mutate as globalMutate } from '@/libs/swr';
 import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
-import { checkFilterState, isException } from '../Checks/checkState';
+import { isException } from '../Checks/checkState';
 import { useAcceptanceComments } from '../Comments/hooks';
 import { flowPlanPhase } from '../Plan/planReview';
-import { acceptanceCheckPath } from '../routes';
+import { acceptanceCheckPath, useAcceptanceRouteBase } from '../routes';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { useAcceptanceTurn } from '../useAcceptanceTurn';
-import { formatAcceptanceCountsText, LIVE_ACCEPTANCE_STATUSES } from '../verdict';
-import { canReviewAcceptance, isReadOnlyAcceptanceDecider } from '../visibility';
+import {
+  canRejectAcceptanceOnly,
+  canReviewAcceptance,
+  isReadOnlyAcceptanceDecider,
+} from '../visibility';
 import DecisionBar from './DecisionBar';
-import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
+import { resolveDecisionView } from './decisionView';
+import FeedbackDrawer from './FeedbackDrawer';
 import { draftRepairPromptInMobile } from './mobileBridge';
 import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './modals';
 import { rejectCopyOnly } from './rejectCopyOnly';
@@ -33,16 +36,24 @@ interface AcceptanceDecisionProps {
 
 const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
   const { t } = useTranslation('verify');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const hydrated = useIsHydrated();
   const { acceptanceId, embedded } = useAcceptanceScope();
+  const routeBase = useAcceptanceRouteBase();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
   const { turn, setTurn } = useAcceptanceTurn(embedded);
   const [pending, setPending] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const { approvals, canApprove } = useAcceptanceComments(acceptanceId);
-  const readOnly = isReadOnlyAcceptanceDecider(data, canApprove);
-  if (!data || (!canReviewAcceptance(data) && !readOnly) || data.acceptance.status === 'closed')
+  const { approvals, canApprove, canManageAccess, items } = useAcceptanceComments(acceptanceId);
+  // A grant is narrower than deciding, so it is checked before the read-only
+  // fallback: a teammate granted reject access gets the live reject button.
+  const rejectOnly = canRejectAcceptanceOnly(data);
+  const readOnly = !rejectOnly && isReadOnlyAcceptanceDecider(data, canApprove);
+  if (
+    !data ||
+    (!canReviewAcceptance(data) && !readOnly && !rejectOnly) ||
+    data.acceptance.status === 'closed'
+  )
     return null;
 
   if (flowPlanPhase(data.rounds.at(-1))) return null;
@@ -56,70 +67,18 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
         </Button>
       </Flexbox>
     );
-  const { acceptance, checks, rounds } = data;
-  const currentRound = rounds.at(-1);
-  const acceptedCount = checks.filter((check) => checkFilterState(check) === 'accepted').length;
-  const needsFixCount = checks.filter((check) => checkFilterState(check) === 'needsFix').length;
-  const ignoredCount = checks.filter((check) => checkFilterState(check) === 'ignored').length;
-  const reviewTotal = checks.length;
-  const pendingCount = reviewTotal - acceptedCount - needsFixCount - ignoredCount;
-  const decidedCount = acceptedCount + needsFixCount + ignoredCount;
-  const countsText = formatAcceptanceCountsText(t, {
-    failed: checks.filter((check) => check.state === 'failed').length,
-    notExecuted: checks.filter((check) => check.state === 'not_executed').length,
-    passed: checks.filter((check) => check.state === 'passed').length,
-    uncertain: checks.filter((check) => check.state === 'uncertain').length,
-  });
-  const barState = LIVE_ACCEPTANCE_STATUSES.has(acceptance.status)
-    ? ('live' as const)
-    : acceptance.status === 'accepted'
-      ? ('accepted' as const)
-      : acceptance.status === 'rejected'
-        ? ('rejected' as const)
-        : ('settled' as const);
-  const barTexts = {
-    accepted: {
-      statusText: t('acceptance.banner.accepted', {
-        time:
-          hydrated && acceptance.completedAt
-            ? dayjs(acceptance.completedAt).format('YYYY-MM-DD HH:mm')
-            : '',
-      }),
-      subText: `${countsText} · ${t('acceptance.banner.acceptedHint', { count: rounds.length })}`,
-    },
-    live: {
-      statusText: t(`acceptance.status.${acceptance.status}`),
-      subText: t('acceptance.banner.liveHint'),
-    },
-    rejected: {
-      statusText: t('acceptance.banner.rejected'),
-      subText: currentRound?.run.decisionDetail?.comment ?? t('acceptance.banner.rejectedHint'),
-    },
-    settled:
-      decidedCount === 0
-        ? {
-            statusText: t('acceptance.bar.progressZero', { total: reviewTotal }),
-            subText: undefined,
-          }
-        : pendingCount === 0
-          ? needsFixCount === 0
-            ? {
-                statusText: t('acceptance.bar.progressDone', { total: reviewTotal }),
-                subText: undefined,
-              }
-            : {
-                statusText: t('acceptance.bar.needsFix', { count: needsFixCount }),
-                subText: undefined,
-              }
-          : {
-              statusText: t('acceptance.bar.progress', {
-                done: decidedCount,
-                rest: pendingCount,
-                total: reviewTotal,
-              }),
-              subText: undefined,
-            },
-  }[barState];
+  const { acceptance, checks } = data;
+  const {
+    acceptedCount,
+    barState,
+    currentRound,
+    feedbackEntries,
+    ignoredCount,
+    needsFixCount,
+    reviewTotal,
+    statusText,
+    subText,
+  } = resolveDecisionView(data, t, { hydrated });
 
   // Teammates' approvals ride along the state line: they are opinions the
   // decider reads, never the decision itself. Only this round's count — an
@@ -132,42 +91,21 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
     const count = approvals.filter((approval) => approval.contextRoundIndex === roundIndex).length;
     return count > 0 ? t('acceptance.comments.approvalCount', { count }) : undefined;
   })();
-  const subTextWithApprovals = [barTexts.subText, approvalText].filter(Boolean).join(' · ');
-
-  const currentRoundIndex = currentRound?.run.roundIndex ?? 0;
-  const groupFeedbackEntries = rounds.flatMap((round) =>
-    (round.run.decisionDetail?.groupFeedback ?? []).map((entry) => ({
-      ...entry,
-      roundIndex: round.run.roundIndex ?? 0,
-    })),
-  );
-  const feedbackEntries: FeedbackListEntry[] = [
-    ...checks.flatMap((check) =>
-      check.reviews
-        .filter((review) => review.action === 'reject')
-        .map((review) => ({
-          annotationCount: review.annotations?.length || undefined,
-          attachments: review.attachments,
-          checkId: check.id,
-          checkSeq: check.seq,
-          comment: review.comment ?? '',
-          createdAt: review.createdAt,
-          kind: 'check' as const,
-          roundIndex: review.roundIndex,
-          stale: review.roundIndex < currentRoundIndex,
-          title: check.title,
-        })),
-    ),
-    ...groupFeedbackEntries.map((entry) => ({
-      attachments: entry.attachments,
-      comment: entry.comment,
-      createdAt: entry.createdAt,
-      groupLabel: entry.category,
-      kind: 'group' as const,
-      roundIndex: entry.roundIndex,
-      stale: entry.roundIndex < currentRoundIndex,
-    })),
-  ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Requests waiting on this decider, so a reviewer's ask does not sit unread
+  // in the discussion while the decider is here on the checks.
+  const pendingAccessCount = canManageAccess
+    ? items.filter(
+        (item) =>
+          item.kind === 'access_request' &&
+          !item.deletedAt &&
+          item.accessRequest?.status === 'pending',
+      ).length
+    : 0;
+  const accessText =
+    pendingAccessCount > 0
+      ? t('acceptance.access.pendingCount', { count: pendingAccessCount })
+      : undefined;
+  const subTextWithApprovals = [subText, approvalText, accessText].filter(Boolean).join(' · ');
 
   const runAction = async (action: () => Promise<unknown>) => {
     setPending(true);
@@ -197,11 +135,12 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
         needsFixCount={needsFixCount}
         pending={pending}
         readOnlyReason={readOnly ? t('acceptance.bar.readOnlyReason') : undefined}
+        rejectOnlyReason={rejectOnly ? t('acceptance.bar.rejectOnlyReason') : undefined}
         repairing={acceptance.status === 'repairing'}
         rerunAvailable={embedded}
         rerunPending={false}
         state={barState}
-        statusText={barTexts.statusText}
+        statusText={statusText}
         subText={subTextWithApprovals || undefined}
         totalCount={reviewTotal}
         onOpenFeedback={() => setFeedbackOpen(true)}
@@ -241,10 +180,10 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
             // `origin` is only visible to the record owner, so this is the
             // viewer's promise, not the server's gate — the copy path below
             // opts out of dispatch explicitly.
-            dispatchAvailable: Boolean(data.origin?.topic),
+            dispatchAvailable: Boolean(data.origin?.topic) || Boolean(data.repairDispatchAvailable),
             acceptanceId: acceptance.id,
             onConfirm: async (comment) => {
-              if (!data.origin?.topic) {
+              if (!data.origin?.topic && !data.repairDispatchAvailable) {
                 const rejected = await runAction(() =>
                   rejectCopyOnly({
                     acceptanceId: acceptance.id,
@@ -305,7 +244,7 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
         onJumpToCheck={(checkId) => {
           setFeedbackOpen(false);
           if (!embedded) {
-            navigate(acceptanceCheckPath(acceptanceId, checkId));
+            navigate(acceptanceCheckPath(acceptanceId, checkId, routeBase));
             return;
           }
           setTimeout(() => {

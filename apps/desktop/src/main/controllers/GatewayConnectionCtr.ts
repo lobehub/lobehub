@@ -1,4 +1,4 @@
-import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,7 +8,7 @@ import {
   COMPUTER_USE_IDENTIFIER as AuvIdentifier,
   toAuvToolOutput,
 } from '@lobechat/device-control/computer-use';
-import type { AgentRunRequestMessage, GatewayMcpParams } from '@lobechat/device-gateway-client';
+import type { GatewayMcpParams } from '@lobechat/device-gateway-client';
 import { deviceGatewayServerKey } from '@lobechat/device-gateway-client/endpoint';
 import type {
   GatewayConnectionState,
@@ -40,6 +40,7 @@ import { createLogger } from '@/utils/logger';
 import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import BrowserControlCtr from './BrowserControlCtr';
+import { executeGatewayAgentRun, type PlatformTaskEntry } from './gatewayAgentRun';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, createProtocolHandler, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
@@ -103,20 +104,6 @@ function buildNotifyProtocol(lhPath: string, topicId: string): string {
     `- Always pass \`--message-id\` on every subsequent call so updates overwrite the same bubble.\n` +
     `- Call notify at least once when the task is done, even if there were no intermediate updates.`
   );
-}
-
-interface PlatformTaskEntry {
-  agentId?: string;
-  agentType: string;
-  operationId: string;
-  parentOperationId?: string;
-  pid: number;
-  topicId: string;
-  /**
-   * Workspace owning the dispatched topic (seeded by `runHeteroTask`), so the
-   * exit-time cleanup notify scopes to the workspace agentNotify resolves it in.
-   */
-  workspaceId?: string;
 }
 
 /**
@@ -225,7 +212,13 @@ export default class GatewayConnectionCtr extends ControllerModule {
     );
 
     // Wire up agent run handler
-    srv.setAgentRunHandler((request) => this.executeAgentRun(request));
+    srv.setAgentRunHandler((request) =>
+      executeGatewayAgentRun(request, {
+        getServerUrl: () => this.remoteServerConfigCtr.getRemoteServerUrl(),
+        heterogeneousAgentCtr: this.heterogeneousAgentCtr,
+        platformTasks: this.platformTasks,
+      }),
+    );
 
     // Wire up generic device RPC handler (server-internal method forwarding,
     // e.g. workspace-init scans — never surfaced to the agent)
@@ -362,80 +355,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }
 
   // ─── Agent Run Routing ───
-
-  private async executeAgentRun(
-    request: AgentRunRequestMessage,
-  ): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
-    try {
-      const serverUrl = await this.remoteServerConfigCtr.getRemoteServerUrl();
-      if (!serverUrl) {
-        return { reason: 'Remote server URL not configured', status: 'rejected' };
-      }
-
-      // Reuse this device's own logged-in session as the run identity. The
-      // access token is a full user OIDC token (7-day TTL, longer than any run),
-      // which heteroIngest/heteroFinish now accept (ownership-gated), AND which
-      // gives the spawned Claude Code's nested `lh` calls a real login state —
-      // unlike the narrow `hetero-operation` token, which only works for the
-      // ingest endpoints. We deliberately do NOT pass the refresh token to the
-      // CLI: the device stays the single refresher (refresh tokens rotate), and
-      // the 7-day access token outlives the run so no mid-run refresh is needed.
-      //
-      // Fall back to the dispatched `request.jwt` when the device has no access
-      // token (e.g. not logged in), preserving the prior behavior gracefully.
-      const accessToken = await this.remoteServerConfigCtr.getAccessToken();
-      const jwt = accessToken || request.jwt;
-
-      // The embedded CLI handles spawn -> adapt -> BatchIngester ->
-      // heteroIngest/heteroFinish -> server -> Gateway -> clients. Wait until
-      // the process has actually spawned (or emitted an early error) before
-      // acknowledging the server request.
-      return await this.heterogeneousAgentCtr.spawnLhHeteroExec({
-        agentId: request.agentId,
-        agentType: request.agentType,
-        assistantMessageId: request.assistantMessageId,
-        args: request.args,
-        cwd: request.cwd,
-        imageList: request.imageList,
-        jwt,
-        operationId: request.operationId,
-        prompt: request.prompt,
-        resumeFallbackSystemContext: request.resumeFallbackSystemContext,
-        resumeSessionId: request.resumeSessionId,
-        serverUrl,
-        systemContext: request.systemContext,
-        topicId: request.topicId,
-        workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
-        // Register the spawned CLI process so `cancelHeteroTask` (sent by the
-        // server's `interruptTask` when the user clicks Stop) can find and kill
-        // it by operationId. The entry is cleaned up on child exit below.
-        onChildSpawned: (child: ChildProcess) => {
-          const pid = child.pid;
-          if (pid === undefined) return;
-          const taskId = request.operationId;
-          this.platformTasks.set(taskId, {
-            agentType: request.agentType,
-            operationId: request.operationId,
-            pid,
-            topicId: request.topicId,
-            workspaceId: request.ingestWorkspaceId ?? request.workspaceId,
-          });
-          child.once('exit', () => {
-            // Only clear if this exit belongs to the current entry — a
-            // superseding run for the same operationId may have already
-            // replaced it.
-            const current = this.platformTasks.get(taskId);
-            if (current?.pid === pid) {
-              this.platformTasks.delete(taskId);
-            }
-          });
-        },
-      });
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : String(err);
-      return { reason, status: 'rejected' };
-    }
-  }
 
   // ─── Tool Call Routing ───
 

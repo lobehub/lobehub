@@ -659,6 +659,12 @@ data rather than an env leak.
 standalone. Keep them for the final PRODUCTION publish of the verification round —
 there the auto-attach to the current conversation is exactly what you want.
 
+The same leak hits a local `lh hetero exec --topic <t> --operation-id <op>` replay: the run
+also exports `LOBEHUB_ASSISTANT_MESSAGE_ID`, which the CLI forwards as the ingest's seeded
+assistant, so every batch fails with `Seeded assistantMessageId msg_… was not found for
+topic <t>`. Set it to the fixture's seeded assistant id and unset
+`LOBEHUB_HETERO_EXEC_INHERIT_PROCESS_GROUP` together with the ids above.
+
 ### Driving the UI
 
 #### P21・Driving a 资源库 upload with agent-browser: use the Add-menu input, and a same-build A/B for the hashing thread

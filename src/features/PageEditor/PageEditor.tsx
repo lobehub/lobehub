@@ -1,22 +1,20 @@
 'use client';
 
 import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
-import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { cssVar, Flexbox } from '@lobehub/ui';
+import type { FC, ReactNode, UIEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import type { ComposerTarget } from '@/features/Conversation/types';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import PageMetaBar from '@/features/PageEditor/PageMetaBar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { usePermission } from '@/hooks/usePermission';
-import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
 import { pageActions } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
+import { usePageCollabEligible, usePageCollabEnabled } from './collab/usePageCollab';
 import DocumentComments from './DocumentComments';
 import BlockCommentMarker from './DocumentComments/BlockCommentMarker';
 import { DocumentCommentsProvider } from './DocumentComments/context';
@@ -48,9 +46,6 @@ import { usePageEditable } from './usePageEditable';
  */
 type PageEditorHeader = ReactNode | null;
 
-const WIDE_SCREEN_CONTAINER_PADDING = 16;
-const TABLE_BASE_BLEED = DEFAULT_BLOCK_ANCHOR_PADDING + WIDE_SCREEN_CONTAINER_PADDING;
-
 const getMaxScrollTop = (node: HTMLElement) => Math.max(node.scrollHeight - node.clientHeight, 0);
 
 const shouldRestoreEditorScroll = ({
@@ -70,6 +65,11 @@ const shouldRestoreEditorScroll = ({
   !isUserInteractingWithEditor;
 
 const styles = StyleSheet.create({
+  artifactContent: {
+    minWidth: 0,
+    paddingBlock: 24,
+    paddingInline: 24,
+  },
   contentWrapper: {
     containerType: 'inline-size',
     display: 'flex',
@@ -89,23 +89,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
 });
-
-const overrideStyles = createStaticStyles(({ css }) => ({
-  editorContent: css`
-    .lobe-editor-table-scroll-wrapper.lobe-editor-table-scroll-wrapper {
-      --lobe-block-anchor-padding: var(--lobe-pageeditor-table-bleed-inline);
-
-      position: relative;
-      box-sizing: border-box;
-      width: 100cqi;
-      margin-inline: calc(var(--lobe-pageeditor-table-bleed-inline) * -1);
-    }
-
-    .lobe-editor-table-scroll-wrapper .editor_table {
-      width: max-content;
-    }
-  `,
-}));
 
 interface PageEditorProps {
   /** Composer that receives selections created by the Ask Copilot toolbar item. */
@@ -162,14 +145,6 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
   const isHtmlPage = useIsHtmlPage(documentId);
-  const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
-  const tableBleedInline = wideScreen
-    ? `${TABLE_BASE_BLEED}px`
-    : `calc(${TABLE_BASE_BLEED}px + max((100cqi - ${CONVERSATION_MIN_WIDTH}px) / 2, 0px))`;
-  const editorContentStyle = {
-    ...styles.editorContent,
-    '--lobe-pageeditor-table-bleed-inline': tableBleedInline,
-  } as CSSProperties;
   const resizeFrameRef = useRef<number | undefined>(undefined);
   const restoreScrollFrameRef = useRef<number | undefined>(undefined);
   const isRestoringScrollRef = useRef(false);
@@ -378,42 +353,48 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>((props) => {
         width={'100%'}
         onScroll={handleEditorScroll}
       >
-        <WideScreenContainer
-          wrapperStyle={{ cursor: editable && !isHtmlPage ? 'text' : 'default' }}
-          onChange={notifyEditorLayoutChange}
-          onClick={() => {
-            if (!editable || isHtmlPage) return;
-
-            editor?.focus();
-          }}
-        >
-          <Flexbox
-            className={overrideStyles.editorContent}
-            flex={1}
-            ref={editorContentRef}
-            style={editorContentStyle}
-            {...{ [GUTTER_COLUMN_ATTRIBUTE]: true }}
-          >
-            <TitleSection />
-            <PageMetaBar />
-            {/* Surfaces local heartbeat health (unstable/lost) for the holder.
-                Suppressed when LockedAlert is showing — see LockStatusBanner. */}
-            <LockStatusBanner />
-            {/* Prominent in-body notice when another member holds the lock; the
-                compact status badge lives in the Header (EditingIndicator). */}
-            <LockedAlert />
-            {isHtmlPage ? (
-              <HtmlPageBody />
-            ) : (
-              <>
-                <EditorCanvas askCopilotTarget={askCopilotTarget} />
-                <BlockCommentMarker hostRef={editorContentRef} />
-              </>
-            )}
-            {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
-            <DocumentComments />
+        {isHtmlPage ? (
+          // An artifact is a finished, self-styled page: it gets the pane's full
+          // width instead of the reading column, and no editable title above it
+          // (the header carries the title; the HTML has its own heading).
+          <Flexbox flex={1} gap={24} ref={editorContentRef} style={styles.artifactContent}>
+            <HtmlPageBody />
+            <WideScreenContainer>
+              {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
+              <DocumentComments />
+            </WideScreenContainer>
           </Flexbox>
-        </WideScreenContainer>
+        ) : (
+          <WideScreenContainer
+            wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
+            onChange={notifyEditorLayoutChange}
+            onClick={() => {
+              if (!editable) return;
+
+              editor?.focus();
+            }}
+          >
+            <Flexbox
+              flex={1}
+              ref={editorContentRef}
+              style={styles.editorContent}
+              {...{ [GUTTER_COLUMN_ATTRIBUTE]: true }}
+            >
+              <TitleSection />
+              <PageMetaBar />
+              {/* Surfaces local heartbeat health (unstable/lost) for the holder.
+                  Suppressed when LockedAlert is showing — see LockStatusBanner. */}
+              <LockStatusBanner />
+              {/* Prominent in-body notice when another member holds the lock; the
+                  compact status badge lives in the Header (EditingIndicator). */}
+              <LockedAlert />
+              <EditorCanvas askCopilotTarget={askCopilotTarget} />
+              <BlockCommentMarker hostRef={editorContentRef} />
+              {documentId && <DocumentLikes documentId={documentId} key={documentId} />}
+              <DocumentComments />
+            </Flexbox>
+          </WideScreenContainer>
+        )}
       </Flexbox>
       {!isHtmlPage && (
         <TableOfContents contentRef={editorContentRef} scrollRef={contentWrapperRef} />
@@ -485,10 +466,19 @@ export const PageEditor: FC<PageEditorProps> = ({
   syncPageAgentActiveState,
 }) => {
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const collabEnabled = usePageCollabEnabled();
+  // Known once the document loads; a SKILL.md then leaves the room path.
+  const collabEligible = usePageCollabEligible(pageId);
+  const [collabEpoch, setCollabEpoch] = useState(0);
+  const handleCollabReset = useCallback(() => setCollabEpoch((epoch) => epoch + 1), []);
 
   return (
     <PageAgentProvider pageId={pageId} syncActiveAgent={syncPageAgentActiveState}>
-      <EditorProvider>
+      {/* A collaboration binding lives for the editor kernel's lifetime, so each room gets a
+          fresh kernel, and a document that leaves the room path drops the binding. */}
+      <EditorProvider
+        key={collabEnabled ? `${pageId}:${collabEligible ? collabEpoch : 'stored'}` : undefined}
+      >
         <PageEditorProvider
           emoji={emoji}
           knowledgeBaseId={knowledgeBaseId}
@@ -496,6 +486,7 @@ export const PageEditor: FC<PageEditorProps> = ({
           pageId={pageId}
           title={title}
           onBack={onBack}
+          onCollabReset={collabEnabled ? handleCollabReset : undefined}
           onDocumentIdChange={onDocumentIdChange}
           onDelete={() => {
             if (!canEdit) return;

@@ -6,6 +6,7 @@ import type {
   PluginApiWorkAction,
   PluginApiWorkConfig,
   PluginApiWorkResourceType,
+  RegisterCanvasWorkParams,
   RegisterDocumentWorkParams,
   RegisterSkillToolResultWorkParams,
   RegisterTaskWorkParams,
@@ -167,7 +168,9 @@ export const extractTaskWorkTargets = ({
     .filter((item) => (item as TaskWorkTargetCandidate).success === true)
     .map((item) => ({
       taskId: asString((item as TaskWorkTargetCandidate).taskId),
-      taskIdentifier: asString((item as TaskWorkTargetCandidate).identifier),
+      taskIdentifier: asString((item as TaskWorkTargetCandidate).taskId)
+        ? undefined
+        : asString((item as TaskWorkTargetCandidate).identifier),
     }))
     .filter((target) => Boolean(target.taskId || target.taskIdentifier));
 };
@@ -279,6 +282,7 @@ export interface WorkRegistrationPorts {
   deleteDocumentWork?: (params: DeleteDocumentWorkParams) => Promise<unknown>;
   deleteTaskWork: (params: DeleteTaskWorkParams) => Promise<unknown>;
   handleSkillToolResult: (params: RegisterSkillToolResultWorkParams) => Promise<unknown>;
+  registerCanvas?: (params: RegisterCanvasWorkParams) => Promise<unknown>;
   registerDocument: (params: RegisterDocumentWorkParams) => Promise<unknown>;
   registerTask: (params: RegisterTaskWorkParams) => Promise<unknown>;
 }
@@ -427,6 +431,37 @@ const dispatchDocumentWorkIntent = async (
   });
 };
 
+const dispatchCanvasWorkIntent = async (
+  intent: WorkRegistrationIntentFor<'canvas'>,
+  ports: WorkRegistrationPorts,
+  provenance: WorkRegistrationProvenance,
+): Promise<void> => {
+  const {
+    agentId,
+    cumulativeCost,
+    cumulativeUsage,
+    messageId,
+    rootOperationId,
+    threadId,
+    toolCallId,
+    toolIdentifier,
+    topicId,
+  } = provenance;
+
+  await ports.registerCanvas?.({
+    ...intent.canvas,
+    agentId,
+    cumulativeCost,
+    cumulativeUsage,
+    messageId,
+    rootOperationId,
+    threadId,
+    toolCallId,
+    toolIdentifier,
+    topicId,
+  });
+};
+
 const dispatchSkillWorkIntent = async (
   intent: WorkRegistrationIntentFor<'skill'>,
   ports: WorkRegistrationPorts,
@@ -467,6 +502,9 @@ const dispatchSkillWorkIntent = async (
  * fails this exhaustive registry until its behavior is registered here.
  */
 export const WORK_REGISTRATION_ADAPTERS = {
+  canvas: {
+    dispatch: dispatchCanvasWorkIntent,
+  },
   document: {
     dispatch: dispatchDocumentWorkIntent,
     resolve: resolveDocumentWorkIntent,

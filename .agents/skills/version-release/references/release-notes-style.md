@@ -222,14 +222,15 @@ Render contributors as a **single flat list** (no separate "Community" / "Core T
 - @arvinxx
 - @Innei
 - @tjx666 (commit author name: YuTengjing)
-- @LiJian
-- @Neko
-- @Rdmclin2
+- @ONLY-yours (commit author name: LiJian)
+- @nekomeowww (commit author name: Neko)
+- @rdmclin2 (commit author name: Rdmclin2)
 - @AmAzing129
 - @sudongyuer (commit author name: Tsuki)
 - @rivertwilight (commit author name: René Wang)
-- @CanisMinor
+- @canisminor1990 (commit author name: CanisMinor)
 - @cy948 (commit author name: Rylan Cai)
+- @MarioJames (commit author name: Mocha)
 
 > **Resolving handles** — git author names (e.g. `YuTengjing`) are not always the GitHub handle. Verify via `gh pr view "$PR" --json author` or `gh api search/users -f q='<email>'` before listing.
 

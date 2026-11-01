@@ -195,6 +195,11 @@ export class AgentRuntimeService {
     });
     this.completionLifecycle = new CompletionLifecycle(db, userId, workspaceId, {
       includeShareVisitor,
+      onTopicRunSettled: ({ operationId, topicId }) =>
+        this.delegate.deliverBackgroundSubAgentResults?.({
+          settledOperationId: operationId,
+          topicId,
+        }) ?? Promise.resolve(),
     });
     this.humanIntervention = new HumanInterventionHandler(db, this.messageModel);
 

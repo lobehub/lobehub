@@ -7,6 +7,9 @@ import { hourlyWorkflowHandler } from '../hourly';
 
 const mocks = vi.hoisted(() => ({
   appendUserMemoryWorkflowRunIds: vi.fn(),
+  config: { consolidationNightlyHourUtc: undefined as number | undefined },
+  listConsolidatedUserIds: vi.fn(),
+  triggerConsolidation: vi.fn(),
   createExecutor: vi.fn(),
   getUsersForHourlyExtraction: vi.fn(),
   isHourlyMemoryExtractionCancellationRequested: vi.fn(),
@@ -25,6 +28,7 @@ vi.mock('@/envs/app', () => ({
 
 vi.mock('@/server/globalConfig/parseMemoryExtractionConfig', () => ({
   parseMemoryExtractionConfig: () => ({
+    consolidationNightlyHourUtc: mocks.config.consolidationNightlyHourUtc,
     upstashWorkflowExtraHeaders: {},
     webhook: { baseUrl: 'https://app.example.com' },
   }),
@@ -36,6 +40,7 @@ vi.mock('@/server/services/memory/userMemory/extract', () => ({
     create: mocks.createExecutor,
   },
   MemoryExtractionWorkflowService: {
+    triggerConsolidation: mocks.triggerConsolidation,
     triggerHourly: mocks.triggerHourly,
     triggerHourlyTracked: mocks.triggerHourlyTracked,
     triggerProcessUsers: mocks.triggerProcessUsers,
@@ -64,6 +69,10 @@ vi.mock('@/database/server', () => ({
   })),
 }));
 
+vi.mock('@/database/models/userMemory/consolidation', () => ({
+  listConsolidatedUserIds: mocks.listConsolidatedUserIds,
+}));
+
 vi.mock('../runGuard', () => ({
   checkGuard: vi.fn().mockResolvedValue({ result: true }),
   ensureWorkflowStarted: vi.fn().mockResolvedValue({ started: true }),
@@ -72,6 +81,9 @@ vi.mock('../runGuard', () => ({
 describe('hourlyWorkflowHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.config.consolidationNightlyHourUtc = undefined;
+    mocks.listConsolidatedUserIds.mockResolvedValue(['user-a', 'user-b']);
+    mocks.triggerConsolidation.mockResolvedValue({ workflowRunId: 'consolidation-run' });
     mocks.createExecutor.mockResolvedValue({
       getUsersForHourlyExtraction: mocks.getUsersForHourlyExtraction,
     });
@@ -246,5 +258,47 @@ describe('hourlyWorkflowHandler', () => {
         status: AsyncTaskStatus.Success,
       },
     );
+  });
+
+  it('starts the incremental consolidation of consolidated users at the nightly hour only', async () => {
+    mocks.getUsersForHourlyExtraction.mockResolvedValue({ ids: ['user-1'] });
+    const run = () =>
+      hourlyWorkflowHandler({
+        requestPayload: { hourlyTaskId: '00000000-0000-4000-8000-000000000001' },
+        run: createStepRunner(),
+      } as never);
+
+    mocks.config.consolidationNightlyHourUtc = (new Date().getUTCHours() + 1) % 24;
+    await run();
+    expect(mocks.triggerConsolidation).not.toHaveBeenCalled();
+
+    mocks.config.consolidationNightlyHourUtc = new Date().getUTCHours();
+    await run();
+    expect(mocks.triggerConsolidation.mock.calls.map((call) => call[0])).toEqual([
+      'user-a',
+      'user-b',
+    ]);
+    expect(mocks.triggerConsolidation).toHaveBeenCalledWith('user-a', 'https://app.example.com', {
+      extraHeaders: {},
+    });
+  });
+
+  it('starts the nightly consolidation on the empty page that ends a real cursor chain', async () => {
+    mocks.config.consolidationNightlyHourUtc = new Date().getUTCHours();
+    // The real executor returns a cursor for every nonempty page, so the chain ends on an empty one.
+    mocks.getUsersForHourlyExtraction.mockResolvedValue({ ids: [] });
+
+    await hourlyWorkflowHandler({
+      requestPayload: {
+        cursor: { createdAt: new Date().toISOString(), id: 'user-last' },
+        hourlyTaskId: '00000000-0000-4000-8000-000000000001',
+      },
+      run: createStepRunner(),
+    } as never);
+
+    expect(mocks.triggerConsolidation.mock.calls.map((call) => call[0])).toEqual([
+      'user-a',
+      'user-b',
+    ]);
   });
 });

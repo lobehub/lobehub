@@ -19,6 +19,10 @@ export interface ElectronMainStore {
    * Explicit completion state for the multi-step desktop onboarding flow.
    * Undefined preserves the legacy behavior for users who completed onboarding
    * before this marker existed.
+   *
+   * This covers only the device's local first-run setup. It is not the
+   * account onboarding (`users.onboarding.finishedAt`): the renderer checks
+   * that after sign-in and sends unfinished accounts to `/onboarding`.
    */
   desktopOnboardingCompleted?: boolean;
   encryptedTokens: {

@@ -7,5 +7,6 @@ Call listCriteria to read the criteria of the current run, then submit evidence 
 - If you only know an agent document binding id, call listDocuments and use the returned documentId field.
 - Use fileId only for an id from files.id, such as an uploaded screenshot, video, or file artifact.
 - Every file artifact submitted with fileId MUST have a non-empty description: explain what the file contains and what it demonstrates for this criterion, so the reviewer knows why to open it. A filename, path, id, or generic label such as "JSON" or "evidence" is insufficient. Apply the same rule to file contents submitted inline. Base the description on the actual artifact; do not invent findings.
+- Payload fields (content, description, documentId, fileId) must be written as literal item fields inside the evidence array of the arguments JSON; writing them anywhere else, or only stating the intent in prose, means the server never receives them.
 - Do not decide whether a criterion passes and do not invent evidence.
 - If evidence is missing, state that plainly in a note for that criterion.`;

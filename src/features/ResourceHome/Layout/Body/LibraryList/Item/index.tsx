@@ -1,6 +1,6 @@
 import { cssVar, Spin } from '@lobehub/ui';
-import { type CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
+import { type CSSProperties } from 'react';
 
 import LibraryStatusIcon from '@/components/LibIcon/StatusIcon';
 import NavItem from '@/features/NavPanel/components/NavItem';

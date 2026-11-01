@@ -590,6 +590,27 @@ describe('verifyRouter', () => {
       expect(bundle).toMatchObject({ isOwner: true, run: { id: RUN_UUID } });
     });
 
+    it("keeps an only-me run from its workspace's members", async () => {
+      const run = {
+        goal: 'Ship a working page',
+        id: RUN_UUID,
+        title: 'Run report',
+        userId: 'owner-user',
+        visibility: 'owner',
+        workspaceId: 'ws-1',
+      };
+      modelMocks.getServerDB.mockResolvedValue({
+        query: {
+          verifyReports: { findFirst: vi.fn(async () => null) },
+          verifyRuns: { findFirst: vi.fn(async () => run) },
+        },
+        select: vi.fn().mockReturnValueOnce(selectRows([])),
+      });
+
+      const teammate = verifyRouter.createCaller({ userId: 'teammate-user' } as any);
+      expect(await teammate.getReportBundle({ verifyRunId: RUN_UUID })).toBeNull();
+    });
+
     it('reads a standalone report without a logged-in user', async () => {
       const run = {
         goal: 'Ship a working page',

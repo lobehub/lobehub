@@ -5,6 +5,7 @@ import { DocumentModel } from '@/database/models/document';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { createAgentMarkdownSnapshot } from '@/server/services/agentDocuments/headlessEditor';
 import { DocumentService } from '@/server/services/document';
+import { updateDocumentThroughRoom } from '@/server/services/pageCollab/bodyWriter';
 
 export interface UpsertCrawledDocumentParams {
   content: string;
@@ -122,12 +123,18 @@ export class WebBrowsingDocumentService {
         // `DocumentService.updateDocument` runs inside a transaction and
         // writes a `document_histories` row when `editorData` differs from
         // the row's current snapshot, so each refresh becomes a revision.
-        await this.documentService.updateDocument(existing.id, {
-          content: snapshot.content,
-          editorData: snapshot.editorData,
-          saveSource: 'llm_call',
-          title,
-        });
+        await updateDocumentThroughRoom(
+          this.db,
+          this.documentService,
+          existing.id,
+          {
+            content: snapshot.content,
+            editorData: snapshot.editorData,
+            saveSource: 'llm_call',
+            title,
+          },
+          { userId: this.userId, workspaceId: this.workspaceId },
+        );
         documentId = existing.id;
         status = 'updated';
       }

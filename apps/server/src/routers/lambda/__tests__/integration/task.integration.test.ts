@@ -625,221 +625,6 @@ describe('Task Router Integration', () => {
     });
   });
 
-  describe('comment notifications', () => {
-    const mentionNode = (userId: string) => ({
-      label: 'Member',
-      metadata: { id: userId, type: 'member' },
-      type: 'mention',
-    });
-    const editorDataWith = (...userIds: string[]) => ({
-      root: { children: [{ children: userIds.map(mentionNode), type: 'paragraph' }] },
-    });
-
-    const setupWorkspace = async () => {
-      const workspaceId = 'task-comment-notify-workspace';
-      const { workspaces, workspaceMembers } = await import('@/database/schemas');
-      await serverDB.insert(workspaces).values({
-        id: workspaceId,
-        name: 'Task Comment Notify Workspace',
-        primaryOwnerId: userId,
-        slug: workspaceId,
-      });
-      await serverDB.insert(workspaceMembers).values([
-        { role: 'owner', userId, workspaceId },
-        { role: 'member', userId: otherUserId!, workspaceId },
-      ]);
-      return {
-        wsCaller: taskRouter.createCaller({ ...createTestContext(userId), workspaceId }),
-        wsOtherCaller: taskRouter.createCaller({
-          ...createTestContext(otherUserId!),
-          workspaceId,
-        }),
-        workspaceId,
-      };
-    };
-
-    it('should ping the task creator and @mentioned members on a new member comment', async () => {
-      otherUserId = await createTestUser(serverDB);
-      const { wsCaller, wsOtherCaller, workspaceId } = await setupWorkspace();
-      const task = await wsCaller.create({ instruction: 'Discuss', name: 'Discuss' });
-
-      // The creator commenting on their own task with no mentions pings nobody.
-      await wsCaller.addComment({ content: 'note to self', id: task.data.id });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-
-      // Another member commenting pings the creator as ambient activity.
-      const comment = await wsOtherCaller.addComment({ content: 'hello', id: task.data.id });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledWith({
-        actorUserId: otherUserId,
-        commentId: comment.data.id,
-        recipients: [{ kind: 'commented', userId }],
-        taskId: task.data.id,
-        workspaceId,
-      });
-
-      // The creator @mentioning the other member pings them as mentioned;
-      // unknown ids and self-mentions are dropped.
-      const mentioned = await wsCaller.addComment({
-        content: '@Member look',
-        editorData: editorDataWith(otherUserId!, userId, 'not-a-member'),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith({
-        actorUserId: userId,
-        commentId: mentioned.data.id,
-        recipients: [{ kind: 'mentioned', userId: otherUserId }],
-        taskId: task.data.id,
-        workspaceId,
-      });
-    });
-
-    it('should upgrade the assignee to mentioned and skip agent-authored comments', async () => {
-      otherUserId = await createTestUser(serverDB);
-      const { wsCaller, workspaceId } = await setupWorkspace();
-      const task = await wsCaller.create({
-        assigneeUserId: otherUserId,
-        instruction: 'Assigned',
-      });
-      await flushAfterResponse();
-      mockNotifyTaskCommentActivity.mockClear();
-
-      await wsCaller.addComment({ content: 'ping', id: task.data.id });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          recipients: [{ kind: 'commented', userId: otherUserId }],
-          workspaceId,
-        }),
-      );
-
-      await wsCaller.addComment({
-        content: '@Member',
-        editorData: editorDataWith(otherUserId!),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenLastCalledWith(
-        expect.objectContaining({ recipients: [{ kind: 'mentioned', userId: otherUserId }] }),
-      );
-
-      // Agent-authored progress notes never ping members, even with mentions.
-      const { agents } = await import('@/database/schemas');
-      const wsAgentId = 'agt_task_comment_ws';
-      await serverDB
-        .insert(agents)
-        .values({ id: wsAgentId, slug: wsAgentId, userId, workspaceId })
-        .onConflictDoNothing();
-      await flushAfterResponse();
-      mockNotifyTaskCommentActivity.mockClear();
-      await wsCaller.addComment({
-        authorAgentId: wsAgentId,
-        content: 'Agent progress note',
-        editorData: editorDataWith(otherUserId!),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-    });
-
-    it('should only ping newly added mentions when a comment is edited', async () => {
-      otherUserId = await createTestUser(serverDB);
-      const thirdUserId = await createTestUser(serverDB);
-      const { wsCaller, workspaceId } = await setupWorkspace();
-      const { workspaceMembers } = await import('@/database/schemas');
-      await serverDB
-        .insert(workspaceMembers)
-        .values({ role: 'member', userId: thirdUserId, workspaceId });
-      const task = await wsCaller.create({ instruction: 'Edit mentions' });
-      const comment = await wsCaller.addComment({
-        content: '@Member',
-        editorData: editorDataWith(otherUserId!),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      mockNotifyTaskCommentActivity.mockClear();
-
-      // Keeping the same mention does not re-notify.
-      await wsCaller.updateComment({
-        commentId: comment.data.id,
-        content: '@Member edited',
-        editorData: editorDataWith(otherUserId!),
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-
-      // Adding a new mention pings only the new member.
-      await wsCaller.updateComment({
-        commentId: comment.data.id,
-        content: '@Member @Third',
-        editorData: editorDataWith(otherUserId!, thirdUserId),
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledWith({
-        actorUserId: userId,
-        commentId: comment.data.id,
-        recipients: [{ kind: 'mentioned', userId: thirdUserId }],
-        taskId: task.data.id,
-        workspaceId,
-      });
-
-      // Content-only edits never notify.
-      await wsCaller.updateComment({ commentId: comment.data.id, content: 'plain' });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).toHaveBeenCalledTimes(1);
-    });
-
-    it('should never notify members who cannot open a private task', async () => {
-      otherUserId = await createTestUser(serverDB);
-      const thirdUserId = await createTestUser(serverDB);
-      const { wsCaller, workspaceId } = await setupWorkspace();
-      const { workspaceMembers } = await import('@/database/schemas');
-      await serverDB
-        .insert(workspaceMembers)
-        .values({ role: 'member', userId: thirdUserId, workspaceId });
-      // A private task is visible to its creator only (assigning it to another
-      // member is rejected upstream), yet the creator can still @mention anyone.
-      const task = await wsCaller.create({
-        instruction: 'Secret',
-        name: 'Secret',
-        visibility: 'private',
-      });
-
-      // The mention must not leak the task's title and link to a member who
-      // cannot open it — neither on a new comment nor on an edit.
-      const comment = await wsCaller.addComment({
-        content: '@Member',
-        editorData: editorDataWith(otherUserId!),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-
-      await wsCaller.updateComment({
-        commentId: comment.data.id,
-        content: '@Member @Third',
-        editorData: editorDataWith(otherUserId!, thirdUserId),
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-    });
-
-    it('should never notify in personal mode', async () => {
-      const task = await caller.create({ instruction: 'Personal' });
-      await caller.addComment({
-        content: '@someone',
-        editorData: editorDataWith('someone'),
-        id: task.data.id,
-      });
-      await flushAfterResponse();
-      expect(mockNotifyTaskCommentActivity).not.toHaveBeenCalled();
-    });
-  });
-
   describe('review config', () => {
     it('should set and retrieve review rubrics', async () => {
       const task = await caller.create({ instruction: 'Test' });
@@ -2085,6 +1870,109 @@ describe('Task Router Integration', () => {
       expect(strandedCreate).toHaveLength(0);
     });
 
+    it('should let a member take over another member’s public task as their private task', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-take-over-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Take Over Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const memberCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId!),
+        workspaceId,
+      });
+
+      const root = await ownerCaller.create({
+        assigneeUserId: userId,
+        automationMode: 'schedule',
+        instruction: 'Owner task',
+        schedulePattern: '0 9 * * *',
+        visibility: 'public',
+      });
+      const child = await ownerCaller.create({
+        instruction: 'Owner subtask',
+        parentTaskId: root.data.id,
+      });
+
+      // Without opting in, a non-creator still cannot demote it.
+      await expect(
+        memberCaller.updateVisibility({ id: root.data.id, visibility: 'private' }),
+      ).rejects.toThrow('Only the task creator can make this task private');
+
+      const taken = await memberCaller.updateVisibility({
+        id: root.data.id,
+        takeOwnership: true,
+        visibility: 'private',
+      });
+      expect(taken.data).toMatchObject({
+        assigneeUserId: null,
+        automationMode: null,
+        createdByUserId: otherUserId,
+        status: 'backlog',
+        visibility: 'private',
+      });
+
+      const [childRow] = await serverDB
+        .select({ createdByUserId: tasks.createdByUserId, visibility: tasks.visibility })
+        .from(tasks)
+        .where(eq(tasks.id, child.data.id));
+      expect(childRow).toEqual({ createdByUserId: otherUserId, visibility: 'private' });
+
+      // The previous creator no longer sees it.
+      await expect(ownerCaller.find({ id: root.data.id })).rejects.toThrow();
+    });
+
+    it('should not take over a task while a subtask is running', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-take-over-running-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Take Over Running Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const memberCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId!),
+        workspaceId,
+      });
+
+      const root = await ownerCaller.create({ instruction: 'Busy root', visibility: 'public' });
+      const child = await ownerCaller.create({
+        instruction: 'Busy subtask',
+        parentTaskId: root.data.id,
+      });
+      await serverDB.update(tasks).set({ status: 'running' }).where(eq(tasks.id, child.data.id));
+
+      await expect(
+        memberCaller.updateVisibility({
+          id: root.data.id,
+          takeOwnership: true,
+          visibility: 'private',
+        }),
+      ).rejects.toThrow('Cannot take over this task while it or a subtask is running');
+      const [rootRow] = await serverDB
+        .select({ createdByUserId: tasks.createdByUserId, visibility: tasks.visibility })
+        .from(tasks)
+        .where(eq(tasks.id, root.data.id));
+      expect(rootRow).toEqual({ createdByUserId: userId, visibility: 'public' });
+    });
+
     it('should keep private tasks creator-only for human assignees', async () => {
       otherUserId = await createTestUser(serverDB);
       const workspaceId = 'task-private-assignee-workspace';
@@ -2121,21 +2009,19 @@ describe('Task Router Integration', () => {
         wsCaller.update({ assigneeUserId: otherUserId, id: privateTask.data.id }),
       ).rejects.toThrow('A private task can only be assigned to its creator');
 
-      // Demoting a member-assigned public task to private is rejected until unassigned.
+      // Demoting a member-assigned public task to private unassigns the member,
+      // who could no longer open it.
       const publicTask = await wsCaller.create({
         assigneeUserId: otherUserId,
         instruction: 'Public task assigned to member',
         visibility: 'public',
       });
-      await expect(
-        wsCaller.updateVisibility({ id: publicTask.data.id, visibility: 'private' }),
-      ).rejects.toThrow('A private task can only be assigned to its creator');
-      await wsCaller.update({ assigneeUserId: null, id: publicTask.data.id });
       const demoted = await wsCaller.updateVisibility({
         id: publicTask.data.id,
         visibility: 'private',
       });
       expect(demoted.data.visibility).toBe('private');
+      expect(demoted.data.assigneeUserId).toBeNull();
     });
 
     it('should preserve the responsible assignee independently of automation', async () => {

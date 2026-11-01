@@ -9,6 +9,7 @@
   "addToKnowledgeBase.title": "Toevoegen aan bibliotheek",
   "addToKnowledgeBase.totalFiles": "{{count}} bestanden geselecteerd",
   "createNew.confirm": "Nieuw aanmaken",
+  "createNew.cover.label": "Omslag",
   "createNew.description.label": "Bibliotheekbeschrijving (optioneel)",
   "createNew.description.placeholder": "Een beschrijving helpt het LLM je bibliotheek beter te begrijpen",
   "createNew.edit.confirm": "Wijzigingen opslaan",

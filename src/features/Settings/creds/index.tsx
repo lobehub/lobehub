@@ -11,7 +11,7 @@ import { usePermission } from '@/hooks/usePermission';
 
 import { createCreateCredModal } from './features/CreateCredModal';
 import CredsList from './features/CredsList';
-import { useCredsApi } from './features/useCredsApi';
+import { personalCredsApi } from './features/useCredsApi';
 
 interface PageProps {
   mobile?: boolean;
@@ -21,12 +21,11 @@ const Page = ({ mobile }: PageProps) => {
   const { t } = useTranslation('setting');
   const { allowed: canManageCredentials, reason } = usePermission('manage_provider_key');
   const [refreshKey, setRefreshKey] = useState(0);
-  const credsApi = useCredsApi();
 
   const handleCreate = () => {
     if (!canManageCredentials) return;
     createCreateCredModal({
-      credsApi,
+      credsApi: personalCredsApi,
       onSuccess: () => setRefreshKey((k) => k + 1),
     });
   };

@@ -4,12 +4,14 @@ import { LucideCheck } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useOnlyMineFilterItem } from '@/features/AgentSidebar/Topic/useOnlyMineFilterItem';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode, TopicSortBy } from '@/types/topic';
 
 export const useTopicFilterDropdownMenu = (): DropdownItem[] => {
   const { t } = useTranslation('topic');
+  const onlyMineItem = useOnlyMineFilterItem();
 
   const [topicGroupMode, topicSortBy, topicIncludeCompleted, updatePreference] = useUserStore(
     (s) => [
@@ -63,11 +65,12 @@ export const useTopicFilterDropdownMenu = (): DropdownItem[] => {
               updatePreference({ topicIncludeCompleted: !topicIncludeCompleted });
             },
           },
+          ...(onlyMineItem ? [onlyMineItem] : []),
         ],
         key: 'filter',
         label: t('filter.filter'),
         type: 'group' as const,
       },
     ];
-  }, [topicGroupMode, topicSortBy, topicIncludeCompleted, updatePreference, t]);
+  }, [topicGroupMode, topicSortBy, topicIncludeCompleted, onlyMineItem, updatePreference, t]);
 };

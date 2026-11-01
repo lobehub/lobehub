@@ -65,6 +65,8 @@ export type MemoryLayerExtractorConfig = MemoryLayerExtractorPublicConfig &
 
 export interface MemoryExtractionPrivateConfig {
   agentBenchmarkLoCoMo: MemoryAgentConfig;
+  /** Memory consolidation (contexts / dossiers); falls back to the persona writer. */
+  agentConsolidation: MemoryAgentConfig;
   agentGateKeeper: MemoryAgentConfig;
   agentGateKeeperPreferredModels?: string[];
   agentGateKeeperPreferredProviders?: string[];
@@ -73,6 +75,11 @@ export interface MemoryExtractionPrivateConfig {
   agentLayerExtractorPreferredProviders?: string[];
   agentPersonaWriter: MemoryAgentConfig;
   concurrency?: number;
+  /**
+   * UTC hour at which the hourly run also starts the incremental consolidation of every
+   * consolidated user; undefined disables it.
+   */
+  consolidationNightlyHourUtc?: number;
   embedding: MemoryAgentConfig;
   embeddingPreferredModels?: string[];
   embeddingPreferredProviders?: string[];
@@ -212,6 +219,25 @@ const parsePersonaWriterAgent = (
   };
 };
 
+const parseConsolidationAgent = (fallback: MemoryAgentConfig): MemoryAgentConfig => {
+  const provider = process.env.MEMORY_USER_MEMORY_CONSOLIDATION_PROVIDER;
+  // Credentials only carry over when the provider is not overridden to a different one.
+  const inherit = !provider || provider.toLowerCase() === (fallback.provider || '').toLowerCase();
+
+  return {
+    apiKey:
+      process.env.MEMORY_USER_MEMORY_CONSOLIDATION_API_KEY ??
+      (inherit ? fallback.apiKey : undefined),
+    baseURL:
+      process.env.MEMORY_USER_MEMORY_CONSOLIDATION_BASE_URL ??
+      (inherit ? fallback.baseURL : undefined),
+    contextLimit: fallback.contextLimit,
+    language: process.env.MEMORY_USER_MEMORY_CONSOLIDATION_LANGUAGE ?? fallback.language,
+    model: process.env.MEMORY_USER_MEMORY_CONSOLIDATION_MODEL || fallback.model,
+    provider: provider || fallback.provider,
+  };
+};
+
 const parseExtractorAgentObservabilityS3 = () => {
   const accessKeyId = process.env.MEMORY_USER_MEMORY_EXTRACTOR_S3_ACCESS_KEY_ID;
   const secretAccessKey = process.env.MEMORY_USER_MEMORY_EXTRACTOR_S3_SECRET_ACCESS_KEY;
@@ -258,6 +284,12 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
   const agentBenchmarkLoCoMo = parseBenchmarkLoCoMoAgent(agentGateKeeper);
   const agentLayerExtractor = parseLayerExtractorAgent(agentGateKeeper.model);
   const agentPersonaWriter = parsePersonaWriterAgent(agentGateKeeper.model);
+  const agentConsolidation = parseConsolidationAgent(agentPersonaWriter);
+  const nightlyHourRaw = process.env.MEMORY_USER_MEMORY_CONSOLIDATION_NIGHTLY_HOUR ?? '18';
+  const consolidationNightlyHourUtc =
+    /^\d+$/.test(nightlyHourRaw) && Number(nightlyHourRaw) < 24
+      ? Number(nightlyHourRaw)
+      : undefined;
   const embedding = parseEmbeddingAgent(
     agentLayerExtractor.model,
     agentLayerExtractor.provider || DEFAULT_MINI_PROVIDER,
@@ -336,6 +368,8 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     agentLayerExtractor,
     agentLayerExtractorPreferredModels,
     agentLayerExtractorPreferredProviders,
+    agentConsolidation,
+    consolidationNightlyHourUtc,
     agentPersonaWriter,
     concurrency,
     embedding,

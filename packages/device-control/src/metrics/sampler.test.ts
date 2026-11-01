@@ -10,6 +10,7 @@ import { DeviceMetricsSampler } from './sampler';
 const setup = async (
   overrides: {
     connected?: () => boolean;
+    disk?: () => Promise<{ totalBytes: number; usedBytes: number } | undefined>;
     upload?: (s: DeviceMetricSample[]) => Promise<void>;
   } = {},
 ) => {
@@ -30,6 +31,7 @@ const setup = async (
       readers: {
         // Each reading adds 100 units of CPU time, 25 of them busy.
         cpuTimes: () => ({ idle: (idle += 75), total: (total += 100) }),
+        disk: overrides.disk ?? (async () => ({ totalBytes: 1000, usedBytes: 600 })),
         loadAverage: () => [1, 2, 3],
         memory: async () => ({ totalBytes: 100, usedBytes: 40 }),
       },
@@ -40,7 +42,7 @@ const setup = async (
 };
 
 describe('DeviceMetricsSampler', () => {
-  it('records CPU, memory, load and connection state', async () => {
+  it('records CPU, memory, load, disk and connection state', async () => {
     const { create, upload } = await setup({ connected: () => false });
     const sampler = create();
     await sampler.start();
@@ -52,6 +54,8 @@ describe('DeviceMetricsSampler', () => {
       expect.objectContaining({
         connected: false,
         cpuPercent: 25,
+        diskTotalBytes: 1000,
+        diskUsedBytes: 600,
         load1: 1,
         load15: 3,
         load5: 2,
@@ -59,6 +63,19 @@ describe('DeviceMetricsSampler', () => {
         memoryUsedBytes: 40,
         observedAt: 1_000_000,
       }),
+    ]);
+  });
+
+  it('still samples when the disk cannot be read, with the disk left null', async () => {
+    const { create, upload } = await setup({ disk: async () => undefined });
+    const sampler = create();
+    await sampler.start();
+    await sampler.sample();
+    await sampler.flush();
+    await sampler.stop();
+
+    expect(upload).toHaveBeenCalledWith([
+      expect.objectContaining({ diskTotalBytes: null, diskUsedBytes: null, memoryUsedBytes: 40 }),
     ]);
   });
 
