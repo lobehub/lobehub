@@ -39,6 +39,14 @@ export const shouldUseGatewayResume = async (
   if (interventions.length > 0 && interventions.every((source) => source?.runtimeType === 'client'))
     return false;
 
+  return shouldUseConfiguredGatewayResume(context, get);
+};
+
+/** The legacy route applies when this deployment does not handle the persisted source. */
+export const shouldUseConfiguredGatewayResume = async (
+  context: ConversationContext,
+  get: () => ChatStore,
+): Promise<boolean> => {
   // A share run only ever executes on the server through the share gateway;
   // the visitor has no local runtime nor access to the owner's agent config.
   if (context.agentShareId) return true;

@@ -129,6 +129,87 @@ describe('server-origin intervention with client-configured agent after reload',
     },
   );
 
+  it.each(Object.keys(actions) as (keyof typeof actions)[])(
+    'falls back to the configured client path for %s when the source is unavailable',
+    async (action) => {
+      const store = seed();
+      sourceMutation().mockResolvedValue({
+        contractVersion: 2,
+        status: 'unavailable',
+        success: false,
+      } as never);
+      await actions[action]();
+      expect(sourceMutation()).toHaveBeenCalled();
+      if (action === 'reject' || action === 'cancel') {
+        expect(store.executeClientAgent).not.toHaveBeenCalled();
+      } else {
+        expect(store.executeClientAgent).toHaveBeenCalledOnce();
+      }
+      expect(store.executeGatewayAgent).not.toHaveBeenCalled();
+      expect(store.optimisticUpdateMessagePlugin).toHaveBeenCalled();
+    },
+  );
+
+  it.each(['approve', 'answer'] as const)(
+    'keeps the configured Gateway legacy path for %s when the source is unavailable',
+    async (action) => {
+      const store = seed();
+      vi.mocked(store.isGatewayModeEnabled).mockReturnValue(true);
+      sourceMutation().mockResolvedValue({
+        contractVersion: 2,
+        status: 'unavailable',
+        success: false,
+      } as never);
+      await actions[action]();
+      expect(store.executeGatewayAgent).toHaveBeenCalledOnce();
+      expect(store.executeClientAgent).not.toHaveBeenCalled();
+      expect(store.optimisticUpdateMessagePlugin).not.toHaveBeenCalled();
+    },
+  );
+
+  it('applies staged approval edits before the client fallback executes', async () => {
+    const store = seed();
+    sourceMutation().mockResolvedValue({ success: false } as never);
+    const prepare = vi.fn(async () => {
+      const key = messageMapKey(context);
+      const messages = useChatStore.getState().dbMessagesMap[key].map((message) => ({
+        ...message,
+        plugin: { ...message.plugin!, arguments: '{"path":"edited"}' },
+      }));
+      useChatStore.setState({ dbMessagesMap: { [key]: messages } });
+    });
+    await store.approveToolCalling(toolMessageId, '', context, {
+      editedArguments: { path: 'edited' },
+      onLegacyEditFallback: prepare,
+    });
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(store.executeClientAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialContext: expect.objectContaining({
+          payload: expect.objectContaining({
+            approvedToolCall: expect.objectContaining({ arguments: '{"path":"edited"}' }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it.each(['skip', 'cancel'] as const)(
+    'preserves the %s legacy side effect on client fallback',
+    async (action) => {
+      const store = seed();
+      sourceMutation().mockResolvedValue({ success: false } as never);
+      const prepare = vi.fn(async () => {});
+      if (action === 'skip')
+        await store.skipToolInteraction(toolMessageId, undefined, context, {
+          onLegacyFallback: prepare,
+        });
+      else await store.cancelToolInteraction(toolMessageId, context, { onLegacyFallback: prepare });
+      expect(prepare).toHaveBeenCalledOnce();
+      expect(store.executeGatewayAgent).not.toHaveBeenCalled();
+    },
+  );
+
   it('subscribes to the server-created continuation in the original group thread', async () => {
     const store = seed();
     const execution = { operationId: 'server-continuation' };
