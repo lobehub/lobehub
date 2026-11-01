@@ -16,7 +16,13 @@ import { botWakeKeys } from '@/libs/swr/keys';
 import { RecordTable } from './RecordTable';
 import { Summary } from './Summary';
 import { useRefreshOnReturn } from './useRefreshOnReturn';
-import { useWakeDecisions, type WakeRecordFilters } from './useWakeRecords';
+import {
+  pageLoadFailed,
+  recordsEmpty,
+  useWakeDecisions,
+  WAKE_RECORDS_PAGE_SIZE,
+  type WakeRecordFilters,
+} from './useWakeRecords';
 
 /** Matches `SCOPE_READ_DEFAULT_DAYS` on the server; the summary reports it too. */
 const WINDOW_DAYS = 30;
@@ -63,11 +69,21 @@ interface WakeRecordsProps {
 export const WakeRecords = ({ active = true, botId, disabled }: WakeRecordsProps) => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string, options?: Record<string, unknown>) => string;
-  const [filters, setFilters] = useState<WakeRecordFilters>(NO_FILTERS);
-  const { data, error, isLoading, isValidating, markDecision, mutate, setSize, size } =
-    useWakeDecisions(botId, filters);
+  const [filters, setFiltersState] = useState<WakeRecordFilters>(NO_FILTERS);
+  const [page, setPage] = useState(1);
+  const { data, error, isLoading, isValidating, markDecision, mutate } = useWakeDecisions(
+    botId,
+    filters,
+    page,
+  );
 
-  // New decisions arrive while the owner is elsewhere (testing the bot): refetch the loaded pages
+  // Another filter is another list: start it from its first page.
+  const setFilters = useCallback((update: (prev: WakeRecordFilters) => WakeRecordFilters) => {
+    setFiltersState(update);
+    setPage(1);
+  }, []);
+
+  // New decisions arrive while the owner is elsewhere (testing the bot): refetch the open page
   // and the summary on coming back, and on demand.
   const refresh = useCallback(() => {
     void mutate();
@@ -75,12 +91,9 @@ export const WakeRecords = ({ active = true, botId, disabled }: WakeRecordsProps
   }, [botId, mutate]);
   useRefreshOnReturn(active, refresh);
 
-  const items = data?.flatMap((page) => page.items) ?? [];
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
   const filtered = filters.outcome || filters.followupOnly || filters.unmarkedOnly;
-  const hasMore = !!data?.at(-1)?.nextCursor;
-  // A next page was asked for and has not arrived (or failed) yet.
-  const loadingMore = !!data && data.length < size;
-  const loadMoreFailed = loadingMore && !!error && !isValidating;
 
   return (
     <Flexbox gap={16}>
@@ -135,15 +148,17 @@ export const WakeRecords = ({ active = true, botId, disabled }: WakeRecordsProps
       <AsyncBoundary
         data={data}
         error={error}
-        isEmpty={items.length === 0}
-        isLoading={isLoading}
+        // A page past the end (its last rows marked away) is not an empty list: the pager stays.
+        isEmpty={recordsEmpty({ error, total })}
+        // A page turn keeps the previous page on screen; only the first load is a skeleton.
+        isLoading={isLoading && !data}
         loading={<ListSkeleton />}
         empty={
           filtered ? (
             <Empty
               title={t('channel.records.emptyFiltered.title')}
               action={
-                <Button onClick={() => setFilters(NO_FILTERS)}>
+                <Button onClick={() => setFilters(() => NO_FILTERS)}>
                   {t('channel.records.emptyFiltered.clear')}
                 </Button>
               }
@@ -158,22 +173,22 @@ export const WakeRecords = ({ active = true, botId, disabled }: WakeRecordsProps
         }
         onRetry={() => void mutate()}
       >
-        <RecordTable disabled={disabled} items={items} onMark={markDecision} />
-        {loadMoreFailed ? (
+        {pageLoadFailed({ data, error, isLoading }) && (
           <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
-        ) : hasMore || loadingMore ? (
-          <Flexbox horizontal justify={'center'}>
-            <Button loading={loadingMore} onClick={() => void setSize(size + 1)}>
-              {t('channel.records.loadMore')}
-            </Button>
-          </Flexbox>
-        ) : (
-          items.length > 0 && (
-            <Text align={'center'} fontSize={12} type={'secondary'}>
-              {t('channel.records.end', { days: WINDOW_DAYS })}
-            </Text>
-          )
         )}
+        <RecordTable
+          disabled={disabled}
+          items={items}
+          // The previous page, while the one asked for loads.
+          loading={isLoading}
+          pagination={{
+            current: page,
+            onChange: setPage,
+            pageSize: WAKE_RECORDS_PAGE_SIZE,
+            total,
+          }}
+          onMark={markDecision}
+        />
       </AsyncBoundary>
     </Flexbox>
   );

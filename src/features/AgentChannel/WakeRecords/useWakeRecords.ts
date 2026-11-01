@@ -5,9 +5,7 @@ import type {
   SignalDecisionOutcome,
 } from '@lobechat/types';
 import { useCallback } from 'react';
-import useSWRInfinite from 'swr/infinite';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { botWakeKeys } from '@/libs/swr/keys';
 import { agentBotProviderService } from '@/services/agentBotProvider';
@@ -20,60 +18,64 @@ export interface WakeRecordFilters {
   unmarkedOnly: boolean;
 }
 
-type DecisionsKey = ReturnType<typeof botWakeKeys.decisions>;
-
-/** The page list with `decisionId`'s mark replaced; `undefined` pages stay as they are. */
+/** The page with `decisionId`'s mark replaced; an unloaded page stays as it is. */
 export const withUserLabel = (
-  pages: BotWakeDecisionPage[] | undefined,
+  page: BotWakeDecisionPage | undefined,
   decisionId: string,
   userLabel: BotWakeDecisionItem['userLabel'],
-): BotWakeDecisionPage[] | undefined =>
-  pages?.map((page) => ({
+): BotWakeDecisionPage | undefined =>
+  page && {
     ...page,
     items: page.items.map((item) => (item.id === decisionId ? { ...item, userLabel } : item)),
-  }));
+  };
+
+/**
+ * The page asked for failed while another one is still on screen. `keepPreviousData` keeps the
+ * old rows in `data`, so without this the failure would pass for the new page's rows.
+ */
+export const pageLoadFailed = ({
+  data,
+  error,
+  isLoading,
+}: {
+  data: unknown;
+  error: unknown;
+  isLoading: boolean;
+}): boolean => data !== undefined && !!error && !isLoading;
+
+/**
+ * Nothing matches, and that is the answer, not a failure: an empty page kept on screen by
+ * `keepPreviousData` while the next filter's request failed is an error to show, not "no records".
+ */
+export const recordsEmpty = ({ error, total }: { error: unknown; total: number }): boolean =>
+  total === 0 && !error;
 
 /** Last-30-days counts for one bot. */
 export const useWakeSummary = (botId: string) =>
   useClientDataSWR(botWakeKeys.summary(botId), () => agentBotProviderService.getWakeSummary(botId));
 
 /**
- * One bot's decisions, a page at a time. Pages live in this hook's own SWR cache, which a global
- * key-filter `mutate` cannot reach (SWR skips `$inf$` keys), so marks go through `markDecision`.
+ * One numbered page (1-based) of a bot's decisions, with the filtered total. The previous page stays
+ * on screen while the next one loads, so the table does not collapse on every page turn.
  */
-export const useWakeDecisions = (botId: string, filters: WakeRecordFilters) => {
-  const workspaceId = useActiveWorkspaceId();
+export const useWakeDecisions = (botId: string, filters: WakeRecordFilters, page: number) => {
   const { followupOnly, outcome, unmarkedOnly } = filters;
 
-  const getKey = useCallback(
-    (_index: number, previous: BotWakeDecisionPage | null): DecisionsKey | null => {
-      if (previous && !previous.nextCursor) return null;
-
-      return botWakeKeys.decisions(
-        workspaceId,
-        botId,
-        { followupOnly, outcome, unmarkedOnly },
-        previous?.nextCursor,
-      );
-    },
-    [botId, followupOnly, outcome, unmarkedOnly, workspaceId],
-  );
-
-  const swr = useSWRInfinite(
-    getKey,
-    ([, , id, keyOutcome, keyFollowup, keyUnmarked, cursorAt, cursorId]) =>
+  const swr = useClientDataSWR<BotWakeDecisionPage>(
+    botWakeKeys.decisions(botId, { followupOnly, outcome, unmarkedOnly }, page),
+    () =>
       agentBotProviderService.listWakeDecisions({
-        botId: id as string,
-        cursor: cursorAt ? { createdAt: cursorAt as string, id: cursorId as string } : undefined,
-        followupOnly: (keyFollowup as boolean) || undefined,
+        botId,
+        followupOnly: followupOnly || undefined,
         limit: WAKE_RECORDS_PAGE_SIZE,
-        outcome: (keyOutcome as SignalDecisionOutcome | null) ?? undefined,
-        unmarkedOnly: (keyUnmarked as boolean) || undefined,
+        offset: (page - 1) * WAKE_RECORDS_PAGE_SIZE,
+        outcome,
+        unmarkedOnly: unmarkedOnly || undefined,
       }),
-    { revalidateFirstPage: false, revalidateOnFocus: false },
+    { keepPreviousData: true, revalidateOnFocus: false },
   );
 
-  const { data: pages, mutate: mutatePages } = swr;
+  const { data, mutate: mutatePage } = swr;
 
   /**
    * Shows the mark at once and saves it; `null` takes the mark back. A failed save puts the
@@ -81,29 +83,25 @@ export const useWakeDecisions = (botId: string, filters: WakeRecordFilters) => {
    */
   const markDecision = useCallback(
     async (decisionId: string, label: BotWakeUserLabel | null) => {
-      const previous = pages
-        ?.flatMap((page) => page.items)
-        .find((item) => item.id === decisionId)?.userLabel;
+      const previous = data?.items.find((item) => item.id === decisionId)?.userLabel;
 
-      await mutatePages(
+      await mutatePage(
         (current) =>
           withUserLabel(
             current,
             decisionId,
             label ? { createdAt: new Date(), label, note: undefined } : null,
           ),
-        {
-          revalidate: false,
-        },
+        { revalidate: false },
       );
 
       try {
         const saved = await agentBotProviderService.labelWakeDecision({ botId, decisionId, label });
-        await mutatePages((current) => withUserLabel(current, decisionId, saved), {
+        await mutatePage((current) => withUserLabel(current, decisionId, saved), {
           revalidate: false,
         });
       } catch (error) {
-        await mutatePages((current) => withUserLabel(current, decisionId, previous ?? null), {
+        await mutatePage((current) => withUserLabel(current, decisionId, previous ?? null), {
           revalidate: false,
         });
         throw error;
@@ -111,7 +109,7 @@ export const useWakeDecisions = (botId: string, filters: WakeRecordFilters) => {
 
       void mutate(botWakeKeys.summary(botId));
     },
-    [botId, mutatePages, pages],
+    [botId, data, mutatePage],
   );
 
   return { ...swr, markDecision };
