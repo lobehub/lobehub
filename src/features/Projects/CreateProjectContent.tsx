@@ -49,6 +49,8 @@ export interface CreateProjectOptions {
 interface CreateProjectFormState {
   /** Emoji or uploaded image URL; a dedicated main agent takes it over too. */
   avatar?: string;
+  /** Creating now would save the project, and its agent, without the avatar on its way. */
+  avatarUploading: boolean;
   identifier: string;
   loading: boolean;
   /** Explicit pick in this modal; otherwise the remembered agent or LobeAI. */
@@ -72,6 +74,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   const createProject = useProjectStore((s) => s.createProject);
   const [remembered] = useState(() => readRememberedMainAgent(getActiveWorkspaceId()));
   const [form, setForm] = useState<CreateProjectFormState>(() => ({
+    avatarUploading: false,
     identifier: '',
     loading: false,
     mainAgentMode: resolveDefaultMainAgentMode(remembered),
@@ -109,7 +112,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   };
 
   const handleCreate = async () => {
-    if (!createInput || form.loading) return;
+    if (!createInput || form.loading || form.avatarUploading) return;
     updateForm({ loading: true });
     try {
       const project = await createProject(
@@ -150,6 +153,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
             disabled={form.loading}
             name={form.name}
             onChange={(avatar) => updateForm({ avatar })}
+            onUploadingChange={(avatarUploading) => updateForm({ avatarUploading })}
           >
             <Input
               autoFocus
@@ -210,7 +214,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
         <Button
-          disabled={!createInput}
+          disabled={!createInput || form.avatarUploading}
           loading={form.loading}
           type="primary"
           onClick={handleCreate}

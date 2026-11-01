@@ -2,19 +2,16 @@ import { Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ImagePlusIcon, LoaderCircleIcon } from 'lucide-react';
-import { memo, type ReactNode, useState } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
-import { useFileStore } from '@/store/file';
-import { imageToBase64 } from '@/utils/imageToBase64';
 
 import { isLocalAvatarPreview } from './pickedAvatar';
 import ProjectAvatar from './ProjectAvatar';
 import { useAvatarFileDrop } from './useAvatarFileDrop';
+import { useProjectAvatarUpload } from './useProjectAvatarUpload';
 
-/** Matches the avatar picker's own uploader, so both paths store the same image. */
-const AVATAR_SIZE = 256;
 const TILE_SIZE = 32;
 
 const styles = stylex.create({
@@ -50,20 +47,6 @@ const styles = stylex.create({
   },
 });
 
-/** Center-crop a dropped image to the square the picker would have produced. */
-const toAvatarFile = async (file: File) => {
-  const url = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    img.src = url;
-    await img.decode();
-    const blob = await (await fetch(imageToBase64({ img, size: AVATAR_SIZE }))).blob();
-    return new File([blob], 'avatar.webp', { type: 'image/webp' });
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-};
-
 interface ProjectAvatarFieldProps {
   avatar?: string;
   /** The rest of the row; an image dropped on it lands here as well. */
@@ -72,6 +55,8 @@ interface ProjectAvatarFieldProps {
   /** Seeds the generated avatar shown until the user picks one. */
   name: string;
   onChange: (avatar?: string) => void;
+  /** An upload is in flight; the avatar it brings arrives through `onChange` later. */
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
 /**
@@ -79,24 +64,9 @@ interface ProjectAvatarFieldProps {
  * image, or drop an image anywhere on the row.
  */
 const ProjectAvatarField = memo<ProjectAvatarFieldProps>(
-  ({ avatar, children, disabled, name, onChange }) => {
+  ({ avatar, children, disabled, name, onChange, onUploadingChange }) => {
     const { t } = useTranslation('project');
-    const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
-    const [uploading, setUploading] = useState(false);
-
-    const upload = async (file: File, { crop }: { crop: boolean }) => {
-      setUploading(true);
-      try {
-        const result = await uploadWithProgress({ file: crop ? await toAvatarFile(file) : file });
-        if (!result?.url) throw new Error('Upload returned no URL');
-        onChange(result.url);
-      } catch (error) {
-        console.error('Failed to upload project avatar', error);
-        toast.error(t('create.avatarUploadFailed'));
-      } finally {
-        setUploading(false);
-      }
-    };
+    const { upload, uploading } = useProjectAvatarUpload({ onChange, onUploadingChange });
 
     const { dragging, dropProps } = useAvatarFileDrop({
       disabled: disabled || uploading,
