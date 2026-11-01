@@ -122,6 +122,31 @@ describe('GoalCriteriaGeneratorService', () => {
     });
   });
 
+  it('asks again when the model returns an empty structured output', async () => {
+    const plan = {
+      criteria: [{ title: 'Brief is delivered', verifierType: 'agent' }],
+      instruction: 'Write the daily AI news brief, following the attached layout.',
+      title: 'Daily AI news brief',
+    };
+    generateObject.mockResolvedValueOnce({}).mockResolvedValueOnce(plan);
+
+    await expect(
+      new GoalCriteriaGeneratorService({} as any, 'user-1').generatePlan({
+        goal: 'Write the daily AI news brief\n\n![image.png](https://example.com/layout.png)',
+      }),
+    ).resolves.toEqual(plan);
+    expect(generateObject).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up after a bounded number of empty structured outputs', async () => {
+    generateObject.mockResolvedValue({});
+
+    await expect(
+      new GoalCriteriaGeneratorService({} as any, 'user-1').generatePlan({ goal: 'Ship it' }),
+    ).resolves.toBeUndefined();
+    expect(generateObject).toHaveBeenCalledTimes(3);
+  });
+
   it("plans a goal's decomposition on the goal's own planning model", async () => {
     const goalConfig = { model: 'gemini-3.8-flash', provider: 'google' };
     generateObject.mockResolvedValueOnce({ problemStatement: 'p', tasks: [] });

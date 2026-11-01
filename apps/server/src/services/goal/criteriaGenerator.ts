@@ -27,6 +27,12 @@ import { resolveGoalModelConfig } from './modelConfig';
 
 const log = debug('lobe-server:goal-criteria-generator');
 const DEFAULT_MAX_CRITERIA = 4;
+/**
+ * Structured output occasionally comes back empty (e.g. a `{}` tool input) even
+ * though the same prompt succeeds on the next call. Ask again a bounded number
+ * of times before telling the user the draft failed.
+ */
+const GOAL_PLAN_MAX_ATTEMPTS = 3;
 
 const generatedCriteriaSchema = z.object({
   criteria: z.array(
@@ -156,34 +162,46 @@ export class GoalCriteriaGeneratorService {
     const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_CRITERIA;
     const modelConfig = await resolveGoalModelConfig(this.db, this.userId);
     const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
-    const raw = await ai.generateObject(
-      {
-        ...chainGoalCriteriaDraft({ ...params, maxCriteria }),
-        ...modelConfig,
-        schema: GOAL_CRITERIA_DRAFT_JSON_SCHEMA,
-        thinking: { type: 'disabled' },
-      },
-      {
-        metadata: { trigger: RequestTrigger.Goal },
-        tracing: {
-          promptVersion: GOAL_CRITERIA_DRAFT_PROMPT_VERSION,
-          scenario: TRACING_SCENARIOS.GoalCriteriaGen,
-          schemaName: GOAL_CRITERIA_DRAFT_JSON_SCHEMA.name,
-        } satisfies TracingOptions,
-      },
-    );
 
-    const parsed = generatedCriteriaSchema.safeParse(raw);
-    if (!parsed.success) {
-      log('goal criteria draft did not match schema: %O', parsed.error.flatten());
-      return undefined;
+    let plan: z.infer<typeof generatedCriteriaSchema> | undefined;
+    for (let attempt = 1; !plan && attempt <= GOAL_PLAN_MAX_ATTEMPTS; attempt++) {
+      const raw = await ai.generateObject(
+        {
+          ...chainGoalCriteriaDraft({ ...params, maxCriteria }),
+          ...modelConfig,
+          schema: GOAL_CRITERIA_DRAFT_JSON_SCHEMA,
+          thinking: { type: 'disabled' },
+        },
+        {
+          metadata: { trigger: RequestTrigger.Goal },
+          tracing: {
+            promptVersion: GOAL_CRITERIA_DRAFT_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.GoalCriteriaGen,
+            schemaName: GOAL_CRITERIA_DRAFT_JSON_SCHEMA.name,
+          } satisfies TracingOptions,
+        },
+      );
+
+      const parsed = generatedCriteriaSchema.safeParse(raw);
+      if (parsed.success) {
+        plan = parsed.data;
+      } else {
+        log(
+          'goal criteria draft did not match schema (attempt %d/%d): %O',
+          attempt,
+          GOAL_PLAN_MAX_ATTEMPTS,
+          parsed.error.flatten(),
+        );
+      }
     }
 
-    const criteria = parsed.data.criteria
+    if (!plan) return undefined;
+
+    const criteria = plan.criteria
       .slice(0, maxCriteria)
       .filter((criterion) => !isProgrammaticTestCheck(criterion.title, criterion.description));
 
-    return { ...parsed.data, criteria };
+    return { ...plan, criteria };
   }
 
   /**
