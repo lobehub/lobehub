@@ -2,7 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
-import { cssVar, cx } from 'antd-style';
+import { cssVar, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,20 +22,17 @@ export const SearchSkillInspector = memo<
 
   if (isArgumentsStreaming && !query) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{t('builtins.lobe-skill-store.apiName.searchSkill')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>
+          {t('builtins.lobe-skill-store.apiName.searchSkill')}
+        </span>
       </div>
     );
   }
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
         {t('builtins.lobe-skill-store.apiName.searchSkill')}:{'\u00A0'}
       </span>
       {query && <span className={highlightTextStyles.primary}>{query}</span>}

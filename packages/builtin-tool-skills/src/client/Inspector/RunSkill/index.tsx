@@ -3,7 +3,7 @@
 import { AGENT_SKILLS_IDENTIFIER_PREFIX } from '@lobechat/const';
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +13,7 @@ import type { ActivateSkillParams, ActivateSkillSource, ActivateSkillState } fro
 
 type SkillLabelKey =
   | 'builtins.lobe-skills.apiName.activateAgentSkill'
+  | 'builtins.lobe-skills.apiName.activateDeviceSkill'
   | 'builtins.lobe-skills.apiName.activateProjectSkill'
   | 'builtins.lobe-skills.apiName.activateSkill';
 
@@ -20,7 +21,7 @@ type SkillLabelKey =
  * Resolve the inspector label key. State-side `source` is the authority once the
  * tool result has streamed in; while args are still streaming we only have the
  * raw `name` to go on, so detect agent skills via the identifier prefix as a
- * best-effort fallback. Project skills can't be inferred from the bare name
+ * best-effort fallback. Filesystem skills can't be inferred from the bare name
  * (no prefix), so they show "Activate Skill" until the result lands.
  */
 const resolveLabelKey = (
@@ -33,6 +34,9 @@ const resolveLabelKey = (
   switch (effective) {
     case 'agent': {
       return 'builtins.lobe-skills.apiName.activateAgentSkill';
+    }
+    case 'device': {
+      return 'builtins.lobe-skills.apiName.activateDeviceSkill';
     }
     case 'project': {
       return 'builtins.lobe-skills.apiName.activateProjectSkill';
@@ -89,14 +93,14 @@ export const RunSkillInspector = memo<
   if (isArgumentsStreaming) {
     if (!displayName)
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{label}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>{label}</span>
         </div>
       );
 
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{label}:</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>{label}:</span>
         <span className={styles.chip}>
           <SkillsIcon className={styles.skillIcon} size={12} />
           <span className={styles.skillName}>{displayName}</span>
@@ -106,8 +110,8 @@ export const RunSkillInspector = memo<
   }
 
   return (
-    <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-      <span>{label}:</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx(isLoading && shinyTextStyles.shinyText)}>{label}:</span>
       {displayName && (
         <span className={styles.chip}>
           <SkillsIcon className={styles.skillIcon} size={12} />

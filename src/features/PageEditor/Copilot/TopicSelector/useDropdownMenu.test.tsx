@@ -6,28 +6,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useDropdownMenu } from './useDropdownMenu';
 
-const confirmModalMock = vi.hoisted(() => vi.fn());
+const confirmRemoveTopicMock = vi.hoisted(() => vi.fn());
 const removeTopicMock = vi.hoisted(() => vi.fn());
 const permissionMock = vi.hoisted(() => ({
   create_content: true,
   edit_own_content: true,
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
+vi.mock('@/features/DeleteTopicConfirm', () => ({
+  confirmRemoveTopic: confirmRemoveTopicMock,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Icon: () => null,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  confirmModal: confirmModalMock,
-}));
-
-vi.mock('antd', () => ({
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   App: {
     useApp: () => ({
       message: {
@@ -39,10 +30,6 @@ vi.mock('antd', () => ({
 
 vi.mock('@/components/RenameModal', () => ({
   openRenameModal: vi.fn(),
-}));
-
-vi.mock('@/const/url', () => ({
-  SESSION_CHAT_TOPIC_URL: (agentId: string, topicId: string) => `/agent/${agentId}/${topicId}`,
 }));
 
 vi.mock('@/const/version', () => ({
@@ -105,7 +92,7 @@ const getMenuItem = (
 
 describe('PageEditor Copilot TopicSelector useDropdownMenu', () => {
   beforeEach(() => {
-    confirmModalMock.mockReset();
+    confirmRemoveTopicMock.mockReset();
     removeTopicMock.mockReset();
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
@@ -138,6 +125,19 @@ describe('PageEditor Copilot TopicSelector useDropdownMenu', () => {
       'share',
       'delete',
     ]);
+  });
+
+  it('labels the share action like the sidebar topic menu', () => {
+    const { result } = renderHook(() =>
+      useDropdownMenu({
+        agentId: 'agent-1',
+        onClose: vi.fn(),
+        topicId: 'topic-1',
+        topicTitle: 'Topic 1',
+      }),
+    );
+
+    expect(getMenuItem(result.current(), 'share')).toMatchObject({ label: 'shareModal.title' });
   });
 
   it('disables write actions for viewers but keeps copy actions available', () => {
@@ -184,11 +184,16 @@ describe('PageEditor Copilot TopicSelector useDropdownMenu', () => {
       }),
     );
 
-    getMenuItem(result.current(), 'delete')?.onClick?.();
-    const config = confirmModalMock.mock.calls[0][0];
-    await config.onOk();
+    confirmRemoveTopicMock.mockImplementation(async ({ onConfirm }) => onConfirm(true));
 
-    expect(removeTopicMock).toHaveBeenCalledWith('topic-1');
+    getMenuItem(result.current(), 'delete')?.onClick?.();
+    await vi.waitFor(() => {
+      expect(removeTopicMock).toHaveBeenCalledWith('topic-1', true);
+    });
+
+    expect(confirmRemoveTopicMock).toHaveBeenCalledWith(
+      expect.objectContaining({ topicIds: ['topic-1'] }),
+    );
     expect(onDelete).toHaveBeenCalledWith('topic-1');
     expect(onClose).toHaveBeenCalled();
   });

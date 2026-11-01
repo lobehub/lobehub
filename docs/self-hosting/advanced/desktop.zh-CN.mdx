@@ -42,11 +42,7 @@ LobeHub 桌面端可以与您自托管的 LobeHub 实例连接，以便您可以
 
 #### OIDC 环境变量配置
 
-您需要在自托管实例中添加以下`ENABLE_OIDC` 和 `JWKS_KEY` 这两个环境变量：
-
-```bash
-ENABLE_OIDC=1
-```
+只要在自托管实例中配置了 `JWKS_KEY` 环境变量，OIDC 就会自动启用，无需单独设置 `ENABLE_OIDC` 开关。
 
 点击下方按钮一键生成 `JWKS_KEY`：
 
@@ -54,7 +50,7 @@ ENABLE_OIDC=1
 
 将生成的环境变量添加到您的部署配置中。
 
-<Callout>如果您之前已配置 `OIDC_JWKS_KEY`，无需修改。系统会自动回退使用 `OIDC_JWKS_KEY`（向后兼容）。</Callout>
+<Callout>`OIDC_JWKS_KEY` 已改名为 `JWKS_KEY`。如果您的部署中仍配置的是 `OIDC_JWKS_KEY`，需要手动将其重命名为 `JWKS_KEY`—— 系统不会自动回退。</Callout>
 
 如果您使用一键部署方式（如 Vercel、Railway 等平台）部署 LobeHub，您需要：
 
@@ -69,6 +65,29 @@ ENABLE_OIDC=1
 4. 点击 "连接" 按钮
 5. 您将被重定向到登录页面，完成授权后即可使用您的自托管配置
 
+### 连接设备网关
+
+设备网关让助理在这台电脑上运行本地工具。
+
+1. 按 [Docker Compose 部署说明](/zh/docs/self-hosting/platform/docker-compose) 启动网关。通过域名访问时，反向代理到 `8788` 端口，并开启 HTTPS 和 WebSocket 支持。
+
+2. 如需让客户端自动获取地址，在 LobeHub 服务端设置以下环境变量，然后重新部署：
+
+   ```env
+   DEVICE_GATEWAY_PUBLIC_URL=https://device-gateway.example.com
+   ```
+
+3. 在桌面端登录该实例，打开标题栏中的 **设备网关** 开关。CLI 用户运行：
+
+   ```sh
+   lh login --server https://lobe.example.com
+   lh connect
+   ```
+
+连接后，可在设备列表中查看这台电脑的在线状态。
+
+<Callout>已有的自定义网关地址仍会优先使用。也可通过桌面端的 `DEVICE_GATEWAY_URL` 环境变量或 `lh connect --gateway <url>` 手动指定地址，无需配置服务端环境变量。</Callout>
+
 ## 常见问题
 
 ### 502 Bad Gateway
@@ -77,7 +96,7 @@ ENABLE_OIDC=1
 
 **解决方案：**
 
-- 确认您已经正确设置了 `ENABLE_OIDC=1` 和 `JWKS_KEY` 环境变量
+- 确认您已经正确设置了 `JWKS_KEY` 环境变量
 - 确保 `JWKS_KEY` 是有效的 JSON 格式，没有额外的单引号
 - 检查您的服务端日志，查看具体错误信息
 
@@ -96,6 +115,11 @@ proxy_busy_buffers_size 32k;
 **解决方案：**
 
 检查 `APP_URL` 环境变量是否与您访问的 URL 一致
+
+### 设备网关无法连接
+
+- **打开后立即断开**：确认网关地址属于当前登录的实例，并检查客户端已有的自定义地址。
+- **连接超时**：在客户端电脑运行 `curl https://device-gateway.example.com/health`，应返回 `OK`；否则检查网关地址、网络和反向代理设置。
 
 ### macOS 启动卡住或闪退
 

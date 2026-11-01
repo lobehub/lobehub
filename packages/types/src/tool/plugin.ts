@@ -20,6 +20,12 @@ export interface CustomPluginParams {
     appSlug: string;
     authConfigId: string;
     connectedAccountId: string;
+    /**
+     * The user entity that linked this connected account — passed as the Composio
+     * `userId` at runtime so a workspace member runs the owner's connection.
+     * Falls back to the row creator for rows written before this field existed.
+     */
+    linkedByUserId?: string;
     redirectUrl?: string;
     status: string;
   };

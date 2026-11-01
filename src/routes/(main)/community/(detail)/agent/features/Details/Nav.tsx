@@ -2,8 +2,16 @@
 
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { BookOpenIcon, HistoryIcon, LayersIcon, ListIcon, SquareUserIcon } from 'lucide-react';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import {
+  BookOpenIcon,
+  HistoryIcon,
+  LayersIcon,
+  ListIcon,
+  SquareArrowOutUpRight,
+  SquareUserIcon,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,29 +19,26 @@ import { AssistantNavKey } from '@/types/discover';
 
 import { useDetailContext } from '../DetailProvider';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    link: css`
-      color: ${cssVar.colorTextDescription};
-
-      &:hover {
-        color: ${cssVar.colorInfo};
-      }
-    `,
-    nav: css`
-      border-block-end: 1px solid ${cssVar.colorBorder};
-    `,
-    tabsWrapper: css`
-      scrollbar-width: none;
-      overflow-x: auto;
-      flex: 1;
-      min-width: 0;
-
-      &::-webkit-scrollbar {
-        display: none;
-      }
-    `,
-  };
+const styles = stylex.create({
+  link: {
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorInfo },
+  },
+  nav: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+  },
+  tabsWrapper: {
+    'scrollbarWidth': 'none',
+    'overflowX': 'auto',
+    'overscrollBehaviorX': 'none',
+    'flex': '1',
+    'minWidth': '0',
+    '::-webkit-scrollbar': { display: 'none' },
+  },
 });
 interface NavProps {
   activeTab?: AssistantNavKey;
@@ -50,7 +55,7 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
   const nav = (
     <Tabs
       activeKey={activeTab}
-      compact={mobile}
+      variant="square"
       items={[
         {
           icon: <Icon icon={BookOpenIcon} size={16} />,
@@ -100,11 +105,22 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
   return mobile ? (
     nav
   ) : (
-    <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
-      <div className={styles.tabsWrapper}>{nav}</div>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.nav).className}
+      justify={'space-between'}
+    >
+      <div {...stylex.props(styles.tabsWrapper)}>{nav}</div>
       <Flexbox horizontal flex="none" gap={12} style={{ marginInlineStart: 12 }}>
-        <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
+        <a
+          {...stylex.props(styles.link)}
+          href={SOCIAL_URL.discord}
+          rel="noreferrer"
+          target="_blank"
+        >
           {t('mcp.details.nav.needHelp')}
+          <Icon icon={SquareArrowOutUpRight} size={12} />
         </a>
       </Flexbox>
     </Flexbox>

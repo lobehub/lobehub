@@ -8,6 +8,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { defineSourceHandler } from '../../../runtime/middleware';
 import { enqueueSelfIterationRun } from '../dispatch/enqueueSelfIterationRun';
+import { resolveSelfIterationResponseLanguage } from '../dispatch/resolveResponseLanguage';
 import { buildSelfReflectionSourceId, ReviewRunStatus } from '../types';
 
 /** Runtime scope supported by self-reflection source handlers. */
@@ -131,6 +132,13 @@ export interface CreateSelfReflectionSourceHandlerDependencies {
    * @default builtin agent default
    */
   maxSteps?: number;
+  /**
+   * Resolves the owner's response language for user-visible run output.
+   * Overridable for tests.
+   *
+   * @default reads the user's `responseLanguage` setting
+   */
+  resolveResponseLanguage?: typeof resolveSelfIterationResponseLanguage;
   /** Workspace id, threaded so the enqueued run targets the correct workspace. */
   workspaceId?: string;
 }
@@ -284,10 +292,14 @@ export const createSelfReflectionSourceHandler = (
 
     const context = await deps.collectContext(toCollectContextInput(payload));
 
+    const responseLanguage = await (
+      deps.resolveResponseLanguage ?? resolveSelfIterationResponseLanguage
+    )(deps.db, payload.userId);
     const prompt = createAgentSignalSelfIterationPrompt({
       agentId: payload.agentId,
       context,
       mode: 'reflection',
+      responseLanguage,
       sourceId: source.sourceId,
       userId: payload.userId,
       window: { end: payload.windowEnd, start: payload.windowStart },

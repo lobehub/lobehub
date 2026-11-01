@@ -1,7 +1,10 @@
-import { IWorldOptions, World, setWorldConstructor } from '@cucumber/cucumber';
-import { Browser, BrowserContext, Page, Response, chromium } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+import type { IWorldOptions } from '@cucumber/cucumber';
+import { setWorldConstructor, World } from '@cucumber/cucumber';
+import type { Browser, BrowserContext, Page, Response } from '@playwright/test';
+import { chromium } from '@playwright/test';
 
 /**
  * Default timeout for waiting operations (e.g., waitForURL, toBeVisible)
@@ -14,6 +17,23 @@ export interface TestContext {
   jsErrors: Error[];
   lastResponse?: Response | null;
   previousUrl?: string;
+}
+
+let sharedBrowser: Browser | undefined;
+
+async function getSharedBrowser(): Promise<Browser> {
+  if (!sharedBrowser) {
+    sharedBrowser = await chromium.launch({
+      headless: process.env.HEADLESS !== 'false',
+    });
+  }
+
+  return sharedBrowser;
+}
+
+export async function closeSharedBrowser(): Promise<void> {
+  await sharedBrowser?.close();
+  sharedBrowser = undefined;
 }
 
 export class CustomWorld extends World {
@@ -46,9 +66,7 @@ export class CustomWorld extends World {
     const PORT = process.env.PORT ? Number(process.env.PORT) : 3006;
     const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
-    this.browser = await chromium.launch({
-      headless: process.env.HEADLESS !== 'false',
-    });
+    this.browser = await getSharedBrowser();
 
     this.browserContext = await this.browser.newContext({
       baseURL: BASE_URL,
@@ -78,7 +96,6 @@ export class CustomWorld extends World {
   async cleanup() {
     await this.page?.close();
     await this.browserContext?.close();
-    await this.browser?.close();
   }
 
   async takeScreenshot(name: string): Promise<Buffer> {

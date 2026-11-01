@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 
 import type { AgentBotProviderItem, NewAgentBotProvider } from '../schemas';
 import { agentBotProviders } from '../schemas';
@@ -9,6 +9,8 @@ interface GateKeeper {
   decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
   encrypt: (plaintext: string) => Promise<string>;
 }
+
+const UUID_RE = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 
 export interface DecryptedBotProvider extends Omit<AgentBotProviderItem, 'credentials'> {
   credentials: Record<string, string>;
@@ -52,10 +54,45 @@ export class AgentBotProviderModel {
     return result;
   };
 
+  /**
+   * Returns the rows it actually removed, so the caller can tell a real delete
+   * from a no-op. The ownership filter and the `(platform, applicationId)`
+   * unique index disagree about scope — the index is global, the filter is not
+   * — so a binding that lives outside the caller's active scope matches
+   * nothing here while still occupying the key that `create` collides with.
+   * Silently returning "ok" in that case reads as "removed" and leaves the
+   * application id permanently unbindable.
+   */
   delete = async (id: string) => {
     return this.db
       .delete(agentBotProviders)
-      .where(and(eq(agentBotProviders.id, id), this.ownership()));
+      .where(and(eq(agentBotProviders.id, id), this.ownership()))
+      .returning({ id: agentBotProviders.id });
+  };
+
+  /**
+   * Look a binding up by id with no scope filter, for the two cases where the
+   * caller's active scope is the problem rather than a permission: explaining
+   * which agent already holds an application id, and letting a creator delete
+   * their own binding from the other scope. Authorization is the caller's job
+   * — this returns rows belonging to anyone.
+   */
+  findByIdAcrossScopes = async (id: string) => {
+    const [result] = await this.db
+      .select()
+      .from(agentBotProviders)
+      .where(eq(agentBotProviders.id, id))
+      .limit(1);
+
+    return result;
+  };
+
+  /** Delete by id with no scope filter. Call only after authorizing the row. */
+  deleteAcrossScopes = async (id: string) => {
+    return this.db
+      .delete(agentBotProviders)
+      .where(eq(agentBotProviders.id, id))
+      .returning({ id: agentBotProviders.id });
   };
 
   query = async (params?: { agentId?: string; platform?: string }) => {
@@ -245,10 +282,51 @@ export class AgentBotProviderModel {
     return decrypted;
   };
 
+  /**
+   * Look up providers by connection id across all users, without decrypting
+   * credentials. Used by the gateway reconciliation sync to map stale gateway
+   * connections back to their (possibly disabled) provider rows.
+   *
+   * Non-UUID ids are filtered out before querying: the gateway also tracks
+   * connection ids that are not provider rows (e.g. system-bot registrations),
+   * and a single non-UUID value in `inArray` on the uuid column fails the
+   * whole query with a Postgres cast error.
+   */
+  static findByIds = async (
+    db: LobeChatDatabase,
+    ids: string[],
+  ): Promise<
+    Array<Pick<AgentBotProviderItem, 'applicationId' | 'enabled' | 'id' | 'platform' | 'settings'>>
+  > => {
+    const uuidIds = ids.filter((id) => UUID_RE.test(id));
+    if (uuidIds.length === 0) return [];
+
+    return db
+      .select({
+        applicationId: agentBotProviders.applicationId,
+        enabled: agentBotProviders.enabled,
+        id: agentBotProviders.id,
+        platform: agentBotProviders.platform,
+        settings: agentBotProviders.settings,
+      })
+      .from(agentBotProviders)
+      .where(inArray(agentBotProviders.id, uuidIds));
+  };
+
   static findEnabledByPlatform = async (
     db: LobeChatDatabase,
     platform: string,
     gateKeeper?: GateKeeper,
+    options?: {
+      /**
+       * Keep rows whose credentials are missing or fail to decrypt, with
+       * `credentials: {}`. The reconciliation sync needs the full enabled set
+       * to decide which gateway connections are stale — silently dropping
+       * undecryptable rows (e.g. during a KEY_VAULTS_SECRET mishap) would make
+       * every healthy connection look stale and mass-disconnect them.
+       */
+      includeUndecryptable?: boolean;
+    },
   ): Promise<DecryptedBotProvider[]> => {
     const results = await db
       .select()
@@ -258,7 +336,10 @@ export class AgentBotProviderModel {
     const decrypted: DecryptedBotProvider[] = [];
 
     for (const r of results) {
-      if (!r.credentials) continue;
+      if (!r.credentials) {
+        if (options?.includeUndecryptable) decrypted.push({ ...r, credentials: {} });
+        continue;
+      }
 
       try {
         const credentials = gateKeeper
@@ -267,7 +348,8 @@ export class AgentBotProviderModel {
 
         decrypted.push({ ...r, credentials });
       } catch {
-        // skip rows with invalid / undecryptable credentials
+        // Invalid / undecryptable credentials.
+        if (options?.includeUndecryptable) decrypted.push({ ...r, credentials: {} });
       }
     }
 

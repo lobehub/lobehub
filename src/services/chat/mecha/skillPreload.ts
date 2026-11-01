@@ -9,6 +9,8 @@ import type { RuntimeSelectedSkill, UserCredSummary } from '@lobechat/types';
 
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
+import { agentSkillsSelectors } from '@/store/tool/slices/agentSkills/selectors';
+import { loadBuiltinSkill } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 
 interface PreloadedSkill {
   content: string;
@@ -88,7 +90,7 @@ const mapToCredSummary = (cred: UserCredSummary): CredSummary => ({
  */
 const buildCredsContext = (userCreds?: UserCredSummary[]): UserCredsContext => ({
   creds: (userCreds || []).map(mapToCredSummary),
-  settingsUrl: '/settings/creds',
+  settingsUrl: '/settings/credential',
 });
 
 const loadSkillContent = async (
@@ -97,9 +99,7 @@ const loadSkillContent = async (
 ): Promise<PreloadedSkill | undefined> => {
   const toolState = getToolStoreState();
 
-  const builtinSkill = (toolState.builtinSkills || []).find(
-    (skill) => skill.identifier === selectedSkill.identifier,
-  );
+  const builtinSkill = await loadBuiltinSkill(selectedSkill.identifier);
 
   if (builtinSkill) {
     let content = builtinSkill.content;
@@ -117,12 +117,12 @@ const loadSkillContent = async (
     };
   }
 
-  const listItem = (toolState.agentSkills || []).find(
-    (skill) => skill.identifier === selectedSkill.identifier,
-  );
+  const listItem = agentSkillsSelectors
+    .getAgentSkills(toolState)
+    .find((skill) => skill.identifier === selectedSkill.identifier);
 
   const detail =
-    (listItem && toolState.agentSkillDetailMap?.[listItem.id]) ||
+    (listItem && agentSkillsSelectors.getAgentSkillDetail(listItem.id)(toolState)) ||
     (listItem ? await agentSkillService.getById(listItem.id) : undefined) ||
     (await agentSkillService.getByIdentifier(selectedSkill.identifier));
 

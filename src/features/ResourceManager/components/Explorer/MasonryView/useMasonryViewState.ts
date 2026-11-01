@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import type { ViewMode } from '@/routes/(main)/resource/features/store/initialState';
+import type { ViewMode } from '@/features/ResourceManager/store/initialState';
 
 interface UseMasonryViewStateOptions {
   dataLength: number;
@@ -14,12 +14,12 @@ export const useMasonryViewState = ({
   dataLength,
   isLoading,
   isNavigating,
-  isValidating,
+  isValidating: _isValidating,
   viewMode: _viewMode,
 }: UseMasonryViewStateOptions) => {
   const showSkeleton = useMemo(
-    () => (isLoading && dataLength === 0) || (isNavigating && isValidating),
-    [dataLength, isLoading, isNavigating, isValidating],
+    () => (isLoading && dataLength === 0) || isNavigating,
+    [dataLength, isLoading, isNavigating],
   );
 
   const isMasonryReady = !showSkeleton;

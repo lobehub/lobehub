@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '../types';
 
 const GithubCopilot: ModelProviderCard = {
   chatModels: [],

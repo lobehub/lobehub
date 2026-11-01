@@ -1,4 +1,9 @@
-import type { ScreenCaptureSession, StreamInvokeRequestParams } from './types';
+import type {
+  DesktopBootstrapIdentity,
+  RendererMemoryInfo,
+  ScreenCaptureSession,
+  StreamInvokeRequestParams,
+} from './types';
 
 type IpcInvoke = <T = unknown>(event: string, ...data: unknown[]) => Promise<T>;
 
@@ -45,6 +50,8 @@ let cachedProxy: DesktopIpcServices | null = null;
 declare global {
   interface Window {
     electronAPI?: {
+      getDesktopBootstrapIdentity?: () => DesktopBootstrapIdentity;
+      getRendererMemoryInfo?: () => Promise<RendererMemoryInfo>;
       invoke?: IpcInvoke;
       onScreenCaptureSession?: (listener: (session: ScreenCaptureSession) => void) => () => void;
       onStreamInvoke: (

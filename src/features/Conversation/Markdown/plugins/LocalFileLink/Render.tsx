@@ -1,8 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { A, Tooltip } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
+import { A, createStaticStyles, Tooltip } from '@lobehub/ui';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
 
@@ -20,6 +20,12 @@ interface LocalFileLinkProperties {
 }
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  reference: css`
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    vertical-align: -0.16em;
+  `,
   icon: css`
     display: inline-flex;
     flex-shrink: 0;
@@ -77,7 +83,8 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
   const { linkHref, linkLabel } = node?.properties || {};
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const parsed = isDesktop ? parseLocalFileHref(linkHref, { workingDirectory }) : null;
+  const parsed = parseLocalFileHref(linkHref, { workingDirectory });
+  const canPreview = isDesktop && !!parsed?.workingDirectory;
   const allowExternalFilePreview =
     !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);
   const label = linkLabel || parsed?.filePath || linkHref || '';
@@ -86,10 +93,8 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
 
   const handleClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
-      if (!parsed) return;
-      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-        return;
-      }
+      if (!parsed || !canPreview) return;
+      if (event.button !== 0) return;
 
       event.preventDefault();
       openLocalFile({
@@ -98,12 +103,30 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
         workingDirectory: parsed.workingDirectory,
       });
     },
-    [allowExternalFilePreview, openLocalFile, parsed],
+    [allowExternalFilePreview, canPreview, openLocalFile, parsed],
   );
+
+  if (!canPreview) {
+    return (
+      <Tooltip mouseEnterDelay={0.1} placement={'topLeft'} title={title}>
+        <span className={styles.reference} data-file-path={parsed?.filePath}>
+          <span aria-hidden className={styles.icon}>
+            <FileIcon fileName={iconFileName} size={16} variant={'raw'} />
+          </span>
+          <span>{label}</span>
+        </span>
+      </Tooltip>
+    );
+  }
 
   return (
     <Tooltip mouseEnterDelay={0.1} placement={'topLeft'} title={title}>
-      <A className={styles.link} href={linkHref} onClick={handleClick}>
+      <A
+        {...(parsed ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
+        className={styles.link}
+        href={linkHref}
+        onClick={handleClick}
+      >
         <span aria-hidden className={styles.icon}>
           <FileIcon fileName={iconFileName} size={16} variant={'raw'} />
         </span>

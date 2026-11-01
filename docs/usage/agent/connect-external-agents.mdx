@@ -1,0 +1,211 @@
+---
+title: Connect External Agents
+description: Bring coding agents and personal agent platforms into LobeHub. Prepare an execution device, connect installed agents, and understand project context, permissions, and sessions.
+tags:
+  - LobeHub
+  - External Agents
+  - Coding Agents
+  - Execution Devices
+  - CLI
+---
+
+# Connect External Agents
+
+LobeHub brings your agents together in one workspace. Alongside agents you create in LobeHub, you can connect external coding agents and personal agent platforms.
+
+Choose **Create Agent → Connect External Agents** to connect an agent that runs on your computer or another connected device. You chat in LobeHub while the external agent runs through its own software on the selected device.
+
+This is different from selecting an AI model or adding an MCP connector. You connect an agent runtime, not just its underlying model.
+
+## Requirements
+
+- **An available execution device**: Use the LobeHub desktop app on the target computer, or a computer connected through the LobeHub CLI.
+- **An installed external agent**: Install its CLI or platform on that device. Check that the desktop app or CLI process can find its executable.
+- **External-agent setup**: Complete the provider's sign-in, model settings, or platform initialization on the same device.
+- **Accessible project files**: For project tasks, choose a working directory that exists on that device and check the necessary system permissions.
+
+**The computer that shows the conversation is not necessarily the computer that runs the agent.** Installation and sign-in on one computer do not prepare another.
+
+The connection wizard scans the local desktop or a connected device. It does not provision a cloud sandbox. Browser pairing alone does not provide a native CLI runtime. See [Execution Devices](/docs/usage/agent/execution-devices) for device setup.
+
+## Supported External Agents
+
+The connection catalog contains the following 15 agents: 13 coding CLIs and two personal agent platforms. The table links to official setup instructions for each product.
+
+### Coding Agents
+
+| Agent | What you connect | Official setup |
+| --- | --- | --- |
+| **Codex** | OpenAI's terminal coding agent, which reads files, changes code, and runs commands | Install and sign in to Codex CLI. [Setup guide](https://github.com/openai/codex) |
+| **Amp** | Amp's coding agent CLI | Install the CLI and complete its account setup. [Setup guide](https://ampcode.com/docs/cli) |
+| **Claude Code** | Anthropic's terminal coding agent | Install Claude Code and complete its authentication setup. [Setup guide](https://code.claude.com/docs/en/setup) |
+| **CodeBuddy** | Tencent's CodeBuddy Code CLI | Install the CLI product, not just the editor extension. [Setup guide](https://codebuddy.ai/docs/cli/installation) |
+| **Cursor** | Cursor's coding agent CLI | Install Cursor CLI separately from the editor as required by its setup guide. [Setup guide](https://cursor.com/docs/cli/installation) |
+| **Factory Droid** | Factory's Droid coding agent CLI | Install Droid and complete Factory sign-in. [Setup guide](https://docs.factory.ai/droid-cli/quickstart) |
+| **Devin** | Cognition's Devin CLI | Prepare the CLI on the execution device, rather than only a hosted Devin session. [Setup guide](https://docs.devin.ai/cli) |
+| **Grok Build** | xAI's coding agent for terminal and automated workflows | Complete the Grok Build installation and authentication steps. [Setup guide](https://docs.x.ai/build/overview) |
+| **Kimi Code** | Moonshot AI's Kimi Code CLI | Install Kimi Code CLI and complete its setup. [Setup guide](https://kimi.com/code/docs/en/kimi-code-cli/guides/getting-started.html) |
+| **OpenCode** | An open-source coding agent with support for multiple model providers | Install OpenCode and configure a model provider. [Setup guide](https://opencode.ai/docs) |
+| **Pi** | The extensible Pi terminal coding agent, not Inflection's Pi assistant | Install the coding agent and configure model access. [Setup guide](https://pi.dev/docs/latest) |
+| **Qoder** | Qoder's coding agent CLI | Install Qoder CLI and complete its account setup. [Setup guide](https://docs.qoder.com/cli/installation) |
+| **TRAE CLI** | The enterprise CLI documented as TraeCode CLI | Prepare enterprise access and install the CLI. This is not the separate Trae Agent project. [Setup guide](https://docs.trae.cn/cli/get-started-with-trae-cli) |
+
+### Personal Agent Platforms
+
+| Agent | What you connect | Official setup |
+| --- | --- | --- |
+| **OpenClaw** | A self-hosted personal agent platform with gateway and messaging features | Install OpenClaw and complete its onboarding and model setup on the target device. [Setup guide](https://docs.openclaw.ai/start/getting-started) |
+| **Hermes** | Nous Research's Hermes Agent, a personal agent with terminal and messaging features | Install Hermes Agent and complete its model and platform setup. [Setup guide](https://hermes-agent.nousresearch.com/docs/getting-started/installation) |
+
+OpenClaw and Hermes appear in the same connection wizard as coding CLIs. LobeHub can read their existing agent profile to prefill available profile details.
+
+<Callout type="info">
+  Before connecting an entry, install its software and check that your account has access. Operating-system support, subscriptions, enterprise access, and regional availability depend on the external product. TRAE's linked guide describes the enterprise CLI in the Chinese documentation.
+</Callout>
+
+## Install and Prepare an External Agent
+
+1. Open the official setup guide for the agent you want to connect.
+2. Install the required CLI or platform on the actual execution device.
+3. Complete its sign-in or model setup on that device.
+4. Run a small task directly in its terminal interface to check that it works.
+5. Return to LobeHub and scan that device.
+
+Installing an editor does not necessarily install its agent CLI. Likewise, access to a provider's chat website does not prepare its local agent.
+
+The wizard detects installed agents and can show their versions. After scanning, check sign-in, model access, and project permissions before starting a task.
+
+## Connect in LobeHub
+
+<Steps>
+  ### Open the Connection Wizard
+
+  Open **Create Agent** and choose **Connect External Agents**.
+
+  ### Choose the Execution Device
+
+  In the desktop app, choose **This Computer** to use agents installed on that computer. Alternatively, choose an online computer from the connected-device list.
+
+  If no device is available, connect one through the desktop app or LobeHub CLI first. In a team workspace, use a device that belongs to that workspace.
+
+  ### Scan and Select Agents
+
+  LobeHub scans the selected device automatically. Available agents appear first, with a version when the scan returns one.
+
+  Select one or more agents. Entries marked **Not installed** are unavailable for selection. After installation or a setup change, click **Rescan**.
+
+  ### Connect and Start a Conversation
+
+  Click **Connect** to add the selected agents. Each selection creates a separate agent in LobeHub.
+
+  For a single selection, you can optionally customize the name and description before connection. Multiple selections connect together without that customization step.
+
+  Open a conversation from the success screen. Before the first project task, check the execution device and working directory.
+</Steps>
+
+The wizard shows three setup steps, but the third step is optional profile customization for a single agent.
+
+## Working Directory
+
+For coding tasks, the working directory is **a project path on the execution device**. It does not refer to a folder on the computer that merely shows the chat.
+
+Choose the device and project before the first task. For example:
+
+> Read the project instructions and summarize the repository structure. Do not change files or run installation commands.
+
+A directory change can require a new external-agent session. Chat history does not transfer the runtime's session state or project files to another directory or device.
+
+OpenClaw and Hermes keep their own platform setup, workspace, memory, and stored context separately from the LobeHub topic.
+
+## Project Instructions and Skills
+
+Project instructions and skills remain specific to the external agent. For example, Claude Code uses `CLAUDE.md`, while Codex uses `AGENTS.md` for project guidance.
+
+Agents running on LobeHub's server can also find project guidance in `.agents/skills`, `.claude/skills`, `AGENTS.md`, and `CLAUDE.md`. The directories contain skills. The Markdown files contain project instructions, not skill packages. See [Execution Devices](/docs/usage/agent/execution-devices).
+
+The files and LobeHub skills available to each integration vary. Follow the selected agent's conventions and ask it to read relevant project instructions before changes.
+
+## Permissions
+
+| Layer | What it controls |
+| --- | --- |
+| **LobeHub tool permissions** | Whether an exposed connector tool runs directly, asks for approval, or stays off |
+| **External-agent permissions** | The CLI or platform's own rules for file access, commands, approvals, and other operations |
+| **Device permissions** | What the operating-system account and process can access |
+
+LobeHub connector permissions do not replace the external agent's own permission system. An agent's native commands do not necessarily pass through a LobeHub connector.
+
+**A working directory is not a security sandbox.** Before a task, review the agent's access scope and approval settings. Require review before destructive commands, publication, or other consequential changes.
+
+## What You See in Chat
+
+LobeHub shows the external agent's responses in the conversation. Depending on the integration and the information the agent shares, you may also see:
+
+- **Tool calls and command output**, including available status and results
+- **File changes**, including available diffs
+- **Plans and progress**, when the agent shares task updates
+- **Questions or approval requests**, where the integration supports them.
+
+Available progress details, controls, and tools vary by integration. Some features available in the external product may be unavailable through LobeHub.
+
+## Sessions and Resume
+
+Continue in the same topic for follow-up work. Runtime session recovery depends on the external agent, its integration, and the original session's availability.
+
+After a device change, directory change, or interruption, check the runtime state before more work. Check whether the original agent session resumed, even if chat history is still visible. If LobeHub reports a new session, share the necessary context again.
+
+## Troubleshooting
+
+| Problem | What to check |
+| --- | --- |
+| **No execution device** | Connect the desktop app or LobeHub CLI. In a workspace, check the device's workspace scope. |
+| **Device offline or scan failed** | Restore the device connection, then scan again. |
+| **Agent shows Not installed** | Check installation on the selected device and executable access for the desktop or CLI process. Then rescan. |
+| **Detected agent cannot start** | Run it directly on that device. Check authentication, model access, version compatibility, and account requirements. |
+| **Project cannot be found** | Check the path and permissions on the execution device, not just the chat device. |
+| **Task stopped midway** | Review output and file changes before retrying. Do not assume that partial work rolled back. |
+| **A native feature is missing** | Check which tools and controls the integration supports; some native features may be unavailable. |
+
+## Tips
+
+- Prepare each agent on the device that will run it.
+- Start with a read-only task before file changes.
+- Use separate agents for distinct projects when that makes device and directory choices clearer.
+- Review results and file changes before the next action.
+- If the selected integration exposes the browser tool, see [Built-in Browser](/docs/usage/agent/built-in-browser) for browser tasks and manual takeover.
+
+{/*
+Maintainer note (not rendered): verification record and reference material.
+
+Product setup links and the connection workflow were reviewed on September 16, 2026. LobeHub implementation references use repository revision `659db0780b263f023019337a48f23e17e77e260d` from September 14, 2026. Interface labels and availability can vary by version.
+
+lobehub-flow: LobeHub — [Connection wizard](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/src/features/ConnectAgent/index.tsx).
+lobehub-catalog: LobeHub — [Connectable providers and device binding](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/src/features/ConnectAgent/providers.ts).
+lobehub-scan: LobeHub — [Agent scanning](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/src/features/ConnectAgent/useAgentScan.ts).
+lobehub-adapters: LobeHub — [Coding-agent adapter registry](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/heterogeneous-agents/src/registry.ts).
+codex: OpenAI — [Codex CLI](https://github.com/openai/codex).
+amp: Amp — [CLI getting started](https://ampcode.com/docs/cli).
+claude: Anthropic — [Claude Code setup](https://code.claude.com/docs/en/setup).
+codebuddy: Tencent CodeBuddy — [CodeBuddy Code installation](https://codebuddy.ai/docs/cli/installation).
+cursor: Cursor — [CLI installation](https://cursor.com/docs/cli/installation).
+droid: Factory — [Droid CLI quickstart](https://docs.factory.ai/droid-cli/quickstart).
+devin: Cognition — [Devin CLI quickstart](https://docs.devin.ai/cli).
+grok: xAI — [Grok Build overview](https://docs.x.ai/build/overview).
+kimi: Moonshot AI — [Kimi Code CLI getting started](https://kimi.com/code/docs/en/kimi-code-cli/guides/getting-started.html).
+opencode: OpenCode — [Introduction and installation](https://opencode.ai/docs).
+pi: Pi — [Coding-agent documentation](https://pi.dev/docs/latest).
+qoder: Qoder — [CLI installation and upgrade](https://docs.qoder.com/cli/installation).
+trae: TRAE — [TraeCode CLI quickstart](https://docs.trae.cn/cli/get-started-with-trae-cli).
+openclaw: OpenClaw — [Getting started](https://docs.openclaw.ai/start/getting-started).
+hermes: Nous Research — [Hermes Agent installation](https://hermes-agent.nousresearch.com/docs/getting-started/installation).
+*/}
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/agent'} title={'Agents'} />
+
+  <Card href={'/docs/usage/agent/execution-devices'} title={'Execution Devices'} />
+
+  <Card href={'/docs/usage/community/skills-market'} title={'Skills Marketplace'} />
+
+  <Card href={'/docs/usage/agent/built-in-browser'} title={'Built-in Browser'} />
+</Cards>

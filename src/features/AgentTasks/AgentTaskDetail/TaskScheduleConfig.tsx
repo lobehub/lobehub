@@ -3,16 +3,18 @@ import {
   ActionIcon,
   Avatar,
   Button,
+  createStaticStyles,
+  cssVar,
   Flexbox,
   Icon,
   InputNumber,
   Popover,
-  Segmented,
+  Select,
+  Switch,
+  Tabs,
   Text,
+  toast,
 } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { Switch } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { CalendarClockIcon, CalendarDays, Clock, RefreshCw, TimerIcon, Zap } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -196,6 +198,8 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
 }: TaskScheduleConfigProps) {
   const { t, i18n } = useTranslation('chat');
   const { allowed: canEditTask, reason } = usePermission('create_content');
+  // An archived task stays idle; scheduling needs it restored first.
+  const isArchived = !!useTaskStore(taskDetailSelectors.activeTaskArchivedAt);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const activeTaskInterval = useTaskStore(taskDetailSelectors.activeTaskPeriodicInterval);
   const automationMode = useTaskStore(taskDetailSelectors.activeTaskAutomationMode);
@@ -211,11 +215,9 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
 
   const enabled = !!automationMode;
   const [isStartingSchedule, setIsStartingSchedule] = useState(false);
-  // Heartbeat tasks are re-armed only by maybeRearmHeartbeat after a topic
-  // completes; there is no dispatcher that picks up `scheduled` heartbeat tasks,
-  // so flipping one to `scheduled` from here would leave it dormant.
   const canStartSchedule =
-    automationMode === 'schedule' &&
+    ((automationMode === 'schedule' && !!schedulePattern) ||
+      (automationMode === 'heartbeat' && finalCurrentInterval > 0)) &&
     !!finalTaskId &&
     status !== 'scheduled' &&
     status !== 'running';
@@ -239,17 +241,13 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
     return null;
   }, [automationMode, finalCurrentInterval, schedulePattern, scheduleTimezone, t, i18n.language]);
 
-  const [nowTick, setNowTick] = useState(0);
-  useEffect(() => {
-    if (!enabled) return;
-    const id = setInterval(() => setNowTick((n) => n + 1), 60_000);
-    return () => clearInterval(id);
-  }, [enabled]);
-
   const nextRun = useMemo(() => {
     if (!enabled) return null;
     if (automationMode === 'heartbeat') {
-      return nextHeartbeatFiring(detail?.heartbeat?.lastAt, finalCurrentInterval);
+      return nextHeartbeatFiring(
+        detail?.heartbeat?.scheduledAt ?? detail?.heartbeat?.lastAt,
+        finalCurrentInterval,
+      );
     }
     if (automationMode === 'schedule' && schedulePattern) {
       return nextScheduleFiring(schedulePattern, scheduleTimezone);
@@ -258,11 +256,11 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   }, [
     automationMode,
     detail?.heartbeat?.lastAt,
+    detail?.heartbeat?.scheduledAt,
     enabled,
     finalCurrentInterval,
     schedulePattern,
     scheduleTimezone,
-    nowTick,
   ]);
 
   const nextRunText = useMemo(() => {
@@ -282,7 +280,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
   );
 
   const handleModeChange = useCallback(
-    (value: string | number) => {
+    (value: string) => {
       if (!canEditTask) return;
       if (!finalTaskId) return;
       setAutomationMode(finalTaskId, value as TaskAutomationMode);
@@ -300,6 +298,14 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
       setIsStartingSchedule(false);
     }
   }, [canEditTask, finalTaskId, updateTaskStatus]);
+
+  const handleTriggerClick = useCallback(
+    (e: { stopPropagation: () => void }) => {
+      e.stopPropagation();
+      if (canEditTask && isArchived) toast.info(t('taskList.contextMenu.scheduleArchivedBlocked'));
+    },
+    [canEditTask, isArchived, t],
+  );
 
   const content = (
     <Flexbox gap={16} style={{ padding: 4, width: 440 }} onClick={(e) => e.stopPropagation()}>
@@ -336,30 +342,34 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
 
       {enabled && (
         <>
-          <Segmented
-            block
-            disabled={!canEditTask}
-            value={automationMode ?? 'heartbeat'}
-            options={[
+          <Tabs
+            activeKey={automationMode ?? 'heartbeat'}
+            items={[
               {
+                disabled: !canEditTask,
+                key: 'schedule',
                 label: (
                   <Flexbox horizontal align="center" gap={6} justify="center">
                     <Icon icon={CalendarDays} size={14} />
                     <span>{t('taskSchedule.schedulerTab')}</span>
                   </Flexbox>
                 ),
-                value: 'schedule',
               },
               {
+                disabled: !canEditTask,
+                key: 'heartbeat',
                 label: (
                   <Flexbox horizontal align="center" gap={6} justify="center">
                     <Icon icon={RefreshCw} size={14} />
                     <span>{t('taskSchedule.intervalTab')}</span>
                   </Flexbox>
                 ),
-                value: 'heartbeat',
               },
             ]}
+            styles={{
+              list: { display: 'flex', width: '100%' },
+              tab: { flex: 1 },
+            }}
             onChange={handleModeChange}
           />
           {automationMode === 'heartbeat' && (
@@ -393,12 +403,12 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
     <Popover
       className={styles.popover}
       content={content}
-      disabled={!canEditTask}
+      disabled={!canEditTask || isArchived}
       placement="bottomRight"
       trigger="click"
     >
       {children ? (
-        <div title={canEditTask ? undefined : reason} onClick={(e) => e.stopPropagation()}>
+        <div title={canEditTask ? undefined : reason} onClick={handleTriggerClick}>
           {children}
         </div>
       ) : (
@@ -407,7 +417,7 @@ const TaskScheduleConfig = memo(function TaskScheduleConfig({
           icon={TimerIcon}
           size="small"
           title={t('taskSchedule.title')}
-          onClick={(e) => e.stopPropagation()}
+          onClick={handleTriggerClick}
         />
       )}
     </Popover>

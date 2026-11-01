@@ -1,22 +1,40 @@
 import { ListTodoIcon } from 'lucide-react';
 
-import { type DynamicRouteMeta, routeMeta } from '@/spa/router/routeMeta';
+import TasksSkeleton from '@/components/Skeleton/Tasks';
+import TaskDetailSkeleton from '@/features/AgentTasks/AgentTaskDetail/TaskDetailSkeleton';
+import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
+import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
+import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
+import { routeMeta } from '@/spa/router/routeMeta';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
 export const tasksRouteMeta = routeMeta({
   icon: ListTodoIcon,
+  Skeleton: TasksSkeleton,
   titleKey: 'navigation.tasks',
 });
 
-export const taskRouteMeta = routeMeta({
-  icon: ListTodoIcon,
-  titleKey: 'navigation.task',
-  useDynamicMeta: (params): DynamicRouteMeta => {
-    const detail = useTaskStore(taskDetailSelectors.taskDetailById(params.taskId ?? ''));
+const TaskDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
+  const routeWorkspaceId = useRouteWorkspaceId(params);
+  const detail = useTaskStore((s) => {
+    const item = taskDetailSelectors.taskDetailById(params.taskId ?? '')(s);
+    return matchesRouteWorkspace(item?.workspaceId, routeWorkspaceId) ? item : undefined;
+  });
 
-    return {
+  usePublishDynamicRouteMeta(
+    {
       title: detail?.name || undefined,
-    };
-  },
+    },
+    onResolve,
+  );
+
+  return null;
+};
+
+export const taskRouteMeta = routeMeta({
+  DynamicMeta: TaskDynamicMeta,
+  icon: ListTodoIcon,
+  Skeleton: TaskDetailSkeleton,
+  titleKey: 'navigation.task',
 });

@@ -1,4 +1,13 @@
-import { type Plans, type ReferralStatusString } from '@lobechat/types';
+// Import the framework-agnostic core directly, not `@/libs/replica`: the app
+// wiring pulls `@/libs/swr/useCacheScope`, which reads this very store, and the
+// cycle would leave `createReplicaState` undefined while the initial state is
+// built.
+import {
+  type Plans,
+  type ReferralStatusString,
+  type UserInitializationState,
+} from '@lobechat/types';
+import { createReplicaState, type ReplicaState } from 'local-replica';
 
 export interface CommonState {
   isFreePlan?: boolean;
@@ -8,8 +17,18 @@ export interface CommonState {
   isUserCanEnableTrace: boolean;
   isUserHasConversation: boolean;
   isUserStateInit: boolean;
+  /** Thrown error from the user-state init fetch — lets tabs show error + Retry instead of a permanent skeleton. */
+  isUserStateInitError?: unknown;
   referralStatus?: ReferralStatusString;
   subscriptionPlan?: Plans;
+  /**
+   * The confirmed bootstrap payload — the replica value behind the flat fields
+   * above. Kept so the replica can read its own entry (and so a revalidation
+   * that returns an unchanged payload skips the re-commit).
+   */
+  userState?: UserInitializationState;
+  /** Replica bookkeeping for `userState` (see `createUserStateResource`). */
+  userStateReplica: ReplicaState<UserInitializationState>;
 }
 
 export const initialCommonState: CommonState = {
@@ -20,4 +39,5 @@ export const initialCommonState: CommonState = {
   isUserHasConversation: false,
   isUserStateInit: false,
   referralStatus: undefined,
+  userStateReplica: createReplicaState(),
 };

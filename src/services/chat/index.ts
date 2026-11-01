@@ -1,49 +1,42 @@
-import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
+import { stripAssistantReasoningForReplay } from '@lobechat/agent-runtime';
 import {
-  COMPOSIO_APP_TYPES,
-  LOBEHUB_SKILL_PROVIDERS,
   REQUEST_AGENT_ID_HEADER,
   REQUEST_TOPIC_ID_HEADER,
   REQUEST_TRIGGER_HEADER,
 } from '@lobechat/const';
-import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeError, isResponsesAPIModel } from '@lobechat/model-runtime';
-import type {
-  RuntimeInitialContext,
-  RuntimeStepContext,
-  TracePayload,
-  UIChatMessage,
+import { isResponsesAPIModel } from '@lobechat/model-runtime/providers/openai/modelId';
+import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
+import {
+  ChatErrorType,
+  type ChatMessageError,
+  getDisabledPluginIds,
+  type RequestTrigger,
+  type RuntimeAdditionalContextFragment,
+  type RuntimeInitialContext,
+  type RuntimeStepContext,
+  type TracePayload,
+  TraceTagMap,
+  type UIChatMessage,
 } from '@lobechat/types';
-import { ChatErrorType, TraceTagMap } from '@lobechat/types';
 import { merge } from 'es-toolkit/compat';
-import { ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank/modelProvider';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
+import { oneShotRelay } from '@/services/llmRelay';
 import { getAgentStoreState } from '@/store/agent';
-import {
-  agentByIdSelectors,
-  agentChatConfigSelectors,
-  agentSelectors,
-} from '@/store/agent/selectors';
+import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
-import { getChatStoreState } from '@/store/chat';
-import { getToolStoreState } from '@/store/tool';
-import {
-  builtinToolSelectors,
-  composioStoreSelectors,
-  lobehubSkillStoreSelectors,
-} from '@/store/tool/selectors';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import {
   settingsSelectors,
   userGeneralSettingsSelectors,
   userProfileSelectors,
 } from '@/store/user/selectors';
-import { type ChatStreamPayload, type OpenAIChatMessage } from '@/types/openai/chat';
+import { type ChatStreamPayload } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
 import { createTraceHeader } from '@/utils/trace';
 
@@ -55,11 +48,10 @@ import {
   contextEngineering,
   getTargetAgentId,
   initializeWithClientStore,
-  resolveModelExtendParams,
+  resolveBrowserModelParams,
 } from './mecha';
 import { type FetchOptions } from './types';
 
-const defaultProvider = ModelProvider.OpenAI;
 const providersWithDeploymentName = new Set<string>([
   ModelProvider.Azure,
   ModelProvider.AzureAI,
@@ -69,8 +61,14 @@ const providersWithDeploymentName = new Set<string>([
   ModelProvider.Volcengine,
   ModelProvider.VolcengineCodingPlan,
 ]);
-interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
+export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   agentId?: string;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (planned by `shouldCompress`).
+   */
+  attachmentPreviewFileIds?: string[];
   groupId?: string;
   messages: UIChatMessage[];
   /**
@@ -81,9 +79,14 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
   topicId?: string;
 }
 
-type ChatStreamInputParams = Partial<Omit<ChatStreamPayload, 'messages'>> & {
-  messages?: (UIChatMessage | OpenAIChatMessage)[];
-};
+export interface PreparedAssistantMessageContext {
+  options: FetchOptions;
+  params: Partial<ChatStreamPayload>;
+  /** Forced or configured `preserveThinking` for the payload, when the model supports it. */
+  preserveThinking?: boolean;
+  /** Whether the assistant reasoning in history is replayed to the model. */
+  replayAssistantReasoning: boolean;
+}
 
 interface FetchAITaskResultParams extends FetchSSEOptions {
   abortController?: AbortController;
@@ -94,10 +97,15 @@ interface FetchAITaskResultParams extends FetchSSEOptions {
    */
   onLoadingChange?: (loading: boolean) => void;
   /**
-   * Request object
+   * Request object. The messages are the task's complete prompt and are sent as-is.
    */
-  params: ChatStreamInputParams;
+  params: Partial<ChatStreamPayload>;
   trace?: TracePayload;
+  /**
+   * Request source recorded on spend / route-attempt logs. Required so every
+   * preset task names its own feature instead of being counted as `chat`.
+   */
+  trigger: RequestTrigger;
 }
 
 interface CreateAssistantMessageStream extends FetchSSEOptions {
@@ -112,29 +120,42 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
   trace?: TracePayload;
 }
 
-class ChatService {
-  private resolveAgentDocumentsTargetId = (
-    targetAgentId: string,
-    enabledToolIds: string[] = [],
-  ): string | undefined => {
-    if (enabledToolIds.includes(AgentBuilderIdentifier)) {
-      return getChatStoreState().activeAgentId || targetAgentId || undefined;
-    }
-
-    return targetAgentId || undefined;
+/**
+ * A relayed call that fails on the device reaches the stream as its executor's
+ * error (`{ provider, errorType, error }`), not the `ChatMessageError`
+ * (`{ type, body, message }`) the legacy browser path produced for the same
+ * failure. Callers read `type` / `body.error` (the Ollama error views, the
+ * provider checker), so give them that shape again.
+ */
+const toRelayedChatError = (error: ChatMessageError): ChatMessageError => {
+  const relayed = error as unknown as {
+    error?: { message?: unknown };
+    errorType?: unknown;
+    message?: unknown;
+    type?: unknown;
   };
+  if (!relayed || typeof relayed !== 'object' || relayed.type || !relayed.errorType) return error;
+  const message =
+    (typeof relayed.error?.message === 'string' && relayed.error.message) ||
+    (typeof relayed.message === 'string' && relayed.message) ||
+    String(relayed.errorType);
+  return { body: relayed, message, type: relayed.errorType as ChatMessageError['type'] };
+};
 
-  createAssistantMessage = async (
+class ChatService {
+  buildAssistantMessageContext = async (
     {
       messages,
       agentId,
       groupId,
+      additionalContexts,
+      attachmentPreviewFileIds,
       topicId,
       resolvedAgentConfig,
       ...params
     }: GetChatCompletionPayload,
     options?: FetchOptions,
-  ) => {
+  ): Promise<PreparedAssistantMessageContext> => {
     const payload = merge(
       {
         model: DEFAULT_AGENT_CONFIG.model,
@@ -174,125 +195,56 @@ class ChatService {
     const effectiveMemoryEffort =
       chatConfig.memory?.effort ?? userMemorySettings.effort ?? 'medium';
 
-    // =================== 1.2 build agent builder context =================== //
+    // =================== 1.2 resolve model parameters =================== //
 
-    // Check if Agent Builder tool is enabled and build context for it
-    // Note: When Agent Builder is active, we need to get the context of the agent being edited,
-    // which is stored in chatStore.activeAgentId, not the targetAgentId (which is the Agent Builder itself)
-    const isAgentBuilderEnabled = enabledToolIds.includes(AgentBuilderIdentifier);
-    const documentsAgentId = this.resolveAgentDocumentsTargetId(targetAgentId, enabledToolIds);
-    let agentBuilderContext;
-    let agentDocuments = documentsAgentId
-      ? agentSelectors.getAgentDocumentsById(documentsAgentId)(getAgentStoreState())
-      : undefined;
+    // Make sure the user's saved model-instance reasoning config is loaded
+    // before the synchronous store reads below — after a reload the
+    // ReasoningConfigLoader SWR fetch may still be in flight when the user
+    // sends the first message. No-op once cached; failures fall back to
+    // level defaults.
+    await getAiInfraStoreState().ensureModelReasoningConfig(payload.model, payload.provider!);
 
-    if (documentsAgentId && agentDocuments === undefined) {
-      try {
-        agentDocuments = await getAgentStoreState().ensureAgentDocuments(documentsAgentId);
-      } catch (error) {
-        // Agent documents are optional on the client; keep generation working if hydration fails.
-        console.error('[ChatService] Failed to ensure agent documents:', error);
-      }
-    }
-
-    if (isAgentBuilderEnabled) {
-      const activeAgentId = getChatStoreState().activeAgentId || '';
-      const baseContext =
-        agentByIdSelectors.getAgentBuilderContextById(activeAgentId)(getAgentStoreState());
-      const activeAgentConfig =
-        agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState());
-
-      // Build official tools list (builtin tools + Composio tools)
-      const toolState = getToolStoreState();
-      const enabledPlugins = activeAgentConfig?.plugins || [];
-
-      const officialTools: OfficialToolItem[] = [];
-
-      // Get builtin tools (excluding Composio tools)
-      const builtinTools = builtinToolSelectors.metaList(toolState);
-      const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
-
-      for (const tool of builtinTools) {
-        // Skip Composio tools in builtin list (they'll be shown separately)
-        if (composioIdentifiers.has(tool.identifier)) continue;
-
-        officialTools.push({
-          description: tool.meta?.description,
-          enabled: enabledPlugins.includes(tool.identifier),
-          identifier: tool.identifier,
-          installed: true,
-          name: tool.meta?.title || tool.identifier,
-          type: 'builtin',
-        });
-      }
-
-      // Get Composio tools (if enabled)
-      const isComposioEnabled =
-        typeof window !== 'undefined' &&
-        window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
-
-      if (isComposioEnabled) {
-        const allComposioServers = composioStoreSelectors.getServers(toolState);
-
-        for (const composioType of COMPOSIO_APP_TYPES) {
-          const server = allComposioServers.find((s) => s.identifier === composioType.identifier);
-
-          officialTools.push({
-            description: `LobeHub Mcp Server: ${composioType.label}`,
-            enabled: enabledPlugins.includes(composioType.identifier),
-            identifier: composioType.identifier,
-            installed: !!server,
-            name: composioType.label,
-            type: 'composio',
-          });
-        }
-      }
-
-      // Get LobehubSkill providers (if enabled)
-      const isLobehubSkillEnabled =
-        typeof window !== 'undefined' &&
-        window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
-
-      if (isLobehubSkillEnabled) {
-        const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);
-
-        for (const provider of LOBEHUB_SKILL_PROVIDERS) {
-          const server = allLobehubSkillServers.find((s) => s.identifier === provider.id);
-
-          officialTools.push({
-            description: `LobeHub Skill Provider: ${provider.label}`,
-            enabled: enabledPlugins.includes(provider.id),
-            identifier: provider.id,
-            installed: !!server,
-            name: provider.label,
-            type: 'lobehub-skill',
-          });
-        }
-      }
-
-      agentBuilderContext = {
-        ...baseContext,
-        officialTools,
-      };
-    }
+    // Which extend params apply, where the reasoning effort comes from,
+    // whether assistant reasoning is replayed, the history window and the
+    // stream flag are decided by the shared rules — the same ones the server
+    // runtime applies — over the browser's stores.
+    const modelParams = await resolveBrowserModelParams({
+      agentId: targetAgentId,
+      chatConfig,
+      groupId,
+      model: payload.model,
+      provider: payload.provider!,
+      searchDecision: searchConfig,
+      subAgentChatConfigOverride: resolvedAgentConfig.subAgentChatConfigOverride,
+      topicId,
+    });
+    const messagesForContext = modelParams.shouldReplayAssistantReasoning
+      ? messages
+      : stripAssistantReasoningForReplay(messages);
 
     // Apply context engineering with preprocessing configuration
     // Note: agentConfig.systemRole is already resolved by resolveAgentConfig for builtin agents
     const modelMessages = await contextEngineering({
-      agentBuilderContext,
-      agentDocuments,
       agentId: targetAgentId,
+      // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
+      // is already pinned-only (resolved upstream in agentConfigResolver).
+      disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),
+      // The stored mode passes through: a model without function calling is
+      // not demoted to chat mode here, matching the server runtime.
+      enableAgentMode: modelParams.enableAgentMode,
       // Use raw chatConfig values, not selectors with business logic that may force false
       enableHistoryCount: chatConfig.enableHistoryCount,
       enableUserMemories,
       groupId,
-      // historyCount is number of history messages; add 1 for current user message
-      historyCount: (chatConfig.historyCount ?? 20) + 1,
+      additionalContexts,
+      attachmentPreviewFileIds,
+      // History messages + the current turn; unset means no truncation.
+      historyCount: modelParams.historyCount,
       // Page editor context from agent runtime
       initialContext: options?.initialContext,
       inputTemplate: chatConfig.inputTemplate,
       manifests: enabledManifests,
-      messages,
+      messages: messagesForContext,
       model: payload.model,
       plugins,
       provider: payload.provider!,
@@ -306,26 +258,26 @@ class ChatService {
       },
     });
 
-    // ============  3. process extend params   ============ //
-
-    const extendParams = resolveModelExtendParams({
-      chatConfig,
-      model: payload.model,
-      provider: payload.provider!,
-    });
-
-    return this.getChatCompletion(
-      {
+    return {
+      options: { ...options, agentId: targetAgentId, topicId },
+      params: {
         ...params,
-        ...extendParams,
-        enabledSearch: searchConfig.enabledSearch && searchConfig.useModelSearch ? true : undefined,
+        ...modelParams.resolvedExtendParams,
+        // Always present on the browser payload, even when unset.
+        enabledSearch: modelParams.resolvedExtendParams?.enabledSearch,
         messages: modelMessages,
-        // Use the chatConfig from the target agent for streaming preference
-        stream: chatConfig.enableStreaming !== false,
+        stream: modelParams.stream,
         tools,
       },
-      { ...options, agentId: targetAgentId, topicId },
-    );
+      preserveThinking: modelParams.preserveThinkingForPayload,
+      replayAssistantReasoning: modelParams.shouldReplayAssistantReasoning,
+    };
+  };
+
+  createAssistantMessage = async (params: GetChatCompletionPayload, options?: FetchOptions) => {
+    const prepared = await this.buildAssistantMessageContext(params, options);
+
+    return this.getChatCompletion(prepared.params, prepared.options);
   };
 
   createAssistantMessageStream = async ({
@@ -351,9 +303,11 @@ class ChatService {
       metadata,
       signal: abortController?.signal,
       stepContext,
-      trace: this.mapTrace(trace, TraceTagMap.Chat),
+      trace: this.mapChatTrace(trace),
     });
   };
+
+  mapChatTrace = (trace?: TracePayload): TracePayload => this.mapTrace(trace, TraceTagMap.Chat);
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
     const { agentId, metadata, signal, responseAnimation, topicId } = options ?? {};
@@ -416,13 +370,17 @@ class ChatService {
     const sdkType = resolveRuntimeProvider(provider);
 
     /**
-     * Use browser agent runtime
+     * A provider only this device reaches: within the LLM relay the server
+     * makes the call and relays it back to this tab (one-shot relay), so the
+     * browser never dials the provider on its own. Outside it, the legacy
+     * browser runtime calls the provider directly.
      */
     const enableFetchOnClient = isEnableFetchOnClient(provider);
+    const relayToThisTab = enableFetchOnClient && oneShotRelay.needsRelay(provider);
 
     let fetcher: typeof fetch | undefined = undefined;
 
-    if (enableFetchOnClient) {
+    if (enableFetchOnClient && !relayToThisTab) {
       /**
        * Notes:
        * 1. Browser agent runtime will skip auth check if a key and endpoint provided by
@@ -431,7 +389,13 @@ class ChatService {
        */
       fetcher = async () => {
         try {
-          return await this.fetchOnClient({ payload, provider, runtimeProvider: sdkType, signal });
+          return await this.fetchOnClient({
+            payload,
+            provider,
+            runtimeProvider: sdkType,
+            signal,
+            topicId,
+          });
         } catch (e) {
           const {
             errorType = ChatErrorType.BadRequest,
@@ -476,24 +440,32 @@ class ChatService {
       responseAnimation,
     ].reduce((acc, cur) => merge(acc, standardizeAnimationStyle(cur)), {});
 
-    return fetchSSE(API_ENDPOINTS.chat(provider), {
-      body: JSON.stringify(payload),
-      fetcher,
-      headers,
-      method: 'POST',
-      onAbort: options?.onAbort,
-      onErrorHandle: options?.onErrorHandle,
-      onFinish: options?.onFinish,
-      onMessageHandle: options?.onMessageHandle,
-      requestContext: {
-        apiMode,
-        fetchOnClient: enableFetchOnClient,
-        model,
-        provider,
-      },
-      responseAnimation: mergedResponseAnimation,
-      signal,
-    });
+    return oneShotRelay.run(
+      relayToThisTab ? provider : undefined,
+      (relay) =>
+        fetchSSE(API_ENDPOINTS.chat(provider), {
+          body: JSON.stringify(payload),
+          fetcher,
+          headers: relay ? { ...(headers as Record<string, string>), ...relay.headers } : headers,
+          method: 'POST',
+          onAbort: options?.onAbort,
+          onErrorHandle:
+            relay && options?.onErrorHandle
+              ? (error) => options.onErrorHandle!(toRelayedChatError(error))
+              : options?.onErrorHandle,
+          onFinish: options?.onFinish,
+          onMessageHandle: options?.onMessageHandle,
+          requestContext: {
+            apiMode,
+            fetchOnClient: enableFetchOnClient && !relayToThisTab,
+            model,
+            provider,
+          },
+          responseAnimation: mergedResponseAnimation,
+          signal,
+        }),
+      { signal },
+    );
   };
 
   fetchPresetTaskResult = async ({
@@ -504,6 +476,7 @@ class ChatService {
     onLoadingChange,
     abortController,
     trace,
+    trigger,
   }: FetchAITaskResultParams) => {
     const errorHandle = (error: Error, errorContent?: any) => {
       onLoadingChange?.(false);
@@ -517,24 +490,20 @@ class ChatService {
     onLoadingChange?.(true);
 
     try {
-      const llmMessages = await contextEngineering({
-        messages: params.messages as any,
-        model: params.model!,
-        provider: params.provider!,
-      });
-
-      await this.getChatCompletion(
-        { ...params, messages: llmMessages },
-        {
-          onErrorHandle: (error) => {
-            errorHandle(new Error(error.message), error);
-          },
-          onFinish,
-          onMessageHandle,
-          signal: abortController?.signal,
-          trace: this.mapTrace(trace, TraceTagMap.SystemChain),
+      // A preset task (translate, compress, rewrite, …) carries its own complete
+      // prompt. Running it through the agent context pipeline would mix in the
+      // current agent's identity, workspace and management context, which small
+      // models echo back verbatim.
+      await this.getChatCompletion(params, {
+        metadata: { trigger },
+        onErrorHandle: (error) => {
+          errorHandle(new Error(error.message), error);
         },
-      );
+        onFinish,
+        onMessageHandle,
+        signal: abortController?.signal,
+        trace: this.mapTrace(trace, TraceTagMap.SystemChain),
+      });
 
       onLoadingChange?.(false);
     } catch (e) {
@@ -566,6 +535,7 @@ class ChatService {
     provider: string;
     runtimeProvider: string;
     signal?: AbortSignal;
+    topicId?: string;
   }) => {
     /**
      * if enable login and not signed in, return unauthorized error
@@ -582,7 +552,10 @@ class ChatService {
     });
     const data = params.payload as ChatStreamPayload;
 
-    return agentRuntime.chat(data, { signal: params.signal });
+    return agentRuntime.chat(data, {
+      metadata: { topicId: params.topicId },
+      signal: params.signal,
+    });
   };
 }
 

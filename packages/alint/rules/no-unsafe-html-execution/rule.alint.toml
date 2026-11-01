@@ -1,0 +1,10 @@
+name = "no-unsafe-html-execution"
+builtInAgent = "basic-structured"
+instruction = """
+Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
+
+Prevent HTML/SVG injection and artifact XSS-to-RCE (historical #13529, GHSA-xq4x-622m-q8fq).
+Report user/model/remote HTML reaching innerHTML, outerHTML, insertAdjacentHTML, document.write, dangerouslySetInnerHTML, or iframe srcDoc without appropriate sanitization/isolation. Removing only script tags with regex is insufficient: event attributes and URL schemes remain. For same-origin srcDoc/artifact frames, no sandbox or allow-scripts together with allow-same-origin leaves active content privileged. Report a visible unsafe frame configuration handling untrusted content even if sanitization is also used, when it explicitly restores those privileges.
+Recommend the existing sanitizeHTMLContent/sanitizeSVG/DOMPurify helper for HTML sinks, textContent/normal React interpolation for plain text, and a restricted sandbox for artifacts. Preserve intentionally executable previews in an isolated origin/sandbox rather than banning all scripts.
+Do not report textContent, escaped text/ordinary JSX interpolation, fixed trusted markup, sanitizer output (unless visibly weakened/bypassed), or an iframe explicitly sandboxed with no same-origin privilege (including sandbox='' or sandbox='allow-scripts' without allow-same-origin). Do not infer that an unknown library renderer is unsafe. Only report the sink/configuration visible here.
+"""

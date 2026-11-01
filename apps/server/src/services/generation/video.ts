@@ -8,6 +8,7 @@ import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
 import { type LobeChatDatabase } from '@lobechat/database';
+import { parseDataUri } from '@lobechat/model-runtime';
 import debug from 'debug';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
@@ -38,6 +39,8 @@ export interface VideoProcessResult {
   duration: number;
   fileHash: string;
   fileSize: number;
+  /** Frames in the video stream; `undefined` when ffmpeg could not count them */
+  frames?: number;
   height: number;
   mimeType: string;
   thumbnailKey: string;
@@ -61,7 +64,10 @@ export class VideoGenerationService {
       headers?: Record<string, string>;
     },
   ): Promise<VideoProcessResult> {
-    log('Processing video from URL: %s', videoUrl);
+    log(
+      'Processing video from source: %s',
+      videoUrl.startsWith('data:') ? 'inline data' : videoUrl,
+    );
 
     let tempVideoPath: string | null = null;
     let tempCoverPath: string | null = null;
@@ -69,8 +75,9 @@ export class VideoGenerationService {
     try {
       tempVideoPath = await this.downloadVideo(videoUrl, options);
 
-      const [metadata, videoBuffer] = await Promise.all([
+      const [metadata, frames, videoBuffer] = await Promise.all([
         this.getVideoMetadata(tempVideoPath),
+        this.countVideoFrames(tempVideoPath),
         fs.readFile(String(tempVideoPath)),
       ]);
 
@@ -79,10 +86,7 @@ export class VideoGenerationService {
       const fileHash = createHash('sha256').update(videoBuffer).digest('hex');
       const fileSize = videoBuffer.length;
 
-      // Determine MIME type from URL or default to mp4
-      const ext = path.extname(new URL(videoUrl).pathname).toLowerCase();
-      const mimeType = ext === '.webm' ? 'video/webm' : 'video/mp4';
-      const videoExt = ext || '.mp4';
+      const { ext: videoExt, mimeType } = this.resolveVideoFormat(videoUrl);
 
       // Generate S3 keys
       const uuid = nanoid();
@@ -141,6 +145,7 @@ export class VideoGenerationService {
         duration: metadata.duration,
         fileHash,
         fileSize,
+        frames,
         height: metadata.height,
         mimeType,
         thumbnailKey,
@@ -173,9 +178,24 @@ export class VideoGenerationService {
       headers?: Record<string, string>;
     },
   ): Promise<string> {
-    const ext = path.extname(new URL(url).pathname).toLowerCase() || '.mp4';
+    const { ext } = this.resolveVideoFormat(url);
     const tempVideoPath = path.join(os.tmpdir(), `lobe-video-${nanoid()}${ext}`);
     log('Downloading video to: %s', tempVideoPath);
+
+    if (url.startsWith('data:')) {
+      const { base64, mimeType } = parseDataUri(url);
+      if (!base64 || !mimeType?.startsWith('video/')) throw new Error('Invalid video data URI');
+
+      const videoBuffer = Buffer.from(base64, 'base64');
+      if (videoBuffer.length > VideoGenerationService.MAX_VIDEO_SIZE) {
+        throw new Error(
+          `Video file too large: ${videoBuffer.length} bytes (max ${VideoGenerationService.MAX_VIDEO_SIZE} bytes)`,
+        );
+      }
+
+      await fs.writeFile(tempVideoPath, videoBuffer);
+      return tempVideoPath;
+    }
 
     const response = await fetch(url, {
       headers: options?.headers,
@@ -220,6 +240,22 @@ export class VideoGenerationService {
     return tempVideoPath;
   }
 
+  private resolveVideoFormat(url: string): { ext: string; mimeType: string } {
+    if (url.startsWith('data:')) {
+      const mimeType = parseDataUri(url).mimeType?.toLowerCase();
+      return {
+        ext: mimeType === 'video/webm' ? '.webm' : '.mp4',
+        mimeType: mimeType || 'video/mp4',
+      };
+    }
+
+    const ext = path.extname(new URL(url).pathname).toLowerCase();
+    return {
+      ext: ext || '.mp4',
+      mimeType: ext === '.webm' ? 'video/webm' : 'video/mp4',
+    };
+  }
+
   private async getVideoMetadata(videoPath: string): Promise<VideoMetadata> {
     const ffmpegPath = getFfmpegPath();
 
@@ -253,6 +289,34 @@ export class VideoGenerationService {
       height: Number.parseInt(streamMatch[2]),
       width: Number.parseInt(streamMatch[1]),
     };
+  }
+
+  /**
+   * Count the video stream's frames by remuxing it to a null sink (no decoding). Models billed by
+   * output tokens bill every frame, and the container duration cannot recover the count once an
+   * audio track is longer than the video.
+   */
+  private async countVideoFrames(videoPath: string): Promise<number | undefined> {
+    try {
+      const { stderr } = await execFileAsync(getFfmpegPath(), [
+        '-hide_banner',
+        '-i',
+        videoPath,
+        '-map',
+        '0:v:0',
+        '-c',
+        'copy',
+        '-f',
+        'null',
+        '-',
+      ]);
+      const counts = [...stderr.matchAll(/frame=\s*(\d+)/g)];
+      const frames = Number(counts.at(-1)?.[1]);
+      return frames > 0 ? frames : undefined;
+    } catch (error) {
+      log('Failed to count video frames: %O', error);
+      return undefined;
+    }
   }
 
   /**

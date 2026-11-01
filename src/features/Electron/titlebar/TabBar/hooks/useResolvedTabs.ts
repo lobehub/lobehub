@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type RouteObject } from 'react-router';
 
-import { desktopRoutes } from '@/spa/router/desktopRouter.config';
+import { mainAreaMetaRoutes } from '@/spa/router/desktopRouter.config';
 import { type DynamicRouteMeta, type ResolvedRouteMeta } from '@/spa/router/routeMeta';
 import { useElectronStore } from '@/store/electron';
 
@@ -31,19 +31,29 @@ export const resolveTab = (
   isActive: boolean,
   t: Translate,
   liveDynamic?: DynamicRouteMeta | null,
-  liveDynamicTabId?: string | null,
+  liveDynamicUrl?: string | null,
 ): ResolvedTab => {
   const staticMeta = matchRouteMeta(routes, tab.url).static;
+  const titleKey = staticMeta.tabTitleKey ?? staticMeta.titleKey;
 
-  const live = isActive && liveDynamicTabId === tab.id ? liveDynamic : undefined;
+  const live =
+    isActive && liveDynamicUrl && normalizeTabUrl(tab.url) === normalizeTabUrl(liveDynamicUrl)
+      ? liveDynamic
+      : undefined;
 
   const title =
     pickMeaningful(live?.title) ??
     pickMeaningful(tab.cached?.title) ??
-    (staticMeta.titleKey ? t(staticMeta.titleKey, { ns: 'electron' }) : undefined) ??
+    (titleKey ? t(titleKey, { ns: 'electron' }) : undefined) ??
     t('navigation.lobehub', { ns: 'electron' });
 
-  const avatar = pickMeaningful(live?.avatar) ?? pickMeaningful(tab.cached?.avatar);
+  // A live `null` is a confirmed "no avatar", so the snapshot must not bring a deleted one back.
+  const avatar =
+    live?.avatar === null
+      ? undefined
+      : (pickMeaningful(live?.avatar) ?? pickMeaningful(tab.cached?.avatar));
+  const avatarSeed = pickMeaningful(live?.avatarSeed) ?? pickMeaningful(tab.cached?.avatarSeed);
+  const avatarKind = live?.avatarKind ?? tab.cached?.avatarKind;
   const backgroundColor =
     pickMeaningful(live?.backgroundColor) ?? pickMeaningful(tab.cached?.backgroundColor);
 
@@ -51,6 +61,8 @@ export const resolveTab = (
     isActive,
     meta: {
       avatar,
+      avatarKind,
+      avatarSeed,
       backgroundColor,
       icon: staticMeta.icon ?? FALLBACK_ICON,
       title,
@@ -68,21 +80,20 @@ export const useResolvedTabs = (): UseResolvedTabsResult => {
   const currentRouteMetaUrl = useElectronStore((s) => s.currentRouteMetaUrl);
 
   const translate = t as unknown as Translate;
-  const currentRouteMetaTabId = currentRouteMetaUrl ? normalizeTabUrl(currentRouteMetaUrl) : null;
 
   const tabs = useMemo(
     () =>
       tabRefs.map((tab) =>
         resolveTab(
-          desktopRoutes,
+          mainAreaMetaRoutes,
           tab,
           tab.id === activeTabId,
           translate,
           currentRouteMeta,
-          currentRouteMetaTabId,
+          currentRouteMetaUrl,
         ),
       ),
-    [tabRefs, activeTabId, currentRouteMeta, currentRouteMetaTabId, translate],
+    [tabRefs, activeTabId, currentRouteMeta, currentRouteMetaUrl, translate],
   );
 
   return { activeTabId, tabs };

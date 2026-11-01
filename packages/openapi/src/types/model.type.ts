@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import type { AiModelSelectItem } from '@/database/schemas';
-
+import type { PublicModel } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
 
@@ -16,6 +15,7 @@ const MODEL_TYPES = [
   'text2video',
   'text2music',
   'realtime',
+  'decision',
 ] as const;
 
 // `stt` was renamed to the standard `asr`. It is still accepted on input as a
@@ -45,23 +45,23 @@ export const ModelsListQuerySchema = PaginationQuerySchema.extend({
 // ==================== Model Response Types ====================
 
 export type GetModelsResponse = PaginationQueryResponse<{
-  models?: AiModelSelectItem[];
+  models?: PublicModel[];
 }>;
 
 // ==================== Model Detail / Mutation Types ====================
 
-export type ModelDetailResponse = AiModelSelectItem;
+export type ModelDetailResponse = PublicModel;
 
 const ModelPayloadBaseSchema = z.object({
-  abilities: z.record(z.unknown()).nullish(),
-  config: z.record(z.unknown()).nullish(),
+  abilities: z.record(z.string(), z.unknown()).nullish(),
+  config: z.record(z.string(), z.unknown()).nullish(),
   contextWindowTokens: z.number().int().nullish(),
   description: z.string().nullish(),
   displayName: z.string().min(1, 'Model display name cannot be empty'),
   enabled: z.boolean().nullish(),
   organization: z.string().nullish(),
-  parameters: z.record(z.unknown()).nullish(),
-  pricing: z.record(z.unknown()).nullish(),
+  parameters: z.record(z.string(), z.unknown()).nullish(),
+  pricing: z.record(z.string(), z.unknown()).nullish(),
   releasedAt: z.string().nullish(),
   sort: z.number().int().nullish(),
   source: z.enum(['remote', 'custom', 'builtin']).nullish(),

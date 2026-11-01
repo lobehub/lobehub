@@ -1,10 +1,10 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Avatar, Block, Flexbox, Markdown, Tag } from '@lobehub/ui';
-import { createStaticStyles, useTheme } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, Markdown, Tag, useTheme } from '@lobehub/ui';
 import { memo } from 'react';
+
+import AgentAvatar from '@/components/AgentAvatar';
 
 import type { GetAgentDetailParams, GetAgentDetailState } from '../../../types';
 
@@ -56,8 +56,9 @@ export const GetAgentDetailRender = memo<
     <div className={styles.container}>
       {meta && (
         <div className={styles.header}>
-          <Avatar
-            avatar={meta.avatar || DEFAULT_AVATAR}
+          <AgentAvatar
+            agentId={pluginState?.agentId}
+            avatar={meta.avatar}
             background={meta.backgroundColor || theme.colorBgContainer}
             shape={'square'}
             size={36}

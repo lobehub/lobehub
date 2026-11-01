@@ -11,7 +11,7 @@ import type { MessengerPlatformBinder } from '../types';
  * even though a bot-channel Slack provider can opt into Socket Mode/websocket),
  * so this lives on the messenger definition, not the bot-channel definition.
  */
-export type MessengerConnectionMode = Extract<ConnectionMode, 'webhook' | 'websocket'>;
+export type MessengerConnectionMode = Extract<ConnectionMode, 'polling' | 'webhook' | 'websocket'>;
 
 /** Cross-cutting services the router exposes to platform webhook gates. */
 export interface MessengerWebhookContext {
@@ -39,6 +39,13 @@ export interface MessengerPlatformWebhookGate {
     rawBody: string,
     ctx: MessengerWebhookContext,
   ) => Promise<Response | null>;
+  /**
+   * Called once the router has handled a delivery that passed `preprocess`.
+   * `response` is undefined when handling threw. Gates that claimed the
+   * delivery (replay dedupe) release the claim here on failure so the
+   * platform's retry is processed instead of answered as a duplicate.
+   */
+  settle?: (req: Request, response: Response | undefined) => Promise<void>;
 }
 
 /**
@@ -150,6 +157,14 @@ export interface MessengerPlatformDefinition {
    * Absent for global-bot platforms (Telegram).
    */
   oauth?: MessengerPlatformOAuthAdapter;
+  /**
+   * Reply traits for messenger-only platforms that have no per-agent bot
+   * channel definition in `bot/platforms` (Linq today). Platforms that do have
+   * one (Telegram, Slack, Discord, WeChat) leave these unset — the bridge reads
+   * the bot-channel definition for them.
+   */
+  supportsMarkdown?: boolean;
+  supportsMessageEdit?: boolean;
   webhookGate?: MessengerPlatformWebhookGate;
 }
 
@@ -161,4 +176,10 @@ export interface MessengerPlatformDefinition {
 export type SerializedMessengerPlatformDefinition = Omit<
   MessengerPlatformDefinition,
   'createBinder' | 'oauth' | 'webhookGate'
->;
+> & {
+  access?: {
+    allowed?: boolean;
+    blockedMessage?: string;
+    requiredPlan?: 'paid';
+  };
+};

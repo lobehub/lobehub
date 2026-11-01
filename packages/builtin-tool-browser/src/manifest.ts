@@ -1,0 +1,162 @@
+import type { BuiltinToolManifest } from '@lobechat/types';
+
+import { systemPrompt } from './systemRole';
+import { BrowserApiName, BrowserIdentifier } from './types';
+
+export const BrowserManifest: BuiltinToolManifest = {
+  api: [
+    {
+      description:
+        'Open a URL in the in-app browser sidebar. Opens the panel automatically if it is closed.',
+      name: BrowserApiName.navigate,
+      parameters: {
+        properties: {
+          url: {
+            description: 'Absolute URL to open (http/https).',
+            type: 'string',
+          },
+        },
+        required: ['url'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Capture an accessibility snapshot of the current page: interactive elements (links, buttons, inputs, headings) with stable refs like [ref=e12] for use in click/fill. Always snapshot before acting, and re-snapshot after the page changes.',
+      name: BrowserApiName.snapshot,
+      parameters: {
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Click an element. Prefer a ref from the latest snapshot; viewport x/y coordinates are a fallback for canvas-like surfaces.',
+      name: BrowserApiName.click,
+      parameters: {
+        properties: {
+          ref: {
+            description: 'Element ref from the latest snapshot, e.g. "e12".',
+            type: 'string',
+          },
+          x: {
+            description: 'Viewport x coordinate (only when no ref is available).',
+            type: 'number',
+          },
+          y: {
+            description: 'Viewport y coordinate (only when no ref is available).',
+            type: 'number',
+          },
+        },
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Fill a text input, textarea, or contenteditable identified by a snapshot ref, or choose an option of a native select (combobox) by its value or visible label. Set submit=true to press Enter afterwards.',
+      name: BrowserApiName.fill,
+      parameters: {
+        properties: {
+          ref: {
+            description: 'Element ref from the latest snapshot.',
+            type: 'string',
+          },
+          submit: {
+            description: 'Press Enter after filling (submit search/login forms).',
+            type: 'boolean',
+          },
+          text: {
+            description: 'Text to fill; for a select, the option value or visible label.',
+            type: 'string',
+          },
+        },
+        required: ['ref', 'text'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Send a key or key combination to the focused element, e.g. Enter, Tab, ArrowDown, Control+a, Shift+Tab. Use ControlOrMeta for shortcuts that are Cmd on macOS and Ctrl elsewhere (select all, copy, paste, undo).',
+      name: BrowserApiName.press,
+      parameters: {
+        properties: {
+          key: {
+            description:
+              'Enter, Tab, Escape, Backspace, Delete, Space, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown, F1–F12 or a single character, optionally prefixed with Control/Alt/Shift/Meta/ControlOrMeta joined by "+", e.g. "ControlOrMeta+a".',
+            type: 'string',
+          },
+        },
+        required: ['key'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Scroll the page vertically (positive dy scrolls down) or horizontally.',
+      name: BrowserApiName.scroll,
+      parameters: {
+        properties: {
+          dx: {
+            description: 'Horizontal pixels to scroll.',
+            type: 'number',
+          },
+          dy: {
+            description: 'Vertical pixels to scroll. Positive scrolls down.',
+            type: 'number',
+          },
+        },
+        required: ['dy'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Lay the page out at a fixed viewport size in CSS pixels, e.g. 1440×900 to see the desktop layout or 390×844 for a phone. The size stays for later pages in this conversation. Omit width and height to go back to the default size.',
+      name: BrowserApiName.setViewport,
+      parameters: {
+        properties: {
+          height: {
+            description: 'Viewport height in CSS pixels (240–2160).',
+            type: 'integer',
+          },
+          width: {
+            description: 'Viewport width in CSS pixels (320–3840).',
+            type: 'integer',
+          },
+        },
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Capture a screenshot of the current page. The image is stored and returned to you as a file reference, and is also shown to the USER in chat. Use snapshot/readPage when you only need the page structure or text.',
+      name: BrowserApiName.screenshot,
+      parameters: {
+        properties: {},
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Extract the readable text content of the current page (for quoting or summarizing).',
+      name: BrowserApiName.readPage,
+      parameters: {
+        properties: {},
+        type: 'object',
+      },
+    },
+  ],
+  // `client`: runs in the desktop renderer (local runtime). `server`: cloud
+  // agent runs proxy each call back to the bound device via deviceGateway —
+  // the desktop app's panel, or a headless agent-browser under `lh connect`.
+  deviceClients: ['cli', 'desktop'],
+  executors: ['client', 'server'],
+  identifier: BrowserIdentifier,
+  meta: {
+    avatar: '🌐',
+    description:
+      'Drive a browser on the device: navigate, inspect pages via accessibility snapshots, click, fill forms, and capture screenshots. In the desktop app it is the sidebar browser the user watches live; under the CLI it is a headless browser.',
+    title: 'Browser',
+  },
+  systemRole: systemPrompt,
+  type: 'builtin',
+};

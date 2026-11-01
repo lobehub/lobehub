@@ -6,15 +6,19 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { createServerPlanRuntimeService } from '../lobeAgentPlan';
 
 vi.mock('@/database/models/document', () => ({
-  DocumentModel: vi.fn(() => ({
-    findById: vi.fn(),
-  })),
+  DocumentModel: vi.fn(function () {
+    return {
+      findById: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topicDocument', () => ({
-  TopicDocumentModel: vi.fn(() => ({
-    findByTopicId: vi.fn(),
-  })),
+  TopicDocumentModel: vi.fn(function () {
+    return {
+      findByTopicId: vi.fn(),
+    };
+  }),
 }));
 
 describe('createServerPlanRuntimeService', () => {
@@ -23,7 +27,21 @@ describe('createServerPlanRuntimeService', () => {
 
     createServerPlanRuntimeService(serverDB, 'user-1', 'workspace-1');
 
-    expect(DocumentModel).toHaveBeenCalledWith(serverDB, 'user-1', 'workspace-1');
+    // 4th arg (callerAgentVisibility) is `undefined` when no agent context
+    // is threaded through (e.g. non-tool-runtime callers).
+    expect(DocumentModel).toHaveBeenCalledWith(serverDB, 'user-1', 'workspace-1', undefined);
     expect(TopicDocumentModel).toHaveBeenCalledWith(serverDB, 'user-1', 'workspace-1');
+  });
+
+  it("threads callerAgentVisibility into the plan runtime's DocumentModel", () => {
+    // Public-agent gate on the read path + inherit on the write path both
+    // flow through the 4th ctor arg. When the agent is private the plan
+    // documents inherit that visibility and lands in the caller's private
+    // Pages bucket instead of leaking to the workspace.
+    const serverDB = {} as never;
+
+    createServerPlanRuntimeService(serverDB, 'user-1', 'workspace-1', 'private');
+
+    expect(DocumentModel).toHaveBeenCalledWith(serverDB, 'user-1', 'workspace-1', 'private');
   });
 });

@@ -71,6 +71,8 @@ LobeHub supports two connection modes for Slack:
         - channels:read
         - chat:write
         - commands
+        - files:read
+        - files:write
         - groups:history
         - groups:read
         - im:history
@@ -180,7 +182,7 @@ Use this method if your Slack app already has Event Subscriptions configured wit
 
   ### Add Bot Token Scopes
 
-  Go to **OAuth & Permissions** → **Bot Token Scopes** and add: `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `groups:history`, `groups:read`, `im:history`, `im:read`, `mpim:history`, `mpim:read`, `reactions:read`, `reactions:write`, `users:read`.
+  Go to **OAuth & Permissions** → **Bot Token Scopes** and add: `app_mentions:read`, `channels:history`, `channels:read`, `chat:write`, `files:read`, `files:write`, `groups:history`, `groups:read`, `im:history`, `im:read`, `mpim:history`, `mpim:read`, `reactions:read`, `reactions:write`, `users:read`.
 
   ### Install to Workspace
 
@@ -267,7 +269,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | **Bot Token**           | Yes              | Bot User OAuth Token (`xoxb-...`)                                                                      |
 | **Signing Secret**      | Yes              | Used to verify requests from Slack                                                                     |
 | **App-Level Token**     | Socket Mode only | App-level token (`xapp-...`) for WebSocket connection                                                  |
-| **Connection Mode**     | No               | `websocket` or `webhook` (default: `webhook`)                                                          |
+| **Connection Mode**     | No               | `websocket` (default) or `webhook`                                                                     |
 | **Allowed User IDs**    | No               | Comma- or whitespace-separated Slack member IDs. Global gate — applies to DMs and channel @mentions    |
 | **DM Policy**           | No               | `open` (default), `allowlist`, `pairing`, or `disabled` — who is allowed to DM the bot                 |
 | **Group Policy**        | No               | `open` (default), `allowlist`, or `disabled` — where the bot responds to @mentions                     |

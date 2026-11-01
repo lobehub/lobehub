@@ -1,6 +1,6 @@
-import { memo,Suspense } from 'react';
+import { memo, Suspense } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 
 import DesktopLayout from '../_layout/Desktop';
 import MobileLayout from '../_layout/Mobile';
@@ -13,7 +13,7 @@ const PortalPanel = memo<PortalPanelProps>(({ mobile }) => {
   const Layout = mobile ? MobileLayout : DesktopLayout;
 
   return (
-    <Suspense fallback={<Loading debugId="PortalPanel" />}>
+    <Suspense fallback={<SurfaceSkeleton header={false} variant={'list'} />}>
       <Layout />
     </Suspense>
   );

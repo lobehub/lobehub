@@ -1,0 +1,69 @@
+export interface ParsedGLMModelId {
+  majorVersion: number;
+  minorVersion?: number;
+  normalizedModelId: string;
+}
+
+const GLM_BASE_MODEL_PATTERN = /^glm-(\d+)(?:\.(\d+))?$/;
+
+const parseMinorVersion = (value: string | undefined): Pick<ParsedGLMModelId, 'minorVersion'> => {
+  if (!value) return {};
+
+  return {
+    minorVersion: Number(value),
+  };
+};
+
+export const parseGLMModelId = (model: string): ParsedGLMModelId | undefined => {
+  const normalizedModelId = model.trim().toLowerCase();
+  if (!normalizedModelId) return;
+
+  const match = GLM_BASE_MODEL_PATTERN.exec(normalizedModelId);
+  if (!match) return;
+
+  const [, majorVersion, minorVersion] = match;
+
+  return {
+    majorVersion: Number(majorVersion),
+    normalizedModelId,
+    ...parseMinorVersion(minorVersion),
+  };
+};
+
+/**
+ * GLM-5.3-Flash uses the GLM-5.3 text parameter contract, including always-on thinking and
+ * streaming tool calls. Keep the alias exact so unrelated Flash, Turbo, and vision variants do
+ * not accidentally inherit mainline capabilities.
+ *
+ * @see https://docs.z.ai/guides/vlm/glm-5.3-flash
+ */
+const normalizeGLMParameterModelId = (model: string) => {
+  const normalizedModelId = model.trim().toLowerCase();
+
+  return normalizedModelId === 'glm-5.3-flash' ? 'glm-5.3' : normalizedModelId;
+};
+
+export const isToolStreamSupportedGLMModel = (model: string): boolean => {
+  const parsed = parseGLMModelId(normalizeGLMParameterModelId(model));
+  if (!parsed) return false;
+
+  if (parsed.majorVersion >= 5) return true;
+
+  return parsed.majorVersion === 4 && parsed.minorVersion !== undefined && parsed.minorVersion >= 6;
+};
+
+/**
+ * GLM-5.3+ rejects `thinking.type: "disabled"`. Thinking is always on;
+ * callers can only vary `reasoning_effort` (`low` | `high` | `max`).
+ *
+ * @see https://z.ai/blog/glm-5.3
+ * @see https://docs.z.ai/guides/vlm/glm-5.3-flash
+ */
+export const isAlwaysOnThinkingGLMModel = (model: string): boolean => {
+  const parsed = parseGLMModelId(normalizeGLMParameterModelId(model));
+  if (!parsed) return false;
+
+  if (parsed.majorVersion > 5) return true;
+
+  return parsed.majorVersion === 5 && parsed.minorVersion !== undefined && parsed.minorVersion >= 3;
+};

@@ -1,6 +1,4 @@
-import { Markdown, Select, Snippet, Tag } from '@lobehub/ui';
-import { Divider } from 'antd';
-import { cssVar } from 'antd-style';
+import { cssVar, Divider, Markdown, Select, Snippet, Tag } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -58,13 +56,15 @@ const GithubBadge = memo(() => {
       <Snippet language={'md'} style={{ fontSize: 12 }} variant={'outlined'}>
         {badgeLite}
       </Snippet>
-      { }
+      {}
       <img
         alt="MCP Badge"
         height={selectedStyle === 'for-the-badge' ? 28 : 20}
         src={styledBadgeUrl}
       />
-      <Divider style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>OR</Divider>
+      <Divider style={{ color: cssVar.colorTextDescription, fontSize: 12, marginBlock: 16 }}>
+        OR
+      </Divider>
       <Select
         options={themeOptions}
         prefix={<Tag style={{ marginRight: 4 }}>theme</Tag>}
@@ -74,7 +74,7 @@ const GithubBadge = memo(() => {
       <Snippet language={'md'} style={{ fontSize: 12 }} variant={'outlined'}>
         {badge}
       </Snippet>
-      { }
+      {}
       <img alt="MCP Badge" src={styledBadgeFullUrl} />
     </>
   );

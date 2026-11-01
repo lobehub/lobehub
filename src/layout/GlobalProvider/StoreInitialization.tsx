@@ -13,9 +13,18 @@ import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+import ElectronAppStateSync from './ElectronAppStateSync';
 import { useUserStateRedirect } from './useUserStateRedirect';
 
 const DeferredStoreInitialization = lazy(() => import('./DeferredStoreInitialization'));
+
+/** Subscribe only after the durable cache is hydrated by CacheHydrationGate. */
+export const BuiltinAgentInitialization = () => {
+  const isLogin = useUserStore(authSelectors.isLogin);
+  const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
+  useInitBuiltinAgent(INBOX_SESSION_ID, { isLogin: Boolean(isLogin) });
+  return null;
+};
 
 const StoreInitialization = memo(() => {
   // prefetch error ns to avoid don't show error content correctly
@@ -32,8 +41,6 @@ const StoreInitialization = memo(() => {
     s.useInitSystemStatus,
     s.useCheckServerVersion,
   ]);
-
-  const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
 
   // init the system preference
   useInitSystemStatus();
@@ -60,9 +67,6 @@ const StoreInitialization = memo(() => {
    */
   const isLoginOnInit = Boolean(isLogin);
 
-  // init inbox agent via builtin agent mechanism
-  useInitBuiltinAgent(INBOX_SESSION_ID, { isLogin: isLoginOnInit });
-
   const onUserStateSuccess = useUserStateRedirect();
 
   // init user state
@@ -77,9 +81,12 @@ const StoreInitialization = memo(() => {
   useStoreUpdater('isMobile', mobile);
 
   return (
-    <Suspense>
-      <DeferredStoreInitialization isLogin={isLoginOnInit} />
-    </Suspense>
+    <>
+      <ElectronAppStateSync />
+      <Suspense>
+        <DeferredStoreInitialization isLogin={isLoginOnInit} />
+      </Suspense>
+    </>
   );
 });
 

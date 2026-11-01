@@ -23,6 +23,9 @@ const getDefaultReasonDetail = (finalState: any, reason?: string): string => {
 
 type EventCallback = (events: StreamEvent[]) => void;
 
+/** Matches Redis's two-hour inactivity TTL; streams are not trimmed by count. */
+const STREAM_RETENTION_MS = 2 * 3600 * 1000;
+
 /**
  * In-Memory Stream Event Manager
  * In-memory implementation for testing and local development environments
@@ -31,6 +34,16 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   private streams: Map<string, StreamEvent[]> = new Map();
   private subscribers: Map<string, EventCallback[]> = new Map();
   private eventIdCounter = 0;
+  private lastPublishedAt = new Map<string, number>();
+
+  private evictExpiredStreams(): void {
+    const now = Date.now();
+    for (const [operationId, publishedAt] of this.lastPublishedAt) {
+      if (now - publishedAt <= STREAM_RETENTION_MS) continue;
+      this.streams.delete(operationId);
+      this.lastPublishedAt.delete(operationId);
+    }
+  }
 
   private generateEventId(): string {
     this.eventIdCounter++;
@@ -41,6 +54,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     operationId: string,
     event: Omit<StreamEvent, 'operationId' | 'timestamp'>,
   ): Promise<string> {
+    this.evictExpiredStreams();
     const eventId = this.generateEventId();
 
     const eventData: StreamEvent = {
@@ -49,7 +63,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
       // event shape stays identical to the production wire format —
       // tests run against this manager and would otherwise mask
       // regressions in the strip behaviour.
-      data: stripFinalStateInEventData(event.data),
+      data: stripFinalStateInEventData(event.data, event.type),
       id: eventId,
       operationId,
       timestamp: Date.now(),
@@ -64,10 +78,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
 
     stream.push(eventData);
 
-    // Limit stream length to prevent memory overflow
-    if (stream.length > 1000) {
-      stream.shift();
-    }
+    this.lastPublishedAt.set(operationId, Date.now());
 
     log('Published event %s for operation %s:%d', eventData.type, operationId, eventData.stepIndex);
 
@@ -110,6 +121,8 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     operationId,
     stepIndex,
     finalState,
+    messagePatchMode,
+    messageRevision,
     reason,
     reasonDetail,
     uiMessages,
@@ -117,7 +130,8 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     // Strip happens centrally inside `publishStreamEvent`.
     return this.publishStreamEvent(operationId, {
       data: {
-        finalState,
+        ...(!messagePatchMode && { finalState }),
+        ...(messagePatchMode && { messagePatchMode: true, messageRevision }),
         operationId,
         phase: 'execution_complete',
         reason: reason || 'completed',
@@ -139,7 +153,48 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     return stream.slice(-count).reverse();
   }
 
+  async getStreamHistoryPage(operationId: string, cursor = '0', limit = 200) {
+    this.evictExpiredStreams();
+    const stream = this.streams.get(operationId);
+    const index = cursor === '0' ? -1 : (stream?.findIndex((event) => event.id === cursor) ?? -1);
+    if (!stream || (cursor !== '0' && index < 0) || stream[0]?.type !== 'agent_runtime_init') {
+      return { available: false, events: [], hasMore: false, nextCursor: cursor };
+    }
+    const events = stream.slice(index + 1, index + 1 + limit);
+    return {
+      available: true,
+      events,
+      hasMore: stream.length > index + 1 + limit,
+      nextCursor: events.at(-1)?.id ?? cursor,
+    };
+  }
+
+  /**
+   * Single bounded read — the long-poll primitive (see `IStreamEventManager`).
+   * The in-memory manager is non-blocking: it returns immediately with whatever
+   * is already buffered after `lastEventId`. `'$'` means "from now", so the
+   * first poll returns nothing and hands back the current tail cursor; later
+   * polls return events appended since. `blockMs` is ignored (tests/local dev
+   * only — the Redis manager provides the real blocking wait).
+   */
+  async readEventsOnce(
+    operationId: string,
+    lastEventId: string = '$',
+    _blockMs: number = 0,
+  ): Promise<{ events: StreamEvent[]; lastEventId: string }> {
+    const stream = this.streams.get(operationId) ?? [];
+
+    if (lastEventId === '$') {
+      return { events: [], lastEventId: stream.at(-1)?.id ?? '0' };
+    }
+
+    const idx = stream.findIndex((e) => e.id === lastEventId);
+    const events = idx >= 0 ? stream.slice(idx + 1) : stream.slice();
+    return { events, lastEventId: events.at(-1)?.id ?? lastEventId };
+  }
+
   async cleanupOperation(operationId: string): Promise<void> {
+    this.lastPublishedAt.delete(operationId);
     this.streams.delete(operationId);
     this.subscribers.delete(operationId);
     log('Cleaned up operation %s', operationId);
@@ -217,6 +272,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
    * Clear all data (for testing)
    */
   clear(): void {
+    this.lastPublishedAt.clear();
     this.streams.clear();
     this.subscribers.clear();
     this.eventIdCounter = 0;

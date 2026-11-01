@@ -1,0 +1,186 @@
+'use client';
+
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  SearchBar,
+  Text,
+  TextArea,
+  useModalContext,
+} from '@lobehub/ui';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import AgentAvatar from '@/components/AgentAvatar';
+import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
+
+import SelectCircle from '../SelectCircle';
+import { useForwardTargets } from '../useForwardTargets';
+import { useForwardTopic } from '../useForwardTopic';
+
+const styles = createStaticStyles(({ css }) => ({
+  body: css`
+    block-size: 460px;
+  `,
+  context: css`
+    flex: 1;
+
+    padding: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  divider: css`
+    align-self: stretch;
+    inline-size: 1px;
+    background: ${cssVar.colorBorderSecondary};
+  `,
+  list: css`
+    overflow-y: auto;
+    flex: 1;
+  `,
+  row: css`
+    cursor: pointer;
+
+    min-block-size: 44px;
+    padding-block: 6px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadiusLG};
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  selected: css`
+    background: ${cssVar.colorFillQuaternary};
+  `,
+}));
+
+export interface TopicForwardContentProps {
+  cancelSourceContinuation?: boolean;
+  sourceAgentId: string;
+  topicId: string;
+  topicTitle: string;
+}
+
+export const TopicForwardContent = ({
+  cancelSourceContinuation,
+  sourceAgentId,
+  topicId,
+  topicTitle,
+}: TopicForwardContentProps) => {
+  const { t } = useTranslation('chat');
+  const { close } = useModalContext();
+  const [note, setNote] = useState('');
+  const agents = useHomeStore(homeAgentListSelectors.allAgents);
+  const { candidates, keyword, selectedIds, setKeyword, targets, toggle } = useForwardTargets(
+    agents,
+    sourceAgentId,
+  );
+  const forwardTopic = useForwardTopic({
+    agentId: sourceAgentId,
+    cancelSourceContinuation,
+    topicId,
+  });
+
+  useFetchAgentList();
+
+  const handleForward = () => {
+    if (targets.length === 0) return;
+
+    forwardTopic(targets, note);
+    close();
+  };
+
+  return (
+    <Flexbox horizontal className={styles.body} gap={16}>
+      <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
+        <SearchBar
+          allowClear
+          placeholder={t('messageForward.modal.searchPlaceholder')}
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+        />
+        <Flexbox className={styles.list} gap={4}>
+          {candidates.length === 0 ? (
+            <Flexbox align={'center'} justify={'center'} padding={24}>
+              <Text type={'secondary'}>{t('messageForward.modal.empty')}</Text>
+            </Flexbox>
+          ) : (
+            candidates.map((agent) => {
+              const selected = selectedIds.includes(agent.id);
+              return (
+                <Flexbox
+                  horizontal
+                  align={'center'}
+                  className={cx(styles.row, selected && styles.selected)}
+                  gap={8}
+                  key={agent.id}
+                  onClick={() => toggle(agent.id)}
+                >
+                  <AgentAvatar
+                    agentId={agent.id}
+                    avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
+                    background={agent.backgroundColor || undefined}
+                    name={agent.label || t('untitledAgent')}
+                    size={22}
+                  />
+                  <Text ellipsis style={{ flex: 1 }}>
+                    {agent.label || t('untitledAgent')}
+                  </Text>
+                  <SelectCircle checked={selected} />
+                </Flexbox>
+              );
+            })
+          )}
+        </Flexbox>
+      </Flexbox>
+
+      <div className={styles.divider} />
+
+      <Flexbox flex={1} gap={12} style={{ minWidth: 0 }}>
+        <Text type={'secondary'}>{t('messageForward.topic.context')}</Text>
+        <Flexbox className={styles.context} gap={8}>
+          <Text ellipsis strong>
+            {topicTitle}
+          </Text>
+          <Text type={'secondary'}>{t('messageForward.topic.description')}</Text>
+        </Flexbox>
+        <TextArea
+          autoSize={{ maxRows: 4, minRows: 2 }}
+          resize={false}
+          value={note}
+          placeholder={t(
+            cancelSourceContinuation
+              ? 'messageForward.topic.handoff.notePlaceholder'
+              : 'messageForward.modal.notePlaceholder',
+          )}
+          onChange={(event) => setNote(event.target.value)}
+        />
+        <Flexbox horizontal gap={8} justify={'flex-end'}>
+          <Button onClick={close}>{t('messageForward.bar.cancel')}</Button>
+          <Button disabled={selectedIds.length === 0} type={'primary'} onClick={handleForward}>
+            {selectedIds.length > 0
+              ? t(
+                  cancelSourceContinuation
+                    ? 'messageForward.topic.handoff.submitCount'
+                    : 'messageForward.modal.sendCount',
+                  { count: selectedIds.length },
+                )
+              : t(
+                  cancelSourceContinuation
+                    ? 'messageForward.topic.handoff.submit'
+                    : 'messageForward.bar.forward',
+                )}
+          </Button>
+        </Flexbox>
+      </Flexbox>
+    </Flexbox>
+  );
+};

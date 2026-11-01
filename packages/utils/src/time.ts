@@ -48,6 +48,16 @@ export const isNewReleaseDate = (date: string, days = 14) => {
   return dayjs().diff(dayjs(date), 'day') < days;
 };
 
+/**
+ * Locale-aware "3 days ago" / "3 天前" relative time. Returns an empty string
+ * for missing or unparseable input so callers can render it unconditionally.
+ */
+export const fromNow = (time?: string | Date | number | null): string => {
+  if (!time) return '';
+  const date = dayjs(time);
+  return date.isValid() ? date.fromNow() : '';
+};
+
 export interface FormatActivityTimeOptions {
   formatOtherYear?: string;
   formatThisYear?: string;

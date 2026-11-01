@@ -1,14 +1,33 @@
 import { autoUpdater } from 'electron-updater';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as EngineModule from '@/modules/updater/engine';
+
 import type { App as AppCore } from '../../App';
 import { UpdaterManager } from '../UpdaterManager';
 
 // Use vi.hoisted to ensure mocks work with require()
-const { mockGetAllWindows, mockReleaseSingleInstanceLock } = vi.hoisted(() => ({
-  mockGetAllWindows: vi.fn().mockReturnValue([]),
-  mockReleaseSingleInstanceLock: vi.fn(),
-}));
+const { mockGetAllWindows, mockLoadSparkleBridge, mockQuit, mockReleaseSingleInstanceLock } =
+  vi.hoisted(() => ({
+    mockGetAllWindows: vi.fn().mockReturnValue([]),
+    mockLoadSparkleBridge: vi.fn(),
+    mockQuit: vi.fn(),
+    mockReleaseSingleInstanceLock: vi.fn(),
+  }));
+
+vi.mock('electron-sparkle-updater', () => ({ loadSparkleBridge: mockLoadSparkleBridge }));
+
+// Production resolves engine.mac.ts through the existing Vite platform plugin.
+vi.mock('@/modules/updater/engine', async (importOriginal) => {
+  const original = await importOriginal<typeof EngineModule>();
+  return {
+    ...original,
+    createUpdateEngine: async (channel: 'stable' | 'canary') =>
+      process.platform === 'darwin'
+        ? (await import('@/modules/updater/engine.mac')).createUpdateEngine(channel)
+        : original.createUpdateEngine(channel),
+  };
+});
 
 // Mock electron-log
 vi.mock('electron-log', () => ({
@@ -23,23 +42,34 @@ vi.mock('electron-log', () => ({
 }));
 
 // Mock electron-updater
-vi.mock('electron-updater', () => ({
-  autoUpdater: {
-    allowDowngrade: false,
-    allowPrerelease: false,
-    autoDownload: false,
-    autoInstallOnAppQuit: false,
-    channel: 'stable',
-    checkForUpdates: vi.fn(),
-    currentVersion: undefined as any,
-    downloadUpdate: vi.fn(),
-    forceDevUpdateConfig: false,
-    logger: null as any,
-    on: vi.fn(),
-    quitAndInstall: vi.fn(),
-    setFeedURL: vi.fn(),
-  },
-}));
+vi.mock('electron-updater', () => {
+  let channel = 'stable';
+
+  return {
+    autoUpdater: {
+      allowDowngrade: false,
+      allowPrerelease: false,
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      get channel() {
+        return channel;
+      },
+      set channel(value: string) {
+        channel = value;
+        this.allowDowngrade = true;
+      },
+      checkForUpdates: vi.fn(),
+      currentVersion: undefined as any,
+      downloadUpdate: vi.fn(),
+      forceDevUpdateConfig: false,
+      isUpdaterActive: vi.fn().mockReturnValue(true),
+      logger: null as any,
+      on: vi.fn(),
+      quitAndInstall: vi.fn(),
+      setFeedURL: vi.fn(),
+    },
+  };
+});
 
 // Mock electron - uses hoisted functions for require() compatibility
 vi.mock('electron', () => ({
@@ -48,22 +78,16 @@ vi.mock('electron', () => ({
   },
   app: {
     getVersion: vi.fn().mockReturnValue('0.0.0'),
+    isPackaged: true,
+    on: vi.fn(),
+    quit: mockQuit,
     releaseSingleInstanceLock: mockReleaseSingleInstanceLock,
   },
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock updater configs
-vi.mock('@/modules/updater/configs', () => ({
+vi.mock('@/modules/updater/configs', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   UPDATE_CHANNEL: 'stable',
   UPDATE_SERVER_URL: 'https://mock.update.server',
   updaterConfig: {
@@ -86,7 +110,10 @@ vi.mock('@/env', () => ({
 // Mock isDev
 vi.mock('@/const/env', () => ({
   isDev: false,
+  isWindows: false,
 }));
+
+const originalPlatform = process.platform;
 
 describe('UpdaterManager', () => {
   let updaterManager: UpdaterManager;
@@ -96,7 +123,9 @@ describe('UpdaterManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(process, 'platform', { value: 'win32' });
     vi.useFakeTimers();
+    mockLoadSparkleBridge.mockReturnValue(null);
 
     // Reset autoUpdater state
     (autoUpdater as any).autoDownload = false;
@@ -106,6 +135,7 @@ describe('UpdaterManager', () => {
     (autoUpdater as any).allowDowngrade = false;
     (autoUpdater as any).forceDevUpdateConfig = false;
     (autoUpdater as any).currentVersion = undefined;
+    vi.mocked((autoUpdater as any).isUpdaterActive).mockReturnValue(true);
 
     // Capture registered events
     registeredEvents = new Map();
@@ -124,6 +154,10 @@ describe('UpdaterManager', () => {
           broadcast: mockBroadcast,
         }),
       },
+      coreUpdateManager: {
+        checkForUpdates: vi.fn().mockResolvedValue(undefined),
+      },
+      isInstallingUpdate: false,
       isQuiting: false,
       menuManager: {
         rebuildAppMenu: vi.fn(),
@@ -138,11 +172,13 @@ describe('UpdaterManager', () => {
   });
 
   afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
     vi.useRealTimers();
   });
 
   describe('constructor', () => {
-    it('should set up electron-log for autoUpdater', () => {
+    it('should set up electron-log for autoUpdater', async () => {
+      await updaterManager.initialize();
       expect(autoUpdater.logger).not.toBeNull();
     });
   });
@@ -155,7 +191,17 @@ describe('UpdaterManager', () => {
       expect(autoUpdater.autoInstallOnAppQuit).toBe(false);
       expect(autoUpdater.channel).toBe('stable');
       expect(autoUpdater.allowPrerelease).toBe(false);
-      expect(autoUpdater.allowDowngrade).toBe(false);
+      expect(autoUpdater.allowDowngrade).toBe(true);
+    });
+
+    it('should allow a persisted canary channel to roll back to an older canary build', async () => {
+      vi.mocked(mockApp.storeManager.get).mockReturnValue('canary');
+
+      await updaterManager.initialize();
+
+      expect(autoUpdater.channel).toBe('canary');
+      expect(autoUpdater.allowPrerelease).toBe(true);
+      expect(autoUpdater.allowDowngrade).toBe(true);
     });
 
     it('should register all event listeners', async () => {
@@ -170,16 +216,230 @@ describe('UpdaterManager', () => {
     });
   });
 
+  describe('sparkle engine', () => {
+    const createBridge = () => ({
+      checkForUpdates: vi.fn(),
+      init: vi.fn().mockReturnValue(true),
+      installUpdateNow: vi.fn(),
+      installUpdateOnQuit: vi.fn(),
+      setAutomaticChecks: vi.fn(),
+      setEventHandler: vi.fn(),
+    });
+
+    let bridge: ReturnType<typeof createBridge>;
+    let sparkleEvents: ((event: any) => void) | undefined;
+
+    beforeEach(() => {
+      bridge = createBridge();
+      bridge.setEventHandler.mockImplementation((handler) => {
+        sparkleEvents = handler;
+      });
+      bridge.checkForUpdates.mockImplementation(() => {
+        sparkleEvents?.({ type: 'update-not-available' });
+      });
+      mockLoadSparkleBridge.mockReturnValue(bridge);
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { value: originalPlatform });
+    });
+
+    it('leaves termination to Sparkle when installing now', async () => {
+      await updaterManager.initialize();
+      (updaterManager as any).updateAvailable = true;
+
+      updaterManager.installNow();
+      await vi.advanceTimersByTimeAsync(100 + 60 * 1000);
+
+      expect(bridge.installUpdateNow).toHaveBeenCalled();
+      expect(mockQuit).not.toHaveBeenCalled();
+    });
+
+    it('drives canary through Sparkle with the arch-specific appcast', async () => {
+      vi.mocked(mockApp.storeManager.get).mockReturnValue('canary');
+      await updaterManager.initialize();
+
+      expect(bridge.init).toHaveBeenCalledWith({
+        appcastUrl: `https://mock.update.server/canary/appcast-${process.arch}.xml`,
+      });
+
+      await updaterManager.checkForUpdates();
+      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(1);
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    });
+
+    it('uses Sparkle for stable without loading electron-updater', async () => {
+      await updaterManager.initialize();
+      await updaterManager.checkForUpdates();
+
+      expect(bridge.init).toHaveBeenCalledWith({
+        appcastUrl: `https://mock.update.server/stable/appcast-${process.arch}.xml`,
+      });
+      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(1);
+      expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
+      expect(autoUpdater.on).not.toHaveBeenCalled();
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    });
+
+    it('switches the Sparkle feed between stable and canary', async () => {
+      await updaterManager.initialize();
+      updaterManager.switchChannel('canary');
+      await vi.advanceTimersByTimeAsync(0);
+      updaterManager.switchChannel('stable');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(bridge.init).toHaveBeenLastCalledWith({
+        appcastUrl: `https://mock.update.server/stable/appcast-${process.arch}.xml`,
+      });
+      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(2);
+      expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
+    });
+
+    it('discards the old channel download and rechecks after its native cycle completes', async () => {
+      vi.mocked(mockApp.storeManager.get).mockReturnValue('canary');
+      bridge.checkForUpdates.mockImplementation(() => {});
+      await updaterManager.initialize();
+      const check = updaterManager.checkForUpdates();
+      sparkleEvents?.({ type: 'update-available', version: '9.9.9-canary.1' });
+      updaterManager.switchChannel('stable');
+      sparkleEvents?.({ type: 'download-progress', phase: 'download', percent: 50 });
+      sparkleEvents?.({ type: 'update-downloaded', version: '9.9.9-canary.1' });
+      await check;
+      expect(mockBroadcast).not.toHaveBeenCalledWith('updateReady', expect.anything());
+      expect(mockBroadcast).not.toHaveBeenCalledWith('updateDownloadProgress', expect.anything());
+      expect(bridge.init).toHaveBeenLastCalledWith({
+        appcastUrl: `https://mock.update.server/stable/appcast-${process.arch}.xml`,
+      });
+      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(2);
+      sparkleEvents?.({ type: 'update-not-available' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(updaterManager.getUpdaterState().stage).toBe('latest');
+    });
+
+    it('reports a missing Sparkle bridge without falling back to electron-updater', async () => {
+      mockLoadSparkleBridge.mockReturnValue(null);
+      await updaterManager.initialize();
+      await updaterManager.checkForUpdates();
+      expect(updaterManager.getUpdaterState()).toEqual({
+        stage: 'error',
+        errorMessage: 'Sparkle bridge unavailable',
+      });
+      expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    });
+
+    it('defers install-later to Sparkle on canary', async () => {
+      vi.mocked(mockApp.storeManager.get).mockReturnValue('canary');
+      await updaterManager.initialize();
+
+      updaterManager.installLater();
+
+      expect(bridge.installUpdateOnQuit).toHaveBeenCalledTimes(1);
+      expect(autoUpdater.autoInstallOnAppQuit).toBe(false);
+    });
+
+    it('unblocks the next check when a Sparkle download fails', async () => {
+      let sparkleEvents: ((event: any) => void) | undefined;
+      bridge.setEventHandler.mockImplementation((fn) => {
+        sparkleEvents = fn;
+      });
+      vi.mocked(mockApp.storeManager.get).mockReturnValue('canary');
+      await updaterManager.initialize();
+
+      sparkleEvents?.({ type: 'update-available', version: '9.9.9' });
+      sparkleEvents?.({ message: 'download failed', type: 'error' });
+      const next = updaterManager.checkForUpdates();
+      sparkleEvents?.({ type: 'update-not-available' });
+      await next;
+
+      expect(bridge.checkForUpdates).toHaveBeenCalledTimes(1);
+      expect(mockBroadcast).toHaveBeenCalledWith('updateError', 'download failed');
+    });
+
+    it('never loads Sparkle outside macOS', async () => {
+      Object.defineProperty(process, 'platform', { value: 'win32' });
+      vi.mocked(mockApp.storeManager.get).mockReturnValue('canary');
+
+      await updaterManager.initialize();
+
+      expect(mockLoadSparkleBridge).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('switchChannel', () => {
+    it('should allow rollback whenever canary is the target channel', async () => {
+      await updaterManager.initialize();
+      updaterManager.switchChannel('canary');
+
+      expect(autoUpdater.allowDowngrade).toBe(true);
+    });
+
+    it('should preserve canary-to-stable downgrade support', async () => {
+      vi.mocked(mockApp.storeManager.get).mockReturnValue('canary');
+      await updaterManager.initialize();
+
+      updaterManager.switchChannel('stable');
+
+      expect(autoUpdater.allowDowngrade).toBe(true);
+    });
+
+    it('should allow rollback when stable remains the target channel', async () => {
+      await updaterManager.initialize();
+      updaterManager.switchChannel('stable');
+
+      expect(autoUpdater.allowDowngrade).toBe(true);
+    });
+  });
+
   describe('checkForUpdates', () => {
     beforeEach(async () => {
       await updaterManager.initialize();
       vi.mocked(autoUpdater.checkForUpdates).mockResolvedValue({} as any);
     });
 
+    // Regression: a snap / tar.gz install (and an AppImage started without its
+    // runtime) makes electron-updater resolve checkForUpdates() with `null` and
+    // emit nothing at all, which used to strand the UI on the `checking`
+    // spinner forever. Issue #19564.
+    it('should report unsupported instead of hanging when the updater is inactive', async () => {
+      vi.mocked((autoUpdater as any).isUpdaterActive).mockReturnValue(false);
+      mockBroadcast.mockClear();
+
+      await updaterManager.checkForUpdates({ manual: true });
+
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+      expect(mockBroadcast).toHaveBeenCalledWith('updaterStateChanged', { stage: 'unsupported' });
+      expect(updaterManager.getUpdaterState().stage).toBe('unsupported');
+    });
+
+    it('should not get stuck on checking after an inactive-updater check', async () => {
+      vi.mocked((autoUpdater as any).isUpdaterActive).mockReturnValue(false);
+
+      await updaterManager.checkForUpdates({ manual: true });
+
+      const stages = mockBroadcast.mock.calls
+        .filter(([event]) => event === 'updaterStateChanged')
+        .map(([, state]) => state.stage);
+      expect(stages).not.toContain('checking');
+    });
+
     it('should call autoUpdater.checkForUpdates', async () => {
       await updaterManager.checkForUpdates();
 
       expect(autoUpdater.checkForUpdates).toHaveBeenCalled();
+    });
+
+    it('should also check core OTA on a manual check', async () => {
+      await updaterManager.checkForUpdates({ manual: true });
+
+      expect(mockApp.coreUpdateManager.checkForUpdates).toHaveBeenCalledWith({ manual: true });
+    });
+
+    it('should leave core OTA to its own schedule on an auto check', async () => {
+      await updaterManager.checkForUpdates();
+
+      expect(mockApp.coreUpdateManager.checkForUpdates).not.toHaveBeenCalled();
     });
 
     it('should broadcast updaterStateChanged with checking stage when checking', async () => {
@@ -323,16 +583,52 @@ describe('UpdaterManager', () => {
   });
 
   describe('installNow', () => {
-    // Note: installNow uses require('electron') which is difficult to mock in vitest.
-    // These tests are skipped because vi.mock doesn't work with dynamic require().
-    // The functionality should be tested in integration tests or E2E tests.
+    beforeEach(async () => {
+      await updaterManager.initialize();
+      (updaterManager as any).updateAvailable = true;
+    });
 
-    it.skip('should set app.isQuiting to true', () => {
+    // Regression: closing every window makes Electron fire `window-all-closed`,
+    // and App.ts quits the process there on Linux/Windows. That used to kill the
+    // process before the deferred quitAndInstall() ran, so a downloaded update
+    // was never installed on Linux. Issue #19564.
+    it('marks the app as installing before closing any window', () => {
+      const closeOrder: string[] = [];
+      const mockWindow = {
+        close: vi.fn(() =>
+          closeOrder.push(`close:isInstallingUpdate=${mockApp.isInstallingUpdate}`),
+        ),
+        isDestroyed: vi.fn().mockReturnValue(false),
+      };
+      mockGetAllWindows.mockReturnValue([mockWindow]);
+
+      updaterManager.installNow();
+
+      expect(mockApp.isInstallingUpdate).toBe(true);
+      expect(closeOrder).toEqual(['close:isInstallingUpdate=true']);
+    });
+
+    it('quits by itself when quitAndInstall fails to hand off', async () => {
+      updaterManager.installNow();
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(autoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true);
+      expect(mockQuit).not.toHaveBeenCalled();
+
+      // The failsafe must not fire while a package manager prompt could still
+      // be running, but it has to fire eventually — otherwise the suppressed
+      // window-all-closed quit leaves a window-less zombie process behind.
+      await vi.advanceTimersByTimeAsync(60 * 1000);
+      expect(mockQuit).toHaveBeenCalled();
+      expect(mockApp.isInstallingUpdate).toBe(false);
+    });
+
+    it('should set app.isQuiting to true', () => {
       updaterManager.installNow();
       expect(mockApp.isQuiting).toBe(true);
     });
 
-    it.skip('should close all windows', () => {
+    it('should close all windows', () => {
       const mockWindow1 = { close: vi.fn(), isDestroyed: vi.fn().mockReturnValue(false) };
       const mockWindow2 = { close: vi.fn(), isDestroyed: vi.fn().mockReturnValue(false) };
       mockGetAllWindows.mockReturnValue([mockWindow1, mockWindow2]);
@@ -341,19 +637,19 @@ describe('UpdaterManager', () => {
       expect(mockWindow2.close).toHaveBeenCalled();
     });
 
-    it.skip('should not close destroyed windows', () => {
+    it('should not close destroyed windows', () => {
       const mockWindow = { close: vi.fn(), isDestroyed: vi.fn().mockReturnValue(true) };
       mockGetAllWindows.mockReturnValue([mockWindow]);
       updaterManager.installNow();
       expect(mockWindow.close).not.toHaveBeenCalled();
     });
 
-    it.skip('should release single instance lock', () => {
+    it('should release single instance lock', () => {
       updaterManager.installNow();
       expect(mockReleaseSingleInstanceLock).toHaveBeenCalled();
     });
 
-    it.skip('should call quitAndInstall with correct parameters after delay', async () => {
+    it('should call quitAndInstall with correct parameters after delay', async () => {
       updaterManager.installNow();
       expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
       await vi.advanceTimersByTimeAsync(100);
@@ -407,6 +703,9 @@ describe('UpdaterManager', () => {
   });
 
   describe('installLater', () => {
+    beforeEach(async () => {
+      await updaterManager.initialize();
+    });
     it('should set autoInstallOnAppQuit to true', () => {
       updaterManager.installLater();
 
@@ -417,6 +716,112 @@ describe('UpdaterManager', () => {
       updaterManager.installLater();
 
       expect(mockBroadcast).toHaveBeenCalledWith('updateWillInstallLater');
+    });
+  });
+
+  describe('install-later session guard', () => {
+    beforeEach(async () => {
+      await updaterManager.initialize();
+      vi.mocked(autoUpdater.downloadUpdate).mockResolvedValue([] as any);
+    });
+
+    const fireDownloaded = (version: string) => {
+      registeredEvents.get('update-downloaded')?.({ version });
+    };
+    const fireAvailable = (version: string) => {
+      registeredEvents.get('update-available')?.({ version });
+    };
+
+    it('suppresses re-broadcast of updateReady for the install-later version', () => {
+      fireDownloaded('2.2.6');
+      expect(mockBroadcast).toHaveBeenCalledWith(
+        'updateReady',
+        expect.objectContaining({ version: '2.2.6' }),
+      );
+
+      updaterManager.installLater();
+
+      mockBroadcast.mockClear();
+      fireDownloaded('2.2.6');
+
+      expect(mockBroadcast).not.toHaveBeenCalledWith('updateReady', expect.anything());
+      expect(mockBroadcast).toHaveBeenCalledWith(
+        'updaterStateChanged',
+        expect.objectContaining({ stage: 'downloaded' }),
+      );
+    });
+
+    it.each([
+      { incomingVersion: '2.2.6', manual: false },
+      { incomingVersion: '2.2.6', manual: true },
+      { incomingVersion: '2.2.5', manual: false },
+      { incomingVersion: '2.2.5', manual: true },
+    ])(
+      'restores the downloaded state after checking $incomingVersion (manual=$manual)',
+      async ({ incomingVersion, manual }) => {
+        fireDownloaded('2.2.6');
+        updaterManager.installLater();
+        mockBroadcast.mockClear();
+        vi.mocked(autoUpdater.downloadUpdate).mockClear();
+        vi.mocked(autoUpdater.checkForUpdates).mockImplementation(async () => {
+          fireAvailable(incomingVersion);
+          return null;
+        });
+
+        await updaterManager.checkForUpdates({ manual });
+
+        const expectedState = {
+          stage: 'downloaded',
+          updateInfo: { kind: 'app', version: '2.2.6' },
+        };
+        expect(updaterManager.getUpdaterState()).toEqual(expectedState);
+        expect(mockBroadcast).toHaveBeenLastCalledWith('updaterStateChanged', expectedState);
+        expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
+        expect(mockBroadcast).not.toHaveBeenCalledWith('updateReady', expect.anything());
+        expect(autoUpdater.autoInstallOnAppQuit).toBe(true);
+      },
+    );
+
+    it('clears the guard and re-broadcasts when a newer version arrives', () => {
+      fireDownloaded('2.2.6');
+      updaterManager.installLater();
+      mockBroadcast.mockClear();
+
+      fireAvailable('2.2.7');
+      fireDownloaded('2.2.7');
+
+      expect(mockBroadcast).toHaveBeenCalledWith(
+        'updateReady',
+        expect.objectContaining({ version: '2.2.7' }),
+      );
+    });
+
+    it('keeps the guard when an older version arrives', () => {
+      fireDownloaded('2.2.6');
+      updaterManager.installLater();
+      mockBroadcast.mockClear();
+
+      fireDownloaded('2.2.5');
+
+      expect(mockBroadcast).not.toHaveBeenCalledWith(
+        'updateReady',
+        expect.objectContaining({ version: '2.2.5' }),
+      );
+    });
+
+    it('clears the guard on channel switch', () => {
+      fireDownloaded('2.2.6');
+      updaterManager.installLater();
+
+      updaterManager.switchChannel('canary');
+
+      mockBroadcast.mockClear();
+      fireDownloaded('2.2.6');
+
+      expect(mockBroadcast).toHaveBeenCalledWith(
+        'updateReady',
+        expect.objectContaining({ version: '2.2.6' }),
+      );
     });
   });
 
@@ -508,14 +913,14 @@ describe('UpdaterManager', () => {
     });
 
     describe('update-downloaded', () => {
-      it('should broadcast updateDownloaded', async () => {
+      it('should broadcast updateReady with the app update info', async () => {
         await updaterManager.initialize();
 
         const info = { version: '2.0.0' };
         const handler = registeredEvents.get('update-downloaded');
         handler?.(info);
 
-        expect(mockBroadcast).toHaveBeenCalledWith('updateDownloaded', info);
+        expect(mockBroadcast).toHaveBeenCalledWith('updateReady', { ...info, kind: 'app' });
       });
     });
 
@@ -579,7 +984,7 @@ describe('UpdaterManager', () => {
       updaterManager.simulateUpdateDownloaded();
 
       expect(mockBroadcast).not.toHaveBeenCalledWith(
-        'updateDownloaded',
+        'updateReady',
         expect.objectContaining({ version: '1.0.0' }),
       );
     });

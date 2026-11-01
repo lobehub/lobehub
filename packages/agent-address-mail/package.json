@@ -1,0 +1,23 @@
+{
+  "name": "@lobechat/agent-address-mail",
+  "version": "0.1.0",
+  "description": "Agent Mail (lobe.id) transport behind an agent's own mail address",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
+  }
+}

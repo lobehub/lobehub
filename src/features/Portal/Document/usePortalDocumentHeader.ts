@@ -1,0 +1,150 @@
+'use client';
+
+import { toast } from '@lobehub/ui';
+import { useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
+import { docsPagePath } from '@/features/ResourceHome/paths';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { useSingleton } from '@/hooks/useSingleton';
+import { documentService } from '@/services/document';
+import { invalidateDocumentMutation } from '@/services/document/invalidation';
+import { useAgentStore } from '@/store/agent';
+import { useDocumentStore } from '@/store/document';
+import { getDocumentRenderMode } from '@/utils/documentRenderMode';
+import { isSkillMarkdownDocument } from '@/utils/skillMarkdown';
+
+import { useResolvedAgentDocumentId, useResolvedDocumentId } from './documentViewContext';
+
+export const TITLE_MAX_LENGTH = 100;
+
+/**
+ * Title state + rename action for the portal document header: the saved title
+ * (title › filename), the loading flag, the meta lock, and a serialized title
+ * write used by the `…` menu's rename dialog.
+ */
+export const usePortalDocumentTitle = () => {
+  const { t } = useTranslation(['chat', 'common']);
+  const documentId = useResolvedDocumentId();
+  const agentId = useAgentStore((s) => s.activeAgentId);
+
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  const optimisticDocumentDetail = useDocumentStore((s) => s.optimisticDocumentDetail);
+  const { data: document, isLoading } = useFetchDocumentDetail(documentId);
+
+  const savedTitle = useMemo(
+    () => document?.title || document?.filename || '',
+    [document?.title, document?.filename],
+  );
+  // Anything the portal renders without the rich editor (highlight view,
+  // file preview) must not be renameable here — matching the full-page
+  // editor's `metaReadOnly` gate (#19760).
+  const isReadonly = !!document && getDocumentRenderMode(document).mode !== 'editor';
+  // A managed skill's `SKILL.md` index carries its identity in the filename —
+  // a portal rename would push the new title into both `title` and `filename`
+  // and desync the bundle. The full-page editor locks meta for the same reason
+  // (see AgentDocumentPage's `metaReadOnly`); the rename API rejects it anyway.
+  const isSkillIndex = !!document && isSkillMarkdownDocument(document);
+  const metaLocked = isReadonly || isSkillIndex;
+
+  // Serializes title writes end-to-end. Two layers:
+  // 1. `saveChain` queues the SERVER calls — updateDocument mutations run
+  //    in submit order, so a slow first request can never land after (and
+  //    overwrite) a newer rename.
+  // 2. The replica's optimistic overlays settle the CLIENT state — a rejected
+  //    older request rolls back only its own overlay, never a newer intent —
+  //    and `saveTicketRef` keeps the follow-up (refresh / toast) to the newest.
+  const saveChain = useSingleton(() => ({ current: Promise.resolve() as Promise<unknown> }));
+  const saveTicketRef = useRef(0);
+
+  const saveTitle = useCallback(
+    async (title: string) => {
+      const nextTitle = title.trim();
+      // Empty or unchanged titles are not written.
+      if (metaLocked || !nextTitle || nextTitle === savedTitle || !documentId) return;
+
+      // Claim the newest save; only this ticket may run the follow-up.
+      const ticket = ++saveTicketRef.current;
+
+      // Queue the server write behind any in-flight rename so the server sees
+      // the titles in the order the user submitted them — a slow first request
+      // can no longer land last and overwrite the newer title.
+      const write = saveChain.current
+        .catch(() => undefined)
+        .then(() => documentService.updateDocument({ id: documentId, title: nextTitle }));
+      saveChain.current = write;
+      try {
+        // Optimistic update, then reconcile with the server response.
+        await optimisticDocumentDetail(documentId, { title: nextTitle }, () => write);
+        if (ticket !== saveTicketRef.current) return;
+        // Revalidate the caches other surfaces read titles from
+        // (working-sidebar tree, standalone document page read the agent
+        // document-list replica), mirroring the full-page editor's
+        // post-rename list refresh.
+        void invalidateDocumentMutation({ agentId: agentId ?? undefined, documentId });
+      } catch (error) {
+        if (ticket !== saveTicketRef.current) return;
+        toast.error(t('operationFailed', { ns: 'common' }));
+        // Reject so the rename dialog stays open with the typed title for a
+        // retry instead of closing as if the write had landed.
+        throw error;
+      }
+    },
+    [agentId, documentId, metaLocked, optimisticDocumentDetail, savedTitle, saveChain, t],
+  );
+
+  return {
+    isLoading,
+    metaLocked,
+    savedTitle,
+    saveTitle,
+    titleFallback: t('agentDocument.portal.titlePlaceholder', { ns: 'chat' }),
+  };
+};
+
+/**
+ * In-app path of the full-page view for the portal document. An agent-bound
+ * document opens in its agent's docs route; any other document (goal
+ * deliverables, notebook docs) has no agent route to land on — that route
+ * redirects unowned ids to the docs index — so it opens in the page editor.
+ */
+export const resolvePortalDocumentPath = (
+  documentId: string | undefined,
+  agentId: string | undefined,
+  agentDocumentId: string | undefined,
+): string | undefined => {
+  if (!documentId) return undefined;
+  if (agentId && agentDocumentId) return buildAgentDocumentPath(agentId, documentId);
+  return docsPagePath(documentId);
+};
+
+/**
+ * Header menu actions shared by every portal document: the absolute link to
+ * the full-page view and a refetch of the document from the server.
+ */
+export const usePortalDocumentHeaderActions = () => {
+  const documentId = useResolvedDocumentId();
+  // The resolved agent-documents binding is the ownership proof: only a bound
+  // document may be linked through the active agent's docs route.
+  const agentId = useAgentStore((s) => s.activeAgentId);
+  const agentDocumentId = useResolvedAgentDocumentId();
+  const appOrigin = useAppOrigin();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+
+  const path = resolvePortalDocumentPath(documentId, agentId, agentDocumentId);
+  const workspacePrefix = activeWorkspaceSlug ? `/${activeWorkspaceSlug}` : '';
+  const url =
+    path && appOrigin ? `${appOrigin.replace(/\/+$/, '')}${workspacePrefix}${path}` : undefined;
+
+  const refresh = useCallback(async () => {
+    if (!documentId) return;
+    await invalidateDocumentMutation({
+      agentId: agentDocumentId ? (agentId ?? undefined) : undefined,
+      documentId,
+    });
+  }, [agentDocumentId, agentId, documentId]);
+
+  return { agentDocumentId, agentId, documentId, path, refresh, url };
+};

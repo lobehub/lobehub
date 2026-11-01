@@ -1,4 +1,4 @@
-import type { ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '../types';
 
 /**
  * @see https://docs.bfl.ai/

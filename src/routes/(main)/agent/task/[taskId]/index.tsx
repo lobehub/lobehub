@@ -3,14 +3,14 @@
 import { memo } from 'react';
 import { useParams } from 'react-router';
 
-import { TaskDetailPage } from '@/features/AgentTasks';
+import { AgentScopedTaskDetailPage } from '@/features/AgentTasks';
 
 const AgentTaskDetailRoute = memo(() => {
-  const { taskId } = useParams<{ taskId?: string }>();
+  const { aid, taskId } = useParams<{ aid?: string; taskId?: string }>();
 
   if (!taskId) return null;
 
-  return <TaskDetailPage showTaskAgentPanelToggle={false} taskId={taskId} />;
+  return <AgentScopedTaskDetailPage agentId={aid} taskId={taskId} />;
 });
 
 export default AgentTaskDetailRoute;

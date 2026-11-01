@@ -2,7 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Play } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -74,23 +74,21 @@ export const RunTasksInspector = memo<BuiltinInspectorProps<RunTasksParams, RunT
 
     if (isArgumentsStreaming && count === 0) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
+        <div className={inspectorTextStyles.root}>
           <Icon icon={Play} size={12} style={{ color: cssVar.colorWarning }} />
-          <span>{t('builtins.lobe-task.apiName.runTasks')}</span>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-task.apiName.runTasks')}
+          </span>
         </div>
       );
     }
 
     return (
-      <div
-        style={{ flexWrap: 'wrap', gap: 6 }}
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 6 }}>
         <Icon icon={Play} size={12} style={{ color: cssVar.colorWarning }} />
-        <span>{t('builtins.lobe-task.apiName.runTasks')}</span>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-task.apiName.runTasks')}
+        </span>
         {count > 0 && (
           <span className={styles.countBadge}>
             {t('builtins.lobe-task.runTasks.count', { count })}

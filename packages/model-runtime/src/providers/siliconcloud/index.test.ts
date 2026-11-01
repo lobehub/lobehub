@@ -170,6 +170,32 @@ describe('LobeSiliconCloudAI - custom features', () => {
       expect(calledPayload.enable_thinking).toBeUndefined();
       expect(calledPayload.thinking_budget).toBe(2048);
     });
+
+    it('should forward reasoning_effort when thinking is not explicitly disabled', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-ai/DeepSeek-V4-Flash',
+        reasoning_effort: 'medium',
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.reasoning_effort).toBe('medium');
+    });
+
+    it('should not send reasoning_effort when thinking is explicitly disabled', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-ai/DeepSeek-V4-Flash',
+        thinking: {
+          type: 'disabled',
+        },
+        reasoning_effort: 'high',
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.reasoning_effort).toBeUndefined();
+      expect(calledPayload.enable_thinking).toBe(false);
+    });
   });
 
   describe('handleError', () => {
@@ -235,9 +261,7 @@ describe('LobeSiliconCloudAI - custom features', () => {
           message: 'Value error, current model does not support parameter `enable_thinking`.',
         },
       };
-      const apiError = new OpenAI.APIError(400, errorInfo, 'Request failed', {
-        status: 400,
-      } as any);
+      const apiError = new OpenAI.APIError(400, errorInfo, 'Request failed', undefined);
 
       vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
 

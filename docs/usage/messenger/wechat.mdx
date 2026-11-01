@@ -1,0 +1,95 @@
+---
+title: Use LobeHub on WeChat
+description: >-
+  Scan a QR code to link your WeChat account to LobeHub Messenger. Choose an
+  active agent, switch agents or workspaces with commands, and chat with your
+  AI assistants directly in WeChat.
+tags:
+  - Messenger
+  - WeChat
+  - LobeHub Bot
+  - Account Linking
+  - Pro
+---
+
+# Use LobeHub on WeChat
+
+WeChat Messenger lets you chat privately with your LobeHub agents from your WeChat account. Scan a QR code once, choose the active agent, and then send messages to the LobeHub contact in WeChat.
+
+> \[!NOTE]
+>
+> This page covers **Messenger**, where your WeChat account is linked to the LobeHub-managed service and you can switch the active agent. To bind a WeChat connection to one specific agent instead, see [Connect LobeHub to WeChat with Channels](/docs/usage/channels/wechat).
+
+## Prerequisites
+
+- A LobeHub account with a **Pro** plan
+- A WeChat account on a mobile device
+
+## Step 1: Open Settings → Messenger → WeChat
+
+In LobeHub, open **Settings → Messenger**, then click the **WeChat** card.
+
+{/* TODO: screenshot — Settings → Messenger landing page with the WeChat card and Pro badge */}
+
+## Step 2: Scan the QR code
+
+Use WeChat on your phone to scan the QR code shown on the WeChat detail page, then confirm the connection in WeChat. If the code expires, click **Scan again** to generate a new one.
+
+{/* TODO: screenshot — WeChat detail page showing the QR code and Scan again button */}
+
+## Step 3: Choose the workspace and active agent
+
+After the connection succeeds, the page shows your WeChat account as a connected user. Select:
+
+- **Workspace** — the personal or team workspace whose agents you want to use.
+- **Active agent** — the agent that should receive your next message.
+
+Changes apply to the next message you send.
+
+{/* TODO: screenshot — connected WeChat user row with workspace and active-agent selectors */}
+
+## Step 4: Start chatting in WeChat
+
+Open the LobeHub conversation in WeChat and send a message. The message is routed to the active agent, and its reply returns in the same private chat.
+
+## Switching Agents and Workspaces
+
+You can change the current routing in either place:
+
+- **In WeChat** — send `/agents` to list your agents and switch the active agent. Send `/switch` to switch between your personal workspace and team workspaces.
+- **In LobeHub** — open **Settings → Messenger → WeChat**, then use the workspace and active-agent selectors.
+
+## Commands
+
+Send these commands in the private chat with the LobeHub contact:
+
+| Command     | Action                                                                    |
+| ----------- | ------------------------------------------------------------------------- |
+| `/agents`   | List your agents and switch the active agent                              |
+| `/switch`   | Switch between your personal workspace and team workspaces                |
+| `/new`      | Start a new conversation                                                   |
+| `/mode`     | Show or switch Agent / Chat mode                                            |
+| `/stop`     | Stop the current run                                                       |
+| `/feedback <message>` | Send feedback to the LobeHub team without triggering an AI reply |
+| `/help`     | Show all available commands                                                |
+
+## Proactive Messages
+
+Because of WeChat platform restrictions, the bot can proactively send messages only while the **send window** is open. Send any message to the LobeHub contact in WeChat to open the window.
+
+Each reply from you resets the allowance to **10 proactive messages within 24 hours**. If the send window is closed, send another message from WeChat before trying again in LobeHub.
+
+## Disconnecting
+
+In **Settings → Messenger → WeChat**, click **Disconnect** on the connected user row. This unlinks your WeChat account and stops message routing.
+
+To reconnect later, return to the same page and scan a new QR code.
+
+## Troubleshooting
+
+- **The QR code expired** — Click **Scan again**, then scan the new code with WeChat.
+- **The page does not show Connected after scanning** — Confirm the login prompt in WeChat, then refresh the LobeHub page. If needed, generate a new QR code and retry.
+- **The wrong agent replies** — Check the active-agent selector, or send `/agents` in WeChat and switch agents.
+- **Agents from the wrong workspace appear** — Change the workspace selector, or send `/switch` in WeChat.
+- **LobeHub cannot send a proactive message** — The WeChat send window is closed or its allowance is exhausted. Send a message to the LobeHub contact from WeChat to reopen the window.
+- **The session stopped working** — Disconnect and scan a new QR code to reconnect.

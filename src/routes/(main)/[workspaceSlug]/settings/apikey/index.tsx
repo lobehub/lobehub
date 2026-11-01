@@ -1,8 +1,13 @@
 'use client';
 
-import Page from '@/routes/(main)/settings/apikey';
+import { WorkspaceApiKeyGuard } from '@/business/client/BusinessSettingPages/WorkspaceApiKeyGuard';
+import Page from '@/features/Settings/apikey';
 
-const WorkspaceApiKeySetting = () => <Page />;
+const WorkspaceApiKeySetting = () => (
+  <WorkspaceApiKeyGuard>
+    <Page showSettingHeader={false} />
+  </WorkspaceApiKeyGuard>
+);
 
 WorkspaceApiKeySetting.displayName = 'WorkspaceApiKeySetting';
 

@@ -1,9 +1,12 @@
+import { AGENT_CHAT_URL } from '@lobechat/const';
 import { produce } from 'immer';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { INBOX_SESSION_ID } from '@/const/session';
-import { SESSION_CHAT_URL } from '@/const/url';
 import type { GlobalStore } from '@/store/global';
 import type { ModelDetailPanelExpandedKey, WorkingSidebarTab } from '@/store/global/initialState';
+import { MODEL_DETAIL_PANEL_EXPANDABLE_KEYS } from '@/store/global/initialState';
+import { readOverridableField, systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import type { StoreSetter } from '@/store/types';
 import { getStableNavigate } from '@/utils/stableNavigate';
 import { setNamespace } from '@/utils/storeDebug';
@@ -24,7 +27,7 @@ export class GlobalWorkspacePaneActionImpl {
   }
 
   switchBackToChat = (sessionId?: string): void => {
-    const target = SESSION_CHAT_URL(sessionId || INBOX_SESSION_ID, this.#get().isMobile);
+    const target = AGENT_CHAT_URL(sessionId || INBOX_SESSION_ID, this.#get().isMobile);
     getStableNavigate()?.(target);
   };
 
@@ -63,7 +66,11 @@ export class GlobalWorkspacePaneActionImpl {
 
   toggleExpandSessionGroup = (id: string, expand: boolean): void => {
     const { status } = this.#get();
-    const nextExpandSessionGroup = produce(status.expandSessionGroupKeys, (draft: string[]) => {
+    // Read the effective (overlay-aware) value so workspace-mode toggles compose
+    // off the workspace list, not the personal one underneath it.
+    const currentKeys =
+      readOverridableField(status, 'expandSessionGroupKeys', getActiveWorkspaceId()) ?? [];
+    const nextExpandSessionGroup = produce(currentKeys, (draft: string[]) => {
       if (expand) {
         if (draft.includes(id)) return;
         draft.push(id);
@@ -89,6 +96,13 @@ export class GlobalWorkspacePaneActionImpl {
       { showAgentBuilderPanel },
       n('toggleAgentBuilderPanel', newValue),
     );
+  };
+
+  toggleHomeRail = (newValue?: boolean): void => {
+    const currentValue = this.#get().status.showHomeRail ?? false;
+    const showHomeRail = typeof newValue === 'boolean' ? newValue : !currentValue;
+
+    this.#get().updateSystemStatus({ showHomeRail }, n('toggleHomeRail', newValue));
   };
 
   togglePageAgentPanel = (newValue?: boolean): void => {
@@ -126,6 +140,20 @@ export class GlobalWorkspacePaneActionImpl {
     this.#get().updateSystemStatus({ showRightPanel }, n('toggleRightPanel', newValue));
   };
 
+  toggleWorkingOverview = (newValue?: boolean): void => {
+    const currentValue = systemStatusSelectors.showWorkingOverview(this.#get());
+    const showWorkingOverview = typeof newValue === 'boolean' ? newValue : !currentValue;
+
+    this.#get().updateSystemStatus({ showWorkingOverview }, n('toggleWorkingOverview', newValue));
+  };
+
+  toggleTerminalPanel = (newValue?: boolean): void => {
+    const showTerminalPanel =
+      typeof newValue === 'boolean' ? newValue : !this.#get().status.showTerminalPanel;
+
+    this.#get().updateSystemStatus({ showTerminalPanel }, n('toggleTerminalPanel', newValue));
+  };
+
   toggleSystemRole = (newValue?: boolean): void => {
     const showSystemRole =
       typeof newValue === 'boolean' ? newValue : !this.#get().status.mobileShowTopic;
@@ -134,15 +162,60 @@ export class GlobalWorkspacePaneActionImpl {
   };
 
   setWorkingSidebarTab = (tab: WorkingSidebarTab): void => {
-    if (this.#get().status.workingSidebarTab === tab) return;
-    this.#get().updateSystemStatus({ workingSidebarTab: tab }, n('setWorkingSidebarTab', tab));
+    const previousNonce = this.#get().status.workingSidebarTabRequest?.nonce ?? 0;
+    this.#get().updateSystemStatus(
+      {
+        workingSidebarTab: tab,
+        workingSidebarTabRequest: { nonce: previousNonce + 1, tab },
+      },
+      n('setWorkingSidebarTab', tab),
+    );
+  };
+
+  openWorkingSidebar = (tab?: WorkingSidebarTab): void => {
+    const previousNonce = this.#get().status.workingSidebarTabRequest?.nonce ?? 0;
+    this.#get().updateSystemStatus(
+      {
+        showRightPanel: true,
+        showWorkingOverview: false,
+        ...(tab
+          ? {
+              workingSidebarTab: tab,
+              workingSidebarTabRequest: { nonce: previousNonce + 1, tab },
+            }
+          : {}),
+      },
+      n('openWorkingSidebar', tab),
+    );
   };
 
   revealInFilesTab = (relativePath: string): void => {
-    this.#get().setWorkingSidebarTab('files');
+    this.#get().openWorkingSidebar('files');
     this.#get().updateSystemStatus(
       { workingSidebarRevealRequest: { nonce: Date.now(), path: relativePath } },
       n('revealInFilesTab'),
+    );
+  };
+
+  openInBrowserTab = (url: string): void => {
+    this.#get().openWorkingSidebar('browser');
+    this.#get().updateSystemStatus(
+      { workingSidebarBrowserRequest: { nonce: Date.now(), url } },
+      n('openInBrowserTab'),
+    );
+  };
+
+  /**
+   * Retire the request as soon as the browser pane has acted on it. Without
+   * this, the request survives in persisted status and every later remount of
+   * the pane — which now happens on each topic switch, since the session key is
+   * per-topic — would navigate that topic's page to the stale URL.
+   */
+  clearBrowserTabRequest = (): void => {
+    if (!this.#get().status.workingSidebarBrowserRequest) return;
+    this.#get().updateSystemStatus(
+      { workingSidebarBrowserRequest: null },
+      n('clearBrowserTabRequest'),
     );
   };
 
@@ -154,8 +227,12 @@ export class GlobalWorkspacePaneActionImpl {
   };
 
   updateModelDetailPanelExpandedKeys = (keys: ModelDetailPanelExpandedKey[]): void => {
+    // persisted as the complement (collapsed keys) so newly shipped sections
+    // default to expanded — see MODEL_DETAIL_PANEL_EXPANDABLE_KEYS
+    const collapsedKeys = MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.filter((key) => !keys.includes(key));
+
     this.#get().updateSystemStatus(
-      { modelDetailPanelExpandedKeys: keys },
+      { modelDetailPanelCollapsedKeys: collapsedKeys },
       n('updateModelDetailPanelExpandedKeys', keys),
     );
   };

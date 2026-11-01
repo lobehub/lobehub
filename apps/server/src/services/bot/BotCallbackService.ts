@@ -1,3 +1,12 @@
+import { randomUUID } from 'node:crypto';
+
+import type {
+  BotNoReplyResult,
+  BotWakeKind,
+  ChatErrorBudgetContext,
+  ChatErrorDispatchContext,
+  ChatErrorHeterogeneousContext,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import type { MessengerPlatform } from '@/config/messenger';
@@ -15,6 +24,9 @@ import { messengerPlatformRegistry } from '@/server/services/messenger/platforms
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
+import { runDeferredReplay, scheduleDeferredReplay } from './deferredReplay';
+import { detectNoReply, extractStandDown } from './noReply';
+import { recordNoReplyLabel } from './noReplyLabel';
 import type {
   BotMessageAttachment,
   BotReplyLocale,
@@ -25,8 +37,12 @@ import type {
 import {
   getBotReplyLocale,
   getStepReactionEmoji,
+  normalizeBotReactionMode,
+  platformFromThreadId,
   platformRegistry,
   resolveBotProviderConfig,
+  shouldApplyReaction,
+  THINKING_REACTION_EMOJI,
 } from './platforms';
 import { clearReactionState, getReactionState, saveReactionState } from './reactionState';
 import {
@@ -36,8 +52,31 @@ import {
   renderStopped,
   splitMessage,
 } from './replyTemplate';
+import { recordWakeRunOutcome } from './wake/scheduler';
 
 const log = debug('lobe-server:bot:callback');
+
+/**
+ * Render a platform delivery error for production logging WITHOUT dumping
+ * the raw error object — platform SDK errors (e.g. `@discordjs/rest`
+ * DiscordAPIError) carry the full `requestBody`, i.e. the user/assistant
+ * message content, which must not be persisted in logs. Status/code live on
+ * well-known fields; the message string from these SDKs is the API error
+ * summary (e.g. "Unknown Channel"), not the payload.
+ */
+const describePlatformError = (error: unknown): string => {
+  if (error instanceof Error) {
+    const status = (error as { status?: unknown }).status;
+    const code = (error as { code?: unknown }).code;
+    const parts = [
+      `${error.name}: ${error.message}`,
+      status === undefined ? undefined : `status=${status}`,
+      code === undefined ? undefined : `code=${code}`,
+    ].filter(Boolean);
+    return parts.join(' ');
+  }
+  return String(error);
+};
 
 // --------------- Callback body types ---------------
 
@@ -55,6 +94,23 @@ export interface BotCallbackBody {
   cost?: number;
   duration?: number;
   elapsedMs?: number;
+  /**
+   * Error ownership from the model-runtime error taxonomy (`user` | `provider`
+   * | `harness` | `system`). Drives the user-facing error message tier when the
+   * exact `errorType` has no precise copy. Forwarded verbatim from the agent
+   * lifecycle event.
+   */
+  errorAttribution?: string;
+  /**
+   * Which spending allowance ran out, and by how much, when the run failed on
+   * an insufficient-credits code. Lets the reply name the exhausted allowance
+   * instead of the generic personal-credits copy (the figures themselves are
+   * never rendered — they belong to the billed owner, not the recipient).
+   * Forwarded verbatim from the agent lifecycle event.
+   */
+  errorBudget?: ChatErrorBudgetContext;
+  errorDispatch?: ChatErrorDispatchContext;
+  errorHeterogeneous?: ChatErrorHeterogeneousContext;
   errorMessage?: string;
   errorType?: string;
   executionTimeMs?: number;
@@ -97,7 +153,15 @@ export interface BotCallbackBody {
   userId?: string;
   userMessageId?: string;
   userPrompt?: string;
+  /** `followup`: the agent may end in silence and feedback is shown only once it acts. */
+  wakeKind?: BotWakeKind;
   workspaceId?: string;
+}
+
+export interface BotCallbackOptions {
+  deliveredChunkCount?: number;
+  onChunkDelivered?: (deliveredChunkCount: number) => Promise<void>;
+  strictDelivery?: boolean;
 }
 
 // --------------- Service ---------------
@@ -109,7 +173,7 @@ export class BotCallbackService {
     this.db = db;
   }
 
-  async handleCallback(body: BotCallbackBody): Promise<void> {
+  async handleCallback(body: BotCallbackBody, options?: BotCallbackOptions): Promise<void> {
     const {
       type,
       applicationId,
@@ -118,7 +182,7 @@ export class BotCallbackService {
       messengerInstallationKey,
       userId,
     } = body;
-    const platform = platformThreadId.split(':')[0];
+    const platform = platformFromThreadId(platformThreadId);
 
     const { client, connectionId, messenger, charLimit, settings, workspaceId } =
       await this.createMessenger({
@@ -130,18 +194,30 @@ export class BotCallbackService {
         workspaceId: body.workspaceId,
       });
 
-    const entry = platformRegistry.getPlatform(platform);
+    const entry =
+      platformRegistry.getPlatform(platform) ?? messengerPlatformRegistry.getPlatform(platform);
     const canEdit = entry?.supportsMessageEdit !== false;
     const replyLocale = getBotReplyLocale(platform);
+    const reactionMode = normalizeBotReactionMode(settings.reactionMode);
 
     if (type === 'step') {
+      // A follow-up wake held its feedback back; the agent going on to another step means it is
+      // acting, so show it now. (The placeholder message is not posted here: a callback cannot
+      // delete it again if the run still ends in silence, so the reply goes out as a new message.)
+      if (body.wakeKind === 'followup' && body.shouldContinue) {
+        await this.revealFollowupFeedback(body, messenger, client, platform, reactionMode);
+      }
       if (canEdit && progressMessageId && settings.displayToolCalls === true) {
         await this.handleStep(body, messenger, progressMessageId, client, replyLocale);
       }
       // Swap the user-message reaction to match the current step type (tool
       // call vs. LLM reasoning). Runs regardless of `displayToolCalls` because
-      // the progress-message edit and the reaction are separate UX channels.
-      await this.swapStepReaction(body, client, platform);
+      // the progress-message edit and the reaction are separate UX channels —
+      // but only under the `full` reaction mode: every swap is a platform
+      // notification for users with message alerts on.
+      if (shouldApplyReaction(reactionMode, 'step')) {
+        await this.swapStepReaction(body, client, platform);
+      }
       // Only renew typing when more steps are expected. The final step
       // (shouldContinue=false) may arrive after the completion callback
       // via async delivery (QStash), which would restart typing after stop.
@@ -152,7 +228,7 @@ export class BotCallbackService {
       // Stop typing on the gateway
       this.stopGatewayTyping(connectionId, platformThreadId);
 
-      await this.handleCompletion(
+      const noReply = await this.handleCompletion(
         body,
         messenger,
         progressMessageId ?? '',
@@ -160,16 +236,160 @@ export class BotCallbackService {
         replyLocale,
         charLimit,
         canEdit,
+        options?.strictDelivery,
+        options?.deliveredChunkCount,
+        options?.onChunkDelivered,
       );
-      await this.clearStepReaction(body, client, platform);
+      // Cleanup follows what was actually applied, not the current setting: a
+      // run that placed a reaction must still remove it after the bot is
+      // switched to `none` mid-run. The setting only decides whether to fall
+      // back to the legacy 👀 when nothing was tracked.
+      await this.clearStepReaction(body, client, platform, {
+        fallbackToReceived: shouldApplyReaction(reactionMode, 'clear'),
+      });
       // Clear the active thread tracker so the thread can accept new messages.
       // In queue mode, the bridge handler's finally block skips this cleanup
       // to keep the thread marked active while the agent runs on the job queue.
       AgentBridgeService.clearActiveThread(platformThreadId);
-      this.summarizeTopicTitle(
-        { ...body, workspaceId: body.workspaceId ?? workspaceId ?? undefined },
-        messenger,
+      // Bookkeeping for the bot-wake pipeline (follow-up window, silent-wake budget, stand-down,
+      // scheduler). Best-effort and a no-op unless the bot has bot-wake enabled: it never affects
+      // delivery.
+      const finished = body.reason !== 'error' && body.reason !== 'interrupted';
+      // The agent steps back with a `STAND_DOWN` line after its reply, or `NO_REPLY:stand_down`.
+      const standDown =
+        finished &&
+        (noReply?.reason === 'stand_down' || extractStandDown(body.lastAssistantContent).standDown);
+      await this.recordWakeOutcome(body, settings, platform, finished && !noReply, standDown);
+      if (noReply) {
+        await this.labelNoReply(body, noReply, platform, workspaceId);
+      } else {
+        this.summarizeTopicTitle(
+          { ...body, workspaceId: body.workspaceId ?? workspaceId ?? undefined },
+          messenger,
+        );
+      }
+      // The topic is idle now — replay any follow-up the bridge parked while
+      // this run was executing (WeChat "one image + one sentence" arrives as
+      // two messages; the second used to fail the topic-start reservation).
+      await this.replayDeferredMessages(
+        platform,
+        applicationId,
+        platformThreadId,
+        messengerInstallationKey,
+        body.operationId ?? randomUUID(),
       );
+    }
+  }
+
+  /**
+   * Shows what a follow-up wake held back (see `wakeKind`): the thinking reaction and typing.
+   * Idempotent per run: the reaction is only placed while none is tracked for the message.
+   */
+  private async revealFollowupFeedback(
+    body: BotCallbackBody,
+    messenger: PlatformMessenger,
+    client: PlatformClient,
+    platform: string,
+    reactionMode: ReturnType<typeof normalizeBotReactionMode>,
+  ): Promise<void> {
+    const { applicationId, platformThreadId, userMessageId } = body;
+
+    if (userMessageId && shouldApplyReaction(reactionMode, 'thinking')) {
+      const tracked = await getReactionState(platform, applicationId, userMessageId);
+      if (!tracked) {
+        const reactionThreadId =
+          client.resolveReactionThreadId?.(platformThreadId, userMessageId) ?? platformThreadId;
+        try {
+          await client
+            .getMessenger(reactionThreadId)
+            .replaceReaction?.(userMessageId, null, THINKING_REACTION_EMOJI);
+          await saveReactionState(platform, applicationId, userMessageId, {
+            emoji: THINKING_REACTION_EMOJI,
+            reactionThreadId,
+          });
+        } catch (error) {
+          log('revealFollowupFeedback: reaction failed: %O', error);
+        }
+      }
+    }
+
+    try {
+      await messenger.triggerTyping?.();
+    } catch (error) {
+      log('revealFollowupFeedback: typing failed: %O', error);
+    }
+  }
+
+  private async recordWakeOutcome(
+    body: BotCallbackBody,
+    settings: Record<string, unknown> | null | undefined,
+    platform: string,
+    spoke: boolean,
+    standDown: boolean,
+  ): Promise<void> {
+    try {
+      await recordWakeRunOutcome({
+        applicationId: body.applicationId,
+        platform,
+        platformThreadId: body.platformThreadId,
+        settings,
+        spoke,
+        // What was posted: without the stand-down marker, which is for the runtime.
+        spoken: {
+          id: body.operationId ?? randomUUID(),
+          text: extractStandDown(body.lastAssistantContent).content,
+        },
+        standDown,
+        wakeKind: body.wakeKind,
+      });
+    } catch (error) {
+      log('recordWakeOutcome failed: %O', error);
+    }
+  }
+
+  private async labelNoReply(
+    body: BotCallbackBody,
+    noReply: BotNoReplyResult,
+    platform: string,
+    workspaceId?: string | null,
+  ): Promise<void> {
+    if (!body.userId || !body.userMessageId) return;
+
+    await recordNoReplyLabel(this.db, {
+      applicationId: body.applicationId,
+      noReply,
+      operationId: body.operationId,
+      platform,
+      platformThreadId: body.platformThreadId,
+      userId: body.userId,
+      userMessageId: body.userMessageId,
+      workspaceId: body.workspaceId ?? workspaceId ?? undefined,
+    });
+  }
+
+  private async replayDeferredMessages(
+    platform: string,
+    applicationId: string,
+    platformThreadId: string,
+    messengerInstallationKey: string | undefined,
+    replayId: string,
+  ): Promise<void> {
+    const target = { applicationId, messengerInstallationKey, platform, platformThreadId };
+    try {
+      await runDeferredReplay(target);
+    } catch (error) {
+      log('replayDeferredMessages failed for thread=%s: %O', platformThreadId, error);
+      // Only the replay job retries. Redelivering this completion would post
+      // the already-delivered final response again.
+      try {
+        await scheduleDeferredReplay(target, replayId);
+      } catch (scheduleError) {
+        log(
+          'Could not schedule deferred replay for thread=%s: %O',
+          platformThreadId,
+          scheduleError,
+        );
+      }
     }
   }
 
@@ -378,9 +598,22 @@ export class BotCallbackService {
     replyLocale: BotReplyLocale,
     charLimit?: number,
     canEdit = true,
-  ): Promise<void> {
-    const { reason, lastAssistantContent, errorMessage, errorType, operationId, attachments } =
-      body;
+    strictDelivery = false,
+    deliveredChunkCount = 0,
+    onChunkDelivered?: (deliveredChunkCount: number) => Promise<void>,
+  ): Promise<BotNoReplyResult | undefined> {
+    const {
+      reason,
+      lastAssistantContent,
+      errorAttribution,
+      errorBudget,
+      errorDispatch,
+      errorHeterogeneous,
+      errorMessage,
+      errorType,
+      operationId,
+      attachments,
+    } = body;
 
     if (reason === 'error') {
       log(
@@ -389,20 +622,59 @@ export class BotCallbackService {
         errorType,
         errorMessage,
       );
-      const errorBody = renderAgentError(errorType, errorMessage, operationId, replyLocale);
+      const errorBody = renderAgentError(
+        errorType,
+        errorMessage,
+        operationId,
+        replyLocale,
+        errorAttribution,
+        errorBudget,
+        errorHeterogeneous,
+        errorDispatch,
+      );
       const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
-      await this.deliverFirstChunk(messenger, progressMessageId, errorText, canEdit);
+      if (deliveredChunkCount < 1) {
+        const delivered = await this.deliverFirstChunk(
+          messenger,
+          progressMessageId,
+          errorText,
+          canEdit,
+          undefined,
+          strictDelivery,
+        );
+        if (delivered) await onChunkDelivered?.(1);
+      }
       return;
     }
 
     if (reason === 'interrupted') {
+      if (deliveredChunkCount >= 1) return;
       const stoppedText = renderStopped(errorMessage, replyLocale);
       try {
         await messenger.createMessage(stoppedText);
+        await onChunkDelivered?.(1);
       } catch (error) {
+        if (strictDelivery) throw error;
         log('handleCompletion: failed to send interrupted message: %O', error);
       }
       return;
+    }
+
+    // A follow-up wake the agent chose not to answer is a result, not a fault: nothing is posted,
+    // and neither the error log nor `strictDelivery`'s throw applies.
+    const noReply = detectNoReply({
+      content: lastAssistantContent,
+      hasAttachments: !!attachments?.length,
+      wakeKind: body.wakeKind,
+    });
+    if (noReply) {
+      log(
+        'handleCompletion: no_reply reason=%s, operationId=%s, thread=%s',
+        noReply.reason,
+        operationId,
+        body.platformThreadId,
+      );
+      return noReply;
     }
 
     // Skip only when there's nothing at all to send. An image/file-only reply
@@ -414,10 +686,18 @@ export class BotCallbackService {
     // ("\n", "  ") through; those collapse to empty text downstream and get
     // rejected by Telegram as "message text is empty", silently losing the
     // reply. Trim before testing.
-    const hasText = !!lastAssistantContent?.trim();
+    // The stand-down marker is for the runtime, not the channel; what came before it is posted.
+    const replyText = extractStandDown(lastAssistantContent).content;
+    const hasText = !!replyText?.trim();
     const hasAttachments = !!attachments?.length;
     if (!hasText && !hasAttachments) {
-      log('handleCompletion: no lastAssistantContent and no attachments, skipping');
+      // console (not debug) — every one of these is a user-facing "bot went
+      // silent": the run completed but the completion event
+      // carried nothing to deliver. Must stay visible in production logs.
+      console.error(
+        `[BotCallbackService] completion had no lastAssistantContent and no attachments, skipping reply (operationId=${operationId}, topicId=${body.topicId}, thread=${body.platformThreadId})`,
+      );
+      if (strictDelivery) throw new Error('Creator callback completed without deliverable content');
       return;
     }
 
@@ -433,7 +713,7 @@ export class BotCallbackService {
     // attachment-only path still drives `deliverFirstChunk` once.
     let chunks: string[];
     if (hasText) {
-      const msgBody = renderFinalReply(lastAssistantContent!);
+      const msgBody = renderFinalReply(replyText!);
       const formattedBody = client.formatMarkdown?.(msgBody) ?? msgBody;
       const finalText = client.formatReply?.(formattedBody, stats) ?? formattedBody;
       chunks = splitMessage(finalText, charLimit);
@@ -452,23 +732,31 @@ export class BotCallbackService {
     const lastIndex = chunks.length - 1;
     const firstChunkAttachments = lastIndex === 0 ? attachments : undefined;
 
-    await this.deliverFirstChunk(
-      messenger,
-      progressMessageId,
-      chunks[0],
-      canEdit,
-      firstChunkAttachments,
-    );
+    if (deliveredChunkCount < 1) {
+      const delivered = await this.deliverFirstChunk(
+        messenger,
+        progressMessageId,
+        chunks[0],
+        canEdit,
+        firstChunkAttachments,
+        strictDelivery,
+      );
+      if (delivered) await onChunkDelivered?.(1);
+    }
     // Each remaining chunk gets its own try/catch so a single transient failure
     // (rate-limit, network blip) doesn't drop everything that follows.
-    for (let i = 1; i < chunks.length; i++) {
+    for (let i = Math.max(1, deliveredChunkCount); i < chunks.length; i++) {
       try {
         const isLast = i === lastIndex;
         await messenger.createMessage(
           isLast && attachments?.length ? { attachments, content: chunks[i] } : chunks[i],
         );
+        await onChunkDelivered?.(i + 1);
       } catch (error) {
-        log('handleCompletion: failed to send chunk %d: %O', i, error);
+        if (strictDelivery) throw error;
+        console.error(
+          `[BotCallbackService] failed to send reply chunk ${i}/${lastIndex} (thread=${body.platformThreadId}): ${describePlatformError(error)}`,
+        );
       }
     }
   }
@@ -485,21 +773,39 @@ export class BotCallbackService {
     text: string,
     canEdit: boolean,
     attachments?: BotMessageAttachment[],
-  ): Promise<void> {
+    strictDelivery = false,
+  ): Promise<boolean> {
     const payload = attachments && attachments.length > 0 ? { attachments, content: text } : text;
 
     if (canEdit && progressMessageId) {
       try {
         await messenger.editMessage(progressMessageId, payload);
-        return;
+        // Positive delivery record (console, not debug): "we sent it and the
+        // platform accepted it" must be provable from production logs alone —
+        // burned days on inferring delivery from the absence of
+        // error logs while the target thread had been deleted out from under
+        // the bot.
+        console.info(
+          `[BotCallbackService] completion reply delivered via editMessage (message=${progressMessageId})`,
+        );
+        return true;
       } catch (error) {
         log('handleCompletion: editMessage failed, falling back to createMessage: %O', error);
       }
     }
     try {
       await messenger.createMessage(payload);
+      console.info('[BotCallbackService] completion reply delivered via createMessage');
+      return true;
     } catch (error) {
-      log('handleCompletion: createMessage fallback failed: %O', error);
+      // Last resort failed — the reply is lost. console (not debug) so the
+      // "agent ran but no reply appeared" class of failures
+      // is visible in production logs instead of an HTTP 200 with nothing.
+      console.error(
+        `[BotCallbackService] createMessage fallback failed, reply lost: ${describePlatformError(error)}`,
+      );
+      if (strictDelivery) throw error;
+      return false;
     }
   }
 
@@ -541,17 +847,21 @@ export class BotCallbackService {
   /**
    * Remove whatever emoji was last applied to the user message and clear the
    * tracking state. Falls back to the legacy `👀` when no state is recorded
-   * so pre-feature runs (or runs against a Redis-less setup) still clean up.
+   * so pre-feature runs (or runs against a Redis-less setup) still clean up,
+   * unless `fallbackToReceived` is off (reaction mode `none`).
    */
   private async clearStepReaction(
     body: BotCallbackBody,
     client: PlatformClient,
     platform: string,
+    { fallbackToReceived }: { fallbackToReceived: boolean },
   ): Promise<void> {
     const { userMessageId, applicationId, platformThreadId } = body;
     if (!userMessageId) return;
 
     const state = await getReactionState(platform, applicationId, userMessageId);
+    // Nothing tracked and reactions are off: there is nothing to remove.
+    if (!state && !fallbackToReceived) return;
     const emoji = state?.emoji ?? '👀';
 
     // Thread-starter messages may live in the parent channel (e.g. Discord),
@@ -580,7 +890,7 @@ export class BotCallbackService {
    */
   private renewGatewayTyping(connectionId: string, platformThreadId: string): void {
     if (!connectionId) return;
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platformFromThreadId(platformThreadId));
     if (!client.isEnabled) return;
 
     client.startTyping(connectionId, platformThreadId).catch((err) => {
@@ -590,7 +900,7 @@ export class BotCallbackService {
 
   private stopGatewayTyping(connectionId: string, platformThreadId: string): void {
     if (!connectionId) return;
-    const client = getMessageGatewayClient();
+    const client = getMessageGatewayClient(platformFromThreadId(platformThreadId));
     if (!client.isEnabled) return;
 
     client.stopTyping(connectionId, platformThreadId).catch((err) => {
@@ -635,6 +945,7 @@ export class BotCallbackService {
         const systemAgent = new SystemAgentService(this.db, userId, body.workspaceId ?? undefined);
         const title = await systemAgent.generateTopicTitle({
           lastAssistantContent,
+          topicId,
           userPrompt,
         });
         if (!title) return;

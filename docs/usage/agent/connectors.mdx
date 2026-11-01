@@ -1,0 +1,308 @@
+---
+title: Connectors
+description: Enable LobeHub built-in capabilities, community skills, MCP integrations, and third-party services, and import your own skills from GitHub, URLs, or ZIP files.
+tags:
+  - LobeHub
+  - Connectors
+  - Skills
+  - MCP
+---
+
+# Connectors
+
+Connectors let agents do more than answer questions. They can use tools, follow specialized workflows, access services you authorize, and take action. Add task management, documents, or image generation; install community skills and MCP integrations; or connect GitHub, Notion, Google Drive, and other services.
+
+Add the tools and skills your agent needs, then choose whether to pin them, use them automatically, or disable them. Connect and authorize an account before using an external service.
+
+## What can you connect?
+
+| Type                          | Purpose                                                                       | Examples                                                              |
+| ----------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| LobeHub built-in capabilities | Manage tasks, create content, and work in LobeHub | Task Tools, Documents, Message, Image Generation, Artifacts, and more |
+| Third-party services          | Access authorized resources and use exposed actions                           | GitHub, Linear, Gmail, Slack, and more                                |
+| Community skills              | Specialized instructions, workflows, and supporting resources                 | Skills tab in the Skill Store                                         |
+| Community MCP integrations    | Access external tools through the Model Context Protocol                      | MCP tab in the Skill Store                                            |
+| Your own skills               | Use skills you created or obtained elsewhere                                  | GitHub, URL, and ZIP imports                                          |
+
+Availability depends on the client, deployment settings, permissions, and execution environment. Installing a skill does not automatically grant access to external accounts or local files.
+
+## Use a connector
+
+### Open the Skills menu
+
+1. Open the **Agent page**.
+2. Click **+** at the lower-left corner of the chat input.
+3. Select **Skills** to view the agent’s pinned and automatically available tools and skills.
+4. Select **Add Skill…** to open the Skill Store, or **Skills Marketplace** to manage existing tools and skills.
+
+The store has **LobeHub, Skills, and MCP** tabs. LobeHub offers built-in capabilities and service connectors; Skills and MCP offer community extensions. Use **Add** in the upper-right corner to import a skill from GitHub, a URL, or ZIP, or to add a custom MCP integration.
+
+### Add and authorize
+
+1. Find the item and review its purpose, dependencies, and required permissions.
+2. Add built-in capabilities as prompted. For an external service, select **Connect** and authorize an account.
+3. Install community extensions and configure required MCP endpoints, authentication, or script dependencies.
+4. Return to the agent’s skill list, check its usage mode, and request a task.
+
+**Installation, authorization, and activation for a particular agent are separate steps.** A successful connection does not grant access to every resource.
+
+### Pinned, Auto, and Disabled
+
+| Mode     | Meaning                                                                        | Best for                          |
+| -------- | ------------------------------------------------------------------------------ | --------------------------------- |
+| Pinned   | Load by default for this agent, subject to runtime and permission requirements | Core capabilities                 |
+| Auto     | Discover and activate when needed instead of loading everything on every turn  | Occasional use                    |
+| Disabled | Exclude the capability from this agent                                         | Capabilities you do not want used |
+
+Choose a mode in the item’s action menu. The Auto group switch controls automatic activation, not bulk installation or removal. Unpinning is not uninstalling, and disabling does not revoke account authorization. Some system capabilities offer different options.
+
+Then describe the work: “Save this research as a document” or “Find GitHub issues I can access.” For sending, modifying, or deleting, specify the target and allowed scope and inspect the result. **Provide passwords and API keys through secure credential controls, not ordinary chat.**
+
+## LobeHub built-in capabilities
+
+LobeHub built-in capabilities cover task management, documents, messaging, image generation, calculation, and interactive content creation. Select the capabilities you need in the store’s **LobeHub** tab. Availability depends on your client and execution environment.
+
+<a id="task-tools" />
+
+### Task Tools
+
+**Purpose:** Create and manage tasks, subtasks, dependencies, assignees, status, and comments through conversation. You can also set acceptance requirements and start execution. Your changes appear in the [Task interface](/docs/usage/getting-started/task).
+
+**Try:** “Create a launch task with copywriting, design, and final-review subtasks. Make the review depend on the first two.”
+
+Check tool access and permissions before use. After creation, inspect the saved task, executing agent, inputs, and output requirements. To run recurring work, configure and enable a schedule, then check the timezone, next run, and status. A deadline alone does not trigger execution or notifications. See [Scheduled Tasks](/docs/usage/agent/scheduled-task). Before deletion, identify the target and whether subtasks are included.
+
+<a id="delivery-checks-and-acceptance" />
+<a id="acceptance" />
+
+#### Acceptance
+
+Acceptance helps you assess whether the output meets your requirements. Configure acceptance criteria so the agent can check them before delivery. A failed check can hold back delivery and start a repair round. The report includes a verdict, score, and evidence for each check.
+
+Use this workflow:
+
+1. **Define checks before execution.** Specify observable criteria, such as required sections, source links, time range, and an output that can be opened. Make each criterion more specific than "high quality."
+2. **Confirm the configuration.** Ask the Agent to add the checks and inspect the saved task. If acceptance checks are unavailable, use the criteria for manual review.
+3. **Run and inspect.** Review the deliverable and check report. Compare the evidence for each item with your requirements.
+4. **Handle failures.** Read the failed items and repair output. If work remains blocked or the repair is insufficient, supply missing information or request changes, then inspect the new result.
+5. **Accept the result.** Confirm completion through the available action when the result meets your requirements. Human acceptance is separate from the Acceptance report.
+
+**Example request:**
+
+> Create a competitor report task and add acceptance checks: cover all three named companies; cite a source link and publication date for each pricing claim; state the observation period and currency; list unverified information separately. Show me the saved checks before execution.
+
+Automated checks apply only to the requirements you configure. Review important facts and the final deliverable yourself, even when all checks pass.
+
+<a id="using-the-cli" />
+
+#### Using the CLI
+
+With the LobeHub CLI installed and authenticated to the intended deployment, the same task system is available through `lh task`:
+
+```bash
+lh task list
+lh task view T-1
+lh task create -i "Draft the release notes"
+lh task edit T-1 --status completed
+```
+
+Replace `T-1` with the intended task identifier. Before marking a task complete, review its deliverable and check report. The last command only changes the status. Use your installed version's help for available options.
+
+<a id="documents" />
+
+### Documents
+
+**Purpose:** Create and maintain the agent’s own persistent reports, notes, project context, and references.
+
+**With it enabled:** Create, read, rename, copy, and delete documents; replace content or make targeted edits; list documents and adjust loading rules. Documents can belong to an agent or be associated with the current topic.
+
+**Try:** “Create a competitor research document with sources. In future updates, change only pricing and product developments.”
+
+**Keep in mind:** Uploaded source PDFs and images are available through the Resource Library or knowledge bases. See [Agent Documents](/docs/usage/agent/agent-documents) for the panel, scope, and history.
+
+<a id="message" />
+
+### Message
+
+**Purpose:** Work with configured messaging channels and manage their bots and connections.
+
+**With it enabled:** Send, read, edit, and manage messages where the channel supports those actions; inspect or manage bot connections and routing.
+
+**Try:** “Send the approved summary to our connected team channel. Let me review the text first.”
+
+**Keep in mind:** Configure the platform and a valid connection first. Available history, editing, and deletion options vary by platform. Bot setup is separate from Slack and WhatsApp service connectors below; see [Messaging Channels](/docs/usage/channels/overview).
+
+<a id="image-generation" />
+
+### Image Generation
+
+**Purpose:** Use image models configured in LobeHub, even when the current chat model does not produce images itself.
+
+**With it enabled:** Discover available models and parameters, submit image-generation requests, and check status.
+
+**Try:** “Generate a landscape product graphic with the subject on the right and headline space on the left.”
+
+**Keep in mind:** Requires an available image model, provider configuration, and quota. Sizes and reference-image support depend on the model. After adding the tool, check that it is available in your conversation's runtime mode.
+
+<a id="credentials" />
+
+### Credentials
+
+**Purpose:** Help manage account authorization and sensitive credentials.
+
+**With it enabled:** Initiate supported connection flows, guide secure credential storage, and supply environment variables in supported cloud execution environments.
+
+**Try:** “Help me connect the service securely without pasting my key into chat.”
+
+**Keep in mind:** Injecting credentials into a cloud sandbox does not provide them to a local device. Availability depends on where execution takes place.
+
+<a id="calculator" />
+
+### Calculator
+
+**Purpose:** Perform numerical calculations and symbolic mathematics.
+
+**With it enabled:** Evaluate expressions, use variables, sort values, convert number bases, solve equations, and perform differentiation, integration, and limits.
+
+**Try:** “Project revenue for the next year at 3% monthly growth and show each month.”
+
+**Keep in mind:** Calculator does not retrieve external data. Use another tool to look up current exchange rates or prices first.
+
+<a id="artifacts" />
+
+### Artifacts
+
+**Purpose:** Create and iterate on visual or interactive work in a dedicated preview panel.
+
+**With it enabled:** Create HTML pages, React components, dashboards, SVG graphics, and simple browser games; revise colors, layout, or interactions through conversation.
+
+**Try:** “Build a pricing page with monthly/yearly switching and show the preview, then add a dark mode.”
+
+**Keep in mind:** Keep ordinary articles and code explanations in chat; use Documents for persistent text and Image Generation for model-generated images. You can prepare a self-contained preview without starting a cloud sandbox. External APIs, resources, and browser permissions may be restricted. General PDF/PPTX export is not part of this skill. Review the preview, test interactions, and use the available panel controls to inspect, copy, or save code.
+
+<a id="lobehub" />
+
+### LobeHub
+
+**Purpose:** Guide the agent in operating platform resources through the LobeHub CLI.
+
+**With it enabled:** Manage agents, topics, documents, knowledge bases, models, plugins, bots, and other supported resources when environment and permissions allow.
+
+**Try:** “Rewrite this agent’s opening message for customer research.”
+
+**Keep in mind:** Requires an available CLI and appropriate account permissions. Loading instructions does not bypass permissions or automatically perform changes.
+
+<a id="agent-browser" />
+
+### Agent Browser
+
+**Purpose:** Automate browser and Electron-page interactions.
+
+**With it enabled:** Navigate, click, fill forms, capture screenshots, and extract content from sites requiring real-page interaction.
+
+**Try:** “Open the product dashboard and summarize this month’s data. Let me sign in; do not submit changes.”
+
+**Keep in mind:** Agent Browser requires an environment with device execution support and can be added from the desktop Skill Store. It differs from the runtime-managed Browser tool and web search; see [Built-in Browser](/docs/usage/agent/built-in-browser) and [Execution Devices](/docs/usage/agent/execution-devices).
+
+### Where are web search, memory, and knowledge bases?
+
+Web search and memory have separate controls in the chat input’s **+** menu. Attach the relevant resources to use a knowledge base. Local system access and sandboxes depend on the selected execution environment. These capabilities do not always need to be added from the Skill Store.
+
+<a id="third-party-services" />
+
+## Third-party service connectors
+
+Connect the services below to let your agent work with authorized account content. After connecting, check the connector details for available actions and permissions. Actions may vary by account, service plan, and deployment configuration.
+
+| Service          | Main uses                                                                             | Usage notes                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| GitHub           | Find repositories, code, issues, and pull requests; support development collaboration | Repository access and changes depend on your authorization. Confirm the target branch before merging a PR.           |
+| Linear           | Work with issues, projects, cycles, documents, and comments                           | Access follows team and project permissions. Confirm the issue and fields before making changes.                     |
+| Outlook Calendar | View and manage calendar events and arrange meetings                                  | Connect and authorize separately from Outlook Mail and OneDrive.                                                     |
+| Notion           | Work with pages, databases, and knowledge content                                     | Grant access to the pages and databases you need. Unshared content is not accessible.                                |
+| PostHog          | Query product analytics and inspect dashboards, experiments, and feature flags        | Select Connect in the Skill Store and follow the project authorization prompts.                                      |
+| X                | Search posts, retrieve profiles, and support publishing and engagement                | Available actions depend on account permissions and the tools provided by the connector.                             |
+| Vercel           | Inspect projects, deployments, logs, and deployment configuration                     | Check accessible projects after connecting. Confirm the target environment before changing deployment configuration. |
+| Gmail            | Find and read email; support composing, sending, and label management                 | Reading, sending, and label management require the corresponding permissions.                                        |
+| Google Drive     | Find, organize, upload, and share files                                               | Access is limited to authorized files. Confirm recipients and access levels before sharing.                          |
+| Google Calendar  | View calendars, create events, and arrange meetings                                   | Confirm the calendar, timezone, and event-editing permissions.                                                       |
+| Slack            | Find conversations, send messages, and work with channels                             | Access is limited by channel permissions. Configure separately from bot connections in Message.                      |
+| Airtable         | Query, create, and update records                                                     | Authorize the bases and tables you need.                                                                             |
+| Google Sheets    | Read, write, and analyze spreadsheets                                                 | Authorize the spreadsheet and specify the sheet and cell range before making changes.                                |
+| Google Docs      | Create, read, edit, and format documents                                              | Requires access or editing permission for the target document.                                                       |
+| Supabase         | Support database, authentication, and storage workflows                               | Authorize the project and grant only the database and service permissions the task needs.                            |
+| Confluence       | Search pages and maintain knowledge content and space information                     | Access is restricted by site, space, and page permissions.                                                           |
+| Jira             | Find and create issues, update status, and track projects and sprints                 | Check project permissions and allowed workflow transitions.                                                          |
+| ClickUp          | Create and update tasks and track projects                                            | Check workspace, list, and task permissions.                                                                         |
+| Dropbox          | Find, upload, download, share, and organize files                                     | Confirm the destination and access scope before sharing or moving files.                                             |
+| Figma            | Read design information, inspect components, and export assets                        | Requires design-file access. See connector details for available actions.                                            |
+| HubSpot          | Work with contacts, deals, sales pipelines, and CRM workflows                         | Contact, deal, and other data access follows account-role permissions.                                               |
+| OneDrive         | Find, organize, upload, download, and share files                                     | Connect separately from Outlook Calendar and Outlook Mail; access is limited to authorized files.                    |
+| Outlook Mail     | Find, read, and send email and manage the inbox                                       | Authorize separately from Outlook Calendar. Check recipients before sending.                                         |
+| Salesforce       | Query CRM records, follow up leads, and update opportunities                          | Access is restricted by object, field, and organization permissions.                                                 |
+| WhatsApp         | Support messaging, media, and customer communication through the Business API         | Requires a WhatsApp Business API account and follows business messaging rules.                                       |
+| YouTube          | Search videos and retrieve video information and available transcripts                | Transcripts are available only when provided and accessible for the video.                                           |
+| Zendesk          | Create, update, and track support tickets and retrieve customer information           | Access is restricted by support role and ticket permissions.                                                         |
+| Cal.com          | Check availability, book meetings, and manage event types                             | Confirm availability, timezone, and booking permissions.                                                             |
+
+### Authorization and tool permissions
+
+A successful connection does not grant unrestricted access. Individual tools can run automatically, require approval, or be disabled. Inspect the configuration: **not every write operation is guaranteed to prompt for approval.** Disabling a tool for an agent is separate from revoking the service authorization.
+
+## Community skills and MCP integrations
+
+LobeHub’s community offers many third-party skills and MCP integrations. Go to **Agent page → chat input + → Skills → Add Skill…**, then use the **Skills** or **MCP** tab to find and add them.
+
+- **Skills** provide instructions, workflows, and references; some include scripts. Review their source, dependencies, and permissions before installation.
+- **MCP integrations** expose external tools and may require an endpoint, authentication, or execution environment. See [MCP Marketplace](/docs/usage/community/mcp-market).
+
+Review the description and required permissions before installing, and use extensions from sources you trust. Configure account access or an execution environment for extensions that need external services or scripts.
+
+<a id="import-skills" />
+
+## Import your own skills
+
+Go to **Agent page → chat input + → Skills → Add Skill…**. In the store, use **Add** in the upper-right corner to import from GitHub, a URL, or ZIP.
+
+### Import from GitHub
+
+1. Choose **Import from GitHub**.
+2. Enter a public repository URL or the full directory URL for the skill.
+3. Confirm and review the parsed name, description, and resources.
+4. Return to the skill list and select Auto or Pinned as needed.
+
+Choose a directory containing a valid `SKILL.md`. If the skill is in a subdirectory, use that directory's URL. Include the branch in the URL, especially if it is not `main`. If a link cannot be imported, package the skill as a ZIP and upload it instead.
+
+### Import from a URL
+
+1. Choose **Import from URL**.
+2. Enter a publicly accessible direct `SKILL.md` URL or a supported skill-package URL.
+3. Confirm, review the result, and choose a usage mode for the agent.
+
+Use a direct link to the skill file or package, rather than its introduction page. LobeHub needs to retrieve and read the file, so private-network or protected addresses may not work.
+
+### Upload a ZIP file
+
+1. Package `SKILL.md` with the required references and scripts.
+2. Choose **Upload Zip**, then select or drop the file.
+3. Wait for upload and parsing, then review the result.
+4. Set the skill to Auto or Pinned for the current agent.
+
+Place `SKILL.md` at the root or inside one top-level directory:
+
+```text
+my-skill/
+├── SKILL.md
+├── references/
+└── scripts/
+```
+
+The UI also accepts `.skill` files, parsed as ZIP packages. Package skills individually; bulk import from deeply nested directories is not supported. Importing does not automatically install dependencies or grant scripts unrestricted execution access.
+
+## Frequently asked questions
+
+**Why is an installed capability not being used?** Check whether it is disabled for this agent or automatic activation is off. Then check runtime mode, model tool-calling support, authorization, device connectivity, and dependencies. Pinning does not bypass those requirements.
+
+**Documents, Artifacts, or Image Generation?** Use Documents for persistent reports and notes; Artifacts for web pages, interactive components, and SVG work; Image Generation for images produced by image models.
+
+**Why can’t I find a connector?** Availability may vary by client, deployment settings, and account permissions. Check the entries shown in your Skill Store and confirm that your account can add connectors.

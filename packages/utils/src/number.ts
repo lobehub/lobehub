@@ -1,4 +1,4 @@
-import { IMAGE_GENERATION_CONFIG, MAX_SEED } from 'model-bank';
+import { IMAGE_GENERATION_CONFIG, MAX_SEED } from 'model-bank/standardParameters';
 import prand from 'pure-rand';
 
 export function generateUniqueSeeds(seedCount: number): number[] {

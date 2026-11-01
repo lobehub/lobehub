@@ -1,8 +1,7 @@
 'use client';
 
 import { type GridProps } from '@lobehub/ui';
-import { Block, Center, Grid, Select, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Block, Center, cssVar, Grid, Select, Text } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 import useMergeState from 'use-merge-value';
@@ -43,7 +42,12 @@ const SizeSelect = memo<SizeSelectProps>(({ options, onChange, value, defaultVal
   // If any option cannot be parsed as ratio, fallback to regular Select
   if (hasInvalidRatio) {
     return (
-      <Select options={options} style={{ width: '100%' }} value={active} onChange={onChange} />
+      <Select
+        options={options?.map((item) => ({ ...item, label: item.label || item.value }))}
+        style={{ width: '100%' }}
+        value={active}
+        onChange={onChange}
+      />
     );
   }
   return (

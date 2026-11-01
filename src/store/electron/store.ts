@@ -7,10 +7,10 @@ import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type ElectronAppAction } from './actions/app';
 import { createElectronAppSlice } from './actions/app';
+import { type CurrentRouteMetaAction } from './actions/currentRouteMeta';
+import { createCurrentRouteMetaSlice } from './actions/currentRouteMeta';
 import { type ElectronGatewayAction } from './actions/gateway';
 import { gatewaySlice } from './actions/gateway';
-import { type NavigationHistoryAction } from './actions/navigationHistory';
-import { createNavigationHistorySlice } from './actions/navigationHistory';
 import { type RecentPagesAction } from './actions/recentPages';
 import { createRecentPagesSlice } from './actions/recentPages';
 import { type ElectronSettingsAction } from './actions/settings';
@@ -31,7 +31,7 @@ export interface ElectronStore
     ElectronAppAction,
     ElectronGatewayAction,
     ElectronSettingsAction,
-    NavigationHistoryAction,
+    CurrentRouteMetaAction,
     RecentPagesAction,
     TabPagesAction {
   /* empty */
@@ -41,7 +41,7 @@ type ElectronStoreAction = ElectronRemoteServerAction &
   ElectronAppAction &
   ElectronGatewayAction &
   ElectronSettingsAction &
-  NavigationHistoryAction &
+  CurrentRouteMetaAction &
   RecentPagesAction &
   TabPagesAction;
 
@@ -54,7 +54,7 @@ const createStore: StateCreator<ElectronStore, [['zustand/devtools', never]]> = 
     createElectronAppSlice(...parameters),
     gatewaySlice(...parameters),
     settingsSlice(...parameters),
-    createNavigationHistorySlice(...parameters),
+    createCurrentRouteMetaSlice(...parameters),
     createRecentPagesSlice(...parameters),
     createTabPagesSlice(...parameters),
   ]),

@@ -1,11 +1,134 @@
 import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
+import type { DeviceExecutionTarget } from '../agent/agencyConfig';
+import type { AgentModelOverride } from '../agent/modelSelection';
 import type { Plans } from '../subscription';
 import type { TopicGroupMode, TopicSortBy } from '../topic';
 import type { UserAgentOnboarding } from './agentOnboarding';
 import type { UserOnboarding } from './onboarding';
 import type { UserSettings } from './settings';
+import type { NotificationSettings } from './settings/notification';
+
+/**
+ * Per-agent override for the device execution decision. Stored on
+ * `workspace_user_settings.preference.agentDeviceOverrides` (see
+ * {@link WorkspaceUserPreference}) and merged over `agents.agencyConfig` at
+ * read time so each workspace member's Cloud Sandbox / workspace-device /
+ * local-machine choice is independent — one member's pick never traps
+ * another. See `resolveAgencyConfig` in
+ * `packages/types/src/agent/agencyConfig.ts` for the merge implementation.
+ *
+ * Routing fields only, deliberately: `executionTarget`, `boundDeviceId`, and
+ * the two `localSandbox*` fields (which qualify *this member's* local execution
+ * — how hard their own machine is fenced is theirs to decide).
+ * `heterogeneousProvider`, `verifyRubricId`, and `workingDirByDevice` remain
+ * agent-shared because they describe *what the agent is*, not *how this user
+ * routes it*.
+ */
+export interface AgentDeviceOverride {
+  boundDeviceId?: string;
+  executionTarget?: DeviceExecutionTarget;
+  localSandbox?: boolean;
+  localSandboxNetwork?: boolean;
+}
+
+/**
+ * Per-user preferences that only make sense inside a specific workspace.
+ *
+ * Stored in its own DB table (`workspace_user_settings`, PK
+ * `(workspace_id, user_id)`) — the workspace-scoped counterpart to
+ * `user_settings`. The dedicated table lets:
+ *   - workspace / user delete cascade take out every trace in one shot;
+ *   - member-list queries stay leak-free (they hit `workspace_members`, not
+ *     this table);
+ *   - the "workspace-scoped user preference" boundary be obvious at the
+ *     schema layer.
+ *
+ * A single jsonb `preference` column holds this shape today (matches how
+ * `users.preference` scales); if a future family grows large enough to
+ * deserve its own column (à la `user_settings.hotkey` / `user_settings.tts`),
+ * split it out at that point.
+ */
+/**
+ * Per-user sidebar layout config for one workspace. Mirrors the two
+ * client-side `status.workspace.*` overlay fields that are worth syncing
+ * across devices; expansion state stays device-local.
+ */
+export interface SidebarLayoutPreference {
+  /** Section keys hidden from the sidebar (customize-sidebar "Hide"). */
+  hiddenSections?: string[];
+  /** Full sidebar item order, including the flex-spacer sentinel. */
+  items?: string[];
+}
+
+export interface WorkspaceUserPreference {
+  agentDeviceOverrides?: Record<string /* agentId */, AgentDeviceOverride>;
+  /** Personal model choices for workspace agents that allow member selection. */
+  agentModelOverrides?: Record<string /* agentId */, AgentModelOverride>;
+  /** Per-member Agent/Chat runtime mode for shared workspace agents. */
+  agentModeOverrides?: Record<string /* agentId */, boolean>;
+  /**
+   * This member's notification preferences for workspace-scoped scenarios
+   * (the `workspace` category of the scenario registry). Same shape as the
+   * personal `user_settings.notification` bag; missing = every workspace
+   * notification enabled. Workspace notifications consult only this bag —
+   * personal notification settings no longer apply to them.
+   */
+  notification?: NotificationSettings;
+  /**
+   * Per-member sidebar sections layout (order + hidden sections). Written as
+   * a complete object on every update — partial patches would drop the
+   * sibling field through the model's top-level merge.
+   */
+  sidebar?: SidebarLayoutPreference;
+  /**
+   * Explicit per-member sidebar membership for workspace Agents / chat groups
+   * (itemId -> visible). The workspace sidebar is a shared structure, so every
+   * item a member can see is listed by default; an entry here is that member's
+   * personal opt-out (`false`) or an explicit re-show of something the legacy
+   * hidden-id list removed. An explicit entry always wins over that list.
+   */
+  sidebarAgentVisibilityOverrides?: Record<string /* itemId */, boolean>;
+  /**
+   * Per-member folder assignment for sidebar items.
+   *
+   * @deprecated Folder membership is workspace-shared again — it lives on the
+   *   `agents.sessionGroupId` / `chat_groups.groupId` columns. Existing keys
+   *   are ignored; nothing reads or writes this map.
+   */
+  sidebarGroupAssignments?: Record<string /* itemId */, string | null>;
+  /**
+   * Sidebar agents/chat-groups the caller removed from their own sidebar
+   * before ownership-based workspace defaults were introduced. Retained for
+   * backward compatibility; new workspace writes use
+   * `sidebarAgentVisibilityOverrides`. Personal mode still uses this list.
+   */
+  sidebarHiddenAgentIds?: string[];
+  /**
+   * Sidebar folders (Categories) the caller removed from their own sidebar in
+   * this workspace. Folders themselves are shared, so this is the personal
+   * mask over them: absent id = shown. Hiding a folder hides the whole
+   * section, its items included — they stay reachable from the agents list.
+   */
+  sidebarHiddenGroupIds?: string[];
+  /**
+   * Per-member pins for sidebar items.
+   *
+   * @deprecated Pinning is workspace-shared again — it lives on the
+   *   `agents.pinned` / `chat_groups.pinned` columns. Existing keys are
+   *   ignored; nothing reads or writes this map.
+   */
+  sidebarPinnedOverrides?: Record<string /* itemId */, boolean>;
+  /**
+   * Topic sidebars list only the topics this member created.
+   *
+   * @deprecated The filter is a device-local, per-agent choice now
+   *   (`systemStatus.topicOnlyMineByAgent`). Existing values are ignored;
+   *   nothing reads or writes this key.
+   */
+  topicOnlyMine?: boolean;
+}
 
 export interface LobeUser {
   avatar?: string;
@@ -19,6 +142,11 @@ export interface LobeUser {
 }
 
 export const UserGuideSchema = z.object({
+  /**
+   * Pages and Resources were merged into Docs; set once the notice is acknowledged
+   */
+  docsMerged: z.boolean().optional(),
+
   /**
    * Move the settings button to the avatar dropdown
    */
@@ -39,17 +167,29 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
-   * enable agent self-iteration feedback capture and policy execution
+   * enable graph runtime configuration for agents
    */
-  enableAgentSelfIteration: z.boolean().optional(),
+  enableAgentGraphConfig: z.boolean().optional(),
   /**
-   * enable the floating chat panel in agent document preview
+   * enable artifact deployment features (publish artifacts to a hosted URL)
    */
-  enableAgentDocumentFloatingChatPanel: z.boolean().optional(),
+  enableArtifactDeployment: z.boolean().optional(),
   /**
-   * enable the Fleet view (side-by-side running-task dashboard)
+   * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
-  enableFleet: z.boolean().optional(),
+  enableClaudeCodeSdk: z.boolean().optional(),
+  /**
+   * run Codex hetero sessions through codex app-server instead of one-shot CLI spawn
+   */
+  enableCodexAppServer: z.boolean().optional(),
+  /**
+   * enable displaying two desktop tabs side by side
+   */
+  enableDesktopSplitView: z.boolean().optional(),
+  /**
+   * one-click import of local Claude Code / Codex CLI sessions as topics (desktop only)
+   */
+  enableHeteroSessionImport: z.boolean().optional(),
   /**
    * enable multi-agent group chat mode
    */
@@ -63,12 +203,87 @@ export const UserLabSchema = z.object({
    */
   enableInputMarkdown: z.boolean().optional(),
   /**
-   * show the "Add Platform Agent" entry in the create menu
+   * enable selecting message text and adding it to the next conversation context
    */
-  enablePlatformAgent: z.boolean().optional(),
+  enableMessageTextSelectionActions: z.boolean().optional(),
+  /**
+   * @deprecated Integrations left Labs and is always shown. Kept so a write
+   * from an older released client is not stripped by the schema.
+   */
+  enableIntegrations: z.boolean().optional(),
+  /**
+   * show OAuth app management in personal and workspace settings
+   */
+  enableOAuthApps: z.boolean().optional(),
+  /**
+   * enable the project workspace experiment
+   */
+  enableProjects: z.boolean().optional(),
+  /**
+   * self-evolving: inject what was learned (the user's rules and each agent's own lessons) into
+   * runs, and show it under memory and on each agent's self-learning page. The former separate
+   * "my rules" switch (`enableMemoryRules`) is folded into this one.
+   */
+  enableSelfLearning: z.boolean().optional(),
+  /**
+   * enable the task delivery-acceptance (verify) config UI on the task detail
+   */
+  enableTaskVerify: z.boolean().optional(),
+  /** Capture a conversation turn as an eval test case (developer-facing). */
+  enableEvalCapture: z.boolean().optional(),
+  /**
+   * show "Report a problem" in the topic menu, which sends where the topic is
+   * (its ids and the client environment) to the support team
+   */
+  enableTopicBugReport: z.boolean().optional(),
+  /**
+   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
+   */
+  enableGoals: z.boolean().optional(),
+  /**
+   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
+   * while older clients that only know this key are still around: their writes
+   * touch only this key, so it carries the latest choice.
+   */
+  enableTopicAcceptance: z.boolean().optional(),
+  /**
+   * expose a port on the working device through a tunnel link, so a dev server
+   * running there can be opened from this UI
+   */
+  enableDeviceTunnel: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;
+
+/** Automation switches for the GitHub integration. Every switch defaults to on. */
+export interface GithubIntegrationPreference {
+  /** Merging a linked pull request accepts its acceptance. */
+  acceptOnMerge?: boolean;
+  /** Post a LobeHub comment (acceptance + conversation links) on pull requests in private repositories. Default on. */
+  commentOnPrivateRepositories?: boolean;
+  /** Same for public repositories. Default off: a public thread is not the place for internal links. */
+  commentOnPublicRepositories?: boolean;
+  /** A failing check wakes the agent that opened the pull request. */
+  wakeOnCiFailure?: boolean;
+  /** Review feedback (changes requested, comments) wakes the agent. */
+  wakeOnReview?: boolean;
+}
+
+export interface UserIntegrationPreference {
+  github?: GithubIntegrationPreference;
+}
+
+export const GithubIntegrationPreferenceSchema = z.object({
+  acceptOnMerge: z.boolean().optional(),
+  commentOnPrivateRepositories: z.boolean().optional(),
+  commentOnPublicRepositories: z.boolean().optional(),
+  wakeOnCiFailure: z.boolean().optional(),
+  wakeOnReview: z.boolean().optional(),
+});
+
+export const UserIntegrationPreferenceSchema = z.object({
+  github: GithubIntegrationPreferenceSchema.optional(),
+});
 
 export interface UserPreference {
   /** Last-used app for "Open working directory in…" split button. Empty/unknown values fall back to platform default. */
@@ -78,11 +293,22 @@ export interface UserPreference {
    * @deprecated Use lab.enableInputMarkdown instead
    */
   disableInputMarkdownRender?: boolean;
+  /**
+   * CSS font-family value used as the global default UI font.
+   * Empty or whitespace-only values fall back to the application font stack.
+   */
+  fontFamily?: string;
   guide?: UserGuide;
   hideSyncAlert?: boolean;
   /**
    * lab experimental features
    */
+  /**
+   * Per-integration automation switches, edited on Settings → Integrations.
+   * Absent keys mean "on": the closed loop is the default, the switch is the
+   * opt-out.
+   */
+  integration?: UserIntegrationPreference;
   lab?: UserLab;
   /**
    * Last active workspace id. Used on cloud to land the user back in the
@@ -91,9 +317,32 @@ export interface UserPreference {
    */
   lastWorkspaceId?: string | null;
   /**
+   * How a project's topic sidebar groups its topics. Kept apart from
+   * `topicGroupMode` because a project spans agents and devices: it defaults to
+   * grouping by agent, and its choice must not leak into single-agent lists.
+   */
+  projectTopicGroupMode?: TopicGroupMode;
+  /**
+   * Personal-mode counterpart of
+   * {@link WorkspaceUserPreference.sidebarHiddenAgentIds}: agents/chat-groups
+   * removed from the personal sidebar via the View All page.
+   */
+  sidebarHiddenAgentIds?: string[];
+  /**
+   * Personal-mode counterpart of
+   * {@link WorkspaceUserPreference.sidebarHiddenGroupIds}: folders
+   * (Categories) hidden from the personal sidebar via Category Management.
+   */
+  sidebarHiddenGroupIds?: string[];
+  /**
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
+  /**
+   * CSS font-family value used by the desktop built-in terminal.
+   * Empty or whitespace-only values fall back to the application code font.
+   */
+  terminalFontFamily?: string;
   topicGroupMode?: TopicGroupMode;
   /**
    * whether to include completed topics in the topic list
@@ -107,11 +356,7 @@ export interface UserPreference {
 }
 
 export type ReferralStatusString =
-  | 'pending_reward'
-  | 'registered'
-  | 'suspected'
-  | 'rewarded'
-  | 'revoked';
+  'pending_reward' | 'registered' | 'suspected' | 'rewarded' | 'revoked';
 
 export interface UserInitializationState {
   agentOnboarding?: UserAgentOnboarding;
@@ -158,12 +403,22 @@ export interface SSOProvider {
 export const UserPreferenceSchema = z
   .object({
     defaultOpenInApp: z.string().optional(),
+    fontFamily: z.string().optional(),
     guide: UserGuideSchema.optional(),
     hideSyncAlert: z.boolean().optional(),
+    integration: UserIntegrationPreferenceSchema.optional(),
     lab: UserLabSchema.optional(),
-    lastWorkspaceId: z.string().nullable().optional(),
+    lastWorkspaceId: z.string().nullish(),
+    projectTopicGroupMode: z
+      .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
+      .optional(),
+    sidebarHiddenAgentIds: z.array(z.string()).optional(),
+    sidebarHiddenGroupIds: z.array(z.string()).optional(),
+    terminalFontFamily: z.string().optional(),
     telemetry: z.boolean().nullable(),
-    topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
+    topicGroupMode: z
+      .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
+      .optional(),
     topicIncludeCompleted: z.boolean().optional(),
     topicSortBy: z.enum(['createdAt', 'updatedAt']).optional(),
     useCmdEnterToSend: z.boolean().optional(),

@@ -1,0 +1,193 @@
+---
+title: Agent Profile
+description: Set an agent's name, appearance, model, tools, and core instructions. Refine its configuration with Agent Builder, connect messaging channels, and review usage.
+tags:
+  - LobeHub
+  - Agent
+  - Agent Profile
+  - Agent Configuration
+  - Agent Appearance Studio
+---
+
+# Agent Profile
+
+In Agent Profile, you can set up an agent and choose how it works. Give it a name and a custom appearance, choose its model and tools, write its core instructions, and review its messaging channels and usage.
+
+## Open Agent Profile
+
+Select an agent and open a conversation, then click **Agent Profile** in the left sidebar. The page has three tabs:
+
+| Tab | Purpose |
+| --- | --- |
+| **Profile** | Configure the agent's name, appearance, model, tools, and core instructions |
+| **Channels** | Connect the agent to external messaging apps |
+| **Stats** | Review the agent's costs, token consumption, and model usage |
+
+## Basic Profile
+
+### Name and Identity
+
+The top of the profile displays the agent's avatar, name, and identity information. Choose a recognizable name so you can find it in your agent list and conversations. If the agent has no name yet, use the AI naming button beside the name to generate one.
+
+A name identifies the agent. To define its responsibilities and working style, use **Core Instructions** further down the page.
+
+### Customize Appearance
+
+Click **Customize Appearance** beside the agent's avatar to open **Agent Appearance Studio**. Here, you can customize its avatar and full-body appearance, upload an existing image, or generate an appearance with AI.
+
+| Image | Requirements |
+| --- | --- |
+| **Avatar** | 1:1, PNG or JPG, up to 1 MB |
+| **Full-body image** | 3:4, transparent PNG, up to 1 MB |
+
+**Use an existing avatar:** Click **Upload** in the avatar area and select an image that meets the requirements. To remove the current avatar, click the delete icon in that area.
+
+**Generate with AI:**
+
+1. In the AI generation section, choose a style: **Lobe Style, Anime, Line Art, Pixel Art**, or **Oil Painting**. You can also choose **Reference Image** to provide a visual reference.
+2. Optionally add a description, such as “a researcher with glasses, a blue jacket, and a friendly expression.” Use it to specify features, clothing, and colors.
+3. Click **Generate** in the avatar area to create an avatar, or use the button to **generate both images** together for an avatar and a full-body image.
+4. Review the results. Adjust the style or description and generate again if needed.
+
+Appearance changes only how the agent looks. It does not change the agent's model, tool permissions, or core instructions.
+
+### Model and Reasoning Effort
+
+In the model and reasoning section, select the model the agent will use. For models that support adjustable reasoning effort, use the adjacent control to set how much effort the model puts into reasoning.
+
+- **Everyday questions, rewriting, and summaries:** Prioritize response speed and cost.
+- **Complex analysis, planning, and coding:** Try higher reasoning effort, then compare results, response time, and usage.
+- **Image, audio, or video tasks:** Check that the model and its integration support the input or output types you need.
+
+Available models and reasoning levels depend on the model and provider. Higher reasoning effort may increase latency and consumption without improving every task. For details about runtime rules, open the **Runtime Priority** information entry in the model settings.
+
+For model setup and availability, see [Model Providers](/docs/usage/providers).
+
+### Agent Tools and User Tools
+
+Below the model settings, tools are listed in two sections:
+
+- **Agent Tools:** Tools configured specifically for this agent. Click **Add Tool** to choose tools for its work.
+- **User Tools:** Tools connected to your account. Use the skill integration entry to add the tools you need.
+
+For a research agent, you can start with search and document tools, then add external services as needed. Before using a listed tool, complete any required account authorization, resource access, or execution environment setup as prompted.
+
+For adding tools, usage modes, and permissions, see [Connectors](/docs/usage/agent/connectors). For reusable working methods and skill packages, see [Skills Marketplace](/docs/usage/community/skills-market).
+
+### Core Instructions
+
+**Core Instructions** define the agent's role, scope, working methods, and response requirements. Unlike a temporary request in a conversation, this is the place for rules you want the agent to follow consistently.
+
+Type directly in the editor, press `/` to open the slash menu, or use the buttons at the top right to switch between rich-text and source editing views.
+
+Useful core instructions cover:
+
+- **Role and goals:** Who the agent works for and what problems it should solve.
+- **Working methods:** What information to gather first and how to handle missing information.
+- **Response requirements:** Language, length, formatting, and citations.
+- **Boundaries:** What not to guess and which actions require confirmation.
+
+For example, a research agent might use:
+
+```text
+You are a company research assistant. Help me organize company information
+and write internal briefs.
+
+Working requirements:
+- Prioritize company websites, financial reports, and regulatory disclosures.
+- Distinguish facts, public claims, and analysis. Do not invent data.
+- Identify missing information rather than filling gaps with guesses.
+
+Response requirements:
+- Start with a summary, then provide the analysis.
+- Use clear headings and concise paragraphs.
+- Include dates, units, and sources for key figures.
+```
+
+Core instructions guide behavior. They do not install tools or grant permissions. For searching, reading files, or working with external services, configure the corresponding tools as well.
+
+## Refine the Configuration with Agent Builder
+
+If you are unsure how to write core instructions or want to improve an existing agent, click the **Agent Builder** button at the top right of the profile page to open the conversation panel.
+
+Describe your use case directly, or start with one of the suggested tasks, such as:
+
+- **Define a system role:** Clarify the agent's expertise and responsibilities.
+- **Add an agent description:** Explain what the agent does and who it is for.
+- **Write a greeting and conversation starters:** Help users begin their first conversation.
+
+For example:
+
+> Configure this agent to analyze user feedback for a product team. It should categorize feedback before identifying problems and suggesting improvements. Refine its core instructions, then write a short greeting and three conversation starters.
+
+Review the resulting content and settings, then test the agent with a real task. Continue the conversation with Agent Builder or return to the profile to make manual adjustments.
+
+## Channels
+
+**Channels** let you interact with this agent through external messaging apps, such as Discord, Telegram, Slack, Feishu, Lark, QQ, WeChat, and LINE.
+
+Open the **Channels** tab, choose a platform, and follow the prompts to set up the connection and access rules. Setup requirements, available features, and plan restrictions vary by platform. Platforms marked **Coming Soon** are not yet available.
+
+For setup instructions and platform-specific details, see the [Channels Overview](/docs/usage/channels/overview).
+
+## Stats
+
+The **Stats** tab shows usage for the current agent, helping you understand costs and model consumption. Unlike account-wide [Usage Statistics](/docs/usage/user-interface/stats), this view focuses on this individual agent.
+
+### Choose a Reporting Period
+
+- **Granularity:** Group usage by day or week.
+- **Time range:** Select the last **7, 30, or 90 days**.
+
+### Review Summary Metrics
+
+| Metric | Meaning |
+| --- | --- |
+| **Cost** | Recorded usage costs for the selected period |
+| **Cache savings** | Cost savings from caching, alongside the hit rate and cache-read volume |
+| **Tokens** | Total token usage, with input and output breakdowns |
+
+Cache savings indicate the effect of caching; they are not cashback or account credit. Usage costs are also separate from subscription prices. Refer to the service's billing rules and invoices for actual charges.
+
+### Explore Trends and Model Details
+
+The **Agent Usage Trend** chart switches between **Cost** and **Tokens**, with separate categories for input, cached input, output, and cache writes. Use it to identify changes in consumption.
+
+The model breakdown table below lists each model's **request count, tokens, and cost**. If consumption rises during a particular period, use the trend and model breakdown to review the work performed, then decide whether to adjust the model, reasoning effort, or amount of context supplied to tasks.
+
+## More Actions
+
+Click the **More** button (`···`) at the top right of Agent Profile to access the following options:
+
+### Advanced Settings
+
+Select **Advanced Settings** to configure the agent's **greeting** and **conversation starters**:
+
+- **Greeting:** Appears when a user opens a new conversation and introduces what the agent can do and how to use it.
+- **Conversation starters:** Suggested questions shown at the start of a conversation to help users begin quickly. Enter a question and click **+** to add more.
+
+Click **Confirm** to save your changes.
+
+### Publish
+
+Select **Publish** to submit the current Agent to the community. After submission, the Agent enters review. Once approved, it appears in the Agent Marketplace.
+
+Before publishing for the first time, complete your community creator profile. For preparation requirements and publishing instructions, see [Become a Creator](/docs/usage/community/become-a-creator).
+
+### Export
+
+Select **Export**, then choose an available format or destination from the submenu. Use it to back up, share, or reuse the current Agent Profile. The available options depend on what the page displays.
+
+### Move to
+
+Select **Move to…** to move the current Agent to another available location. The Agent is removed from its original location after the move. Available destinations depend on your account permissions.
+
+### Copy to
+
+Select **Copy to…** to copy the current Agent to a personal account or workspace where you have permission to create agents. The original Agent remains in place. Available destinations depend on your account permissions.
+
+### Delete
+
+Select **Delete** to delete the current Agent. This is a destructive action. Confirm that you selected the correct Agent before you continue. If you need a backup, use **Export** or **Copy to…** first.
+
+The bottom of the menu also shows the Agent's creation time, which helps you verify which Agent you are managing.

@@ -1,7 +1,16 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
-import { AgentDocumentsApiName, AgentDocumentsIdentifier } from './types';
+import {
+  AgentDocumentsApiName,
+  AgentDocumentsIdentifier,
+  LIST_DOCUMENTS_DEFAULT_LIMIT,
+  LIST_DOCUMENTS_MAX_LIMIT,
+  MOVE_DOCUMENTS_MAX_IDS,
+} from './types';
+
+const AGENT_DOCUMENT_ID_DESCRIPTION =
+  'Target agent document ID. Use the "id" field returned by listDocuments, not "documentId".';
 
 export const AgentDocumentsManifest: BuiltinToolManifest = {
   api: [
@@ -12,7 +21,8 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           content: {
-            description: 'Document content in markdown or plain text.',
+            description:
+              'Document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```); outside code, Markdown syntax such as `\\`, `__` or `*` is interpreted. Do not open with an H1 (`#`) heading — the title renders as the document header and the leading H1 is removed automatically; start directly with the body and use `##` or deeper for sections.',
             type: 'string',
           },
           hintIsSkill: {
@@ -20,6 +30,11 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             description:
               'Set true only when the document captures reusable procedural knowledge or durable agent behavior.',
             type: 'boolean',
+          },
+          parentId: {
+            description:
+              'Parent to create the document under: a folder, or a document such as the workflow/SOP whose run this document records. Pass its "documentId" (or "id") from listDocuments or createFolder. Omit to create at the root. Fails if the parent does not exist.',
+            type: 'string',
           },
           scope: {
             default: 'agent',
@@ -36,10 +51,14 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         required: ['title', 'content'],
         type: 'object',
       },
+      work: {
+        action: 'create',
+        resourceType: 'document',
+      },
     },
     {
       description:
-        'Read an existing agent document by ID. Prefer XML format before node-level edits because XML includes stable node IDs.',
+        'Read an existing agent document by ID. Prefer XML format before node-level edits because XML includes stable node IDs. Long documents are returned one window at a time; a partial read ends with the offset to continue from.',
       name: AgentDocumentsApiName.readDocument,
       parameters: {
         properties: {
@@ -51,8 +70,18 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             type: 'string',
           },
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
+          },
+          limit: {
+            description:
+              'Maximum number of lines to return. Omit to read as much as fits in one response.',
+            type: 'integer',
+          },
+          offset: {
+            description:
+              '1-based line to start reading from. Use the offset given at the end of a partial read to continue.',
+            type: 'integer',
           },
         },
         required: ['id'],
@@ -66,16 +95,21 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           content: {
-            description: 'New full document content.',
+            description:
+              'New full document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```). Do not open with an H1 (`#`) heading — the title renders as the document header and the leading H1 is removed automatically; use `##` or deeper for sections.',
             type: 'string',
           },
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
         },
         required: ['id', 'content'],
         type: 'object',
+      },
+      work: {
+        action: 'update',
+        resourceType: 'document',
       },
     },
     {
@@ -85,7 +119,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
           operations: {
@@ -140,19 +174,33 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         required: ['id', 'operations'],
         type: 'object',
       },
+      work: {
+        action: 'update',
+        resourceType: 'document',
+      },
     },
     {
-      description: 'Remove an existing agent document by ID (similar intent to rm/delete).',
+      description:
+        'Remove an existing agent document or folder by ID (similar intent to rm). A document or folder with nested children is refused unless withChildren is true.',
       name: AgentDocumentsApiName.removeDocument,
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
+          },
+          withChildren: {
+            description:
+              'Also delete every document nested under it. Only set this when the user wants the children gone too; otherwise move them out first.',
+            type: 'boolean',
           },
         },
         required: ['id'],
         type: 'object',
+      },
+      work: {
+        action: 'delete',
+        resourceType: 'document',
       },
     },
     {
@@ -162,7 +210,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
           newTitle: {
@@ -172,6 +220,10 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         },
         required: ['id', 'newTitle'],
         type: 'object',
+      },
+      work: {
+        action: 'update',
+        resourceType: 'document',
       },
     },
     {
@@ -191,13 +243,74 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         required: ['id'],
         type: 'object',
       },
+      work: {
+        action: 'create',
+        resourceType: 'document',
+      },
     },
     {
       description:
-        'List agent documents. Use this to discover documents that are not auto-injected (e.g. web-crawled pages) or to resolve a title to a document ID.',
+        'Create a folder for organizing agent documents (similar intent to mkdir -p). Idempotent: if a folder with the same name already exists in that location it is returned instead of creating a duplicate, so it is safe to call on every scheduled run.',
+      name: AgentDocumentsApiName.createFolder,
+      parameters: {
+        properties: {
+          parentId: {
+            description:
+              'Parent folder or document ("documentId" or "id" from listDocuments/createFolder). Omit to create at the root.',
+            type: 'string',
+          },
+          title: {
+            description: 'Folder name. Cannot contain "/" or "\\".',
+            type: 'string',
+          },
+        },
+        required: ['title'],
+        type: 'object',
+      },
+    },
+    {
+      description: `Move documents and/or folders under a folder or a document, or back to the root (similar intent to mv). Accepts up to ${MOVE_DOCUMENTS_MAX_IDS} ids per call, so a whole set can be filed in one call. Titles, ids, content, history and load rules are kept. Each id is reported as moved, unchanged (already there) or failed with a reason; one failure does not stop the rest.`,
+      name: AgentDocumentsApiName.moveDocuments,
+      parameters: {
+        properties: {
+          ids: {
+            description:
+              'Documents or folders to move: the "id" (or "documentId") of each entry from listDocuments.',
+            items: { type: 'string' },
+            maxItems: MOVE_DOCUMENTS_MAX_IDS,
+            minItems: 1,
+            type: 'array',
+          },
+          parentId: {
+            description:
+              'Destination folder or document ("documentId" or "id" from listDocuments/createFolder). Pass null to move to the root.',
+            type: ['string', 'null'],
+          },
+        },
+        required: ['ids', 'parentId'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        "List agent documents (this agent's own notes/skills/structured docs). Use this to discover documents that are not auto-injected (e.g. web-crawled pages), to expand a folder collapsed in the agent_documents_index, or to resolve a title to a document ID. Each entry reports its type (file or folder), parentId (null at the root), childCount when something is nested under it (documents can hold children too) and updatedAt. Do NOT use this to find the user's uploaded files (PDFs, images, general uploads) — those live in the resource library and are covered by the Knowledge Base tool's listFiles, not here.",
       name: AgentDocumentsApiName.listDocuments,
       parameters: {
         properties: {
+          limit: {
+            description: `Maximum number of documents to return (default ${LIST_DOCUMENTS_DEFAULT_LIMIT}, max ${LIST_DOCUMENTS_MAX_LIMIT}).`,
+            type: 'number',
+          },
+          offset: {
+            description:
+              'Number of documents to skip. Use the offset given at the end of a truncated listing to fetch the next page.',
+            type: 'number',
+          },
+          parentId: {
+            description:
+              'Restrict the listing to the direct children of this parent — a folder or a document. Pass the id shown on a collapsed row in the agent_documents_index, or a "documentId"/"id" from a previous listing. Fails if the parent does not exist. Without parentId every document is listed, including nested ones; use each entry\'s "parentId" (null = root) to tell where it sits.',
+            type: 'string',
+          },
           scope: {
             default: 'agent',
             description:
@@ -207,9 +320,13 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
           },
           sourceType: {
             default: 'all',
-            description:
-              'Filter by document source. "file" = user-created or uploaded; "web" = crawled from external URLs; "all" returns both. Web-crawled documents are hidden from the default agent_documents_index — pass sourceType="web" here to see them.',
+            description: `Filter by document source within this agent-document system (unrelated to the user's resource library uploads). "file" = every non-web agent document (authored or edited as agent documents, plus uploaded originals); "web" = crawled from external URLs; "all" returns both. Web-crawled documents are hidden from the default agent_documents_index — pass sourceType="web" here to see them.`,
             enum: ['all', 'file', 'web'],
+            type: 'string',
+          },
+          titleContains: {
+            description:
+              'Only list documents whose title contains this text (case-insensitive). Applied before paging, so it finds every match, e.g. all daily reports that share a title prefix.',
             type: 'string',
           },
         },
@@ -224,7 +341,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           id: {
-            description: 'Target document ID.',
+            description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
           rule: {
@@ -253,7 +370,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
   meta: {
     avatar: '🗂️',
     description:
-      'Manage agent-scoped documents (list/create/read/edit/remove/rename/copy/upsert) and load rules',
+      "Manage agent-scoped documents and folders (list/create/read/edit/remove/rename/copy/move, create folders) and load rules. Not for the user's uploaded files — use the Knowledge Base tool for those.",
     title: 'Documents',
   },
   systemRole: systemPrompt,

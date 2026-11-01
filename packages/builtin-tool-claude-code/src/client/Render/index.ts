@@ -1,19 +1,16 @@
 import { RunCommandRender } from '@lobechat/shared-tool-ui/renders';
-import type { BuiltinRender, RenderDisplayControl } from '@lobechat/types';
+import type { BuiltinRender } from '@lobechat/types';
 
 import { ClaudeCodeApiName } from '../../types';
-import {
-  isLinearMcpApiName,
-  LINEAR_MCP_PREFIX,
-  LINEAR_MCP_TOOL_NAMES,
-} from '../Inspector/linearMcpLabels';
 import Agent from './Agent';
 import AskUserQuestion from './AskUserQuestion';
+import { BrowserMcpRenders } from './BrowserMcp';
 import Edit from './Edit';
 import Glob from './Glob';
 import Grep from './Grep';
 import { LinearMcpRenders } from './LinearMcp';
 import Read from './Read';
+import SendMessage from './SendMessage';
 import Skill from './Skill';
 import Task from './Task';
 import TodoWrite from './TodoWrite';
@@ -37,6 +34,7 @@ const FixedClaudeCodeRenders = {
   [ClaudeCodeApiName.Glob]: Glob,
   [ClaudeCodeApiName.Grep]: Grep,
   [ClaudeCodeApiName.Read]: Read,
+  [ClaudeCodeApiName.SendMessage]: SendMessage,
   [ClaudeCodeApiName.Skill]: Skill,
   // Task panel renders the adapter-synthesized `pluginState.todos` snapshot.
   // Only TaskUpdate / TaskList show it — those events express list-level
@@ -51,41 +49,21 @@ const FixedClaudeCodeRenders = {
   [ClaudeCodeApiName.WebFetch]: WebFetch,
   [ClaudeCodeApiName.WebSearch]: WebSearch,
   [ClaudeCodeApiName.Write]: Write,
+  // In-app browser tools CC drives through the desktop's builtin MCP server.
+  // Screenshot is the one that earns its card: it renders the captured page.
+  ...BrowserMcpRenders,
   ...LinearMcpRenders,
 };
 
 export const ClaudeCodeRenders = new Proxy(FixedClaudeCodeRenders, {
   get: (target, prop) => {
     if (typeof prop !== 'string') return undefined;
-    return prop in target ? target[prop as keyof typeof target] : LinearMcpRenders[prop];
+    if (prop in target) return target[prop as keyof typeof target];
+    return BrowserMcpRenders[prop] ?? LinearMcpRenders[prop];
   },
 }) as unknown as Record<string, BuiltinRender>;
 
-/**
- * Per-APIName default display control for CC tool renders.
- *
- * CC doesn't ship a LobeChat manifest (its tools come from Anthropic tool_use
- * blocks at runtime), so the store's manifest-based `getRenderDisplayControl`
- * can't reach these. The builtin-tools aggregator exposes this map via
- * `getBuiltinRenderDisplayControl` as a fallback.
- */
-const FixedClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = {
-  [ClaudeCodeApiName.Edit]: 'expand',
-  [ClaudeCodeApiName.TaskList]: 'expand',
-  [ClaudeCodeApiName.TaskUpdate]: 'expand',
-  [ClaudeCodeApiName.TodoWrite]: 'expand',
-  [ClaudeCodeApiName.Write]: 'expand',
-  ...Object.fromEntries(
-    LINEAR_MCP_TOOL_NAMES.map((tool) => [`${LINEAR_MCP_PREFIX}${tool}`, 'expand']),
-  ),
-};
-
-export const ClaudeCodeRenderDisplayControls: Record<string, RenderDisplayControl> = new Proxy(
-  FixedClaudeCodeRenderDisplayControls,
-  {
-    get: (target, prop) => {
-      if (typeof prop !== 'string') return undefined;
-      return target[prop] || (isLinearMcpApiName(prop) ? 'expand' : undefined);
-    },
-  },
-);
+export {
+  ClaudeCodeRenderDisplayControls,
+  resolveClaudeCodeRenderDisplayControl,
+} from './displayControls';

@@ -57,7 +57,7 @@ interface SkillManagementDocumentServiceDeps {
   /** Markdown-to-editor snapshot projector. */
   createMarkdownEditorSnapshot?: (content: string) => Promise<AgentDocumentEditorSnapshot>;
   /** Document history service dependency. */
-  documentService: Pick<DocumentService, 'trySaveCurrentDocumentHistory'>;
+  documentService: Pick<DocumentService, 'getDocumentById' | 'trySaveCurrentDocumentHistory'>;
 }
 
 const createEmptyEditorData = (): Record<string, unknown> => ({
@@ -94,7 +94,10 @@ const buildSkillMetadata = (
 export class SkillManagementDocumentService {
   private agentDocumentModel: SkillManagementAgentDocumentModel;
   private createMarkdownEditorSnapshot: (content: string) => Promise<AgentDocumentEditorSnapshot>;
-  private documentService: Pick<DocumentService, 'trySaveCurrentDocumentHistory'>;
+  private documentService: Pick<
+    DocumentService,
+    'getDocumentById' | 'trySaveCurrentDocumentHistory'
+  >;
 
   constructor(
     private db: LobeChatDatabase,
@@ -118,7 +121,8 @@ export class SkillManagementDocumentService {
    *
    * Expects:
    * - `name` is a stable lowercase skill name.
-   * - `bodyMarkdown` is Markdown body content without YAML frontmatter.
+   * - `bodyMarkdown` is Markdown body content; a pasted YAML frontmatter block
+   *   is stripped because frontmatter renders from structured fields.
    *
    * Returns:
    * - The created skill detail with normalized frontmatter content.
@@ -333,7 +337,8 @@ export class SkillManagementDocumentService {
    *
    * Expects:
    * - The target resolves to a live managed skill bundle.
-   * - Incoming bodyMarkdown has no YAML frontmatter.
+   * - Incoming bodyMarkdown may carry a pasted YAML frontmatter block; it is
+   *   stripped before rendering because frontmatter renders from structured fields.
    *
    * Returns:
    * - Updated skill detail with index content included.
@@ -359,7 +364,10 @@ export class SkillManagementDocumentService {
     // Removal condition: only if document history can snapshot Markdown content directly.
     const editorSnapshot = await this.createMarkdownEditorSnapshot(normalizedContent);
 
-    await this.documentService.trySaveCurrentDocumentHistory(index.documentId, 'llm_call');
+    const preMutationHistory = await this.documentService.trySaveCurrentDocumentHistory(
+      index.documentId,
+      'llm_call',
+    );
     const updatedBundle =
       (await this.agentDocumentModel.updateDocumentIdentity(resolved.id, {
         metadata,
@@ -373,8 +381,17 @@ export class SkillManagementDocumentService {
 
     const updated = await this.agentDocumentModel.findById(index.id);
     if (!updated) throw new Error(`Skill index disappeared during replace: ${index.id}`);
+    const updatedDocument = await this.documentService.getDocumentById(index.documentId);
 
-    return this.toSkillDetail(updatedBundle, updated, { includeContent: true });
+    return {
+      ...this.toSkillDetail(updatedBundle, updated, { includeContent: true }),
+      ...(updatedDocument?.updatedAt
+        ? { expectedCurrentDocumentUpdatedAt: updatedDocument.updatedAt.toISOString() }
+        : {}),
+      ...(preMutationHistory?.historyId
+        ? { preMutationHistoryId: preMutationHistory.historyId }
+        : {}),
+    };
   }
 
   /**
@@ -441,16 +458,19 @@ export class SkillManagementDocumentService {
   ): Promise<SkillAgentDocument | undefined> {
     if (target.agentDocumentId) {
       const doc = await this.agentDocumentModel.findById(target.agentDocumentId);
-      if (!doc) return undefined;
-      if (doc.agentId !== agentId) return undefined;
-      if (doc.fileType === SKILL_BUNDLE_FILE_TYPE) return doc;
+      if (doc && doc.agentId === agentId) {
+        if (doc.fileType === SKILL_BUNDLE_FILE_TYPE) return doc;
 
-      if (doc.fileType === SKILL_INDEX_FILE_TYPE && doc.parentId) {
-        const bundle = await this.agentDocumentModel.findByDocumentId(agentId, doc.parentId);
-        if (bundle?.fileType === SKILL_BUNDLE_FILE_TYPE) return bundle;
+        if (doc.fileType === SKILL_INDEX_FILE_TYPE && doc.parentId) {
+          const bundle = await this.agentDocumentModel.findByDocumentId(agentId, doc.parentId);
+          if (bundle?.fileType === SKILL_BUNDLE_FILE_TYPE) return bundle;
+        }
       }
 
-      return undefined;
+      // Fall through to the name selector when the agent document id does not
+      // resolve to a bundle under this agent. LLM tool calls commonly pass both
+      // selectors, and one mistyped id character must not hard-fail the read
+      // when the stable skill name is also provided (T-507).
     }
 
     if (!target.name) return undefined;

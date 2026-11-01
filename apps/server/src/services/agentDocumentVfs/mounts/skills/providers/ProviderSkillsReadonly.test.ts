@@ -2,15 +2,19 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { filterBuiltinSkills } from '@/helpers/skillFilters';
+import { USER_HIDDEN_BUILTIN_SKILLS } from '@/helpers/skillFilters';
 
 import { ProviderSkillsBuiltin } from './ProviderSkillsBuiltin';
 import { ProviderSkillsInstalledActive } from './ProviderSkillsInstalledActive';
 import { ProviderSkillsInstalledAll } from './ProviderSkillsInstalledAll';
 
 describe('readonly skill providers', () => {
-  const builtinSkill = filterBuiltinSkills(builtinSkills)[0];
-  const builtinSkillWithResources = filterBuiltinSkills(builtinSkills).find(
+  // Mirrors the provider's own set: user-hidden skills excluded, no device gating.
+  const visibleBuiltinSkills = builtinSkills.filter(
+    (skill) => !USER_HIDDEN_BUILTIN_SKILLS.has(skill.identifier),
+  );
+  const builtinSkill = visibleBuiltinSkills[0];
+  const builtinSkillWithResources = visibleBuiltinSkills.find(
     (skill) => skill.resources && Object.keys(skill.resources).length > 0,
   );
 

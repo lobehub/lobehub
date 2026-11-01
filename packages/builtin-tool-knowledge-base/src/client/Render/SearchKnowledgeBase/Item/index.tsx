@@ -1,8 +1,9 @@
 'use client';
 
 import type { FileSearchResult } from '@lobechat/types';
-import { Center, Flexbox, MaterialFileTypeIcon, Text, Tooltip } from '@lobehub/ui';
-import { cx } from 'antd-style';
+import { Center, Flexbox, MaterialFileTypeIcon, Tooltip } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
 import { useTheme } from 'next-themes';
 import { memo } from 'react';
 

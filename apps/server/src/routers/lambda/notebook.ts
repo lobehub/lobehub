@@ -1,13 +1,25 @@
 import { type NotebookDocument } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { TopicModel } from '@/database/models/topic';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
+import { WorkModel } from '@/database/models/work';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { NotebookRuntimeService } from '@/server/services/notebook';
+import {
+  assertCanEditResource,
+  assertCanPerformResourceAction,
+} from '@/server/services/resourcePermission';
+
+import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
+import { resolveRootOperation } from './_helpers/runProvenance';
 
 const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -15,6 +27,8 @@ const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
 
   return opts.next({
     ctx: {
+      operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, wsId),
+      workModel: new WorkModel(ctx.serverDB, ctx.userId, wsId),
       documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
       notebookService: new NotebookRuntimeService({
         serverDB: ctx.serverDB,
@@ -22,11 +36,34 @@ const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
         workspaceId: wsId,
       }),
       topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId, wsId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
 export const notebookRouter = router({
+  /**
+   * Attach an existing document to a topic without copying it.
+   *
+   * `createDocument` always writes a new row, so linking through it duplicated
+   * the document (and, inside an agent run, registered the copy as a second
+   * produced Work). This only writes the `(documentId, topicId)` pair, which is
+   * idempotent.
+   */
+  associateDocument: notebookProcedure
+    .use(withScopedPermission('document:update'))
+    .input(z.object({ documentId: z.string(), topicId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const [document, topic] = await Promise.all([
+        ctx.documentModel.findById(input.documentId),
+        ctx.topicModel.findById(input.topicId),
+      ]);
+      if (!document) throw new TRPCError({ code: 'NOT_FOUND', message: 'Document not found' });
+      if (!topic) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
+
+      return ctx.topicDocumentModel.associate(input);
+    }),
+
   createDocument: notebookProcedure
     .use(withScopedPermission('document:create'))
     .input(
@@ -34,6 +71,7 @@ export const notebookRouter = router({
         content: z.string(),
         description: z.string(),
         metadata: z.record(z.string(), z.any()).optional(),
+        operationId: z.string().optional(),
         source: z.string().optional().default('notebook'),
         sourceType: z.enum(['file', 'web', 'api', 'topic']).optional().default('api'),
         title: z.string(),
@@ -45,6 +83,39 @@ export const notebookRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Resolve provenance before creating anything. A caller may only attribute
+      // a document to an owned run in this topic, including its owned ancestry.
+      const operation = input.operationId
+        ? await ctx.operationModel.findOwnOperationById(input.operationId)
+        : null;
+      if (input.operationId && (!operation || operation.topicId !== input.topicId)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Operation does not belong to this topic',
+        });
+      }
+      const rootOperation = operation
+        ? await resolveRootOperation((id) => ctx.operationModel.findOwnOperationById(id), operation)
+        : null;
+
+      // One report written twice — through the agent documents tool and through
+      // this one — used to land as two documents: two entries in the topic's
+      // document list, two Works, and two deliverable cards on the goal graph,
+      // all for one piece of work. A byte-identical document of the same kind
+      // already in this topic is that second write, so it reuses the row
+      // instead of forking the document. Nothing changed, so nothing is
+      // registered either. The kind travels with the search, because a document
+      // is found by its type: `agent/plan` and the labelled kinds (`article` /
+      // `note` / `report`) stay distinct, so a plan is never answered with a
+      // markdown note and a note is never answered with a markdown row.
+      const twin = await ctx.topicDocumentModel.findVerbatimTwin({
+        content: input.content,
+        fileType: input.type,
+        title: input.title,
+        topicId: input.topicId,
+      });
+      if (twin) return twin;
+
       // Create the document
       const document = await ctx.documentModel.create({
         content: input.content,
@@ -64,6 +135,18 @@ export const notebookRouter = router({
         topicId: input.topicId,
       });
 
+      if (operation && rootOperation) {
+        await ctx.workModel.registerDocument({
+          agentId: operation.agentId,
+          changeType: 'created',
+          documentId: document.id,
+          rootOperationId: rootOperation.id,
+          toolIdentifier: 'lobehub-notebook',
+          toolName: 'createDocument',
+          topicId: input.topicId,
+        });
+      }
+
       return document;
     }),
 
@@ -71,7 +154,33 @@ export const notebookRouter = router({
     .use(withScopedPermission('document:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      await ctx.notebookService.deleteDocument(input.id);
+      const existing = await ctx.documentModel.findById(input.id);
+      if (!existing) return { success: true };
+      // Same guard as documentRouter.deleteDocument — the two routers delete
+      // from the same `documents` table and must not diverge in semantics.
+      if (ctx.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'delete',
+          db: ctx.serverDB,
+          resourceId: input.id,
+          resourceType: 'document',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+      }
+
+      // Same cascade rule as documentRouter.deleteDocument: a non-owner's
+      // folder delete must not take teammates' descendants with it.
+      await ctx.notebookService.deleteDocument(input.id, {
+        restrictToCreator: isWorkspaceNonOwner(ctx),
+      });
+
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
+          'document',
+          input.id,
+        );
+      }
 
       return { success: true };
     }),
@@ -125,6 +234,15 @@ export const notebookRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // General-access write guard, mirroring `document.updateDocument`.
+      await assertCanEditResource({
+        db: ctx.serverDB,
+        resourceId: input.id,
+        resourceType: 'document',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+
       let contentToUpdate = input.content;
 
       // Handle append mode

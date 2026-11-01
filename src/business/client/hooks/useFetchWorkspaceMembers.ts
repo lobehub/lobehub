@@ -4,4 +4,5 @@ export interface FetchWorkspaceMembersOptions {
 
 export const useFetchWorkspaceMembers = (_options: FetchWorkspaceMembersOptions = {}) => ({
   data: [],
+  isLoading: false,
 });

@@ -1,24 +1,155 @@
+/**
+ * The remote ref a local branch publishes to — the only branch identity that means
+ * anything off this machine. A worktree's generated branch name or a push with an
+ * explicit refspec makes the local name differ from the remote one.
+ */
+export interface GitUpstreamRef {
+  /** Branch name ON the remote (`feat/x`), never the local name */
+  branch: string;
+  /** Remote name (`origin`) */
+  remote: string;
+}
+
 export interface GitBranchInfo {
   /** Branch short name, or short SHA when in detached HEAD state */
   branch?: string;
   /** True when HEAD is detached (no branch ref) */
   detached?: boolean;
+  /** Remote ref the branch publishes to. Absent when unpushed or unresolvable */
+  upstream?: GitUpstreamRef;
 }
 
+export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
+
 export interface GitLinkedPullRequest {
+  ciStatus?: GitPullRequestCiStatus;
+  isDraft?: boolean;
+  mergeable?: string;
+  mergedAt?: string | null;
+  mergeStateStatus?: string;
   number: number;
+  reviewDecision?: string;
   state: string;
   title: string;
   url: string;
 }
 
+export type GitLinkedPullRequestLookupStatus = 'ok' | 'gh-missing' | 'error';
+
 export interface GitLinkedPullRequestResult {
-  /** Additional open PRs targeting the same head branch, beyond the primary one */
+  /** Additional PRs targeting the same head branch, beyond the primary one */
   extraCount?: number;
-  /** Null when no open PR is linked to the branch */
+  /** Null when no PR is linked to the branch */
   pullRequest: GitLinkedPullRequest | null;
   /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other failure */
-  status: 'ok' | 'gh-missing' | 'error';
+  status: GitLinkedPullRequestLookupStatus;
+  /** Remote ref the lookup queried under — the PR's own head ref when one was found */
+  upstream?: GitUpstreamRef;
+}
+
+export interface GitPullRequestCheck {
+  completedAt?: string;
+  detailsUrl?: string;
+  name: string;
+  required: boolean;
+  startedAt?: string;
+  status: 'cancelled' | 'failure' | 'neutral' | 'pending' | 'skipped' | 'success';
+}
+
+export interface GitPullRequestComment {
+  author: string;
+  body: string;
+  createdAt: string;
+  id: string;
+}
+
+export interface GitPullRequestReview {
+  author: string;
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
+  submittedAt: string;
+}
+
+export interface GitPullRequestCommit {
+  author: string;
+  committedAt: string;
+  message: string;
+  sha: string;
+}
+
+export interface GitPullRequestDetail {
+  additions: number;
+  author: string;
+  autoMerge?: { method: 'merge' | 'rebase' | 'squash' } | null;
+  baseBehindBy: number;
+  baseRefName: string;
+  body: string;
+  changedFiles: number;
+  checks: GitPullRequestCheck[];
+  comments: GitPullRequestComment[];
+  commits: GitPullRequestCommit[];
+  deletions: number;
+  headRefName: string;
+  headRefOid: string;
+  isCrossRepository: boolean;
+  isDraft: boolean;
+  mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
+  mergedAt?: string;
+  mergeStateStatus:
+    'BEHIND' | 'BLOCKED' | 'CLEAN' | 'DIRTY' | 'DRAFT' | 'HAS_HOOKS' | 'UNKNOWN' | 'UNSTABLE';
+  number: number;
+  repo: { name: string; owner: string };
+  reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
+  reviews: GitPullRequestReview[];
+  state: 'closed' | 'merged' | 'open';
+  title: string;
+  url: string;
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+export type GitPullRequestActivity = Pick<GitPullRequestDetail, 'comments' | 'commits' | 'reviews'>;
+
+export interface GitPullRequestDetailResult {
+  detail: GitPullRequestDetail | null;
+  status: GitLinkedPullRequestLookupStatus;
+}
+
+export type GitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
+
+/**
+ * Slow, permission-dependent merge context resolved separately from the PR
+ * detail so the pane can paint before branch protection / compare calls land.
+ */
+export interface GitPullRequestMergeContext {
+  /** Commits the base branch has that the PR head does not. */
+  baseBehindBy: number;
+  /** Status-check contexts required by branch protection on the base branch. */
+  requiredChecks: string[];
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+export type GitPullRequestAction =
+  | {
+      admin?: boolean;
+      deleteBranch?: boolean;
+      headRefOid: string;
+      method: GitPullRequestMergeMethod;
+      type: 'merge';
+    }
+  | { headRefOid: string; method: GitPullRequestMergeMethod; type: 'autoMerge' }
+  | { type: 'disableAutoMerge' }
+  | { method: 'merge' | 'rebase'; type: 'updateBranch' }
+  | { type: 'ready' }
+  | { body: string; type: 'comment' }
+  | { type: 'close' }
+  | { type: 'reopen' }
+  | { head: string; type: 'deleteBranch' }
+  | { base: string; type: 'changeBase' };
+
+export interface GitPullRequestActionResult {
+  error?: string;
+  success: boolean;
 }
 
 export interface GitBranchListItem {
@@ -204,6 +335,18 @@ export interface GitRenameBranchResult {
 export interface GitDeleteBranchResult {
   error?: string;
   success: boolean;
+}
+
+export interface GitRemoveWorktreeResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface GitAddWorktreeResult {
+  error?: string;
+  success: boolean;
+  /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
+  worktreePath?: string;
 }
 
 export interface GitPullResult {

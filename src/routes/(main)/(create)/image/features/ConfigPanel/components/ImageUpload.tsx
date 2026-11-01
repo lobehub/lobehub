@@ -1,8 +1,6 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
-import { App } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Center, createStaticStyles, cssVar, cx, toast } from '@lobehub/ui';
 import { Image as ImageIcon, X } from 'lucide-react';
 import { type FC } from 'react';
 import React, { memo, useEffect, useRef, useState } from 'react';
@@ -434,7 +432,7 @@ const ImageUpload: FC<ImageUploadProps> = memo(
     const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
     const [uploadState, setUploadState] = useState<UploadState | null>(null);
     const { t } = useTranslation('components');
-    const { message } = App.useApp();
+
     const { validateFiles, validateDimensions } = useUploadFilesValidation(
       undefined,
       maxFileSize,
@@ -539,7 +537,7 @@ const ImageUpload: FC<ImageUploadProps> = memo(
     const handleDrop = async (files: File[]) => {
       // Show warning if multiple files detected
       if (files.length > 1) {
-        message.warning(t('ImageUpload.actions.dropMultipleFiles'));
+        toast.warning(t('ImageUpload.actions.dropMultipleFiles'));
       }
 
       // Take the first image file

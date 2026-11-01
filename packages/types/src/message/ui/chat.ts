@@ -1,5 +1,6 @@
 import type { GroundingSearch } from '../../search';
 import type { ThreadStatus } from '../../topic/thread';
+import type { WorkSummaryItem } from '../../work';
 import type {
   ChatImageItem,
   ChatMessageError,
@@ -32,13 +33,29 @@ export type UIMessageRoleType =
   | 'agentCouncil'
   | 'compressedGroup'
   | 'compareGroup'
-  | 'verify';
+  | 'verify'
+  | 'taskCallback';
 
 export interface ChatFileItem {
   content?: string;
+  /** Stable application proxy URL used for browser-native downloads. */
+  downloadUrl?: string;
   fileType: string;
   id: string;
+  /**
+   * The viewer lost access to the referenced file (e.g. its owner switched a
+   * workspace-shared file back to private after it was used in a shared
+   * conversation). The server tombstones the row — id only, no name/url — and
+   * the UI renders a no-access placeholder card instead of the file card.
+   */
+  inaccessible?: boolean;
   name: string;
+  /**
+   * Character count of the original parsed text when the stored `content` was cut at parse time
+   * (see `metadata.originalCharCount` on the document). Lets prompts tell the model the text is
+   * incomplete instead of leaving it to guess from the file size.
+   */
+  originalCharCount?: number;
   size: number;
   url: string;
 }
@@ -86,6 +103,13 @@ export interface TaskBlock {
 
 export interface AssistantContentBlock {
   content: string;
+  /**
+   * Multi-agent broadcast members rendered inline as a single AgentCouncil block
+   * (parallel columns) within the supervisor's assistant group — instead of a
+   * separate top-level `agentCouncil` message. Set on a dedicated council block
+   * that carries no own content/tools.
+   */
+  council?: UIChatMessage[];
   error?: ChatMessageError | null;
   fileList?: ChatFileItem[];
   id: string;
@@ -163,12 +187,22 @@ export interface TaskDetail {
   totalCost?: number;
   /** Total messages created during execution */
   totalMessages?: number;
-  /** Total execution steps */
+  /**
+   * Total LLM calls made during execution — the user-facing step metric.
+   * Tool-only runtime iterations are not counted here.
+   */
   totalSteps?: number;
   /** Total tokens consumed */
   totalTokens?: number;
   /** Total tool calls made */
   totalToolCalls?: number;
+}
+
+export interface MessageSender {
+  avatar?: string | null;
+  fullName?: string | null;
+  id: string;
+  username?: string | null;
 }
 
 export interface UIChatMessage {
@@ -185,12 +219,34 @@ export interface UIChatMessage {
    */
   children?: AssistantContentBlock[];
   chunksList?: ChatFileChunk[];
+  /** Parallel response columns created by conversation-flow for virtual compare messages. */
+  columns?: UIChatMessage[][];
   /**
    * All messages within a compression group (role: 'compressedGroup')
    * Used for rendering expanded view with conversation-flow parsing
    */
   compressedMessages?: UIChatMessage[];
+  /**
+   * Ids of the group's oldest members that `compressedMessages` leaves out. A
+   * compression group can hold thousands of messages; the read path only
+   * hydrates the newest ones (see `MAX_COMPRESSED_GROUP_MEMBERS`) but keeps
+   * every member addressable, e.g. by a `#<message-id>` deep link.
+   */
+  compressedOmittedIds?: string[];
+  /**
+   * Conversation turns (mainline `user` messages) across the WHOLE group, set
+   * when `compressedOmittedIds` is: `compressedMessages` then holds only the
+   * newest members and undercounts the history it folded away.
+   */
+  compressedTurnCount?: number;
   content: string;
+  /**
+   * Character length of the STORED tool result body, kept when the read path
+   * replaced `content` with a render-facing view model. Presence checks (the
+   * tool status icon, "is this tool settled") must read this instead of
+   * `content.length`, which would otherwise report a trimmed body as empty.
+   */
+  contentLength?: number;
   createdAt: number;
   /** Lexical editor JSON state for rich text rendering */
   editorData?: Record<string, any> | null;
@@ -219,6 +275,14 @@ export interface UIChatMessage {
    * parent message id
    */
   parentId?: string;
+  /**
+   * The UI read path reduced this tool message's `content` / `pluginState` to
+   * a view model, and which surface has to fetch the stored payload back:
+   * `'detail'` when the inline card is complete on its own (a detail portal or
+   * the raw viewer fetches), `'render'` when the card itself renders the body
+   * and must be hydrated as the row expands.
+   */
+  payloadOmitted?: 'detail' | 'render';
   /**
    * Performance metrics (tps, ttft, duration, latency)
    * Aggregated from all children in group messages
@@ -254,6 +318,17 @@ export interface UIChatMessage {
    */
   role: UIMessageRoleType;
   search?: GroundingSearch | null;
+  /**
+   * The workspace member who authored this message. Populated by the server
+   * query via a users LEFT JOIN. `null` for messages whose author account was
+   * deleted (rare — `messages.user_id` cascades on delete, so this is mainly
+   * a safety fallback) or for messages returned by paths that don't hydrate
+   * this field yet (streaming/optimistic client messages).
+   *
+   * Used by the User bubble to render the actual sender's avatar in
+   * workspace-shared topics instead of hard-coding the viewer's own avatar.
+   */
+  sender?: MessageSender | null;
   sessionId?: string;
   /**
    * External-signal callback blocks (). Set on virtual
@@ -312,4 +387,12 @@ export interface UIChatMessage {
    */
   usage?: ModelUsage;
   videoList?: ChatVideoItem[];
+  /**
+   * Work summaries produced by this message's root operation, resolved
+   * server-side and attached by `metadata.work.rootOperationId`. Rides the
+   * message-list payload so the in-message Works chips and the sidebar's
+   * summary view read from one source instead of a separate work-summary
+   * fetch. Empty/omitted when the message produced no Work.
+   */
+  works?: WorkSummaryItem[];
 }

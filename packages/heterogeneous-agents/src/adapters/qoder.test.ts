@@ -1,0 +1,267 @@
+import { describe, expect, it } from 'vitest';
+
+import { QoderAdapter } from './qoder';
+
+describe('QoderAdapter', () => {
+  it('maps lifecycle, text, and usage with Qoder identity', () => {
+    const adapter = new QoderAdapter();
+    const start = adapter.adapt({
+      model: 'qoder-default',
+      session_id: 'qoder-session-1',
+      subtype: 'init',
+      type: 'system',
+    });
+
+    expect(start[0]).toMatchObject({
+      data: { model: 'qoder-default', provider: 'qoder', sessionId: 'qoder-session-1' },
+      type: 'stream_start',
+    });
+    expect(adapter.sessionId).toBe('qoder-session-1');
+
+    const assistant = adapter.adapt({
+      message: {
+        content: [{ text: 'hello', type: 'text' }],
+        id: 'msg-1',
+        model: 'qoder-default',
+        usage: { input_tokens: 12, output_tokens: 3 },
+      },
+      type: 'assistant',
+    });
+    expect(assistant).toContainEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ chunkType: 'text', content: 'hello' }),
+        type: 'stream_chunk',
+      }),
+    );
+    expect(assistant).toContainEqual(
+      expect.objectContaining({
+        data: expect.objectContaining({ provider: 'qoder' }),
+        type: 'step_complete',
+      }),
+    );
+
+    expect(
+      adapter.adapt({ is_error: false, result: 'done', type: 'result' }).map((event) => event.type),
+    ).toEqual(['stream_end', 'visible_output_end', 'agent_runtime_end']);
+  });
+
+  it('normalizes tool calls, results, and parent lineage to Qoder', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+
+    const toolEvents = adapter.adapt({
+      message: {
+        content: [{ id: 'tool-1', input: { command: 'pwd' }, name: 'Bash', type: 'tool_use' }],
+        id: 'msg-sub',
+      },
+      parent_tool_use_id: 'parent-tool-1',
+      type: 'assistant',
+    });
+    const calling = toolEvents.find(
+      (event) => event.type === 'stream_chunk' && event.data.chunkType === 'tools_calling',
+    );
+    expect(calling?.data).toMatchObject({
+      subagent: { parentToolCallId: 'parent-tool-1' },
+      toolsCalling: [{ apiName: 'Bash', id: 'tool-1', identifier: 'qoder' }],
+    });
+    expect(toolEvents.find((event) => event.type === 'tool_start')?.data).toMatchObject({
+      subagent: { parentToolCallId: 'parent-tool-1' },
+      toolCalling: { identifier: 'qoder' },
+    });
+
+    const resultEvents = adapter.adapt({
+      message: {
+        content: [{ content: '/workspace', tool_use_id: 'tool-1', type: 'tool_result' }],
+        role: 'user',
+      },
+      parent_tool_use_id: 'parent-tool-1',
+      type: 'user',
+    });
+    expect(resultEvents.find((event) => event.type === 'tool_result')?.data).toMatchObject({
+      content: '/workspace',
+      subagent: { parentToolCallId: 'parent-tool-1' },
+      toolCallId: 'tool-1',
+    });
+    expect(resultEvents.find((event) => event.type === 'tool_end')?.data).toMatchObject({
+      payload: { toolCalling: { identifier: 'qoder' } },
+      subagent: { parentToolCallId: 'parent-tool-1' },
+    });
+  });
+
+  it('emits one structured Qoder auth error even though Qoder exits successfully', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    const authText = 'Not logged in · Please run /login';
+
+    expect(
+      adapter.adapt({
+        message: {
+          content: [
+            { text: 'Not logged in', type: 'text' },
+            { text: 'Please run /login', type: 'text' },
+          ],
+          id: 'msg-auth',
+        },
+        type: 'assistant',
+      }),
+    ).toEqual([]);
+
+    const events = adapter.adapt({
+      is_error: true,
+      result: authText,
+      subtype: 'success',
+      type: 'result',
+    });
+    expect(events.map((event) => event.type)).toEqual([
+      'stream_end',
+      'visible_output_end',
+      'error',
+    ]);
+    expect(events[2].data).toMatchObject({
+      agentType: 'qoder',
+      code: 'auth_required',
+      docsUrl: 'https://docs.qoder.com/cli/auth.md',
+      stderr: authText,
+    });
+    expect(events[2].data.message).toContain('Qoder');
+  });
+
+  it('reports credits usage although Qoder zeroes every token field', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ model: 'Auto', session_id: 'q-session', subtype: 'init', type: 'system' });
+    adapter.adapt({
+      event: { message: { id: 'msg-1', model: 'Auto' }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    // Qoder's message_delta: token fields always 0, consumption in credits only
+    const turn = adapter.adapt({
+      event: {
+        delta: { stop_reason: 'end_turn' },
+        type: 'message_delta',
+        usage: {
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          credits: 0.6151926628571428,
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      type: 'stream_event',
+    });
+
+    const turnUsage = turn.find(
+      (event) => event.type === 'step_complete' && event.data.phase === 'turn_metadata',
+    );
+    expect(turnUsage?.data).toMatchObject({
+      model: 'Auto',
+      provider: 'qoder',
+      usage: {
+        credits: 0.6151926628571428,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 0,
+      },
+    });
+
+    // The result event carries the session grand total in total_credits
+    const result = adapter.adapt({
+      subtype: 'success',
+      total_cost_usd: 0,
+      total_credits: 1.0052312114285713,
+      type: 'result',
+      usage: {
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+      },
+    });
+    const resultUsage = result.find(
+      (event) => event.type === 'step_complete' && event.data.phase === 'result_usage',
+    );
+    expect(resultUsage?.data).toMatchObject({
+      costUsd: 0,
+      usage: { credits: 1.0052312114285713, totalTokens: 0 },
+    });
+  });
+
+  it('merges token counts with credits when Qoder reports both', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    adapter.adapt({
+      event: { message: { id: 'msg-1', model: 'Qwen3.8-Flash' }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    const turn = adapter.adapt({
+      event: {
+        delta: { stop_reason: 'end_turn' },
+        type: 'message_delta',
+        usage: { cache_read_input_tokens: 4, credits: 0.5, input_tokens: 10, output_tokens: 5 },
+      },
+      type: 'stream_event',
+    });
+
+    expect(
+      turn.find((event) => event.type === 'step_complete' && event.data.phase === 'turn_metadata')
+        ?.data.usage,
+    ).toEqual({
+      credits: 0.5,
+      inputCacheMissTokens: 10,
+      inputCachedTokens: 4,
+      totalInputTokens: 14,
+      totalOutputTokens: 5,
+      totalTokens: 19,
+    });
+  });
+
+  it('still drops usage events when Qoder reports neither tokens nor credits', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    adapter.adapt({
+      event: { message: { id: 'msg-1', model: 'Auto' }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    const turn = adapter.adapt({
+      event: {
+        type: 'message_delta',
+        usage: {
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      type: 'stream_event',
+    });
+    expect(turn.filter((event) => event.type === 'step_complete')).toEqual([]);
+
+    const result = adapter.adapt({
+      subtype: 'success',
+      total_cost_usd: 0,
+      total_credits: 0,
+      type: 'result',
+      usage: { input_tokens: 0, output_tokens: 0 },
+    });
+    expect(result.filter((event) => event.type === 'step_complete')).toEqual([]);
+  });
+
+  it('normalizes pending tool identity when flushing', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    adapter.adapt({
+      message: {
+        content: [{ id: 'tool-1', input: {}, name: 'Read', type: 'tool_use' }],
+        id: 'msg-1',
+      },
+      type: 'assistant',
+    });
+
+    expect(adapter.flush()[0]).toMatchObject({
+      data: { payload: { toolCalling: { identifier: 'qoder' } }, toolCallId: 'tool-1' },
+      type: 'tool_end',
+    });
+  });
+});

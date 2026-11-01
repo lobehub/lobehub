@@ -172,6 +172,49 @@ describe('useAgentSignalReceipts', () => {
     expect(result.current.receiptsByAnchor.get('user-1')).toBeUndefined();
   });
 
+  it('re-anchors steered continuation receipts under the original visible host group', async () => {
+    vi.mocked(agentSignalService.listReceipts).mockResolvedValueOnce({
+      cursor: undefined,
+      receipts: [
+        { ...receipt, anchorMessageId: 'assistant-group-2', id: 'receipt-continuation-group' },
+        { ...receipt, anchorMessageId: 'assistant-child-2', id: 'receipt-continuation-child' },
+        {
+          ...receipt,
+          anchorMessageId: undefined,
+          id: 'receipt-continuation-trigger',
+          triggerMessageId: 'steer-1',
+        },
+      ],
+    });
+
+    const { result } = renderReceiptsHook({
+      agentId: 'agent-1',
+      displayMessages: [
+        message({ id: 'user-1', role: 'user' }),
+        message({ id: 'assistant-group-1', parentId: 'user-1', role: 'assistantGroup' }),
+        message({ id: 'steer-1', metadata: { steer: true }, role: 'user' }),
+        message({
+          children: [{ content: 'Final assistant step', id: 'assistant-child-2' }],
+          id: 'assistant-group-2',
+          parentId: 'steer-1',
+          role: 'assistantGroup',
+        }),
+      ],
+      enabled: true,
+      topicId: 'topic-1',
+    });
+
+    await waitFor(() => {
+      expect(result.current.receiptsByAnchor.get('assistant-group-1')).toEqual([
+        expect.objectContaining({ id: 'receipt-continuation-group' }),
+        expect.objectContaining({ id: 'receipt-continuation-child' }),
+        expect.objectContaining({ id: 'receipt-continuation-trigger' }),
+      ]);
+    });
+    expect(result.current.receiptsByAnchor.get('assistant-group-2')).toBeUndefined();
+    expect(result.current.receiptsByAnchor.get('steer-1')).toBeUndefined();
+  });
+
   it('groups trigger-only receipts under the trigger message when no assistant child exists', async () => {
     vi.mocked(agentSignalService.listReceipts).mockResolvedValueOnce({
       cursor: undefined,

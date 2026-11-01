@@ -29,6 +29,21 @@ const MAX_RECENT_MESSAGES = 5;
 /** Max characters per message content */
 const MAX_MESSAGE_LENGTH = 300;
 
+const RAW_TOPIC_ID = /(?:^|\W)tpc_[\dA-Za-z]{8,}(?![\dA-Za-z])/;
+
+/**
+ * Whether the messages point at another topic, either through a `<refer_topic>`
+ * tag or a raw `tpc_` topic id the user pasted.
+ */
+export function mentionsTopic(messages: Array<{ content: string | unknown }>): boolean {
+  if (parseReferTopicTags(messages).length > 0) return true;
+
+  return messages.some((msg) => {
+    const raw = typeof msg.content === 'string' ? msg.content : '';
+    return RAW_TOPIC_ID.test(raw.replaceAll('\\_', '_'));
+  });
+}
+
 /**
  * Parse <refer_topic> tags from message contents
  */

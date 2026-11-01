@@ -21,10 +21,20 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('BriefCardSummary', () => {
-  it('should render summary text', () => {
+  it('should render summary text', async () => {
     vi.mocked(useSize).mockReturnValue(undefined);
     render(<BriefCardSummary summary="Test summary content" />);
-    expect(screen.getByText('Test summary content')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Test summary content', {}, { timeout: 10_000 }),
+    ).toBeInTheDocument();
+  });
+
+  it('measures an eagerly mounted wrapper so the lazy markdown is observed', () => {
+    vi.mocked(useSize).mockReturnValue(undefined);
+    render(<BriefCardSummary summary="Test summary content" />);
+
+    const ref = vi.mocked(useSize).mock.calls.at(-1)![0] as { current: HTMLElement | null };
+    expect(ref.current).toBeInstanceOf(HTMLElement);
   });
 
   it('should not show expand link when content does not overflow', () => {

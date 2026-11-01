@@ -1,27 +1,17 @@
 import {
   AGENT_SIGNAL_REVIEW_IDENTIFIER,
   AGENT_SIGNAL_REVIEW_TOOL_API_NAMES,
-  AgentSignalToolExecutionRuntime,
 } from '@lobechat/builtin-tool-agent-signal';
+import { AgentSignalToolExecutionRuntime } from '@lobechat/builtin-tool-agent-signal/executionRuntime';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { BriefModel } from '@/database/models/brief';
-import { UserModel } from '@/database/models/user';
-import type { LobeChatDatabase } from '@/database/type';
 import { readAgentSignalMarker } from '@/server/services/agentSignal/operationMarker';
 import { createServerSelfReviewBriefWriter } from '@/server/services/agentSignal/services/selfIteration/review/brief';
 import { createReviewRuntimePrimitives } from '@/server/services/agentSignal/services/selfIteration/review/server';
 import { SkillManagementDocumentService } from '@/server/services/skillManagement';
-import { translation } from '@/server/translation';
 
 import type { ServerRuntimeRegistration } from './types';
-
-const resolveBriefTextTranslator = async (db: LobeChatDatabase, userId: string) => {
-  const userInfo = await UserModel.getInfoForAIGeneration(db, userId);
-  const { t } = await translation('home', userInfo.responseLanguage ?? 'en-US');
-
-  return t;
-};
 
 /**
  * Registers the nightly-review self-iteration builtin server runtime, so an
@@ -53,7 +43,6 @@ export const agentSignalReviewRuntime: ServerRuntimeRegistration = {
     const service = createReviewRuntimePrimitives({
       agentId,
       briefModel: new BriefModel(serverDB, userId, workspaceId),
-      briefTextTranslator: await resolveBriefTextTranslator(serverDB, userId),
       db: serverDB,
       localDate,
       proposalBriefWriter: createServerSelfReviewBriefWriter(serverDB, userId, workspaceId),

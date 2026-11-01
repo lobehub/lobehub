@@ -5,7 +5,7 @@ import urlJoin from 'url-join';
 import { FileModel } from '@/database/models/file';
 import { fileEnv } from '@/envs/file';
 import { getRedisConfig } from '@/envs/redis';
-import { initializeRedis, isRedisEnabled } from '@/libs/redis';
+import { initializeRedis, isRedisEnabled } from '@/server/modules/Redis';
 import { FileS3 } from '@/server/modules/S3';
 
 import type { FileServiceImpl, PreSignedUpload } from './type';
@@ -52,8 +52,10 @@ export class S3StaticFileImpl implements FileServiceImpl {
     return this.s3.deleteFiles(keys);
   }
 
-  async getFileContent(key: string): Promise<string> {
-    return this.s3.getFileContent(key);
+  async getFileContent(key: string, byteLength?: number): Promise<string> {
+    return byteLength === undefined
+      ? this.s3.getFileContent(key)
+      : this.s3.getFileContent(key, byteLength);
   }
 
   async getFileByteArray(key: string): Promise<Uint8Array> {
@@ -76,6 +78,14 @@ export class S3StaticFileImpl implements FileServiceImpl {
     return this.s3.createPreSignedUrlForPreview(key, expiresIn);
   }
 
+  async createPreSignedUrlForDownload(
+    key: string,
+    fileName: string,
+    expiresIn?: number,
+  ): Promise<string> {
+    return this.s3.createPreSignedUrlForDownload(key, fileName, expiresIn);
+  }
+
   private async getStorageKeyFromUrl(url: string): Promise<string> {
     if (!url.startsWith('http://') && !url.startsWith('https://')) return url;
 
@@ -85,6 +95,12 @@ export class S3StaticFileImpl implements FileServiceImpl {
     }
 
     return extractedKey;
+  }
+
+  async createDownloadUrl(url: string, fileName: string, expiresIn?: number): Promise<string> {
+    const key = await this.getStorageKeyFromUrl(url);
+
+    return this.createPreSignedUrlForDownload(key, fileName, expiresIn);
   }
 
   private async getCachedPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string> {

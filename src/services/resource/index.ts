@@ -23,6 +23,7 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
     chunkingStatus: item.chunkingStatus,
     // Document-specific fields
     content: item.content,
+    contentPreview: item.contentPreview,
 
     createdAt: item.createdAt,
 
@@ -34,11 +35,17 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
 
     embeddingTaskId: item.embeddingStatus ? 'placeholder' : null,
 
+    fileId: item.fileId,
+
     fileType: item.fileType,
 
     finishEmbedding: item.finishEmbedding,
 
+    hasChildren: item.hasChildren,
+
     id: item.id,
+
+    knowledgeBaseIds: item.knowledgeBaseIds,
 
     // Metadata
     metadata: item.metadata || undefined,
@@ -55,8 +62,14 @@ const mapToResourceItem = (item: FileListItem): ResourceItem => {
 
     updatedAt: item.updatedAt,
 
+    uploader: item.uploader ?? null,
+
     // File-specific fields
     url: item.url,
+
+    userId: item.userId,
+
+    visibility: item.visibility,
   };
 };
 
@@ -101,6 +114,7 @@ export class ResourceService {
     // Map frontend parameter names to backend parameter names
     const backendParams = {
       ...params,
+      includeContentPreview: params.includeContentPreview ?? false,
       knowledgeBaseId: params.libraryId, // Map libraryId to knowledgeBaseId
       libraryId: undefined, // Remove the frontend-specific parameter
     };
@@ -126,9 +140,13 @@ export class ResourceService {
     return fileService.resolveKnowledgeItemIds(backendParams);
   }
 
-  async deleteResourcesByQuery(params: ResourceQueryParams): Promise<{ count: number }> {
+  async deleteResourcesByQuery(
+    params: ResourceQueryParams,
+    excludedIds?: string[],
+  ): Promise<{ count: number }> {
     const backendParams = {
       ...params,
+      excludedIds,
       knowledgeBaseId: params.libraryId,
       libraryId: undefined,
     };
@@ -288,10 +306,34 @@ export class ResourceService {
   }
 
   /**
-   * Move a resource to a different parent folder
+   * Move a resource to a different parent folder.
+   *
+   * With the caller's copy of the row (`known`), the move is a single request:
+   * the row already tells us whether it is a file or a document, and a move
+   * changes nothing else, so the result is composed locally instead of being
+   * fetched back. `updateResource`'s look-up → update → re-fetch chain is three
+   * round-trips, and the explorer's "moved" toast waits on this promise.
    */
-  async moveResource(id: string, parentId: string | null): Promise<ResourceItem> {
-    return this.updateResource(id, { parentId });
+  async moveResource(
+    id: string,
+    parentId: string | null,
+    known?: ResourceItem,
+  ): Promise<ResourceItem> {
+    if (!known) return this.updateResource(id, { parentId });
+
+    // Route by id, not by `sourceType`: a file that backs a derived page is
+    // listed with `sourceType: 'file'` but addressed by the page's `docs_` id
+    // (see the knowledge repository's `COALESCE(d.id, f.id)`), and only the
+    // document endpoint knows that id — the same rule `getKnowledgeItem` uses.
+    if (id.startsWith('docs_')) {
+      await documentService.updateDocument({ id, parentId });
+    } else {
+      await fileService.updateFile(id, { parentId });
+    }
+
+    const { _optimistic, ...rest } = known;
+    void _optimistic;
+    return { ...rest, parentId, updatedAt: new Date() };
   }
 }
 

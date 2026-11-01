@@ -77,9 +77,3 @@ export const userPersonaDocumentHistories = pgTable(
     index('user_persona_document_histories_profile_index').on(table.profile),
   ],
 );
-
-export type UserPersonaDocument = typeof userPersonaDocuments.$inferSelect;
-export type NewUserPersonaDocument = typeof userPersonaDocuments.$inferInsert;
-
-export type UserPersonaDocumentHistoriesItem = typeof userPersonaDocumentHistories.$inferSelect;
-export type NewUserPersonaDocumentHistoriesItem = typeof userPersonaDocumentHistories.$inferInsert;

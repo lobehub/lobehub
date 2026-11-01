@@ -387,6 +387,94 @@ describe('DataImporter', () => {
   });
 
   describe('import message and topic', () => {
+    it('skips a trashed message identity when the same export is imported again', async () => {
+      const data = {
+        data: {
+          messages: [
+            {
+              content: 'Imported once',
+              createdAt: '2026-09-10T00:00:00Z',
+              id: 'trashed-import-message',
+              role: 'user',
+              updatedAt: '2026-09-10T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as ImportPgDataStructure;
+      await importer.importPgData(data);
+      await clientDB
+        .update(Schema.messages)
+        .set({ deletedAt: new Date('2026-09-10T01:00:00Z'), isDeleted: true })
+        .where(eq(Schema.messages.clientId, 'trashed-import-message'));
+
+      const second = await new DataImporterRepos(clientDB, userId).importPgData(data);
+
+      expect(second.success).toBe(true);
+      expect(second.results.messages).toMatchObject({ added: 0, errors: 0, skips: 1 });
+    });
+
+    it('should map topic agentId to the imported agent id', async () => {
+      const exportData: ImportPgDataStructure = {
+        data: {
+          agents: [
+            {
+              id: 'agt_topic_agent',
+              slug: 'topic-agent',
+              model: 'gpt-4',
+              provider: 'openai',
+              systemRole: '',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          messages: [
+            {
+              id: 'msg_topic_agent',
+              role: 'user',
+              content: 'hello',
+              topicId: 'tpc_topic_agent',
+              agentId: 'agt_topic_agent',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          topics: [
+            {
+              id: 'tpc_topic_agent',
+              title: 'topic with agent',
+              agentId: 'agt_topic_agent',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const result = await importer.importPgData(exportData);
+
+      expect(result.success).toBe(true);
+      expect(result.results.topics).toMatchObject({ added: 1, errors: 0, skips: 0 });
+      expect(result.results.messages).toMatchObject({ added: 1, errors: 0, skips: 0 });
+
+      const [agent] = await clientDB.query.agents.findMany({
+        where: eq(Schema.agents.userId, userId),
+      });
+      const [topic] = await clientDB.query.topics.findMany({
+        where: eq(Schema.topics.userId, userId),
+      });
+      const [message] = await clientDB.query.messages.findMany({
+        where: eq(Schema.messages.userId, userId),
+      });
+
+      expect(topic.agentId).toBe(agent.id);
+      expect(message.agentId).toBe(agent.id);
+      expect(topic.agentId).not.toBe('agt_topic_agent');
+    });
+
     it('should import return correct result', async () => {
       const exportData = topicsData as ImportPgDataStructure;
       const result = await importer.importPgData(exportData);

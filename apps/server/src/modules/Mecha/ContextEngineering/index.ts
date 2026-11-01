@@ -1,182 +1,140 @@
-import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
-import { MessagesEngine } from '@lobechat/context-engine';
-import { type OpenAIChatMessage } from '@lobechat/types';
+import {
+  type ContextEngineeringResult,
+  type ContextSnapshot,
+  runContextEngineering,
+} from '@lobechat/mecha';
 
 import { type ServerMessagesEngineParams } from './types';
 
 /**
- * Create server-side variable generators with runtime context
- * These are safe to use in Node.js environment
+ * Shape the server's per-step gathering into the host-agnostic context
+ * snapshot. The assembly itself (engine parameters, placeholder generators,
+ * page-agent gating) lives in `@lobechat/mecha` and is shared with the client.
  */
-const createServerVariableGenerators = (params: {
-  model?: string;
-  provider?: string;
-  timezone?: string;
-}) => {
-  const { model, provider, timezone } = params;
-  const tz = timezone || 'UTC';
-  return {
-    // Time-related variables (localized to user's timezone)
-    date: () => new Date().toLocaleDateString('en-US', { dateStyle: 'full', timeZone: tz }),
-    datetime: () => new Date().toLocaleString('en-US', { timeZone: tz }),
-    time: () => new Date().toLocaleTimeString('en-US', { timeStyle: 'medium', timeZone: tz }),
-    timezone: () => tz,
-    // Model-related variables
-    model: () => model ?? '',
-    provider: () => provider ?? '',
-  };
-};
-
-/**
- * Server-side messages engine function
- *
- * This function wraps MessagesEngine for server-side usage.
- * Unlike the frontend version, it receives all data as parameters
- * instead of fetching from stores.
- *
- * @example
- * ```typescript
- * const messages = await serverMessagesEngine({
- *   messages: chatMessages,
- *   model: 'gpt-4',
- *   provider: 'openai',
- *   systemRole: 'You are a helpful assistant',
- *   knowledge: {
- *     fileContents: [...],
- *     knowledgeBases: [...],
- *   },
- * });
- * ```
- */
-export const serverMessagesEngine = async ({
-  messages = [],
-  model,
-  modelKnowledgeCutoff,
-  provider,
-  systemRole,
-  inputTemplate,
+export const toContextSnapshot = ({
+  additionalContexts,
+  additionalVariables,
+  agentBuilderContext,
+  agentDocuments,
+  agentGroup,
+  agentIdentity,
+  agentManagementContext,
+  attachmentPreviewFileIds,
+  botPlatformContext,
+  capabilities,
+  connectorOwnershipNote,
+  discordContext,
   enableAgentMode,
+  enableExpertise,
   enableHistoryCount,
+  enableStaleToolResultTrim,
+  evalContext,
+  expertise,
   forceFinish,
+  formatHistorySummary,
+  groupAgentBuilderContext,
   historyCount,
   historySummary,
-  formatHistorySummary,
   initialContext,
+  inputTemplate,
   knowledge,
-  agentDocuments,
+  messages = [],
+  model,
+  modelDisplayName,
+  modelKnowledgeCutoff,
+  onboardingContext,
+  planTodo,
+  projectInstructions,
+  provider,
   skillsConfig,
+  systemRole,
   toolDiscoveryConfig,
   toolsConfig,
-  capabilities,
-  userMemory,
-  agentBuilderContext,
-  agentGroup,
-  botPlatformContext,
-  discordContext,
-  evalContext,
-  agentManagementContext,
-  onboardingContext,
-  pageContentContext,
   topicReferences,
-  additionalVariables,
+  userMemory,
   userTimezone,
-}: ServerMessagesEngineParams): Promise<OpenAIChatMessage[]> => {
-  const engine = new MessagesEngine({
-    // Capability injection
+  workspaceContext,
+}: ServerMessagesEngineParams): ContextSnapshot => ({
+  agent: {
+    documents: agentDocuments,
+    enableHistoryCount,
+    enableStaleToolResultTrim,
+    historyCount,
+    identity: agentIdentity,
+    inputTemplate,
+    knowledge: { fileContents: knowledge?.fileContents, knowledgeBases: knowledge?.knowledgeBases },
+    systemRole,
+  },
+  // Server-side file access URLs resolve to stable file-proxy URLs in production.
+  fileContext: { enabled: true, includeFileUrl: true, previewFileIds: attachmentPreviewFileIds },
+  model: {
     capabilities: {
       isCanUseAudio: capabilities?.isCanUseAudio,
       isCanUseFC: capabilities?.isCanUseFC,
       isCanUseVideo: capabilities?.isCanUseVideo,
       isCanUseVision: capabilities?.isCanUseVision,
     },
-
-    // Agent configuration
-    enableAgentMode,
-    enableHistoryCount,
-
-    // Server-side file access URLs resolve to stable file-proxy URLs in production.
-    fileContext: { enabled: true, includeFileUrl: true },
-
-    // Force finish mode (inject summary prompt when maxSteps exceeded)
-    forceFinish,
-
-    formatHistorySummary,
-
-    historyCount,
-
-    historySummary,
-
-    inputTemplate,
-
-    initialContext,
-
-    // Knowledge injection
-    knowledge: {
-      fileContents: knowledge?.fileContents,
-      knowledgeBases: knowledge?.knowledgeBases,
-    },
-    agentDocuments,
-
-    // Messages
-    messages,
-
-    // Model info
+    displayName: modelDisplayName,
+    knowledgeCutoff: modelKnowledgeCutoff,
     model,
-    modelKnowledgeCutoff,
-
     provider,
-    systemRole,
-
-    // Timezone for system date provider
-    timezone: userTimezone,
-
-    // Tools configuration
+  },
+  run: {
+    additionalContexts,
+    enableAgentMode,
+    enableExpertise,
+    expertise,
+    forceFinish,
+    formatHistorySummary,
+    historySummary,
+    initialContext,
+    messages,
+  },
+  step: {
+    agentBuilderContext,
+    agentManagementContext,
+    groupAgentBuilderContext,
+    onboardingContext,
+    planTodo,
+    topicReferences,
+    workspaceContext,
+  },
+  tools: {
+    disabledToolIdentifiers: toolsConfig?.disabledToolIdentifiers,
+    enabledSkills: skillsConfig?.enabledSkills,
+    enabledToolIds: toolsConfig?.tools,
+    manifests: toolsConfig?.manifests,
     toolDiscoveryConfig,
-    toolsConfig: {
-      disabledToolIdentifiers:
-        toolsConfig?.disabledToolIdentifiers ??
-        (toolsConfig?.tools?.includes(PageAgentIdentifier) ? undefined : [PageAgentIdentifier]),
-      manifests: toolsConfig?.manifests,
-      tools: toolsConfig?.tools,
-    },
-
-    // User memory configuration
+  },
+  variables: additionalVariables,
+  world: {
+    botPlatformContext,
+    connectorOwnershipNote,
+    discordContext,
+    evalContext,
+    group: agentGroup,
+    projectInstructions,
     userMemory: userMemory?.memories
-      ? {
-          enabled: true,
-          fetchedAt: userMemory.fetchedAt,
-          memories: userMemory.memories,
-        }
+      ? { enabled: true, fetchedAt: userMemory.fetchedAt, memories: userMemory.memories }
       : undefined,
+    userTimezone,
+  },
+});
 
-    // Server-side variable generators (with model/provider context + device paths)
-    variableGenerators: {
-      ...createServerVariableGenerators({ model, provider, timezone: userTimezone }),
-      ...Object.fromEntries(
-        Object.entries(additionalVariables ?? {}).map(([k, v]) => [k, () => v]),
-      ),
-    },
-
-    // Skills configuration
-    ...(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0 && { skillsConfig }),
-
-    // Topic references
-    ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
-
-    // Extended contexts
-    ...(agentBuilderContext && { agentBuilderContext }),
-    ...(agentGroup && { agentGroup }),
-    ...(botPlatformContext && { botPlatformContext }),
-    ...(discordContext && { discordContext }),
-    ...(evalContext && { evalContext }),
-    ...(onboardingContext && { onboardingContext }),
-    ...(agentManagementContext && { agentManagementContext }),
-    ...(pageContentContext && { pageContentContext }),
-  });
-
-  const result = await engine.process();
-  return result.messages;
-};
+/**
+ * Server-side messages engine function.
+ *
+ * Unlike the frontend version, it receives all data as parameters instead of
+ * fetching from stores, shapes them into a {@link ContextSnapshot} and runs the
+ * shared context engineering core.
+ *
+ * Returns the pipeline metadata alongside the messages: processors record
+ * per-request decisions there (trim stats, cache-warmth gates, truncation
+ * counts), and the agent-runtime trace recorder persists them per step.
+ */
+export const serverMessagesEngine = async (
+  params: ServerMessagesEngineParams,
+): Promise<ContextEngineeringResult> => runContextEngineering(toContextSnapshot(params));
 
 // Re-export types
 export type {

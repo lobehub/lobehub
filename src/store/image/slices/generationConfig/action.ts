@@ -5,7 +5,7 @@ import {
   type RuntimeImageGenParamsKeys,
   type RuntimeImageGenParamsValue,
 } from 'model-bank';
-import { extractDefaultValues } from 'model-bank';
+import { extractDefaultValues } from 'model-bank/standardParameters';
 
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
@@ -322,6 +322,24 @@ export class GenerationConfigActionImpl {
 
   setImageNum = (imageNum: number): void => {
     this.#set(() => ({ imageNum }), false, `setImageNum/${imageNum}`);
+  };
+
+  addUploadingImagePreviews = (urls: string[]): void => {
+    this.#set(
+      (state) => ({ uploadingImagePreviews: [...state.uploadingImagePreviews, ...urls] }),
+      false,
+      'addUploadingImagePreviews',
+    );
+  };
+
+  removeUploadingImagePreviews = (urls: string[]): void => {
+    this.#set(
+      (state) => ({
+        uploadingImagePreviews: state.uploadingImagePreviews.filter((url) => !urls.includes(url)),
+      }),
+      false,
+      'removeUploadingImagePreviews',
+    );
   };
 
   reuseSettings = (

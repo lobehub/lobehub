@@ -6,6 +6,8 @@ import type { KnowledgeBaseItem } from '../knowledgeBase';
 import type { FewShots } from '../llm';
 import type { LobeAgentAgencyConfig } from './agencyConfig';
 import { AgentChatConfigSchema, type LobeAgentChatConfig } from './chatConfig';
+import { type AgentPluginEntry, AgentPluginEntrySchema } from './pluginConfig';
+import type { AgentProfile } from './profile';
 import type { LobeAgentTTSConfig } from './tts';
 
 /**
@@ -17,7 +19,20 @@ export interface AgentRankItem {
   backgroundColor: string | null;
   count: number;
   id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
   title: string | null;
+}
+
+/** An agent whose execution is routed to a specific device — see the device detail page. */
+export interface DeviceBoundAgentItem {
+  avatar: string | null;
+  backgroundColor: string | null;
+  id: string;
+  /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
+  name: string | null;
+  title: string | null;
+  visibility: 'private' | 'public';
 }
 
 export interface LobeAgentConfig {
@@ -36,37 +51,52 @@ export interface LobeAgentConfig {
    * Used to save the complete state of the rich text editor, including special nodes like mention
    */
   editorData?: any;
+
   fewShots?: FewShots;
   files?: FileItem[];
   id?: string;
-
   /**
    * knowledge bases
    */
   knowledgeBases?: KnowledgeBaseItem[];
+
   /**
    * Language model used by the agent
    * @default gpt-4o-mini
    */
   model: string;
+  /**
+   * The agent's personal name (e.g. "Alice", "小艾") — the identity it is
+   * addressed by. Distinct from {@link LobeAgentConfig.title}, which describes
+   * the role it plays ("Health Assistant" / "健康助手"). Optional: agents
+   * created before this field existed have no name.
+   */
+  name?: string;
 
   /**
    * Opening message
    */
   openingMessage?: string;
+
   /**
    * Opening questions
    */
   openingQuestions?: string[];
-
   /**
    * Language model parameters
    */
   params: LLMParams;
+
   /**
-   * Enabled plugins
+   * Enabled plugins. Each entry is either a legacy bare identifier string
+   * (implicit pinned) or a tri-state `{ identifier, mode }` object — see
+   * `AgentPluginEntry` / `parsePluginEntry`. Prefer the read helpers
+   * (`getActivePluginIds`, `getPinnedPluginIds`, `getDisabledPluginIds`,
+   * `getPluginMode`) over reading this field directly.
    */
-  plugins?: string[];
+  plugins?: AgentPluginEntry[];
+  /** Character sheet — traits and artwork; see {@link AgentProfile}. */
+  profile?: AgentProfile | null;
 
   /**
    *  Model provider
@@ -79,7 +109,8 @@ export interface LobeAgentConfig {
   systemRole: string;
 
   /**
-   * Agent title/name
+   * The role the agent plays, shown as its display label across the app
+   * (see {@link LobeAgentConfig.name} for the personal name).
    */
   title?: string;
 
@@ -95,8 +126,7 @@ export interface LobeAgentConfig {
 }
 
 export type LobeAgentConfigKeys =
-  | keyof LobeAgentConfig
-  | ['params', keyof LobeAgentConfig['params']];
+  keyof LobeAgentConfig | ['params', keyof LobeAgentConfig['params']];
 
 /**
  * Zod schema for creating a new agent.
@@ -104,25 +134,33 @@ export type LobeAgentConfigKeys =
  */
 export const CreateAgentSchema = z.object({
   agencyConfig: z.custom<LobeAgentAgencyConfig>().optional(),
-  avatar: z.string().nullable().optional(),
-  backgroundColor: z.string().nullable().optional(),
+  avatar: z.string().nullish(),
+  backgroundColor: z.string().nullish(),
   chatConfig: AgentChatConfigSchema.optional(),
-  description: z.string().nullable().optional(),
+  description: z.string().nullish(),
   editorData: z.unknown().optional(),
   fewShots: z.unknown().optional(),
-  marketIdentifier: z.string().nullable().optional(),
-  model: z.string().nullable().optional(),
-  openingMessage: z.string().nullable().optional(),
+  marketIdentifier: z.string().nullish(),
+  metadata: z.record(z.string(), z.unknown()).nullish(),
+  model: z.string().nullish(),
+  name: z.string().nullish(),
+  openingMessage: z.string().nullish(),
   openingQuestions: z.array(z.string()).optional(),
-  params: z.record(z.unknown()).optional(),
-  plugins: z.array(z.string()).optional(),
-  provider: z.string().nullable().optional(),
-  sessionGroupId: z.string().nullable().optional(),
-  systemRole: z.string().nullable().optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
+  plugins: z.array(AgentPluginEntrySchema).optional(),
+  provider: z.string().nullish(),
+  sessionGroupId: z.string().nullish(),
+  systemRole: z.string().nullish(),
   tags: z.array(z.string()).optional(),
-  title: z.string().nullable().optional(),
+  title: z.string().nullish(),
   tts: z.custom<LobeAgentTTSConfig>().optional(),
-  virtual: z.boolean().nullable().optional(),
+  virtual: z.boolean().nullish(),
+  /**
+   * `private` keeps the agent visible only to its creator within the workspace;
+   * `public` (default) makes it visible to every workspace member. Ignored in
+   * personal mode (no workspaceId).
+   */
+  visibility: z.enum(['private', 'public']).optional(),
 });
 
 export type CreateAgentConfig = z.infer<typeof CreateAgentSchema>;
@@ -141,15 +179,27 @@ export interface AgentItem {
   id: string;
   /** Market agent identifier for published agents */
   marketIdentifier?: string | null;
+  /** Default extension bag for values with no column and no home in `profile`. */
+  metadata?: Record<string, unknown> | null;
   model?: string | null;
+  /** Personal name of the agent — see {@link LobeAgentConfig.name}. */
+  name?: string | null;
   openingMessage?: string | null;
   openingQuestions?: string[];
   params?: any;
-  plugins?: string[];
+  plugins?: AgentPluginEntry[];
+  /** Character sheet — traits and artwork; see {@link AgentProfile}. */
+  profile?: AgentProfile | null;
   provider?: string | null;
   /** Session group ID for direct grouping */
   sessionGroupId?: string | null;
   slug?: string | null;
+  /**
+   * The society (agent org) this agent belongs to, or `null` for a standalone
+   * one. A real column rather than a metadata key: agents get listed and
+   * filtered by it.
+   */
+  societyId?: string | null;
   systemRole?: string | null;
   tags?: string[];
   title?: string | null;
@@ -157,6 +207,11 @@ export interface AgentItem {
   updatedAt: Date;
   userId: string;
   virtual?: boolean | null;
+  /**
+   * Workspace-scoped visibility. `public` (default) = every workspace member
+   * can see this agent; `private` = creator-only. Ignored in personal mode.
+   */
+  visibility?: 'private' | 'public';
   /** Owning workspace; null for personal (non-workspace) agents. */
   workspaceId?: string | null;
 }

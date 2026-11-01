@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 
+import { CLI_COMPLETION_CWORD_ENV } from '../constants/identity';
 import {
   getCompletionCandidates,
   parseCompletionWordIndex,
@@ -20,7 +21,10 @@ export function registerCompletionCommand(program: Command) {
     .allowUnknownOption()
     .argument('[words...]')
     .action((words: string[] = []) => {
-      const currentWordIndex = parseCompletionWordIndex(process.env.LOBEHUB_COMP_CWORD, words);
+      const currentWordIndex = parseCompletionWordIndex(
+        process.env[CLI_COMPLETION_CWORD_ENV],
+        words,
+      );
       const candidates = getCompletionCandidates(program, words, currentWordIndex);
 
       for (const candidate of candidates) {

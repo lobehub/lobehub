@@ -16,9 +16,150 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576 + 65_536,
     description:
+      "Gemini 3.8 Flash is Google's most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows.",
+    displayName: 'Gemini 3.8 Flash',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.8',
+    id: 'gemini-3.8-flash',
+    knowledgeCutoff: '2026-03',
+    maxOutput: 65_536,
+    /** Introductory rates through 2026-12-31; standard token rates double afterward.
+     * @see https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing
+     */
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-09-02',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
+      'Gemini 3.7 Flash is the next iteration in the Gemini 3 series of highly-capable, natively multimodal, reasoning models, with support for computer use and file search.',
+    displayName: 'Gemini 3.7 Flash',
+    family: 'gemini',
+    generation: 'gemini-3.7',
+    id: 'gemini-3.7-flash',
+    knowledgeCutoff: '2026-03',
+    maxOutput: 65_536,
+    // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
+    // input 1.5 / output 7.5 / cacheRead 0.15 / cacheWrite lookup { '1h': 1 } (per million tokens).
+    // See https://cloud.google.com/vertex-ai/generative-ai/pricing
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-08-13',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel3', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
+      'Gemini 3.6 Flash balances speed with intelligence for agentic and multimodal tasks, with lower output cost than 3.5 Flash.',
+    displayName: 'Gemini 3.6 Flash',
+    family: 'gemini',
+    generation: 'gemini-3.6',
+    id: 'gemini-3.6-flash',
+    knowledgeCutoff: '2026-03',
+    maxOutput: 65_536,
+    // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
+    // input 1.5 / output 7.5 / cacheRead 0.15 / cacheWrite lookup { '1h': 1 } (per million tokens).
+    // See https://cloud.google.com/vertex-ai/generative-ai/pricing
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-07-21',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['thinkingLevel', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
       "Gemini's most intelligent model built for speed, combining frontier intelligence with superior search and grounding.",
     displayName: 'Gemini 3.5 Flash',
-    enabled: true,
     family: 'gemini',
     generation: 'gemini-3.5',
     id: 'gemini-3.5-flash',
@@ -42,6 +183,51 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-19',
     settings: {
+      extendParams: ['thinkingLevel', 'urlContext'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      audio: true,
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_048_576 + 65_536,
+    description:
+      "Gemini 3.5 Flash-Lite is Google's fastest, most cost-efficient 3.5 model for high-throughput agentic tasks, document parsing, and simple data extraction.",
+    displayName: 'Gemini 3.5 Flash-Lite',
+    enabled: true,
+    family: 'gemini',
+    generation: 'gemini-3.5',
+    id: 'gemini-3.5-flash-lite',
+    knowledgeCutoff: '2026-03',
+    maxOutput: 65_536,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'videoInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-07-21',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
       extendParams: ['thinkingLevel', 'urlContext'],
       searchImpl: 'params',
       searchProvider: 'google',
@@ -188,7 +374,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
     description:
       "Gemini 3.1 Flash-Lite is Google's most cost-efficient multimodal model, optimized for high-volume agentic tasks, translation, and data processing.",
     displayName: 'Gemini 3.1 Flash-Lite',
-    enabled: true,
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-lite',

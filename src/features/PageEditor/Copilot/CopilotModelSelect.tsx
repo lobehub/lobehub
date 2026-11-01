@@ -1,5 +1,4 @@
-import { ActionIcon, Center, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Center, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { ChevronDownIcon, Settings2Icon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 
@@ -49,8 +48,10 @@ const CopilotModelSelect = memo(() => {
   ]);
 
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
+  // Reasoning-family params are hidden below (hideReasoningParams), so gate on
+  // the non-reasoning subset to avoid an empty popover for reasoning-only models
   const isModelHasExtendParams = useAiInfraStore(
-    aiModelSelectors.isModelHasExtendParams(model, provider),
+    aiModelSelectors.isModelHasNonReasoningExtendParams(model, provider),
   );
 
   const displayName = enabledModel?.displayName || model;
@@ -89,7 +90,7 @@ const CopilotModelSelect = memo(() => {
       </ModelSwitchPanel>
       {isModelHasExtendParams && (
         <ActionPopover
-          content={<ControlsForm disabled={!canEdit} />}
+          content={<ControlsForm hideReasoningParams disabled={!canEdit} />}
           minWidth={350}
           open={settingsOpen}
           placement={'topRight'}

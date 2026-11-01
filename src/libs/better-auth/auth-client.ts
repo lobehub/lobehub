@@ -1,3 +1,4 @@
+import { CLIENT_VERSION_HEADER, CURRENT_VERSION } from '@lobechat/const';
 import {
   adminClient,
   genericOAuthClient,
@@ -23,6 +24,11 @@ export const {
   unlinkAccount,
   useSession,
 } = createAuthClient({
+  fetchOptions: {
+    headers: {
+      [CLIENT_VERSION_HEADER]: CURRENT_VERSION,
+    },
+  },
   plugins: [
     adminClient(),
     inferAdditionalFields<typeof auth>(),

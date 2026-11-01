@@ -437,7 +437,6 @@ describe('messageMapKey', () => {
     });
 
     it('Scenario: User sends message to group using groupId parameter', () => {
-      // This is the new pattern used in sendGroupMessage
       const result = messageMapKey({
         agentId: 'agt_agent001',
         groupId: 'grp_group001',

@@ -1,5 +1,7 @@
 export interface ElectronAppState {
   arch?: string; // e.g., 'x64', 'arm64'
+  /** Human-readable name of the shell that `runCommand` uses (e.g. "PowerShell 7+ (pwsh)"). */
+  defaultShell?: string;
   isLinux?: boolean;
   isMac?: boolean;
   isWindows?: boolean;
@@ -27,3 +29,6 @@ export interface UserPathData {
 
 export type ThemeMode = 'system' | 'dark' | 'light';
 export type ThemeAppearance = 'dark' | 'light' | string;
+
+export type GuidedPermission = 'accessibility' | 'fullDisk' | 'inputMonitoring' | 'screen';
+export type PermissionGuideStatus = 'active' | 'dismissed' | 'granted';

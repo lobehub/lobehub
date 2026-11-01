@@ -6,7 +6,13 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { getRouteById } from '@/config/routes';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 export interface NavItem {
   hidden?: boolean;
@@ -38,6 +44,8 @@ export const useNavLayout = (): NavLayout => {
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const { showMarket, hideGitHub } = useServerConfigStore(featureFlagsSelectors);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const enableDashboard = useServerConfigStore(serverConfigSelectors.enableDashboard);
+  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
   const topNavItems = useMemo(
     () =>
@@ -61,13 +69,30 @@ export const useNavLayout = (): NavLayout => {
           url: '/tasks',
         },
         {
-          icon: getRouteById('page')!.icon,
-          key: SidebarTabKey.Pages,
-          title: t('tab.pages'),
-          url: '/page',
+          // Behind the same lab toggle as the agent-scoped goal pages.
+          hidden: !enableGoals,
+          icon: getRouteById('goals')!.icon,
+          key: SidebarTabKey.Goals,
+          title: t('tab.goals'),
+          url: '/goals',
+        },
+        {
+          // Personal boards only for now — workspace-level boards have no UI
+          // yet — and only while the `dashboard` feature flag is on.
+          hidden: !!activeWorkspaceSlug || !enableDashboard,
+          icon: getRouteById('dashboard')!.icon,
+          key: SidebarTabKey.Dashboard,
+          title: t('tab.dashboard'),
+          url: '/dashboard',
+        },
+        {
+          icon: getRouteById('resource')!.icon,
+          key: SidebarTabKey.Resource,
+          title: t('tab.resource'),
+          url: '/resource',
         },
       ] as NavItem[],
-    [t, toggleCommandMenu],
+    [t, toggleCommandMenu, activeWorkspaceSlug, enableDashboard, enableGoals],
   );
 
   const bottomMenuItems = useMemo(
@@ -85,12 +110,6 @@ export const useNavLayout = (): NavLayout => {
           key: SidebarTabKey.Community,
           title: t('tab.community'),
           url: '/community',
-        },
-        {
-          icon: getRouteById('resource')!.icon,
-          key: SidebarTabKey.Resource,
-          title: t('tab.resource'),
-          url: '/resource',
         },
         {
           hidden: !!activeWorkspaceSlug,

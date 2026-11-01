@@ -1,3 +1,4 @@
+import { isCallSubAgentCall, stripSubAgentReference } from '@lobechat/builtin-tool-lobe-agent';
 import { type UIChatMessage } from '@lobechat/types';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -48,7 +49,13 @@ export const generateMarkdown = ({
     }
 
     if (chat.role === 'tool') {
-      parts.push('```json', String(chat.content), '```');
+      // The sub-agent reference is a hidden address for the parent agent, not
+      // part of the readable result. JSON export keeps it so an imported
+      // conversation can still continue that sub-agent.
+      const content = isCallSubAgentCall(chat.plugin)
+        ? stripSubAgentReference(String(chat.content))
+        : String(chat.content);
+      parts.push('```json', content, '```');
     } else {
       parts.push(String(chat.content));
 

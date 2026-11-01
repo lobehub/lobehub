@@ -1,11 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate } from '@/libs/swr';
-import { userKeys } from '@/libs/swr/keys';
 import { useUserStore } from '@/store/user';
-
-vi.mock('zustand/traditional');
+import { readUserDisplaySnapshot, writeUserDisplaySnapshot } from '@/store/user/displaySnapshot';
 
 // Mock @/libs/swr mutate
 vi.mock('@/libs/swr', async () => {
@@ -23,6 +21,10 @@ const mockBetterAuthClient = vi.hoisted(() => ({
 }));
 
 vi.mock('@/libs/better-auth/auth-client', () => mockBetterAuthClient);
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -45,12 +47,26 @@ describe('createAuthSlice', () => {
         await result.current.refreshUserState();
       });
 
-      expect(mutate).toHaveBeenCalledWith(userKeys.initState());
+      // The bootstrap payload now lives in a replica resource: a refresh
+      // re-mutates the cache through the replica driver's key predicate.
+      expect(mutate).toHaveBeenCalledWith(expect.any(Function));
     });
   });
 
   describe('logout', () => {
-    it('should call better-auth signOut', async () => {
+    it('clears the captured user snapshot after successful sign-out', async () => {
+      writeUserDisplaySnapshot('user-a', { avatar: 'avatar-a' });
+      writeUserDisplaySnapshot('user-b', { avatar: 'avatar-b' });
+      localStorage.setItem('lobehub:active-scope', 'user-a:personal');
+      useUserStore.setState({ user: { id: 'user-a' } });
+
+      mockBetterAuthClient.signOut.mockImplementationOnce(async ({ fetchOptions }) => {
+        // A concurrent session update must not change which snapshot this
+        // sign-out is allowed to clear.
+        useUserStore.setState({ user: { id: 'user-b' } });
+        fetchOptions?.onSuccess?.();
+      });
+
       const { result } = renderHook(() => useUserStore());
 
       await act(async () => {
@@ -58,6 +74,24 @@ describe('createAuthSlice', () => {
       });
 
       expect(mockBetterAuthClient.signOut).toHaveBeenCalled();
+      expect(readUserDisplaySnapshot('user-a')).toBeUndefined();
+      expect(readUserDisplaySnapshot('user-b')).toEqual({ avatar: 'avatar-b' });
+      expect(localStorage.getItem('lobehub:active-scope')).toBeNull();
+    });
+
+    it('preserves the signing-out user snapshot when sign-out fails', async () => {
+      writeUserDisplaySnapshot('user-a', { avatar: 'avatar-a' });
+      localStorage.setItem('lobehub:active-scope', 'user-a:personal');
+      useUserStore.setState({ user: { id: 'user-a' } });
+      mockBetterAuthClient.signOut.mockRejectedValueOnce(new Error('sign-out failed'));
+
+      const { result } = renderHook(() => useUserStore());
+      const logoutPromise = result.current.logout();
+
+      await expect(logoutPromise).rejects.toThrow('sign-out failed');
+
+      expect(readUserDisplaySnapshot('user-a')).toEqual({ avatar: 'avatar-a' });
+      expect(localStorage.getItem('lobehub:active-scope')).toBe('user-a:personal');
     });
   });
 
@@ -83,6 +117,34 @@ describe('createAuthSlice', () => {
 
       expect(window.location.href).toContain('/signin');
       expect(window.location.href).toContain('callbackUrl');
+
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+        writable: true,
+      });
+    });
+
+    it('should explain an expired session on the signin page', async () => {
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: {
+          ...originalLocation,
+          href: '',
+          pathname: '/chat',
+          toString: () => 'http://localhost/chat',
+        },
+        writable: true,
+      });
+
+      const { result } = renderHook(() => useUserStore());
+
+      await act(async () => {
+        await result.current.openLogin('sessionExpired');
+      });
+
+      expect(window.location.href).toContain('reason=sessionExpired');
 
       Object.defineProperty(window, 'location', {
         configurable: true,

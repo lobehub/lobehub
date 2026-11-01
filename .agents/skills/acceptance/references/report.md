@@ -1,0 +1,303 @@
+# Structured Report Rounds (`lh acceptance run ingest` / `render`)
+
+Every round is a **structured report round**: a self-contained directory that
+`lh acceptance run ingest` uploads as one immutable verification round, or that
+`lh acceptance run render` turns into the local acceptance page when this machine
+is not signed in ([Local reports](../SKILL.md#local-reports-when-not-signed-in)). You
+author the checks here, which is the usual case; when a verify plan was handed to
+you, the same directory is keyed by its check item ids and ingested into the
+plan's round ([plan-format.md](./plan-format.md)). The
+acceptance page renders itself from `result.json`: provenance, the overall
+conclusion, and the check list from `plan[]` paired with `cases[]`, each with
+its evidence inline — **images render as figures, before/after pairs render
+under tinted comparison bands**. The local `report.html` is the same page. A
+chat-only summary or a bare markdown report never gets that rendering; the
+structured round does.
+
+## Contents
+
+- [No operation ID needed](#no-operation-id-needed)
+- [Directory layout](#directory-layout)
+- [Workflow](#workflow)
+- [result.json schema](#resultjson-schema)
+- [Rules](#rules)
+
+Rule of thumb: **you author the checks → `ingest`; a plan was handed to you →
+`ingest --operation`.** Never mix both for the same delivery round.
+
+## No operation id needed
+
+`--operation` is optional on every command in this skill. Without one, author
+the checks and use one of these first-class paths:
+
+A round is immutable, so **allocate a fresh directory before every ingest** —
+never point a second ingest at a directory you already published:
+
+```bash
+# $1 = subject key (see Directory layout), $2 = a short slug for this round.
+new_round() {
+  dir=".acceptances/$1/$(date +%Y%m%d-%H%M%S)-$2"
+  mkdir -p "$dir/assets" || return
+  # Fresh clones and worktrees never carry the self-ignoring file, so seed it
+  # before anything is written; an existing one is left untouched.
+  [ -e .acceptances/.gitignore ] || printf '*\n' > .acceptances/.gitignore || return
+  printf '%s' "$dir"
+}
+```
+
+Run it from the repository root. It is the only supported way to create a round
+directory by hand: it keeps the whole tree out of `git status` before the first
+`result.json` or screenshot exists.
+
+Use the CLI's ingest help to select the supported flags for the intended path:
+first standalone publication records the durable requirement; repairs append to
+the same acceptance; an explicitly supplied subject is preserved. Prefer one
+structured ingest with declared checks over per-item submissions without a plan.
+`acceptance run create` creates a round, not the Acceptance ID used by flows.
+
+For a flow-first plan without an acceptance yet, use
+[`lh acceptance create`](../SKILL.md#optional-user-journey-flows) before publishing
+the graph. Unlike `acceptance run create` above, it returns an **Acceptance ID**
+without creating a round. Do not use the round ID from **B** in flow commands.
+If an acceptance was already created, pass `--acceptance <acceptanceId>` to ingest
+so the report joins that acceptance rather than creating another standalone one.
+
+## Directory layout
+
+Rounds live under `.acceptances/`, grouped by the delivery they belong to:
+
+```
+.acceptances/
+├── .gitignore                     # `*` — the whole tree stays out of git
+└── <subject-key>/                 # topic-tpc_x | task-T-12 | document-doc_x
+    │                              # standalone-<slug> until an acceptance id exists
+    ├── acceptance.json            # which acceptance these rounds belong to (CLI-written)
+    ├── report.html                # local mode: the rendered page of every round
+    ├── reviews.json               # local mode: the reader's saved decisions
+    └── <YYYYMMDD-HHMMSS>-<slug>/  # ONE round — never write into an existing one
+        ├── result.json            # THE report — the page renders from this
+        ├── proposal.md            # what this round delivers, posted to the discussion
+        ├── report.md              # narrative tail only (verdict, follow-ups, score)
+        └── assets/                # evidence referenced from cases[].evidence
+```
+
+Three things the shape buys, none of them cosmetic:
+
+- **The subject key mirrors `--subject <type>:<id>`**, so a directory listing
+  answers what the acceptance page answers: which delivery is this, and how many
+  rounds has it had. A flat `./acceptance-report` answers neither. A standalone
+  round has no subject to key on, so group it under `standalone-<slug>` and keep
+  every later round of that delivery in the same directory.
+- **A round is immutable**, so its directory name carries the timestamp and is
+  written once. Re-verification after a fix creates the NEXT directory; reusing
+  one silently destroys the evidence a reviewer already decided against.
+- **The tree is git-invisible.** `.acceptances/.gitignore` contains `*`, which
+  ignores the whole directory including itself, so evidence binaries never land
+  as untracked noise and the project's own `.gitignore` is never rewritten.
+  The file ignores itself, so a fresh clone or worktree never has it, and a
+  general-purpose skill installer does not seed it either. `new_round` creates
+  it before anything is written; `lh acceptance install` and
+  `lh acceptance run ingest` also ensure it exists, but ingest runs only after
+  the round has already been written.
+
+Writing a round somewhere else still works — `ingest` takes an explicit path —
+but then keeping it out of git is on you.
+
+## Workflow
+
+1. **Write `plan[]` BEFORE you run anything.** Each item is
+   `{ id, title, category, verifier, method, expected, requiredEvidence,
+supersedes? }`.
+   A planned item that never produces a case renders as **未执行** rather than
+   vanishing — cut coverage in the open.
+   Every item is an outcome the reader can judge — never a programmatic gate
+   ([what is not an acceptance check](#what-is-not-an-acceptance-check)).
+   **Use an acquired CLI schema or the linked report schema rather than reconstructing it**: a
+   plausible-but-wrong nested shape parses as JSON, is dropped on ingest, and
+   the round publishes green with its evidence silently degraded. Read every
+   ingest warning as a failed publish.
+   Before executing the **first round only**, send the draft for
+   [acceptance-checker plan review](acceptance-checker.md) and save the agreed plan and
+   requirement mapping after resolving material gaps. In follow-up rounds the
+   execution owner carries the agreed plan forward using its existing context.
+2. **Collect evidence into `assets/` as you test.** Screenshots must be
+   **visually verified by their designated inspector before supporting a pass**.
+   In the first round this is normally the checker; the runner captures and
+   indexes images without pre-reviewing them, then incorporates its attributable
+   inspection records. Inspect each artifact version once, reusing its findings
+   for the cases it supports. File presence or captions are not inspection.
+   For metrics, time series, model or benchmark
+   comparisons, distributions, matrices, and tables, use native Acceptance
+   structured visualizations: put review-sized values in `cases[].datasets`,
+   declare the view in `cases[].visualizations`, and retain the raw CSV/JSON,
+   benchmark output, trace, profile, or vectors in `evidence`. Do not generate a
+   PNG/GIF when a supported renderer can faithfully express the data. See
+   [Structured visualizations](#structured-visualizations).
+3. **Fill `cases[]` as you go** — one entry per tested behavior
+   (`{ id, name, category, surface, status, observation, evidence }`), reusing
+   the plan item's `id`. `status`: `pass` / `fail` / `blocked` (couldn't run —
+   a blocked case is not a pass).
+   Keep `observation` brief and reviewer-facing; follow
+   [checklist explanation guidance](../SKILL.md#keep-checklist-explanations-brief).
+   Detailed reasoning and execution records belong in evidence attachments.
+4. **Set `title` and `summary.verdict`** (`pass` / `fail` / `partial`) — without
+   them the run lists as "未命名验证" with a permanent amber "?" glyph. Write the
+   one-paragraph verdict into `summary.conclusion`.
+5. **Write `proposal.md` — the round's own note to the reviewer.** What this
+   round delivers and where you want their eyes, the way a person writes a pull
+   request description: a few sentences, in the
+   [report language](../SKILL.md#two-paths--no-id-is-required). `ingest` posts it into the acceptance's discussion as a message on this
+   round, so it is the first thing a reviewer reads and they can answer it in
+   place. It is NOT the verification write-up — do not restate the checks or the
+   verdict, those are `result.json` and `report.md`. Every round gets one: the
+   first says what the delivery is, later ones say what changed since the
+   feedback. Skip it only when there is genuinely nothing to say beyond the
+   checks.
+6. **`report.md` is the narrative tail only** — this-round notes, follow-ups,
+   score. Do NOT repeat the scope block or a case table; those double up on the
+   page. Write it in the report language.
+7. **Review, then publish:** hand the completed plan, report, original evidence,
+   and an explicit file list with relevant diff text or prepared diff artifact
+   paths (including in-round repairs, base and tested revision, and affected case IDs)
+   to the acceptance-checker for a quick evidence review using [acceptance-checker.md](acceptance-checker.md)
+   (first round only, one quick check with no checker re-review after fixes;
+   the diff helps identify updates and affected agreed cases.
+   The acceptance-checker limits code reading to the supplied materials and must not run `git diff` or
+   expand the file list. It checks the report and artifacts, without reopening requirements
+   or expanding into code review. State repairs and affected cases in plain language). Resolve
+   findings and record review limitations in the narrative tail before declaring
+   a pass. The primary coordinates findings and authorizes publication; the same
+   runner publishes and returns actual uploaded coverage and links. The primary
+   does not reread unchanged reports or evidence to repeat the workers' checks.
+   The acceptance-checker does not operate the product or upload results.
+
+   ```bash
+   lh acceptance run ingest "$REPORT_DIR" --source agent-testing --json
+   # local mode: render instead; same round directory, nothing uploaded
+   lh acceptance run render "$REPORT_DIR" --json
+   ```
+
+   On the first ingest or render, add `--requirement "<one-sentence business goal>"`.
+   Describe the durable goal of the whole acceptance, not this round's narrower
+   implementation scope. Never edit `acceptance.json`, `reviews.json` or
+   `report.html` by hand: the CLI owns them, and a render rewrites the page.
+
+   Grouping needs nothing from you: the command attaches the round to the
+   conversation it was invoked from when it can, and otherwise creates a
+   standalone acceptance. Pass `--subject` only when you were told which Task,
+   Topic, or Document owns the work. To publish a repair into that same history, add
+   `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
+   command uploads cases + evidence + report body and returns `acceptanceUrl`
+   for the stable acceptance page, which opens on the latest round. Copy
+   `acceptanceUrl` verbatim in the final reply; do not add the `roundUrl` the
+   command also returns.
+   Never reconstruct the host, path, or round query: the CLI resolves the
+   configured server, including self-hosted installations. A render returns
+   `reportUrl` instead, the page's `file://` link. See
+   [Final handoff](../SKILL.md#final-handoff-mandatory).
+
+## result.json schema
+
+The current CLI exposes `lh acceptance run schema` (JSON Schema),
+`schema --example --surface <surface>` (an unexecuted draft), and
+`validate <reportDir>` (offline diagnostics). Learn any unknown options from the
+relevant help once. Local validation does not inspect media, check account
+language, or establish remote plan membership; `ingest --dry-run` remains the
+account-aware preflight.
+
+For an older CLI without these commands, acquire
+[the report payload schema](report-schema.md#minimal-round-payload) once when
+constructing `result.json`; do not load it during environment discovery or review.
+
+### Structured visualizations
+
+For dataset/chart outcomes, read only the
+[structured visualization schema](report-schema.md#structured-visualizations).
+Ordinary screenshot cases do not load these examples.
+
+### Closed vocabularies — the pipeline acts on these, they are not labels
+
+| field                           | values                                                                                                | what it does                                                                                                         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `verifier`                      | `program` \| `agent` \| `llm` (default `agent`)                                                       | How the verdict is reached. A command-asserted check is `program`; calling it `agent` hides what actually judged it. |
+| `requiredEvidence`              | `screenshot` \| `gif` \| `video` \| `audio` \| `text` \| `markdown` \| `dom_snapshot` \| `transcript` | The artifact this check **must** produce. The coverage gate **fails** an item whose required medium is missing.      |
+| `surfaces` / per-case `surface` | `web` \| `desktop` \| `cli` \| `mobile` \| `bot` (`electron` → `desktop`)                             | The product surface a check ran **on**. A test kind (`unit`, `backend`) or runtime mode is not a surface.            |
+
+`category` names the user-facing requirement area (e.g. `Task hierarchy`,
+`Rate-limit recovery`) — never a technical surface. `method` / `expected` stay
+free prose; they render under the check next to the outcome.
+
+### What is not an acceptance check
+
+The repo's own gates — tests, coverage, `type-check`, lint, format, a clean
+build, "CI passes" — are never `plan[]` / `cases[]` items, under any phrasing;
+they are one line in `report.md` under **Verification**. Ingest drops matching
+items (matched on title, category, AND `method`), warns, and recounts `summary`;
+a gates-only round fails to publish. Full rule: SKILL.md.
+
+### Before/after comparison pairs
+
+The page renders a complete pair under tinted bands (red `before`, green
+`after`). Both halves need the same string `id`; use `layout: "horizontal"` for
+a left/right comparison and `layout: "vertical"` for a top/bottom comparison.
+When omitted, `layout` defaults to `horizontal`. Add a `label` stating the
+measured delta on each side:
+
+```json
+"evidence": [
+  { "path": "assets/before.png",
+    "description": "Topic row before the change, showing the original 11px text size.",
+    "comparison": { "id": "topic-row", "role": "before", "layout": "horizontal", "label": "before: 11px" } },
+  { "path": "assets/after.png",
+    "description": "The same topic row after the change, showing the updated 12px text size.",
+    "comparison": { "id": "topic-row", "role": "after", "layout": "horizontal", "label": "after: 12px" } }
+]
+```
+
+Choose the layout by comparison intent, not by the source image dimensions:
+
+- `horizontal` — before on the left, after on the right. Use it when the reader
+  should compare the same region across two versions at a glance. This is the
+  normal choice for full-page or full-window before/after screenshots.
+- `vertical` — before on top, after below. Use it when preserving each image's
+  full width matters more than simultaneous scanning, such as a very wide,
+  shallow toolbar or timeline strip.
+
+A comparison pair means the same view, reached by the same operation and held
+in the same state, on the pre-change code (`before`) and the delivered code
+(`after`). Two states of one build — loading vs loaded, empty vs filled — are
+ordinary evidence, not a pair; a skeleton change pairs the old skeleton with
+the new one, and the loaded page goes in plain evidence. Sequential steps of a
+flow are ordinary ordered evidence with captions, not a pair.
+
+### Video chapters
+
+A `video` evidence entry takes `chapters`: `step` (an action, with `label`),
+`check` (a claim true of that frame, with `note`) and `flag` (an anomaly you
+noticed and disclose, with `note`), each at `t` seconds. The page puts them on
+the player's timeline and captions each claim over its frame:
+
+```json
+{ "path": "assets/scroll-top.mp4",
+  "description": "Five scrolls at the top of a short topic.",
+  "chapters": [
+    { "kind": "step", "t": 6, "label": "Scroll #3" },
+    { "kind": "check", "t": 7.9, "note": "Scroll #3: no skeleton, first question still in place" }
+  ] }
+```
+
+Derive `t` from logged marks, never from memory, and disclose every anomaly as a
+`flag` — [video-chapters.md](./video-chapters.md).
+
+## Rules
+
+- **No evidence, no claim** — every `pass`/`fail` in `cases[]` links at least
+  one asset.
+- **Non-visual behavioral claims need dual text evidence** — attach a concise
+  reviewer-facing reasoning document and a separate audit-facing execution
+  artifact containing the exact command/request and observed values. Neither
+  unsupported prose nor an unexplained log dump is sufficient.
+- **Report failures faithfully** — a failing case with clear evidence is a good
+  report; a vague green one is not.
+- If coverage was cut, say so in `report.md` — silent truncation reads as
+  "covered everything".

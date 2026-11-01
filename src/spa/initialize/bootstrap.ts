@@ -1,21 +1,32 @@
 import { flushSync } from 'react-dom';
 
+import { startBootMetricsFinalize } from '@/libs/bootMetrics';
+import { bootTiming } from '@/libs/bootTiming';
+
 import { setAppReady } from '../atoms/app';
 import { initializeApp } from '.';
 import { startImportSettingsFromUrl } from './importSettings';
-import { startPostRenderInitialization } from './postRender';
-import { registerBuiltinToolSurfaces } from './toolSurfaces';
 
 let started = false;
+
+const loadPostRenderInitialization = async () => {
+  try {
+    const { startPostRenderInitialization } = await import('./postRender');
+    startPostRenderInitialization();
+  } catch (error) {
+    console.error('[SPA Initialize] failed to load post-render initialization', error);
+  }
+};
 
 export const startAppInitialization = () => {
   if (started) return;
   started = true;
 
-  startImportSettingsFromUrl();
-  registerBuiltinToolSurfaces();
+  // must run synchronously before first React render
+  bootTiming.spanSync('import-settings', startImportSettingsFromUrl);
 
-  void initializeApp()
+  void bootTiming
+    .span('core-init', initializeApp)
     .catch((error) => {
       console.error('[SPA Initialize] failed', error);
     })
@@ -23,6 +34,8 @@ export const startAppInitialization = () => {
       flushSync(() => {
         setAppReady(true);
       });
-      startPostRenderInitialization();
+      bootTiming.mark('app-ready');
+      void loadPostRenderInitialization();
+      startBootMetricsFinalize();
     });
 };

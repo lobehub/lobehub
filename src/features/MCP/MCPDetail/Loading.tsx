@@ -1,5 +1,4 @@
-import { Flexbox, Skeleton } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 const DetailsLoading = memo(() => {
@@ -7,10 +6,10 @@ const DetailsLoading = memo(() => {
     <Flexbox gap={24}>
       <Flexbox gap={12}>
         <Flexbox horizontal align={'center'} gap={16} width={'100%'}>
-          <Skeleton.Avatar active shape={'square'} size={64} />
-          <Skeleton.Button active style={{ height: 36, width: 200 }} />
+          <Skeleton.Avatar shape={'square'} size={64} />
+          <Skeleton height={36} width={200} />
         </Flexbox>
-        <Skeleton.Button active size={'small'} style={{ width: 200 }} />
+        <Skeleton height={28} width={200} />
       </Flexbox>
       <Flexbox
         horizontal
@@ -20,8 +19,8 @@ const DetailsLoading = memo(() => {
           borderBottom: `1px solid ${cssVar.colorBorder}`,
         }}
       >
-        <Skeleton.Button />
-        <Skeleton.Button />
+        <Skeleton height={36} />
+        <Skeleton height={36} />
       </Flexbox>
       <Flexbox
         flex={1}
@@ -31,9 +30,9 @@ const DetailsLoading = memo(() => {
           overflow: 'hidden',
         }}
       >
-        <Skeleton paragraph={{ rows: 3 }} title={false} />
-        <Skeleton paragraph={{ rows: 8 }} title={false} />
-        <Skeleton paragraph={{ rows: 8 }} title={false} />
+        <Skeleton.Text rows={3} />
+        <Skeleton.Text rows={8} />
+        <Skeleton.Text rows={8} />
       </Flexbox>
     </Flexbox>
   );

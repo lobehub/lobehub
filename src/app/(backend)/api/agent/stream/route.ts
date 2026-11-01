@@ -3,7 +3,8 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { createStreamEventManager } from '@/server/modules/AgentRuntime';
+import { createLambdaContext } from '@/libs/trpc/lambda/context';
+import { createAgentStateManager, createStreamEventManager } from '@/server/modules/AgentRuntime';
 
 const log = debug('api-route:agent:stream');
 const timing = debug('lobe-server:agent-runtime:timing');
@@ -28,6 +29,40 @@ export async function GET(request: NextRequest) {
       },
       { status: 400 },
     );
+  }
+
+  // Resolve the caller the same way the lambda tRPC context does (Better Auth
+  // session cookie, `Oidc-Auth` JWT, or `X-API-Key`) so the CLI's existing
+  // `getAgentStreamAuthInfo` headers keep working unchanged.
+  const { userId: callerUserId } = await createLambdaContext(request);
+
+  if (!callerUserId) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
+  const agentStateManager = createAgentStateManager();
+  const metadata = await agentStateManager.getOperationMetadata(operationId);
+
+  if (!metadata) {
+    return NextResponse.json({ error: 'operation_not_found' }, { status: 404 });
+  }
+
+  // A share-visitor run (`AgentOperationMetadata.streamOwnerUserId` set — see its
+  // JSDoc in `AgentStateManager.ts`) executes as the creator but must only ever
+  // be read back through the Gateway WS channel, which applies the owner-configured
+  // visitor redaction (`gatewayVisitorRedaction.ts`). This raw endpoint replays
+  // unredacted history with no projection, and the creator must never read a
+  // visitor's transcript (visitor-isolation invariant) — so reject with 404 for
+  // EVERY caller, including both the visitor and the creator.
+  if (metadata.streamOwnerUserId) {
+    return NextResponse.json({ error: 'operation_not_found' }, { status: 404 });
+  }
+
+  // Otherwise this is a normal (non-share) operation: only its owner may read it.
+  // 404 rather than 403 so an unauthorized caller cannot distinguish "not mine"
+  // from "does not exist".
+  if (metadata.userId !== callerUserId) {
+    return NextResponse.json({ error: 'operation_not_found' }, { status: 404 });
   }
 
   log(`Starting SSE connection for operation ${operationId} from eventId ${lastEventId}`);
