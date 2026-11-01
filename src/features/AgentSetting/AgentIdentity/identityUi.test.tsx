@@ -255,6 +255,22 @@ describe('InboxSection', () => {
     expect(screen.getByRole('button', { name: /sender49@example.com/ })).toBeInTheDocument();
   });
 
+  it('reports a failed refresh when the cached inbox is empty', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    service.listInbox.mockResolvedValueOnce([]).mockRejectedValue(new Error('inbox unavailable'));
+    service.getInboxUnreadCount.mockResolvedValue(0);
+
+    fresh(<InboxSection agentId={'agt_1'} />);
+    await screen.findByText('identity.inbox.empty');
+
+    await vi.advanceTimersByTimeAsync(INBOX_REFRESH_INTERVAL_MS + 100);
+
+    // An unreachable inbox must not read as an empty one.
+    expect(await screen.findByText('identity.inbox.loadFailed')).toBeInTheDocument();
+    expect(screen.getByText('identity.inbox.empty')).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
   it('picks up a delivery that lands while the tab stays open', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     service.listInbox.mockResolvedValueOnce(rows).mockResolvedValue([

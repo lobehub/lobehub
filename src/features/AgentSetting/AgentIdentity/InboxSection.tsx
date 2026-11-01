@@ -57,17 +57,24 @@ const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
     />
   );
 
+  // A later fetch can fail while SWR still holds the last good result, and an
+  // empty inbox is a legitimate result. Show the failure next to whatever is
+  // cached instead of returning early, or an unreachable inbox reads as empty.
+  const refreshError = error ? (
+    <InlineError
+      detail={error instanceof Error ? error.message : String(error)}
+      summary={t('identity.inbox.loadFailed')}
+      onRetry={() => void mutate()}
+    />
+  ) : undefined;
+
   // Only a first page that never loaded replaces the list. A failed refresh or
   // older page keeps every message already on screen, with a retry below it.
   if (error && !data) {
     return (
       <Flexbox gap={10}>
         {header}
-        <InlineError
-          detail={error instanceof Error ? error.message : String(error)}
-          summary={t('identity.inbox.loadFailed')}
-          onRetry={() => void mutate()}
-        />
+        {refreshError}
       </Flexbox>
     );
   }
@@ -87,6 +94,7 @@ const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
       <Flexbox gap={10}>
         {header}
         <div className={identityStyles.empty}>{t('identity.inbox.empty')}</div>
+        {refreshError}
       </Flexbox>
     );
   }
@@ -138,19 +146,12 @@ const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
           );
         })}
       </Flexbox>
-      {error ? (
-        <InlineError
-          detail={error instanceof Error ? error.message : String(error)}
-          summary={t('identity.inbox.loadFailed')}
-          onRetry={() => void mutate()}
-        />
-      ) : (
-        hasMore && (
+      {refreshError ??
+        (hasMore && (
           <Button block size={'small'} type={'text'} onClick={loadMore}>
             {t('identity.inbox.loadMore')}
           </Button>
-        )
-      )}
+        ))}
     </Flexbox>
   );
 });
