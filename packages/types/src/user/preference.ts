@@ -207,6 +207,11 @@ export const UserLabSchema = z.object({
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
   /**
+   * @deprecated Integrations left Labs and is always shown. Kept so a write
+   * from an older released client is not stripped by the schema.
+   */
+  enableIntegrations: z.boolean().optional(),
+  /**
    * show OAuth app management in personal and workspace settings
    */
   enableOAuthApps: z.boolean().optional(),
