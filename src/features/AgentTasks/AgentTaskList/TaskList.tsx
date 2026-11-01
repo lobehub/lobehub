@@ -1,3 +1,4 @@
+import { matchesTaskListFilter, type TaskListFilter } from '@lobechat/types';
 import {
   AccordionHeader,
   AccordionItem,
@@ -58,6 +59,11 @@ interface TaskListProps {
   emptyDescription?: string;
   /** Thrown error from the list SWR — surfaced as a failure state, not a skeleton. */
   error?: unknown;
+  /**
+   * The page filter the rows were fetched with. Re-applied locally so a row
+   * edited out of it (priority changed, assignee swapped) leaves at once.
+   */
+  filter?: TaskListFilter;
   /** First-load / retry in flight (SWR `isLoading`). */
   isLoading?: boolean;
   /** Optional list source for alternate task collections such as scheduled tasks. */
@@ -150,6 +156,7 @@ const TaskList = memo<TaskListProps>((props) => {
   const {
     data,
     error,
+    filter,
     isLoading,
     items,
     onRetry,
@@ -161,7 +168,12 @@ const TaskList = memo<TaskListProps>((props) => {
   const { t } = useTranslation('chat');
   const storeTasks = useTaskStore(taskListSelectors.taskList(queryKey));
   const storeTasksTotal = useTaskStore(taskListSelectors.taskListTotal(queryKey));
-  const tasks = items ?? storeTasks;
+  const sourceTasks = items ?? storeTasks;
+  const tasks = useMemo(
+    () =>
+      filter ? sourceTasks.filter((task) => matchesTaskListFilter(task, filter)) : sourceTasks,
+    [filter, sourceTasks],
+  );
   // The store list is fetched in full up to a ceiling; past it the server's
   // `total` still counts every task, so say the list is a subset rather than
   // let the missing rows vanish silently. Alternate collections (`items`)
