@@ -44,6 +44,31 @@ describe('task bulk model methods', () => {
     expect(await mine.updateFieldsForIds([], { priority: 1 })).toEqual([]);
   });
 
+  it('updateFieldsForIds rewrites only the configs it was handed, in the same statement', async () => {
+    const { a, b, foreign, mine, theirs } = await setup();
+
+    const updated = await mine.updateFieldsForIds(
+      [a.id, b.id],
+      { priority: 2 },
+      new Map<string, unknown>([
+        [a.id, { repo: 'lobehub/lobehub' }],
+        [b.id, null],
+        // Not part of this edit: its config must not be rewritten.
+        [foreign.id, { repo: 'elsewhere' }],
+      ]),
+    );
+
+    expect(updated.map((task) => task.id).sort()).toEqual([a.id, b.id].sort());
+    expect((await mine.findById(a.id))?.config).toEqual({ repo: 'lobehub/lobehub' });
+    expect((await mine.findById(b.id))?.config).toBeNull();
+    // Untouched: a config for an id outside `ids` never reaches the statement.
+    expect((await theirs.findById(foreign.id))?.config).toEqual({});
+  });
+
+  it('lockForBulkEdit asks the database for nothing when it is handed no ids', async () => {
+    expect(await new TaskModel(serverDB, userId).lockForBulkEdit([])).toEqual([]);
+  });
+
   it('lockForBulkEdit returns only owned rows with the columns a bulk edit decides on', async () => {
     const { a, foreign, mine } = await setup();
 

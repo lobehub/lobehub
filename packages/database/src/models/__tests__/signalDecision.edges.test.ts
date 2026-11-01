@@ -132,7 +132,7 @@ describe('SignalDecisionModel scope read edges', () => {
     // `verdicts` is `notNull().default([])`, so only a row read from an older
     // snapshot (or a driver that hands back null) can lack them; the read must
     // still return the documented empty array.
-    const limit = vi.fn().mockResolvedValue([
+    const offset = vi.fn().mockResolvedValue([
       {
         address: null,
         createdAt: new Date(),
@@ -146,6 +146,9 @@ describe('SignalDecisionModel scope read edges', () => {
         verdicts: null,
       },
     ]);
+    // The paginated read ends with `.limit(...).offset(...)`, so the mocked
+    // chain has to expose both steps before it is awaited.
+    const limit = vi.fn().mockReturnValue({ offset });
     vi.spyOn(serverDB, 'select').mockReturnValueOnce({
       from: () => ({
         leftJoin: () => ({ where: () => ({ orderBy: () => ({ limit }) }) }),
@@ -169,5 +172,6 @@ describe('SignalDecisionModel scope read edges', () => {
       },
     ]);
     expect(limit).toHaveBeenCalledWith(expect.any(Number));
+    expect(offset).toHaveBeenCalledWith(0);
   });
 });
