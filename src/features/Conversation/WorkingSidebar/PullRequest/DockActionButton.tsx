@@ -1,3 +1,5 @@
+import './DockActionButton.css';
+
 import type {
   DeviceGitPullRequestAction,
   DeviceGitPullRequestDetail,
@@ -7,16 +9,15 @@ import { Button, type DropdownItem, SplitButton } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import styles from './DockActionButton.module.css';
 import { type DockAction, PR_KEYS } from './mergeDockData';
 import { MERGE_METHODS } from './mergeMethodStorage';
 import type { TranslateKey } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
 
 const TONE_CLASS = {
-  error: styles.toneError,
+  error: 'lobe-dock-action-button-531d9ccb-tone-error',
   plain: undefined,
-  success: styles.toneSuccess,
+  success: 'lobe-dock-action-button-531d9ccb-tone-success',
 };
 
 type SplitAction = Extract<DockAction, { kind: 'merge' | 'autoMerge' | 'updateBranch' }>;

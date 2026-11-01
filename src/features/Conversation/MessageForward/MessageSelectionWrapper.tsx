@@ -1,5 +1,7 @@
 'use client';
 
+import './MessageSelectionWrapper.css';
+
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -11,7 +13,6 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { sx } from '@/styles/sx';
 
 import { messageStateSelectors, useConversationStore } from '../store';
-import contentStyles from './MessageSelectionWrapper.module.css';
 import { isSelectableRole } from './selectableRoles';
 import SelectCircle from './SelectCircle';
 
@@ -100,8 +101,8 @@ const MessageSelectionWrapper = memo<MessageSelectionWrapperProps>(({ children, 
             {...sx(
               [styles.content, isAssistant && styles.contentCollapsed],
               isAssistant
-                ? `${contentStyles.content} ${contentStyles.contentAssistant}`
-                : contentStyles.content,
+                ? `${'lobe-message-selection-wrapper-3c24b563-content'} ${'lobe-message-selection-wrapper-3c24b563-content-assistant'}`
+                : 'lobe-message-selection-wrapper-3c24b563-content',
             )}
           >
             {children}

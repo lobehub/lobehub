@@ -4,21 +4,21 @@
 /* The hover action bar is suppressed in selection mode, so collapse its 28px
    placeholder too — otherwise every selected row carries a big empty
    highlighted strip beneath the bubble. */
-.content [data-user-action-bar-portal],
-.content [data-assitant-action-bar-portal],
-.content [data-assistant-group-action-bar-portal] {
+.lobe-message-selection-wrapper-3c24b563-content [data-user-action-bar-portal],
+.lobe-message-selection-wrapper-3c24b563-content [data-assitant-action-bar-portal],
+.lobe-message-selection-wrapper-3c24b563-content [data-assistant-group-action-bar-portal] {
   display: none;
 }
 
 /* The avatar + name + time header is redundant while scanning to select —
    drop it so every turn reads as one clean line. */
-.content :global(.message-header) {
+.lobe-message-selection-wrapper-3c24b563-content .message-header {
   display: none;
 }
 
 /* Assistant turns flow from the leading edge of the lane. User turns keep their
    native right alignment + indent so they still read as "sent by the user". */
-.contentAssistant :global(.message-wrapper) {
+.lobe-message-selection-wrapper-3c24b563-content-assistant .message-wrapper {
   align-items: flex-start !important;
   padding-inline-start: 0 !important;
 }

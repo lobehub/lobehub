@@ -1,5 +1,7 @@
 'use client';
 
+import './QueueTray.css';
+
 import { ActionIcon, Flexbox, Icon, Image, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -21,7 +23,6 @@ import { useFileStore } from '@/store/file';
 
 import { useConversationResourceAccess } from '../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../store';
-import thumbStyles from './QueueTray.module.css';
 import {
   createQueueSendNowGate,
   getQueuedHintKey,
@@ -123,7 +124,7 @@ const QueuedFilePreview = memo<QueuedFilePreviewProps>(({ file }) => {
     return (
       <Image
         alt={file.name}
-        classNames={{ wrapper: thumbStyles.imageThumb }}
+        classNames={{ wrapper: 'lobe-queue-tray-1c07b9c6-image-thumb' }}
         objectFit={'cover'}
         size={PREVIEW_SIZE}
         src={file.url}

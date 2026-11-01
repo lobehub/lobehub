@@ -1,3 +1,5 @@
+import './MergeDock.css';
+
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
 import { Button, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -10,7 +12,6 @@ import { sx } from '@/styles/sx';
 
 import ChecksList from './ChecksList';
 import DockActionButton from './DockActionButton';
-import checksStyles from './MergeDock.module.css';
 import { type DockAction, type MergeDockInput, resolveMergeDock } from './mergeDockData';
 import { readMergeMethod, writeMergeMethod } from './mergeMethodStorage';
 import { DOCK_ICON, TONE_COLOR, type TranslateKey } from './prVisual';
@@ -172,7 +173,7 @@ const MergeDock = memo<MergeDockProps>(
           </Flexbox>
           {model.reasons.length > 0 &&
             (hasFailedChecks ? (
-              <details className={checksStyles.checks}>
+              <details className={'lobe-merge-dock-17ae741d-checks'}>
                 <summary>
                   <Icon icon={ChevronRightIcon} size={12} />
                   {reasons}

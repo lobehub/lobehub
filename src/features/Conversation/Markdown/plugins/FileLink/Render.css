@@ -1,0 +1,31 @@
+.lobe-render-9ad65026-label {
+  text-decoration-color: var(--lobe-color-text-tertiary);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s;
+}
+
+.lobe-render-9ad65026-link {
+  cursor: pointer;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  color: var(--lobe-color-text) !important;
+  text-decoration: none;
+  vertical-align: -0.16em;
+
+  &:hover {
+    color: var(--lobe-color-text) !important;
+  }
+
+  &:hover > span:last-child {
+    text-decoration-color: var(--lobe-color-text-secondary);
+  }
+
+  &:focus-visible {
+    border-radius: 2px;
+    outline: 2px solid var(--lobe-color-primary-border);
+    outline-offset: 2px;
+  }
+}

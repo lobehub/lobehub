@@ -1,3 +1,5 @@
+import '../style.css';
+
 import { cx, lobeStaticStylish, Markdown } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
@@ -5,7 +7,6 @@ import { memo } from 'react';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { styles } from '../style';
-import previewStyles from '../style.module.css';
 
 const Preview = memo<{ content: string }>(({ content }) => {
   const isMobile = useIsMobile();
@@ -16,7 +17,7 @@ const Preview = memo<{ content: string }>(({ content }) => {
       className={cx(
         lobeStaticStylish.noScrollbar,
         stylex.props(styles.preview).className,
-        previewStyles.preview,
+        'lobe-share-message-modal-7976a4b0-preview',
       )}
     >
       <Markdown variant={isMobile ? 'chat' : undefined}>{content}</Markdown>

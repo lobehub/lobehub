@@ -1,5 +1,7 @@
 'use client';
 
+import './Render.css';
+
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -23,7 +25,6 @@ import {
   type ScmEventCheck,
   type ScmEventReview,
 } from './parseScmEvent';
-import logToggleStyles from './Render.module.css';
 
 const NOT_LAST = ':not(:last-child)';
 
@@ -180,7 +181,7 @@ const CheckRow = memo<{ check: ScmEventCheck; leading?: ReactNode }>(({ check, l
         ) : null}
         {check.log ? (
           <span
-            {...sx([styles.logToggle], open ? logToggleStyles.logToggleOpen : undefined)}
+            {...sx([styles.logToggle], open ? 'lobe-render-6976df0b-log-toggle-open' : undefined)}
             onClick={() => setOpen((v) => !v)}
           >
             {open ? t('scmEvent.hideLog') : t('scmEvent.showLog')}

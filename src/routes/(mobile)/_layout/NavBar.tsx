@@ -1,5 +1,7 @@
 'use client';
 
+import './NavBar.css';
+
 import { Icon } from '@lobehub/ui';
 import { type TabBarProps } from '@lobehub/ui/mobile';
 import { TabBar } from '@lobehub/ui/mobile';
@@ -13,8 +15,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useMobileNavigation } from '@/hooks/useMobileNavigation';
 import { SidebarTabKey } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-
-import moduleStyles from './NavBar.module.css';
 
 const styles = stylex.create({
   container: {
@@ -37,7 +37,10 @@ const NavBar = memo(() => {
       [
         {
           icon: (active: boolean) => (
-            <Icon className={active ? moduleStyles.active : undefined} icon={MessageSquare} />
+            <Icon
+              className={active ? 'lobe-nav-bar-c7ad71e3-active' : undefined}
+              icon={MessageSquare}
+            />
           ),
           key: SidebarTabKey.Chat,
           onClick: () => {
@@ -47,7 +50,7 @@ const NavBar = memo(() => {
         },
         showMarket && {
           icon: (active: boolean) => (
-            <Icon className={active ? moduleStyles.active : undefined} icon={Compass} />
+            <Icon className={active ? 'lobe-nav-bar-c7ad71e3-active' : undefined} icon={Compass} />
           ),
           key: SidebarTabKey.Community,
           onClick: () => {
@@ -57,7 +60,7 @@ const NavBar = memo(() => {
         },
         {
           icon: (active: boolean) => (
-            <Icon className={active ? moduleStyles.active : undefined} icon={User} />
+            <Icon className={active ? 'lobe-nav-bar-c7ad71e3-active' : undefined} icon={User} />
           ),
           key: SidebarTabKey.Me,
           onClick: () => {

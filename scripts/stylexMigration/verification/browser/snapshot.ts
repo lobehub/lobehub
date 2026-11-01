@@ -29,6 +29,8 @@ export const captureInPage = (
     geometry?: boolean;
     properties?: string[];
     selector?: string;
+    keyPrefix?: string;
+    originSelector?: string;
     styleKeys?: string[];
   } = {},
 ): StyleSnapshot => {
@@ -38,7 +40,7 @@ export const captureInPage = (
   const elements = [root, ...root.querySelectorAll('*')].filter(
     (element) => !['LINK', 'META', 'SCRIPT', 'STYLE'].includes(element.tagName),
   );
-  if (elements.length < 2) throw new Error('The component has not mounted');
+  if (elements.length < 2 && !options.keyPrefix) throw new Error('The component has not mounted');
   const keys = new Map<Element, string>();
   const walk = (element: Element, key: string) => {
     keys.set(element, key);
@@ -46,10 +48,10 @@ export const captureInPage = (
       .filter((child) => elements.includes(child))
       .forEach((child, index) => walk(child, `${key}.${index}`));
   };
-  walk(root, 'root');
+  walk(root, `${options.keyPrefix ?? ''}root`);
   if (options.collectMetadata)
     elements.forEach((element, index) =>
-      element.setAttribute('data-experiment-node', String(index)),
+      element.setAttribute('data-experiment-node', `${options.keyPrefix ?? ''}${index}`),
     );
   root.getBoundingClientRect();
   const canonical = (value: Record<string, unknown>) =>
@@ -103,7 +105,9 @@ export const captureInPage = (
       }
     }
   }
-  const origin = root.getBoundingClientRect();
+  const originRoot = options.originSelector ? document.querySelector(options.originSelector) : root;
+  if (!originRoot) throw new Error('CAPTURE_ORIGIN_MISSING');
+  const origin = originRoot.getBoundingClientRect();
   const rounded = (value: number) => Math.round(value * 1000) / 1000;
   const styles: StyleSnapshot['styles'] = [];
   const interned = new Map<string, number>();
@@ -181,7 +185,12 @@ export const captureInPage = (
               attributes: [...element.attributes]
                 .filter(
                   (attribute) =>
-                    !['class', 'style', 'data-experiment-node'].includes(attribute.name),
+                    ![
+                      'class',
+                      'style',
+                      'data-experiment-node',
+                      'data-stylex-verification-surface',
+                    ].includes(attribute.name),
                 )
                 .map((attribute): [string, string] => [attribute.name, attribute.value])
                 .sort(([a], [b]) => (a < b ? -1 : 1)),

@@ -1,5 +1,7 @@
 'use client';
 
+import './style.css';
+
 import { agentDisplayName } from '@lobechat/types';
 import { cx, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
@@ -11,7 +13,6 @@ import Avatar from './components/Avatar';
 import ErrorContent from './components/ErrorContent';
 import MessageContent from './components/MessageContent';
 import Title from './components/Title';
-import styles from './style.module.css';
 import type { ChatItemProps } from './type';
 
 const ChatItem = memo<ChatItemProps>(
@@ -71,7 +72,7 @@ const ChatItem = memo<ChatItemProps>(
     return (
       <Flexbox
         align={isUser ? 'flex-end' : 'flex-start'}
-        className={cx('message-wrapper', styles.container, className)}
+        className={cx('message-wrapper', 'lobe-chat-item-d448b0c8-container', className)}
         data-message-id={id}
         gap={8}
         paddingBlock={8}

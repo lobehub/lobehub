@@ -1,10 +1,10 @@
 /* The collapsible failed-checks summary. `summary` and its chevron are native
    elements keyed off `details[open]`, so this stays plain CSS. */
-.checks {
+.lobe-merge-dock-17ae741d-checks {
   margin-inline-start: 22px;
 }
 
-.checks > summary {
+.lobe-merge-dock-17ae741d-checks > summary {
   cursor: pointer;
 
   display: flex;
@@ -17,10 +17,10 @@
   list-style: none;
 }
 
-.checks > summary::-webkit-details-marker {
+.lobe-merge-dock-17ae741d-checks > summary::-webkit-details-marker {
   display: none;
 }
 
-.checks[open] > summary svg {
+.lobe-merge-dock-17ae741d-checks[open] > summary svg {
   transform: rotate(90deg);
 }

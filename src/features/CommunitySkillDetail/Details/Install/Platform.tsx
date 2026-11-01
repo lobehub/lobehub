@@ -1,5 +1,7 @@
 'use client';
 
+import './Platform.css';
+
 import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Claude, Cline, Cursor, OpenAI } from '@lobehub/icons';
 import {
@@ -26,7 +28,6 @@ import { useChatStore } from '@/store/chat';
 
 import { useDetailActionContext } from '../../DetailProvider';
 import { getSkillInstructionsUrl } from './getSkillInstructionsUrl';
-import styles from './Platform.module.css';
 import VsCodeIcon from './VsCodeIcon';
 
 const Title = ({ children }: { children?: React.ReactNode }) => (
@@ -246,7 +247,7 @@ const Platform = memo<PlatformProps>(
             <Highlighter
               fullFeatured
               wrap
-              className={lite ? styles.lite : undefined}
+              className={lite ? 'lobe-platform-535c8dc5-lite' : undefined}
               defaultExpand={expandCodeByDefault ?? false}
               fileName={'Agent prompt'}
               language={'bash'}
@@ -305,7 +306,7 @@ const Platform = memo<PlatformProps>(
             {lite && <Divider dashed />}
             <Highlighter
               fullFeatured
-              className={lite ? styles.lite : undefined}
+              className={lite ? 'lobe-platform-535c8dc5-lite' : undefined}
               defaultExpand={expandCodeByDefault ?? false}
               fileName={t('skills.details.sidebar.installCommand')}
               language={'bash'}
@@ -317,7 +318,7 @@ const Platform = memo<PlatformProps>(
             {lite && <Divider dashed />}
             <Highlighter
               fullFeatured
-              className={lite ? styles.lite : undefined}
+              className={lite ? 'lobe-platform-535c8dc5-lite' : undefined}
               defaultExpand={false}
               fileName={t('skills.details.sidebar.directoryLayout')}
               language={'text'}

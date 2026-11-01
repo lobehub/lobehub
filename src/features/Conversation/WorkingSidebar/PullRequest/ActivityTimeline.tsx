@@ -1,3 +1,5 @@
+import './MarkdownBody.css';
+
 import type {
   DeviceGitPullRequestAction,
   DeviceGitPullRequestDetail,
@@ -13,7 +15,6 @@ import { useTranslation } from 'react-i18next';
 
 import { electronSystemService } from '@/services/electron/system';
 
-import bodyStyles from './MarkdownBody.module.css';
 import type { Tone } from './mergeDockData';
 import { timeAgo, TONE_COLOR, type TranslateKey } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
@@ -137,9 +138,12 @@ const ActivityTimeline = memo<ActivityTimelineProps>(
                 </Flexbox>
                 <div {...stylex.props(styles.commentBodyWrap)}>
                   <Markdown
-                    className={cx(stylex.props(styles.commentBody).className, bodyStyles.body)}
                     fontSize={13}
                     variant={'chat'}
+                    className={cx(
+                      stylex.props(styles.commentBody).className,
+                      'lobe-markdown-body-55878cda-body',
+                    )}
                   >
                     {entry.body}
                   </Markdown>

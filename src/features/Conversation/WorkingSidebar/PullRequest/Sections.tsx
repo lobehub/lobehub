@@ -1,3 +1,5 @@
+import './MarkdownBody.css';
+
 import type {
   DeviceGitPullRequestAction,
   DeviceGitPullRequestActivity,
@@ -21,7 +23,6 @@ import { ChevronRight, OverviewRow, rowStyles } from '../Overview/OverviewRow';
 import { sectionProps, sectionStyles } from '../Overview/sectionStyles';
 import ActivityTimeline from './ActivityTimeline';
 import ChecksList from './ChecksList';
-import bodyStyles from './MarkdownBody.module.css';
 import { timeAgo } from './prVisual';
 import type { PullRequestBusy } from './usePullRequestActions';
 
@@ -132,9 +133,12 @@ const Sections = memo<SectionsProps>(
             onToggle={toggle('description')}
           >
             <Markdown
-              className={cx(stylex.props(styles.body).className, bodyStyles.body)}
               fontSize={13}
               variant={'chat'}
+              className={cx(
+                stylex.props(styles.body).className,
+                'lobe-markdown-body-55878cda-body',
+              )}
             >
               {detail.body}
             </Markdown>

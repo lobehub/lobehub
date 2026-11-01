@@ -1,8 +1,11 @@
 'use client';
 
+import './Render.css';
+
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
 import { A, copyToClipboard, Icon, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { CopyIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback } from 'react';
@@ -24,7 +27,31 @@ import {
   isShareVisitorContext,
   resolveAppOrigin,
 } from './parse';
-import styles from './Render.module.css';
+
+const stylesAtomic = stylex.create({
+  icon: { display: 'inline-flex', flexShrink: 0, alignItems: 'center' },
+  copy: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '18px',
+    height: '18px',
+    marginInlineStart: '2px',
+    padding: '0',
+    borderStyle: 'none',
+    borderRadius: 'var(--lobe-border-radius-sm)',
+    color: { 'default': 'var(--lobe-color-text-quaternary)', ':hover': 'var(--lobe-color-text)' },
+    verticalAlign: '-0.2em',
+    backgroundColor: { 'default': 'transparent', ':hover': 'var(--lobe-color-fill-secondary)' },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+    transition: 'color 0.15s, background 0.15s',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': 'var(--lobe-color-primary-border)' },
+    outlineOffset: { 'default': null, ':focus-visible': '1px' },
+  },
+});
 
 interface FileLinkProperties {
   fileId?: string;
@@ -49,10 +76,10 @@ const getAppOrigin = () =>
 
 const FileLabel = ({ label }: { label: string }) => (
   <>
-    <span aria-hidden className={styles.icon}>
+    <span aria-hidden {...stylex.props(stylesAtomic['icon'])}>
       <FileIcon fileName={label} size={16} variant={'raw'} />
     </span>
-    <span className={styles.label}>{label}</span>
+    <span className={'lobe-render-9ad65026-label'}>{label}</span>
   </>
 );
 
@@ -132,7 +159,7 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
     <>
       <A
         {...(fileId ? { [RENDERER_HANDLED_LINK_ATTR]: 'true' } : {})}
-        className={styles.link}
+        className={'lobe-render-9ad65026-link'}
         href={targetHref}
         rel="noopener noreferrer"
         onClick={handleClick}
@@ -146,7 +173,7 @@ const Render = memo<MarkdownElementProps<FileLinkProperties>>(({ node }) => {
       {targetHref && (
         <button
           aria-label={t('copy')}
-          className={styles.copy}
+          {...stylex.props(stylesAtomic['copy'])}
           title={t('copy')}
           type={'button'}
           onClick={handleCopy}

@@ -1,3 +1,5 @@
+import './index.css';
+
 import { Accordion, cx, ScrollArea } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -8,7 +10,6 @@ import MarkdownMessage from '@/features/Conversation/Markdown';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { type ChatCitationItem } from '@/types/index';
 
-import contentStyles from './index.module.css';
 import Title from './Title';
 
 const styles = stylex.create({
@@ -64,7 +65,7 @@ const Thinking = memo<ThinkingProps>((props) => {
               viewportProps={{
                 className: cx(
                   stylex.props(styles.contentScroll).className,
-                  contentStyles.contentScroll,
+                  'lobe-thinking-6f369866-content-scroll',
                 ),
                 ref: ref as RefObject<HTMLDivElement>,
                 onScroll: handleScroll,

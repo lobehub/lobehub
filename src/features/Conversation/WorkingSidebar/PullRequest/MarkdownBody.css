@@ -1,17 +1,17 @@
 /* Descendant rules for the rendered PR description. The Markdown output is not
    ours to tag, which StyleX cannot target, so they stay plain CSS. */
-.body table {
+.lobe-markdown-body-55878cda-body table {
   overflow-x: auto;
   display: block;
   max-width: 100%;
 }
 
-.body img,
-.body video {
+.lobe-markdown-body-55878cda-body img,
+.lobe-markdown-body-55878cda-body video {
   max-width: 100%;
 }
 
-.body pre {
+.lobe-markdown-body-55878cda-body pre {
   overflow-x: auto;
   max-width: 100%;
 }
