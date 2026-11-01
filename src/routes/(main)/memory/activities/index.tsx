@@ -1,9 +1,10 @@
 import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { CalendarClockIcon } from 'lucide-react';
 import { type FC } from 'react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MemoryListBoundary } from '@/features/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -33,9 +34,7 @@ const ActivitiesArea = memo(() => {
   const activitiesPage = useUserMemoryStore((s) => s.activitiesPage);
   const activitiesInit = useUserMemoryStore((s) => s.activitiesInit);
   const activitiesTotal = useUserMemoryStore((s) => s.activitiesTotal);
-  const activitiesSearchLoading = useUserMemoryStore((s) => s.activitiesSearchLoading);
   const useFetchActivities = useUserMemoryStore((s) => s.useFetchActivities);
-  const resetActivitiesList = useUserMemoryStore((s) => s.resetActivitiesList);
 
   const sortOptions = [
     { label: t('filter.sort.createdAt'), value: 'capturedAt' },
@@ -44,13 +43,10 @@ const ActivitiesArea = memo(() => {
 
   const apiSort = sortValue === 'capturedAt' ? undefined : (sortValue as 'startsAt');
 
-  useEffect(() => {
-    if (!apiSort) return;
-    const sort = viewMode === 'grid' ? apiSort : undefined;
-    resetActivitiesList({ q: searchValue || undefined, sort });
-  }, [searchValue, apiSort, viewMode]);
-
-  const { isLoading } = useFetchActivities({
+  // Each search / sort is its own replica entry: the hook selects it before
+  // paint, so the previous query's rows never show under this one. `error` is
+  // this query's failure while it has nothing painted.
+  const { data, error, isLoading, mutate } = useFetchActivities({
     page: activitiesPage,
     pageSize: 12,
     q: searchValue || undefined,
@@ -70,8 +66,6 @@ const ActivitiesArea = memo(() => {
     },
     [setSortValueRaw],
   );
-
-  const showLoading = activitiesSearchLoading || !activitiesInit;
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -102,11 +96,16 @@ const ActivitiesArea = memo(() => {
             onSearch={handleSearch}
             onSortChange={viewMode === 'grid' ? handleSortChange : undefined}
           />
-          {showLoading ? (
-            <Loading viewMode={viewMode} />
-          ) : (
+          <MemoryListBoundary
+            data={data}
+            error={error}
+            isInitialized={activitiesInit}
+            isLoading={isLoading}
+            loading={<Loading viewMode={viewMode} />}
+            onRetry={() => void mutate()}
+          >
             <List isLoading={isLoading} searchValue={searchValue} viewMode={viewMode} />
-          )}
+          </MemoryListBoundary>
         </WideScreenContainer>
       </Flexbox>
     </Flexbox>

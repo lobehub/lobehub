@@ -2,7 +2,7 @@
 
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { type TFunction } from 'i18next';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,9 @@ const resolveLabel = (t: TFunction<'plugin'>, source: ActivateSkillSource | unde
   switch (source) {
     case 'agent': {
       return t('builtins.lobe-skills.apiName.activateAgentSkill');
+    }
+    case 'device': {
+      return t('builtins.lobe-skills.apiName.activateDeviceSkill');
     }
     case 'project': {
       return t('builtins.lobe-skills.apiName.activateProjectSkill');
@@ -75,14 +78,14 @@ export const ActivateSkillInspector = memo<
   if (isArgumentsStreaming) {
     if (!displayName)
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{label}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>{label}</span>
         </div>
       );
 
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{label}:</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>{label}:</span>
         <span className={styles.chip}>
           <SkillsIcon className={styles.skillIcon} size={12} />
           <span className={styles.skillName}>{displayName}</span>
@@ -92,8 +95,8 @@ export const ActivateSkillInspector = memo<
   }
 
   return (
-    <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-      <span>{label}:</span>
+    <div className={inspectorTextStyles.root}>
+      <span className={cx(isLoading && shinyTextStyles.shinyText)}>{label}:</span>
       {displayName && (
         <span className={styles.chip}>
           <SkillsIcon className={styles.skillIcon} size={12} />

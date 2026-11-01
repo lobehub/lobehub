@@ -7,6 +7,8 @@ export interface GenerateObjectPayload {
 
 export interface MatchContext {
   generateObject?: (payload: GenerateObjectPayload) => Promise<{ reason: string; score: number }>;
+  /** Max attempts for the LLM judge before giving up (transient flakes / missing score). Default 3. */
+  judgeMaxAttempts?: number;
   judgeModel?: string;
 }
 

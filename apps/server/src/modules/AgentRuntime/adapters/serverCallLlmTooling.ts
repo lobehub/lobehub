@@ -1,0 +1,102 @@
+import { type AgentState, selectOperationToolSet } from '@lobechat/agent-runtime';
+import {
+  buildStepSkillDelta,
+  buildStepToolDelta,
+  type OperationToolSet,
+  type ResolvedSkillSet,
+  type ResolvedToolSet,
+  SkillResolver,
+  type ToolDiscoveryConfig,
+  ToolResolver,
+} from '@lobechat/context-engine';
+
+import type { ExecutionPlan } from '@/helpers/executionTarget';
+
+import type { RuntimeExecutorContext } from '../context';
+import { buildToolDiscoveryConfig, log } from '../executorHelpers';
+import { resolveRunActiveDeviceId } from '../executors/resolveRunActiveDeviceId';
+
+export interface ServerCallLlmTooling {
+  /**
+   * The device actually routed for this run, if any (same single-track gate
+   * `buildStepToolDelta` uses below). Exposed so callers building prompt
+   * template variables can tell whether `runCommand`/`execScript` will
+   * execute on a device instead of falling back to the cloud sandbox —
+   * `resolved.enabledToolIds.includes('lobe-cloud-sandbox')` alone doesn't
+   * cover it, since Skills' sandbox fallback applies whenever no device is
+   * routed, independent of whether the dedicated Cloud Sandbox tool is
+   * offered.
+   */
+  activeDeviceId?: string;
+  /**
+   * The run's resolved execution target (`local`/`device`/`sandbox`/`auto`/
+   * `none`), straight from `state.plan.execution.target`. Exposed
+   * alongside `activeDeviceId` because `'auto'` is the one target where a
+   * device can be routed (`activeDeviceId` set) while the cloud sandbox is
+   * *also* reachable — see `AgentToolsEngine`'s `agentModeRules` gate for
+   * `lobe-cloud-sandbox`, which allows it for `'auto'` regardless of routing.
+   */
+  executionTarget?: ExecutionPlan['target'];
+  resolved: ResolvedToolSet;
+  resolvedSkills?: ResolvedSkillSet;
+  toolDiscoveryConfig?: ToolDiscoveryConfig;
+  tools?: ResolvedToolSet['tools'];
+}
+
+export const resolveServerCallLlmTooling = (
+  ctx: Pick<RuntimeExecutorContext, 'operationId' | 'stepIndex'>,
+  state: AgentState,
+  allowedToolNames?: string[],
+): ServerCallLlmTooling => {
+  // Resolve tools via ToolResolver (unified tool injection).
+  //
+  // Resolve device policy first, then activate only tools already allowed by
+  // the operation snapshot. Routing a device must not widen that tool pool.
+  const activeDeviceId = resolveRunActiveDeviceId(state);
+  const executionTarget = (state.plan?.execution as ExecutionPlan | undefined)?.target;
+  const operationToolSet: OperationToolSet = selectOperationToolSet(state);
+
+  const stepDelta = buildStepToolDelta({
+    activeDeviceId,
+    enabledToolIds: operationToolSet.enabledToolIds,
+    forceFinish: state.forceFinish,
+    // Device activation cannot widen the operation's allowed tool pool.
+    localSystemManifest: operationToolSet.manifestMap['lobe-local-system'],
+    operationManifestMap: operationToolSet.manifestMap,
+  });
+
+  const toolResolver = new ToolResolver();
+  const resolved: ResolvedToolSet = toolResolver.resolve(
+    operationToolSet,
+    stepDelta,
+    state.activatedStepTools ?? [],
+    allowedToolNames,
+  );
+
+  const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
+  const toolDiscoveryConfig = buildToolDiscoveryConfig(operationToolSet, resolved.enabledToolIds);
+
+  if (stepDelta.activatedTools.length > 0) {
+    log(
+      `[${ctx.operationId}:${ctx.stepIndex}] ToolResolver injected %d step-level tools: %o`,
+      stepDelta.activatedTools.length,
+      stepDelta.activatedTools.map((tool) => tool.id),
+    );
+  }
+
+  // Resolve skills via SkillResolver (unified skill injection).
+  const skillResolver = new SkillResolver();
+  const stepSkillDelta = buildStepSkillDelta();
+  const resolvedSkills = state.plan?.skills
+    ? skillResolver.resolve(state.plan?.skills, stepSkillDelta, state.activatedStepSkills ?? [])
+    : undefined;
+
+  return {
+    activeDeviceId,
+    executionTarget,
+    resolved,
+    resolvedSkills,
+    toolDiscoveryConfig,
+    tools,
+  };
+};

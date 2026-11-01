@@ -200,6 +200,14 @@ export const trpcBotProvider: BotProviderQuery = {
       tenantId: params.tenantId,
     });
   },
+
+  sendMessengerPush: async (params) => {
+    return lambdaClient.messenger.sendMessengerPush.mutate({
+      content: params.content,
+      platform: params.platform,
+      tenantId: params.tenantId,
+    });
+  },
 };
 
 // ────────────────────────────────────────────────────────────────────────
@@ -212,7 +220,7 @@ export const trpcBotProvider: BotProviderQuery = {
  *
  * Runtime callers pass `{ platform, ...rest }` and may omit `botId`. We
  * resolve `botId` from `platform` here (frontend convenience — find the
- * first enabled bot on that platform) and strip `platform` before
+ * first enabled, non-failed bot on that platform) and strip `platform` before
  * forwarding, mirroring the original `_callBotMessage` behavior.
  */
 const resolveBotId = async (params: { botId?: string; platform?: string }): Promise<string> => {
@@ -221,7 +229,11 @@ const resolveBotId = async (params: { botId?: string; platform?: string }): Prom
     throw new Error('botId or platform is required');
   }
   const providers = (await lambdaClient.agentBotProvider.list.query()) as any[];
-  const bot = providers.find((b) => b.platform === params.platform && b.enabled);
+  // A `failed` bot's credentials are known-broken (e.g. an expired WeChat
+  // session rejects every upload) — never auto-pick one.
+  const bot = providers.find(
+    (b) => b.platform === params.platform && b.enabled && b.runtimeStatus !== 'failed',
+  );
   if (!bot) {
     throw new Error(`No enabled bot found for platform "${params.platform}". Configure one first.`);
   }
@@ -235,8 +247,12 @@ const resolveBotId = async (params: { botId?: string; platform?: string }): Prom
  * vary; the TRPC procedures will type-check the final shape.
  */
 const buildTrpcInput = async (params: any): Promise<any> => {
-  const botId = await resolveBotId(params);
   const { botId: _b, platform: _p, ...rest } = params ?? {};
+  // A System Bot send names its connection already; injecting a platform
+  // default `botId` next to it would trip the procedures' "exactly one of"
+  // check and reject the call.
+  if (rest.messengerInstallationId) return rest;
+  const botId = await resolveBotId(params);
   return { ...rest, botId };
 };
 
@@ -251,6 +267,10 @@ export const trpcMessageService: MessageRuntimeService = {
 
   readMessages: async (params) => {
     return lambdaClient.botMessage.readMessages.query(await buildTrpcInput(params)) as any;
+  },
+
+  readDocument: async (params) => {
+    return lambdaClient.botMessage.readDocument.query(await buildTrpcInput(params)) as any;
   },
 
   editMessage: async (params) => {

@@ -1,20 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type App } from '@/core/App';
 
 import WorkspaceCtr from '../WorkspaceCtr';
 
-const { ipcMainHandleMock } = vi.hoisted(() => ({
+const { ipcMainHandleMock, listClaudeCodeMemoryMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
-}));
-
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
+  listClaudeCodeMemoryMock: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
@@ -26,6 +18,14 @@ vi.mock('electron', () => ({
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
   readdir: vi.fn(),
+}));
+
+vi.mock('@lobechat/device-control/claude-code-memory', () => ({
+  listClaudeCodeMemory: listClaudeCodeMemoryMock,
+}));
+
+vi.mock('@lobechat/local-file-shell', () => ({
+  detectRepoType: vi.fn(async () => undefined),
 }));
 
 const mockLocalFileProtocolManager = {
@@ -42,8 +42,13 @@ describe('WorkspaceCtr', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    vi.stubEnv('HOME', '/device-home');
     mockFsPromises = await import('node:fs/promises');
     workspaceCtr = new WorkspaceCtr(mockApp);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   const dirent = (name: string, kind: 'dir' | 'file') => ({
@@ -110,6 +115,43 @@ describe('WorkspaceCtr', () => {
       });
     });
 
+    it('merges execution-device skills and keeps project skills first on duplicate names', async () => {
+      vi.mocked(mockFsPromises.readdir).mockImplementation(async (dir: string) => {
+        if (dir === '/proj/.agents/skills') return [dirent('shared', 'dir')];
+        if (dir === '/proj/.agents/skills/shared') return [dirent('SKILL.md', 'file')];
+        if (dir === '/device-home/.agents/skills')
+          return [dirent('device-writer', 'dir'), dirent('shared', 'dir')];
+        if (dir === '/device-home/.agents/skills/device-writer')
+          return [dirent('SKILL.md', 'file')];
+        if (dir === '/device-home/.agents/skills/shared') return [dirent('SKILL.md', 'file')];
+        throw new Error('ENOENT');
+      });
+      vi.mocked(mockFsPromises.readFile).mockImplementation(async (file: string) => {
+        if (file === '/proj/.agents/skills/shared/SKILL.md')
+          return frontmatter('shared', 'from project');
+        if (file === '/device-home/.agents/skills/device-writer/SKILL.md')
+          return frontmatter('device-writer', 'from device');
+        if (file === '/device-home/.agents/skills/shared/SKILL.md')
+          return frontmatter('shared', 'from device');
+        throw new Error('ENOENT');
+      });
+
+      const result = await workspaceCtr.listProjectSkills({ scope: '/proj' });
+
+      expect(result.skills.map((skill) => `${skill.name}:${skill.scope}`)).toEqual([
+        'device-writer:device',
+        'shared:project',
+      ]);
+      expect(result.skills.find((skill) => skill.name === 'device-writer')).toMatchObject({
+        previewRoot: '/device-home/.agents/skills',
+        scope: 'device',
+      });
+      expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).toHaveBeenCalledWith('/proj');
+      expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).toHaveBeenCalledWith(
+        '/device-home/.agents/skills',
+      );
+    });
+
     it('caps instruction file content', async () => {
       vi.mocked(mockFsPromises.readdir).mockRejectedValue(new Error('ENOENT'));
       const huge = 'x'.repeat(100 * 1024);
@@ -150,12 +192,57 @@ describe('WorkspaceCtr', () => {
       expect(result.skills.map((s) => s.name)).toEqual(['alpha']);
     });
 
+    it('parses folded block scalar descriptions', async () => {
+      vi.mocked(mockFsPromises.readdir).mockImplementation(async (dir: string) => {
+        if (dir === '/proj/.agents/skills') return [dirent('agent-testing', 'dir')];
+        if (dir === '/proj/.agents/skills/agent-testing') return [dirent('SKILL.md', 'file')];
+        throw new Error('ENOENT');
+      });
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue(
+        [
+          '---',
+          'name: agent-testing',
+          'description: >',
+          '  Agentic end-to-end testing for LobeHub: backend verification via the CLI,',
+          '  frontend verification via agent-browser (Electron).',
+          '---',
+          'body',
+        ].join('\n'),
+      );
+
+      const result = await workspaceCtr.listProjectSkills({ scope: '/proj' });
+
+      expect(result.skills[0]).toMatchObject({
+        description:
+          'Agentic end-to-end testing for LobeHub: backend verification via the CLI, frontend verification via agent-browser (Electron).',
+        name: 'agent-testing',
+      });
+    });
+
     it('returns empty + null source when no skills exist', async () => {
       vi.mocked(mockFsPromises.readdir).mockRejectedValue(new Error('ENOENT'));
 
       const result = await workspaceCtr.listProjectSkills({ scope: '/proj' });
 
       expect(result).toEqual({ root: '/proj', skills: [], source: null });
+    });
+  });
+
+  describe('listClaudeCodeMemory', () => {
+    it('approves the memory directory for the preview protocol', async () => {
+      const memoryDir = '/device-home/.claude/projects/-proj/memory';
+      listClaudeCodeMemoryMock.mockImplementation(async (_params, deps) => {
+        await deps.approveProjectRoot(memoryDir);
+        return { files: [], memoryDir };
+      });
+
+      const result = await workspaceCtr.listClaudeCodeMemory({ scope: '/proj' });
+
+      expect(result).toEqual({ files: [], memoryDir });
+      expect(listClaudeCodeMemoryMock).toHaveBeenCalledWith({ scope: '/proj' }, expect.anything());
+      expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).toHaveBeenCalledWith(
+        memoryDir,
+      );
     });
   });
 });

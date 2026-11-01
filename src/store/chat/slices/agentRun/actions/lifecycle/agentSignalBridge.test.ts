@@ -1,0 +1,188 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/services/agentSignal', () => ({
+  agentSignalService: {
+    emitClientGatewaySourceEvent: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+vi.mock('@/store/user/store', () => ({
+  getUserStoreState: vi.fn(),
+}));
+
+vi.mock('@/store/chat/store', () => ({
+  getChatStoreState: vi.fn(() => ({})),
+}));
+
+describe('emitClientAgentSignalSourceEvent', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // The retired rollout flag may still sit in a cached server config; it must not decide.
+    vi.stubGlobal('window', {
+      global_serverConfigStore: {
+        getState: () => ({
+          featureFlags: { enableAgentSelfIteration: true },
+          serverConfigInit: true,
+        }),
+      },
+    });
+  });
+
+  it('emits the full client.runtime.start payload shape', async () => {
+    const { agentSignalService } = await import('@/services/agentSignal');
+    const { getUserStoreState } = await import('@/store/user/store');
+    const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
+
+    vi.mocked(getUserStoreState).mockReturnValue({
+      isUserStateInit: true,
+      preference: { lab: { enableSelfLearning: true } },
+    } as never);
+
+    await emitClientAgentSignalSourceEvent({
+      payload: {
+        agentId: 'agent-1',
+        operationId: 'op-1',
+        parentMessageId: 'msg-1',
+        parentMessageType: 'user',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
+      },
+      sourceId: 'op-1:client:start',
+      sourceType: 'client.runtime.start',
+      timestamp: 1,
+    });
+
+    expect(agentSignalService.emitClientGatewaySourceEvent).toHaveBeenCalledWith({
+      payload: {
+        agentId: 'agent-1',
+        operationId: 'op-1',
+        parentMessageId: 'msg-1',
+        parentMessageType: 'user',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
+      },
+      sourceId: 'op-1:client:start',
+      sourceType: 'client.runtime.start',
+      timestamp: 1,
+    });
+  });
+
+  it('emits the full client.runtime.complete payload shape', async () => {
+    const { agentSignalService } = await import('@/services/agentSignal');
+    const { getUserStoreState } = await import('@/store/user/store');
+    const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
+
+    vi.mocked(getUserStoreState).mockReturnValue({
+      isUserStateInit: true,
+      preference: { lab: { enableSelfLearning: true } },
+    } as never);
+
+    await emitClientAgentSignalSourceEvent({
+      payload: {
+        agentId: 'agent-1',
+        anchorMessageId: 'asst-1',
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        status: 'completed',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
+      },
+      sourceId: 'op-1:client:complete',
+      sourceType: 'client.runtime.complete',
+      timestamp: 2,
+    });
+
+    expect(agentSignalService.emitClientGatewaySourceEvent).toHaveBeenCalledWith({
+      payload: {
+        agentId: 'agent-1',
+        anchorMessageId: 'asst-1',
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        status: 'completed',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+        triggerMessageId: 'msg-1',
+      },
+      sourceId: 'op-1:client:complete',
+      sourceType: 'client.runtime.complete',
+      timestamp: 2,
+    });
+  });
+
+  it('skips emitting once the user state says Labs Self-evolving is off', async () => {
+    const { agentSignalService } = await import('@/services/agentSignal');
+    const { getUserStoreState } = await import('@/store/user/store');
+    const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
+
+    vi.mocked(getUserStoreState).mockReturnValue({
+      isUserStateInit: true,
+      preference: { lab: { enableSelfLearning: false } },
+    } as never);
+
+    await emitClientAgentSignalSourceEvent({
+      payload: {
+        agentId: 'agent-1',
+        operationId: 'op-1',
+        parentMessageId: 'msg-1',
+        parentMessageType: 'user',
+      },
+      sourceId: 'op-1:client:start',
+      sourceType: 'client.runtime.start',
+      timestamp: 1,
+    });
+
+    expect(agentSignalService.emitClientGatewaySourceEvent).not.toHaveBeenCalled();
+  });
+
+  it('emits when Labs Self-evolving is on and user state is initialized', async () => {
+    const { agentSignalService } = await import('@/services/agentSignal');
+    const { getUserStoreState } = await import('@/store/user/store');
+    const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
+
+    vi.mocked(getUserStoreState).mockReturnValue({
+      isUserStateInit: true,
+      preference: { lab: { enableSelfLearning: true } },
+    } as never);
+
+    await emitClientAgentSignalSourceEvent({
+      payload: {
+        agentId: 'agent-1',
+        operationId: 'op-1',
+        parentMessageId: 'msg-1',
+        parentMessageType: 'user',
+      },
+      sourceId: 'op-1:client:start',
+      sourceType: 'client.runtime.start',
+      timestamp: 1,
+    });
+
+    expect(agentSignalService.emitClientGatewaySourceEvent).toHaveBeenCalledOnce();
+  });
+
+  it('keeps emitting before local stores finish initialization so the server can decide', async () => {
+    const { agentSignalService } = await import('@/services/agentSignal');
+    const { getUserStoreState } = await import('@/store/user/store');
+    const { emitClientAgentSignalSourceEvent } = await import('./agentSignalBridge');
+
+    vi.mocked(getUserStoreState).mockReturnValue({
+      isUserStateInit: false,
+    } as never);
+
+    await emitClientAgentSignalSourceEvent({
+      payload: {
+        agentId: 'agent-1',
+        operationId: 'op-1',
+        parentMessageId: 'msg-1',
+        parentMessageType: 'user',
+      },
+      sourceId: 'op-1:client:start',
+      sourceType: 'client.runtime.start',
+      timestamp: 1,
+    });
+
+    expect(agentSignalService.emitClientGatewaySourceEvent).toHaveBeenCalledOnce();
+  });
+});

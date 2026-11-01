@@ -1,0 +1,11 @@
+/**
+ * @deprecated Import from `agentIntervention`. The alias keeps v1 construction
+ * working while Cloud migrates to the generic batch/outbox API.
+ */
+export {
+  AGENT_INTERVENTION_IDENTITY_CONFLICT as HETERO_INTERVENTION_IDENTITY_CONFLICT,
+  AGENT_INTERVENTION_INVALID_ACTION as HETERO_INTERVENTION_INVALID_PROVIDER_OPTIONS,
+  AGENT_INTERVENTION_INVALID_REVIEW_TOKEN_HASH as HETERO_INTERVENTION_INVALID_REVIEW_TOKEN_HASH,
+  AGENT_INTERVENTION_RESOLUTION_REQUEST_REUSED as HETERO_INTERVENTION_RESOLUTION_REQUEST_REUSED,
+  AgentInterventionModel as HeterogeneousAgentInterventionModel,
+} from './agentIntervention';

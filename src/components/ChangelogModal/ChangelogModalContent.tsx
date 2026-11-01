@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { changelogKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import ChangelogContent from './ChangelogContent';
@@ -13,7 +14,7 @@ const SCROLL_HEIGHT = 'min(80vh, 760px)';
 
 const ChangelogModalContent = memo(() => {
   const { t } = useTranslation('common');
-  const { data, isLoading } = useSWR('changelog-modal-index', () =>
+  const { data, isLoading } = useSWR(changelogKeys.modalIndex(), () =>
     lambdaClient.changelog.getIndex.query(),
   );
 

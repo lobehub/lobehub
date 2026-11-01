@@ -1,7 +1,8 @@
 import { Flexbox, InputNumber } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useMemo } from 'react';
 import useMergeState from 'use-merge-value';
+
+import DiscreteSlider from '@/components/DiscreteSlider';
 
 const Kibi = 1024;
 const MAX_VALUE = 64 * Kibi; // 65536
@@ -39,17 +40,10 @@ const ReasoningTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defau
     setPowValue(exponent(value / Kibi));
   };
 
-  const marks = useMemo(() => {
-    return {
-      [exponent(1)]: '1k',
-      [exponent(2)]: '2k',
-      [exponent(4)]: '4k', // 4 kibi = 4096
-      [exponent(8)]: '8k',
-      [exponent(16)]: '16k',
-      [exponent(32)]: '32k',
-      [exponent(64)]: '64k',
-    };
-  }, []);
+  const options = useMemo(
+    () => [1, 2, 4, 8, 16, 32, 64].map((item) => ({ label: `${item}k`, value: exponent(item) })),
+    [],
+  );
 
   const step = useMemo(() => {
     const current = token ?? 0;
@@ -64,15 +58,7 @@ const ReasoningTokenSlider = memo<MaxTokenSliderProps>(({ value, onChange, defau
   return (
     <Flexbox horizontal align={'center'} gap={12} paddingInline={'4px 0'}>
       <Flexbox flex={1}>
-        <Slider
-          marks={marks}
-          max={exponent(64)}
-          min={exponent(1)}
-          step={null}
-          tooltip={{ open: false }}
-          value={powValue}
-          onChange={updateWithPowValue}
-        />
+        <DiscreteSlider options={options} value={powValue} onChange={updateWithPowValue} />
       </Flexbox>
       <div>
         <InputNumber

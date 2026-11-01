@@ -6,24 +6,43 @@ import type {
   GitWorkingTreePatches,
 } from '@lobechat/electron-client-ipc';
 import type {
+  DeviceGitAddWorktreeResult,
   DeviceGitAheadBehind,
   DeviceGitBranchListItem,
   DeviceGitCheckoutResult,
+  DeviceGitDeleteBranchResult,
   DeviceGitLinkedPullRequest,
+  DeviceGitLinkedPullRequestLookupStatus,
+  DeviceGitPullRequestAction,
+  DeviceGitPullRequestActionResult,
+  DeviceGitPullRequestActivity,
+  DeviceGitPullRequestDetailResult,
+  DeviceGitPullRequestMergeContext,
+  DeviceGitRemoveWorktreeResult,
+  DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
+  DeviceGitUpstreamRef,
   DeviceGitWorkingTreeStatus,
+  DeviceGitWorktreeListItem,
 } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { electronGitService } from '@/services/electron/git';
 
-/** Branch + linked-PR summary, composed from the branch and PR reads. */
-export interface GitInfo {
+/** Current branch + detached-HEAD state for a working directory (cheap read). */
+export interface GitBranchSummary {
   branch?: string;
   detached?: boolean;
+  upstream?: DeviceGitUpstreamRef;
+}
+
+/** Linked-PR summary for a branch — the result of the expensive `gh` leg. */
+export interface GitLinkedPRSummary {
   extraCount?: number;
   ghMissing?: boolean;
   pullRequest?: DeviceGitLinkedPullRequest | null;
+  pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
+  upstream?: DeviceGitUpstreamRef;
 }
 
 /**
@@ -34,7 +53,10 @@ export interface GitInfo {
  * symmetric: both transports expose the same granular git operations.
  */
 class GitService {
-  /** Local branches of a working directory. */
+  /**
+   * Local branches of a working directory. A remote device that cannot answer
+   * rejects; `[]` is a real answer (an unborn repo).
+   */
   listGitBranches({
     deviceId,
     path,
@@ -64,6 +86,75 @@ class GitService {
       : electronGitService.checkoutGitBranch({ branch, create, path });
   }
 
+  /** Rename a branch in a working directory. */
+  renameGitBranch({
+    deviceId,
+    from,
+    path,
+    to,
+  }: {
+    deviceId?: string;
+    from: string;
+    path: string;
+    to: string;
+  }): Promise<DeviceGitRenameBranchResult> {
+    return deviceId
+      ? lambdaClient.device.renameGitBranch.mutate({ deviceId, from, path, to })
+      : electronGitService.renameGitBranch({ from, path, to });
+  }
+
+  /** Delete a branch in a working directory. */
+  deleteGitBranch({
+    branch,
+    deviceId,
+    path,
+  }: {
+    branch: string;
+    deviceId?: string;
+    path: string;
+  }): Promise<DeviceGitDeleteBranchResult> {
+    return deviceId
+      ? lambdaClient.device.deleteGitBranch.mutate({ branch, deviceId, path })
+      : electronGitService.deleteGitBranch({ branch, path });
+  }
+
+  /** Remove a worktree from a working directory's repository. */
+  removeGitWorktree({
+    deviceId,
+    path,
+    worktreePath,
+  }: {
+    deviceId?: string;
+    path: string;
+    worktreePath: string;
+  }): Promise<DeviceGitRemoveWorktreeResult> {
+    return deviceId
+      ? lambdaClient.device.removeGitWorktree.mutate({ deviceId, path, worktreePath })
+      : electronGitService.removeGitWorktree({ path, worktreePath });
+  }
+
+  /**
+   * Add a linked worktree on a fresh branch to a working directory's repository.
+   * A remote device derives the target path server-side from `path` + `branch`
+   * (never trusting a client-supplied absolute path), so `worktreePath` is only
+   * forwarded on the local IPC route where this machine owns the filesystem.
+   */
+  addGitWorktree({
+    branch,
+    deviceId,
+    path,
+    worktreePath,
+  }: {
+    branch: string;
+    deviceId?: string;
+    path: string;
+    worktreePath: string;
+  }): Promise<DeviceGitAddWorktreeResult> {
+    return deviceId
+      ? lambdaClient.device.addGitWorktree.mutate({ branch, deviceId, path })
+      : electronGitService.addGitWorktree({ branch, path, worktreePath });
+  }
+
   /** Pull (`--ff-only`) the current branch of a working directory. */
   pullGitBranch({
     deviceId,
@@ -91,41 +182,135 @@ class GitService {
   }
 
   /**
-   * Branch + linked PR summary. Composes a branch read with a conditional PR
-   * lookup (skipped for detached HEAD / non-github repos) — both legs dispatch
-   * per `deviceId`, so the gh-CLI lookup runs on whichever machine owns the repo.
+   * Current branch + detached-HEAD state. A cheap local git read, deliberately
+   * split from the linked-PR lookup so the branch label can revalidate promptly
+   * on a working-directory switch without re-triggering the expensive `gh` call.
+   * Dispatches per `deviceId` like every other leg.
    */
-  async getGitInfo({
+  async getGitBranch({
     deviceId,
-    isGithub,
     path,
   }: {
     deviceId?: string;
-    isGithub?: boolean;
     path: string;
-  }): Promise<GitInfo> {
-    const branchInfo = deviceId
+  }): Promise<GitBranchSummary> {
+    const info = deviceId
       ? await lambdaClient.device.gitBranch.query({ deviceId, path })
       : await electronGitService.getGitBranch(path);
-    const branch = branchInfo?.branch;
-    const detached = branchInfo?.detached;
-    if (!branch) return {};
+    return { branch: info?.branch, detached: info?.detached, upstream: info?.upstream };
+  }
 
-    // Skip the PR lookup for detached HEAD or non-github repos.
-    if (detached || !isGithub) return { branch, detached };
-
+  /**
+   * PR linked to `branch` on a GitHub repo. Shells out to `gh` (8s timeout), so
+   * callers throttle this far more aggressively than the branch read. Includes
+   * merged/closed PRs so persisted snapshots can refresh after GitHub changes
+   * outside the app.
+   *
+   * `branch` is the LOCAL branch; the device resolves the remote ref it publishes
+   * to and queries GitHub under that, falling back to a commit→PR lookup. It
+   * reports the ref it landed on as `upstream` — persist that, not the local name.
+   */
+  async getLinkedPullRequest({
+    branch,
+    deviceId,
+    path,
+    pullRequestNumber,
+  }: {
+    branch: string;
+    deviceId?: string;
+    path: string;
+    pullRequestNumber?: number;
+  }): Promise<GitLinkedPRSummary | undefined> {
     const pr = deviceId
-      ? await lambdaClient.device.gitLinkedPullRequest.query({ branch, deviceId, path })
-      : await electronGitService.getLinkedPullRequest({ branch, path });
-    if (!pr) return { branch, detached };
-
+      ? await lambdaClient.device.gitLinkedPullRequest.query({
+          branch,
+          deviceId,
+          path,
+          pullRequestNumber,
+        })
+      : await electronGitService.getLinkedPullRequest({ branch, path, pullRequestNumber });
+    if (!pr) return undefined;
     return {
-      branch,
-      detached,
       extraCount: pr.extraCount,
       ghMissing: pr.status === 'gh-missing',
       pullRequest: pr.pullRequest,
+      pullRequestStatus: pr.status,
+      upstream: pr.upstream,
     };
+  }
+
+  /** Full detail of a pull request in a working directory. */
+  async getPullRequestDetail({
+    coreOnly,
+    deviceId,
+    number,
+    path,
+  }: {
+    coreOnly?: boolean;
+    deviceId?: string;
+    number: number;
+    path: string;
+  }): Promise<DeviceGitPullRequestDetailResult> {
+    return deviceId
+      ? ((await lambdaClient.device.gitPullRequestDetail.query({
+          coreOnly,
+          deviceId,
+          number,
+          path,
+        })) ?? {
+          detail: null,
+          status: 'error',
+        })
+      : electronGitService.getPullRequestDetail({ coreOnly, number, path });
+  }
+
+  async getPullRequestActivity(params: {
+    deviceId?: string;
+    number: number;
+    path: string;
+  }): Promise<DeviceGitPullRequestActivity> {
+    if (!params.deviceId) return electronGitService.getPullRequestActivity(params);
+    const result = await lambdaClient.device.gitPullRequestActivity.query({
+      ...params,
+      deviceId: params.deviceId,
+    });
+    if (!result) throw new Error('Unable to load pull request activity');
+    return result;
+  }
+
+  /** Branch protection, viewer permission and base drift for a pull request. */
+  async getPullRequestMergeContext({
+    deviceId,
+    ...params
+  }: {
+    baseRefName: string;
+    deviceId?: string;
+    headRefOid: string;
+    number: number;
+    path: string;
+    repo: { name: string; owner: string };
+  }): Promise<DeviceGitPullRequestMergeContext | null> {
+    return deviceId
+      ? ((await lambdaClient.device.gitPullRequestMergeContext.query({ deviceId, ...params })) ??
+          null)
+      : electronGitService.getPullRequestMergeContext(params);
+  }
+
+  /** Run a `gh pr` mutation (merge, auto-merge, ready, comment, close, ...) on a pull request. */
+  async runPullRequestAction({
+    action,
+    deviceId,
+    number,
+    path,
+  }: {
+    action: DeviceGitPullRequestAction;
+    deviceId?: string;
+    number: number;
+    path: string;
+  }): Promise<DeviceGitPullRequestActionResult> {
+    return deviceId
+      ? lambdaClient.device.runGitPullRequestAction.mutate({ action, deviceId, number, path })
+      : electronGitService.runPullRequestAction({ action, number, path });
   }
 
   /** Working-tree dirty-file counts for a working directory. */
@@ -197,7 +382,10 @@ class GitService {
       : electronGitService.getGitBranchDiff({ baseRef, path });
   }
 
-  /** Remote branches (`refs/remotes/origin/*`) of a working directory. */
+  /**
+   * Remote branches (`refs/remotes/origin/*`) of a working directory. A remote
+   * device that cannot answer rejects; `[]` is a real answer (no `origin`).
+   */
   listGitRemoteBranches({
     deviceId,
     path,
@@ -208,6 +396,19 @@ class GitService {
     return deviceId
       ? lambdaClient.device.listGitRemoteBranches.query({ deviceId, path })
       : electronGitService.listGitRemoteBranches(path);
+  }
+
+  /** Git worktrees attached to the same repository as a working directory. */
+  listGitWorktrees({
+    deviceId,
+    path,
+  }: {
+    deviceId?: string;
+    path: string;
+  }): Promise<DeviceGitWorktreeListItem[]> {
+    return deviceId
+      ? lambdaClient.device.listGitWorktrees.query({ deviceId, path })
+      : electronGitService.listGitWorktrees(path);
   }
 
   /** Revert (discard working-tree changes to) a single file in a working directory. */

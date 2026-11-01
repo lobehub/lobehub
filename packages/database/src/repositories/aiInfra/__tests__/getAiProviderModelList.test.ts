@@ -86,6 +86,32 @@ describe('AiInfraRepos', () => {
       );
     });
 
+    it('should hide preference-only shells without a builtin card', async () => {
+      const mockUserModels = [
+        // Preference-only shell (e.g. left after clearRemoteModels demoted a
+        // remote row with a saved reasoning preference): no identity at all
+        {
+          config: { chatConfig: { reasoningEffort: 'high' } },
+          id: 'gone-remote-model',
+          type: 'chat' as const,
+        },
+        // Preference row for a builtin model keeps merging onto its card
+        {
+          config: { chatConfig: { reasoningEffort: 'low' } },
+          id: 'gpt-4',
+          type: 'chat' as const,
+        },
+      ] as AiProviderModelListItem[];
+      const mockBuiltinModels = [{ displayName: 'GPT-4', enabled: true, id: 'gpt-4' }];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue(mockUserModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(mockBuiltinModels);
+
+      const result = await repo.getAiProviderModelList('openai');
+
+      expect(result.map((m) => m.id)).toEqual(['gpt-4']);
+    });
+
     it('should use builtin models', async () => {
       const providerId = 'ai21';
 
@@ -779,7 +805,7 @@ describe('AiInfraRepos', () => {
         { id: 'dall-e-3', type: 'image', enabled: true },
         { id: 'text-embedding-3-small', type: 'embedding', enabled: true },
         { id: 'tts-1', type: 'tts', enabled: true },
-        { id: 'whisper-1', type: 'stt', enabled: true },
+        { id: 'whisper-1', type: 'asr', enabled: true },
       ] as AiProviderModelListItem[];
 
       vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue(userModels);
@@ -790,7 +816,7 @@ describe('AiInfraRepos', () => {
       expect(result.find((m) => m.id === 'dall-e-3')!.type).toBe('image');
       expect(result.find((m) => m.id === 'text-embedding-3-small')!.type).toBe('embedding');
       expect(result.find((m) => m.id === 'tts-1')!.type).toBe('tts');
-      expect(result.find((m) => m.id === 'whisper-1')!.type).toBe('stt');
+      expect(result.find((m) => m.id === 'whisper-1')!.type).toBe('asr');
     });
 
     it('should keep user type for custom models not in builtin list', async () => {
@@ -813,6 +839,27 @@ describe('AiInfraRepos', () => {
       const custom = result.find((m) => m.id === 'my-custom-model');
       expect(custom).toBeDefined();
       expect(custom!.type).toBe('chat');
+    });
+
+    it('should normalize the legacy `stt` type to `asr` for custom models on read', async () => {
+      const providerId = 'openai';
+
+      // A custom model not in the builtin list, still stored with the old `stt`
+      // value in the DB (no bulk migration). It should read back as `asr`.
+      const userModels: AiProviderModelListItem[] = [
+        { id: 'my-custom-transcribe', type: 'stt', enabled: true },
+      ] as unknown as AiProviderModelListItem[];
+
+      const builtinModels: AiProviderModelListItem[] = [
+        { id: 'gpt-4', type: 'chat', enabled: true },
+      ] as AiProviderModelListItem[];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue(userModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(builtinModels);
+
+      const result = await repo.getAiProviderModelList(providerId);
+
+      expect(result.find((m) => m.id === 'my-custom-transcribe')!.type).toBe('asr');
     });
   });
 });

@@ -63,12 +63,24 @@ const GOOGLE_EXTERNAL_URL_SUPPORTED_TYPES = new Set([
   'video/webm',
   'video/wmv',
   'video/x-flv',
+  // Audio file types
+  'audio/aac',
+  'audio/aiff',
+  'audio/flac',
+  'audio/mp3',
+  'audio/ogg',
+  'audio/wav',
 ]);
 
 const normalizeExternalContentType = (contentType: string): string => {
   // Some servers return non-standard alias `image/jpg` for JPEG files.
   // Normalize it to the standard type to avoid unnecessary fallback to inline base64.
   if (contentType === 'image/jpg') return 'image/jpeg';
+
+  // MP3 is commonly served as `audio/mpeg` / `audio/mpg`, but Gemini's external
+  // URL feature expects `audio/mp3`. Normalize so audio URLs are handed off as
+  // fileData instead of falling back to downloading + inlining the whole file.
+  if (contentType === 'audio/mpeg' || contentType === 'audio/mpg') return 'audio/mp3';
 
   return contentType;
 };

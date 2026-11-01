@@ -63,7 +63,7 @@ describe('formatGrepResults', () => {
         match18
         match19
         match20
-        ... and 5 more"
+      [Showing 20 of 25 locations. To see the rest, narrow the search with a more specific pattern, path or glob.]"
     `);
   });
 
@@ -79,7 +79,7 @@ describe('formatGrepResults', () => {
         match1
         match2
         match3
-        ... and 2 more"
+      [Showing 3 of 5 locations. To see the rest, narrow the search with a more specific pattern, path or glob.]"
     `);
   });
 });

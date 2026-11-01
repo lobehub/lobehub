@@ -1,4 +1,4 @@
-import type { HeterogeneousCliAgentType, ToolStatus } from '@lobechat/electron-client-ipc';
+import type { BinaryStatus, HeterogeneousCliAgentType } from '@lobechat/electron-client-ipc';
 import type { HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
 import type { SidebarAgentItem } from '@lobechat/types';
 import type { TFunction } from 'i18next';
@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 
 import type { CreateHeteroAgentOptions } from '@/hooks/useCreateHeteroAgent';
 
-export type HeteroDetectionMap = Partial<Record<HeterogeneousCliAgentType, ToolStatus>>;
+export type HeteroDetectionMap = Partial<Record<HeterogeneousCliAgentType, BinaryStatus>>;
 
 export interface ActionContext {
   agents: SidebarAgentItem[];
@@ -26,11 +26,11 @@ export interface RecommendedAction {
   execute: (ctx: ActionContext) => Promise<void>;
   /** i18n interpolation values for title/description/cta */
   i18nValues?: Record<string, string>;
-  icon: ReactNode;
   id: string;
   isEligible: (ctx: ActionContext) => boolean;
   /** Higher = shown earlier. Defaults to 0. */
   priority?: number;
+  renderIcon: (size: number) => ReactNode;
   tagKey?: string;
 
   titleKey: string;

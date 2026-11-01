@@ -1,13 +1,11 @@
 'use client';
 
-import { Button, Flexbox, Icon, Skeleton, TextArea } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Button, cssVar, Flexbox, Icon, Skeleton, TextArea } from '@lobehub/ui';
 import { SmilePlus } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
-import { usePermission } from '@/hooks/usePermission';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 import { useGlobalStore } from '@/store/global';
@@ -15,13 +13,34 @@ import { globalGeneralSelectors } from '@/store/global/selectors';
 import { truncateByWeightedLength } from '@/utils/textLength';
 
 import { usePageEditorStore } from './store';
+import { usePageEditable } from './usePageEditable';
+
+export const getTitleTextAreaInteractionProps = (canEdit: boolean) => ({
+  readOnly: !canEdit,
+});
+
+// Enter that confirms an IME candidate (Chinese/Japanese input) must not submit
+// the title: moving focus to the body mid-composition commits the text there too.
+// Safari reports the confirming keydown with isComposing=false but keyCode 229.
+export const isTitleSubmitKey = (e: {
+  key: string;
+  keyCode?: number;
+  nativeEvent?: { isComposing?: boolean };
+}) => e.key === 'Enter' && !e.nativeEvent?.isComposing && e.keyCode !== 229;
 
 const TitleSection = memo(() => {
   const { t } = useTranslation('file');
-  const { allowed: canEdit } = usePermission('edit_own_content');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
   const documentId = usePageEditorStore((s) => s.documentId);
+  // Gate the title/emoji on the same state as the body editor: edit permission
+  // AND not locked by another member (nor pending / save-blocked). The lock makes
+  // the whole page read-only, so metadata must not stay editable behind it.
+  // `metaReadOnly` additionally locks just the meta (title + emoji) while leaving
+  // the body editable — used for managed docs like a skill's `SKILL.md` index,
+  // whose identity is renamed through skill APIs, never a plain title save.
+  const isMetaReadOnly = usePageEditorStore((s) => s.metaReadOnly);
+  const canEdit = usePageEditable() && !isMetaReadOnly;
   const emoji = usePageEditorStore((s) => s.emoji);
   const title = usePageEditorStore((s) => s.title);
   const setEmoji = usePageEditorStore((s) => s.setEmoji);
@@ -102,12 +121,12 @@ const TitleSection = memo(() => {
 
       {/* Title Input */}
       {showTitleSkeleton ? (
-        <Skeleton.Button active style={{ height: 44, width: 320 }} />
+        <Skeleton height={44} width={320} />
       ) : (
         <TextArea
           autoSize={{ minRows: 1 }}
-          disabled={!canEdit}
           placeholder={t('pageEditor.titlePlaceholder')}
+          {...getTitleTextAreaInteractionProps(canEdit)}
           value={title}
           variant={'borderless'}
           style={{
@@ -127,7 +146,7 @@ const TitleSection = memo(() => {
           onKeyDown={(e) => {
             if (!canEdit) return;
 
-            if (e.key === 'Enter') {
+            if (isTitleSubmitKey(e)) {
               e.preventDefault();
               handleTitleSubmit();
             }

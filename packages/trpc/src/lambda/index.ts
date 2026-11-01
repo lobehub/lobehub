@@ -8,10 +8,14 @@
  * @link https://trpc.io/docs/v11/procedures
  */
 
+import { databaseError } from '../middleware/databaseError';
 import { openTelemetry } from '../middleware/openTelemetry';
+import { upstreamError } from '../middleware/upstreamError';
 import { userAuth } from '../middleware/userAuth';
 import { trpc } from './init';
+import { apiKeyScopeGuard } from './middleware/apiKeyScope';
 import { heteroOperationAuth } from './middleware/heteroOperationAuth';
+import { llmRelayRequest } from './middleware/llmRelayRequest';
 import { oidcAuth } from './middleware/oidcAuth';
 
 /**
@@ -21,15 +25,34 @@ import { oidcAuth } from './middleware/oidcAuth';
 export const router = trpc.router;
 
 /**
+ * Merge sub-routers into one flat router: procedure paths are unchanged and a
+ * duplicate path throws when the router is built.
+ * @link https://trpc.io/docs/v11/merging-routers
+ */
+export const mergeRouters = trpc.mergeRouters;
+
+/**
  * Create an unprotected procedure
  * @link https://trpc.io/docs/v11/procedures
  **/
-const baseProcedure = trpc.procedure.use(openTelemetry);
+const baseProcedure = trpc.procedure.use(openTelemetry).use(upstreamError).use(databaseError);
 
-export const publicProcedure = baseProcedure;
+// `apiKeyScopeGuard` also covers public procedures: `createLambdaContext`
+// authenticates an `X-API-Key` before procedure selection, and several public
+// procedures serve authenticated data off `ctx.userId`. The guard is a no-op
+// without API-key auth, so anonymous access is untouched.
+export const publicProcedure = baseProcedure.use(apiKeyScopeGuard);
 
 // procedure that asserts that the user is logged in
-export const authedProcedure = baseProcedure.use(oidcAuth).use(userAuth);
+// `apiKeyScopeGuard` narrows API-key-authenticated calls to the key's scopes;
+// session/OIDC auth and full-access keys pass through untouched.
+// `llmRelayRequest` relays the procedure's LLM calls to a device-only provider
+// back to the requesting tab (one-shot relay).
+export const authedProcedure = baseProcedure
+  .use(oidcAuth)
+  .use(userAuth)
+  .use(apiKeyScopeGuard)
+  .use(llmRelayRequest);
 
 // procedure for hetero-agent ingest/finish endpoints — requires a `hetero-operation` JWT
 export const heteroAuthedProcedure = baseProcedure.use(heteroOperationAuth).use(userAuth);

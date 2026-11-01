@@ -14,7 +14,8 @@ const skillTargetProperties = {
 } as const;
 
 const skillBodyMarkdownProperty = {
-  description: 'Markdown body for SKILL.md. Do not include YAML frontmatter.',
+  description:
+    'Markdown body for SKILL.md. Do not include YAML frontmatter — a pasted frontmatter block is stripped automatically, and frontmatter is rendered from name/description.',
   type: 'string',
 } as const;
 

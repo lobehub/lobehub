@@ -1,5 +1,5 @@
 import { Timer, TimerOff } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -8,7 +8,7 @@ import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selec
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
-import Action from '../components/Action';
+import { ChatInputAction } from '../components/ChatInputAction';
 import Controls from './Controls';
 
 const History = memo(() => {
@@ -18,7 +18,6 @@ const History = memo(() => {
     agentByIdSelectors.isAgentConfigLoadingById(agentId)(s),
     chatConfigByIdSelectors.getChatConfigById(agentId)(s),
   ]);
-  const [updating, setUpdating] = useState(false);
   const { t } = useTranslation('setting');
   const isMobile = useIsMobile();
 
@@ -29,7 +28,7 @@ const History = memo(() => {
     ];
   });
 
-  if (isLoading) return <Action disabled icon={TimerOff} />;
+  if (isLoading) return <ChatInputAction disabled icon={TimerOff} />;
 
   const title = t(
     enableHistoryCount
@@ -39,13 +38,12 @@ const History = memo(() => {
   );
 
   return (
-    <Action
+    <ChatInputAction
       icon={enableHistoryCount ? Timer : TimerOff}
-      loading={updating}
       showTooltip={false}
       title={title}
       popover={{
-        content: <Controls setUpdating={setUpdating} updating={updating} />,
+        content: <Controls />,
         minWidth: 240,
         trigger: isMobile ? 'click' : 'hover',
       }}

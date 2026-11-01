@@ -1,5 +1,5 @@
 import { SKILL_DRAG_MIME } from '@lobechat/const';
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import type React from 'react';
 
 import type { ActionTagCategory, ActionTagType } from './types';
@@ -25,7 +25,7 @@ export const writeSkillDragData = (dataTransfer: DataTransfer, payload: SkillDra
 };
 
 /**
- * Resolve a `var(--x)` reference (e.g. from antd-style `cssVar.*`) to its
+ * Resolve a `var(--x)` reference (e.g. from `@lobehub/ui` `cssVar.*`) to its
  * concrete computed value in the context of `ctx`. Lets the drag preview live
  * on `document.body` (free of transformed ancestors that would break
  * fixed-position cursor tracking) while still picking up the themed token.
@@ -99,9 +99,13 @@ const setSkillDragImage = (event: React.DragEvent, label: string): void => {
     zIndex: '9999',
   });
 
-  // Row layout is: [chevron svg] [skill icon svg] [name] [count]. Take the last
-  // svg so we always grab the skill icon, never the chevron.
-  const svgs = Array.from(host.querySelectorAll('svg'));
+  // Row layout is: [chevron svg] [skill icon svg] [name] [count] [row actions].
+  // The hover action buttons (view / rename / delete) stay in the DOM even when
+  // hidden, so exclude them before taking the last svg — otherwise we'd grab the
+  // trailing Trash2 action icon instead of the skill icon.
+  const svgs = Array.from(host.querySelectorAll('svg')).filter(
+    (svg) => !svg.closest('.skill-row-actions'),
+  );
   const iconSvg = svgs.at(-1);
   if (iconSvg) {
     const iconClone = iconSvg.cloneNode(true) as SVGElement;

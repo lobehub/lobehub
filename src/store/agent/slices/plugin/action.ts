@@ -1,3 +1,4 @@
+import { type AgentPluginMode, getPluginMode, upsertPluginMode } from '@lobechat/types';
 import { produce } from 'immer';
 
 import { type StoreSetter } from '@/store/types';
@@ -27,27 +28,40 @@ export class PluginSliceActionImpl {
     await this.#get().togglePlugin(id, false);
   };
 
+  /**
+   * Boolean pin/unpin toggle, kept for the many callers that only ever
+   * add-to-agent or remove-from-agent (no disabled concept). Internally
+   * upgrades to `upsertPluginMode` so the write path is unified with
+   * `setPluginMode`; callers that need the third (disabled) state should use
+   * `setPluginMode` directly instead.
+   */
   togglePlugin = async (id: string, open?: boolean): Promise<void> => {
     const originConfig = agentSelectors.currentAgentConfig(this.#get());
     if (!originConfig) return;
 
-    const config = produce(originConfig, (draft) => {
-      draft.plugins = produce(draft.plugins || [], (plugins) => {
-        const index = plugins.indexOf(id);
-        const shouldOpen = open !== undefined ? open : index === -1;
+    const shouldOpen =
+      open !== undefined ? open : getPluginMode(originConfig.plugins, id) !== 'pinned';
 
-        if (shouldOpen) {
-          // If open is true or id doesn't exist in plugins, add it
-          if (index === -1) {
-            plugins.push(id);
-          }
-        } else {
-          // If open is false or id exists in plugins, remove it
-          if (index !== -1) {
-            plugins.splice(index, 1);
-          }
-        }
-      });
+    await this.setPluginMode(id, shouldOpen ? 'pinned' : 'auto');
+  };
+
+  /**
+   * Sets one identifier's explicit mode (pinned / auto / disabled). Only the
+   * touched entry is upgraded to object shape — every other entry, including
+   * untouched legacy strings, is left exactly as-is (lazy per-item upgrade).
+   */
+  setPluginMode = async (id: string, mode: AgentPluginMode): Promise<void> => {
+    const originConfig = agentSelectors.currentAgentConfig(this.#get());
+    if (!originConfig) return;
+
+    const config = produce(originConfig, (draft) => {
+      // `LobeAgentConfig['plugins']` is still typed `string[]` — widening it is
+      // deferred to the final phase of the tri-state rollout so `.includes()`
+      // call sites keep getting compiler errors until manually migrated. The
+      // runtime value legitimately becomes mixed-shape here (JSONB has no
+      // schema enforcement), so this cast is the one deliberate boundary
+      // where that mismatch is intentional.
+      draft.plugins = upsertPluginMode(draft.plugins, id, mode) as unknown as string[];
     });
 
     await this.#get().updateAgentConfig(config);

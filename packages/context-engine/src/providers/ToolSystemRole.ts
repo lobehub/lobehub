@@ -36,6 +36,17 @@ export interface ToolSystemRoleConfig {
 }
 
 /**
+ * Select the manifests whose systemRole / API descriptions get injected into the
+ * system prompt by ToolSystemRoleProvider.
+ *
+ * Exported so ActivationResultTrimProcessor can decide, with the exact same
+ * predicate, whether an activation tool result's full documentation is already
+ * carried by the system prompt and can therefore be trimmed from history.
+ */
+export const selectToolPromptManifests = (manifests?: LobeToolManifest[]): LobeToolManifest[] =>
+  (manifests ?? []).filter((manifest) => manifest.api.length > 0 || manifest.systemRole);
+
+/**
  * Tool System Role Provider
  * Responsible for injecting tool-related system roles for models that support tool calling
  */
@@ -92,20 +103,16 @@ export class ToolSystemRoleProvider extends BaseSystemRoleProvider {
       return undefined;
     }
 
-    const tools: Tool[] = manifests
-      .filter((manifest) => manifest.api.length > 0 || manifest.systemRole)
-      .map((manifest) => ({
-        apis: manifest.api.map(
-          (api): API => ({
-            desc: api.description,
-            name: this.toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
-          }),
-        ),
-        description: manifest.meta?.description,
-        identifier: manifest.identifier,
-        name: manifest.meta?.title || manifest.identifier,
-        systemRole: manifest.systemRole,
-      }));
+    const tools: Tool[] = selectToolPromptManifests(manifests).map((manifest) => ({
+      apis: manifest.api.map((api): API => ({
+        desc: api.description,
+        name: this.toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
+      })),
+      description: manifest.meta?.description,
+      identifier: manifest.identifier,
+      name: manifest.meta?.title || manifest.identifier,
+      systemRole: manifest.systemRole,
+    }));
 
     if (tools.length === 0) {
       log('No meaningful tools to inject (all manifests have empty APIs and no systemRole)');

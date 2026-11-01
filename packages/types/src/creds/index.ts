@@ -8,8 +8,28 @@ export type CredType = 'kv-env' | 'kv-header' | 'oauth' | 'file';
 
 // ===== Credential Summary (for list display) =====
 
+/** One workspace organization a personal credential is shared into. */
+export interface CredShareSummary {
+  organizationAccountId: number;
+  /** Set while `visibility` is 'public': when it was last published. */
+  sharedAt?: string;
+  /**
+   * 'private': linked for the owner's own use in that workspace only.
+   * 'public': usable by every member of that workspace.
+   */
+  visibility: 'private' | 'public';
+  /** Cloud workspace the organization mirrors, when it mirrors one. */
+  workspaceId?: string;
+}
+
 export interface UserCredSummary {
   createdAt: string;
+  /**
+   * Market account of the member who created a workspace-owned credential.
+   * Unset on personal credentials and on workspace credentials created
+   * before creators were recorded (those are admin-managed).
+   */
+  createdByAccountId?: number;
   description?: string;
   // File type specific
   fileName?: string;
@@ -23,8 +43,47 @@ export interface UserCredSummary {
   oauthAvatar?: string;
   oauthProvider?: string;
   oauthUsername?: string;
+  /**
+   * Organization-scoped responses only: the organization the credential is
+   * being viewed in.
+   */
+  organizationAccountId?: number;
+  /**
+   * Owner account id of this credential, only populated in organization-scoped
+   * list/get responses (`workspaceCreds.list` / `workspaceCreds.get`).
+   */
+  ownerAccountId?: number;
+  /** See `ownerAccountId`. */
+  ownerDisplayName?: string;
+  /** See `ownerAccountId`. */
+  ownerNamespace?: string;
+  /**
+   * 'organization' when the organization created this credential directly;
+   * 'user' when a member shared their own personal credential in. Only
+   * populated in organization-scoped list/get responses.
+   */
+  ownerType?: 'organization' | 'user';
+  /**
+   * Organization-scoped responses, member-shared credentials only: when the
+   * share was last published.
+   */
+  sharedAt?: string;
+  /**
+   * Personal responses only: whether the credential is shared into the
+   * active workspace (derived from `shares`). Absent outside a workspace
+   * context.
+   */
+  sharedToActiveWorkspace?: boolean;
+  /** Personal responses only: the workspaces this credential is shared into. */
+  shares?: CredShareSummary[];
   type: CredType;
   updatedAt: string;
+  /**
+   * Organization-scoped responses only. 'private': only its creator (a
+   * workspace credential) or its owner (a shared personal credential) can
+   * use it in this workspace. 'public': every member can.
+   */
+  visibility?: 'private' | 'public';
 }
 
 // ===== Credential with Plaintext (for editing) =====
@@ -64,6 +123,17 @@ export interface UpdateCredRequest {
   description?: string;
   name?: string;
   values?: Record<string, string>; // Only for KV types
+}
+
+// ===== Share Request =====
+
+/**
+ * Shares one of the caller's own personal credentials into a workspace's
+ * Market organization. Defaults to `visibility: 'public'` (immediately
+ * visible to the org); pass `'private'` to only link it as a draft.
+ */
+export interface ShareCredRequest {
+  visibility?: 'private' | 'public';
 }
 
 // ===== Get Options =====

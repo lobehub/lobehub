@@ -1,9 +1,17 @@
 'use client';
 
-import type { DropdownItem } from '@lobehub/ui';
-import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { confirmModal, type ModalInstance } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
+import {
+  Block,
+  confirmModal,
+  copyToClipboard,
+  type DropdownItem,
+  Flexbox,
+  Icon,
+  type ModalInstance,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import {
   Clock3Icon,
   Copy,
@@ -11,19 +19,25 @@ import {
   Hash,
   Maximize2,
   PencilLine,
-  Star,
+  Pin,
+  PinOff,
+  Share2,
   Trash,
   Wand2,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
+import { useTopicBugReportMenuItem } from '@/business/client/hooks/useTopicBugReportMenuItem';
 import { openRenameModal } from '@/components/RenameModal';
 import { DOCUMENT_HISTORY_QUERY_LIST_LIMIT } from '@/const/documentHistory';
 import { isDesktop } from '@/const/version';
+import { useAgentContext } from '@/features/Conversation/useAgentContext';
+import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import { openDocumentCompareModal } from '@/features/PageEditor/History/CompareModal';
 import { formatHistoryAbsoluteTime } from '@/features/PageEditor/History/formatHistoryDate';
 import type {
@@ -36,6 +50,8 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useDocumentStore } from '@/store/document';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 interface TopicInfoHeaderProps {
   authorName: string;
@@ -64,9 +80,20 @@ const TopicInfoHeader = ({ authorName, title, updatedAtLabel }: TopicInfoHeaderP
   </Block>
 );
 
-export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] } => {
+interface UseMenuOptions {
+  /**
+   * Share entry for the topic. Passed only where Share is not already a header
+   * button (inside a workspace, where comments take that slot).
+   */
+  share?: { disabled?: boolean; onClick: () => void };
+}
+
+export const useMenu = ({ share }: UseMenuOptions = {}): {
+  menuHeader?: ReactNode;
+  menuItems: () => DropdownItem[];
+} => {
   const { t } = useTranslation(['chat', 'topic', 'common', 'file']);
-  const { message } = App.useApp();
+
   const { pathname } = useLocation();
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
@@ -75,9 +102,11 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
   ]);
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
 
-  const activeAgentId = useChatStore((s) => s.activeAgentId);
-  const activeTopic = useChatStore(topicSelectors.currentActiveTopic);
-  const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
+  const { agentId: activeAgentId, threadId, topicId: routeTopicId } = useAgentContext();
+  const activeTopic = useChatStore((s) =>
+    routeTopicId ? topicSelectors.getTopicById(routeTopicId)(s) : undefined,
+  );
+  const workingDirectory = useChatStore(topicSelectors.getTopicWorkingDirectory(routeTopicId));
   const [autoRenameTopicTitle, favoriteTopic, removeTopic, updateTopicTitle] = useChatStore((s) => [
     s.autoRenameTopicTitle,
     s.favoriteTopic,
@@ -105,7 +134,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
 
       const { editor, markDirty, performSave } = useDocumentStore.getState();
       if (!editor) {
-        message.error(t('pageEditor.history.restoreError', { ns: 'file' }));
+        toast.error(t('pageEditor.history.restoreError', { ns: 'file' }));
         return;
       }
 
@@ -123,7 +152,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
               `header-actions-history-${docId}`,
             );
 
-            editor.setDocument('json', JSON.stringify(result.editorData));
+            editor.setDocument('json', JSON.stringify(result.editorData), { keepId: true });
             markDirty(docId);
             await performSave(docId, undefined, {
               restoreFromHistoryId: item.id,
@@ -132,14 +161,14 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
             onSuccess?.();
           } catch (error) {
             console.error('[HeaderActions] Failed to restore history item:', error);
-            message.error(t('pageEditor.history.restoreError', { ns: 'file' }));
+            toast.error(t('pageEditor.history.restoreError', { ns: 'file' }));
             throw error;
           }
         },
         title: t('pageEditor.history.restoreConfirm.title', { ns: 'file' }),
       });
     },
-    [docId, message, t],
+    [docId, t],
   );
 
   const openCompareModal = useCallback(async (): Promise<void> => {
@@ -154,7 +183,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
       const items = result.items ?? [];
 
       if (items.length === 0) {
-        message.info(t('pageEditor.history.empty', { ns: 'file' }));
+        toast.info(t('pageEditor.history.empty', { ns: 'file' }));
         return;
       }
 
@@ -173,15 +202,37 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
       compareInstanceRef.current = instance;
     } catch (error) {
       console.error('[HeaderActions] Failed to open document compare modal:', error);
-      message.error(t('pageEditor.history.compareError', { ns: 'file' }));
+      toast.error(t('pageEditor.history.compareError', { ns: 'file' }));
     }
-  }, [docId, handleRestoreHistory, message, saveSourceLabels, t]);
+  }, [docId, handleRestoreHistory, saveSourceLabels, t]);
 
   const authorInfo = useAuthorInfo(activeTopic?.userId);
 
   const topicId = activeTopic?.id;
   const topicTitle = activeTopic?.title ?? '';
   const isFavorite = !!activeTopic?.favorite;
+  // `isFavorite` above is the topic's Pin; this adds it to the home sidebar's
+  // Favorites section. No star button owns the hotkey here, so none is shown.
+  const favoriteMenuItem = useFavoriteMenuItem(
+    topicId && activeAgentId
+      ? {
+          path: AGENT_CHAT_TOPIC_URL(activeAgentId, topicId),
+          snapshotReady: !!topicTitle && topicTitle !== '...',
+          targetId: topicId,
+          title: topicTitle,
+          type: 'topic',
+        }
+      : undefined,
+    { showHotkey: false },
+  );
+
+  const enableTopicBugReport = useUserStore(labPreferSelectors.enableTopicBugReport);
+  const bugReportItem = useTopicBugReportMenuItem({
+    agentId: activeAgentId,
+    threadId: threadId ?? undefined,
+    topicId,
+  });
+
   const menuHeader = useMemo<ReactNode | undefined>(() => {
     if (!authorInfo?.fullName || !topicId) return undefined;
 
@@ -208,19 +259,20 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
     );
   }, [activeTopic?.updatedAt, authorInfo?.fullName, topicId, t]);
 
-  const menuItems = useMemo<DropdownItem[]>(() => {
+  const menuItems = useCallback((): DropdownItem[] => {
     const items: DropdownItem[] = [];
 
     if (topicId) {
       items.push(
         {
-          icon: <Icon icon={Star} />,
+          icon: <Icon icon={isFavorite ? PinOff : Pin} />,
           key: 'favorite',
-          label: t(isFavorite ? 'actions.unfavorite' : 'actions.favorite', { ns: 'topic' }),
+          label: t(isFavorite ? 'actions.unpin' : 'actions.pin', { ns: 'topic' }),
           onClick: () => {
             favoriteTopic(topicId, !isFavorite);
           },
         },
+        ...(favoriteMenuItem ? [favoriteMenuItem] : []),
         { type: 'divider' as const },
         {
           icon: <Icon icon={Wand2} />,
@@ -248,6 +300,16 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
         { type: 'divider' as const },
       );
 
+      if (share) {
+        items.push({
+          disabled: share.disabled,
+          icon: <Icon icon={Share2} />,
+          key: 'share',
+          label: t('share', { ns: 'common' }),
+          onClick: share.onClick,
+        });
+      }
+
       if (isDesktop && workingDirectory) {
         items.push({
           icon: <Icon icon={Copy} />,
@@ -255,7 +317,7 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
           label: t('actions.copyWorkingDirectory', { ns: 'topic' }),
           onClick: () => {
             void navigator.clipboard.writeText(workingDirectory);
-            message.success(t('actions.copyWorkingDirectorySuccess', { ns: 'topic' }));
+            toast.success(t('actions.copyWorkingDirectorySuccess', { ns: 'topic' }));
           },
         });
       }
@@ -263,8 +325,8 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
       if (isDesktop && activeAgentId && !pathname.startsWith('/popup')) {
         items.push({
           icon: <Icon icon={ExternalLink} />,
-          key: 'openInPopupWindow',
-          label: t('inPopup.title', { ns: 'topic' }),
+          key: 'openInNewWindow',
+          label: t('actions.openInNewWindow', { ns: 'topic' }),
           onClick: () => {
             openTopicInNewWindow(activeAgentId, topicId);
           },
@@ -276,11 +338,12 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
           icon: <Icon icon={Hash} />,
           key: 'copySessionId',
           label: t('actions.copySessionId', { ns: 'topic' }),
-          onClick: () => {
-            void navigator.clipboard.writeText(topicId);
-            message.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
+          onClick: async () => {
+            await copyToClipboard(topicId);
+            toast.success(t('actions.copySessionIdSuccess', { ns: 'topic' }));
           },
         },
+        ...(enableTopicBugReport && bugReportItem ? [bugReportItem] : []),
         { type: 'divider' as const },
       );
     }
@@ -317,15 +380,11 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
           key: 'delete',
           label: t('delete', { ns: 'common' }),
           onClick: () => {
-            confirmModal({
-              cancelText: t('cancel', { ns: 'common' }),
-              content: t('actions.confirmRemoveTopic', { ns: 'topic' }),
-              okButtonProps: { danger: true },
-              okText: t('delete', { ns: 'common' }),
-              onOk: async () => {
-                await removeTopic(topicId);
+            void confirmRemoveTopic({
+              onConfirm: async (removeFiles) => {
+                await removeTopic(topicId, removeFiles);
               },
-              title: t('delete', { ns: 'common' }),
+              topicIds: [topicId],
             });
           },
         },
@@ -336,7 +395,11 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
   }, [
     topicId,
     topicTitle,
+    bugReportItem,
+    enableTopicBugReport,
     isFavorite,
+    favoriteMenuItem,
+    share,
     activeAgentId,
     pathname,
     workingDirectory,
@@ -350,7 +413,6 @@ export const useMenu = (): { menuHeader?: ReactNode; menuItems: DropdownItem[] }
     toggleWideScreen,
     openCompareModal,
     t,
-    message,
   ]);
 
   return { menuHeader, menuItems };

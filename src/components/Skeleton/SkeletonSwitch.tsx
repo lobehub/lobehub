@@ -1,13 +1,6 @@
 import { Skeleton } from '@lobehub/ui';
-import { css, cx } from 'antd-style';
 
-const switchLoading = cx(css`
-  width: 44px !important;
-  min-width: 44px !important;
-  height: 22px !important;
-  border-radius: 12px !important;
-`);
-
+// Inline size: Skeleton sets its own height/width inline, which only an inline value can override.
 export const SkeletonSwitch = () => {
-  return <Skeleton.Button active className={switchLoading} />;
+  return <Skeleton height={22} radius={12} style={{ minWidth: 44 }} width={44} />;
 };

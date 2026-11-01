@@ -166,7 +166,7 @@ export interface UniformTool {
 
 // ---- Tool Lifecycle Types ----
 
-export type ToolSource = 'builtin' | 'client' | 'mcp' | 'klavis' | 'lobehubSkill';
+export type ToolSource = 'builtin' | 'client' | 'mcp' | 'composio' | 'lobehubSkill';
 
 /**
  * Where the tool is executed for a given invocation.
@@ -183,6 +183,8 @@ export type ActivationSource = 'active_tools' | 'mention' | 'device' | 'discover
  * Operation-level tool set: determined at createOperation time, immutable during execution.
  */
 export interface OperationToolSet {
+  /** Tool IDs that may be restored from historical explicit activations for this run. */
+  activatableToolIds?: string[];
   enabledToolIds: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
@@ -220,6 +222,7 @@ export interface ResolvedToolSet {
   enabledToolIds: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
+  promptManifestMap: Record<string, LobeToolManifest>;
   sourceMap: Record<string, ToolSource>;
   tools: UniformTool[];
 }

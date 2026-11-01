@@ -1,21 +1,22 @@
-import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 import { getToolStoreState, useToolStore } from '@/store/tool';
-import { klavisStoreSelectors } from '@/store/tool/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
+import { composioStoreSelectors } from '@/store/tool/selectors';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import { CredsIdentifier } from '../manifest';
+import { buildRequestCredsInputResult } from '../requestCredsInput';
 import type {
-  ConnectKlavisServiceParams,
+  ConnectComposioServiceParams,
   InitiateOAuthConnectParams,
   InjectCredsToSandboxParams,
-  SaveCredsParams,
+  RequestCredsInputParams,
 } from '../types';
 import { CredsApiName, LOBEHUB_OAUTH_PROVIDER_LIST } from '../types';
 
@@ -26,22 +27,22 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
   protected readonly apiEnum = CredsApiName;
 
   /**
-   * Connect a Klavis integration service via OAuth
-   * Creates a Klavis server instance and initiates the OAuth flow
+   * Connect a Composio integration service via OAuth
+   * Creates a Composio connection and initiates the OAuth flow
    */
-  connectKlavisService = async (
-    params: ConnectKlavisServiceParams,
+  connectComposioService = async (
+    params: ConnectComposioServiceParams,
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
       const { service } = params;
 
       // Validate service identifier
-      const serverType = getKlavisServerByServerIdentifier(service);
-      if (!serverType) {
+      const appType = getComposioAppByIdentifier(service);
+      if (!appType) {
         return {
           error: {
-            message: `Unknown Klavis service: "${service}". Check the available Klavis services list in the credentials context.`,
+            message: `Unknown Composio service: "${service}". Check the available Composio services list in the credentials context.`,
             type: 'UnknownService',
           },
           success: false,
@@ -50,85 +51,64 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
 
       // Check if already connected via store
       const toolState = getToolStoreState();
-      const existingServer = klavisStoreSelectors.getServerByIdentifier(service)(toolState);
-      if (existingServer?.status === KlavisServerStatus.CONNECTED) {
+      const existingServer = composioStoreSelectors.getServerByIdentifier(service)(toolState);
+      if (existingServer?.status === ComposioServerStatus.ACTIVE) {
         return {
-          content: `Already connected to ${serverType.label}. You can use ${serverType.label} tools directly.`,
+          content: `Already connected to ${appType.label}. You can use ${appType.label} tools directly.`,
           state: {
             connected: true,
             identifier: service,
-            serviceName: serverType.label,
+            serviceName: appType.label,
           },
           success: true,
         };
       }
 
-      // Get userId
-      const userId = userProfileSelectors.userId(useUserStore.getState());
-      if (!userId) {
-        return {
-          error: {
-            message: 'User is not authenticated',
-            type: 'MissingUserId',
-          },
-          success: false,
-        };
-      }
+      log('[CredsExecutor] connectComposioService - creating connection for:', service);
 
-      log('[CredsExecutor] connectKlavisService - creating server for:', service);
-
-      // Create Klavis server instance
-      const server = await useToolStore.getState().createKlavisServer({
-        identifier: serverType.identifier,
-        serverName: serverType.serverName,
-        userId,
+      // Create Composio connection (authConfigId managed server-side)
+      const server = await useToolStore.getState().createComposioConnection({
+        appSlug: appType.appSlug,
+        identifier: appType.identifier,
+        label: appType.label,
       });
 
       if (!server) {
         return {
           error: {
-            message: `Failed to create Klavis server instance for ${serverType.label}`,
+            message: `Failed to create Composio connection for ${appType.label}`,
             type: 'CreateServerFailed',
           },
           success: false,
         };
       }
 
-      // If already authenticated (no OAuth needed)
-      if (server.isAuthenticated) {
+      // If already active (no OAuth needed)
+      if (server.status === ComposioServerStatus.ACTIVE) {
         return {
-          content: `Successfully connected to ${serverType.label}! You can now use ${serverType.label} tools.`,
+          content: `Successfully connected to ${appType.label}! You can now use ${appType.label} tools.`,
           state: {
             connected: true,
             identifier: service,
-            serviceName: serverType.label,
+            serviceName: appType.label,
           },
           success: true,
         };
       }
 
-      // OAuth needed — open popup and poll for completion
-      if (server.oauthUrl) {
-        const result = await this.openKlavisOAuthAndWait(server.oauthUrl, server.identifier);
-
-        if (result.success) {
-          return {
-            content: `Successfully connected to ${serverType.label}! You can now use ${serverType.label} tools.`,
-            state: {
-              connected: true,
-              identifier: service,
-              serviceName: serverType.label,
-            },
-            success: true,
-          };
-        }
-
+      // OAuth needed — return the authorization link for the user to open.
+      // This tool runs from the agent's response, which carries no user gesture,
+      // so the browser would block any popup we tried to open ourselves. Handing
+      // back the link lets the user click it (a real gesture) to authorize; the
+      // connection moves to ACTIVE once they finish.
+      if (server.redirectUrl) {
         return {
-          content: `Authorization was cancelled or timed out for ${serverType.label}. You can try again later.`,
+          content: `To connect ${appType.label}, ask the user to open this authorization link and complete the sign-in:\n\n${server.redirectUrl}\n\nOnce they have authorized, ${appType.label} tools will be ready to use.`,
           state: {
             connected: false,
             identifier: service,
-            serviceName: serverType.label,
+            redirectUrl: server.redirectUrl,
+            serviceName: appType.label,
           },
           success: true,
         };
@@ -136,17 +116,17 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
 
       return {
         error: {
-          message: 'Unexpected server state: no oauthUrl and not authenticated',
+          message: 'Unexpected server state: no redirectUrl and not active',
           type: 'UnexpectedState',
         },
         success: false,
       };
     } catch (error) {
-      log('[CredsExecutor] connectKlavisService - error:', error);
+      log('[CredsExecutor] connectComposioService - error:', error);
       return {
         error: {
-          message: error instanceof Error ? error.message : 'Failed to connect Klavis service',
-          type: 'ConnectKlavisFailed',
+          message: error instanceof Error ? error.message : 'Failed to connect Composio service',
+          type: 'ConnectComposioFailed',
         },
         success: false,
       };
@@ -310,91 +290,6 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
   };
 
   /**
-   * Open Klavis OAuth popup and poll for authorization completion
-   * Unlike Market OAuth which uses postMessage, Klavis OAuth uses polling
-   */
-  private openKlavisOAuthAndWait = (
-    oauthUrl: string,
-    identifier: string,
-  ): Promise<{ success: boolean }> => {
-    return new Promise((resolve) => {
-      const popup = window.open(oauthUrl, '_blank', 'width=600,height=700');
-
-      if (!popup) {
-        resolve({ success: false });
-        return;
-      }
-
-      let resolved = false;
-      // eslint-disable-next-line prefer-const
-      let pollInterval: ReturnType<typeof setInterval>;
-      // eslint-disable-next-line prefer-const
-      let windowCheckInterval: ReturnType<typeof setInterval>;
-
-      const checkConnected = async (): Promise<boolean> => {
-        try {
-          await useToolStore.getState().refreshKlavisServerTools(identifier);
-          const toolState = getToolStoreState();
-          const server = klavisStoreSelectors.getServerByIdentifier(identifier)(toolState);
-          return server?.status === KlavisServerStatus.CONNECTED;
-        } catch {
-          return false;
-        }
-      };
-
-      const cleanup = () => {
-        if (resolved) return;
-        resolved = true;
-        clearInterval(pollInterval);
-        clearInterval(windowCheckInterval);
-      };
-
-      // Poll for authentication completion every 1s
-      pollInterval = setInterval(async () => {
-        if (resolved) return;
-        if (await checkConnected()) {
-          cleanup();
-          resolve({ success: true });
-        }
-      }, 1000);
-
-      // Monitor popup closure — give a short grace period then treat as cancelled
-      windowCheckInterval = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(windowCheckInterval);
-          if (resolved) return;
-
-          // Grace period: check a few more times after popup closes (4s)
-          // User may have authorized right before closing
-          setTimeout(async () => {
-            if (resolved) return;
-            // One final check
-            if (await checkConnected()) {
-              cleanup();
-              resolve({ success: true });
-            } else {
-              cleanup();
-              resolve({ success: false });
-            }
-          }, 4000);
-        }
-      }, 500);
-
-      // Hard timeout after 2 minutes
-      setTimeout(
-        () => {
-          if (!resolved) {
-            cleanup();
-            if (!popup.closed) popup.close();
-            resolve({ success: false });
-          }
-        },
-        2 * 60 * 1000,
-      );
-    });
-  };
-
-  /**
    * Inject credentials to sandbox environment
    * Calls the SDK inject API to get decrypted credentials for sandbox injection.
    */
@@ -491,67 +386,26 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
   };
 
   /**
-   * Save new credentials
+   * Runs after the user approves the secure form, which already wrote the
+   * values to the credential store. Only confirms the key exists.
    */
-  saveCreds = async (
-    params: SaveCredsParams,
+  requestCredsInput = async (
+    params: RequestCredsInputParams,
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     try {
-      // Normalize params: AI may send `displayName` instead of `name`,
-      // or `value` (env-style string) instead of `values` (Record)
-      const raw = params as any;
-      const name: string = params.name || raw.displayName || params.key;
-
-      let values: Record<string, string> = params.values;
-      if (!values && typeof raw.value === 'string') {
-        values = {};
-        for (const line of (raw.value as string).split('\n')) {
-          const idx = line.indexOf('=');
-          if (idx > 0) {
-            values[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-          }
-        }
-      }
-
-      if (!values || Object.keys(values).length === 0) {
-        return {
-          content:
-            'Failed to save credential: values must be a non-empty object of key-value pairs (e.g., { "API_KEY": "sk-xxx" }).',
-          error: {
-            message: 'values is empty or missing. Provide key-value pairs, not a raw string.',
-            type: 'InvalidParams',
-          },
-          success: false,
-        };
-      }
-
-      log('[CredsExecutor] saveCreds - key:', params.key, 'name:', name);
-
-      await lambdaClient.market.creds.createKV.mutate({
-        description: params.description,
-        key: params.key,
-        name,
-        type: params.type as 'kv-env' | 'kv-header',
-        values,
-      });
-
-      return {
-        content: `Credential "${name}" saved successfully with key "${params.key}"`,
-        state: {
-          key: params.key,
-          message: `Credential "${name}" saved successfully`,
-          success: true,
-        },
-        success: true,
-      };
+      const { data } = await lambdaClient.market.creds.listForContext.query();
+      return buildRequestCredsInputResult(
+        params,
+        data.some((cred) => cred.key === params.key),
+      );
     } catch (error) {
-      log('[CredsExecutor] saveCreds - error:', error);
+      log('[CredsExecutor] requestCredsInput - error:', error);
       return {
-        content: `Failed to save credential: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        content: `Failed to check credential "${params.key}": ${error instanceof Error ? error.message : 'Unknown error'}`,
         error: {
-          message: error instanceof Error ? error.message : 'Failed to save credential',
-          type: 'SaveCredentialFailed',
+          message: error instanceof Error ? error.message : 'Failed to check credential',
+          type: 'CheckCredentialFailed',
         },
         success: false,
       };

@@ -4,7 +4,9 @@ import debug from 'debug';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
 import { createAgentStateManager, createStreamEventManager } from './factory';
+import type { GatewayInitMeta } from './GatewayStreamNotifier';
 import { type IAgentStateManager, type IStreamEventManager } from './types';
+import { hasVisibleOutputEndPublished } from './visibleOutputEnd';
 
 const log = debug('lobe-server:agent-runtime:coordinator');
 
@@ -39,6 +41,8 @@ const hasEnteredStreamEndState = (
 };
 
 export interface AgentRuntimeCoordinatorOptions {
+  /** Whether terminal reconciliation is delivered by protocol-v2 message patches. */
+  messagePatchModeResolver?: (state: AgentState) => boolean;
   /**
    * Custom state manager implementation
    * Defaults to automatic selection based on Redis availability
@@ -74,11 +78,13 @@ export interface AgentRuntimeCoordinatorOptions {
  * Supports dependency injection, allowing custom implementations to be passed in
  */
 export class AgentRuntimeCoordinator {
+  private messagePatchModeResolver?: (state: AgentState) => boolean;
   private stateManager: IAgentStateManager;
   private streamEventManager: IStreamEventManager;
   private uiMessagesResolver?: (state: AgentState) => Promise<UIChatMessage[] | undefined>;
 
   constructor(options?: AgentRuntimeCoordinatorOptions) {
+    this.messagePatchModeResolver = options?.messagePatchModeResolver;
     this.stateManager = options?.stateManager ?? createAgentStateManager();
     this.streamEventManager = options?.streamEventManager ?? createStreamEventManager();
     this.uiMessagesResolver = options?.uiMessagesResolver;
@@ -90,11 +96,21 @@ export class AgentRuntimeCoordinator {
   async createAgentOperation(
     operationId: string,
     data: {
+      acceptsMemberRuntimeEnd?: boolean;
       agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
+      mirrorToOperationId?: string;
       modelRuntimeConfig?: any;
+      streamOwnerUserId?: string;
       userId?: string;
       workspaceId?: string;
     },
+    /**
+     * Routing facts (topicId, agentId, …) sent with the gateway `init` but not
+     * persisted: the hub's `op_lifecycle` carries them to every socket of the
+     * user, so a client that did not start the run can tell where it belongs.
+     */
+    initMeta?: GatewayInitMeta,
   ): Promise<void> {
     try {
       // Create operation metadata
@@ -105,7 +121,10 @@ export class AgentRuntimeCoordinator {
 
       if (metadata) {
         // Send agent runtime init event
-        await this.streamEventManager.publishAgentRuntimeInit(operationId, metadata);
+        await this.streamEventManager.publishAgentRuntimeInit(operationId, {
+          ...metadata,
+          ...initMeta,
+        });
         log('[%s] Agent operation created and initialized', operationId);
       }
     } catch (error) {
@@ -146,6 +165,35 @@ export class AgentRuntimeCoordinator {
     }
   }
 
+  private resolveMessagePatchMode(state: AgentState): boolean {
+    if (!this.messagePatchModeResolver) return false;
+    try {
+      return this.messagePatchModeResolver(state);
+    } catch (error) {
+      console.error('Failed to resolve message patch mode:', error);
+      return false;
+    }
+  }
+
+  private async publishVisibleOutputEnd(
+    operationId: string,
+    state: AgentState,
+    stepIndex: number,
+  ): Promise<void> {
+    try {
+      await this.streamEventManager.publishStreamEvent(operationId, {
+        data: { reason: state.status },
+        stepIndex,
+        type: 'visible_output_end',
+      });
+    } catch (error) {
+      // Example: a transient Redis write failure may drop the early UI hint.
+      // Keep publishing agent_runtime_end because it is the authoritative
+      // terminal event that drains queues and reconciles final state.
+      console.error('Failed to publish visible_output_end:', error);
+    }
+  }
+
   /**
    * Save Agent state and handle corresponding events
    */
@@ -158,11 +206,17 @@ export class AgentRuntimeCoordinator {
 
       // Send a terminal event once the operation first enters a terminal state.
       if (hasEnteredStreamEndState(previousState?.status, state.status)) {
+        const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
+        const messagePatchMode = this.resolveMessagePatchMode(state);
+        if (!hasVisibleOutputEndPublished(state)) {
+          await this.publishVisibleOutputEnd(operationId, state, stepIndex);
+        }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: state,
+          ...(messagePatchMode && { messagePatchMode: true, messageRevision: stepIndex + 1 }),
           operationId,
           reason: state.status,
-          stepIndex: state.stepCount ?? previousState?.stepCount ?? 0,
+          stepIndex,
           uiMessages: await this.resolveUiMessages(state),
         });
         log('[%s] Agent runtime reached terminal state: %s', operationId, state.status);
@@ -186,12 +240,21 @@ export class AgentRuntimeCoordinator {
 
       // This ensures agent_runtime_end is sent after all step events.
       if (hasEnteredStreamEndState(previousState?.status, stepResult.newState.status)) {
+        // Example: call_llm step 3 can early-publish visible_output_end, then
+        // finish step 4 enters done. Keep terminal stepIndex for end payloads,
+        // but suppress visible_output_end once the operation marker exists.
+        const stepIndex =
+          stepResult.stepIndex ?? stepResult.newState.stepCount ?? previousState?.stepCount ?? 0;
+        const messagePatchMode = this.resolveMessagePatchMode(stepResult.newState);
+        if (!hasVisibleOutputEndPublished(stepResult.newState)) {
+          await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);
+        }
         await this.streamEventManager.publishAgentRuntimeEnd({
           finalState: stepResult.newState,
+          ...(messagePatchMode && { messagePatchMode: true, messageRevision: stepIndex + 1 }),
           operationId,
           reason: stepResult.newState.status,
-          stepIndex:
-            stepResult.newState.stepCount ?? stepResult.stepIndex ?? previousState?.stepCount ?? 0,
+          stepIndex,
           uiMessages: await this.resolveUiMessages(stepResult.newState),
         });
         log(
@@ -211,6 +274,35 @@ export class AgentRuntimeCoordinator {
    */
   async loadAgentState(operationId: string): Promise<AgentState | null> {
     return this.stateManager.loadAgentState(operationId);
+  }
+
+  /**
+   * Set the interrupt sentinel so pollers can observe the stop request
+   * without loading the full state blob.
+   */
+  async markInterrupted(operationId: string): Promise<void> {
+    return this.stateManager.markInterrupted(operationId);
+  }
+
+  /**
+   * Check the interrupt sentinel.
+   */
+  async isInterrupted(operationId: string): Promise<boolean> {
+    return this.stateManager.isInterrupted(operationId);
+  }
+
+  /**
+   * Record whether the client holds user messages queued behind the operation.
+   */
+  async setQueuedMessages(operationId: string, pending: boolean): Promise<void> {
+    return this.stateManager.setQueuedMessages(operationId, pending);
+  }
+
+  /**
+   * Check the client's queued-messages flag.
+   */
+  async hasQueuedMessages(operationId: string): Promise<boolean> {
+    return this.stateManager.hasQueuedMessages(operationId);
   }
 
   /**
@@ -270,21 +362,73 @@ export class AgentRuntimeCoordinator {
   }
 
   /**
+   * Park the envelope for the step an inline loop is about to run. This stands in
+   * for the queue message that the loop chose not to publish, so a redelivery
+   * that arrives after the loop died resumes from the step it actually reached
+   * instead of being dismissed as a stale duplicate.
+   */
+  async saveInlineResume<T>(operationId: string, envelope: T): Promise<boolean> {
+    return this.stateManager.saveInlineResume(operationId, JSON.stringify(envelope));
+  }
+
+  /**
+   * Read a parked inline envelope. Returns null when there is none.
+   *
+   * A read failure propagates, so the delivery is retried rather than treated as
+   * "no envelope" — see `loadInlineResume` on the state manager. A value that no
+   * longer parses is different: retrying cannot fix it, so it is reported and
+   * treated as absent instead of looping the delivery into the DLQ.
+   */
+  async loadInlineResume<T>(operationId: string): Promise<null | T> {
+    const serialized = await this.stateManager.loadInlineResume(operationId);
+    if (!serialized) return null;
+
+    try {
+      return JSON.parse(serialized) as T;
+    } catch (error) {
+      console.error(`Unparseable inline resume envelope for ${operationId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Drop a parked inline envelope once the queue owns the next step again.
+   * Scoped to the lock owner, so a worker that lost the race cannot delete the
+   * envelope of the worker that is still running.
+   */
+  async clearInlineResume(operationId: string, ownerId: string): Promise<void> {
+    return this.stateManager.clearInlineResume(operationId, ownerId);
+  }
+
+  /**
    * Atomically try to claim a step for execution (distributed lock).
    */
   async tryClaimStep(
     operationId: string,
     stepIndex: number,
     ttlSeconds?: number,
+    ownerId?: string,
   ): Promise<boolean> {
-    return this.stateManager.tryClaimStep(operationId, stepIndex, ttlSeconds);
+    return this.stateManager.tryClaimStep(operationId, stepIndex, ttlSeconds, ownerId);
   }
 
   /**
    * Release the step execution lock.
    */
-  async releaseStepLock(operationId: string, stepIndex: number): Promise<void> {
-    return this.stateManager.releaseStepLock(operationId, stepIndex);
+  async releaseStepLock(operationId: string, stepIndex: number, ownerId?: string): Promise<void> {
+    return this.stateManager.releaseStepLock(operationId, stepIndex, ownerId);
+  }
+
+  /**
+   * Extend the step execution lock if it is still owned by this worker.
+   */
+  async refreshStepLock(
+    operationId: string,
+    stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ): Promise<boolean> {
+    return this.stateManager.refreshStepLock(operationId, stepIndex, ttlSeconds, ownerId);
   }
 
   /**

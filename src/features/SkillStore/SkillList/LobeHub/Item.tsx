@@ -1,9 +1,15 @@
 'use client';
 
-import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
-import type { Klavis } from 'klavis';
+import {
+  ActionIcon,
+  Block,
+  confirmModal,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  stopPropagation,
+} from '@lobehub/ui';
 import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,8 +26,8 @@ interface ItemProps {
   isConnected: boolean;
   label: string;
   onOpenDetail?: () => void;
-  serverName?: Klavis.McpServerName;
-  type: 'klavis' | 'lobehub';
+  serverName?: string;
+  type: 'composio' | 'lobehub';
 }
 
 const Item = memo<ItemProps>(
@@ -38,7 +44,8 @@ const Item = memo<ItemProps>(
     });
 
     // Get localized description
-    const i18nPrefix = type === 'klavis' ? 'tools.klavis.servers' : 'tools.lobehubSkill.providers';
+    const i18nPrefix =
+      type === 'composio' ? 'tools.composio.servers' : 'tools.lobehubSkill.providers';
     // @ts-ignore
     const localizedDescription = t(`${i18nPrefix}.${identifier}.description`, {
       defaultValue: description,

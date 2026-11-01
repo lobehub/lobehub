@@ -14,13 +14,12 @@ export {
   AGENT_SIGNAL_TOOL_RESULT_KIND,
   type AgentSignalToolApiName,
 } from './shared/apiNames';
-export {
-  type AgentSignalRuntimePrimitive,
-  type AgentSignalRuntimeService,
-  type AgentSignalToolContext,
-  AgentSignalToolExecutionRuntime,
-  type AgentSignalToolExecutionRuntimeOptions,
-  type ToolResultKind,
+export type {
+  AgentSignalRuntimePrimitive,
+  AgentSignalRuntimeService,
+  AgentSignalToolContext,
+  AgentSignalToolExecutionRuntimeOptions,
+  ToolResultKind,
 } from './shared/ExecutionRuntime';
 export {
   AGENT_SIGNAL_FEEDBACK_INTENT_IDENTIFIER,

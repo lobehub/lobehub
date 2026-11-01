@@ -1,12 +1,15 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agentSkills, files, globalFiles, users } from '@lobechat/database/schemas';
+import { agentSkills, files, globalFiles, users, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentSkillModel } from '@/database/models/agentSkill';
+
 import { SkillImportError } from './errors';
 import { SkillImporter } from './importer';
+import type * as ParserModule from './parser';
 
 // Mock external dependencies only (GitHub, S3, parser)
 const normalizeIdentifierPart = (part: string) =>
@@ -30,7 +33,9 @@ const mockGitHubInstance = {
   parseRepoUrl: vi.fn(),
 };
 vi.mock('@/server/modules/GitHub', () => ({
-  GitHub: vi.fn().mockImplementation(() => mockGitHubInstance),
+  GitHub: vi.fn(function () {
+    return mockGitHubInstance;
+  }),
   GitHubNotFoundError: class GitHubNotFoundError extends Error {
     constructor(message: string) {
       super(message);
@@ -50,11 +55,21 @@ const mockParserInstance = {
   parseZipPackage: vi.fn(),
 };
 vi.mock('./parser', () => ({
-  SkillParser: vi.fn().mockImplementation(() => mockParserInstance),
+  SkillParser: vi.fn(function () {
+    return mockParserInstance;
+  }),
 }));
 
-// Mock global fetch for URL imports
-const mockFetch = vi.fn();
+// User-supplied URLs must be fetched through ssrfSafeFetch (SSRF guard), never raw global
+// fetch. Configure URL-import responses on mockSsrfSafeFetch. The raw global fetch is stubbed
+// to throw, so any regression back to `fetch(userUrl)` fails loudly instead of silently
+// re-opening the SSRF hole (GHSA-53h9-fmjf-frwr / #16536).
+const { mockSsrfSafeFetch } = vi.hoisted(() => ({ mockSsrfSafeFetch: vi.fn() }));
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
+
+const mockFetch = vi.fn(() => {
+  throw new Error('raw global fetch must not be used for user-supplied URLs; use ssrfSafeFetch');
+});
 vi.stubGlobal('fetch', mockFetch);
 
 // Mock S3 operations in FileService implementation
@@ -816,11 +831,11 @@ describe('SkillImporter', () => {
 
   describe('importFromUrl', () => {
     beforeEach(() => {
-      mockFetch.mockReset();
+      mockSsrfSafeFetch.mockReset();
     });
 
     it('should import skill from URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => `---
@@ -859,7 +874,7 @@ This is the skill content.`,
     });
 
     it('should handle URL with path', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => `---
@@ -883,7 +898,7 @@ description: A nested skill
     });
 
     it('should update existing skill when re-importing from same URL', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => 'content',
@@ -921,7 +936,7 @@ description: A nested skill
     });
 
     it('should return unchanged when content is the same', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: true,
         status: 200,
         text: async () => 'content',
@@ -948,6 +963,160 @@ description: A nested skill
       expect(second.skill.id).toBe(first.skill.id);
     });
 
+    // A market skill installed from the Skill Store UI / `lh skill install` is
+    // keyed by its market identifier. Older agent-tool imports of the same
+    // download URL derived a different identifier, missed that row, and failed
+    // the insert on the per-user name index with a raw "Failed query" error.
+    it('recognizes a skill already installed from the same URL under another identifier', async () => {
+      const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () => new ArrayBuffer(0),
+        ok: true,
+        status: 200,
+      });
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# Memory Setup Skill',
+        manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+
+      const installed = await importer.importFromUrl(
+        { url },
+        { identifier: 'openclaw-skills-memory-setup', source: 'market' },
+      );
+      const again = await importer.importFromUrl({ url });
+
+      expect(again.status).toBe('unchanged');
+      expect(again.skill.id).toBe(installed.skill.id);
+      expect(again.skill.identifier).toBe('openclaw-skills-memory-setup');
+    });
+
+    it('updates a skill imported under the URL identifier even after its name changed', async () => {
+      const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () => new ArrayBuffer(0),
+        ok: true,
+        status: 200,
+      });
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Memory Setup Skill',
+        manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+      const legacy = await importer.importFromUrl({ url });
+
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Memory Setup Skill v2',
+        manifest: { name: 'memory-setup-v2', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+      const again = await importer.importFromUrl(
+        { url },
+        { identifier: 'openclaw-skills-memory-setup', source: 'market' },
+      );
+
+      expect(again.status).toBe('updated');
+      expect(again.skill.id).toBe(legacy.skill.id);
+      expect(again.skill.name).toBe('memory-setup-v2');
+    });
+
+    it('does not overwrite a user skill that happens to carry the URL identifier', async () => {
+      const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
+      const userSkill = await importer.createUserSkill({
+        content: '# My own notes',
+        description: 'Personal skill',
+        identifier: 'url.market.lobehub.com.api.v1.skills.openclaw-skills-memory-setup.download',
+        name: 'my-notes',
+      });
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () => new ArrayBuffer(0),
+        ok: true,
+        status: 200,
+      });
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Memory Setup Skill',
+        manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+
+      const imported = await importer.importFromUrl(
+        { url },
+        { identifier: 'openclaw-skills-memory-setup', source: 'market' },
+      );
+
+      expect(imported.status).toBe('created');
+      expect(imported.skill.id).not.toBe(userSkill.id);
+      const untouched = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, userSkill.id),
+      });
+      expect(untouched?.name).toBe('my-notes');
+      expect(untouched?.content).toBe('# My own notes');
+    });
+
+    it('rejects a market import whose identifier is taken by a user skill instead of overwriting it', async () => {
+      const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
+      const userSkill = await importer.createUserSkill({
+        content: '# My own notes',
+        description: 'Personal skill',
+        identifier: 'openclaw-skills-memory-setup',
+        name: 'my-notes',
+      });
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () => new ArrayBuffer(0),
+        ok: true,
+        status: 200,
+      });
+      mockParserInstance.parseZipPackage.mockResolvedValueOnce({
+        content: '# Memory Setup Skill',
+        manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
+        resources: new Map(),
+      });
+
+      const error = await importer
+        .importFromUrl({ url }, { identifier: 'openclaw-skills-memory-setup', source: 'market' })
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(SkillImportError);
+      expect(error.code).toBe('CONFLICT');
+      const untouched = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, userSkill.id),
+      });
+      expect(untouched?.name).toBe('my-notes');
+      expect(untouched?.content).toBe('# My own notes');
+    });
+
+    it('rejects a different skill with an installed name as a CONFLICT naming the installed one', async () => {
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () => new ArrayBuffer(0),
+        ok: true,
+        status: 200,
+      });
+      mockParserInstance.parseZipPackage.mockResolvedValue({
+        content: '# Image Generation',
+        manifest: { name: 'image-generation', description: 'Generate images' },
+        resources: new Map(),
+      });
+      await importer.importFromUrl(
+        {
+          url: 'https://market.lobehub.com/api/v1/skills/zhayujie-cowagent-image-generation/download',
+        },
+        { identifier: 'zhayujie-cowagent-image-generation', source: 'market' },
+      );
+
+      const error = await importer
+        .importFromUrl(
+          {
+            url: 'https://market.lobehub.com/api/v1/skills/onyx-dot-app-onyx-image-generation/download',
+          },
+          { identifier: 'onyx-dot-app-onyx-image-generation', source: 'market' },
+        )
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(SkillImportError);
+      expect(error.code).toBe('CONFLICT');
+      expect(error.message).toContain('zhayujie-cowagent-image-generation');
+    });
+
     it('should throw INVALID_URL error for invalid URL', async () => {
       await expect(importer.importFromUrl({ url: 'not-a-valid-url' })).rejects.toThrow(
         SkillImportError,
@@ -961,7 +1130,7 @@ description: A nested skill
     });
 
     it('should throw NOT_FOUND error when URL returns 404', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: false,
         status: 404,
         statusText: 'Not Found',
@@ -979,7 +1148,7 @@ description: A nested skill
     });
 
     it('should throw DOWNLOAD_FAILED error when fetch fails', async () => {
-      mockFetch.mockResolvedValue({
+      mockSsrfSafeFetch.mockResolvedValue({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -997,7 +1166,7 @@ description: A nested skill
     });
 
     it('should throw DOWNLOAD_FAILED error when network error occurs', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
+      mockSsrfSafeFetch.mockRejectedValue(new Error('Network error'));
 
       await expect(
         importer.importFromUrl({ url: 'https://example.com/network-error.md' }),
@@ -1008,6 +1177,98 @@ description: A nested skill
       } catch (e) {
         expect((e as SkillImportError).code).toBe('DOWNLOAD_FAILED');
       }
+    });
+
+    // Regression: the imported body is stored and returned to the caller, so a raw fetch here
+    // is a full-read SSRF. The fetch must go through the SSRF guard. See GHSA-53h9-fmjf-frwr / #16536.
+    it('should import a market ZIP whose SKILL.md has no front-matter (importFromMarket path)', async () => {
+      // Use the real parser for this case: the regression lives in manifest derivation
+      const { SkillParser: RealSkillParser } = (await vi.importActual(
+        './parser',
+      )) as typeof ParserModule;
+      const realParser = new RealSkillParser();
+      mockParserInstance.parseZipPackage.mockImplementation((buffer, options) =>
+        realParser.parseZipPackage(buffer, options),
+      );
+
+      // Real shape of market package brainbytes-dev-everything-claude-finance-aml-kyc
+      const skillMd = `# AML/KYC Compliance
+
+> Customer due diligence, suspicious activity reporting, PEP screening, sanctions — Anti-Money Laundering and Know Your Customer compliance.
+
+## When to Activate
+
+- Customer onboarding and KYC process design
+`;
+      const { zipSync } = await import('fflate');
+      const zipped = zipSync({ 'SKILL.md': new TextEncoder().encode(skillMd) });
+
+      mockSsrfSafeFetch.mockResolvedValue({
+        arrayBuffer: async () =>
+          zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength),
+        headers: new Headers({ 'content-type': 'application/zip' }),
+        ok: true,
+        status: 200,
+      });
+
+      const identifier = 'brainbytes-dev-everything-claude-finance-aml-kyc';
+      // Same call shape as agentSkillsRouter.importFromMarket
+      const result = await importer.importFromUrl(
+        { url: `https://market.lobehub.com/api/v1/skills/${identifier}/download` },
+        { identifier, source: 'market' },
+      );
+
+      expect(result.status).toBe('created');
+      expect(result.skill.identifier).toBe(identifier);
+      expect(result.skill.name).toBe('AML/KYC Compliance');
+      expect(result.skill.description).toMatch(/^Customer due diligence/);
+      expect(result.skill.source).toBe('market');
+      expect(mockParserInstance.parseZipPackage).toHaveBeenCalledWith(expect.any(Buffer), {
+        fallbackName: identifier,
+      });
+    });
+
+    describe('SSRF protection (#16536)', () => {
+      it('should fetch the user URL through ssrfSafeFetch, not raw global fetch', async () => {
+        mockSsrfSafeFetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          headers: { get: () => 'text/markdown' },
+          text: async () => 'internal-response-body',
+        });
+        mockParserInstance.parseSkillMd.mockReturnValue({
+          content: '# x',
+          manifest: { name: 'x', description: 'x' },
+          raw: 'raw',
+        });
+
+        await importer.importFromUrl({ url: 'http://169.254.169.254/latest/meta-data/' });
+
+        // The SSRF guard is the sink; the raw global fetch (stubbed to throw) is never touched.
+        expect(mockSsrfSafeFetch).toHaveBeenCalledWith('http://169.254.169.254/latest/meta-data/', {
+          signal: expect.anything(),
+        });
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('should surface DOWNLOAD_FAILED when ssrfSafeFetch blocks an internal host', async () => {
+        // ssrfSafeFetch rejects when the target resolves to a private/link-local address.
+        mockSsrfSafeFetch.mockRejectedValue(
+          new Error('SSRF blocked: DNS lookup 169.254.169.254 is not allowed.'),
+        );
+
+        await expect(
+          importer.importFromUrl({ url: 'http://169.254.169.254/latest/meta-data/' }),
+        ).rejects.toThrow(SkillImportError);
+
+        try {
+          await importer.importFromUrl({ url: 'http://169.254.169.254/latest/meta-data/' });
+        } catch (e) {
+          expect((e as SkillImportError).code).toBe('DOWNLOAD_FAILED');
+          expect((e as SkillImportError).message).toContain('SSRF blocked');
+        }
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -1108,6 +1369,133 @@ description: A nested skill
 
       // Clean up other user
       await db.delete(users).where(eq(users.id, otherUserId));
+    });
+  });
+
+  // Regression: a skill imported while running inside a workspace must be
+  // written with `workspace_id = <ws>`, not the importer's personal scope
+  // (`workspace_id IS NULL`). Otherwise it is invisible to every workspace member
+  // — including the creator whenever they operate in workspace mode — and a
+  // re-import of a name that already exists personally hits a unique violation.
+  describe('workspace scoping', () => {
+    let workspaceId: string;
+    let wsImporter: SkillImporter;
+
+    beforeEach(async () => {
+      // agent_skills.workspace_id has an FK to workspaces.id, so the workspace
+      // row must exist before a workspace-scoped skill can be inserted.
+      const [ws] = await db
+        .insert(workspaces)
+        .values({ name: 'Test Workspace', primaryOwnerId: userId, slug: `ws-${userId}` })
+        .returning();
+      workspaceId = ws.id;
+      wsImporter = new SkillImporter(db, userId, workspaceId);
+    });
+
+    it('createUserSkill writes workspace_id when running in a workspace', async () => {
+      const result = await wsImporter.createUserSkill({
+        content: '# WS content',
+        description: 'A workspace skill',
+        name: 'Workspace Skill',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.id),
+      });
+      expect(dbSkill?.workspaceId).toBe(workspaceId);
+    });
+
+    it('personal import stays personal (workspace_id IS NULL)', async () => {
+      const result = await importer.createUserSkill({
+        content: '# personal',
+        description: 'A personal skill',
+        name: 'Personal Skill',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.id),
+      });
+      expect(dbSkill?.workspaceId).toBeNull();
+    });
+
+    it('importFromUrl lands the skill in the workspace scope', async () => {
+      mockSsrfSafeFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => 'content',
+      });
+      mockParserInstance.parseSkillMd.mockReturnValue({
+        content: '# Imported',
+        manifest: { name: 'Imported Workspace Skill', description: 'from url' },
+        raw: 'raw',
+      });
+
+      const result = await wsImporter.importFromUrl({
+        url: 'https://example.com/ws-skill.md',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.skill.id),
+      });
+      expect(dbSkill?.workspaceId).toBe(workspaceId);
+    });
+
+    it('is visible to other workspace members but hidden from personal scope', async () => {
+      const created = await wsImporter.createUserSkill({
+        content: '# shared',
+        description: 'A shared workspace skill',
+        identifier: 'shared-ws-skill',
+        name: 'Shared Workspace Skill',
+      });
+
+      // Another member of the SAME workspace (different user, same workspaceId).
+      // Workspace reads filter by workspace_id only, so a member must see it.
+      const memberId = `member-${userId}`;
+      await db.insert(users).values({ id: memberId });
+      const memberView = await new AgentSkillModel(db, memberId, workspaceId).findById(created.id);
+      expect(memberView?.id).toBe(created.id);
+
+      // The importer's OWN personal scope (no workspaceId) must NOT see it.
+      const personalView = await new AgentSkillModel(db, userId).findById(created.id);
+      expect(personalView).toBeUndefined();
+
+      await db.delete(users).where(eq(users.id, memberId));
+    });
+
+    it('does not collide with a same-named skill in the user personal scope', async () => {
+      // The user already has a personal skill named "pdf" (a different identifier).
+      await importer.createUserSkill({
+        content: '# personal pdf',
+        description: 'personal pdf skill',
+        identifier: 'personal-pdf',
+        name: 'pdf',
+      });
+
+      // Importing a market/URL skill also named "pdf" into the workspace must
+      // succeed: the personal partial unique `(user_id, name) WHERE ws IS NULL`
+      // and the workspace partial unique `(ws, name) WHERE ws IS NOT NULL` are
+      // disjoint. Pre-fix this insert wrote workspace_id = NULL and blew up on
+      // the personal unique index.
+      mockSsrfSafeFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => 'content',
+      });
+      mockParserInstance.parseSkillMd.mockReturnValue({
+        content: '# workspace pdf',
+        manifest: { name: 'pdf', description: 'workspace pdf skill' },
+        raw: 'raw',
+      });
+
+      const result = await wsImporter.importFromUrl({
+        url: 'https://example.com/anthropics-skills-pdf.md',
+      });
+
+      const dbSkill = await db.query.agentSkills.findFirst({
+        where: eq(agentSkills.id, result.skill.id),
+      });
+      expect(dbSkill?.name).toBe('pdf');
+      expect(dbSkill?.workspaceId).toBe(workspaceId);
     });
   });
 });

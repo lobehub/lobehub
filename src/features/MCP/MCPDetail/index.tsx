@@ -1,5 +1,4 @@
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { Center, Empty, Flexbox, useTheme } from '@lobehub/ui';
 import { Boxes } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +12,7 @@ import Overview from '@/features/MCPPluginDetail/Overview';
 import Schema from '@/features/MCPPluginDetail/Schema';
 import Score from '@/features/MCPPluginDetail/Score';
 import { useDiscoverStore } from '@/store/discover';
+import { mcpSelectors } from '@/store/discover/selectors';
 import { useToolStore } from '@/store/tool';
 import { McpNavKey } from '@/types/discover';
 
@@ -29,19 +29,18 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
   const { t } = useTranslation('plugin');
 
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
-  const [activeMCPIdentifier, isMcpListInit] = useToolStore((s) => [
-    s.activeMCPIdentifier,
-    s.isMcpListInit,
-  ]);
+  const list = useToolStore((s) => s.mcpPluginList);
 
-  const identifier = defaultIdentifier ?? activeMCPIdentifier;
+  // Without an explicit identifier the detail defaults to the first marketplace
+  // row, once the list has painted (from storage or the server).
+  const identifier = defaultIdentifier ?? list?.items?.[0]?.identifier;
 
   const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
-  const { data, isLoading } = useMcpDetail({ identifier });
+  const { isLoading, queryKey } = useMcpDetail({ identifier });
+  const data = useDiscoverStore(mcpSelectors.mcpDetail(queryKey));
 
-  // If an explicit identifier is passed in, skip the isMcpListInit check
-  const shouldWaitForInit = !defaultIdentifier && !isMcpListInit;
-  if (shouldWaitForInit || isLoading) return <Loading />;
+  // An explicit identifier never waits on the list; otherwise wait for it to paint.
+  if ((!defaultIdentifier && !list) || isLoading) return <Loading />;
 
   if (!identifier)
     return (

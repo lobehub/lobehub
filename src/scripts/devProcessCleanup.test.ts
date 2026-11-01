@@ -1,3 +1,5 @@
+import type { SpawnOptions } from 'node:child_process';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface DevProcessHandle {
@@ -8,6 +10,11 @@ interface DevProcessHandle {
 
 interface DevStartupTestingExports {
   __testing: {
+    createPackageScriptProcessConfig: (params: { isWindows: boolean; scriptName: string }) => {
+      args: string[];
+      command: string;
+      options: SpawnOptions;
+    };
     createDevProcessHandle: (params: { isWindows: boolean; pid?: number }) => DevProcessHandle;
     sendSignalToDevProcess: (handle: DevProcessHandle | undefined, signal: NodeJS.Signals) => void;
   };
@@ -30,6 +37,22 @@ describe('devProcessCleanup', () => {
       directPid: 1234,
       groupPid: 1234,
       isWindows: false,
+    });
+  });
+
+  it('should run package scripts through bun instead of npm', async () => {
+    const { createPackageScriptProcessConfig } = (await loadTestingExports()).__testing;
+
+    expect(
+      createPackageScriptProcessConfig({ isWindows: false, scriptName: 'dev:spa' }),
+    ).toMatchObject({
+      args: ['run', 'dev:spa'],
+      command: 'bun',
+      options: {
+        detached: true,
+        shell: false,
+        stdio: 'inherit',
+      },
     });
   });
 

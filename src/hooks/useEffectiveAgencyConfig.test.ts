@@ -1,0 +1,373 @@
+import { renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useAgentStore } from '@/store/agent';
+import { useUserStore } from '@/store/user';
+
+import { useEffectiveAgencyConfig } from './useEffectiveAgencyConfig';
+
+const managementAccess = vi.hoisted(() => ({
+  canManageAgent: false,
+  isAccessLoading: false,
+}));
+
+vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
+  useAgentManagementAccess: () => managementAccess,
+}));
+
+const topicState = vi.hoisted(() => ({
+  activeTopicId: 'topic-1',
+  topic: undefined as
+    | {
+        agentId?: string;
+        metadata?: { boundDeviceId?: string; workingDirectory?: string };
+        projectWorkingDirectoryId?: string;
+      }
+    | undefined,
+}));
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (s: typeof topicState) => unknown) => selector(topicState),
+}));
+vi.mock('@/store/chat/selectors', () => ({
+  topicSelectors: {
+    getTopicById: (id: string) => (s: typeof topicState) =>
+      id === s.activeTopicId ? s.topic : undefined,
+  },
+}));
+
+vi.mock('@/store/agent', () => ({ useAgentStore: vi.fn() }));
+vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: {
+    getAgencyConfigById:
+      (id: string) => (s: { agentMap: Record<string, { agencyConfig?: unknown }> }) =>
+        s.agentMap[id]?.agencyConfig,
+    getAgentById:
+      (id: string) =>
+      (s: {
+        agentMap: Record<string, { visibility?: 'private' | 'public'; workspaceId?: string }>;
+      }) =>
+        s.agentMap[id],
+  },
+}));
+vi.mock('@/store/user', () => ({ useUserStore: vi.fn() }));
+vi.mock('@/store/user/selectors', () => ({
+  workspaceUserSettingsSelectors: {
+    agentDeviceOverrideById:
+      (id: string) =>
+      (s: { workspaceUserPreference: { agentDeviceOverrides?: Record<string, unknown> } }) =>
+        s.workspaceUserPreference.agentDeviceOverrides?.[id],
+  },
+}));
+
+const mockedUseAgentStore = vi.mocked(useAgentStore);
+const mockedUseUserStore = vi.mocked(useUserStore);
+
+const sharedConfig = { boundDeviceId: 'creator-device', executionTarget: 'device' as const };
+
+const setupStores = ({
+  agencyConfig = sharedConfig as unknown,
+  fetchedPreference,
+  isLoading = false,
+  override,
+  visibility,
+  workspaceId,
+}: {
+  agencyConfig?: unknown;
+  /** SWR response data — `undefined` = not yet resolved, `null` = no server row. */
+  fetchedPreference?: unknown;
+  isLoading?: boolean;
+  override?: unknown;
+  visibility?: 'private' | 'public';
+  workspaceId?: string;
+} = {}) => {
+  const agentState = { agentMap: { 'agent-1': { agencyConfig, visibility, workspaceId } } };
+  const userState = {
+    useFetchWorkspaceUserPreference: () => ({ data: fetchedPreference, isLoading }),
+    workspaceUserPreference: { agentDeviceOverrides: override ? { 'agent-1': override } : {} },
+  };
+  mockedUseAgentStore.mockImplementation((selector: any) => selector(agentState));
+  mockedUseUserStore.mockImplementation((selector: any) => selector(userState));
+};
+
+describe('useEffectiveAgencyConfig', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    topicState.topic = undefined;
+    managementAccess.canManageAgent = false;
+    managementAccess.isAccessLoading = false;
+  });
+
+  it('returns the shared config as-is for personal agents, ignoring any override', () => {
+    setupStores({ override: { boundDeviceId: 'my-device', executionTarget: 'device' } });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig).toEqual(sharedConfig);
+    expect(result.current.workspaceScoped).toBe(false);
+  });
+
+  it('merges the caller override over the shared config for workspace agents', () => {
+    setupStores({
+      override: { boundDeviceId: 'my-device', executionTarget: 'local' },
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig).toEqual({
+      boundDeviceId: 'my-device',
+      executionTarget: 'local',
+    });
+    expect(result.current.workspaceScoped).toBe(false);
+  });
+
+  it('falls back to the shared config when a workspace agent has no override', () => {
+    setupStores({ workspaceId: 'ws-1' });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig).toEqual(sharedConfig);
+    expect(result.current.workspaceScoped).toBe(true);
+  });
+
+  // The owner's own `local` / this-machine pick also lives in the per-user
+  // override (the shared row must never reference a personal device — the
+  // server rejects it), so it must merge back even on a private Workspace
+  // Agent, with the member policy stripped for the owner's own surfaces.
+  it("applies the owner's override and strips the policy while the Workspace Agent is private", () => {
+    setupStores({
+      agencyConfig: {
+        boundDeviceId: 'shared-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      },
+      override: { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
+      visibility: 'private',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current).toEqual({
+      agencyConfig: { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
+      executionTargetOverridden: true,
+      isPreferenceLoading: false,
+      topicDeviceUnknown: false,
+      workspaceScoped: false,
+    });
+  });
+
+  it('waits for the preference fetch even when the caller manages the agent', () => {
+    setupStores({
+      agencyConfig: { executionTarget: 'device' },
+      isLoading: true,
+      visibility: 'private',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.isPreferenceLoading).toBe(true);
+    expect(result.current.canDisplayExecutionTarget).toBe(false);
+  });
+
+  it("applies the author's or Workspace admin's own override on a public Workspace Agent", () => {
+    managementAccess.canManageAgent = true;
+    setupStores({
+      agencyConfig: {
+        boundDeviceId: 'shared-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      },
+      override: { boundDeviceId: 'manager-desktop', executionTarget: 'local' },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current).toEqual({
+      agencyConfig: { boundDeviceId: 'manager-desktop', executionTarget: 'local' },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
+      executionTargetOverridden: true,
+      isPreferenceLoading: false,
+      topicDeviceUnknown: false,
+      workspaceScoped: false,
+    });
+  });
+
+  // A fixed policy constrains members, not the shared default: the author or a
+  // Workspace admin must still be able to repoint it (e.g. off a deleted or
+  // offline device) from the profile picker.
+  it("keeps a fixed public Workspace Agent's target selectable for its author or admin", () => {
+    managementAccess.canManageAgent = true;
+    setupStores({
+      agencyConfig: { ...sharedConfig, executionTargetSelectionPolicy: 'fixed' },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1', { topicId: null }));
+
+    expect(result.current.agencyConfig).toEqual(sharedConfig);
+    expect(result.current.canSelectExecutionTarget).toBe(true);
+    expect(result.current.executionTargetOverridden).toBe(false);
+  });
+
+  it('shows a read-only execution summary when an ordinary member is fixed to the shared target', () => {
+    setupStores({
+      agencyConfig: {
+        boundDeviceId: 'shared-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current).toMatchObject({
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: false,
+    });
+  });
+
+  it('reports that a member override applies instead of the shared default', () => {
+    setupStores({
+      override: { boundDeviceId: 'my-device', executionTarget: 'device' },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.executionTargetOverridden).toBe(true);
+  });
+
+  it('does not report an override that a fixed policy shelves for a member', () => {
+    setupStores({
+      agencyConfig: { ...sharedConfig, executionTargetSelectionPolicy: 'fixed' },
+      override: { boundDeviceId: 'my-device', executionTarget: 'device' },
+      visibility: 'public',
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('creator-device');
+    expect(result.current.executionTargetOverridden).toBe(false);
+  });
+
+  it('never reports an override for a personal agent or a device-only override', () => {
+    setupStores({ override: { boundDeviceId: 'my-device', executionTarget: 'device' } });
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current
+        .executionTargetOverridden,
+    ).toBe(false);
+
+    setupStores({ override: { boundDeviceId: 'my-device' }, workspaceId: 'ws-1' });
+    expect(
+      renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current
+        .executionTargetOverridden,
+    ).toBe(false);
+  });
+
+  it('preserves workspace scope when an override has no explicit execution target', () => {
+    setupStores({ override: { boundDeviceId: 'my-device' }, workspaceId: 'ws-1' });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('my-device');
+    expect(result.current.workspaceScoped).toBe(true);
+  });
+
+  it('reports preference loading only for workspace agents', () => {
+    setupStores({ isLoading: true, workspaceId: 'ws-1' });
+    const workspaceResult = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+    expect(workspaceResult.result.current.isPreferenceLoading).toBe(true);
+    expect(workspaceResult.result.current.canDisplayExecutionTarget).toBe(false);
+    expect(workspaceResult.result.current.canSelectExecutionTarget).toBe(false);
+
+    setupStores({ isLoading: true });
+    const personalResult = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+    expect(personalResult.result.current.isPreferenceLoading).toBe(false);
+  });
+
+  it('prefers the SWR preference over the (possibly stale) store bucket', () => {
+    // Switch-back window: SWR serves the cached CURRENT workspace preference
+    // while the un-keyed store bucket still holds the previous workspace's.
+    setupStores({
+      fetchedPreference: {
+        agentDeviceOverrides: {
+          'agent-1': { boundDeviceId: 'my-device', executionTarget: 'device' },
+        },
+      },
+      override: { boundDeviceId: 'stale-other-ws-device', executionTarget: 'device' },
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('my-device');
+  });
+
+  it('treats a null SWR response (no server row) as no override', () => {
+    setupStores({
+      fetchedPreference: null,
+      override: { boundDeviceId: 'stale-other-ws-device', executionTarget: 'device' },
+      workspaceId: 'ws-1',
+    });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+
+    expect(result.current.agencyConfig).toEqual(sharedConfig);
+  });
+
+  it('pins the conversation device without changing the agent default', () => {
+    setupStores();
+    topicState.topic = {
+      agentId: 'agent-1',
+      metadata: { boundDeviceId: 'project-device' },
+      projectWorkingDirectoryId: 'directory-1',
+    };
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+    expect(result.current.agencyConfig?.boundDeviceId).toBe('project-device');
+    expect(result.current.canSelectExecutionTarget).toBe(false);
+    const defaults = renderHook(() => useEffectiveAgencyConfig('agent-1', { topicId: null }));
+    expect(defaults.result.current.agencyConfig).toEqual(sharedConfig);
+    expect(sharedConfig.boundDeviceId).toBe('creator-device');
+  });
+
+  // Regression: a cwd with no recorded machine fell back to the agent default
+  // device, and the picker presented that device as the topic's own.
+  it('reports a conversation cwd whose machine was never recorded', () => {
+    setupStores();
+    topicState.topic = { agentId: 'agent-1', metadata: { workingDirectory: '/Users/other/repo' } };
+    const { result } = renderHook(() => useEffectiveAgencyConfig('agent-1'));
+    expect(result.current.topicDeviceUnknown).toBe(true);
+    expect(result.current.agencyConfig).toEqual(sharedConfig);
+    topicState.topic = {
+      agentId: 'agent-1',
+      metadata: { boundDeviceId: 'dev-a', workingDirectory: '/Users/other/repo' },
+    };
+    expect(renderHook(() => useEffectiveAgencyConfig('agent-1')).result.current).toMatchObject({
+      topicDeviceUnknown: false,
+    });
+  });
+
+  it('returns undefined config when agentId is missing', () => {
+    setupStores({ override: { boundDeviceId: 'my-device' }, workspaceId: 'ws-1' });
+
+    const { result } = renderHook(() => useEffectiveAgencyConfig(undefined));
+
+    expect(result.current.agencyConfig).toBeUndefined();
+    expect(result.current.canDisplayExecutionTarget).toBe(false);
+    expect(result.current.canSelectExecutionTarget).toBe(false);
+    expect(result.current.isPreferenceLoading).toBe(false);
+    expect(result.current.workspaceScoped).toBe(false);
+  });
+});

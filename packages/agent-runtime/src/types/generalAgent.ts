@@ -3,9 +3,25 @@ import {
   type DynamicInterventionResolver,
   type GlobalInterventionAuditConfig,
   type MessageToolCall,
+  type RuntimeAdditionalContextFragment,
 } from '@lobechat/types';
 
+import type { AgentState } from './state';
+
 export interface GeneralAgentCallLLMInstructionPayload {
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
+  allowedToolNames?: string[];
+  /**
+   * Reuse an existing assistant message instead of creating a new one. Set when
+   * resuming from a tool-first step (e.g. tools activator) whose seeded
+   * placeholder must be filled by this LLM turn rather than orphaned.
+   */
+  assistantMessageId?: string;
+  /**
+   * Attachments the context engine sends as a preview plus file id, planned by
+   * `shouldCompress` so attachment text fits under the compression threshold.
+   */
+  attachmentPreviewFileIds?: string[];
   /** Force create a new assistant message (e.g., after compression) */
   createAssistantMessage?: boolean;
   isFirstMessage?: boolean;
@@ -72,6 +88,8 @@ export interface GeneralAgentConfig {
     [key: string]: any;
     maxSteps?: number;
   };
+  /** Explicit tool-name allow-list for agents that intentionally restrict tools. */
+  allowedToolNames?: string[];
   /**
    * Context compression configuration
    * When enabled and triggered, ALL messages are compressed into a single MessageGroup summary.
@@ -81,6 +99,8 @@ export interface GeneralAgentConfig {
     enabled?: boolean;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
+    /** Explicit threshold after a compression summary exists; default 0.65 reserves prompt headroom. */
+    recompressionThresholdRatio?: number;
     /** Threshold ratio for triggering compression (default: 0.5) */
     thresholdRatio?: number;
   };
@@ -95,19 +115,10 @@ export interface GeneralAgentConfig {
    * When not provided, defaults to [createSecurityBlacklistGlobalAudit()]
    */
   globalInterventionAudits?: GlobalInterventionAuditConfig[];
-  modelRuntimeConfig?: {
-    /**
-     * Compression model configuration
-     * Used for context compression tasks
-     */
-    compressionModel?: {
-      model: string;
-      provider: string;
-    };
-    model: string;
-    provider: string;
-  };
+  modelRuntimeConfig?: AgentState['modelRuntimeConfig'];
   operationId: string;
+  /** Phase-level tools exposed to this agent run. Falls back to AgentState.tools. */
+  tools?: any[];
   userId?: string;
 }
 
@@ -116,7 +127,7 @@ export interface GeneralAgentConfig {
  */
 export interface GeneralAgentCompressionResultPayload {
   /** Compressed messages (summary + pinned + recent) */
-  compressedMessages: any[];
+  compressedMessages?: any[];
   /** Compression group ID in database */
   groupId: string;
   /** Parent message ID for subsequent LLM call (last assistant message before compression) */

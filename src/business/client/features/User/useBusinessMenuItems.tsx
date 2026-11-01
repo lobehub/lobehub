@@ -1,4 +1,3 @@
-// eslint-disable-next-line unused-imports/no-unused-vars
-export default function useBusinessMenuItems(isSignin: boolean | undefined) {
+export default function useBusinessMenuItems(_isSignin: boolean | undefined) {
   return [];
 }

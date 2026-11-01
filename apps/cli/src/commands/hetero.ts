@@ -1,23 +1,157 @@
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createWriteStream } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
+import {
+  HETEROGENEOUS_AGENT_CONFIGS,
+  isLocalHeterogeneousType,
+  LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  type LocalHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
+import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
+import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
+import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
+import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+import {
+  createPiRpcAgentHandle,
+  type PiRpcStartupControl,
+  preparePiRpcInput,
+} from '@lobechat/heterogeneous-agents/rpc';
 import type {
   AgentContentBlock,
   AgentImageSource,
   AgentPromptInput,
   AgentStreamEvent,
+  UploadHeterogeneousImage,
 } from '@lobechat/heterogeneous-agents/spawn';
-import { spawnAgent } from '@lobechat/heterogeneous-agents/spawn';
+import {
+  classifyHeteroProcessFailure,
+  createCodexAgentHandle,
+  createFileStoreImageUploader,
+  isHeteroStatusGuideErrorData,
+  spawnAgent,
+  spawnDshAcpSession,
+} from '@lobechat/heterogeneous-agents/spawn';
+import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
+import { cliVersion } from '../pkg';
+import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
+import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
 import { log } from '../utils/logger';
+import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
+import { createOperationTokenRenewal } from '../utils/OperationTokenRenewal';
+import { createLocalTraceStore } from '../utils/traceStore';
 import { TrpcIngestSink } from '../utils/TrpcIngestSink';
 
-const SUPPORTED_AGENT_TYPES = new Set(['claude-code', 'codex']);
+const DSH_AGENT_TYPE = 'deepseek-harness';
+export const SUPPORTED_AGENT_TYPES = new Set<string>([
+  ...LOCAL_HETEROGENEOUS_AGENT_TYPES,
+  DSH_AGENT_TYPE,
+]);
+
+/**
+ * Extra env for the spawned agent process.
+ *
+ * In server-ingest mode the run's operation and conversation arrive as CLI
+ * arguments, not env, so the agent's own shell could not name them. Commands it
+ * runs on behalf of this conversation — `lh goal create --conversation` for
+ * `/goal`, evidence ingests — read `LOBEHUB_OPERATION_ID` / `LOBEHUB_TOPIC_ID`,
+ * so they are echoed into the child. A standalone run has no server identity
+ * and passes none.
+ */
+export const buildAgentProcessEnv = ({
+  operationId,
+  pathEnv,
+  topicId,
+}: {
+  operationId?: string;
+  pathEnv?: string;
+  topicId?: string;
+}): Record<string, string> | undefined => {
+  const env: Record<string, string> = {
+    ...(pathEnv ? { PATH: pathEnv } : {}),
+    ...(operationId ? { LOBEHUB_OPERATION_ID: operationId } : {}),
+    ...(topicId ? { LOBEHUB_TOPIC_ID: topicId } : {}),
+  };
+  return Object.keys(env).length > 0 ? env : undefined;
+};
+const SUPPORTED_AGENT_TITLES = [
+  ...HETEROGENEOUS_AGENT_CONFIGS.map(({ title }) => title),
+  'DeepSeek Harness',
+].join(' / ');
+const SUPPORTED_AGENT_COMMANDS = HETEROGENEOUS_AGENT_CONFIGS.map(
+  ({ defaultCommand }) => `\`${defaultCommand}\``,
+).join(', ');
+const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
+const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
+
+/**
+ * Runtime factories for `lh hetero exec`. Pi uses RPC; other agents fall
+ * through to the generic one-shot `spawnAgent`.
+ */
+const spawnRuntimeRegistry: Partial<
+  Record<
+    LocalHeterogeneousAgentType,
+    (
+      spawnOpts: Parameters<typeof spawnAgent>[0],
+      lifecycle?: {
+        onRawStdout?: (chunk: Buffer) => void;
+        onStartupControl?: (control: PiRpcStartupControl) => void;
+      },
+    ) => Promise<Awaited<ReturnType<typeof spawnAgent>>>
+  >
+> = {
+  pi: async (spawnOpts, lifecycle) =>
+    createPiRpcAgentHandle({
+      ...(await preparePiRpcInput(spawnOpts.prompt, {
+        args: spawnOpts.extraArgs ?? [],
+        lobeHubContext: !!spawnOpts.env?.LOBEHUB_TOPIC_ID,
+      })),
+      commandPath: spawnOpts.command!,
+      cwd: spawnOpts.cwd ?? process.cwd(),
+      detached: spawnOpts.detached,
+      env: { ...process.env, ...spawnOpts.env },
+      operationId: spawnOpts.operationId,
+      onRawStdout: lifecycle?.onRawStdout,
+      onStartupControl: lifecycle?.onStartupControl,
+      resumeSessionId: spawnOpts.resumeSessionId,
+      uploadImage: spawnOpts.uploadImage,
+    }),
+};
+
+/**
+ * Spawn via the registered runtime factory, or the generic one-shot spawn.
+ * `onRawStdout` (raw-dump tee) reaches both generic and registered runtimes;
+ * RPC runtimes must install it before their eager handshake.
+ */
+const spawnAgentOrRuntime = (
+  spawnOpts: Parameters<typeof spawnAgent>[0],
+  onRawStdout?: (chunk: Buffer) => void,
+  onStartupControl?: (control: PiRpcStartupControl) => void,
+  nativeCodex?: boolean,
+): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
+  if (nativeCodex)
+    return createCodexAgentHandle({
+      clientVersion: cliVersion,
+      args: spawnOpts.extraArgs ?? [],
+      commandPath: spawnOpts.command!,
+      cwd: spawnOpts.cwd ?? process.cwd(),
+      env: { ...process.env, ...spawnOpts.env },
+      onRawStdout,
+      onStartupControl,
+      operationId: spawnOpts.operationId,
+      prompt: spawnOpts.prompt,
+      resumeSessionId: spawnOpts.resumeSessionId,
+    });
+  const runtimeFactory = spawnRuntimeRegistry[spawnOpts.agentType as LocalHeterogeneousAgentType];
+  if (runtimeFactory) return runtimeFactory(spawnOpts, { onRawStdout, onStartupControl });
+  return spawnAgent({ ...spawnOpts, onRawStdout });
+};
 
 /**
  * Patterns that indicate a `--resume <sessionId>` run should be retried
@@ -43,6 +177,9 @@ const RESUME_RETRY_PATTERNS = [
   /session.*not found/i,
   /conversation.*not found/i,
   /resume.*not found/i,
+  // Codex reports a missing saved thread (exec and app-server alike) as
+  // "thread/resume failed: no rollout found for thread id <id>".
+  /no rollout found/i,
   // Context overflow — API rejected the resumed session's accumulated history
   /prompt.*too long/i,
   /context.*too long/i,
@@ -53,11 +190,25 @@ const RESUME_RETRY_PATTERNS = [
 const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
   RESUME_RETRY_PATTERNS.some((p) => p.test(text));
 
+const isMissingGrokResumeSession = (data: Record<string, unknown> | undefined): boolean => {
+  if (data?.agentType !== 'grok-build' || !isRecord(data.details)) return false;
+  const { details } = data;
+  const rpcData = details.data;
+  return details.method === 'session/load' && isRecord(rpcData) && rpcData.code === 'FS_NOT_FOUND';
+};
+
 interface ExecOptions {
+  agentArg?: string[];
+  /** Explicit device protocol capability; unsupported native options fail closed. */
+  codexAppServer?: boolean;
   command?: string;
   cwd?: string;
+  effort?: string;
   image?: string[];
   inputJson?: string;
+  /** Amp agent mode, forwarded as the native `--mode` flag. */
+  mode?: string;
+  model?: string;
   operationId?: string;
   prompt?: string;
   /**
@@ -76,6 +227,11 @@ interface ExecOptions {
   render?: 'jsonl' | 'none';
   resume?: string;
   /**
+   * Speed mode selection (Codex only). Translated into the native
+   * `service_tier` config; `fast` requests the Fast (priority) tier.
+   */
+  speed?: string;
+  /**
    * Server topic id.  When set, enables server-ingest mode: events are
    * batch-POSTed to `aiAgent.heteroIngest` in addition to (or instead of)
    * being written to stdout.  Requires `--operation-id` to be a valid
@@ -86,6 +242,49 @@ interface ExecOptions {
 }
 
 const collectImage = (value: string, previous: string[] = []): string[] => [...previous, value];
+const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
+
+const buildExtraArgs = (
+  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'mode' | 'model' | 'speed' | 'type'>,
+): string[] | undefined => {
+  const selectorArgs =
+    options.type === 'amp'
+      ? [...(options.mode ? ['--mode', options.mode] : [])]
+      : options.type === 'droid' || options.type === 'trae'
+        ? []
+        : options.type === 'codex'
+          ? [
+              ...(options.model ? ['--model', options.model] : []),
+              ...(options.effort
+                ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
+                : []),
+              ...(options.speed
+                ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${options.speed}"`]
+                : []),
+            ]
+          : options.type === 'claude-code' ||
+              options.type === 'codebuddy' ||
+              options.type === 'grok-build'
+            ? [
+                ...(options.model ? ['--model', options.model] : []),
+                ...(options.effort ? ['--effort', options.effort] : []),
+              ]
+            : options.type === 'cursor' ||
+                options.type === 'devin' ||
+                options.type === 'kimi-code' ||
+                options.type === 'opencode' ||
+                options.type === 'pi'
+              ? [...(options.model ? ['--model', options.model] : [])]
+              : options.type === 'qoder'
+                ? [
+                    ...(options.model ? ['--model', options.model] : []),
+                    ...(options.effort ? ['--reasoning-effort', options.effort] : []),
+                  ]
+                : [];
+  const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
+
+  return extraArgs.length > 0 ? extraArgs : undefined;
+};
 
 const readStdin = async (): Promise<string> => {
   const chunks: Buffer[] = [];
@@ -131,16 +330,28 @@ const parseImageArg = (value: string): AgentImageSource => {
  * Accepts:
  *   - `'plain text'` → single text block
  *   - `[{ type: 'text', text }, { type: 'image', source }]` → content blocks
- *   - `{ content: [...] }` (Anthropic message shape) → unwraps `content`
+ *   - `{ content: [...], resumeFallback?: [...] }` → unwraps the primary prompt
+ *     and reserves the fallback for a retry without native resume
  *   - `{ type: 'text', ... } | { type: 'image', ... }` → single block
  */
-const coerceJsonPrompt = (parsed: unknown): AgentPromptInput => {
-  if (typeof parsed === 'string') return parsed;
-  if (Array.isArray(parsed)) return parsed as AgentContentBlock[];
+const coerceJsonPrompt = (
+  parsed: unknown,
+): Pick<ResolvedPrompt, 'prompt' | 'resumeFallbackPrompt'> => {
+  if (typeof parsed === 'string') return { prompt: parsed };
+  if (Array.isArray(parsed)) return { prompt: parsed as AgentContentBlock[] };
   if (parsed && typeof parsed === 'object') {
     const obj = parsed as Record<string, unknown>;
-    if (Array.isArray(obj.content)) return obj.content as AgentContentBlock[];
-    if (obj.type === 'text' || obj.type === 'image') return [obj as AgentContentBlock];
+    if (Array.isArray(obj.content)) {
+      return {
+        prompt: obj.content as AgentContentBlock[],
+        ...(Array.isArray(obj.resumeFallback)
+          ? { resumeFallbackPrompt: obj.resumeFallback as AgentContentBlock[] }
+          : {}),
+      };
+    }
+    if (obj.type === 'text' || obj.type === 'image') {
+      return { prompt: [obj as unknown as AgentContentBlock] };
+    }
   }
   throw new Error(
     'Invalid --input-json shape: expected a string, array of content blocks, ' +
@@ -152,6 +363,8 @@ interface ResolvedPrompt {
   /** Human-readable description for the empty-input check. */
   describe: () => string;
   prompt: AgentPromptInput;
+  /** Full prompt used only when native resume fails and the CLI retries fresh. */
+  resumeFallbackPrompt?: AgentPromptInput;
 }
 
 const buildPromptFromText = (text: string, images: string[]): ResolvedPrompt => {
@@ -193,7 +406,7 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
       throw new Error('--image cannot be combined with --input-json (put images in the JSON).');
     }
     const raw = await readInputJson(options.inputJson);
-    return { describe: () => raw.trim(), prompt: coerceJsonPrompt(JSON.parse(raw)) };
+    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
   }
 
   if (options.prompt !== undefined && options.prompt !== '-') {
@@ -203,115 +416,10 @@ const resolvePrompt = async (options: ExecOptions): Promise<ResolvedPrompt> => {
   // No --prompt or --prompt -: read stdin and auto-detect.
   const raw = await readStdin();
   if (looksLikeJsonInput(raw)) {
-    return { describe: () => raw.trim(), prompt: coerceJsonPrompt(JSON.parse(raw)) };
+    return { describe: () => raw.trim(), ...coerceJsonPrompt(JSON.parse(raw)) };
   }
   return buildPromptFromText(raw, images);
 };
-
-class SerialServerIngester {
-  private accumulatedText = '';
-  private fatalError: Error | null = null;
-  private inflight: Promise<void> = Promise.resolve();
-  private nextSnapshotSeq = 0;
-  private pendingTextEvent: AgentStreamEvent | undefined;
-  private timer: ReturnType<typeof setTimeout> | null = null;
-
-  constructor(
-    private readonly sink: TrpcIngestSink,
-    private readonly snapshotFlushMs = 200,
-  ) {}
-
-  push(event: AgentStreamEvent): void {
-    if (this.fatalError) return;
-
-    // Text-snapshot coalescing is a MAIN-AGENT-ONLY transport optimization:
-    // it debounces the main agent's token-level text *deltas* into one
-    // `replace` snapshot to cut ingest calls. Subagent text is explicitly
-    // excluded (`!event.data?.subagent`) for two reasons:
-    //   1. Subagent text is emitted as ONE full block per turn (see
-    //      claudeCode adapter `handleSubagentAssistant` — "the full block IS
-    //      the only emission"), so there is nothing to coalesce.
-    //   2. `accumulatedText` is a single shared accumulator with no subagent
-    //      scope. Folding subagent blocks in would (a) splice main-agent text
-    //      into the subagent message via the shared buffer, and (b) emit a
-    //      `replace` snapshot that the server's subagent path *appends*
-    //      (`persistSubagentText` has no snapshot semantics) → duplicated /
-    //      cross-scope content. Forwarding the raw block straight through lets
-    //      the server append it exactly once, correctly.
-    if (
-      event.type === 'stream_chunk' &&
-      event.data?.chunkType === 'text' &&
-      typeof event.data?.content === 'string' &&
-      !event.data?.subagent
-    ) {
-      this.accumulatedText += event.data.content;
-      this.pendingTextEvent = event;
-      if (this.timer) clearTimeout(this.timer);
-      this.timer = setTimeout(() => {
-        this.timer = null;
-        this.queuePendingTextSnapshot();
-      }, this.snapshotFlushMs);
-      return;
-    }
-
-    this.queuePendingTextSnapshot();
-    // `accumulatedText` is a PER-MESSAGE accumulator: it coalesces the text
-    // deltas of the current assistant message into one `replace` snapshot.
-    // A new message boundary (`stream_start` / `stream_end`, emitted by the
-    // adapter's `openMainMessage`) must reset it — otherwise it spans the
-    // whole run and every later message's snapshot re-emits all prior
-    // messages' text verbatim, which the server then persists into the new
-    // DB message: cross-message text duplication. Reset
-    // AFTER flushing the just-ended message's pending snapshot above.
-    if (event.type === 'stream_start' || event.type === 'stream_end') {
-      this.accumulatedText = '';
-    }
-    this.enqueue(async () => {
-      await this.sink.ingest([event]);
-    });
-  }
-
-  async drain(): Promise<void> {
-    this.queuePendingTextSnapshot();
-    try {
-      await this.inflight;
-    } catch {
-      // `fatalError` is re-thrown below.
-    }
-    if (this.fatalError) throw this.fatalError;
-  }
-
-  private enqueue(task: () => Promise<void>) {
-    this.inflight = this.inflight.then(task).catch((err) => {
-      this.fatalError = err instanceof Error ? err : new Error(String(err));
-      throw this.fatalError;
-    });
-  }
-
-  private queuePendingTextSnapshot() {
-    if (!this.pendingTextEvent || this.fatalError) return;
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-
-    const baseEvent = this.pendingTextEvent;
-    this.pendingTextEvent = undefined;
-    const snapshotEvent: AgentStreamEvent = {
-      ...baseEvent,
-      data: {
-        ...baseEvent.data,
-        content: this.accumulatedText,
-        snapshotMode: 'replace',
-        snapshotSeq: ++this.nextSnapshotSeq,
-      },
-    };
-
-    this.enqueue(async () => {
-      await this.sink.ingest([snapshotEvent]);
-    });
-  }
-}
 
 interface RawStreamDumpAttempt {
   /** Flush + close both file streams. Resolves once the bytes are on disk. */
@@ -392,6 +500,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
     process.exit(2);
   }
 
+  if (options.codexAppServer && options.type !== 'codex') {
+    throw new Error('Native Codex options require --type codex');
+  }
   let resolved: ResolvedPrompt;
   try {
     resolved = await resolvePrompt(options);
@@ -429,6 +540,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
     });
   }
 
+  // Local execution trace. Recorded for EVERY run, not just server-ingest ones:
+  // a standalone `lh hetero exec` is exactly the case where nothing else keeps
+  // a record of what the agent did, and it is the same snapshot format a native
+  // agent run produces, so `lh trace op inspect` reads both.
+  const traceRecorder = new HeteroTraceRecorder({
+    agentType: options.type,
+    operationId,
+    onError: (message) => log.warn(`Trace: ${message}`),
+    store: createLocalTraceStore(),
+    topicId: options.topic,
+  });
+
   // Determine JSONL output mode.
   // Explicit --render flag always wins. Otherwise: emit JSONL in standalone
   // mode; suppress in server-ingest mode (sink handles the data path).
@@ -437,9 +560,19 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // Build the ingest sink — no-op for standalone mode, real tRPC sink for
   // server-ingest mode.  The tRPC client reads LOBEHUB_JWT (operation-scoped
   // JWT injected by the server) for authentication.
-  const agentType = options.type as 'claude-code' | 'codex';
+  const agentType = options.type;
   let sink: TrpcIngestSink | undefined;
-  let serverIngester: SerialServerIngester | undefined;
+  let serverIngester: CoalescingBatchIngester | undefined;
+  // Set for the duration of each spawn attempt (see `runOneAgent`): stops the
+  // running agent when the server tells us its output is being discarded.
+  let abortForIngestLoss: ((error: Error) => void) | undefined;
+  // Uploader for tool_result images (CC `Read` on an image file). Reuses the
+  // CLI's authenticated lambda client so the persisted event carries a
+  // `{ fileId, url }` reference instead of heavy base64. Only wired in
+  // server-ingest mode — standalone runs don't persist events, so there is
+  // nothing to echo. The pipeline degrades a throw/undefined to the
+  // `[Image: …]` text placeholder, so this never fails the run.
+  let uploadImage: UploadHeterogeneousImage | undefined;
   if (serverIngest) {
     const client = await getTrpcClient();
     sink = new TrpcIngestSink(
@@ -449,8 +582,311 @@ const exec = async (options: ExecOptions): Promise<void> => {
       options.topic!,
       process.env.LOBEHUB_ASSISTANT_MESSAGE_ID,
     );
-    serverIngester = new SerialServerIngester(sink);
+    serverIngester = new CoalescingBatchIngester(sink, undefined, (error) => {
+      // The server has stopped storing this run's events (its topic marker was
+      // settled underneath it, or the operation is already terminal) and every
+      // later batch would be discarded the same way. Waiting for `drain()` to
+      // report that means the agent keeps working — for minutes, on a long task
+      // — to produce output nobody will ever see. Stop it now; the drain below
+      // still raises the same error, so the finish leg reports a failed run.
+      abortForIngestLoss?.(error);
+    });
+
+    uploadImage = createFileStoreImageUploader(async () => {
+      const lambda = await getTrpcClient();
+      return {
+        abortS3Upload: (input) => lambda.upload.abortS3Upload.mutate(input),
+        checkFileHash: (input) => lambda.file.checkFileHash.mutate(input),
+        createFile: (input) => lambda.file.createFile.mutate(input),
+        createS3PreSignedUrl: (input) => lambda.upload.createS3PreSignedUrl.mutate(input),
+      };
+    });
   }
+
+  const operationHeartbeat =
+    serverIngester && operationId
+      ? createOperationHeartbeat({
+          operationId,
+          push: (event) => serverIngester.push(event),
+        })
+      : undefined;
+
+  // The heartbeat only renews the lease while the token under it is valid. The
+  // server signs that token for four hours; a longer run renews it in place, or
+  // every ingest after that point is rejected and the operation is reclaimed.
+  const operationTokenRenewal =
+    serverIngester && operationId
+      ? createOperationTokenRenewal({
+          operationId,
+          renew: async (id) =>
+            (await getTrpcClient()).aiAgent.refreshHeteroOperationToken.mutate({ operationId: id }),
+        })
+      : undefined;
+
+  // DSH is a protocol runtime (its `acp` profile) with no CLI descriptor. Keep
+  // it on the same public `hetero exec` surface, but drive its ACP session
+  // directly instead of passing it through `spawnAgent`.
+  if (agentType === DSH_AGENT_TYPE) {
+    const hasImages =
+      typeof resolved.prompt !== 'string' &&
+      resolved.prompt.some((block) => block.type === 'image');
+    if (hasImages) {
+      log.error('DeepSeek Harness currently accepts text prompts only.');
+      process.exit(2);
+    }
+
+    const prompt =
+      typeof resolved.prompt === 'string'
+        ? resolved.prompt
+        : resolved.prompt
+            .map((block) => (block.type === 'text' ? block.text : ''))
+            .filter(Boolean)
+            .join('\n');
+    let session: ReturnType<typeof spawnDshAcpSession> | undefined;
+    let exitCode = 0;
+    // Same contract as `runOneAgent`: once the server discards this run's
+    // output, stop the harness instead of letting it keep calling the model
+    // and running tools until natural idle.
+    let ingestLoss: Error | undefined;
+    abortForIngestLoss = (error) => {
+      if (ingestLoss) return;
+      ingestLoss = error;
+      log.error('Server is discarding this run output, stopping the agent:', error.message);
+      void session?.dispose().catch(() => {});
+    };
+
+    try {
+      session = spawnDshAcpSession({
+        args: options.agentArg,
+        clientVersion: 'lobehub-cli',
+        command: options.command,
+        cwd: options.cwd || process.cwd(),
+        // Same identity echo as the CLI agents, so `lh` commands the harness
+        // runs for this conversation can name its operation and topic.
+        env: buildAgentProcessEnv({
+          operationId: serverIngest ? operationId : undefined,
+          topicId: options.topic,
+        }),
+        model: options.model,
+        operationId,
+        // `--resume` continues the persisted harness session.
+        resumeSessionId: options.resume,
+      });
+      // The loss may have landed (via the heartbeat) before the turn started.
+      if (ingestLoss) throw ingestLoss;
+
+      let terminalError: string | undefined;
+      for await (const event of session.prompt(prompt)) {
+        if (event.type === 'error') {
+          const data = event.data as Record<string, unknown> | undefined;
+          terminalError = String(data?.message ?? data?.error ?? '') || 'DSH execution failed';
+        }
+        if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+        operationHeartbeat?.observe(event);
+        traceRecorder.observe(event);
+        serverIngester?.push(event);
+        if (ingestLoss) break;
+      }
+      if (ingestLoss) throw ingestLoss;
+
+      operationHeartbeat?.stop();
+      await serverIngester?.drain();
+      const finishError = terminalError
+        ? { message: terminalError, type: 'AgentRuntimeError' }
+        : undefined;
+      // Before the sink, so a failing server call still leaves a snapshot.
+      await traceRecorder.finalize({
+        error: finishError,
+        result: terminalError ? 'error' : 'success',
+      });
+      if (sink) {
+        await sink.finish({
+          error: finishError,
+          result: terminalError ? 'error' : 'success',
+          sessionId: session.sessionId,
+        });
+      }
+      if (terminalError) exitCode = 1;
+    } catch (caught) {
+      exitCode = 1;
+      // A killed runtime reports its own exit; the ingest loss is the real cause.
+      const error = ingestLoss ?? caught;
+      const message = error instanceof Error ? error.message : String(error);
+      log.error('DeepSeek Harness execution failed:', message);
+      operationHeartbeat?.stop();
+      await traceRecorder.finalize({
+        error: { message, type: 'AgentRuntimeError' },
+        result: 'error',
+      });
+      if (sink) {
+        await serverIngester?.drain().catch(() => {});
+        await sink
+          .finish({
+            error: { message, type: 'AgentRuntimeError' },
+            result: 'error',
+            sessionId: session?.sessionId ?? options.resume,
+          })
+          .catch(() => {});
+      }
+    } finally {
+      abortForIngestLoss = undefined;
+      operationTokenRenewal?.stop();
+      await session?.dispose().catch(() => {});
+    }
+
+    process.exit(exitCode);
+  }
+
+  // The public set also contains runtime-backed providers such as DSH. Past
+  // this branch the existing spawn pipeline requires a descriptor-backed CLI.
+  if (!isLocalHeterogeneousType(agentType)) {
+    throw new TypeError(`Unsupported CLI-backed heterogeneous agent type: ${agentType}`);
+  }
+
+  // ─── AskUserQuestion MCP — remote Human-in-the-loop ────────────────────────
+  //
+  // Mount the same `lobe_cc` MCP server the desktop app uses, but resolve the
+  // bridge over the server's Redis stream instead of Electron IPC:
+  //   - request out: `bridge.events()` ride the normal ingest sink → server
+  //     `heteroIngest` → Redis stream → renderer shows the AskUserQuestion card.
+  //   - response back: the sandbox can't read Redis, so a long-poll pulls the
+  //     `agent_intervention_response` off the stream (published by the browser's
+  //     `submitHeteroIntervention`) and resolves the pending bridge call.
+  // The bridge's own 5-min timeout is the backstop, so a dropped poll or an
+  // absent user never strands CC.
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+  let askServer: LobeBuiltinMcpServer | undefined;
+  let askBridge: AskUserBridge | undefined;
+  let askMcpConfigPath: string | undefined;
+  const askPollAbort = new AbortController();
+  if (
+    serverIngest &&
+    (agentType === 'claude-code' ||
+      agentType === 'cursor' ||
+      agentType === 'droid' ||
+      agentType === 'devin' ||
+      agentType === 'qoder') &&
+    serverIngester
+  ) {
+    if (agentType === 'cursor' || agentType === 'droid') {
+      askBridge = new AskUserBridge(operationId, {
+        identifier: agentType === 'cursor' ? 'claude-code' : agentType,
+        provider: agentType,
+      });
+    } else if (agentType === 'devin') {
+      askBridge = new AskUserBridge(operationId, {
+        identifier: 'devin',
+        provider: 'devin',
+      });
+    } else {
+      askServer = new LobeBuiltinMcpServer();
+      await askServer.start();
+      askBridge = askServer.registerOperation(
+        operationId,
+        new AskUserBridge(operationId, { identifier: agentType, provider: agentType }),
+      );
+      askMcpConfigPath = path.join(os.tmpdir(), `lobe-cc-mcp-${operationId}.json`);
+      await writeFile(
+        askMcpConfigPath,
+        JSON.stringify({
+          mcpServers: {
+            lobe_cc: {
+              alwaysLoad: true,
+              type: 'http',
+              url: askServer.urlForOperation(operationId),
+            },
+          },
+        }),
+        'utf8',
+      );
+    }
+
+    // (i) Forward every bridge event into the same ordered durable ingest path
+    // as CC's. Browser submit already XADDed a response for producer delivery,
+    // but that is only transport acceptance. The bridge echo after resolve is
+    // the producer ACK (producerAck=true + resolutionRequestId) that transitions
+    // Cloud from `resolving` to terminal. Persistence de-dupes transitions by
+    // (operationId, toolCallId, transition).
+    void (async () => {
+      for await (const event of askBridge!.events()) {
+        serverIngester!.push(event as AgentStreamEvent);
+      }
+    })();
+
+    // (ii) Long-poll the server for the user's answer — only while a question is
+    // actually pending, so an idle run holds no server invocation.
+    void (async () => {
+      const client = await getTrpcClient();
+      // Start at the beginning of this operation stream. A response can be
+      // published after `pendingCount` flips but before the first XREAD; `$`
+      // would skip that already-present response and strand the CLI until the
+      // bridge timeout. Unknown/stale tool ids are harmless (`resolve` no-ops).
+      let lastEventId = '0-0';
+      while (!askPollAbort.signal.aborted) {
+        if (askBridge!.pendingCount === 0) {
+          await sleep(200);
+          continue;
+        }
+        try {
+          const res = await client.aiAgent.waitInterventionResponse.query({
+            lastEventId,
+            operationId,
+          });
+          lastEventId = res.lastEventId;
+          for (const event of res.events) {
+            const data = event.data as {
+              cancelReason?: 'session_ended' | 'timeout' | 'user_cancelled';
+              cancelled?: boolean;
+              result?: unknown;
+              resolutionRequestId?: string;
+              toolCallId: string;
+            };
+            // Idempotent: resolve() no-ops on an unknown / already-settled id.
+            askBridge!.resolve(data.toolCallId, {
+              cancelReason: data.cancelReason,
+              cancelled: data.cancelled,
+              result: data.result,
+              resolutionRequestId: data.resolutionRequestId,
+            });
+          }
+        } catch {
+          // Transient (server hiccup / token refresh) — back off and retry.
+          // The bridge's 10-min timeout still bounds the overall wait.
+          await sleep(1000);
+        }
+      }
+    })();
+  }
+
+  /**
+   * Build the `finish` error payload. Process-level failures the agent CLI
+   * never got to report in-stream (spawn ENOENT because the CLI isn't
+   * installed, an auth failure printed straight to stderr) are classified into
+   * the structured status-guide shape and attached as `body`, so the client
+   * renders the dedicated install/sign-in guide instead of the generic error
+   * card. Unclassifiable failures keep the flat `{ message, type }` everything
+   * downstream already handles.
+   *
+   * A classified error is always typed `AgentRuntimeError` — matching how the
+   * adapters' in-stream classified errors (overloaded / rate_limit) persist —
+   * instead of leaking the transport-internal `type` the failure happened to
+   * surface through (`stream_error` for a spawn ENOENT reads wrong on a
+   * "CLI not installed" error).
+   */
+  const buildFinishError = (
+    message: string,
+    type: string,
+    errnoCode?: string,
+  ): { body?: Record<string, unknown>; message: string; type: string } => {
+    const classified = classifyHeteroProcessFailure({
+      agentType,
+      command: options.command,
+      detail: message,
+      errnoCode,
+    });
+    if (!classified) return { message, type };
+    return { body: { ...classified }, message: classified.message, type: 'AgentRuntimeError' };
+  };
 
   /**
    * Spawn one agent process and stream all its events into the server ingester.
@@ -464,9 +900,21 @@ const exec = async (options: ExecOptions): Promise<void> => {
    *
    * Returns:
    *   code / signal — child exit info
+   *   cancelled      — true when this CLI received SIGINT/SIGTERM for the run
    *   sessionId     — CC session id from `system.init` (undefined on resume failure)
    *   ingestError   — true when a batch could not be flushed after retries
    *   resumeNotFound — true when a resume-not-found error was intercepted
+   *   sawTerminalError — true when a terminal `error` event was pushed to the
+   *                      ingester (CC can relay an API/rate-limit error this way
+   *                      and still exit 0, so the exit code alone is not enough)
+   *   terminalErrorMessage — the message from that terminal `error` event, used
+   *                      as the task-level error detail in the finish payload
+   *   terminalErrorData — the full structured payload of that terminal `error`
+   *                      event when the adapter already classified it into a
+   *                      status-guide error (overloaded / rate_limit / …); the
+   *                      finish leg forwards it verbatim as the error `body` so
+   *                      the client renders the dedicated guide instead of the
+   *                      generic error card
    *   stderrContent  — accumulated stderr (only when interceptResumeErrors=true)
    */
   const runOneAgent = async (
@@ -474,25 +922,168 @@ const exec = async (options: ExecOptions): Promise<void> => {
     interceptResumeErrors: boolean,
     runLabel: string,
   ): Promise<{
+    cancelled: boolean;
     code: number | null;
     ingestError: boolean;
     resumeNotFound: boolean;
+    sawTerminalError: boolean;
     sessionId: string | undefined;
     signal: NodeJS.Signals | null;
     stderrContent: string;
+    terminalErrorData: Record<string, unknown> | undefined;
+    terminalErrorMessage: string | undefined;
   }> => {
+    // Own terminal signals before the async factory starts. Pi exposes its
+    // startup control synchronously once constructed; cancellation received
+    // during prompt normalization is remembered and applied at that point.
+    const inheritsWrapperProcessGroup =
+      process.platform !== 'win32' && process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] === '1';
+    let interrupted = false;
+    let cancellationSignal: NodeJS.Signals | undefined;
+    let handle: Awaited<ReturnType<typeof spawnAgent>> | undefined;
+    let startupControl: PiRpcStartupControl | undefined;
+    const cancellations: Promise<void>[] = [];
+    let cancellationError: unknown;
+    const cancelStartup = (control: PiRpcStartupControl, signal: NodeJS.Signals) => {
+      cancellations.push(
+        control.cancel(signal).catch((error) => {
+          cancellationError ??= error;
+          log.error(
+            'Failed to cancel agent:',
+            error instanceof Error ? error.message : String(error),
+          );
+        }),
+      );
+    };
+    const drainCancellation = async () => {
+      await Promise.all(cancellations);
+      if (cancellationError) throw cancellationError;
+    };
+    // Deliberately NOT `interrupted`: the user did not stop this run, so the
+    // finish leg must report `error` (with the ingest failure as its detail)
+    // rather than `cancelled`, which would leave the operation running on the
+    // server with nothing left to drive it.
+    let ingestLoss: Error | undefined;
+    // Inside an inherited wrapper group an external SIGINT/SIGTERM already
+    // reaches the agent, so forwarding it would signal twice. An ingest-loss
+    // abort has no OS signal behind it — the CLI decided on its own — so it
+    // must always deliver the signal itself, or the agent keeps running (the
+    // desktop and connected-device dispatches are exactly the inherited case).
+    // Native app-server owns a detached process even inside the connect wrapper group.
+    const ownsSignalDelivery = () =>
+      options.codexAppServer || !inheritsWrapperProcessGroup || ingestLoss !== undefined;
+    const signalAgent = (signal: NodeJS.Signals) => {
+      if (startupControl) cancelStartup(startupControl, signal);
+      else handle?.kill(signal);
+    };
+    const applyCancellation = (signal: NodeJS.Signals) => {
+      cancellationSignal = signal;
+      if (!ownsSignalDelivery()) {
+        // The process group already delivered the OS signal, so a second one
+        // would be a duplicate — but session transports (ACP, RPC) carry a
+        // protocol-level cancel the signal cannot express. Notify it so the
+        // session classifies the agent's resulting exit as host-driven
+        // cancellation rather than reporting a transport crash.
+        if (startupControl) cancelStartup(startupControl, signal);
+        else handle?.interrupt?.(signal);
+        return;
+      }
+      signalAgent(signal);
+    };
+    const onSigint = () => {
+      const signal = interrupted ? 'SIGKILL' : 'SIGINT';
+      interrupted = true;
+      applyCancellation(signal);
+    };
+    const onSigterm = () => {
+      interrupted = true;
+      applyCancellation('SIGTERM');
+    };
+    const removeSignalListeners = () => {
+      process.off('SIGINT', onSigint);
+      process.off('SIGTERM', onSigterm);
+      abortForIngestLoss = undefined;
+    };
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
+
+    abortForIngestLoss = (error) => {
+      if (ingestLoss) return;
+      ingestLoss = error;
+      log.error('Server is discarding this run output, stopping the agent:', error.message);
+      applyCancellation('SIGTERM');
+    };
+
     // One raw-dump file pair per spawn attempt (the resume retry is a second
     // attempt). The stdout tee runs inside `spawnAgent` before the adapter.
     const dumpAttempt = rawDump?.openAttempt(runLabel);
 
     // `spawnAgent` is async and can reject DURING image normalization — fetch
-    // failures, missing local --image paths, decode errors.
-    let handle: Awaited<ReturnType<typeof spawnAgent>>;
+    // failures, missing local --image paths, decode errors. The runtime
+    // registry picks the transport: pi runs over RPC, everything else spawns
+    // one-shot (same handle shape, so the event loop below is unchanged).
     try {
-      handle = await spawnAgent({ ...spawnOpts, onRawStdout: dumpAttempt?.writeStdout });
+      handle = await spawnAgentOrRuntime(
+        spawnOpts,
+        dumpAttempt?.writeStdout,
+        (control) => {
+          startupControl = control;
+          // `control.cancel` is protocol-level (session abort), not an OS signal
+          // — replay any cancellation received before the control bound, even
+          // when the process group already delivered the signal itself.
+          if (cancellationSignal) cancelStartup(control, cancellationSignal);
+        },
+        options.codexAppServer,
+      );
+      if (cancellationSignal && !startupControl) {
+        // Same split as `applyCancellation`: when the wrapper does not own
+        // signal delivery the process group already signaled the agent, but
+        // session transports still need the protocol-level cancel.
+        if (ownsSignalDelivery()) handle.kill(cancellationSignal);
+        else handle.interrupt?.(cancellationSignal);
+      }
     } catch (err) {
-      await dumpAttempt?.close();
-      log.error('Failed to start agent:', err instanceof Error ? err.message : String(err));
+      try {
+        await drainCancellation();
+        await dumpAttempt?.close();
+      } finally {
+        removeSignalListeners();
+      }
+      if (cancellationSignal) {
+        return {
+          cancelled: !ingestLoss,
+          code: null,
+          ingestError: ingestLoss !== undefined,
+          resumeNotFound: false,
+          sawTerminalError: false,
+          sessionId: undefined,
+          signal: cancellationSignal,
+          stderrContent: '',
+          terminalErrorData: undefined,
+          terminalErrorMessage: undefined,
+        };
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      const errnoCode =
+        typeof err === 'object' && err && 'code' in err && typeof err.code === 'string'
+          ? err.code
+          : undefined;
+      log.error('Failed to start agent:', message);
+      await traceRecorder.finalize({
+        error: buildFinishError(message, 'AgentRuntimeError', errnoCode),
+        result: 'error',
+      });
+      if (serverIngester && sink) {
+        try {
+          await serverIngester.drain();
+          await sink.finish({
+            error: buildFinishError(message, 'AgentRuntimeError', errnoCode),
+            result: 'error',
+          });
+        } catch {
+          // best-effort; process is exiting anyway
+        }
+      }
       process.exit(1);
     }
 
@@ -511,59 +1102,55 @@ const exec = async (options: ExecOptions): Promise<void> => {
       dumpAttempt?.writeStderr(chunk);
     });
     handle.stderr.pipe(process.stderr);
-
-    // Ctrl-C → SIGINT to the child's process group.
-    // Repeated Ctrl-C escalates to SIGKILL.
-    let interrupted = false;
-    const onSigint = async () => {
-      if (interrupted) {
-        handle.kill('SIGKILL');
-        return;
+    const exit = handle.exit.catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      if (stderrContent.length < STDERR_CAP) {
+        stderrContent += `${stderrContent ? '\n' : ''}${message}`;
       }
-      interrupted = true;
-      handle.kill('SIGINT');
-      if (serverIngester && sink) {
-        try {
-          await serverIngester.drain();
-          await sink.finish({ result: 'cancelled' });
-        } catch {
-          // best-effort; process is exiting anyway
-        }
-      }
-    };
-    const onSigterm = async () => {
-      handle.kill('SIGTERM');
-      if (serverIngester && sink) {
-        try {
-          await serverIngester.drain();
-          await sink.finish({ result: 'cancelled' });
-        } catch {
-          // best-effort
-        }
-      }
-    };
-    process.on('SIGINT', onSigint);
-    process.on('SIGTERM', onSigterm);
+      return { code: 1, signal: null as NodeJS.Signals | null };
+    });
 
     // Stream events. Each event is optionally written as JSONL and pushed
     // into the ingester.  When intercepting resume errors, a matching
     // `error` event is withheld from the ingester and flags a retry instead.
     let resumeNotFound = false;
-    const ingestError = false;
+    let sawTerminalError = false;
+    let terminalErrorMessage: string | undefined;
+    let terminalErrorData: Record<string, unknown> | undefined;
     try {
       for await (const event of handle.events) {
         if (interceptResumeErrors && event.type === 'error') {
           const data = event.data as Record<string, unknown> | undefined;
           const msg = String(data?.message ?? data?.error ?? '');
-          if (looksLikeNeedsRetryWithoutResume(msg)) {
+          if (looksLikeNeedsRetryWithoutResume(msg) || isMissingGrokResumeSession(data)) {
             resumeNotFound = true;
             // Emit to JSONL for observability but do NOT push to ingester —
             // we are about to retry; the server must not see a terminal error.
+            // The local trace still records it: "attempt 1 could not resume" is
+            // the whole reason someone reads the trace back.
             if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+            traceRecorder.observe(event);
             continue;
           }
         }
+        // A terminal `error` event (e.g. an API/rate-limit error relayed by CC)
+        // must mark the run as failed even when the child exits 0 — track it so
+        // the finish result is not derived from the exit code alone. Capture the
+        // message too, so the finish payload can surface it as the task-level
+        // error detail (CC relays these on stdout, not stderr).
+        if (event.type === 'error') {
+          sawTerminalError = true;
+          const data = event.data as Record<string, unknown> | undefined;
+          terminalErrorMessage = String(data?.message ?? data?.error ?? '') || undefined;
+          // Keep the adapter's already-classified status-guide payload
+          // (overloaded / rate_limit carry `agentType` + `code`) so the finish
+          // leg doesn't flatten it back to a bare string — the process-failure
+          // classifier there only knows cli_not_found / auth_required.
+          terminalErrorData = isHeteroStatusGuideErrorData(data) ? data : undefined;
+        }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
+        operationHeartbeat?.observe(event);
+        traceRecorder.observe(event);
         serverIngester?.push(event);
       }
     } catch (err) {
@@ -571,11 +1158,27 @@ const exec = async (options: ExecOptions): Promise<void> => {
         'Stream error from agent process:',
         err instanceof Error ? err.message : String(err),
       );
+      await traceRecorder.finalize({
+        error: buildFinishError(
+          String(err),
+          'stream_error',
+          (err as NodeJS.ErrnoException | null)?.code,
+        ),
+        result: 'error',
+      });
       if (serverIngester && sink) {
         try {
           await serverIngester.drain();
+          // A spawn failure (missing CLI binary / cwd) surfaces HERE, not via
+          // `exit`: `spawnAgent` fails the event stream on the child's `error`
+          // event, so this catch runs and exits before the finish block below.
+          // Pass the raw errno code along for precise classification.
           await sink.finish({
-            error: { message: String(err), type: 'stream_error' },
+            error: buildFinishError(
+              String(err),
+              'stream_error',
+              (err as NodeJS.ErrnoException | null)?.code,
+            ),
             result: 'error',
           });
         } catch {
@@ -583,15 +1186,22 @@ const exec = async (options: ExecOptions): Promise<void> => {
         }
       }
       await dumpAttempt?.close();
+      try {
+        await drainCancellation();
+      } finally {
+        removeSignalListeners();
+      }
       process.exit(1);
-    } finally {
-      process.off('SIGINT', onSigint);
-      process.off('SIGTERM', onSigterm);
     }
 
-    const { code, signal } = await handle.exit;
+    const { code, signal } = await exit;
     await stderrEnded;
     await dumpAttempt?.close();
+    try {
+      await drainCancellation();
+    } finally {
+      removeSignalListeners();
+    }
 
     // Fallback stderr detection: CC may exit non-zero without emitting a
     // result event (e.g. it writes to stderr and quits immediately).
@@ -605,27 +1215,74 @@ const exec = async (options: ExecOptions): Promise<void> => {
     }
 
     return {
+      cancelled: interrupted,
       code,
-      ingestError,
+      // The shared ingester is permanently failed once the server refused a
+      // batch, so the caller must neither retry this run (every event of a
+      // retry would be dropped, with no second abort to stop it) nor report it
+      // as anything but failed.
+      ingestError: ingestLoss !== undefined,
       resumeNotFound,
+      sawTerminalError,
       sessionId: handle.sessionId,
       signal,
       stderrContent,
+      terminalErrorData,
+      terminalErrorMessage,
     };
   };
 
   // ─── First run (with --resume if provided) ───────────────────────────────
 
   const interceptResume = !!options.resume;
+  const extraArgs = [
+    ...(buildExtraArgs(options) ?? []),
+    // Point the supported CLI at the lobe_cc AskUserQuestion MCP server we just mounted.
+    ...(askMcpConfigPath ? ['--mcp-config', askMcpConfigPath] : []),
+  ];
+  // Resolve the CLI binary once, up front, and reuse it for both the initial
+  // run and the resume-retry. For each provider's default bare command
+  // this finds the validated binary — including an app-bundled Codex CLI when
+  // a broken `codex` shim shadows PATH — so sandbox/terminal runs no longer
+  // ENOENT on a stale global install. Custom commands are used verbatim.
+  const resolvedCommand = await resolveHeteroSpawnCommand(agentType, options.command);
+  const commandEnv = buildAgentProcessEnv({
+    operationId: serverIngest ? operationId : undefined,
+    pathEnv: resolvedCommand.pathEnv,
+    topicId: options.topic,
+  });
+  // Devin ACP's `--permission-mode` is a global flag; default to bypass so
+  // headless connected-device runs do not block on permission prompts. The mode
+  // response must not overwrite the model selected by `initialModel`.
+  const permissionMode = options.type === 'devin' ? 'bypass' : undefined;
+
+  const spawnOptions = {
+    agentType: options.type,
+    askUserBridge: askBridge,
+    command: resolvedCommand.command,
+    commandVersion: resolvedCommand.version,
+    cwd: options.cwd || process.cwd(),
+    detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
+    env: commandEnv,
+    extraArgs,
+    // Device and sandbox executions are observed through the same gateway stream as native
+    // server agents. Ask Claude Code for content-block deltas so the current conversation
+    // receives text while the process is running, not only the terminal assistant snapshot.
+    includePartialMessages: options.type === 'claude-code',
+    initialModel:
+      options.type === 'droid' || options.type === 'devin' || options.type === 'trae'
+        ? options.model
+        : undefined,
+    // Keep Claude Code's stdin open while it can still use input: closing it
+    // early makes print mode kill background tasks after 10 minutes.
+    liveInput: options.type === 'claude-code',
+    operationId,
+    permissionMode,
+    uploadImage,
+  };
+
   const first = await runOneAgent(
-    {
-      agentType: options.type,
-      command: options.command,
-      cwd: options.cwd || process.cwd(),
-      operationId,
-      prompt: resolved.prompt,
-      resumeSessionId: options.resume,
-    },
+    { ...spawnOptions, prompt: resolved.prompt, resumeSessionId: options.resume },
     interceptResume,
     'attempt-1',
   );
@@ -644,17 +1301,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // fresh session.  The server's `heteroSessionId` is updated with the new id,
   // breaking the stale-session loop.
   let result = first;
-  if (first.resumeNotFound) {
+  if (!first.cancelled && !first.ingestError && first.resumeNotFound) {
     log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
-      {
-        agentType: options.type,
-        command: options.command,
-        cwd: options.cwd || process.cwd(),
-        operationId,
-        prompt: resolved.prompt,
-        // No resumeSessionId — start fresh
-      },
+      // No resumeSessionId — start fresh
+      { ...spawnOptions, prompt: resolved.resumeFallbackPrompt ?? resolved.prompt },
       false, // no need to intercept resume errors on a fresh run
       'attempt-2-noresume',
     );
@@ -664,41 +1315,100 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   const { code, signal, sessionId } = result;
 
+  // Why the run failed to upload, when it did. `sawTerminalError`/stderr stay
+  // ahead of it: those explain a failing agent, while this explains an agent
+  // that worked and lost its output — the least obvious of the three, and the
+  // only one with no other trace in the conversation.
+  let ingestErrorMessage: string | undefined;
+
   if (serverIngester && sink) {
+    operationHeartbeat?.stop();
     try {
       await serverIngester.drain();
     } catch (err) {
-      log.error(
-        'Failed to flush events to server:',
-        err instanceof Error ? err.message : String(err),
-      );
+      ingestErrorMessage = err instanceof Error ? err.message : String(err);
+      log.error('Failed to flush events to server:', ingestErrorMessage);
       result = { ...result, ingestError: true };
-    }
-
-    const exitedClean = !result.ingestError && (code === 0 || signal === 'SIGTERM');
-
-    // When the run failed, pass stderr as the error detail so the server can
-    // surface a useful message instead of the generic "Agent execution failed"
-    // fallback.  Trim to the last 1 KB — the tail is most informative and
-    // keeps the tRPC payload small.
-    const stderrTail = result.stderrContent.trim();
-    const finishError =
-      !exitedClean && stderrTail
-        ? { message: stderrTail.slice(-1024), type: 'AgentRuntimeError' }
-        : undefined;
-
-    try {
-      await sink.finish({
-        error: finishError,
-        result: exitedClean ? 'success' : 'error',
-        sessionId,
-      });
-    } catch (err) {
-      log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
     }
   }
 
-  if (code !== null) process.exit(result.ingestError ? 1 : code);
+  // CC relays API/rate-limit errors as an in-stream terminal `error` event but
+  // still exits 0, so the exit code alone would report `success`. Treat any
+  // pushed terminal error as a failed run so the topic/task is marked failed.
+  const exitedClean =
+    !result.cancelled &&
+    !result.ingestError &&
+    !result.sawTerminalError &&
+    (code === 0 || signal === 'SIGTERM');
+
+  // When the run failed, pass an error detail so the server surfaces a useful
+  // message instead of the generic "Agent execution failed" fallback. Prefer
+  // the in-stream terminal error (CC relays API/rate-limit errors here while
+  // exiting 0, so stderr is empty), then the upload failure (a clean agent whose
+  // output never landed leaves nothing on stderr either), then the stderr tail.
+  // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
+  // payload small.
+  const stderrTail = result.stderrContent.trim();
+  const errorDetail = result.terminalErrorMessage || ingestErrorMessage || stderrTail;
+  // The adapter's in-stream classification (overloaded / rate_limit) already
+  // carries the structured status-guide body — forward it verbatim instead of
+  // re-deriving from the flattened message via the process-only classifier,
+  // which would drop `agentType`/`code` and demote the client UI to the
+  // generic error card.
+  const finishError =
+    result.cancelled || exitedClean
+      ? undefined
+      : result.terminalErrorData
+        ? {
+            body: { ...result.terminalErrorData },
+            message: String(result.terminalErrorData.message ?? errorDetail ?? ''),
+            type: 'AgentRuntimeError',
+          }
+        : errorDetail
+          ? buildFinishError(errorDetail.slice(-1024), 'AgentRuntimeError')
+          : undefined;
+
+  const runResult = result.cancelled ? 'cancelled' : exitedClean ? 'success' : 'error';
+
+  // Close the local trace for EVERY run — the outcome is derived above from the
+  // same signals the server finish uses, so a standalone run records the same
+  // completion reason a server-ingest one does. Runs before the sink so a
+  // failing server call still leaves a complete snapshot on disk.
+  await traceRecorder.finalize({ error: finishError, result: runResult });
+  let finishDeliveryFailed = false;
+
+  if (serverIngester && sink) {
+    try {
+      await sink.finish({
+        error: finishError,
+        resumeSessionInvalidated: first.resumeNotFound || undefined,
+        result: runResult,
+        sessionId,
+      });
+    } catch (err) {
+      finishDeliveryFailed = true;
+      log.error('Failed to send heteroFinish:', err instanceof Error ? err.message : String(err));
+    }
+  }
+  // Only now: the drain and the finish receipt above both authenticate with the
+  // operation token, and either can sit in retries long enough for it to expire.
+  operationTokenRenewal?.stop();
+
+  // Tear down the AskUserQuestion MCP: stop polling, cancel any in-flight
+  // pending (→ CC's tool returns cleanly), close the server, drop the temp
+  // config. Best-effort — the process is about to exit anyway.
+  askPollAbort.abort();
+  if (askServer) {
+    askServer.unregisterOperation(operationId);
+    await askServer.stop().catch(() => {});
+  } else askBridge?.cancelAll('session_ended');
+  if (askMcpConfigPath) await unlink(askMcpConfigPath).catch(() => {});
+
+  if (code !== null) {
+    const hasRunError =
+      finishDeliveryFailed || result.ingestError || (!result.cancelled && result.sawTerminalError);
+    process.exit(hasRunError ? 1 : code);
+  }
   if (signal === 'SIGINT') process.exit(130);
   if (signal === 'SIGTERM') process.exit(143);
   if (signal === 'SIGKILL') process.exit(137);
@@ -708,7 +1418,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
 export function registerHeteroCommand(program: Command) {
   const hetero = program
     .command('hetero')
-    .description('Run heterogeneous agent CLIs (Claude Code / Codex) and stream their output');
+    .description(
+      `Run heterogeneous agent CLIs (${SUPPORTED_AGENT_TITLES}) and stream their output`,
+    );
 
   hetero
     .command('exec')
@@ -726,11 +1438,24 @@ export function registerHeteroCommand(program: Command) {
       '--input-json <path>',
       'Read full multimodal prompt as JSON content blocks from a file. Use `-` for stdin.',
     )
+    .option('--codex-app-server', 'Run Codex through its native app-server protocol')
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
+    .option('--mode <mode>', 'Forward a resolved Amp agent mode selection to the agent CLI')
+    .option('--model <model>', 'Forward a resolved model selection to the agent CLI')
+    .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')
+    .option(
+      '--speed <mode>',
+      'Forward a resolved speed selection to the agent CLI (codex only; `fast` requests the Fast service tier)',
+    )
+    .option(
+      '--agent-arg <arg>',
+      'Forward one native agent CLI argument after wrapper parsing (repeatable)',
+      collectAgentArg,
+    )
     .option(
       '-c, --command <bin>',
-      'Override the agent CLI binary name (default: `claude` or `codex`)',
+      `Override the agent runtime binary (CLI defaults: ${SUPPORTED_AGENT_COMMANDS}; DeepSeek Harness defaults to 'dsh --profile acp')`,
     )
     .option(
       '--operation-id <id>',

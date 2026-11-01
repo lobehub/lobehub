@@ -1,0 +1,277 @@
+'use client';
+
+import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Spin,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
+import { CircleCheck } from 'lucide-react';
+import { memo, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { useHomeStore } from '@/store/home';
+import { homeAgentListSelectors } from '@/store/home/selectors';
+
+import { buildMoveTargets } from './targets';
+
+type Step = 'pick' | 'confirm' | 'moving' | 'done';
+
+export interface MoveTopicsContentProps {
+  /** Called after the move succeeds (e.g. to exit multi-select mode). */
+  onMoved?: () => void;
+  /** Source agent — excluded from the picker so a no-op move can't be chosen. */
+  sourceAgentId?: string | null;
+  topicIds: string[];
+}
+
+const styles = createStaticStyles(({ css }) => ({
+  sectionHeader: css`
+    padding-block: 4px;
+    padding-inline: 8px;
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  searchInput: css`
+    width: 100%;
+    padding-block: 6px;
+    padding-inline: 10px;
+    border: none;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    font-family: inherit;
+    font-size: 13px;
+    color: ${cssVar.colorText};
+
+    background: transparent;
+    outline: none;
+
+    &::placeholder {
+      color: ${cssVar.colorTextPlaceholder};
+    }
+  `,
+}));
+
+const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId, topicIds }) => {
+  const { t } = useTranslation(['topic', 'chat', 'common']);
+  const { close, setCanDismissByClickOutside } = useModalContext();
+  const navigate = useWorkspaceAwareNavigate();
+
+  const [step, setStep] = useState<Step>('pick');
+  const [search, setSearch] = useState('');
+  const [target, setTarget] = useState<{ id: string; title: string } | null>(null);
+
+  const batchMoveTopicsToAgent = useChatStore((s) => s.batchMoveTopicsToAgent);
+  const pinnedAgents = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
+  const agentGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
+  const ungroupedAgents = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
+  const privateAgentGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
+  const privatePinnedAgents = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
+  const privateUngroupedAgents = useHomeStore(
+    homeAgentListSelectors.privateUngroupedAgents,
+    isEqual,
+  );
+  const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
+
+  // The inbox (default "LobeAI") agent is virtual, so it's filtered out of the
+  // sidebar agent list — add it back so topics can be moved to it too.
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const inboxMeta = useAgentStore((s) =>
+    inboxAgentId ? agentSelectors.getAgentMetaById(inboxAgentId)(s) : undefined,
+  );
+
+  useFetchAgentList();
+
+  const count = topicIds.length;
+
+  // Private agents get their own section on top — appended to the end of a
+  // long workspace list they were effectively unreachable. The source agent is
+  // excluded (no-op move) and the virtual inbox agent is added back.
+  const { privateAgents, workspaceAgents } = useMemo(
+    () =>
+      buildMoveTargets({
+        agentGroups,
+        inbox: inboxAgentId
+          ? {
+              avatar: inboxMeta?.avatar || DEFAULT_INBOX_AVATAR,
+              description: null,
+              id: inboxAgentId,
+              pinned: false,
+              title: agentDisplayName(inboxMeta, t('inbox.title', { ns: 'chat' })),
+              type: 'agent',
+              updatedAt: new Date(),
+            }
+          : undefined,
+        pinnedAgents,
+        privateAgentGroups,
+        privatePinnedAgents,
+        privateUngroupedAgents,
+        search,
+        sourceAgentId,
+        ungroupedAgents,
+      }),
+    [
+      agentGroups,
+      inboxAgentId,
+      inboxMeta,
+      pinnedAgents,
+      privateAgentGroups,
+      privatePinnedAgents,
+      privateUngroupedAgents,
+      search,
+      sourceAgentId,
+      t,
+      ungroupedAgents,
+    ],
+  );
+
+  const renderAgentItems = (list: SidebarAgentItem[]) =>
+    list.map((agent) => (
+      <AgentItem
+        active={false}
+        agent={agent}
+        agentId={agent.id}
+        agentTitle={agentDisplayName(agent, t('untitledAgent', { ns: 'chat' }))}
+        avatar={agent.avatar}
+        key={agent.id}
+        onClose={() => {}}
+        onAgentChange={() => {
+          setTarget({
+            id: agent.id,
+            title: agentDisplayName(agent, t('untitledAgent', { ns: 'chat' })),
+          });
+          setStep('confirm');
+        }}
+      />
+    ));
+
+  const handleConfirm = async () => {
+    if (!target) return;
+    setStep('moving');
+    // Lock dismissal so the move can't be interrupted mid-flight.
+    setCanDismissByClickOutside?.(false);
+    try {
+      await batchMoveTopicsToAgent(topicIds, target.id);
+      onMoved?.();
+      setStep('done');
+    } catch (error) {
+      console.error('[MoveTopics] move failed:', error);
+      toast.error(t('management.moveModal.error'));
+      setStep('confirm');
+    } finally {
+      setCanDismissByClickOutside?.(true);
+    }
+  };
+
+  if (step === 'pick') {
+    return (
+      <Flexbox>
+        <input
+          autoFocus
+          className={styles.searchInput}
+          placeholder={t('management.bulk.moveSearchPlaceholder')}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {!isAgentListInit ? (
+          <SkeletonList rows={6} />
+        ) : privateAgents.length + workspaceAgents.length === 0 ? (
+          <Flexbox align={'center'} justify={'center'} padding={24}>
+            <Text fontSize={12} type={'secondary'}>
+              {t('management.bulk.moveEmpty')}
+            </Text>
+          </Flexbox>
+        ) : (
+          <Flexbox
+            gap={4}
+            padding={8}
+            style={{ maxHeight: '50vh', overflowY: 'auto', width: '100%' }}
+          >
+            {privateAgents.length > 0 ? (
+              <>
+                <div className={styles.sectionHeader}>
+                  {t('taskManager.agentSelector.privateGroup')}
+                </div>
+                {renderAgentItems(privateAgents)}
+                {workspaceAgents.length > 0 && (
+                  <div className={styles.sectionHeader}>
+                    {t('taskManager.agentSelector.workspaceGroup')}
+                  </div>
+                )}
+                {renderAgentItems(workspaceAgents)}
+              </>
+            ) : (
+              renderAgentItems(workspaceAgents)
+            )}
+          </Flexbox>
+        )}
+      </Flexbox>
+    );
+  }
+
+  if (step === 'confirm') {
+    return (
+      <Flexbox gap={20} padding={24}>
+        <Text>{t('management.moveModal.confirmContent', { count, title: target?.title })}</Text>
+        <Flexbox horizontal gap={8} justify={'flex-end'}>
+          <Button onClick={() => setStep('pick')}>{t('management.moveModal.back')}</Button>
+          <Button type={'primary'} onClick={handleConfirm}>
+            {t('management.moveModal.confirmOk')}
+          </Button>
+        </Flexbox>
+      </Flexbox>
+    );
+  }
+
+  if (step === 'moving') {
+    return (
+      <Flexbox align={'center'} gap={16} justify={'center'} padding={48}>
+        <Spin size="large" />
+        <Text type={'secondary'}>{t('management.moveModal.moving')}</Text>
+      </Flexbox>
+    );
+  }
+
+  // done
+  return (
+    <Flexbox align={'center'} gap={20} justify={'center'} padding={48}>
+      <Flexbox align={'center'} gap={12}>
+        <Icon color={cssVar.colorSuccess} icon={CircleCheck} size={32} />
+        <Text weight={500}>{t('management.moveModal.done', { count })}</Text>
+      </Flexbox>
+      <Flexbox horizontal gap={8}>
+        <Button onClick={close}>{t('management.moveModal.doneOk')}</Button>
+        {target && (
+          <Button
+            type={'primary'}
+            onClick={() => {
+              navigate(AGENT_CHAT_URL(target.id));
+              close();
+            }}
+          >
+            {t('management.moveModal.goToTarget', { title: target.title })}
+          </Button>
+        )}
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+MoveTopicsContent.displayName = 'MoveTopicsContent';
+
+export default MoveTopicsContent;

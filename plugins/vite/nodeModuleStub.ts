@@ -5,7 +5,7 @@ import type { Plugin } from 'vite';
  *
  * - `node:stream`: dynamically imported in azureai provider behind `typeof window === 'undefined'`
  *   guard — dead code in browser but Rollup still resolves it.
- * - `node-fetch`: dynamically imported by klavis SDK's getFetchFn behind a runtime
+ * - `node-fetch`: dynamically imported by composio SDK's getFetchFn behind a runtime
  *   Node.js version check — dead code in browser since native fetch is available.
  */
 export function viteNodeModuleStub(): Plugin {

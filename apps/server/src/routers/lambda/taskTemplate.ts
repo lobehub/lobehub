@@ -1,34 +1,35 @@
-import { KNOWN_TASK_TEMPLATE_IDS } from '@lobechat/const';
+import { TASK_TEMPLATE_RECOMMEND_MAX_COUNT } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { ENABLED_SKILL_SOURCES, TaskTemplateService } from '@/server/services/taskTemplate';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { TaskTemplateService } from '@/server/services/taskTemplate';
 
 const listDailyRecommendSchema = z.object({
-  count: z.number().int().min(1).optional(),
+  count: z.number().int().min(1).max(TASK_TEMPLATE_RECOMMEND_MAX_COUNT).optional(),
   interestKeys: z.array(z.string().max(64)).max(32),
+  locale: z.string().max(32).optional(),
   refreshSeed: z.string().min(1).max(32).optional(),
 });
 
 const templateIdSchema = z.object({
-  templateId: z
-    .string()
-    .max(64)
-    .refine((id) => KNOWN_TASK_TEMPLATE_IDS.has(id), { message: 'Unknown task template id' }),
+  templateId: z.number().int().positive(),
 });
 
-export const taskTemplateRouter = router({
-  dismiss: authedProcedure.input(templateIdSchema).mutation(async () => ({ success: true })),
+const taskTemplateProcedure = authedProcedure.use(serverDatabase);
 
-  listDailyRecommend: authedProcedure
+export const taskTemplateRouter = router({
+  dismiss: taskTemplateProcedure.input(templateIdSchema).mutation(async () => ({ success: true })),
+
+  listDailyRecommend: taskTemplateProcedure
     .input(listDailyRecommendSchema)
     .query(async ({ input, ctx }) => {
       try {
-        const service = new TaskTemplateService(ctx.userId);
+        const service = new TaskTemplateService(ctx.userId, ctx.serverDB);
         const data = await service.listDailyRecommend(input.interestKeys, {
           count: input.count,
-          enabledSkillSources: ENABLED_SKILL_SOURCES,
+          locale: input.locale,
           refreshSeed: input.refreshSeed,
         });
         return { data, success: true };
@@ -42,5 +43,7 @@ export const taskTemplateRouter = router({
       }
     }),
 
-  recordCreated: authedProcedure.input(templateIdSchema).mutation(async () => ({ success: true })),
+  recordCreated: taskTemplateProcedure
+    .input(templateIdSchema)
+    .mutation(async () => ({ success: true })),
 });

@@ -1,5 +1,4 @@
-import { Icon, Tag } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider, Icon, Tag } from '@lobehub/ui';
 import { Timer } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

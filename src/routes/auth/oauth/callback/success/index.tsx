@@ -1,3 +1,1 @@
-import OAuthCallbackSuccess from '@/features/Auth/OAuthCallback/Success';
-
-export default OAuthCallbackSuccess;
+export { default } from '@/features/Auth/OAuthCallback/Success';

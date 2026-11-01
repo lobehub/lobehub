@@ -1,10 +1,9 @@
 'use client';
 
-import { Outlet, useParams } from 'react-router-dom';
+import { Outlet, useParams } from 'react-router';
 
+import ProviderMenu from '@/features/Settings/provider/ProviderMenu';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-
-import ProviderMenu from '../../../../(main)/settings/provider/ProviderMenu';
 
 const Layout = () => {
   const params = useParams<{ providerId: string }>();

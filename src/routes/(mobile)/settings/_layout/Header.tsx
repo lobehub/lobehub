@@ -4,12 +4,12 @@ import { Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useMatch, useParams, useSearchParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useShowMobileWorkspace } from '@/hooks/useShowMobileWorkspace';
+import { useAgentStore } from '@/store/agent';
 import { SettingsTabs } from '@/store/global/initialState';
-import { useSessionStore } from '@/store/session';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
 
 // Explicit tab → i18n key map. Covers:
@@ -20,6 +20,7 @@ import { mobileHeaderSticky } from '@/styles/mobileHeader';
 const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.Billing]: 'subscription:tab.billing',
   [SettingsTabs.Credits]: 'subscription:tab.credits',
+  [SettingsTabs.Labs]: 'labs:title',
   [SettingsTabs.Plans]: 'subscription:tab.plans',
   [SettingsTabs.Profile]: 'auth:profile.title',
   [SettingsTabs.Referral]: 'subscription:tab.referral',
@@ -28,27 +29,69 @@ const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.SystemTools]: 'setting:tab.systemTools',
 };
 
+const WORKSPACE_TAB_TITLE_KEY: Record<string, string> = {
+  'audit-log': 'setting:workspaceSetting.tab.auditLog',
+  'budget': 'subscription:tab.budget',
+  'chat-preference': 'setting:tab.chatPreference',
+  'connector': 'setting:workspaceSetting.tab.connector',
+  'credential': 'setting:tab.creds',
+  'general': 'setting:workspaceSetting.tab.general',
+  'labels': 'setting:workspaceSetting.tab.labels',
+  'members': 'setting:workspaceSetting.tab.members',
+  'oauth-apps': 'auth:tab.oauthApps',
+  'skill': 'setting:workspaceSetting.tab.skill',
+  'statistics': 'auth:tab.stats',
+  'teams': 'setting:workspaceSetting.tab.teams',
+};
+
+/** URL slugs are kebab-case (`subscription-accounts`); `setting:tab.*` keys are camelCase. */
+const camelCaseSlug = (slug: string) =>
+  slug.replaceAll(/-([a-z])/g, (_, char) => char.toUpperCase());
+
 const Header = memo(() => {
-  const { t } = useTranslation(['setting', 'auth', 'subscription']);
+  const { t } = useTranslation(['setting', 'auth', 'labs', 'subscription']);
   const showMobileWorkspace = useShowMobileWorkspace();
   const navigate = useWorkspaceAwareNavigate();
-  const params = useParams<{ providerId?: string; tab?: string }>();
+  const params = useParams<{ providerId?: string; tab?: string; workspaceSlug?: string }>();
+  const [searchParams] = useSearchParams();
+  const workspaceSettingsMatch = useMatch('/:workspaceSlug/settings/:workspaceTab/*');
+  // Known tabs are static routes (no `:tab` param), so read the tab off the URL.
+  const personalSettingsMatch = useMatch('/settings/:tab/*');
 
-  const isSessionActive = useSessionStore((s) => !!s.activeId);
-  const isProvider = params.providerId && params.providerId !== 'all';
+  const isAgentActive = useAgentStore((s) => !!s.activeAgentId);
+  // Personal provider details carry the id in the path; the workspace provider
+  // page canonicalizes it into the `provider` query param instead.
+  const queryProvider = searchParams.get('provider');
+  const providerId =
+    params.providerId ?? (queryProvider && queryProvider !== 'all' ? queryProvider : undefined);
+  const isProvider = providerId && providerId !== 'all';
 
   const handleBackClick = () => {
-    if (isSessionActive && showMobileWorkspace) {
+    if (isAgentActive && showMobileWorkspace) {
       navigate('/agent');
-    } else if (isProvider) {
+    } else if (params.providerId && params.providerId !== 'all') {
       navigate('/settings/provider/all', { escape: true });
+    } else if (isProvider) {
+      // Query-selected provider (workspace form): back to the workspace
+      // provider list instead of escaping to personal settings.
+      navigate('/settings/provider');
+    } else if (params.workspaceSlug) {
+      // Workspace tabs go back to the workspace settings menu; the menu goes
+      // back to the workspace. Workspace-aware paths keep the slug.
+      navigate(workspaceSettingsMatch ? '/settings' : '/');
     } else {
       navigate('/me/settings', { escape: true });
     }
   };
 
-  const tab = params.tab as SettingsTabs | undefined;
-  const tabTitleKey = tab ? (TAB_TITLE_KEY[tab] ?? `setting:tab.${tab}`) : 'setting:tab.all';
+  const workspaceTab = workspaceSettingsMatch?.params.workspaceTab;
+  const tab = (params.tab ?? personalSettingsMatch?.params.tab ?? workspaceTab) as
+    SettingsTabs | undefined;
+  const tabTitleKey = tab
+    ? (WORKSPACE_TAB_TITLE_KEY[workspaceTab ?? ''] ??
+      TAB_TITLE_KEY[tab] ??
+      `setting:tab.${camelCaseSlug(tab)}`)
+    : 'setting:tab.all';
   // i18next's strict key union rejects dynamic strings. `Parameters<typeof t>[0]` would push TS
   // onto the wrong overload and infer the return as `unknown`, so we fall back to `as any`.
   // Unknown keys surface visibly as raw text, which is acceptable.
@@ -62,7 +105,7 @@ const Header = memo(() => {
         <ChatHeader.Title
           title={
             <Flexbox horizontal align={'center'} gap={8}>
-              <span style={{ lineHeight: 1.2 }}>{isProvider ? params.providerId : tabTitle}</span>
+              <span style={{ lineHeight: 1.2 }}>{isProvider ? providerId : tabTitle}</span>
             </Flexbox>
           }
         />

@@ -23,9 +23,8 @@ export const CollapsedMessage = memo<CollapsedMessageProps>(({ id, content }) =>
       <Flexbox padding={4}>
         <Button
           block
-          color={'default'}
           size={'small'}
-          variant={'filled'}
+          type={'fill'}
           onClick={() => {
             toggleMessageCollapsed(id, false);
           }}

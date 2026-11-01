@@ -17,10 +17,8 @@ export type DeviceAccessReason =
    */
   | 'bot-personal-platform'
   /**
-   * Bot caller, sender is on the operator's trusted external list. Reserved —
-   * the resolver never returns this value yet; future work will plumb the
-   * trusted list through `DeviceAccessPolicyInput` and add the branch here
-   * without touching `AgentToolsEngine`.
+   * Bot caller, sender is on the owner's device list (`settings.devicePolicy =
+   * 'allowlist'`), carried as `botContext.isDeviceTrusted`.
    */
   | 'bot-trusted'
   /** Bot caller, sender is identifiable but not the owner — DENY device tools. */
@@ -30,7 +28,14 @@ export type DeviceAccessReason =
    * webhook didn't deliver the author). Treated as untrusted external —
    * fail-closed.
    */
-  | 'bot-owner-not-configured';
+  | 'bot-owner-not-configured'
+  /**
+   * Shared-agent visitor conversation — DENY device tools. The run executes
+   * under the creator's identity, so device access would hand the visitor the
+   * creator's machines; hetero targets degrade to sandbox, native device tools
+   * to plain chat.
+   */
+  | 'share-visitor';
 
 /**
  * Bot platforms whose LobeHub integration is **personal-scope-only at the
@@ -57,6 +62,8 @@ const PERSONAL_SCOPE_BOT_PLATFORMS = new Set<string>(['wechat']);
 export interface DeviceAccessPolicyInput {
   /** Undefined when the caller is a first-party UI (web / desktop / mobile). */
   botContext?: ChatTopicBotContext;
+  /** True when the run serves a shared-agent visitor (share gate present). */
+  shareVisitor?: boolean;
 }
 
 export interface DeviceAccessPolicyOutput {
@@ -78,7 +85,13 @@ export interface DeviceAccessPolicyOutput {
 export const resolveDeviceAccessPolicy = (
   input: DeviceAccessPolicyInput,
 ): DeviceAccessPolicyOutput => {
-  const { botContext } = input;
+  const { botContext, shareVisitor } = input;
+
+  // Checked before every trust branch: a share visitor is never allowed to
+  // reach the creator's devices, regardless of how the request arrived.
+  if (shareVisitor) {
+    return { canUseDevice: false, reason: 'share-visitor' };
+  }
 
   if (!botContext) {
     return { canUseDevice: true, reason: 'first-party' };
@@ -96,9 +109,9 @@ export const resolveDeviceAccessPolicy = (
     return { canUseDevice: true, reason: 'bot-personal-platform' };
   }
 
-  // Future: bot-trusted branch (operator-curated allowlist of external
-  // senders). Falls through to the deny branch until the trusted list is
-  // wired into `DeviceAccessPolicyInput`.
+  if (botContext.isDeviceTrusted) {
+    return { canUseDevice: true, reason: 'bot-trusted' };
+  }
 
   if (!botContext.senderExternalUserId) {
     return { canUseDevice: false, reason: 'bot-owner-not-configured' };

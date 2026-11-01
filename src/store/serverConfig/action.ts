@@ -1,13 +1,13 @@
 import { type SWRResponse } from 'swr';
 
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
+import { serverConfigKeys } from '@/libs/swr/keys';
 import { globalService } from '@/services/global';
 import { type StoreSetter } from '@/store/types';
 import { type GlobalRuntimeConfig } from '@/types/serverConfig';
 
 import { type ServerConfigStore } from './store';
 
-const FETCH_SERVER_CONFIG_KEY = 'FETCH_SERVER_CONFIG';
 const CLOUD_DESKTOP_BUSINESS_FEATURES_FLAG = '__LOBECLOUD_DESKTOP_BUSINESS_FEATURES__';
 
 const setDesktopBusinessFeaturesFlag = (enableBusinessFeatures: boolean | undefined) => {
@@ -34,7 +34,7 @@ export class ServerConfigActionImpl {
 
   useInitServerConfig = (): SWRResponse<GlobalRuntimeConfig> => {
     return useOnlyFetchOnceSWR<GlobalRuntimeConfig>(
-      FETCH_SERVER_CONFIG_KEY,
+      serverConfigKeys.get,
       () => globalService.getGlobalConfig(),
       {
         onError: () => {
@@ -46,9 +46,11 @@ export class ServerConfigActionImpl {
           this.#set(
             {
               billboard: data.billboard ?? null,
+              canAccessDevDock: data.serverFeatureFlags.enableDevDock === true,
               featureFlags: data.serverFeatureFlags,
               serverConfig: data.serverConfig,
               serverConfigInit: true,
+              serverConfigLoaded: true,
             },
             false,
             'initServerConfig',

@@ -1,10 +1,29 @@
-import type { Pricing, PricingUnit, PricingUnitName } from 'model-bank';
+import type { LookupPricingUnit, Pricing, PricingUnit, PricingUnitName } from 'model-bank';
+
+/**
+ * Cache TTL a request uses unless it asks for a longer one; Anthropic's prompt caching
+ * defaults to 5 minutes, and cache-write lookups key their prices by `ttl`.
+ */
+const DEFAULT_CACHE_TTL_KEY = '5m';
+
+/**
+ * Lookup key whose price represents the unit in a single-price display.
+ * Keys are sorted alphabetically in model-bank, so the first key of a TTL lookup is `1h`;
+ * showing it would quote the 1-hour cache write as the model's cache-write price.
+ */
+const getDisplayLookupKey = (unit: LookupPricingUnit): string | undefined => {
+  const prices = unit.lookup?.prices || {};
+  if (unit.lookup?.pricingParams?.includes('ttl') && DEFAULT_CACHE_TTL_KEY in prices) {
+    return DEFAULT_CACHE_TTL_KEY;
+  }
+  return Object.keys(prices)[0];
+};
 
 /**
  * Internal helper to extract the displayed unit rate from a pricing unit by strategy
  * - fixed: rate
  * - tiered: tiers[0].rate
- * - lookup: first price value
+ * - lookup: the default-TTL (`5m`) price for TTL lookups, otherwise the first price value
  */
 const getRateFromUnit = (unit: PricingUnit): number | undefined => {
   switch (unit.strategy) {
@@ -15,8 +34,8 @@ const getRateFromUnit = (unit: PricingUnit): number | undefined => {
       return unit.tiers?.[0]?.rate;
     }
     case 'lookup': {
-      const prices = Object.values(unit.lookup?.prices || {});
-      return prices[0];
+      const key = getDisplayLookupKey(unit);
+      return key ? unit.lookup.prices[key] : undefined;
     }
     default: {
       return undefined;
@@ -25,9 +44,21 @@ const getRateFromUnit = (unit: PricingUnit): number | undefined => {
 };
 
 const getOriginalRateFromUnit = (unit: PricingUnit): number | undefined => {
-  if (unit.strategy !== 'fixed') return undefined;
-
-  return unit.originalRate;
+  switch (unit.strategy) {
+    case 'fixed': {
+      return unit.originalRate;
+    }
+    case 'tiered': {
+      return unit.tiers?.[0]?.originalRate;
+    }
+    case 'lookup': {
+      const key = getDisplayLookupKey(unit);
+      return key ? unit.lookup.originalPrices?.[key] : undefined;
+    }
+    default: {
+      return undefined;
+    }
+  }
 };
 
 /**
@@ -44,7 +75,7 @@ export const getUnitRateByName = (
 };
 
 /**
- * Get fixed unit original rate by unit name when it is higher than the current rate.
+ * Get unit original rate by unit name when it is higher than the current rate.
  */
 export const getOriginalUnitRateByName = (
   pricing?: Pricing,

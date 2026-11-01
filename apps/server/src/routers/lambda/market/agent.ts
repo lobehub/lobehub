@@ -4,6 +4,7 @@ import { customAlphabet } from 'nanoid/non-secure';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { UserModel } from '@/database/models/user';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketSDK, marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
@@ -237,8 +238,6 @@ const agentProcedure = authedProcedure
   .use(marketUserInfo)
   .use(marketSDK)
   .use(async ({ ctx, next }) => {
-    // Import UserModel dynamically to avoid circular dependencies
-    const { UserModel } = await import('@/database/models/user');
     const userModel = new UserModel(ctx.serverDB, ctx.userId);
 
     // Get user's market accessToken from database (stored by MarketAuthProvider after OIDC login)
@@ -277,22 +276,22 @@ const createAgentVersionSchema = z.object({
   avatar: z.string().optional(),
   category: z.string().optional(),
   changelog: z.string().optional(),
-  config: z.record(z.any()).optional(),
+  config: z.record(z.string(), z.any()).optional(),
   defaultInputModes: z.array(z.string()).optional(),
   defaultOutputModes: z.array(z.string()).optional(),
   description: z.string().optional(),
   documentationUrl: z.string().optional(),
-  extensions: z.array(z.record(z.any())).optional(),
+  extensions: z.array(z.record(z.string(), z.any())).optional(),
   hasPushNotifications: z.boolean().optional(),
   hasStateTransitionHistory: z.boolean().optional(),
   hasStreaming: z.boolean().optional(),
   identifier: z.string(),
-  interfaces: z.array(z.record(z.any())).optional(),
+  interfaces: z.array(z.record(z.string(), z.any())).optional(),
   name: z.string().optional(),
   preferredTransport: z.string().optional(),
   providerId: z.number().optional(),
-  securityRequirements: z.array(z.record(z.any())).optional(),
-  securitySchemes: z.record(z.any()).optional(),
+  securityRequirements: z.array(z.record(z.string(), z.any())).optional(),
+  securitySchemes: z.record(z.string(), z.any()).optional(),
   setAsCurrent: z.boolean().optional(),
   summary: z.string().optional(),
   supportsAuthenticatedExtendedCard: z.boolean().optional(),
@@ -315,11 +314,11 @@ const publishOrCreateSchema = z.object({
 
   changelog: z.string().optional(),
 
-  config: z.record(z.any()).optional(),
+  config: z.record(z.string(), z.any()).optional(),
 
   description: z.string().optional(),
 
-  editorData: z.record(z.any()).optional(),
+  editorData: z.record(z.string(), z.any()).optional(),
 
   // Agent basic info
   identifier: z.string().nullish(),

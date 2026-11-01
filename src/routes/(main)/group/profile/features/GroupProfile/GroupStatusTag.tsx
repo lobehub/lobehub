@@ -3,6 +3,7 @@
 import { Tag } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -17,7 +18,8 @@ const GroupStatusTag = memo(() => {
   const [status, setStatus] = useState<AgentStatus | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const meta = useAgentGroupStore(agentGroupSelectors.currentGroupMeta);
+  const { gid } = useParams<{ gid: string }>();
+  const meta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(gid ?? '')(s));
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {
@@ -71,11 +73,7 @@ const GroupStatusTag = memo(() => {
 
   if (loading || !statusConfig) return null;
 
-  return (
-    <Tag bordered={false} color={statusConfig.color}>
-      {statusConfig.label}
-    </Tag>
-  );
+  return <Tag color={statusConfig.color}>{statusConfig.label}</Tag>;
 });
 
 GroupStatusTag.displayName = 'GroupStatusTag';

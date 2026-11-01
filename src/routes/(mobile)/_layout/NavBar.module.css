@@ -1,0 +1,3 @@
+.active svg {
+  fill: color-mix(in srgb, var(--lobe-color-primary) 33%, transparent);
+}

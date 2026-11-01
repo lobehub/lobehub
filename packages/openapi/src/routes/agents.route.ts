@@ -1,15 +1,17 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
+import { describeRoute } from 'hono-openapi';
 
 import { getAllScopePermissions, getScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { AgentController } from '../controllers/agent.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
-import { PaginationQuerySchema } from '../types';
 import {
   AgentIdParamSchema,
   CreateAgentRequestSchema,
+  DuplicateAgentSchema,
+  GetAgentsQuerySchema,
   UpdateAgentRequestSchema,
 } from '../types/agent.type';
 
@@ -28,7 +30,7 @@ AgentRoutes.get(
     getScopePermissions('AGENT_READ', ['ALL', 'OWNER']),
     'You do not have permission to view the Agent list',
   ),
-  zValidator('query', PaginationQuerySchema),
+  zValidator('query', GetAgentsQuerySchema),
   async (c) => {
     const controller = new AgentController();
     return await controller.queryAgents(c);
@@ -110,6 +112,16 @@ AgentRoutes.delete(
     const controller = new AgentController();
     return await controller.deleteAgent(c);
   },
+);
+
+AgentRoutes.post(
+  '/:id/duplicate',
+  describeRoute({ summary: 'Duplicate agent', tags: ['agents'] }),
+  requireAuth,
+  requireAnyPermission(getAllScopePermissions('AGENT_FORK')),
+  zValidator('param', AgentIdParamSchema),
+  zValidator('json', DuplicateAgentSchema),
+  async (c) => new AgentController().duplicateAgent(c),
 );
 
 export default AgentRoutes;

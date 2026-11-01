@@ -1,3 +1,1 @@
-import OAuthCallbackError from '@/features/Auth/OAuthCallback/Error';
-
-export default OAuthCallbackError;
+export { default } from '@/features/Auth/OAuthCallback/Error';

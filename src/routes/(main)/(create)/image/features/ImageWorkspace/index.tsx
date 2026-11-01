@@ -23,6 +23,7 @@ const ImageWorkspace = ({ embedInput = true }: ImageWorkspaceProps) => (
     selectors={{
       activeGenerationTopicId: generationTopicSelectors.activeGenerationTopicId,
       currentGenerationBatches: generationBatchSelectors.currentGenerationBatches,
+      generationTopics: generationTopicSelectors.generationTopics,
       isCurrentGenerationTopicLoaded: generationBatchSelectors.isCurrentGenerationTopicLoaded,
     }}
   />

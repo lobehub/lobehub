@@ -184,20 +184,18 @@ const SortButton = memo(() => {
 
   const menuItems = useMemo<DropdownMenuCheckboxItem[]>(
     () =>
-      items.map(
-        (item): DropdownMenuCheckboxItem => ({
-          checked: item.key === activeItem?.key,
-          closeOnClick: true,
-          key: item.key,
-          label: item.label,
-          onCheckedChange: (checked: boolean) => {
-            if (checked) {
-              handleSort(String(item.key));
-            }
-          },
-          type: 'checkbox',
-        }),
-      ),
+      items.map((item): DropdownMenuCheckboxItem => ({
+        checked: item.key === activeItem?.key,
+        closeOnClick: true,
+        key: item.key,
+        label: item.label,
+        onCheckedChange: (checked: boolean) => {
+          if (checked) {
+            handleSort(String(item.key));
+          }
+        },
+        type: 'checkbox',
+      })),
     [activeItem?.key, handleSort, items],
   );
 

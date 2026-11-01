@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { ArrowLeftRight } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,20 +38,32 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface InlineVideoFramesProps {
+  /** Label of the empty add card; defaults to the reference image label. */
+  addLabel?: string;
   endImageUrl?: string | null;
   imageUrl?: string | null;
   imageUrls?: string[] | null;
   isSupportEndImage?: boolean;
   maxCount?: number;
   maxFileSize?: number;
+  /**
+   * Label images as "Image 1", "Image 2"… so prompts can refer to them, and show the used
+   * count on the add card. Used when every image is a reference.
+   */
+  numberReferences?: boolean;
   onEndImageChange: (data: UploadData | null) => void;
   onImageChange: (data: UploadData | null) => void;
   onImageUrlsChange?: (data: UploadData) => void;
   onRemoveImageUrl?: (url: string) => void;
+  /** Optional batch upload handler to enable multi-select on the add card. */
+  onUploadFiles?: (files: File[]) => void | Promise<void>;
+  /** In-flight upload previews (object URLs) rendered with a spinner. */
+  uploadingPreviews?: string[];
 }
 
 const InlineVideoFrames = memo<InlineVideoFramesProps>(
   ({
+    addLabel,
     imageUrl,
     imageUrls,
     endImageUrl,
@@ -60,9 +71,12 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
     onEndImageChange,
     onImageUrlsChange,
     onRemoveImageUrl,
+    onUploadFiles,
     isSupportEndImage = true,
     maxCount = 5,
     maxFileSize,
+    numberReferences = false,
+    uploadingPreviews = [],
   }) => {
     const { t } = useTranslation('video');
     const [isHovered, setIsHovered] = useState(false);
@@ -78,8 +92,10 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
     }, [imageUrl, imageUrls]);
 
     const hasRefFrames = refFrameUrls.length > 0;
-    const canAddMore = refFrameUrls.length < maxCount;
-    const shouldCollapse = hasRefFrames && !isHovered;
+    const totalCount = refFrameUrls.length + uploadingPreviews.length;
+    const hasItems = totalCount > 0;
+    const canAddMore = totalCount < maxCount;
+    const shouldCollapse = hasItems && !isHovered;
     const showEndFrame = isSupportEndImage && hasRefFrames;
 
     return (
@@ -106,6 +122,11 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
                 key={url}
                 label={label}
                 maxFileSize={maxFileSize}
+                badge={
+                  numberReferences
+                    ? t('config.referenceImage.indexedLabel', { index: String(index + 1) })
+                    : undefined
+                }
                 style={{
                   marginInlineStart:
                     index > 0 ? (shouldCollapse ? STACK_OFFSET : EXPAND_OFFSET) : 0,
@@ -127,14 +148,37 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
             );
           })}
 
+          {/* In-flight upload placeholders (with spinner) */}
+          {uploadingPreviews.map((url, index) => (
+            <UploadCard
+              loading
+              imageUrl={url}
+              key={`uploading-${url}`}
+              maxFileSize={maxFileSize}
+              style={{
+                marginInlineStart:
+                  refFrameUrls.length + index > 0
+                    ? shouldCollapse
+                      ? STACK_OFFSET
+                      : EXPAND_OFFSET
+                    : 0,
+                zIndex: refFrameUrls.length + index + 1,
+              }}
+              onRemove={() => {}}
+              onUpload={() => {}}
+            />
+          ))}
+
           {/* Add new frame button */}
           {canAddMore &&
             (shouldCollapse ? (
               <UploadCard
                 className={styles.addCirclePos}
                 maxFileSize={maxFileSize}
+                multiple={!!onUploadFiles}
                 variant="circle"
                 onRemove={() => {}}
+                onUploadFiles={onUploadFiles}
                 onUpload={(data) => {
                   if (onImageUrlsChange) {
                     onImageUrlsChange(data);
@@ -146,13 +190,19 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
             ) : (
               <UploadCard
                 imageUrl={null}
-                label={t('config.referenceImage.label')}
                 maxFileSize={maxFileSize}
+                multiple={!!onUploadFiles}
+                label={
+                  numberReferences && hasItems
+                    ? t('config.referenceImage.count', { count: totalCount, max: String(maxCount) })
+                    : (addLabel ?? t('config.referenceImage.label'))
+                }
                 style={{
-                  marginInlineStart: hasRefFrames ? EXPAND_OFFSET : 0,
-                  zIndex: refFrameUrls.length + 1,
+                  marginInlineStart: hasItems ? EXPAND_OFFSET : 0,
+                  zIndex: totalCount + 1,
                 }}
                 onRemove={() => {}}
+                onUploadFiles={onUploadFiles}
                 onUpload={(data) => {
                   if (hasRefFrames) {
                     if (onImageUrlsChange) {

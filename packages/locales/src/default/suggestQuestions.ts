@@ -479,4 +479,78 @@ export default {
   'write.40.prompt':
     'Write a knowledge base article that helps users solve a specific problem. Include a clear problem statement, prerequisites and assumptions, step-by-step solution with screenshots, alternative approaches when applicable, troubleshooting tips for common issues, related articles and next steps, and feedback mechanism.',
   'write.40.title': 'Write a knowledge base article',
+
+  // Agent Builder — starters for configuring/building the current agent
+  'agentBuilder.01.prompt':
+    "Help me refine this agent's role and persona so its responsibilities and areas of expertise are clear and specific.",
+  'agentBuilder.01.title': "Refine this agent's role",
+  'agentBuilder.02.prompt':
+    'Rewrite the system prompt for this agent to make it more precise, well-structured, and effective.',
+  'agentBuilder.02.title': 'Improve the system prompt',
+  'agentBuilder.03.prompt':
+    'Based on what this agent does, suggest a fitting name, a short description, and an avatar style.',
+  'agentBuilder.03.title': 'Suggest a name and avatar',
+  'agentBuilder.04.prompt':
+    'Recommend the tools, plugins, or skills this agent should enable to do its job well, and explain why.',
+  'agentBuilder.04.title': 'Recommend tools and skills',
+  'agentBuilder.05.prompt':
+    "Write a welcoming opening message and a few opening questions that match this agent's purpose.",
+  'agentBuilder.05.title': 'Craft the opening message',
+  'agentBuilder.06.prompt':
+    "Help me define this agent's tone of voice and reply style, then apply it to the system prompt.",
+  'agentBuilder.06.title': 'Set its tone and style',
+  'agentBuilder.07.prompt':
+    "Define what this agent should and shouldn't do, including topics it should politely decline.",
+  'agentBuilder.07.title': 'Define its boundaries',
+  'agentBuilder.08.prompt':
+    'Suggest knowledge or few-shot examples I should add so this agent answers consistently.',
+  'agentBuilder.08.title': 'Add knowledge and examples',
+  'agentBuilder.09.prompt':
+    'Recommend a suitable model and parameters for this agent given its tasks, and explain the trade-offs.',
+  'agentBuilder.09.title': 'Pick a suitable model',
+  'agentBuilder.10.prompt':
+    "Review this agent's current configuration and point out anything that's missing or worth improving.",
+  'agentBuilder.10.title': 'Review my current setup',
+  'agentBuilder.11.prompt':
+    'This agent feels too generic. Help me narrow it down into a focused, specialized assistant.',
+  'agentBuilder.11.title': 'Make it more specialized',
+  'agentBuilder.12.prompt':
+    "Help me localize this agent's name, description, and prompts for another language.",
+  'agentBuilder.12.title': 'Localize the configuration',
+
+  // Group Builder — starters for configuring/building the current group and its members
+  'groupBuilder.01.prompt':
+    'Suggest a member role this group is currently missing, and help me add it.',
+  'groupBuilder.01.title': 'Add a missing member',
+  'groupBuilder.02.prompt':
+    'Review how this group collaborates and suggest a clearer, more efficient workflow.',
+  'groupBuilder.02.title': 'Optimize the workflow',
+  'groupBuilder.03.prompt':
+    "Help me define this group's goal and the concrete outcome it should produce.",
+  'groupBuilder.03.title': "Define the group's goal",
+  'groupBuilder.04.prompt':
+    "Help me clarify each member's responsibilities so their roles don't overlap.",
+  'groupBuilder.04.title': 'Adjust the division of labor',
+  'groupBuilder.05.prompt':
+    "Based on this group's purpose, what member roles should I add to make it more capable?",
+  'groupBuilder.05.title': 'Suggest roles to add',
+  'groupBuilder.06.prompt':
+    'Help me refine how the group supervisor dispatches work to its members.',
+  'groupBuilder.06.title': 'Tune the supervisor strategy',
+  'groupBuilder.07.prompt': "Help me improve the role and persona of one of this group's members.",
+  'groupBuilder.07.title': "Improve a member's persona",
+  'groupBuilder.08.prompt':
+    "Help me define this group's conversation style and collaboration norms.",
+  'groupBuilder.08.title': 'Set collaboration norms',
+  'groupBuilder.09.prompt':
+    "Add a member responsible for reviewing and quality-checking the group's output.",
+  'groupBuilder.09.title': 'Add a reviewer role',
+  'groupBuilder.10.prompt': 'Help me streamline how members hand off work to each other.',
+  'groupBuilder.10.title': 'Streamline handoffs',
+  'groupBuilder.11.prompt':
+    "Review this group's overall setup and members, and point out what's missing or redundant.",
+  'groupBuilder.11.title': 'Review the whole group',
+  'groupBuilder.12.prompt':
+    'Some members seem redundant. Help me consolidate or remove overlapping roles.',
+  'groupBuilder.12.title': 'Remove overlapping members',
 };

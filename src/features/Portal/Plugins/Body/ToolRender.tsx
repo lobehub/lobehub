@@ -1,4 +1,4 @@
-import { BuiltinToolsPortals } from '@lobechat/builtin-tools/portals';
+import { getBuiltinPortal } from '@lobechat/builtin-tools/portals';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
@@ -23,7 +23,7 @@ const ToolRender = memo(() => {
 
   if (!args) return;
 
-  const Render = BuiltinToolsPortals[plugin.identifier];
+  const Render = getBuiltinPortal(plugin.identifier);
 
   if (!Render) return null;
 

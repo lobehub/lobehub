@@ -1,8 +1,8 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { GroupBotIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,11 @@ import type { CallSubAgentParams, CallSubAgentState } from '../../../types';
 import { SubAgentStats } from '../../components/SubAgentStats';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  background: css`
+    flex-shrink: 0;
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
+  `,
   chip: css`
     overflow: hidden;
     display: inline-flex;
@@ -45,9 +50,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 /**
  * Collapsed row for lobe-agent's `callSubAgent`. Mirrors the Claude Code Agent
- * tool: leading bot icon + "Call SubAgent" label + the description in a chip.
- * Once the run finishes, the persisted state feeds a compact stats tail
- * (tool count · model · tokens).
+ * tool: leading bot icon + "Call SubAgent" label + the description in a chip,
+ * with a compact stats tail (tool count · model · tokens) that ticks up live
+ * while the sub-agent runs and settles on the persisted totals when it finishes.
  */
 export const CallSubAgentInspector = memo<
   BuiltinInspectorProps<CallSubAgentParams, CallSubAgentState>
@@ -55,20 +60,36 @@ export const CallSubAgentInspector = memo<
   const { t } = useTranslation('plugin');
 
   const description = (args?.description || partialArgs?.description)?.trim();
-  const isShiny = isArgumentsStreaming || isLoading;
+  // A background call finishes its tool step at once, so `isLoading` drops
+  // while the sub-agent is still working.
+  const runningInBackground = pluginState?.background === true && pluginState.status === 'pending';
+  const isShiny = isArgumentsStreaming || isLoading || runningInBackground;
+
+  // The completion bridge writes the authoritative stats flat onto pluginState at
+  // the end of the run; until then `progress` holds the live totals streamed off
+  // the running sub-agent. Prefer the flat ones so the tail never regresses to a
+  // stale live sample once the run is done.
+  const hasFinalStats =
+    pluginState?.totalTokens !== undefined || pluginState?.totalToolCalls !== undefined;
+  const stats = hasFinalStats ? pluginState : pluginState?.progress;
 
   return (
-    <div
-      className={cx(inspectorTextStyles.root, styles.root, isShiny && shinyTextStyles.shinyText)}
-    >
+    <div className={cx(inspectorTextStyles.root, styles.root)}>
       <GroupBotIcon className={styles.icon} size={14} />
-      <span className={styles.label}>{t('builtins.lobe-agent.apiName.callSubAgent')}</span>
+      <span className={cx(styles.label, isShiny && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-agent.apiName.callSubAgent')}
+      </span>
       {description && <span className={styles.chip}>{description}</span>}
-      {!isShiny && pluginState && (
+      {runningInBackground && (
+        <span className={styles.background}>
+          {t('builtins.lobe-agent.subAgent.backgroundRunning')}
+        </span>
+      )}
+      {stats && (
         <SubAgentStats
-          model={pluginState.model}
-          totalTokens={pluginState.totalTokens}
-          totalToolCalls={pluginState.totalToolCalls}
+          model={stats.model}
+          totalTokens={stats.totalTokens}
+          totalToolCalls={stats.totalToolCalls}
         />
       )}
     </div>

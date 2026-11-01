@@ -1,40 +1,4 @@
-import {
-  AgentBuilderManifest,
-  AgentBuilderStreamings,
-} from '@lobechat/builtin-tool-agent-builder/client';
-import {
-  AgentDocumentsManifest,
-  AgentDocumentsStreamings,
-} from '@lobechat/builtin-tool-agent-documents/client';
-import {
-  AgentManagementManifest,
-  AgentManagementStreamings,
-} from '@lobechat/builtin-tool-agent-management/client';
-import {
-  ClaudeCodeIdentifier,
-  ClaudeCodeStreamings,
-} from '@lobechat/builtin-tool-claude-code/client';
-import {
-  CloudSandboxManifest,
-  CloudSandboxStreamings,
-} from '@lobechat/builtin-tool-cloud-sandbox/client';
-import {
-  GroupAgentBuilderManifest,
-  GroupAgentBuilderStreamings,
-} from '@lobechat/builtin-tool-group-agent-builder/client';
-import {
-  GroupManagementManifest,
-  GroupManagementStreamings,
-} from '@lobechat/builtin-tool-group-management/client';
-import { LobeAgentManifest, LobeAgentStreamings } from '@lobechat/builtin-tool-lobe-agent/client';
-import {
-  LocalSystemManifest,
-  LocalSystemStreamings,
-} from '@lobechat/builtin-tool-local-system/client';
-import { MemoryManifest, MemoryStreamings } from '@lobechat/builtin-tool-memory/client';
-import { MessageManifest, MessageStreamings } from '@lobechat/builtin-tool-message/client';
-import { PageAgentManifest, PageAgentStreamings } from '@lobechat/builtin-tool-page-agent/client';
-import { type BuiltinStreaming } from '@lobechat/types';
+import type { BuiltinStreaming } from '@lobechat/types';
 
 /**
  * Builtin tools streaming renderer registry
@@ -44,28 +8,15 @@ import { type BuiltinStreaming } from '@lobechat/types';
  * still executing, allowing real-time feedback to users.
  * The component should fetch streaming content from store internally.
  */
-const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = {
-  [AgentBuilderManifest.identifier]: AgentBuilderStreamings as Record<string, BuiltinStreaming>,
-  [AgentDocumentsManifest.identifier]: AgentDocumentsStreamings as Record<string, BuiltinStreaming>,
-  [AgentManagementManifest.identifier]: AgentManagementStreamings as Record<
-    string,
-    BuiltinStreaming
-  >,
-  [ClaudeCodeIdentifier]: ClaudeCodeStreamings as Record<string, BuiltinStreaming>,
-  [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
-  [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderStreamings as Record<
-    string,
-    BuiltinStreaming
-  >,
-  [GroupManagementManifest.identifier]: GroupManagementStreamings as Record<
-    string,
-    BuiltinStreaming
-  >,
-  [LobeAgentManifest.identifier]: LobeAgentStreamings as Record<string, BuiltinStreaming>,
-  [LocalSystemManifest.identifier]: LocalSystemStreamings as Record<string, BuiltinStreaming>,
-  [MemoryManifest.identifier]: MemoryStreamings as Record<string, BuiltinStreaming>,
-  [MessageManifest.identifier]: MessageStreamings as Record<string, BuiltinStreaming>,
-  [PageAgentManifest.identifier]: PageAgentStreamings as Record<string, BuiltinStreaming>,
+const builtinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = {};
+
+export const registerBuiltinStreamings = (
+  entries: Record<string, Record<string, BuiltinStreaming>>,
+): void => {
+  for (const [identifier, streamings] of Object.entries(entries)) {
+    const current = builtinToolStreamings[identifier];
+    builtinToolStreamings[identifier] = current ? Object.assign(current, streamings) : streamings;
+  }
 };
 
 export interface BuiltinStreamingRegistryEntry {
@@ -75,7 +26,7 @@ export interface BuiltinStreamingRegistryEntry {
 }
 
 export const listBuiltinStreamingEntries = (): BuiltinStreamingRegistryEntry[] =>
-  Object.entries(BuiltinToolStreamings).flatMap(([identifier, toolset]) =>
+  Object.entries(builtinToolStreamings).flatMap(([identifier, toolset]) =>
     Object.entries(toolset)
       .filter((entry): entry is [string, BuiltinStreaming] => !!entry[1])
       .map(([apiName, streaming]) => ({
@@ -96,7 +47,7 @@ export const getBuiltinStreaming = (
 ): BuiltinStreaming | undefined => {
   if (!identifier || !apiName) return undefined;
 
-  const toolset = BuiltinToolStreamings[identifier];
+  const toolset = builtinToolStreamings[identifier];
   if (!toolset) return undefined;
 
   return toolset[apiName];

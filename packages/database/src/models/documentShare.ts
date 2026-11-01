@@ -27,6 +27,15 @@ export class DocumentShareModel {
     this.db = db;
   }
 
+  // document_shares.visibility is share semantics ('private' | 'link'), not the
+  // workspace row-visibility ('public' | 'private') — pass only the scope
+  // columns so buildWorkspaceWhere never filters on it.
+  private ownership = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: documentShares.userId, workspaceId: documentShares.workspaceId },
+    );
+
   create = async (
     documentId: string,
     params: {
@@ -75,15 +84,7 @@ export class DocumentShareModel {
     const [result] = await this.db
       .update(documentShares)
       .set({ updatedAt: new Date(), visibility })
-      .where(
-        and(
-          eq(documentShares.documentId, documentId),
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            documentShares,
-          ),
-        ),
-      )
+      .where(and(eq(documentShares.documentId, documentId), this.ownership()))
       .returning();
 
     return result || null;
@@ -93,15 +94,7 @@ export class DocumentShareModel {
     const [result] = await this.db
       .update(documentShares)
       .set({ permission, updatedAt: new Date() })
-      .where(
-        and(
-          eq(documentShares.documentId, documentId),
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            documentShares,
-          ),
-        ),
-      )
+      .where(and(eq(documentShares.documentId, documentId), this.ownership()))
       .returning();
 
     return result || null;
@@ -110,15 +103,7 @@ export class DocumentShareModel {
   deleteByDocumentId = async (documentId: string) => {
     return this.db
       .delete(documentShares)
-      .where(
-        and(
-          eq(documentShares.documentId, documentId),
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            documentShares,
-          ),
-        ),
-      );
+      .where(and(eq(documentShares.documentId, documentId), this.ownership()));
   };
 
   getByDocumentId = async (documentId: string) => {
@@ -132,15 +117,7 @@ export class DocumentShareModel {
         visibility: documentShares.visibility,
       })
       .from(documentShares)
-      .where(
-        and(
-          eq(documentShares.documentId, documentId),
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            documentShares,
-          ),
-        ),
-      )
+      .where(and(eq(documentShares.documentId, documentId), this.ownership()))
       .limit(1);
 
     return result[0] || null;
@@ -187,6 +164,8 @@ export class DocumentShareModel {
     const isOwner = !!accessUserId && row.document.userId === accessUserId;
 
     if (!isOwner) {
+      // 'private' (or no share record) is creator-only, even inside a
+      // workspace; only 'link' opens the page to other viewers.
       const hasShare = !!row.visibility;
       if (!hasShare || row.visibility === 'private') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'This page is private' });

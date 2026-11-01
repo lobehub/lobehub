@@ -9,6 +9,11 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>{children}</SWRConfig>
 );
 
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
+
 vi.mock('@lobechat/const', () => ({
   isDesktop: true,
 }));
@@ -17,12 +22,6 @@ vi.mock('@/services/electron/openInApp', () => ({
   electronOpenInAppService: {
     detectApps: vi.fn(),
     openInApp: vi.fn(),
-  },
-}));
-
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    error: vi.fn(),
   },
 }));
 
@@ -96,10 +95,10 @@ describe('useOpenInApp', () => {
   const importModules = async () => {
     const hookMod = await import('./useOpenInApp');
     const svc = await import('@/services/electron/openInApp');
-    const msg = await import('@/components/AntdStaticMethods');
+    const { toast } = await import('@lobehub/ui');
     return {
-      message: msg.message,
       service: svc.electronOpenInAppService,
+      toast,
       useOpenInApp: hookMod.useOpenInApp,
     };
   };
@@ -175,7 +174,7 @@ describe('useOpenInApp', () => {
   });
 
   it('surfaces a pathNotFound toast when main reports Path not found', async () => {
-    const { message, service, useOpenInApp } = await importModules();
+    const { service, toast, useOpenInApp } = await importModules();
     (service.detectApps as ReturnType<typeof vi.fn>).mockResolvedValue({
       apps: [{ displayName: 'VS Code', id: 'vscode', installed: true }],
     });
@@ -191,12 +190,12 @@ describe('useOpenInApp', () => {
       await result.current.launch('vscode');
     });
 
-    expect(message.error).toHaveBeenCalledWith(expect.stringContaining('errors.pathNotFound'));
-    expect(message.error).toHaveBeenCalledWith(expect.stringContaining('/tmp/proj'));
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('errors.pathNotFound'));
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('/tmp/proj'));
   });
 
   it('surfaces an appNotInstalled toast when main reports X is not installed', async () => {
-    const { message, service, useOpenInApp } = await importModules();
+    const { service, toast, useOpenInApp } = await importModules();
     (service.detectApps as ReturnType<typeof vi.fn>).mockResolvedValue({
       apps: [{ displayName: 'VS Code', id: 'vscode', installed: true }],
     });
@@ -214,12 +213,12 @@ describe('useOpenInApp', () => {
       await result.current.launch('vscode');
     });
 
-    expect(message.error).toHaveBeenCalledWith(expect.stringContaining('errors.appNotInstalled'));
-    expect(message.error).toHaveBeenCalledWith(expect.stringContaining('VS Code'));
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('errors.appNotInstalled'));
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('VS Code'));
   });
 
   it('surfaces a generic launchFailed toast for unknown errors', async () => {
-    const { message, service, useOpenInApp } = await importModules();
+    const { service, toast, useOpenInApp } = await importModules();
     (service.detectApps as ReturnType<typeof vi.fn>).mockResolvedValue({
       apps: [{ displayName: 'VS Code', id: 'vscode', installed: true }],
     });
@@ -235,7 +234,7 @@ describe('useOpenInApp', () => {
       await result.current.launch('vscode');
     });
 
-    expect(message.error).toHaveBeenCalledWith(expect.stringContaining('errors.launchFailed'));
-    expect(message.error).toHaveBeenCalledWith(expect.stringContaining('spawn ENOENT'));
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('errors.launchFailed'));
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('spawn ENOENT'));
   });
 });

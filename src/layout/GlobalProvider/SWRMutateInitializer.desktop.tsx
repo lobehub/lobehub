@@ -5,6 +5,7 @@ import { type PropsWithChildren, useEffect } from 'react';
 import { useSWRConfig } from 'swr';
 
 import { setScopedMutate } from '@/libs/swr';
+import { applyDesktopBootstrapIdentity } from '@/spa/initialize/desktopIdentity';
 
 /**
  * Initialize scoped mutate for use outside React components (e.g., Zustand stores)
@@ -19,6 +20,9 @@ const SWRMutateInitializer = ({ children }: PropsWithChildren) => {
 
   useWatchBroadcast('remoteServerConfigUpdated', () => {
     try {
+      // Token changes can switch the local cache partition. Apply the new
+      // safe-storage identity before revalidating any SWR key.
+      applyDesktopBootstrapIdentity();
       const result = mutate(() => true, undefined, { revalidate: true });
       void result?.catch?.(() => {});
     } catch {

@@ -1,4 +1,4 @@
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import { type TFunction } from 'i18next';
 import { type ChangeEvent } from 'react';
 import { useCallback } from 'react';
@@ -14,6 +14,13 @@ import {
 interface UseUploadFolderOptions {
   currentFolderId?: string | null;
   libraryId?: string | null;
+  /**
+   * Runs once the folder and its files have actually been created. The
+   * `.gitignore` confirm path defers the upload past the returned promise, so
+   * callers that need to refresh a view must hook in here instead of awaiting
+   * `handleFolderUpload`.
+   */
+  onUploaded?: () => void;
   t: TFunction<'file'>;
   uploadFolderWithStructure: FileManageAction['uploadFolderWithStructure'];
 }
@@ -21,6 +28,7 @@ interface UseUploadFolderOptions {
 const useUploadFolder = ({
   currentFolderId,
   libraryId,
+  onUploaded,
   t,
   uploadFolderWithStructure,
 }: UseUploadFolderOptions) => {
@@ -31,8 +39,10 @@ const useUploadFolder = ({
 
       const targetFolderId = currentFolderId ?? undefined;
       const targetLibraryId = libraryId ?? undefined;
-      const upload = async (fileList: File[]) =>
-        uploadFolderWithStructure(fileList, targetLibraryId, targetFolderId);
+      const upload = async (fileList: File[]) => {
+        await uploadFolderWithStructure(fileList, targetLibraryId, targetFolderId);
+        onUploaded?.();
+      };
 
       // Apply built-in block list first
       const originalCount = files.length;
@@ -40,8 +50,7 @@ const useUploadFolder = ({
       const builtInBlockedCount = originalCount - files.length;
 
       if (builtInBlockedCount > 0) {
-        const { message } = await import('antd');
-        message.info(
+        toast.info(
           t('header.actions.builtInBlockList.filtered', {
             ignored: builtInBlockedCount,
             total: originalCount,
@@ -70,8 +79,7 @@ const useUploadFolder = ({
               const ignoredCount = gitignoreOriginalCount - filteredFiles.length;
 
               if (ignoredCount > 0) {
-                const { message } = await import('antd');
-                message.info(
+                toast.info(
                   t('header.actions.gitignore.filtered', {
                     ignored: ignoredCount,
                     total: gitignoreOriginalCount,
@@ -94,7 +102,7 @@ const useUploadFolder = ({
 
       event.target.value = '';
     },
-    [currentFolderId, libraryId, t, uploadFolderWithStructure],
+    [currentFolderId, libraryId, onUploaded, t, uploadFolderWithStructure],
   );
 
   return { handleFolderUpload };

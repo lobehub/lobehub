@@ -24,11 +24,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('provider command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -45,6 +40,7 @@ describe('provider command', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -69,13 +65,21 @@ describe('provider command', () => {
     });
 
     it('should output JSON', async () => {
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
       const providers = [{ id: 'openai', name: 'OpenAI' }];
       mockTrpcClient.aiProvider.getAiProviderList.query.mockResolvedValue(providers);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'provider', 'list', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(providers, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...providers[0], url: 'https://app.lobehub.com/settings/provider/openai' }],
+          null,
+          2,
+        ),
+      );
     });
   });
 

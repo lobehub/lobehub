@@ -23,15 +23,6 @@ interface GetOwnAgentsParams {
 }
 
 export class MarketApiService {
-  /**
-   * @deprecated This method is no longer needed as authentication is now handled
-   * automatically through tRPC middleware. Keeping for backward compatibility.
-   */
-
-  setAccessToken(_token: string) {
-    // No-op: Authentication is now handled through tRPC authedProcedure middleware
-  }
-
   // Create new agent
   async createAgent(agentData: {
     actAs?: number;
@@ -97,16 +88,6 @@ export class MarketApiService {
     return lambdaClient.market.agent.createAgentVersion.mutate(versionData);
   }
 
-  // Publish agent (make it visible in marketplace)
-  async publishAgent(identifier: string): Promise<void> {
-    await lambdaClient.market.agent.publishAgent.mutate({ identifier });
-  }
-
-  // Unpublish agent (hide from marketplace, can be republished)
-  async unpublishAgent(identifier: string): Promise<void> {
-    await lambdaClient.market.agent.unpublishAgent.mutate({ identifier });
-  }
-
   // Deprecate agent (permanently hide, cannot be republished)
   async deprecateAgent(identifier: string): Promise<void> {
     await lambdaClient.market.agent.deprecateAgent.mutate({ identifier });
@@ -155,14 +136,6 @@ export class MarketApiService {
     return lambdaClient.market.agentGroup.getAgentGroupDetail.query({
       identifier,
     }) as Promise<any>;
-  }
-
-  async publishAgentGroup(identifier: string): Promise<void> {
-    await lambdaClient.market.agentGroup.publishAgentGroup.mutate({ identifier });
-  }
-
-  async unpublishAgentGroup(identifier: string): Promise<void> {
-    await lambdaClient.market.agentGroup.unpublishAgentGroup.mutate({ identifier });
   }
 
   async deprecateAgentGroup(identifier: string): Promise<void> {

@@ -49,6 +49,27 @@ export interface ParseResult {
 }
 
 /**
+ * Which threaded messages belong to the rendered flat list.
+ *
+ * - `undefined`: every message is in scope. Used when the input holds only threaded rows (a
+ *   thread passed on its own), where there is no main flow to separate.
+ * - `null`: the main flow only. Threaded rows are side conversations (background runs,
+ *   sub-agent turns) and must not be walked into the transcript.
+ * - a thread id: the main flow plus that thread. This is the thread view, whose query
+ *   intentionally returns the unthreaded ancestors together with the thread's replies.
+ */
+export type ThreadScope = string | null | undefined;
+
+export interface ParseOptions {
+  /**
+   * The thread the caller is rendering, or `null` for the main flow. Omit it to derive the
+   * scope from the input: mixed input is treated as the main flow, thread-only input as the
+   * thread itself. Thread views must pass it, because their input mixes ancestors and replies.
+   */
+  threadId?: string | null;
+}
+
+/**
  * Internal helper maps used during parsing
  */
 export interface HelperMaps {
@@ -60,4 +81,6 @@ export interface HelperMaps {
   messageMap: Map<string, Message>;
   /** Maps thread ID to all messages in that thread */
   threadMap: Map<string, Message[]>;
+  /** Which threaded messages the flat list may walk. See `ThreadScope`. */
+  threadScope: ThreadScope;
 }

@@ -1,0 +1,213 @@
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import Body from './index';
+
+interface MockGlobalState {
+  status: {
+    hiddenSidebarSections?: string[];
+    sidebarExpandedKeys?: string[];
+    sidebarItems?: string[];
+  };
+  updateSystemStatus: (patch: Partial<MockGlobalState['status']>) => void;
+}
+
+const mocks = vi.hoisted(() => ({
+  globalState: undefined as unknown as MockGlobalState,
+  navLayout: {
+    bottomMenuItems: [] as { key: string; title: string; url: string }[],
+    topNavItems: [] as { key: string; title: string; url: string }[],
+  },
+  updateSystemStatus: vi.fn(),
+}));
+
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Flexbox: ({ children, flex }: { children: React.ReactNode; flex?: number }) => (
+        <div data-testid={flex ? 'sidebar-body' : 'sidebar-sections'}>{children}</div>
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      AccordionRoot: ({
+        children,
+        value,
+        onValueChange,
+      }: {
+        children: React.ReactNode;
+        onValueChange?: (keys: string[]) => void;
+        value?: string[];
+      }) => (
+        <div data-expanded-keys={JSON.stringify(value)} data-testid="sidebar-accordion">
+          <button aria-label="collapse recents" onClick={() => onValueChange?.(['agent'])} />
+          {children}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
+
+vi.mock('react-router', () => ({
+  Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
+    <a href={to}>{children}</a>
+  ),
+  useNavigate: () => vi.fn(),
+}));
+
+vi.mock('@/features/NavPanel/components/NavItem', () => ({
+  default: ({ title }: { title: string }) => <div>{title}</div>,
+}));
+
+vi.mock('@/hooks/useActiveTabKey', () => ({
+  useActiveTabKey: () => 'home',
+}));
+
+vi.mock('@/hooks/useNavLayout', () => ({
+  useNavLayout: () => mocks.navLayout,
+}));
+
+vi.mock('@/utils/navigation', () => ({
+  isModifierClick: () => false,
+}));
+
+vi.mock('@/features/Home/Recents', () => ({
+  default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
+}));
+
+vi.mock('@/features/Channels/ChannelList', () => ({
+  default: () => <div data-testid="sidebar-channels" />,
+}));
+
+vi.mock('./Agent', () => ({
+  default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
+}));
+
+vi.mock('./Private', () => ({
+  default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
+}));
+
+vi.mock('./CustomizeSidebarModal', () => ({
+  openCustomizeSidebarModal: vi.fn(),
+}));
+
+vi.mock('@/store/global', () => ({
+  useGlobalStore: (selector: (state: MockGlobalState) => unknown) => selector(mocks.globalState),
+}));
+
+beforeEach(() => {
+  mocks.updateSystemStatus.mockReset();
+  mocks.navLayout = {
+    bottomMenuItems: [],
+    topNavItems: [],
+  };
+  mocks.globalState = {
+    status: {
+      hiddenSidebarSections: [],
+      sidebarExpandedKeys: ['recents', 'agent'],
+      sidebarItems: ['recents', 'agent'],
+    },
+    updateSystemStatus: mocks.updateSystemStatus,
+  };
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+describe('Home sidebar body', () => {
+  it('uses persisted sidebar accordion expanded keys', () => {
+    mocks.globalState.status.sidebarExpandedKeys = ['agent'];
+
+    render(<Body />);
+
+    expect(screen.getByTestId('sidebar-accordion')).toHaveAttribute(
+      'data-expanded-keys',
+      '["agent"]',
+    );
+  });
+
+  it('persists sidebar accordion expanded changes', () => {
+    render(<Body />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'collapse recents' }));
+
+    expect(mocks.updateSystemStatus).toHaveBeenCalledWith({ sidebarExpandedKeys: ['agent'] });
+  });
+
+  it('renders items strictly in sidebarItems order with the spacer at its stored position', () => {
+    mocks.navLayout = {
+      bottomMenuItems: [
+        { key: 'image', title: 'Image', url: '/image' },
+        { key: 'resource', title: 'Resource', url: '/resource' },
+      ],
+      topNavItems: [
+        { key: 'pages', title: 'Pages', url: '/page' },
+        { key: 'tasks', title: 'Tasks', url: '/tasks' },
+      ],
+    };
+    mocks.globalState.status.sidebarItems = [
+      'pages',
+      'recents',
+      'agent',
+      '__spacer__',
+      'image',
+      'tasks',
+      'resource',
+    ];
+
+    render(<Body />);
+
+    const children = Array.from(screen.getByTestId('sidebar-body').children);
+    const spacerIndex = children.findIndex((child) =>
+      child.hasAttribute('data-sidebar-bottom-spacer'),
+    );
+
+    expect(spacerIndex).toBe(2);
+    expect(children[0]).toHaveTextContent('Pages');
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-channels'));
+    expect(children[3]).toHaveTextContent('Image');
+    expect(children[4]).toHaveTextContent('Tasks');
+    expect(children[5]).toHaveTextContent('Resource');
+  });
+
+  it('keeps a top item that was dragged past the spacer in its new position', () => {
+    mocks.navLayout = {
+      bottomMenuItems: [{ key: 'image', title: 'Image', url: '/image' }],
+      topNavItems: [{ key: 'tasks', title: 'Tasks', url: '/tasks' }],
+    };
+    // User dragged `tasks` from the top section to sit after `image`.
+    mocks.globalState.status.sidebarItems = ['recents', 'agent', '__spacer__', 'image', 'tasks'];
+
+    render(<Body />);
+
+    const children = Array.from(screen.getByTestId('sidebar-body').children);
+
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-channels'));
+    expect(children[1]).toHaveAttribute('data-sidebar-bottom-spacer');
+    expect(children[2]).toHaveTextContent('Image');
+    expect(children[3]).toHaveTextContent('Tasks');
+  });
+
+  it('keeps Channels between adjacent sections in the same spacing group with its own accordion', () => {
+    mocks.globalState.status.sidebarItems = ['agent', 'recents'];
+
+    render(<Body />);
+
+    const children = Array.from(screen.getByTestId('sidebar-sections').children);
+
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
+    expect(children[2]).toContainElement(screen.getByTestId('sidebar-item-recents'));
+  });
+});

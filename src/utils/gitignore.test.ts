@@ -62,6 +62,18 @@ node_modules/
       expect(shouldIgnoreFile('folder/.DS_Store', ['.DS_Store'])).toBe(true);
     });
 
+    it('should match leading "**/" patterns at any depth, including the root', () => {
+      // Per gitignore spec a leading `**/` matches in all directories, so
+      // `**/foo` is equivalent to `foo` and must also match at the root.
+      expect(shouldIgnoreFile('node_modules/index.js', ['**/node_modules'])).toBe(true);
+      expect(shouldIgnoreFile('src/node_modules/index.js', ['**/node_modules'])).toBe(true);
+      expect(shouldIgnoreFile('build.log', ['**/*.log'])).toBe(true);
+      expect(shouldIgnoreFile('src/build.log', ['**/*.log'])).toBe(true);
+      expect(shouldIgnoreFile('src/main.ts', ['**/*.log'])).toBe(false);
+      expect(shouldIgnoreFile('node_modules/index.js', ['**/**/node_modules'])).toBe(true);
+      expect(shouldIgnoreFile('build.log', ['**/**/*.log'])).toBe(true);
+    });
+
     it('should handle negation patterns', () => {
       const patterns = ['*.log', '!important.log'];
       expect(shouldIgnoreFile('test.log', patterns)).toBe(true);

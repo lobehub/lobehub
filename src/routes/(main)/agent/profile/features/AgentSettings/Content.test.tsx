@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatSettingsTabs } from '@/store/global/initialState';
@@ -10,53 +10,35 @@ const mocks = vi.hoisted(() => ({
   agentState: {
     activeAgentId: 'inbox-agent',
     config: {},
+    isCurrentAgentHeterogeneous: false,
     isInbox: true,
     meta: {},
     optimisticUpdateAgentConfig: vi.fn(),
     optimisticUpdateAgentMeta: vi.fn(),
   },
-  serverState: {
-    featureFlags: {
-      enableAgentSelfIteration: true,
-    },
-  },
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Avatar: () => <div data-testid="avatar" />,
-  Block: ({ children }: PropsWithChildren) => <div>{children}</div>,
-  Flexbox: ({ children }: PropsWithChildren) => <div>{children}</div>,
-  Icon: () => <span />,
-  Text: ({ children }: PropsWithChildren) => <span>{children}</span>,
-}));
-
-vi.mock('@/components/Menu', () => ({
-  default: ({
-    items = [],
-    onClick,
-    selectedKeys = [],
-  }: {
-    items?: { key?: string; label?: ReactNode }[];
-    onClick?: ({ key }: { key: string }) => void;
-    selectedKeys?: string[];
-  }) => (
-    <div data-selected={selectedKeys.join(',')} data-testid="agent-settings-menu">
-      {items.map((item) => (
-        <button
-          key={item.key}
-          type="button"
-          onClick={() => item.key && onClick?.({ key: item.key })}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  ),
+  userState: { preference: { lab: { enableAgentGraphConfig: false } } },
 }));
 
 vi.mock('@/features/AgentSetting', () => ({
   AgentSettings: ({ tab }: { tab: ChatSettingsTabs }) => (
     <div data-tab={tab} data-testid="agent-settings-content" />
+  ),
+  SettingsModalLayout: ({
+    activeTab,
+    tabs = [],
+    children,
+  }: {
+    activeTab?: string;
+    children?: ReactNode;
+    tabs?: { key: string }[];
+  }) => (
+    <div
+      data-active={activeTab}
+      data-tabs={tabs.map((tab) => tab.key).join(',')}
+      data-testid="layout"
+    >
+      {children}
+    </div>
   ),
 }));
 
@@ -72,49 +54,61 @@ vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
     currentAgentConfig: (state: typeof mocks.agentState) => state.config,
     currentAgentMeta: (state: typeof mocks.agentState) => state.meta,
+    isCurrentAgentHeterogeneous: (state: typeof mocks.agentState) =>
+      state.isCurrentAgentHeterogeneous,
   },
   builtinAgentSelectors: {
     isInboxAgent: (state: typeof mocks.agentState) => state.isInbox,
   },
 }));
 
-vi.mock('@/store/serverConfig', () => ({
-  featureFlagsSelectors: (state: typeof mocks.serverState) => state.featureFlags,
-  useServerConfigStore: (selector: (state: typeof mocks.serverState) => unknown) =>
-    selector(mocks.serverState),
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: typeof mocks.userState) => unknown) => selector(mocks.userState),
 }));
 
-vi.mock('antd-style', () => ({
-  useTheme: () => ({
-    colorBgLayout: '#fff',
-    colorBorderSecondary: '#eee',
-  }),
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: {
+    enableAgentGraphConfig: (state: typeof mocks.userState) =>
+      state.preference.lab.enableAgentGraphConfig,
+  },
 }));
 
 describe('AgentSettings Content', () => {
   beforeEach(() => {
     mocks.agentState.isInbox = true;
-    mocks.serverState.featureFlags.enableAgentSelfIteration = true;
+    mocks.agentState.isCurrentAgentHeterogeneous = false;
+    mocks.userState.preference.lab.enableAgentGraphConfig = false;
   });
 
-  it('should select self iteration when inbox hides opening settings', () => {
+  it('opens on the opening tab', () => {
     render(<Content />);
 
-    expect(screen.queryByRole('button', { name: 'agentTab.opening' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'agentTab.selfIteration' })).toBeInTheDocument();
-    expect(screen.getByTestId('agent-settings-menu')).toHaveAttribute(
-      'data-selected',
-      ChatSettingsTabs.SelfIteration,
-    );
+    const layout = screen.getByTestId('layout');
+    expect(layout).toHaveAttribute('data-active', ChatSettingsTabs.Opening);
+    expect(layout).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
     expect(screen.getByTestId('agent-settings-content')).toHaveAttribute(
       'data-tab',
-      ChatSettingsTabs.SelfIteration,
+      ChatSettingsTabs.Opening,
     );
+  });
+
+  it('adds the graph tab for custom agents when its Labs switch is on', () => {
+    mocks.agentState.isInbox = false;
+    mocks.userState.preference.lab.enableAgentGraphConfig = true;
+
+    render(<Content />);
+
+    expect(screen.getByTestId('layout')).toHaveAttribute(
+      'data-tabs',
+      `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Graph}`,
+    );
+  });
+
+  it('keeps the graph tab off for inbox even with its Labs switch on', () => {
+    mocks.userState.preference.lab.enableAgentGraphConfig = true;
+
+    render(<Content />);
+
+    expect(screen.getByTestId('layout')).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
   });
 });

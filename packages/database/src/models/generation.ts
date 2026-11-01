@@ -5,16 +5,17 @@ import type {
   GenerationAsset,
   ImageGenerationAsset,
   VideoGenerationAsset,
+  VideoGenerationTaskMetadata,
 } from '@lobechat/types';
 import { FileSource } from '@lobechat/types';
 import debug from 'debug';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, exists } from 'drizzle-orm';
 
 import { FileService } from '@/server/services/file';
 
 import type { NewFile } from '../schemas';
 import type { GenerationItem, GenerationWithAsyncTask, NewGeneration } from '../schemas/generation';
-import { generations } from '../schemas/generation';
+import { generationBatches, generations, generationTopics } from '../schemas/generation';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { FileModel } from './file';
@@ -38,7 +39,40 @@ export class GenerationModel {
   }
 
   private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, generations);
+    and(
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, generations),
+      exists(
+        this.db
+          .select({ id: generationBatches.id })
+          .from(generationBatches)
+          .innerJoin(generationTopics, eq(generationTopics.id, generationBatches.generationTopicId))
+          .where(
+            and(
+              eq(generationBatches.id, generations.generationBatchId),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                generationBatches,
+              ),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                generationTopics,
+              ),
+            ),
+          ),
+      ),
+    );
+
+  private async findTopicVisibilityByGenerationId(id: string, trx: Transaction) {
+    const [result] = await trx
+      .select({ visibility: generationTopics.visibility })
+      .from(generations)
+      .innerJoin(generationBatches, eq(generationBatches.id, generations.generationBatchId))
+      .innerJoin(generationTopics, eq(generationTopics.id, generationBatches.generationTopicId))
+      .where(and(eq(generations.id, id), this.ownership()))
+      .limit(1);
+
+    return result?.visibility;
+  }
 
   async create(value: Omit<NewGeneration, 'userId'>): Promise<GenerationItem> {
     log('Creating generation: %O', {
@@ -106,10 +140,13 @@ export class GenerationModel {
     asset: GenerationAsset,
     file: Omit<NewFile, 'id' | 'userId'>,
     source: FileSource = FileSource.ImageGeneration,
-  ) {
+  ): Promise<{ file: { id: string } } | undefined> {
     log('Creating generation asset and file with transaction: %s', id);
 
     return await this.db.transaction(async (tx: Transaction) => {
+      const topicVisibility = await this.findTopicVisibilityByGenerationId(id, tx);
+      if (!topicVisibility) return;
+
       // Create file first using transaction
       // Since duplicates are very rare, we always create globalFile - checking existence first would be wasteful
       const newFile = await this.fileModel.create(
@@ -117,6 +154,7 @@ export class GenerationModel {
           ...file,
           parentId: file.parentId ?? undefined,
           source,
+          ...(this.workspaceId ? { visibility: topicVisibility } : {}),
         },
         true,
         tx,
@@ -190,7 +228,10 @@ export class GenerationModel {
     const asset = generation.asset as ImageGenerationAsset | VideoGenerationAsset | null;
     if (asset && asset.url && asset.thumbnailUrl) {
       const urlPromises: Promise<string>[] = [
-        this.fileService.getFullFileUrl(asset.url),
+        this.fileService.getFileAccessUrl({
+          fileId: generation.fileId ?? undefined,
+          url: asset.url,
+        }),
         this.fileService.getFullFileUrl(asset.thumbnailUrl),
       ];
 
@@ -209,12 +250,18 @@ export class GenerationModel {
       }
     }
 
+    const previousGenerationId = (
+      generation.asyncTask?.metadata as VideoGenerationTaskMetadata | null | undefined
+    )?.previousGenerationId;
+
     // Build the Generation object following the same structure as in generationBatch.ts
     const result: Generation = {
       asset,
       asyncTaskId: generation.asyncTaskId || null,
       createdAt: generation.createdAt,
+      ...(generation.fileId ? { fileId: generation.fileId } : {}),
       id: generation.id,
+      ...(previousGenerationId ? { previousGenerationId } : {}),
       seed: generation.seed,
       task: {
         error: generation.asyncTask?.error

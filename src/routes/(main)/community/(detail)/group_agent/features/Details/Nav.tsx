@@ -2,24 +2,19 @@
 
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { Flexbox, Icon, Tabs } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { BookOpenIcon, HistoryIcon, SquareUserIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    link: css`
-      color: ${cssVar.colorTextDescription};
-
-      &:hover {
-        color: ${cssVar.colorInfo};
-      }
-    `,
-    nav: css`
-      border-block-end: 1px solid ${cssVar.colorBorder};
-    `,
-  };
+const styles = stylex.create({
+  link: { color: { 'default': cssVar.colorTextDescription, ':hover': cssVar.colorInfo } },
+  nav: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+  },
 });
 
 export enum GroupAgentNavKey {
@@ -40,7 +35,7 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = GroupAgentNavKey
   const nav = (
     <Tabs
       activeKey={activeTab}
-      compact={mobile}
+      variant="square"
       items={[
         {
           icon: <Icon icon={BookOpenIcon} size={16} />,
@@ -65,10 +60,25 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = GroupAgentNavKey
   return mobile ? (
     nav
   ) : (
-    <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={stylex.props(styles.nav).className}
+      justify={'space-between'}
+    >
       {nav}
-      <Flexbox horizontal gap={12}>
-        <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
+      <Flexbox
+        horizontal
+        flex="none"
+        gap={12}
+        style={{ marginInlineStart: 12, whiteSpace: 'nowrap' }}
+      >
+        <a
+          {...stylex.props(styles.link)}
+          href={SOCIAL_URL.discord}
+          rel="noreferrer"
+          target="_blank"
+        >
           {t('groupAgents.details.nav.needHelp', { defaultValue: 'Need help?' })}
         </a>
       </Flexbox>

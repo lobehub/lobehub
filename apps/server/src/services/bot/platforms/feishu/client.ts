@@ -2,8 +2,10 @@ import {
   createLarkAdapter,
   decodeLarkThreadId,
   downloadMediaFromRawMessage,
+  flattenLarkMessageContent,
   LarkApiClient,
   type LarkRawMessage,
+  toFeishuEmojiType,
 } from '@lobechat/chat-adapter-feishu';
 import type { Chat as ChatBot, Message } from 'chat';
 import debug from 'debug';
@@ -15,8 +17,10 @@ import {
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
 
+import { warnAttachmentFailures } from '../attachmentDelivery';
 import { stripMarkdown } from '../stripMarkdown';
 import {
+  type BotCredentialErrorCode,
   type BotPlatformRuntimeContext,
   type BotProviderConfig,
   ClientFactory,
@@ -24,10 +28,13 @@ import {
   type PlatformClient,
   type PlatformMessenger,
   type UsageStats,
+  type ValidationError,
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
+import { isSoloBotChat } from './chatComposition';
 import { FeishuWSConnection } from './gateway';
+import { readReactionIds, writeReactionIds } from './reactionTracker';
 import { sendFeishuAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:feishu:client');
@@ -55,6 +62,53 @@ function resolveDomain(platform: string): 'lark' | 'feishu' {
 
 // ---------- Shared runtime operations ----------
 
+/**
+ * Reaction removal is the one step nothing retries for us: the bridge and the
+ * queue callback both drop their own reaction state after the final clear,
+ * whether or not it succeeded. So a transient Feishu/network failure here is
+ * retried in place before the leftover id is handed back to the tracker.
+ */
+const REMOVE_REACTION_ATTEMPTS = 3;
+const REMOVE_REACTION_RETRY_DELAY_MS = 250;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Remove one reaction, retrying transient failures. Resolves whether it is gone. */
+async function removeReactionWithRetry(
+  api: LarkApiClient,
+  messageId: string,
+  reactionId: string,
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= REMOVE_REACTION_ATTEMPTS; attempt++) {
+    try {
+      await api.removeReaction(messageId, reactionId);
+      return true;
+    } catch (error) {
+      log('removeReaction %s on %s failed (attempt %d): %O', reactionId, messageId, attempt, error);
+      if (attempt < REMOVE_REACTION_ATTEMPTS) await sleep(REMOVE_REACTION_RETRY_DELAY_MS * attempt);
+    }
+  }
+  return false;
+}
+
+/** Remove every tracked reaction; returns the ids that could not be removed. */
+async function removeTrackedReactions(
+  api: LarkApiClient,
+  messageId: string,
+  reactionIds: string[],
+): Promise<string[]> {
+  const leftovers: string[] = [];
+  for (const reactionId of reactionIds) {
+    if (!(await removeReactionWithRetry(api, messageId, reactionId))) leftovers.push(reactionId);
+  }
+  return leftovers;
+}
+
+const reactionCleanupError = (messageId: string, leftovers: string[]) =>
+  new Error(
+    `Feishu could not remove ${leftovers.length} bot reaction(s) on ${messageId}; ids kept for a later cleanup`,
+  );
+
 function createMessenger(
   config: BotProviderConfig,
   domain: 'lark' | 'feishu',
@@ -62,8 +116,21 @@ function createMessenger(
 ): PlatformMessenger {
   const api = new LarkApiClient(config.applicationId, config.credentials.appSecret, domain);
   const chatId = extractChatId(platformThreadId);
+  const { applicationId, platform } = config;
   return {
-    addReaction: (messageId, emoji) => api.addReaction(messageId, emoji).then(() => {}),
+    // Feishu takes a named `emoji_type`, never unicode — see `./reactionEmoji`.
+    // An unmapped emoji is skipped rather than passed through: the API would
+    // reject it with `231001` and the failure would only surface in logs.
+    addReaction: async (messageId, emoji) => {
+      const emojiType = toFeishuEmojiType(emoji);
+      if (!emojiType) {
+        log('addReaction: no Feishu emoji_type for %s, skipping', emoji);
+        return;
+      }
+      const tracked = await readReactionIds(platform, applicationId, messageId);
+      const { reactionId } = await api.addReaction(messageId, emojiType);
+      await writeReactionIds(platform, applicationId, messageId, [...tracked, reactionId]);
+    },
     createMessage: async (content) => {
       const text = messengerContentText(content);
       const attachments = typeof content === 'string' ? undefined : content.attachments;
@@ -71,20 +138,58 @@ function createMessenger(
         await api.sendMessage(chatId, text);
       }
       if (attachments?.length) {
-        await sendFeishuAttachments(api, chatId, attachments);
+        const sent = await sendFeishuAttachments(api, chatId, attachments);
+        warnAttachmentFailures(`bot-platform:${platform}:reply`, sent.failures);
       }
     },
     editMessage: (messageId, content) =>
       api.editMessage(messageId, messengerContentText(content)).then(() => {}),
-    // Feishu / Lark currently expose no authenticated removeReaction endpoint.
-    // Callers should treat this as a best-effort no-op — step swaps will stack
-    // additions rather than clear the previous emoji.
-    removeReaction: () => Promise.resolve(),
+    // Feishu's delete endpoint is keyed by `reaction_id` (protocol-spec §5.2),
+    // which only `./reactionTracker` remembers. Without a tracked id there is
+    // nothing to delete — that reaction was placed by someone else, or by a run
+    // whose key has expired.
+    removeReaction: async (messageId) => {
+      const tracked = await readReactionIds(platform, applicationId, messageId);
+      if (tracked.length === 0) return;
+      const leftovers = await removeTrackedReactions(api, messageId, tracked);
+      await writeReactionIds(platform, applicationId, messageId, leftovers);
+      if (leftovers.length > 0) throw reactionCleanupError(messageId, leftovers);
+    },
     replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
-      if (prevEmoji === nextEmoji) return;
-      // No remove API upstream — we can only add. Step swaps therefore stack
-      // emoji on the user's message. Final cleanup is a no-op.
-      if (nextEmoji) await api.addReaction(messageId, nextEmoji);
+      // Compare the MAPPED values, not the unicode: several bridge emoji can
+      // resolve to the same `emoji_type`, and re-placing one that is already
+      // there would swap a live reaction for an identical one.
+      const next = toFeishuEmojiType(nextEmoji);
+      if (next && next === toFeishuEmojiType(prevEmoji)) return;
+
+      // Everything the bot has placed on this message so far — normally one
+      // id, more if an earlier cleanup failed. Read BEFORE adding: if the add
+      // throws, the tracker still names the old reaction and the next swap
+      // retries the cleanup instead of leaking it.
+      const tracked = await readReactionIds(platform, applicationId, messageId);
+
+      // Add before remove, per the PlatformMessenger contract: the user should
+      // see at least one bot reaction throughout the transition. Track the new
+      // id alongside the old ones straight away, so nothing is orphaned if the
+      // removal below fails. A null `nextEmoji` is the final clear — remove only.
+      let placed: string | undefined;
+      if (next) {
+        const { reactionId } = await api.addReaction(messageId, next);
+        placed = reactionId;
+        await writeReactionIds(platform, applicationId, messageId, [...tracked, reactionId]);
+      }
+
+      // Whatever could not be removed stays tracked, so a later swap or clear
+      // can still take it back instead of it living on the message forever;
+      // the tracker entry disappears only once the remote state is really clean.
+      const leftovers = await removeTrackedReactions(api, messageId, tracked);
+      await writeReactionIds(
+        platform,
+        applicationId,
+        messageId,
+        placed ? [...leftovers, placed] : leftovers,
+      );
+      if (leftovers.length > 0) throw reactionCleanupError(messageId, leftovers);
     },
   };
 }
@@ -116,7 +221,30 @@ async function feishuExtractFiles(
 
   log('extractFiles: msgId=%s, message_type=%s', (message as any).id, raw.message_type);
 
-  const attachments = await downloadMediaFromRawMessage(api, raw);
+  const warn = (message: string, ...args: unknown[]) =>
+    console.error(`[bot-platform:feishu:client] ${message}`, ...args);
+
+  const attachments = await downloadMediaFromRawMessage(api, raw, { warn });
+
+  const quoted = await resolveFeishuQuotedMessage(api, raw, warn);
+  if (quoted) {
+    // Hand the quoted text to `formatPrompt` through the same
+    // `raw.referenced_message` shape Discord's payload carries natively, so
+    // the model sees `<referenced_message sender="…">` for Feishu replies too.
+    // `raw` is the object `formatPrompt` reads a moment later in the bridge.
+    if (quoted.text) {
+      (
+        raw as LarkRawMessage & {
+          referenced_message?: { author: { username: string }; content: string };
+        }
+      ).referenced_message = {
+        author: { username: quoted.senderName },
+        content: quoted.text,
+      };
+    }
+    attachments.push(...quoted.attachments);
+  }
+
   if (attachments.length === 0) {
     log('extractFiles: no media items resolved for msgId=%s', (message as any).id);
     return undefined;
@@ -134,6 +262,99 @@ async function feishuExtractFiles(
     name: att.name,
     size: att.size,
   }));
+}
+
+interface FeishuQuotedMessage {
+  attachments: Awaited<ReturnType<typeof downloadMediaFromRawMessage>>;
+  senderName: string;
+  text: string;
+}
+
+/**
+ * Resolve the message a Feishu reply quotes.
+ *
+ * A reply event only carries `parent_id`; the quoted message's body never
+ * rides along. Without this, "@bot put this customer into the pipeline sheet"
+ * while quoting a PDF reaches the model as the bare sentence — the PDF is
+ * lost. Fetch the parent via `GET /im/v1/messages/:id`, normalize the history
+ * row (`msg_type` / `body.content`) into the receive-event shape, and reuse
+ * the regular download path. The resource API is keyed by the message that
+ * owns the file, so the download uses the parent's `message_id`.
+ *
+ * Best-effort: a parent the app cannot read (permission, recalled, network)
+ * is logged and skipped so the reply itself still goes through.
+ */
+async function resolveFeishuQuotedMessage(
+  api: LarkApiClient,
+  raw: LarkRawMessage,
+  warn: (message: string, ...args: unknown[]) => void,
+): Promise<FeishuQuotedMessage | undefined> {
+  const parentId = raw.parent_id;
+  if (!parentId) return undefined;
+
+  let item: any;
+  try {
+    const data = await api.getMessage(parentId);
+    item = data?.items?.[0] ?? (data?.message_id ? data : undefined);
+  } catch (error) {
+    warn('Failed to fetch quoted message %s for message %s: %s', parentId, raw.message_id, error);
+    return undefined;
+  }
+
+  if (!item || item.deleted) {
+    log('extractFiles: quoted message %s is missing or recalled, skipping', parentId);
+    return undefined;
+  }
+
+  const messageType: string = item.msg_type ?? item.message_type ?? 'text';
+  const content: string = item.body?.content ?? item.content ?? '{}';
+  const parentRaw: LarkRawMessage = {
+    chat_id: item.chat_id ?? raw.chat_id,
+    content,
+    create_time: item.create_time ?? raw.create_time,
+    message_id: item.message_id ?? parentId,
+    message_type: messageType,
+  };
+
+  const { text } = flattenLarkMessageContent(messageType, content);
+  const attachments = await downloadMediaFromRawMessage(api, parentRaw, { warn });
+
+  log(
+    'extractFiles: quoted message %s (%s) resolved: text=%d chars, media=%d',
+    parentId,
+    messageType,
+    text.length,
+    attachments.length,
+  );
+
+  return {
+    attachments,
+    senderName: await resolveFeishuSenderName(api, item.sender),
+    text: text
+      .replaceAll(/@_user_\d+/g, '')
+      .replaceAll('@_all', '')
+      .trim(),
+  };
+}
+
+/**
+ * Display name of a history-row sender. The contact API needs a scope many
+ * apps lack, so the open_id is the fallback — still enough for the model to
+ * tell who said what.
+ */
+async function resolveFeishuSenderName(
+  api: LarkApiClient,
+  sender: { id?: string; sender_type?: string } | undefined,
+): Promise<string> {
+  const senderId = sender?.id;
+  if (!senderId) return 'unknown';
+  if (sender?.sender_type !== 'user') return senderId;
+  try {
+    const info = await api.getUserInfo(senderId);
+    return info?.name || senderId;
+  } catch {
+    return senderId;
+  }
 }
 
 // ---------- Webhook Client (existing behavior) ----------
@@ -230,6 +451,14 @@ class FeishuWebhookClient implements PlatformClient {
 
   extractChatId(platformThreadId: string): string {
     return extractChatId(platformThreadId);
+  }
+
+  /**
+   * A Feishu group holding exactly one user and one bot is this bot's private
+   * conversation — see `./chatComposition`. Anything else stays mention-only.
+   */
+  async isSoloBotConversation(platformThreadId: string): Promise<boolean> {
+    return isSoloBotChat(this.api, this.config.applicationId, extractChatId(platformThreadId));
   }
 
   formatMarkdown(markdown: string): string {
@@ -428,6 +657,14 @@ class FeishuWSClientImpl implements PlatformClient {
     return extractChatId(platformThreadId);
   }
 
+  /**
+   * A Feishu group holding exactly one user and one bot is this bot's private
+   * conversation — see `./chatComposition`. Anything else stays mention-only.
+   */
+  async isSoloBotConversation(platformThreadId: string): Promise<boolean> {
+    return isSoloBotChat(this.api, this.config.applicationId, extractChatId(platformThreadId));
+  }
+
   formatMarkdown(markdown: string): string {
     return stripMarkdown(markdown);
   }
@@ -440,6 +677,61 @@ class FeishuWSClientImpl implements PlatformClient {
   parseMessageId(compositeId: string): string {
     return compositeId;
   }
+}
+
+// ---------- Credential error classification ----------
+
+/**
+ * Feishu / Lark open-platform error codes that `tenant_access_token/internal`
+ * returns for bad app credentials, grouped by what the operator has to do.
+ *
+ * @see https://open.feishu.cn/document/server-docs/api-call-guide/generic-error-code
+ */
+const LARK_AUTH_ERROR_CODES: Record<string, BotCredentialErrorCode> = {
+  // wrong / mismatched app_id + app_secret
+  10003: 'invalid_credentials', // invalid param
+  10015: 'invalid_credentials', // wrong app secret
+  20002: 'invalid_credentials', // app_id and app_secret did not match
+  // the app itself is unusable: disabled, uninstalled, IP restricted
+  10005: 'permission_denied', // app id unauthorized
+  10014: 'permission_denied', // app unauthorized (disabled)
+  99991401: 'permission_denied', // ip denied by app setting
+  99991673: 'permission_denied', // unauthorized app
+  // the app does not exist under this domain (feishu vs lark included)
+  11209: 'application_not_found', // app not exist
+  // platform throttling / quota
+  2200: 'rate_limited', // internal error caused by frequent calls
+  99991400: 'rate_limited', // request trigger frequency limit
+  99991403: 'rate_limited', // monthly API quota exceeded
+};
+
+/**
+ * Map the message thrown by `LarkApiClient.getTenantAccessToken` to a
+ * credential error code. Returns `undefined` when the failure is not one we
+ * recognize, so the raw platform message is still the only thing shown.
+ */
+export function classifyLarkAuthError(detail?: string): BotCredentialErrorCode | undefined {
+  if (!detail) return undefined;
+
+  // `Lark auth error: <code> <msg>` — the platform answered with a business code
+  const business = /Lark auth error: (\d+)/.exec(detail);
+  if (business) return LARK_AUTH_ERROR_CODES[business[1]];
+
+  // `Lark auth failed: <http status> <body>` — transport-level failure
+  const http = /Lark auth failed: (\d{3})/.exec(detail);
+  if (http) {
+    const status = Number(http[1]);
+    if (status === 429) return 'rate_limited';
+    if (status === 401 || status === 403) return 'permission_denied';
+    if (status >= 500) return 'upstream_unavailable';
+    return undefined;
+  }
+
+  // `fetch failed`, DNS / timeout errors — the platform could not be reached
+  if (/fetch failed|ECONNREFUSED|ENOTFOUND|ETIMEDOUT|timed? ?out/i.test(detail))
+    return 'upstream_unavailable';
+
+  return undefined;
 }
 
 // ---------- Factory ----------
@@ -462,11 +754,20 @@ export class FeishuClientFactory extends ClientFactory {
     applicationId?: string,
     platform?: string,
   ): Promise<ValidationResult> {
-    const errors: Array<{ field: string; message: string }> = [];
+    const errors: ValidationError[] = [];
 
-    if (!applicationId) errors.push({ field: 'applicationId', message: 'App ID is required' });
+    if (!applicationId)
+      errors.push({
+        code: 'missing_credentials',
+        field: 'applicationId',
+        message: 'App ID is required',
+      });
     if (!credentials.appSecret)
-      errors.push({ field: 'appSecret', message: 'App Secret is required' });
+      errors.push({
+        code: 'missing_credentials',
+        field: 'appSecret',
+        message: 'App Secret is required',
+      });
 
     if (errors.length > 0) return { errors, valid: false };
 
@@ -475,9 +776,22 @@ export class FeishuClientFactory extends ClientFactory {
       const api = new LarkApiClient(applicationId!, credentials.appSecret, domain);
       await api.getTenantAccessToken();
       return { valid: true };
-    } catch {
+    } catch (error) {
+      // Keep the platform's own reason (e.g. `Lark auth error: 10003 ...` or
+      // an HTTP status): a bare "failed to authenticate" cannot tell a wrong
+      // secret from a wrong domain or a network problem. The classified code
+      // lets the UI add a readable hint on top of it.
+      const detail = getRuntimeStatusErrorMessage(error);
       return {
-        errors: [{ field: 'credentials', message: 'Failed to authenticate with Feishu API' }],
+        errors: [
+          {
+            code: classifyLarkAuthError(detail),
+            field: 'credentials',
+            message: detail
+              ? `Failed to authenticate with Feishu API: ${detail}`
+              : 'Failed to authenticate with Feishu API',
+          },
+        ],
         valid: false,
       };
     }

@@ -1,7 +1,6 @@
 import { BaseExecutor, type BuiltinToolResult, type IBuiltinToolExecutor } from '@lobechat/types';
 import { defBase } from '@thi.ng/base-n/base';
 import { all, create } from 'mathjs';
-// @ts-ignore - nerdamer doesn't have TypeScript definitions
 import nerdamer from 'nerdamer-prime/all';
 
 import {
@@ -50,6 +49,7 @@ class CalculatorExecutor
     } catch (error) {
       throw new Error(
         `Failed to evaluate expression: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { cause: error },
       );
     }
   }
@@ -373,6 +373,21 @@ class CalculatorExecutor
         }
 
         const result = nerdamer.solveEquations(equation, solveVariables);
+
+        // `solveEquations` yields nothing for an unsolvable system. The
+        // single-equation branch above already surfaces that as a SolveError;
+        // mirror it here instead of dereferencing the empty result.
+        if (!result) {
+          return {
+            content: 'No solution found for the given system of equations',
+            error: {
+              message: 'No solution found',
+              type: 'SolveError',
+            },
+            success: false,
+          };
+        }
+
         const rawResult = result.toString();
 
         const pairs = rawResult.split(',');

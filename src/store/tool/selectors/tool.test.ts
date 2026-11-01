@@ -74,6 +74,7 @@ const mockState = {
     'plugin-1': false,
     'plugin-2': true,
   },
+  pluginInstallErrors: {},
   uninstalledBuiltinTools: [],
 } as ToolStoreState;
 
@@ -92,6 +93,21 @@ describe('toolSelectors', () => {
     it('should return "success" if the plugin manifest is loaded', () => {
       const result = toolSelectors.getManifestLoadingStatus('plugin-1')(mockState);
       expect(result).toBe('success');
+    });
+
+    it('should return "error" when a refresh failed even if an old manifest remains', () => {
+      const state = {
+        ...mockState,
+        pluginInstallErrors: {
+          'plugin-1': { cause: 'Connection refused', message: 'fetchError' },
+        },
+      } as unknown as ToolStoreState;
+
+      expect(toolSelectors.getManifestLoadingStatus('plugin-1')(state)).toBe('error');
+      expect(toolSelectors.getPluginInstallError('plugin-1')(state)).toEqual({
+        cause: 'Connection refused',
+        message: 'fetchError',
+      });
     });
   });
 

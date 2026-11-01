@@ -1,7 +1,8 @@
-import { createVisualFileRef } from '@lobechat/const/visualRef';
-import type { ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import { createMediaFileRef } from '@lobechat/const/mediaRef';
+import type { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
+import { FILE_INLINE_MAX_CHARS, FILE_PREVIEW_CHARS } from './file';
 import { filesPrompts } from './index';
 
 describe('filesPrompts', () => {
@@ -24,6 +25,12 @@ describe('filesPrompts', () => {
     id: 'video-1',
     alt: 'test video',
     url: 'https://example.com/video.mp4',
+  };
+
+  const mockAudio: ChatAudioItem = {
+    id: 'audio-1',
+    alt: 'test audio',
+    url: 'https://example.com/audio.mp3',
   };
 
   it('should generate prompt with only images', () => {
@@ -192,8 +199,8 @@ describe('filesPrompts', () => {
 
   it('should generate stable visual refs when message id is provided', () => {
     const messageId = 'message-with-visual-media';
-    const imageRef = createVisualFileRef({ index: 0, messageId, type: 'image' });
-    const videoRef = createVisualFileRef({ index: 0, messageId, type: 'video' });
+    const imageRef = createMediaFileRef({ index: 0, messageId, type: 'image' });
+    const videoRef = createMediaFileRef({ index: 0, messageId, type: 'video' });
 
     const result = filesPrompts({
       imageList: [mockImage],
@@ -207,6 +214,34 @@ describe('filesPrompts', () => {
     expect(result).toContain(
       `<video ref="${videoRef}" name="test video" url="https://example.com/video.mp4"></video>`,
     );
+  });
+
+  describe('Audio functionality', () => {
+    it('should generate prompt with only audios', () => {
+      const result = filesPrompts({
+        audioList: [mockAudio],
+      });
+
+      expect(result).toEqual(
+        `<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
+<context.instruction>following part contains context information injected by the system. Please follow these instructions:
+
+1. Always prioritize handling user-visible content.
+2. the context is only required when user's queries rely on it.
+</context.instruction>
+<files_info>
+<audios>
+<audios_docstring>here are user upload audios you can refer to</audios_docstring>
+<audio ref="audio_1" name="test audio" url="https://example.com/audio.mp3"></audio>
+</audios>
+</files_info>
+<!-- END SYSTEM CONTEXT -->`,
+      );
+    });
+
+    it('should return empty string for empty audio list', () => {
+      expect(filesPrompts({ audioList: [] })).toBe('');
+    });
   });
 
   describe('Video functionality', () => {
@@ -347,6 +382,99 @@ describe('filesPrompts', () => {
       const result = filesPrompts({});
 
       expect(result).toEqual('');
+    });
+  });
+
+  describe('large attachments', () => {
+    it('inlines content up to the limit unchanged', () => {
+      const content = 'a'.repeat(FILE_INLINE_MAX_CHARS);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`size="1024">${content}</file>`);
+      expect(result).not.toContain('truncated="true"');
+    });
+
+    it('previews a file under the inline limit when its id is in previewFileIds', () => {
+      const content = 'row,value\n'.repeat(1000);
+      const result = filesPrompts({
+        addUrl: false,
+        canReadAttachment: true,
+        fileList: [{ ...mockFile, content }],
+        previewFileIds: new Set([mockFile.id]),
+      });
+
+      expect(result).toContain('truncated="true"');
+      expect(result).toContain(`call readAttachment with fileId="${mockFile.id}"`);
+      expect(result.length).toBeLessThan(content.length);
+    });
+
+    it('replaces oversized content with a marked preview', () => {
+      const content = `${'a'.repeat(FILE_PREVIEW_CHARS)}${'b'.repeat(FILE_INLINE_MAX_CHARS)}`;
+      const result = filesPrompts({ addUrl: true, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(
+        `url="https://example.com/test.pdf" lines="1-1" total_lines="1" total_chars="${content.length}" truncated="true">${'a'.repeat(FILE_PREVIEW_CHARS)}\n[This is a preview, not the complete file`,
+      );
+      expect(result).toContain(
+        `Line 1 is ${content.length} characters long and was cut at ${FILE_PREVIEW_CHARS}`,
+      );
+      expect(result).not.toContain('bbbb');
+    });
+
+    it('previews whole lines and names the readAttachment call for the next window', () => {
+      const content = 'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10 + 1);
+      const result = filesPrompts({
+        addUrl: false,
+        canReadAttachment: true,
+        fileList: [{ ...mockFile, content }],
+      });
+
+      expect(result).toContain(`lines="1-400" total_lines="${FILE_INLINE_MAX_CHARS / 10 + 2}"`);
+      expect(result).toContain(
+        `To continue, call readAttachment with fileId="${mockFile.id}" and offset=401.`,
+      );
+    });
+
+    it('does not promise readAttachment when the request does not carry the tool', () => {
+      const content = 'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10 + 1);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`lines="1-400" total_lines="${FILE_INLINE_MAX_CHARS / 10 + 2}"`);
+      expect(result).toContain('no tool to read the rest is available here');
+      expect(result).toContain(`Lines 401-${FILE_INLINE_MAX_CHARS / 10 + 2} were left out.`);
+      expect(result).not.toContain('readAttachment');
+    });
+
+    it('re-reads a long first line in full when readAttachment can hold it', () => {
+      // One line longer than the preview but within one readAttachment window.
+      const content = `${'a'.repeat(6000)}\n${'row,value\n'.repeat(FILE_INLINE_MAX_CHARS / 10)}`;
+      const result = filesPrompts({
+        addUrl: false,
+        canReadAttachment: true,
+        fileList: [{ ...mockFile, content }],
+      });
+
+      expect(result).toContain(
+        `Line 1 is 6000 characters long and was cut at ${FILE_PREVIEW_CHARS}. To read it in full and continue, call readAttachment with fileId="${mockFile.id}" and offset=1.`,
+      );
+      expect(result).not.toContain('cannot be paged');
+    });
+
+    it('marks stored text that was cut at parse time even when it is short', () => {
+      const result = filesPrompts({
+        addUrl: false,
+        fileList: [{ ...mockFile, content: 'head', originalCharCount: 9_000_000 }],
+      });
+
+      expect(result).toContain('truncated="true" original_chars="9000000"');
+      expect(result).toContain('only the first 4 of the original 9000000 characters were kept');
+    });
+
+    it('counts lines of oversized content', () => {
+      const content = 'line\n'.repeat(FILE_INLINE_MAX_CHARS / 5 + 1);
+      const result = filesPrompts({ addUrl: false, fileList: [{ ...mockFile, content }] });
+
+      expect(result).toContain(`total_lines="${FILE_INLINE_MAX_CHARS / 5 + 2}"`);
     });
   });
 });

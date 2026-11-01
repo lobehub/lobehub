@@ -2,6 +2,7 @@ import type { DBMessageItem } from '@lobechat/types';
 import { asc, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { MAX_TOOL_IDENTIFIER_LENGTH } from '@/utils/clampToolIdentifier';
 import { uuid } from '@/utils/uuid';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -94,6 +95,32 @@ describe('MessageModel Create Tests', () => {
       expect(result.userId).toBe(userId);
     });
 
+    it('finds a message by client id within the current user scope', async () => {
+      await Promise.all([
+        messageModel.create(
+          {
+            clientId: 'shared-client-id',
+            content: 'owned message',
+            role: 'assistant',
+          },
+          'owned-message',
+        ),
+        new MessageModel(serverDB, otherUserId).create(
+          {
+            clientId: 'shared-client-id',
+            content: 'other message',
+            role: 'assistant',
+          },
+          'other-message',
+        ),
+      ]);
+
+      await expect(messageModel.findByClientId('shared-client-id')).resolves.toMatchObject({
+        content: 'owned message',
+        id: 'owned-message',
+      });
+    });
+
     it('promotes metadata.usage into the dedicated usage column on create', async () => {
       const usage = { cost: 0.004, totalInputTokens: 70, totalOutputTokens: 30, totalTokens: 100 };
       const result = await messageModel.create({
@@ -104,8 +131,7 @@ describe('MessageModel Create Tests', () => {
       });
 
       expect(result.usage).toEqual(usage);
-      // metadata.usage stays written for backward-compatible reads
-      expect((result.metadata as any).usage).toEqual(usage);
+      expect((result.metadata as any).usage).toBeUndefined();
     });
 
     it('prefers a top-level usage over metadata.usage on create', async () => {
@@ -119,6 +145,7 @@ describe('MessageModel Create Tests', () => {
       });
 
       expect(result.usage).toEqual(topLevel);
+      expect((result.metadata as any).usage).toBeUndefined();
     });
 
     it('should generate message ID automatically', async () => {
@@ -162,6 +189,61 @@ describe('MessageModel Create Tests', () => {
         .where(eq(messagePlugins.id, result.id));
       expect(pluginResult).toHaveLength(1);
       expect(pluginResult[0].identifier).toBe('plugin1');
+    });
+
+    it('should persist pluginError when creating a failed tool message', async () => {
+      // agent-runtime's createToolMessage passes the tool failure as pluginError
+      // together with an empty content; dropping it leaves the model with an
+      // `<empty_content>` tool result and no clue why the call failed.
+      const result = await messageModel.create({
+        content: undefined as unknown as string,
+        plugin: {
+          apiName: 'analyzeMedia',
+          arguments: '{}',
+          identifier: 'lobe-agent',
+          type: 'builtin',
+        },
+        pluginError: {
+          errorType: 'InsufficientBudgetForModel',
+          kind: 'stop',
+          message: 'budget exceeded',
+        },
+        role: 'tool',
+        sessionId: '1',
+        tool_call_id: 'call_budget',
+      });
+
+      const [row] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, result.id));
+      expect(row.error).toMatchObject({ errorType: 'InsufficientBudgetForModel' });
+    });
+
+    it('should clamp oversized plugin identifiers when creating a tool message', async () => {
+      const oversizedApiName = `api-${'a'.repeat(40_000)}`;
+      const oversizedIdentifier = `plugin-${'i'.repeat(40_000)}`;
+
+      const result = await messageModel.create({
+        content: 'tool result',
+        plugin: {
+          apiName: oversizedApiName,
+          arguments: '{}',
+          identifier: oversizedIdentifier,
+          type: 'default',
+        },
+        role: 'tool',
+        sessionId: '1',
+        tool_call_id: 'oversized-tool-call',
+      });
+
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, result.id));
+
+      expect(plugin.apiName).toBe(oversizedApiName.slice(0, MAX_TOOL_IDENTIFIER_LENGTH));
+      expect(plugin.identifier).toBe(oversizedIdentifier.slice(0, MAX_TOOL_IDENTIFIER_LENGTH));
     });
 
     it('should create tool message ', async () => {
@@ -340,6 +422,82 @@ describe('MessageModel Create Tests', () => {
         ),
       ).toHaveLength(1);
       expect(timingEvents.some((event) => event.includes('topic.touchUpdatedAt'))).toBe(false);
+    });
+
+    it('should honour caller-supplied ids for the pair', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-client-ids',
+        sessionId: '1',
+        title: 'Client ids',
+        userId,
+      });
+
+      // The client renders the optimistic pair under these ids before the row
+      // exists; honouring them verbatim is what removes the placeholder → real
+      // id swap from the send flow.
+      const userMessageId = 'msg_clientUser01';
+      const assistantMessageId = 'msg_clientAsst01';
+
+      const result = await messageModel.createUserAndAssistantMessages(
+        {
+          assistantMessage: {
+            content: '',
+            role: 'assistant',
+            sessionId: '1',
+            topicId: 'topic-client-ids',
+          },
+          userMessage: {
+            content: 'hello',
+            role: 'user',
+            sessionId: '1',
+            topicId: 'topic-client-ids',
+          },
+        },
+        { ids: { assistantMessageId, userMessageId } },
+      );
+
+      expect(result.userMessage.id).toBe(userMessageId);
+      expect(result.assistantMessage.id).toBe(assistantMessageId);
+      // The pair must still be linked, now through the supplied user id.
+      expect(result.assistantMessage.parentId).toBe(userMessageId);
+
+      const stored = await serverDB
+        .select({ id: messages.id })
+        .from(messages)
+        .where(eq(messages.topicId, 'topic-client-ids'))
+        .orderBy(asc(messages.createdAt));
+
+      expect(stored.map((row) => row.id)).toEqual([userMessageId, assistantMessageId]);
+    });
+
+    it('should mint ids when the caller supplies none', async () => {
+      await serverDB.insert(topics).values({
+        id: 'topic-server-ids',
+        sessionId: '1',
+        title: 'Server ids',
+        userId,
+      });
+
+      // Back-compat: a client that predates client-minted ids sends none, and
+      // the model keeps generating them.
+      const result = await messageModel.createUserAndAssistantMessages({
+        assistantMessage: {
+          content: '',
+          role: 'assistant',
+          sessionId: '1',
+          topicId: 'topic-server-ids',
+        },
+        userMessage: {
+          content: 'hello',
+          role: 'user',
+          sessionId: '1',
+          topicId: 'topic-server-ids',
+        },
+      });
+
+      expect(result.userMessage.id).toMatch(/^msg_/);
+      expect(result.assistantMessage.id).toMatch(/^msg_/);
+      expect(result.assistantMessage.parentId).toBe(result.userMessage.id);
     });
 
     it('should not touch topic updatedAt when creating a pair for an existing topic', async () => {

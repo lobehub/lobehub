@@ -2,7 +2,9 @@ import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { ConversationProvider, MessageItem, useConversationStore } from '@/features/Conversation';
+import { ConversationProvider } from '@/features/Conversation/ConversationProvider';
+import MessageItem from '@/features/Conversation/Messages';
+import { useConversationStore } from '@/features/Conversation/store';
 
 interface ChatListContentProps {
   ids: string[];
@@ -34,15 +36,8 @@ interface ChatListProps {
 }
 
 const ChatList = memo<ChatListProps>(({ context, ids, messages }) => {
-  const hasInitMessages = messages.length > 0;
-
   return (
-    <ConversationProvider
-      context={context}
-      hasInitMessages={hasInitMessages}
-      messages={messages}
-      skipFetch={true}
-    >
+    <ConversationProvider context={context} messages={messages}>
       <ChatListContent ids={ids} />
     </ConversationProvider>
   );

@@ -1,6 +1,5 @@
-import { createRoot } from 'react-dom/client';
-
+import { createSPARoot } from '../../../../src/spa/runtime';
 import ScreenCaptureOverlay from './ScreenCaptureOverlay';
 
-const root = createRoot(document.getElementById('root')!);
+const root = createSPARoot(document.getElementById('root')!);
 root.render(<ScreenCaptureOverlay />);

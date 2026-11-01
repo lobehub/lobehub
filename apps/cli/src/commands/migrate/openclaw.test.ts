@@ -5,6 +5,9 @@ import path from 'node:path';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { log } from '../../utils/logger';
+import { registerOpenClawMigration } from './openclaw';
+
 // ── Mocks ──────────────────────────────────────────────
 
 const { mockTrpcClient } = vi.hoisted(() => ({
@@ -49,11 +52,6 @@ vi.mock('../../utils/logger', () => ({
   },
   setVerbose: vi.fn(),
 }));
-
-// eslint-disable-next-line import-x/first
-import { log } from '../../utils/logger';
-// eslint-disable-next-line import-x/first
-import { registerOpenClawMigration } from './openclaw';
 
 // ── Helpers ────────────────────────────────────────────
 

@@ -1,3 +1,1 @@
-import VerifyEmail from '@/features/Auth/VerifyEmail';
-
-export default VerifyEmail;
+export { default } from '@/features/Auth/VerifyEmail';

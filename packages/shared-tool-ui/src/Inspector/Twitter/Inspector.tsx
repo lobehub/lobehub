@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
@@ -156,14 +156,16 @@ const TwitterInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>
     const primary = pickPrimaryChip(effectiveArgs);
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={inspectorTextStyles.root}>
         <XLogomark />
-        <span className={styles.productPrefix}>X (Twitter)</span>
+        <span
+          className={cx(
+            styles.productPrefix,
+            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+          )}
+        >
+          X (Twitter)
+        </span>
         <span className={styles.chip}>
           <span className={styles.chipAction}>{label}</span>
           {primary && (

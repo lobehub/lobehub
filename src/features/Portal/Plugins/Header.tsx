@@ -1,4 +1,4 @@
-import { BuiltinToolsPortalActions } from '@lobechat/builtin-tools/portals';
+import { getBuiltinPortalAction } from '@lobechat/builtin-tools/portals';
 import type { BuiltinPortalTitle } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
@@ -12,7 +12,7 @@ import Title from './Title';
  * ToolUI portal header: the generic back/close chrome plus the tool's title and,
  * when a tool registers them, header right-actions (e.g. prev/next nav).
  */
-const Header = () => {
+const Header = ({ onClose }: { onClose?: () => void }) => {
   const [toolUIIdentifier = '', messageId] = useChatStore((s) => [
     chatPortalSelectors.toolUIIdentifier(s),
     chatPortalSelectors.toolMessageId(s),
@@ -20,7 +20,7 @@ const Header = () => {
   const params = useChatStore(chatPortalSelectors.toolUIParams, isEqual);
   const message = useChatStore(dbMessageSelectors.getDbMessageById(messageId || ''), isEqual);
 
-  const Actions = BuiltinToolsPortalActions[toolUIIdentifier] as BuiltinPortalTitle | undefined;
+  const Actions = getBuiltinPortalAction(toolUIIdentifier) as BuiltinPortalTitle | undefined;
 
   return (
     <HeaderChrome
@@ -35,6 +35,7 @@ const Header = () => {
           />
         ) : undefined
       }
+      onClose={onClose}
     />
   );
 };

@@ -1,0 +1,92 @@
+'use client';
+
+import { type UserCredSummary } from '@lobechat/types';
+import { Button, Input, TextArea } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
+import { useMutation } from '@tanstack/react-query';
+import { type FC } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { usePermission } from '@/hooks/usePermission';
+
+import { type CredsApi } from '../useCredsApi';
+
+const styles = stylex.create({
+  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
+});
+
+interface EditMetaFormProps {
+  cred: UserCredSummary;
+  credsApi: CredsApi;
+  onCancel: () => void;
+  onSuccess: () => void;
+}
+
+interface FormValues {
+  description?: string;
+  name: string;
+}
+
+const EditMetaForm: FC<EditMetaFormProps> = ({ cred, credsApi, onCancel, onSuccess }) => {
+  const { t } = useTranslation('setting');
+  const { allowed: canManageCredentials } = usePermission('manage_provider_key');
+  const form = useForm<FormValues>({
+    initialValues: {
+      description: cred.description,
+      name: cred.name,
+    },
+    onSubmit: (values) => handleSubmit(values),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (values: FormValues) => {
+      if (!canManageCredentials) return;
+
+      await credsApi.client.update.mutate({
+        description: values.description,
+        id: cred.id,
+        name: values.name,
+      });
+    },
+    onSuccess: () => {
+      onSuccess();
+    },
+  });
+
+  const handleSubmit = (values: FormValues) => {
+    if (!canManageCredentials) return;
+
+    updateMutation.mutate(values);
+  };
+
+  return (
+    <Form form={form} layout="vertical">
+      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
+        <Input disabled={!canManageCredentials} />
+      </Form.Field>
+
+      <Form.Field label={t('creds.form.description')} name="description">
+        <TextArea
+          disabled={!canManageCredentials}
+          placeholder={t('creds.form.descriptionPlaceholder')}
+          rows={2}
+        />
+      </Form.Field>
+
+      <div {...stylex.props(styles.footer)}>
+        <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
+        <Button
+          disabled={!canManageCredentials}
+          htmlType="submit"
+          loading={updateMutation.isPending}
+          type="primary"
+        >
+          {t('creds.form.save')}
+        </Button>
+      </div>
+    </Form>
+  );
+};
+
+export default EditMetaForm;

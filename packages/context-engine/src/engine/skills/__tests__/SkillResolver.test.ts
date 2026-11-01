@@ -98,7 +98,11 @@ describe('SkillResolver', () => {
 
     const resolved = resolver.resolve(operationSkillSet, delta, accumulated);
 
-    expect(resolved.enabledSkills.filter((s) => s.activated)).toHaveLength(3);
+    // `lobehub-cli` has no content anywhere (neither its own base definition
+    // nor the accumulated activation) — see the dedicated content-guard
+    // tests below for why it's correctly excluded here rather than being
+    // force-activated with nothing to show.
+    expect(resolved.enabledSkills.filter((s) => s.activated)).toHaveLength(2);
   });
 
   it('should let step delta content override original content', () => {
@@ -133,5 +137,54 @@ describe('SkillResolver', () => {
 
     const artifacts = resolved.enabledSkills.find((s) => s.identifier === 'artifacts');
     expect(artifacts?.content).toBe('from-delta');
+  });
+
+  describe('content guard — a pinned/activated skill with no content must not vanish', () => {
+    // Regression test: a ZIP-bundled skill deliberately has no pre-fetched
+    // `content` (resolveClientSkills / aiAgent's skills build withhold it
+    // until `activateSkill` mounts the bundle). Before this fix, being pinned
+    // alone forced `activated: true` with `content: undefined` — and
+    // SkillContextProvider's `activated && content` / `!activated` filters
+    // both reject that combination, making the skill invisible in the
+    // injected prompt entirely (neither auto-injected nor listed as
+    // available for the model to discover and activate).
+    const bundledSkill = {
+      description: 'A skill whose content requires activation to mount',
+      identifier: 'pptx',
+      name: 'PPTX',
+      // no `content` — mirrors a ZIP-bundled skill pre-activation
+    };
+
+    it('does not mark a pinned skill activated when it has no content', () => {
+      const operationSkillSet: OperationSkillSet = {
+        enabledPluginIds: ['pptx'],
+        skills: [bundledSkill],
+      };
+
+      const resolved = resolver.resolve(operationSkillSet, emptyDelta);
+
+      const pptx = resolved.enabledSkills.find((s) => s.identifier === 'pptx');
+      // Falls through as a plain (non-activated) entry — visible to
+      // SkillContextProvider's `!activated` (available) bucket instead of
+      // vanishing.
+      expect(pptx?.activated).toBeUndefined();
+      expect(pptx?.content).toBeUndefined();
+    });
+
+    it('activates it once a step delta supplies real content (post-activateSkill)', () => {
+      const operationSkillSet: OperationSkillSet = {
+        enabledPluginIds: ['pptx'],
+        skills: [bundledSkill],
+      };
+      const delta: StepSkillDelta = {
+        activatedSkills: [{ content: 'mounted skill content', identifier: 'pptx' }],
+      };
+
+      const resolved = resolver.resolve(operationSkillSet, delta);
+
+      const pptx = resolved.enabledSkills.find((s) => s.identifier === 'pptx');
+      expect(pptx?.activated).toBe(true);
+      expect(pptx?.content).toBe('mounted skill content');
+    });
   });
 });

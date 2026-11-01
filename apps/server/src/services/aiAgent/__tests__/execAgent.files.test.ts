@@ -24,99 +24,124 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      files: [],
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      files: [],
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn().mockImplementation(() => ({
-    findByIds: mockFindByIds,
-  })),
+  FileModel: vi.fn().mockImplementation(function () {
+    return {
+      findByIds: mockFindByIds,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(null),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: mockCreateOperation,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
-vi.mock('@/server/services/klavis', () => ({
-  KlavisService: vi.fn().mockImplementation(() => ({
-    getKlavisManifests: vi.fn().mockResolvedValue([]),
-  })),
+vi.mock('@/server/services/composio', () => ({
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFileAccessUrl: vi
-      .fn()
-      .mockImplementation((file: { url: string }) =>
-        Promise.resolve(`https://s3.example.com/${file.url}`),
-      ),
-    getFullFileUrl: vi
-      .fn()
-      .mockImplementation((key: string) => Promise.resolve(`https://s3.example.com/${key}`)),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFileAccessUrl: vi.fn().mockImplementation(function (file: { url: string }) {
+        return Promise.resolve(`https://s3.example.com/${file.url}`);
+      }),
+      getFullFileUrl: vi.fn().mockImplementation(function (key: string) {
+        return Promise.resolve(`https://s3.example.com/${key}`);
+      }),
+    };
+  }),
 }));
 
 vi.mock('../ingestAttachment', () => ({
@@ -124,9 +149,11 @@ vi.mock('../ingestAttachment', () => ({
 }));
 
 vi.mock('@/server/services/document', () => ({
-  DocumentService: vi.fn().mockImplementation(() => ({
-    parseFile: mockParseFile,
-  })),
+  DocumentService: vi.fn().mockImplementation(function () {
+    return {
+      parseFile: mockParseFile,
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
@@ -213,6 +240,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         expect.objectContaining({ name: 'photo.png', mimeType: 'image/png' }),
         expect.any(Object),
         'test-user-id',
+        undefined,
       );
 
       // Verify messageModel.create was called with files
@@ -404,6 +432,27 @@ describe('AiAgentService.execAgent - file upload handling', () => {
     });
   });
 
+  describe('when content from the conversation is attached', () => {
+    it('keeps the selections on the persisted row and on the run’s user message', async () => {
+      const contextSelections = [
+        { content: 'Quoted reply', format: 'text' as const, id: 'sel-1', source: 'text' as const },
+      ];
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Explain this',
+        userMessage: { metadata: { contextSelections } },
+      });
+
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      expect(userMessageCall![0].metadata).toMatchObject({ contextSelections });
+      // The run sees the same metadata the row was persisted with; the context
+      // engine injects selections from it.
+      const lastMessage = mockCreateOperation.mock.calls[0][0].initialMessages.at(-1);
+      expect(lastMessage.metadata).toEqual(userMessageCall![0].metadata);
+    });
+  });
+
   describe('when file upload fails', () => {
     it('should continue execution without the failed file', async () => {
       mockIngestAttachment.mockRejectedValue(new Error('Download failed'));
@@ -424,8 +473,9 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       expect(mockCreateOperation).toHaveBeenCalled();
 
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
-      // files array is empty since upload failed, so should be undefined-ish
-      expect(userMessageCall![0].files).toEqual([]);
+      // all uploads failed → no fileIds, normalized to undefined (no empty
+      // messagesFiles relation attached)
+      expect(userMessageCall![0].files).toBeUndefined();
     });
   });
 
@@ -448,7 +498,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         prompt: 'What is in this image?',
       });
 
-      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1']);
+      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1'], { type: 'ordinary' });
 
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
       expect(userMessageCall![0].files).toEqual(['file-img-1']);
@@ -460,6 +510,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         {
           alt: 'photo.png',
           id: 'file-img-1',
+          mimeType: 'image/png',
           url: 'https://s3.example.com/files/test-user-id/xxx/photo.png',
         },
       ]);
@@ -487,7 +538,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
         prompt: 'Summarize this document',
       });
 
-      expect(mockParseFile).toHaveBeenCalledWith('file-pdf-1');
+      expect(mockParseFile).toHaveBeenCalledWith('file-pdf-1', { type: 'ordinary' });
 
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       const lastMessage = createOpArgs.initialMessages.at(-1);
@@ -613,7 +664,7 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       });
 
       // FileModel.findByIds sees deduped input (cheaper query)
-      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1']);
+      expect(mockFindByIds).toHaveBeenCalledWith(['file-img-1'], { type: 'ordinary' });
 
       // Only one link row will be inserted
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');

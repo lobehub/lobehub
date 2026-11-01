@@ -1,6 +1,8 @@
 /* eslint-disable perfectionist/sort-interfaces */
-import type { FileContent, KnowledgeBaseInfo, PageContentContext } from '@lobechat/prompts';
+import type { AgentIdentityContext, FileContent, KnowledgeBaseInfo } from '@lobechat/prompts';
 import type {
+  ExpertiseContextSnapshot,
+  RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
   RuntimeSelectedSkill,
   RuntimeSelectedTool,
@@ -20,10 +22,12 @@ import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilder
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
 import type { OnboardingContext } from '../../providers/OnboardingContextInjector';
 import type { Plan } from '../../providers/PlanInjector';
+import type { ProjectInstructionFile } from '../../providers/ProjectInstructionsInjector';
 import type { SkillMeta } from '../../providers/SkillContextProvider';
 import type { TodoList } from '../../providers/TodoInjector';
 import type { ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 import type { TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
+import type { WorkspaceContext } from '../../providers/WorkspaceContextInjector';
 import type { PipelineContextMetadata } from '../../types';
 import type { LobeToolManifest } from '../tools/types';
 
@@ -32,6 +36,8 @@ import type { LobeToolManifest } from '../tools/types';
  * Injected by caller to check if model supports specific capabilities
  */
 export interface ModelCapabilityChecker {
+  /** Check if audio input is supported */
+  isCanUseAudio?: (model: string, provider: string) => boolean;
   /** Check if function calling is supported */
   isCanUseFC?: (model: string, provider: string) => boolean;
   /** Check if video is supported */
@@ -90,6 +96,11 @@ export interface FileContextConfig {
   enabled: boolean;
   /** Whether to include file URLs (desktop typically uses false) */
   includeFileUrl: boolean;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (see `planAttachmentPreviews`).
+   */
+  previewFileIds?: string[];
 }
 
 /**
@@ -198,6 +209,8 @@ export interface AgentGroupConfig {
 export interface PlanTodoConfig {
   /** Whether plan/todo context injection is enabled */
   enabled?: boolean;
+  /** Whether to inject the current todos into this LLM call */
+  injectTodos?: boolean;
   /** The current plan to inject (injected before first user message) */
   plan?: Plan;
   /** The current todo list to inject (injected at end of last user message) */
@@ -213,6 +226,10 @@ export interface MessagesEngineParams {
   messages: UIChatMessage[];
   /** Model ID */
   model: string;
+  /** Human-friendly model name, e.g. `Fable 5`. Omit when unknown. */
+  modelDisplayName?: string;
+  /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
+  modelKnowledgeCutoff?: string;
   /** Provider ID */
   provider: string;
 
@@ -232,6 +249,13 @@ export interface MessagesEngineParams {
   enableAgentMode?: boolean;
   /** Whether to enable history message count limit */
   enableHistoryCount?: boolean;
+  /**
+   * Whether stale tool results are replaced with short placeholders in the
+   * model context. Undefined / true → trimming enabled (default).
+   */
+  enableStaleToolResultTrim?: boolean;
+  /** Whether to inject the operation expertise snapshot */
+  enableExpertise?: boolean;
   /** Force finish flag: when true, injects summary prompt for max-steps completion */
   forceFinish?: boolean;
   /** Function to format history summary */
@@ -244,6 +268,16 @@ export interface MessagesEngineParams {
   inputTemplate?: string;
   /** System role */
   systemRole?: string;
+  /**
+   * The agent's identity (personal `name` + role `title`), appended to the
+   * system message so the model can introduce itself by the name the user gave
+   * it. Ignored in group chat, where GroupContextInjector owns identity.
+   */
+  agentIdentity?: AgentIdentityContext;
+  /** Agent-materialized presentation contexts for this LLM call */
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
+  /** Immutable expertise captured when the operation started. */
+  expertise?: ExpertiseContextSnapshot;
 
   // ========== Capability injection (dependency injection) ==========
   /** Model capability checker */
@@ -282,10 +316,19 @@ export interface MessagesEngineParams {
   agentBuilderContext?: AgentBuilderContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: BotPlatformContext;
+  /**
+   * Where the conversation lives (app origin + workspace slug), so the model
+   * writes in-app links that resolve to the right scope.
+   */
+  workspaceContext?: WorkspaceContext;
   /** Discord context for injecting channel/guild info into system injection message */
   discordContext?: DiscordContext;
   /** Eval context for injecting environment prompts into system message */
+  /** Borrowed-connector attribution note, already rendered by the caller. */
+  connectorOwnershipNote?: string;
   evalContext?: EvalContext;
+  /** A project's root instruction files (`AGENTS.md` / `CLAUDE.md`). */
+  projectInstructions?: ProjectInstructionFile[];
   /** Onboarding context for injecting phase guidance and documents */
   onboardingContext?: OnboardingContext;
   /** Agent Management context */
@@ -313,11 +356,6 @@ export interface MessagesEngineParams {
    * Contains static state like initial page content that doesn't change during execution
    */
   initialContext?: RuntimeInitialContext;
-  /**
-   * Page content context for direct injection (server-side usage)
-   * When provided, takes precedence over initialContext/stepContext
-   */
-  pageContentContext?: PageContentContext;
   /**
    * Step context computed at the beginning of each step (frontend runtime usage)
    * Contains dynamic state like latest XML that changes between steps
@@ -358,5 +396,6 @@ export { type SkillMeta } from '../../providers/SkillContextProvider';
 export { type TodoItem, type TodoList } from '../../providers/TodoInjector';
 export { type ToolDiscoveryMeta } from '../../providers/ToolDiscoveryProvider';
 export { type TopicReferenceItem } from '../../providers/TopicReferenceContextInjector';
+export { type WorkspaceContext } from '../../providers/WorkspaceContextInjector';
 export { type OpenAIChatMessage, type UIChatMessage } from '@/types/index';
 export { type FileContent, type KnowledgeBaseInfo } from '@lobechat/prompts';

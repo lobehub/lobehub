@@ -1,10 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 
 import { aiModelRouter } from '../aiModel';
 
+const mockGetHiddenBuiltinModelsForUser = vi.hoisted(() => vi.fn());
+
+vi.mock('@/business/server/aiProvider', () => ({
+  getHiddenBuiltinModelsForUser: mockGetHiddenBuiltinModelsForUser,
+  getModelRedirects: vi.fn(async () => ({})),
+}));
 vi.mock('@/database/models/aiModel');
 vi.mock('@/database/models/user');
 vi.mock('@/database/repositories/aiInfra');
@@ -27,14 +33,20 @@ describe('aiModelRouter', () => {
     userId: 'test-user',
   };
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetHiddenBuiltinModelsForUser.mockResolvedValue([]);
+  });
+
   it('should create ai model', async () => {
     const mockCreate = vi.fn().mockResolvedValue({ id: 'model-1' });
-    vi.mocked(AiModelModel).mockImplementation(
-      () =>
-        ({
-          create: mockCreate,
-        }) as any,
-    );
+    const mockFindByIdAndProvider = vi.fn().mockResolvedValue(null);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+        findByIdAndProvider: mockFindByIdAndProvider,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -44,9 +56,63 @@ describe('aiModelRouter', () => {
     });
 
     expect(result).toBe('model-1');
+    expect(mockFindByIdAndProvider).toHaveBeenCalledWith('test-model', 'test-provider');
     expect(mockCreate).toHaveBeenCalledWith({
       id: 'test-model',
       providerId: 'test-provider',
+    });
+  });
+
+  it('should reject duplicate ai model before creating', async () => {
+    const mockCreate = vi.fn();
+    const mockFindByIdAndProvider = vi.fn().mockResolvedValue({ id: 'test-model' });
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+        findByIdAndProvider: mockFindByIdAndProvider,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.createAiModel({
+        id: 'test-model',
+        providerId: 'test-provider',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Model "test-model" already exists',
+    });
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('should convert duplicate insert races to conflict errors', async () => {
+    const duplicateError = Object.assign(new Error('failed query'), {
+      cause: Object.assign(new Error('duplicate key'), {
+        code: '23505',
+        constraint: 'ai_models_id_provider_id_user_id_pk',
+      }),
+    });
+    const mockCreate = vi.fn().mockRejectedValue(duplicateError);
+    const mockFindByIdAndProvider = vi.fn().mockResolvedValue(null);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+        findByIdAndProvider: mockFindByIdAndProvider,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.createAiModel({
+        id: 'test-model',
+        providerId: 'test-provider',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      message: 'Model "test-model" already exists',
     });
   });
 
@@ -56,12 +122,11 @@ describe('aiModelRouter', () => {
       name: 'Test Model',
     };
     const mockFindById = vi.fn().mockResolvedValue(mockModel);
-    vi.mocked(AiModelModel).mockImplementation(
-      () =>
-        ({
-          findById: mockFindById,
-        }) as any,
-    );
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        findById: mockFindById,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -77,12 +142,11 @@ describe('aiModelRouter', () => {
       { id: 'model-2', name: 'Model 2' },
     ];
     const mockGetList = vi.fn().mockResolvedValue(mockModelList);
-    vi.mocked(AiInfraRepos).mockImplementation(
-      () =>
-        ({
-          getAiProviderModelList: mockGetList,
-        }) as any,
-    );
+    vi.mocked(AiInfraRepos).mockImplementation(function () {
+      return {
+        getAiProviderModelList: mockGetList,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -98,12 +162,11 @@ describe('aiModelRouter', () => {
 
   it('should remove ai model', async () => {
     const mockDelete = vi.fn().mockResolvedValue(true);
-    vi.mocked(AiModelModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-        }) as any,
-    );
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -117,12 +180,11 @@ describe('aiModelRouter', () => {
 
   it('should update ai model', async () => {
     const mockUpdate = vi.fn().mockResolvedValue(true);
-    vi.mocked(AiModelModel).mockImplementation(
-      () =>
-        ({
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        update: mockUpdate,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -141,12 +203,11 @@ describe('aiModelRouter', () => {
 
   it('should toggle model enabled status', async () => {
     const mockToggle = vi.fn().mockResolvedValue(true);
-    vi.mocked(AiModelModel).mockImplementation(
-      () =>
-        ({
-          toggleModelEnabled: mockToggle,
-        }) as any,
-    );
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        toggleModelEnabled: mockToggle,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -167,12 +228,11 @@ describe('aiModelRouter', () => {
 
   it('should batch toggle ai models', async () => {
     const mockBatchToggle = vi.fn().mockResolvedValue(true);
-    vi.mocked(AiModelModel).mockImplementation(
-      () =>
-        ({
-          batchToggleAiModels: mockBatchToggle,
-        }) as any,
-    );
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        batchToggleAiModels: mockBatchToggle,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -187,12 +247,11 @@ describe('aiModelRouter', () => {
 
   it('should batch update ai models', async () => {
     const mockBatchUpdate = vi.fn().mockResolvedValue([]);
-    vi.mocked(AiModelModel).mockImplementation(
-      () =>
-        ({
-          batchUpdateAiModels: mockBatchUpdate,
-        }) as any,
-    );
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        batchUpdateAiModels: mockBatchUpdate,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -209,12 +268,11 @@ describe('aiModelRouter', () => {
 
   it('should clear models by provider', async () => {
     const mockClear = vi.fn().mockResolvedValue(true);
-    vi.mocked(AiModelModel).mockImplementation(
-      () =>
-        ({
-          clearModelsByProvider: mockClear,
-        }) as any,
-    );
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        clearModelsByProvider: mockClear,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -227,12 +285,11 @@ describe('aiModelRouter', () => {
 
   it('should clear remote models', async () => {
     const mockClearRemote = vi.fn().mockResolvedValue(true);
-    vi.mocked(AiModelModel).mockImplementation(
-      () =>
-        ({
-          clearRemoteModels: mockClearRemote,
-        }) as any,
-    );
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        clearRemoteModels: mockClearRemote,
+      } as any;
+    });
 
     const caller = aiModelRouter.createCaller(mockCtx);
 
@@ -241,5 +298,67 @@ describe('aiModelRouter', () => {
     });
 
     expect(mockClearRemote).toHaveBeenCalledWith('provider-1');
+  });
+
+  it('should get model reasoning config', async () => {
+    const mockGet = vi.fn().mockResolvedValue({ gpt5_6ReasoningEffort: 'high' });
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        getModelReasoningConfig: mockGet,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    const result = await caller.getAiModelReasoningConfig({
+      id: 'gpt-5.6-sol',
+      providerId: 'openai',
+    });
+
+    expect(mockGet).toHaveBeenCalledWith('gpt-5.6-sol', 'openai');
+    expect(result).toEqual({ gpt5_6ReasoningEffort: 'high' });
+  });
+
+  it('should update model reasoning config', async () => {
+    const mockUpdate = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        updateModelReasoningConfig: mockUpdate,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.updateAiModelReasoningConfig({
+      id: 'gpt-5.6-sol',
+      providerId: 'openai',
+      value: { gpt5_6ReasoningEffort: 'xhigh', reasoningMode: 'pro' },
+    });
+
+    expect(mockUpdate).toHaveBeenCalledWith('gpt-5.6-sol', 'openai', {
+      gpt5_6ReasoningEffort: 'xhigh',
+      reasoningMode: 'pro',
+    });
+  });
+
+  it('should reject invalid reasoning config values', async () => {
+    const mockUpdate = vi.fn();
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        updateModelReasoningConfig: mockUpdate,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.updateAiModelReasoningConfig({
+        id: 'gpt-5.6-sol',
+        providerId: 'openai',
+        value: { gpt5_6ReasoningEffort: 'ultra' } as any,
+      }),
+    ).rejects.toThrow();
+
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });

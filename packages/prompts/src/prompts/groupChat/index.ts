@@ -1,4 +1,5 @@
 import type { UIChatMessage } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 
 export interface GroupMemberInfo {
   id: string;
@@ -66,7 +67,7 @@ export const buildGroupChatSystemPrompt = ({
 
 export interface SupervisorPromptParams {
   allowDM?: boolean;
-  availableAgents: Array<{ id: string; title?: string | null }>;
+  availableAgents: Array<{ id: string; name?: string | null; title?: string | null }>;
   conversationHistory: string;
   scene?: 'casual' | 'productive';
   systemPrompt?: string;
@@ -99,7 +100,7 @@ export const buildSupervisorPrompt = ({
     // Then include all agents
     ...availableAgents.map((agent) => ({
       id: agent.id,
-      name: agent.title || agent.id,
+      name: agentDisplayName(agent, agent.id),
       role: 'assistant',
     })),
   ];

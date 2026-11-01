@@ -1,14 +1,19 @@
 import { useMemo } from 'react';
 
-import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { sortFileList } from '@/routes/(main)/resource/features/store/selectors';
+import { useCurrentFolderId } from '@/features/ResourceManager/hooks/useCurrentFolderId';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { sortFileList } from '@/features/ResourceManager/store/selectors';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
-import { INITIAL_STATUS } from '@/store/global/initialState';
+import {
+  DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+  INITIAL_STATUS,
+} from '@/store/global/initialState';
 import type { AsyncTaskStatus } from '@/types/asyncTask';
 import type { FileListItem } from '@/types/files';
 import type { ResourceQueryParams } from '@/types/resource';
+
+import { isQueryNavigation } from '../isQueryNavigation';
 
 interface UseExplorerListDataParams {
   isLoading?: boolean;
@@ -18,13 +23,14 @@ interface UseExplorerListDataParams {
 
 export const useExplorerListData = ({
   isLoading,
-  isValidating,
+  isValidating: _isValidating,
   queryParams,
 }: UseExplorerListDataParams) => {
   const [sorter, sortType] = useResourceManagerStore((s) => [s.sorter, s.sortType]);
-  const columnWidths = useGlobalStore(
-    (s) => s.status.resourceManagerColumnWidths || INITIAL_STATUS.resourceManagerColumnWidths,
-  );
+  const columnWidths = useGlobalStore((s) => ({
+    ...DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+    ...(s.status.resourceManagerColumnWidths || INITIAL_STATUS.resourceManagerColumnWidths),
+  }));
   const currentFolderId = useCurrentFolderId();
   const { currentQueryParams, hasMore, resourceList } = useFileStore((s) => ({
     currentQueryParams: s.queryParams,
@@ -32,15 +38,10 @@ export const useExplorerListData = ({
     resourceList: s.resourceList,
   }));
 
-  const isNavigating = useMemo(() => {
-    if (!currentQueryParams) return false;
-
-    return (
-      currentQueryParams.libraryId !== queryParams.libraryId ||
-      currentQueryParams.parentId !== queryParams.parentId ||
-      currentQueryParams.category !== queryParams.category
-    );
-  }, [currentQueryParams, queryParams]);
+  const isNavigating = useMemo(
+    () => isQueryNavigation(currentQueryParams, queryParams),
+    [currentQueryParams, queryParams],
+  );
 
   const rawData = useMemo(
     () =>
@@ -62,8 +63,7 @@ export const useExplorerListData = ({
     [rawData, sorter, sortType],
   );
 
-  const showSkeleton =
-    ((isLoading ?? false) && data.length === 0) || ((isNavigating ?? false) && !!isValidating);
+  const showSkeleton = ((isLoading ?? false) && data.length === 0) || !!isNavigating;
 
   return {
     columnWidths,

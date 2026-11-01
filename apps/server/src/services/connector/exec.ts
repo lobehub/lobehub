@@ -1,6 +1,10 @@
-import { ConnectorToolPermission } from '@/database/schemas';
+import { isLocalOrPrivateUrl } from '@lobechat/utils';
+
+import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
 
+import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
 import { ensureFreshConnectorToken } from './tokens';
 
@@ -54,6 +58,44 @@ export const callConnectorToolById = async (
     throw new ConnectorToolCallError(
       'FORBIDDEN',
       `Tool '${params.toolName}' is disabled for this connector`,
+    );
+  }
+
+  // Keep the tool list fresh through normal use: if it hasn't been synced in a
+  // while, refresh it from the upstream MCP server in the background so the user
+  // never has to open the connector page and click Refresh by hand. HTTP-only,
+  // throttled, and deferred — reuses the `tools` rows already loaded above.
+  // Wrapped defensively: this is a pure optimization and must never break the
+  // tool call, even if the scheduler itself throws.
+  try {
+    scheduleStaleConnectorToolsRefresh(
+      [
+        {
+          id: connector.id,
+          mcpConnectionType: connector.mcpConnectionType,
+          mcpServerUrl: connector.mcpServerUrl,
+        },
+      ],
+      buildLastSyncedAtMap(tools),
+      ctx,
+    );
+  } catch {
+    // Background tool-list refresh is best-effort — never fail the tool call.
+  }
+
+  // Stdio runs on a desktop device, never in the server process. Private HTTP
+  // endpoints also require a device when a gateway is configured; self-hosted
+  // servers without a gateway can still connect to their own LAN over HTTP.
+  const requiresDevice =
+    connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
+    (deviceGateway.isConfigured &&
+      !!connector.mcpServerUrl &&
+      isLocalOrPrivateUrl(connector.mcpServerUrl));
+  if (requiresDevice) {
+    throw new ConnectorToolCallError(
+      'BAD_REQUEST',
+      `Connector '${connector.name}' points at an MCP endpoint that only your machine can reach (stdio or local network). ` +
+        'Run these tools in the desktop app through a configured device gateway.',
     );
   }
 

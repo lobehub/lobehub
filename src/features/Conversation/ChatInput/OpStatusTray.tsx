@@ -1,29 +1,27 @@
 'use client';
 
 import { formatElapsedClockTime } from '@lobechat/utils';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import { CircleDollarSignIcon, CoinsIcon, FootprintsIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import {
-  AI_RUNTIME_OPERATION_TYPES,
-  type OperationType,
-} from '@/store/chat/slices/operation/types';
+import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { shinyTextStyles } from '@/styles';
-import {
-  calculateOperationUsageMetrics,
-  hasOperationUsageMetrics,
-  mergeOperationUsageMetrics,
-  type OperationUsageMetrics,
-} from '@/utils/operationUsageMetrics';
+import { calculateOperationUsageMetrics } from '@/utils/operationUsageMetrics';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../store';
-import { parseStatusPhrases, pickStableStatusPhrase } from './OpStatusTray/logic';
+import { type ActivityKey, resolveOperationActivity } from '../utils/operationActivity';
+import AnimatedCount from './OpStatusTray/AnimatedCount';
+import { parseStatusPhrases, pickRotatingStatusPhrase } from './OpStatusTray/logic';
+
+// Cycle the generating phrase like a carousel so a long-running task doesn't
+// stare back with the same line the whole time.
+const STATUS_PHRASE_ROTATION_MS = 4000;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -44,6 +42,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   containerTopAttached: css`
     border-start-start-radius: 0;
     border-start-end-radius: 0;
+  `,
+  containerSeamless: css`
+    border: none;
+
+    /* keep a hairline divider on top so the tray still reads as separated from
+       the conversation above, even without the full card chrome */
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 0;
+    background: transparent;
   `,
   divider: css`
     width: 1px;
@@ -112,6 +119,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  statusPhrase: css`
+    @keyframes op-status-tray-phrase-enter {
+      from {
+        transform: translateY(3px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    display: inline-block;
+    animation: op-status-tray-phrase-enter 0.4s ease;
+  `,
   timerValue: css`
     flex: none;
     color: ${cssVar.colorTextTertiary};
@@ -153,6 +176,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transform-box: fill-box;
     fill: ${cssVar.colorPrimary};
     animation: op-status-tray-glyph-core 1.5s ease-in-out infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
   glyphOrbit: css`
     transform-origin: center;
@@ -165,17 +192,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     stroke-width: 1.5;
 
     animation: op-status-tray-glyph-spin 2s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
 }));
 
-const ActivityGlyph = memo(() => (
+const ActivityGlyph = () => (
   <svg aria-hidden className={styles.activityGlyph} viewBox="0 0 16 16">
     <circle className={styles.glyphOrbit} cx="8" cy="8" r="6.1" />
     <circle className={styles.glyphCore} cx="8" cy="8" r="2.7" />
   </svg>
-));
-
-ActivityGlyph.displayName = 'ActivityGlyph';
+);
 
 const formatTokens = (n: number) => {
   if (n < 1000) return String(n);
@@ -188,40 +217,17 @@ const formatCost = (cost: number) => {
   return cost.toFixed(2);
 };
 
-const normalizeStepCount = (stepCount: unknown) => {
-  if (typeof stepCount !== 'number' || !Number.isFinite(stepCount)) return 0;
-  return Math.max(0, Math.floor(stepCount));
-};
-
-type ActivityKey = 'compressing' | 'generating' | 'reasoning' | 'searching' | 'toolCalling';
-
-/**
- * Map a running sub-operation type to the streaming phase shown on the left.
- * Container ops (AI_RUNTIME) and bookkeeping ops return undefined.
- */
-const resolveActivity = (type: OperationType): ActivityKey | undefined => {
-  if (type === 'reasoning') return 'reasoning';
-  if (
-    type === 'toolCalling' ||
-    type === 'executeToolCall' ||
-    type === 'createToolMessage' ||
-    type === 'pluginApi' ||
-    type.startsWith('builtinTool')
-  )
-    return 'toolCalling';
-  if (type === 'rag' || type === 'searchWorkflow') return 'searching';
-  if (type === 'contextCompression' || type === 'generateSummary') return 'compressing';
-  if (
-    type === 'callLLM' ||
-    type === 'groupAgentStream' ||
-    type === 'createAssistantMessage' ||
-    type === 'supervisorDecision'
-  )
-    return 'generating';
-  return undefined;
+const normalizeCount = (count: unknown) => {
+  if (typeof count !== 'number' || !Number.isFinite(count)) return 0;
+  return Math.max(0, Math.floor(count));
 };
 
 interface OpStatusTrayProps {
+  /**
+   * Drop the card chrome (background, border, rounded corners) so the status
+   * reads as a plain inline row — used when nothing is flush below it to attach to.
+   */
+  seamless?: boolean;
   /**
    * Square the top corners when another panel sits flush above this one.
    */
@@ -230,13 +236,13 @@ interface OpStatusTrayProps {
 
 interface MetricItem {
   icon: LucideIcon;
-  key: 'cost' | 'steps' | 'tokens';
+  key: 'cost' | 'llmCalls' | 'tokens';
   label: string;
   title: string;
-  value: string;
+  value: ReactNode;
 }
 
-const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
+const OpStatusTray = memo<OpStatusTrayProps>(({ seamless, topAttached }) => {
   const { t } = useTranslation(['chat', 'opStatusTray']);
   const context = useConversationStore(contextSelectors.context);
   const dbMessages = useConversationStore(dataSelectors.dbMessages);
@@ -246,73 +252,82 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     let activity: ActivityKey | undefined;
     let earliestStart: number | undefined;
     let latestActivityStart = -1;
+    let llmCalls = 0;
     let statusSeed: string | undefined;
-    let stepCount = 0;
-    let usageMetrics: OperationUsageMetrics | undefined;
     const runtimeOperationIds: string[] = [];
 
     for (const op of ops) {
-      if (op.status !== 'running' || op.metadata.isAborting) continue;
+      if (op.status !== 'running' || op.metadata.isAborting || op.metadata.visibleLoadingDone)
+        continue;
 
-      const mapped = resolveActivity(op.type);
+      const mapped = resolveOperationActivity(op.type);
       if (mapped && op.metadata.startTime > latestActivityStart) {
         latestActivityStart = op.metadata.startTime;
         activity = mapped;
       }
 
-      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type)) {
+      const isSteeredSend = op.type === 'sendMessage' && op.metadata.turnStartTime !== undefined;
+      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type) && !isSteeredSend) {
         continue;
       }
 
       runtimeOperationIds.push(op.id);
-      stepCount = Math.max(stepCount, normalizeStepCount(op.metadata.stepCount));
-      if (hasOperationUsageMetrics(op.metadata.usageMetrics)) {
-        usageMetrics = mergeOperationUsageMetrics(usageMetrics, op.metadata.usageMetrics);
-      }
+      // Prefer the explicit LLM-call total; older servers only sent the
+      // execution step index, which is the best available fallback.
+      const opLlmCalls =
+        typeof op.metadata.llmCalls === 'number'
+          ? normalizeCount(op.metadata.llmCalls)
+          : normalizeCount(op.metadata.stepCount);
+      llmCalls = Math.max(llmCalls, opLlmCalls);
 
-      if (earliestStart === undefined || op.metadata.startTime < earliestStart) {
-        earliestStart = op.metadata.startTime;
+      const turnStartTime = op.metadata.turnStartTime ?? op.metadata.startTime;
+      if (earliestStart === undefined || turnStartTime < earliestStart) {
+        earliestStart = turnStartTime;
         statusSeed = op.id;
       }
     }
     return {
       activity: activity ?? 'generating',
+      llmCalls,
       operationIdsKey: runtimeOperationIds.join('|'),
       startTime: earliestStart,
       statusSeed,
-      steps: stepCount,
-      usageMetrics,
     };
   });
   const operationsByMessage = useChatStore((s) => s.operationsByMessage);
+  const handoffStartTime = useChatStore((s) =>
+    operationSelectors.isSteerHandoffPending(context)(s)
+      ? operationSelectors.getLatestAgentRuntimeTurnStartTime(context)(s)
+      : undefined,
+  );
+  const startTime = operationState.startTime ?? handoffStartTime;
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!operationState.startTime) return;
+    if (!startTime) return;
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [operationState.startTime]);
+  }, [startTime]);
 
   const operationIds = useMemo(
     () => new Set(operationState.operationIdsKey.split('|').filter(Boolean)),
     [operationState.operationIdsKey],
   );
 
-  // Fallback for older / reloaded operation state: derive usage from messages
-  // produced by this operation when live operation metadata is unavailable.
-  const fallbackMetrics = useMemo(() => {
+  // Single source of truth: derive the operation total from the same per-message
+  // usage shown on each bubble, so the tray always equals their sum. (Updates as
+  // messages refresh — no separate live accumulation that can drift.)
+  const usageMetrics = useMemo(() => {
     return calculateOperationUsageMetrics(dbMessages, operationIds, operationsByMessage);
   }, [dbMessages, operationIds, operationsByMessage]);
 
-  if (!operationState.startTime) return null;
+  if (!startTime) return null;
 
-  const { totalCost, totalTokens } = hasOperationUsageMetrics(operationState.usageMetrics)
-    ? operationState.usageMetrics
-    : fallbackMetrics;
-  const elapsed = now - operationState.startTime;
+  const { totalCost, totalTokens } = usageMetrics;
+  const elapsed = now - startTime;
   const costLabel = t('chat:opStatusTray.cost');
-  const stepLabel = t('chat:opStatusTray.steps');
+  const llmCallsLabel = t('chat:opStatusTray.llmCalls');
   const tokenLabel = t('chat:opStatusTray.tokens', { defaultValue: 'tokens' });
   const generatingPhrases = parseStatusPhrases(
     t('opStatusTray:generatingPhrases', {
@@ -320,26 +335,28 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       returnObjects: true,
     }),
   );
+  const rotationStep = Math.floor(elapsed / STATUS_PHRASE_ROTATION_MS);
   const randomGeneratingStatus =
-    pickStableStatusPhrase(
+    pickRotatingStatusPhrase(
       generatingPhrases,
-      operationState.statusSeed ?? String(operationState.startTime),
+      operationState.statusSeed ?? String(startTime),
+      rotationStep,
     ) ?? t('chat:opStatusTray.status.generating');
   const statusText =
     operationState.activity === 'generating'
       ? randomGeneratingStatus
       : t(`chat:opStatusTray.status.${operationState.activity}`);
 
-  // Zero-valued metrics render nothing; steps only matter for long-running
-  // multi-step tasks, so a single step stays hidden too.
-  const metrics = [
-    operationState.steps > 1
+  // Zero-valued metrics render nothing. LLM calls are the user-facing "step"
+  // metric: tool-only iterations never increment it.
+  const metricCandidates: (MetricItem | undefined)[] = [
+    operationState.llmCalls > 0
       ? {
           icon: FootprintsIcon,
-          key: 'steps',
-          label: stepLabel,
-          title: `${operationState.steps} ${stepLabel}`,
-          value: String(operationState.steps),
+          key: 'llmCalls',
+          label: llmCallsLabel,
+          title: `${operationState.llmCalls} ${llmCallsLabel}`,
+          value: String(operationState.llmCalls),
         }
       : undefined,
     totalTokens > 0
@@ -348,7 +365,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
           key: 'tokens',
           label: tokenLabel,
           title: `${formatTokens(totalTokens)} ${tokenLabel}`,
-          value: formatTokens(totalTokens),
+          value: <AnimatedCount format={formatTokens} value={totalTokens} />,
         }
       : undefined,
     totalCost > 0
@@ -360,7 +377,8 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
           value: formatCost(totalCost),
         }
       : undefined,
-  ].filter((item): item is MetricItem => !!item);
+  ];
+  const metrics = metricCandidates.filter((item): item is MetricItem => !!item);
   const tokenMetric = metrics.find((metric) => metric.key === 'tokens');
 
   const renderMetric = ({ icon, title, value }: MetricItem) => (
@@ -397,12 +415,20 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     <Flexbox
       horizontal
       align="center"
-      className={cx(styles.container, topAttached && styles.containerTopAttached)}
       justify="space-between"
+      className={cx(
+        styles.container,
+        topAttached && styles.containerTopAttached,
+        seamless && styles.containerSeamless,
+      )}
     >
       <span className={cx(styles.metric, styles.statusMetric)}>
         <ActivityGlyph />
-        <span className={cx(styles.statusText, shinyTextStyles.shinyText)}>{statusText}...</span>
+        <span className={styles.statusText}>
+          <span className={styles.statusPhrase} key={statusText}>
+            <span className={shinyTextStyles.shinyText}>{statusText}...</span>
+          </span>
+        </span>
         <span className={styles.timerValue}>{formatElapsedClockTime(elapsed)}</span>
       </span>
 

@@ -1,10 +1,15 @@
 import { z } from 'zod';
 
-import type { ConversationContext } from '../../conversation';
 import type { UploadFileItem } from '../../files';
 import type { MessageSemanticSearchChunk } from '../../rag';
 import type { ChatMessageError } from '../common/base';
 import { ChatMessageErrorSchema } from '../common/base';
+import type {
+  ContextSelection,
+  ContextSelectionBase,
+  ContextSelectionLineRange,
+  ElementContextSelection,
+} from '../common/contextSelection';
 // Import for local use
 import type { PageSelection } from '../common/pageSelection';
 import type { ChatPluginPayload } from '../common/tools';
@@ -13,17 +18,14 @@ import type { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';
 
 export type CreateMessageRoleType =
-  | 'user'
-  | 'assistant'
-  | 'tool'
-  | 'task'
-  | 'supervisor'
-  | 'verify';
+  'user' | 'assistant' | 'tool' | 'task' | 'supervisor' | 'verify' | 'taskCallback';
 
 export interface CreateMessageParams extends Partial<
   Omit<UIChatMessage, 'content' | 'role' | 'topicId' | 'chunksList'>
 > {
   agentId?: string;
+  /** Caller-provided key for idempotent persistence within one user scope. */
+  clientId?: string;
   content: string;
   error?: ChatMessageError | null;
   fileChunks?: MessageSemanticSearchChunk[];
@@ -82,26 +84,33 @@ export interface CreateNewMessageParams {
   traceId?: string;
 }
 
-export interface ChatContextContent {
-  content: string;
-  /**
-   * Format of the content. Defaults to text.
-   */
-  format?: 'xml' | 'text' | 'markdown';
-  id: string;
-  /**
-   * Page ID the selection belongs to (for page editor selections)
-   */
+export interface ChatContextContent extends ContextSelectionBase {
+  /** Present when `source` is `element` — the picked DOM element's details. */
+  element?: ElementContextSelection['element'];
+  filePath?: string;
+  language?: string;
+  lineRange?: ContextSelectionLineRange;
   pageId?: string;
-  /**
-   * Optional short preview for displaying in UI.
-   */
-  preview?: string;
-  title?: string;
+  side?: 'additions' | 'context' | 'deletions';
+  source?: ContextSelection['source'];
   type: 'text';
+  workingDirectory?: string;
+  xml?: string;
 }
 
 // Re-export PageSelection from common for backwards compatibility
+export type {
+  CodeContextSelection,
+  ContextSelection,
+  ElementContextSelection,
+  PageContextSelection,
+} from '../common';
+export {
+  CodeContextSelectionSchema,
+  ContextSelectionSchema,
+  ElementContextSelectionSchema,
+  PageContextSelectionSchema,
+} from '../common';
 export type { PageSelection } from '../common/pageSelection';
 export { PageSelectionSchema } from '../common/pageSelection';
 
@@ -111,6 +120,11 @@ export interface SendMessageParams {
    * @deprecated Use pageSelections instead for page editor selections
    */
   contexts?: ChatContextContent[];
+  /**
+   * Generic context selections attached to the message.
+   * Page selections and code selections should both be represented here.
+   */
+  contextSelections?: ContextSelection[];
   /**
    * create a thread
    * @deprecated Use ConversationContext.newThread instead
@@ -139,13 +153,29 @@ export interface SendMessageParams {
    * This decouples sendMessage from store selectors.
    */
   messages?: UIChatMessage[];
-
   /**
    * Additional metadata for the message (e.g., mentioned users)
    */
   metadata?: Record<string, any>;
 
   onlyAddUserMessage?: boolean;
+  /**
+   * Called once the send lifecycle owns the turn, either by persisting the user message or by
+   * placing it in the current conversation queue. Transient UI can release local resources after
+   * this acknowledgement because queued turns retain their uploaded file metadata.
+   */
+  onMessageAccepted?: () => void;
+  /**
+   * Called once the user message has been persisted, before the assistant run completes.
+   * UI flows that own separate transient content use this acknowledgement to release it
+   * without waiting for the full generation.
+   */
+  onMessagePersisted?: () => void;
+  /**
+   * ID of a pre-created local user message that the formal send lifecycle should adopt in place.
+   * This keeps an optimistic row stable while replacing its local preview with uploaded media.
+   */
+  optimisticUserMessageId?: string;
   /**
    * Page selections attached to the message (for Ask AI functionality)
    * These will be persisted to the database and injected via context-engine
@@ -156,25 +186,30 @@ export interface SendMessageParams {
    * If not provided, will be calculated from messages list.
    */
   parentId?: string;
-}
-
-export interface SendGroupMessageParams {
-  context: ConversationContext;
-  files?: UploadFileItem[];
-  message: string;
   /**
-   * Additional metadata for the message (e.g., mentioned users)
+   * Send a separate turn without consuming or clearing the active composer.
+   * Voice messages use this so the current text draft and pending attachments
+   * remain available after the audio-only turn is dispatched.
    */
-  metadata?: Record<string, any>;
+  preserveComposer?: boolean;
   /**
-   * for group chat
+   * Cancels the send before the conversation lifecycle accepts ownership of the turn.
+   * Once `onMessageAccepted` fires, later aborts are ignored and the existing runtime Stop flow
+   * owns any subsequent model execution.
    */
-  targetMemberId?: string | null;
+  signal?: AbortSignal;
 }
 
 // ========== Zod Schemas ========== //
 
-const UIMessageRoleTypeSchema = z.enum(['user', 'assistant', 'tool', 'task', 'supervisor']);
+const UIMessageRoleTypeSchema = z.enum([
+  'user',
+  'assistant',
+  'tool',
+  'task',
+  'supervisor',
+  'taskCallback',
+]);
 
 const ChatPluginPayloadSchema = z.object({
   apiName: z.string(),
@@ -197,24 +232,24 @@ export const CreateNewMessageParamsSchema = z
     /**
      * @deprecated Use agentId instead. Will be resolved to agentId in the router.
      */
-    sessionId: z.string().nullable().optional(),
+    sessionId: z.string().nullish(),
     // Tool related
     tool_call_id: z.string().optional(),
     plugin: ChatPluginPayloadSchema.optional(),
     // Grouping
     parentId: z.string().optional(),
-    groupId: z.string().nullable().optional(),
+    groupId: z.string().nullish(),
     // Context
-    topicId: z.string().nullable().optional(),
-    threadId: z.string().nullable().optional(),
-    targetId: z.string().nullable().optional(),
+    topicId: z.string().nullish(),
+    threadId: z.string().nullish(),
+    targetId: z.string().nullish(),
     // Model info
-    model: z.string().nullable().optional(),
-    provider: z.string().nullable().optional(),
+    model: z.string().nullish(),
+    provider: z.string().nullish(),
     // Content
     files: z.array(z.string()).optional(),
     // Error handling
-    error: ChatMessageErrorSchema.nullable().optional(),
+    error: ChatMessageErrorSchema.nullish(),
     // Metadata
     traceId: z.string().optional(),
     fileChunks: z.array(SemanticSearchChunkSchema).optional(),

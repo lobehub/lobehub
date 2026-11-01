@@ -5,7 +5,10 @@ import {
   resolveUILocale,
 } from './getUILocaleAndResources.utils';
 
-const uiLocaleLoaders = import.meta.glob<{ default: UILocaleResourceInput }>('/locales/*/ui.json');
+type UILocaleModule = { default: UILocaleResourceInput };
+type UILocaleLoaderMap = Record<string, () => Promise<UILocaleModule>>;
+
+const uiLocaleLoaders = import.meta.glob('/locales/*/ui.json') as UILocaleLoaderMap;
 
 const loadBusinessResources = async (locale: string): Promise<UILocaleResources | null> => {
   const key = `/locales/${locale}/ui.json`;
@@ -13,7 +16,7 @@ const loadBusinessResources = async (locale: string): Promise<UILocaleResources 
   if (!loader) return null;
   try {
     const mod = await loader();
-    const resources = mod.default as UILocaleResourceInput | null;
+    const resources = mod.default;
 
     return resources ? normalizeUILocaleResources(resources) : null;
   } catch {

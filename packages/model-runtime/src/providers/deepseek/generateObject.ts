@@ -21,6 +21,7 @@ export const createDeepSeekAnthropicGenerateObject = async (
   payload: GenerateObjectPayload,
   options?: GenerateObjectOptions,
   pricing?: Pricing,
+  config?: AnthropicGenerateObjectConfig,
 ) => {
   // DeepSeek's Anthropic-compatible endpoint rejects named schema tool_choice
   // while thinking is active, but accepts `{ type: "any" }`. V4 models may
@@ -51,6 +52,7 @@ export const createDeepSeekAnthropicGenerateObject = async (
   } as Anthropic;
 
   return createAnthropicGenerateObject(sanitizedClient, payload, options, pricing, {
+    requestModel: config?.requestModel,
     requestParams,
     schemaToolChoice: thinkingDisabled ? 'tool' : 'any',
   });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 type HistoryMode = 'push' | 'replace';
 
@@ -43,7 +43,6 @@ export function useQueryParam<T>(
     throttleMs = 0,
   } = options;
 
-   
   const throttleTimer = useRef<NodeJS.Timeout | null>(null);
   const lastExecuteTime = useRef<number>(0);
 
@@ -154,6 +153,114 @@ export function useQueryParam<T>(
   return [value, setValue];
 }
 
+type ParserMap = Record<string, Parser<any> | ParserWithDefault<any>>;
+
+type QueryStatesValues<P extends ParserMap> = {
+  [K in keyof P]: P[K] extends Parser<infer T> ? T : never;
+};
+
+const readValues = <P extends ParserMap>(
+  parsers: P,
+  searchParams: URLSearchParams,
+): QueryStatesValues<P> =>
+  Object.fromEntries(
+    Object.keys(parsers).map((key) => {
+      const parser = parsers[key];
+      const parsed = parser.parse(searchParams.get(key));
+      return [key, parsed ?? (parser as ParserWithDefault<any>).defaultValue];
+    }),
+  ) as QueryStatesValues<P>;
+
+/**
+ * Read and write several query params that belong together.
+ *
+ * `useQueryParam`'s setter navigates on its own, and react-router hands the
+ * functional updater the params it captured at render time — not the live URL.
+ * So two setters fired from one event handler both start from the pre-event
+ * params and the second navigation drops whatever the first one wrote. Params
+ * that change together have to travel in a single update; this hook is that
+ * update.
+ */
+export function useQueryStates<P extends ParserMap>(
+  parsers: P,
+  options: Pick<QueryParamOptions<never>, 'clearOnDefault' | 'history'> = {},
+): [
+  QueryStatesValues<P>,
+  (
+    updates:
+      | Partial<QueryStatesValues<P>>
+      | ((prev: QueryStatesValues<P>) => Partial<QueryStatesValues<P>>),
+  ) => void,
+] {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const { clearOnDefault = false, history = 'push' } = options;
+
+  // Refs keep `setValues` stable while still reading the latest config.
+  const parsersRef = useRef(parsers);
+  const searchParamsRef = useRef(searchParams);
+  const clearOnDefaultRef = useRef(clearOnDefault);
+  const historyRef = useRef(history);
+
+  useEffect(() => {
+    parsersRef.current = parsers;
+    searchParamsRef.current = searchParams;
+    clearOnDefaultRef.current = clearOnDefault;
+    historyRef.current = history;
+  });
+
+  const values = readValues(parsers, searchParams);
+
+  const setValues = useCallback(
+    (
+      updates:
+        | Partial<QueryStatesValues<P>>
+        | ((prev: QueryStatesValues<P>) => Partial<QueryStatesValues<P>>),
+    ) => {
+      const currentParsers = parsersRef.current;
+      const currentClearOnDefault = clearOnDefaultRef.current;
+      const currentHistory = historyRef.current;
+
+      const patch =
+        typeof updates === 'function'
+          ? updates(readValues(currentParsers, searchParamsRef.current))
+          : updates;
+
+      setSearchParams(
+        (prevParams) => {
+          const newSearchParams = new URLSearchParams(prevParams);
+
+          for (const key of Object.keys(patch)) {
+            const parser = currentParsers[key];
+            if (!parser) continue;
+
+            const serialized = parser.serialize(patch[key]);
+            const defaultValue = (parser as ParserWithDefault<any>).defaultValue;
+
+            if (
+              currentClearOnDefault &&
+              defaultValue !== undefined &&
+              serialized === parser.serialize(defaultValue)
+            ) {
+              newSearchParams.delete(key);
+            } else if (serialized === null || serialized === undefined) {
+              newSearchParams.delete(key);
+            } else {
+              newSearchParams.set(key, serialized);
+            }
+          }
+
+          return newSearchParams;
+        },
+        { replace: currentHistory === 'replace' },
+      );
+    },
+    [setSearchParams],
+  );
+
+  return [values, setValues];
+}
+
 // ===== Parsers =====
 
 /**
@@ -256,49 +363,49 @@ export function useQueryState(
 ): [string | null, (value: string | null | ((prev: string | null) => string | null)) => void];
 
 // String parser with default value
- 
+
 export function useQueryState(
   key: string,
   parserWithDefault: ParserWithDefault<string>,
 ): [string, (value: string | ((prev: string) => string)) => void];
 
 // Boolean parser
- 
+
 export function useQueryState(
   key: string,
   parser: typeof parseAsBoolean,
 ): [boolean | null, (value: boolean | null | ((prev: boolean | null) => boolean | null)) => void];
 
 // Boolean parser with default value
- 
+
 export function useQueryState(
   key: string,
   parserWithDefault: ParserWithDefault<boolean>,
 ): [boolean, (value: boolean | ((prev: boolean) => boolean)) => void];
 
 // Integer parser
- 
+
 export function useQueryState(
   key: string,
   parser: typeof parseAsInteger,
 ): [number | null, (value: number | null | ((prev: number | null) => number | null)) => void];
 
 // Integer parser with default value
- 
+
 export function useQueryState(
   key: string,
   parserWithDefault: ParserWithDefault<number>,
 ): [number, (value: number | ((prev: number) => number)) => void];
 
 // String enum parser with default value
- 
+
 export function useQueryState<T extends string>(
   key: string,
   parserWithDefault: ParserWithDefault<T>,
 ): [T, (value: T | ((prev: T) => T)) => void];
 
 // --- Single Implementation ---
- 
+
 export function useQueryState(key: string, parserOrOptions?: any): any {
   // Fixed logic dispatch issue
   let parser: Parser<any>;

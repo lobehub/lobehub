@@ -2,8 +2,8 @@ import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
 import { injectActiveTraceHeaders } from '@/libs/observability/traceparent';
-import { workflowClient } from '@/libs/qstash';
 
+import { scheduleLocalAgentSignalRun } from './impls';
 import type { AgentSignalWorkflowRunPayload } from './types';
 
 export type { AgentSignalWorkflowRunPayload, AgentSignalWorkflowSourceEventInput } from './types';
@@ -17,6 +17,17 @@ const WORKFLOW_PATHS = {
 const normalizeFlowControlKeySegment = (value: string) => {
   return value.replaceAll(/[^\w.-]/g, '_');
 };
+
+/**
+ * The QStash flow-control key that serializes Agent Signal work for one `scopeKey`: one delivery
+ * at a time. Anything that must run one-at-a-time per scope (the bot-wake scheduler's delayed
+ * flush, per channel) shares this key shape so the serialization is one mechanism, not two.
+ */
+export const agentSignalScopeFlowControl = (scopeKey: string) => ({
+  // NOTICE: see `triggerRun` below for why only the flow-control segment is normalized.
+  key: `agent-signal.run.scope.${normalizeFlowControlKeySegment(scopeKey)}`,
+  parallelism: 1,
+});
 
 const getWorkflowUrl = (path: string): string => {
   const baseUrl = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
@@ -32,18 +43,18 @@ const getWorkflowUrl = (path: string): string => {
  * Agent Signal workflow trigger helper.
  *
  * Use when:
- * - Server-owned ingress wants to hand off execution to Upstash Workflow
+ * - Server-owned ingress wants to hand off execution to the configured background runtime
  * - The caller already normalized the source event
  *
  * Expects:
  * - `sourceEvent.scopeKey` is stable for the policy coordination scope
  *
  * Returns:
- * - Upstash workflow trigger metadata including `workflowRunId`
+ * - Queue mode returns Upstash workflow trigger metadata
+ * - Local mode returns a synthetic `workflowRunId` and executes in-process without durability
  */
 export class AgentSignalWorkflow {
-  static triggerRun(payload: AgentSignalWorkflowRunPayload) {
-    const url = getWorkflowUrl(WORKFLOW_PATHS.run);
+  static async triggerRun(payload: AgentSignalWorkflowRunPayload) {
     const traceHeaders = new Headers();
 
     // NOTICE:
@@ -58,6 +69,13 @@ export class AgentSignalWorkflow {
     //   triggers or we stop relying on Workflow/QStash as the async hop.
     injectActiveTraceHeaders(traceHeaders);
 
+    if (!appEnv.enableQueueAgentRuntime) {
+      return scheduleLocalAgentSignalRun(payload, traceHeaders);
+    }
+
+    const url = getWorkflowUrl(WORKFLOW_PATHS.run);
+    const { workflowClient } = await import('@/libs/qstash');
+
     log('Triggering run workflow payload=%O', {
       agentId: payload.agentId,
       headers: Object.fromEntries(traceHeaders.entries()),
@@ -68,20 +86,17 @@ export class AgentSignalWorkflow {
 
     return workflowClient.trigger({
       body: payload,
-      flowControl: {
-        // NOTICE:
-        // Upstash QStash flow control keys reject `:` and other scope-key delimiters used by
-        // AgentSignal. We normalize only the flow-control segment here so runtime scope keys can
-        // keep their richer shape everywhere else.
-        // Source/context:
-        // - Local smoke trigger against real QStash returned:
-        //   `flowControlKey must be alphanumeric, hyphen, underscore, or period`
-        // - `payload.sourceEvent.scopeKey` commonly contains delimiters like `topic:...`
-        // Removal condition:
-        // - Safe to remove only if Upstash broadens flow-control key validation.
-        key: `agent-signal.run.scope.${normalizeFlowControlKeySegment(payload.sourceEvent.scopeKey)}`,
-        parallelism: 1,
-      },
+      // NOTICE:
+      // Upstash QStash flow control keys reject `:` and other scope-key delimiters used by
+      // AgentSignal. We normalize only the flow-control segment so runtime scope keys can
+      // keep their richer shape everywhere else.
+      // Source/context:
+      // - Local smoke trigger against real QStash returned:
+      //   `flowControlKey must be alphanumeric, hyphen, underscore, or period`
+      // - `payload.sourceEvent.scopeKey` commonly contains delimiters like `topic:...`
+      // Removal condition:
+      // - Safe to remove only if Upstash broadens flow-control key validation.
+      flowControl: agentSignalScopeFlowControl(payload.sourceEvent.scopeKey),
       headers: Object.fromEntries(traceHeaders.entries()),
       url,
     });

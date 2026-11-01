@@ -1,8 +1,8 @@
-import { Form } from 'antd';
+import { toast } from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { resetPassword } from '@/libs/better-auth/auth-client';
 
 interface ResetPasswordFormValues {
@@ -18,12 +18,11 @@ interface UseResetPasswordParams {
 
 export const useResetPassword = ({ email, token, onSuccessRedirect }: UseResetPasswordParams) => {
   const { t } = useTranslation('auth');
-  const [form] = Form.useForm<ResetPasswordFormValues>();
   const [loading, setLoading] = useState(false);
 
   const handleResetPassword = async (values: ResetPasswordFormValues) => {
     if (!token) {
-      message.error(t('betterAuth.resetPassword.invalidToken'));
+      toast.error(t('betterAuth.resetPassword.invalidToken'));
       return;
     }
 
@@ -31,23 +30,27 @@ export const useResetPassword = ({ email, token, onSuccessRedirect }: UseResetPa
     try {
       const result = await resetPassword({ newPassword: values.newPassword, token });
       if (result.error) {
-        message.error(result.error.message || t('betterAuth.resetPassword.error'));
+        toast.error(result.error.message || t('betterAuth.resetPassword.error'));
         return;
       }
-      message.success(t('betterAuth.resetPassword.success'));
+      toast.success(t('betterAuth.resetPassword.success'));
       const redirectUrl = email ? `/signin?email=${encodeURIComponent(email)}` : '/signin';
       onSuccessRedirect(redirectUrl);
     } catch (error) {
       console.error('Reset password error:', error);
-      message.error(t('betterAuth.resetPassword.error'));
+      toast.error(t('betterAuth.resetPassword.error'));
     } finally {
       setLoading(false);
     }
   };
 
+  const form = useForm<ResetPasswordFormValues>({
+    initialValues: { confirmPassword: '', newPassword: '' },
+    onSubmit: handleResetPassword,
+  });
+
   return {
     form,
-    handleResetPassword,
     loading,
   };
 };

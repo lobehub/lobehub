@@ -8,6 +8,15 @@ interface LobeHubModelConfig {
   version: number;
 }
 
+export interface LobeHubModelPricingContext {
+  plan: string;
+  scope: 'personal';
+}
+
+export interface LobeHubModelPricingOptions {
+  pricingContext?: LobeHubModelPricingContext;
+}
+
 const getDefaultLobeHubModelConfig = (): LobeHubModelConfig => ({
   models: [],
   planCardModels: [],
@@ -17,7 +26,7 @@ const getDefaultLobeHubModelConfig = (): LobeHubModelConfig => ({
 const loadLobeHubModelConfig = async (): Promise<LobeHubModelConfig> =>
   getDefaultLobeHubModelConfig();
 
-export const loadModels = async () =>
+export const loadModels = async (_options?: LobeHubModelPricingOptions) =>
   loadModelBankModels({
     providerLoaders: {
       [ModelProvider.LobeHub]: loadLobeHubModels,
