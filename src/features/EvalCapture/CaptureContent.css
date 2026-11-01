@@ -1,10 +1,10 @@
 /* Sized down to sit with the label it qualifies rather than compete with it. */
-.kind {
+.lobe-capture-content-156861c9-kind {
   font-size: var(--lobe-font-size-sm);
 }
 
-.kind [role='tab'],
-.kind button {
+.lobe-capture-content-156861c9-kind [role='tab'],
+.lobe-capture-content-156861c9-kind button {
   padding-block: 1px;
   padding-inline: 8px;
 }

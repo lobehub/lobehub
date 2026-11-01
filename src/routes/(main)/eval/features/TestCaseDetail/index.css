@@ -1,21 +1,21 @@
-.breadcrumb {
+.lobe-test-case-detail-a58474f2-breadcrumb {
   font-size: var(--lobe-font-size);
 }
 
-.breadcrumb a {
+.lobe-test-case-detail-a58474f2-breadcrumb a {
   color: var(--lobe-color-text-tertiary);
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
-.breadcrumb a:hover {
+.lobe-test-case-detail-a58474f2-breadcrumb a:hover {
   color: var(--lobe-color-text);
 }
 
-.editor {
+.lobe-test-case-detail-a58474f2-editor {
   font-size: var(--lobe-font-size);
 }
 
-.editor textarea {
+.lobe-test-case-detail-a58474f2-editor textarea {
   line-height: 1.75;
 }

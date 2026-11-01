@@ -1,12 +1,12 @@
 'use client';
 
+import './Footer.css';
+
 import { type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { Button, ModalFooter, useModalContext } from '@lobehub/ui';
 import { ChevronDown } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import moduleStyles from './Footer.module.css';
 
 interface FooterProps {
   loading: boolean;
@@ -31,7 +31,7 @@ const RunCreateFooter: FC<FooterProps> = ({ loading, onCreateAndStart, onCreateO
       <Button disabled={loading} onClick={close}>
         {t('common.cancel')}
       </Button>
-      <Flexbox horizontal className={moduleStyles.splitButton}>
+      <Flexbox horizontal className={'lobe-footer-743fbaf6-split-button'}>
         <Button loading={loading} type="primary" onClick={onCreateOnly}>
           {t('run.create.createOnly')}
         </Button>

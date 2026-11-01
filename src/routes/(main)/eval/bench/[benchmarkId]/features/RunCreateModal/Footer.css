@@ -3,16 +3,16 @@
  * antd's Dropdown.Button. Both <button>s are direct children because
  * DropdownMenu renders its trigger inline (Menu.Root is context-only).
  */
-.splitButton > button + button {
+.lobe-footer-743fbaf6-split-button > button + button {
   margin-inline-start: -1px;
 }
 
-.splitButton > button:first-child {
+.lobe-footer-743fbaf6-split-button > button:first-child {
   border-start-end-radius: 0;
   border-end-end-radius: 0;
 }
 
-.splitButton > button:last-child {
+.lobe-footer-743fbaf6-split-button > button:last-child {
   border-start-start-radius: 0;
   border-end-start-radius: 0;
 }

@@ -1,3 +1,5 @@
+import './TestCaseTable.css';
+
 import { DropdownMenu, Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Input, Pagination, Table, type TableColumn, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -9,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import { sx } from '@/styles/sx';
 
 import SegmentBar from '../../../../features/SegmentBar';
-import moduleStyles from './TestCaseTable.module.css';
 
 const styles = stylex.create({
   filterButton: {
@@ -355,7 +356,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
             </Flexbox>
           )}
         </div>
-        <div className={moduleStyles.table}>
+        <div className={'lobe-test-case-table-acd68e7e-table'}>
           <Table
             classNames={{ header: { cell: stylex.props(styles.tableHeader).className } }}
             columns={columns}

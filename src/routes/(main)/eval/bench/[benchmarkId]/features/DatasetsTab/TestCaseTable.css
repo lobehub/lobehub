@@ -1,0 +1,4 @@
+.lobe-test-case-table-acd68e7e-table .row-selected > td,
+.lobe-test-case-table-acd68e7e-table .row-selected:hover > td {
+  background: var(--lobe-color-primary-bg);
+}

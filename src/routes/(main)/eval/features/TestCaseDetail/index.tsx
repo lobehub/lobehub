@@ -1,5 +1,7 @@
 'use client';
 
+import './index.css';
+
 import { Breadcrumb, Button, Flexbox, Tag, Text, TextArea, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -10,7 +12,6 @@ import { useTranslation } from 'react-i18next';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
 
-import moduleStyles from './index.module.css';
 import Transcript from './Transcript';
 import { useCaseDraft } from './useCaseDraft';
 
@@ -118,7 +119,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
       }}
     >
       <Breadcrumb
-        className={moduleStyles.breadcrumb}
+        className={'lobe-test-case-detail-a58474f2-breadcrumb'}
         items={[
           {
             title: <WorkspaceLink to="/eval">{t('testCaseDetail.breadcrumb.eval')}</WorkspaceLink>,
@@ -173,7 +174,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
             editing ? (
               <TextArea
                 autoSize={{ maxRows: 12, minRows: 3 }}
-                className={moduleStyles.editor}
+                className={'lobe-test-case-detail-a58474f2-editor'}
                 value={draft.input}
                 onChange={(e) => setDraft({ input: e.target.value })}
               />
@@ -202,7 +203,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
         {editing ? (
           <TextArea
             autoSize={{ maxRows: 12, minRows: 3 }}
-            className={moduleStyles.editor}
+            className={'lobe-test-case-detail-a58474f2-editor'}
             value={draft.criteria}
             onChange={(e) => setDraft({ criteria: e.target.value })}
           />
@@ -220,7 +221,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
         {editing ? (
           <TextArea
             autoSize={{ maxRows: 12, minRows: 3 }}
-            className={moduleStyles.editor}
+            className={'lobe-test-case-detail-a58474f2-editor'}
             placeholder={t('testCaseDetail.expected.placeholder')}
             value={draft.expected}
             onChange={(e) => setDraft({ expected: e.target.value })}
