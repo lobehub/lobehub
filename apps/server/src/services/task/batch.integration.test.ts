@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
-import { agents, taskActivities, tasks, users } from '@/database/schemas';
+import { agents, taskActivities, tasks, users, workspaces } from '@/database/schemas';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import { TaskBatchService } from './batch';
@@ -344,6 +344,38 @@ describe('TaskBatchService (real PostgreSQL)', () => {
   });
 
   describe('delete', () => {
+    it("deletes other members' visible workspace tasks, like the single-task delete", async () => {
+      const workspaceId = 'task-batch-delete-ws';
+      await db.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Workspace',
+        primaryOwnerId: otherUserId,
+        slug: workspaceId,
+      });
+      const teammate = new TaskModel(db, otherUserId, workspaceId);
+      const shared = await teammate.create({ instruction: 'Teammate task', visibility: 'public' });
+      const hidden = await teammate.create({
+        instruction: 'Teammate private',
+        visibility: 'private',
+      });
+      const own = await new TaskModel(db, userId, workspaceId).create({
+        instruction: 'My task',
+        visibility: 'public',
+      });
+
+      const result = await new TaskBatchService(db, userId, workspaceId).delete([
+        shared.id,
+        own.id,
+        hidden.id,
+      ]);
+
+      expect(result.updated.sort()).toEqual([shared.id, own.id].sort());
+      // A teammate's private task is not visible, so it is reported, not touched.
+      expect(result.skipped).toEqual([{ id: hidden.id, reason: 'notFound' }]);
+      expect(await teammate.findById(shared.id)).toBeNull();
+      expect(await teammate.findById(hidden.id)).not.toBeNull();
+    });
+
     it('deletes idle tasks in one pass and reports missing ones', async () => {
       const [a, b] = await createTasks(2);
       const keep = (await createTasks(1))[0];

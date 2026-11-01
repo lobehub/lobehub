@@ -3088,6 +3088,10 @@ export default {
   'taskList.bulk.deleteConfirm.content':
     'Deleted tasks and their comments and runs cannot be recovered; their subtasks stay as top-level tasks. Running tasks are stopped first.',
   'taskList.bulk.deleteConfirm.ok': 'Delete',
+  'taskList.bulk.deleteConfirm.othersWarning_one':
+    '{{count}} of these tasks was created by another workspace member. Deleting it removes it for everyone.',
+  'taskList.bulk.deleteConfirm.othersWarning_other':
+    '{{count}} of these tasks were created by other workspace members. Deleting them removes them for everyone.',
   'taskList.bulk.deleteConfirm.title_one': 'Delete {{count}} task?',
   'taskList.bulk.deleteConfirm.title_other': 'Delete {{count}} tasks?',
   'taskList.bulk.followUpFailed.desc':

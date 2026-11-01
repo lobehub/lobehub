@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   chunkIds,
+  countTasksCreatedByOthers,
   isEditableTarget,
   mergeOutcomes,
   pruneSelection,
@@ -63,5 +64,17 @@ describe('taskSelectionModel', () => {
     expect(isEditableTarget(input)).toBe(true);
     expect(isEditableTarget(div)).toBe(false);
     expect(isEditableTarget(null)).toBe(false);
+  });
+
+  it('counts the selected tasks another member created', () => {
+    const tasks = [
+      { createdByUserId: 'me' },
+      { createdByUserId: 'teammate' },
+      { createdByUserId: 'other-teammate' },
+      { createdByUserId: null },
+    ];
+    expect(countTasksCreatedByOthers(tasks, 'me')).toBe(2);
+    expect(countTasksCreatedByOthers(tasks, undefined)).toBe(0);
+    expect(countTasksCreatedByOthers([], 'me')).toBe(0);
   });
 });
