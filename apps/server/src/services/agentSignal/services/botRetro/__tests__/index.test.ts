@@ -4,16 +4,25 @@ import { TRACING_SCENARIOS } from '@lobechat/const';
 import { BOT_RETRO_JSON_SCHEMA, BOT_RETRO_PROMPT_VERSION } from '@lobechat/prompts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BOT_LESSONS_FILENAME, BOT_RETRO_LOG_FILENAME, renderBotLessons } from '../documents';
+import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
+
+import {
+  BOT_LESSONS_FILENAME,
+  BOT_REFLECTION_FOLDER,
+  BOT_RETRO_LOG_FILENAME,
+  renderBotLessons,
+} from '../documents';
 import { BotRetroService, toBotRetroVent } from '../index';
 
 const mocks = vi.hoisted(() => ({
+  createFolder: vi.fn(),
   generateObject: vi.fn(),
   getAgentMeta: vi.fn(),
   getDocumentByFilename: vi.fn(),
   listBotTopics: vi.fn(),
   listOwnerWakeMarks: vi.fn(),
   listVents: vi.fn(),
+  moveDocuments: vi.fn(),
   upsertDocument: vi.fn(),
   upsertDocumentByFilename: vi.fn(),
 }));
@@ -30,7 +39,9 @@ vi.mock('@/database/models/agentSignal/botRetro', () => ({
 
 vi.mock('@/server/services/agentDocuments', () => ({
   AgentDocumentsService: class {
+    createFolder = mocks.createFolder;
     getDocumentByFilename = mocks.getDocumentByFilename;
+    moveDocuments = mocks.moveDocuments;
     upsertDocument = mocks.upsertDocument;
     upsertDocumentByFilename = mocks.upsertDocumentByFilename;
   },
@@ -84,6 +95,12 @@ describe('BotRetroService.runForAgent', () => {
     ]);
     mocks.getAgentMeta.mockResolvedValue({ description: null, title: 'Shadow' });
     files({});
+    mocks.upsertDocument.mockImplementation(async ({ filename }) => ({ id: `row-${filename}` }));
+    mocks.moveDocuments.mockResolvedValue([{ id: 'row', status: 'moved' }]);
+    mocks.createFolder.mockResolvedValue({
+      created: true,
+      folder: { documentId: 'docs_folder' },
+    });
   });
 
   it('skips a day the log already holds, before reading or calling the model', async () => {
@@ -94,6 +111,7 @@ describe('BotRetroService.runForAgent', () => {
     expect(outcome).toEqual({ reason: 'already_reviewed', status: 'skipped' });
     expect(mocks.listBotTopics).not.toHaveBeenCalled();
     expect(mocks.generateObject).not.toHaveBeenCalled();
+    expect(mocks.createFolder).not.toHaveBeenCalled();
   });
 
   it('skips an agent with no bot conversation in the window', async () => {
@@ -103,9 +121,10 @@ describe('BotRetroService.runForAgent', () => {
 
     expect(outcome).toEqual({ reason: 'no_bot_activity', status: 'skipped' });
     expect(mocks.generateObject).not.toHaveBeenCalled();
+    expect(mocks.createFolder).not.toHaveBeenCalled();
   });
 
-  it('splits platform issues from own mistakes and writes both documents', async () => {
+  it('splits platform issues from own mistakes and writes both documents into the folder', async () => {
     mocks.generateObject.mockResolvedValue({
       lessons: ['Reply only when addressed or clearly invited'],
       platformIssues: [
@@ -150,6 +169,12 @@ describe('BotRetroService.runForAgent', () => {
       filename: BOT_LESSONS_FILENAME,
       policyLoad: PolicyLoad.ALWAYS,
     });
+    expect(mocks.createFolder).toHaveBeenCalledTimes(1);
+    expect(mocks.createFolder).toHaveBeenCalledWith('agent-1', BOT_REFLECTION_FOLDER);
+    expect(mocks.moveDocuments.mock.calls).toEqual([
+      ['agent-1', [`row-${BOT_LESSONS_FILENAME}`], 'docs_folder'],
+      ['agent-1', [`row-${BOT_RETRO_LOG_FILENAME}`], 'docs_folder'],
+    ]);
 
     const logWrite = mocks.upsertDocument.mock.calls.find(
       ([call]) => call.filename === BOT_RETRO_LOG_FILENAME,
@@ -182,12 +207,47 @@ describe('BotRetroService.runForAgent', () => {
       '- Confirm the thread first',
     );
     expect(mocks.upsertDocument).not.toHaveBeenCalled();
+    // Existing documents are updated wherever they are; nothing is created or moved.
+    expect(mocks.createFolder).not.toHaveBeenCalled();
+    expect(mocks.moveDocuments).not.toHaveBeenCalled();
     expect(mocks.upsertDocumentByFilename).toHaveBeenCalledTimes(1);
     const [logWrite] = mocks.upsertDocumentByFilename.mock.calls[0];
     expect(logWrite.filename).toBe(BOT_RETRO_LOG_FILENAME);
     expect(logWrite.content.indexOf('## 2026-11-01')).toBeLessThan(
       logWrite.content.indexOf('## 2026-10-31'),
     );
+  });
+
+  it('falls back to the top level when an ordinary document already has the folder name', async () => {
+    mocks.createFolder.mockRejectedValue(
+      new AgentDocumentVfsError('A document named "Bot Reflection" already exists', 'CONFLICT'),
+    );
+    mocks.generateObject.mockResolvedValue({
+      lessons: ['Ask before guessing'],
+      platformIssues: [],
+      selfMistakes: [],
+      summary: 'Fine.',
+    });
+
+    await new BotRetroService({} as never, 'user-1').runForAgent(input);
+
+    expect(mocks.upsertDocument).toHaveBeenCalledTimes(2);
+    expect(mocks.moveDocuments).not.toHaveBeenCalled();
+  });
+
+  it('does not swallow other folder failures', async () => {
+    mocks.createFolder.mockRejectedValue(new Error('db down'));
+    mocks.generateObject.mockResolvedValue({
+      lessons: ['Ask before guessing'],
+      platformIssues: [],
+      selfMistakes: [],
+      summary: 'Fine.',
+    });
+
+    await expect(new BotRetroService({} as never, 'user-1').runForAgent(input)).rejects.toThrow(
+      'db down',
+    );
+    expect(mocks.moveDocuments).not.toHaveBeenCalled();
   });
 
   it('rejects a malformed model answer without touching the documents', async () => {

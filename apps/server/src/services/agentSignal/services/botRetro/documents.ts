@@ -1,3 +1,6 @@
+/** Folder the retro documents live in, so they do not crowd the agent's top-level documents. */
+export const BOT_REFLECTION_FOLDER = 'Bot Reflection';
+
 /**
  * Agent document holding the lessons a bot agent keeps in front of itself. Loaded into every run
  * of the agent; the owner may edit or disable it, and the next retro starts from whatever is there.

@@ -13,10 +13,12 @@ import { z } from 'zod';
 import { AgentBotRetroModel, type BotRetroVentRow } from '@/database/models/agentSignal/botRetro';
 import type { LobeChatDatabase } from '@/database/type';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
 import {
   BOT_LESSONS_FILENAME,
+  BOT_REFLECTION_FOLDER,
   BOT_RETRO_LOG_FILENAME,
   hasBotRetroLogEntry,
   parseBotLessons,
@@ -188,6 +190,33 @@ export class BotRetroService {
       ),
     );
 
+    // The folder is created on the first new document only, so a skipped day never leaves an
+    // empty folder behind, and documents that already exist are updated wherever the owner keeps them.
+    let folderId: string | null | undefined;
+    const ensureFolder = async () => {
+      if (folderId !== undefined) return folderId;
+      try {
+        folderId = (await documents.createFolder(agentId, BOT_REFLECTION_FOLDER)).folder.documentId;
+      } catch (error) {
+        // An ordinary document already holds the folder's name: keep the retro at the top level.
+        if (!(error instanceof AgentDocumentVfsError && error.code === 'CONFLICT')) throw error;
+        log('agent=%s folder name %s is taken by a document', agentId, BOT_REFLECTION_FOLDER);
+        folderId = null;
+      }
+      return folderId;
+    };
+    const createInFolder = async (
+      params: Parameters<AgentDocumentsService['upsertDocument']>[0],
+    ) => {
+      const created = await documents.upsertDocument(params);
+      const parentId = await ensureFolder();
+      if (!parentId) return;
+
+      const [moved] = await documents.moveDocuments(agentId, [created.id], parentId);
+      if (moved?.status === 'failed')
+        log('agent=%s kept %s at the top level: %s', agentId, params.filename, moved.error);
+    };
+
     // A vent id the model names but the agent never filed is a slip, not a vent.
     const ventIds = new Set(vents.map((vent) => vent.id));
     const platformIssues = result.platformIssues.map((issue) => ({
@@ -206,7 +235,7 @@ export class BotRetroService {
           filename: BOT_LESSONS_FILENAME,
         });
       } else {
-        await documents.upsertDocument({
+        await createInFolder({
           agentId,
           content: renderBotLessons(lessons),
           filename: BOT_LESSONS_FILENAME,
@@ -231,7 +260,7 @@ export class BotRetroService {
         filename: BOT_RETRO_LOG_FILENAME,
       });
     } else {
-      await documents.upsertDocument({
+      await createInFolder({
         agentId,
         content: logContent,
         filename: BOT_RETRO_LOG_FILENAME,
