@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { LINEAR_DEFAULT_IMPORT_STATE_TYPES, LINEAR_OPEN_ISSUE_STATE_TYPES } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -165,6 +166,37 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
     // Picked explicitly: imported, then closed like its issue.
     expect(result.created).toBe(1);
     expect((await linkedTask('1'))?.status).toBe('completed');
+  });
+
+  it('imports completed issues as completed tasks when the filter includes completed', async () => {
+    serve([
+      issue({ id: '1', state: { name: 'Done', type: 'completed' } }),
+      issue({ id: '2', state: { name: 'In Progress', type: 'started' } }),
+    ]);
+    const service = new LinearIssueSyncService(db, userId);
+
+    const result = await service.syncByFilter(TOKEN, {
+      stateTypes: [...LINEAR_DEFAULT_IMPORT_STATE_TYPES],
+      teamId: TEAM,
+    });
+
+    expect(result).toMatchObject({ created: 2, skipped: [] });
+    expect((await linkedTask('1'))?.status).toBe('completed');
+    expect((await linkedTask('2'))?.status).toBe('backlog');
+  });
+
+  it('skips completed issues when the filter only asks for open states', async () => {
+    serve([issue({ id: '1', state: { name: 'Done', type: 'completed' } })]);
+    const service = new LinearIssueSyncService(db, userId);
+
+    const result = await service.syncByFilter(TOKEN, {
+      stateTypes: [...LINEAR_OPEN_ISSUE_STATE_TYPES],
+      teamId: TEAM,
+    });
+
+    expect(result.created).toBe(0);
+    expect(result.skipped).toEqual([{ identifier: 'ENG-1', reason: 'closed' }]);
+    expect(await linkedTask('1')).toBeNull();
   });
 
   it('nests a sub-issue under the task of its parent issue', async () => {

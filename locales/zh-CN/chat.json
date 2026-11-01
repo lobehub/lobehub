@@ -2622,6 +2622,8 @@
   "taskList.bulk.delete": "删除…",
   "taskList.bulk.deleteConfirm.content": "删除后，任务及其评论和运行记录无法恢复，子任务会保留为顶层任务。运行中的任务会先被停止。",
   "taskList.bulk.deleteConfirm.ok": "删除",
+  "taskList.bulk.deleteConfirm.othersWarning_one": "其中 {{count}} 个任务由其他成员创建，删除后所有成员都将无法再看到。",
+  "taskList.bulk.deleteConfirm.othersWarning_other": "其中 {{count}} 个任务由其他成员创建，删除后所有成员都将无法再看到。",
   "taskList.bulk.deleteConfirm.title_one": "删除 {{count}} 个任务？",
   "taskList.bulk.deleteConfirm.title_other": "删除 {{count}} 个任务？",
   "taskList.bulk.followUpFailed.desc": "任务已标记完成，但检查点暂停和依赖任务没有处理成功，请检查相关的父任务和依赖任务。",

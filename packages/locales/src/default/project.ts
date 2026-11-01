@@ -161,6 +161,9 @@ export default {
   'acceptance.success.start': 'Project started',
   'acceptance.title': 'Acceptance',
   'create.action': 'Create project',
+  'create.avatarHint': 'Pick an emoji or upload an image. You can also drop an image here.',
+  'create.avatarInvalidType': 'Use a JPG, PNG, GIF, or WEBP image.',
+  'create.avatarUploadFailed': "Couldn't upload the image. Try again.",
   'create.blank': 'Blank project',
   'create.fromGithub': 'From GitHub repository',
   'create.identifierDescription':
@@ -168,9 +171,15 @@ export default {
   'create.identifierInvalid': 'Use 3–6 uppercase letters or numbers, starting with a letter.',
   'create.identifierLabel': 'Identifier (optional)',
   'create.identifierPlaceholder': 'ACE',
+  'create.mainAgentDedicatedDescription':
+    'Creates an agent named after the project, with its avatar and the Project label. It stays in your agents list. Your choice is reused next time.',
+  'create.mainAgentDedicatedPlaceholder': 'Named after the project',
+  'create.mainAgentDedicatedTag': 'New',
   'create.mainAgentDescription':
     'Manages this project’s conversations, tasks, and goals. Your choice is reused next time.',
   'create.mainAgentLabel': 'Main agent',
+  'create.mainAgentMode.dedicated': 'Create a dedicated agent',
+  'create.mainAgentMode.existing': 'Use an existing agent',
   'create.mainAgentPlaceholder': 'Select an agent',
   'create.nameLabel': 'Project name',
   'create.namePlaceholder': 'What are you working on?',

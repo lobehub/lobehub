@@ -1,4 +1,4 @@
-// Bundle-size import boundaries for src/**, shared by eslint.config.mjs. These
+// Bundle-size import boundaries for src/**, shared by oxlint.config.ts. These
 // keep real import() seams in place instead of relying on component-level
 // conditional rendering.
 

@@ -96,7 +96,7 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
       onClick: () => handleBenchmarkSwitch(b.id),
       style: b.id === id ? { backgroundColor: cssVar.controlItemBgActive } : {},
     }));
-  }, [benchmarkList, handleBenchmarkSwitch, id, styles.menuIcon]);
+  }, [benchmarkList, handleBenchmarkSwitch, id]);
 
   return (
     <Block

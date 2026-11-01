@@ -93,7 +93,7 @@ export default {
   'linear.sync.filter.project': 'Linear project',
   'linear.sync.filter.projectHint': 'Keep All projects to include every issue in the team.',
   'linear.sync.filter.states': 'Issue states to sync',
-  'linear.sync.filter.statesHint': 'Completed and canceled issues are left out by default.',
+  'linear.sync.filter.statesHint': 'Canceled issues are left out by default.',
   'linear.sync.filter.statesSummary': '{{count}} states',
   'linear.sync.filter.team': 'Linear team',
   'linear.sync.filter.teamPlaceholder': 'Choose a team',

@@ -13,16 +13,25 @@ import { useTranslation } from 'react-i18next';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useHomeStore } from '@/store/home';
 import { type ProjectListItem, useProjectStore } from '@/store/project';
 
 import {
+  buildCreateProjectRequest,
   getCreateProjectInput,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
   isProjectSlugValid,
 } from './createProjectForm';
-import MainAgentField from './MainAgentField';
-import { writeRememberedMainAgent } from './mainAgentStorage';
+import MainAgentSection from './MainAgentSection';
+import {
+  DEDICATED_MAIN_AGENT,
+  type MainAgentMode,
+  readRememberedMainAgent,
+  resolveDefaultMainAgentMode,
+  writeRememberedMainAgent,
+} from './mainAgentStorage';
+import ProjectAvatarField from './ProjectAvatarField';
 import { useDefaultMainAgent } from './useDefaultMainAgent';
 
 export interface CreateProjectOptions {
@@ -35,10 +44,15 @@ export interface CreateProjectOptions {
 }
 
 interface CreateProjectFormState {
+  /** Emoji or uploaded image URL; a dedicated main agent takes it over too. */
+  avatar?: string;
+  /** Creating now would save the project, and its agent, without the avatar on its way. */
+  avatarUploading: boolean;
   identifier: string;
   loading: boolean;
   /** Explicit pick in this modal; otherwise the remembered agent or LobeAI. */
   mainAgentId?: string;
+  mainAgentMode: MainAgentMode;
   name: string;
   slug: string;
   slugEdited: boolean;
@@ -55,13 +69,16 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
   const createProject = useProjectStore((s) => s.createProject);
-  const [form, setForm] = useState<CreateProjectFormState>({
+  const [remembered] = useState(() => readRememberedMainAgent(getActiveWorkspaceId()));
+  const [form, setForm] = useState<CreateProjectFormState>(() => ({
+    avatarUploading: false,
     identifier: '',
     loading: false,
+    mainAgentMode: resolveDefaultMainAgentMode(remembered),
     name: '',
     slug: '',
     slugEdited: false,
-  });
+  }));
   const defaultMainAgentId = useDefaultMainAgent();
   const mainAgentId = form.mainAgentId ?? defaultMainAgentId;
   const createInput = getCreateProjectInput(form);
@@ -83,11 +100,24 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
   };
 
   const handleCreate = async () => {
-    if (!createInput || form.loading) return;
+    if (!createInput || form.loading || form.avatarUploading) return;
     updateForm({ loading: true });
     try {
-      const project = await createProject({ ...createInput, coordinatorAgentId: mainAgentId });
-      if (mainAgentId) writeRememberedMainAgent(mainAgentId, getActiveWorkspaceId());
+      const project = await createProject(
+        buildCreateProjectRequest(createInput, {
+          avatar: form.avatar,
+          mainAgentId,
+          mainAgentMode: form.mainAgentMode,
+        }),
+      );
+      const rememberedChoice =
+        form.mainAgentMode === 'dedicated' ? DEDICATED_MAIN_AGENT : mainAgentId;
+      if (rememberedChoice) writeRememberedMainAgent(rememberedChoice, getActiveWorkspaceId());
+      if (form.mainAgentMode === 'dedicated') {
+        // The project created an agent and maybe the Project label; show both.
+        const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
+        void Promise.all([refreshAgentList(), refreshAgentLabels()]);
+      }
       close();
       if (onCreated) onCreated(project);
       else navigate(`/project/${project.slug ?? project.id}`);
@@ -106,14 +136,22 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           <Text fontSize={13} weight={500}>
             {t('create.nameLabel')}
           </Text>
-          <Input
-            autoFocus
-            maxLength={255}
-            placeholder={t('create.namePlaceholder')}
-            value={form.name}
-            onChange={(event) => updateName(event.target.value)}
-            onPressEnter={handleCreate}
-          />
+          <ProjectAvatarField
+            avatar={form.avatar}
+            disabled={form.loading}
+            name={form.name}
+            onChange={(avatar) => updateForm({ avatar })}
+            onUploadingChange={(avatarUploading) => updateForm({ avatarUploading })}
+          >
+            <Input
+              autoFocus
+              maxLength={255}
+              placeholder={t('create.namePlaceholder')}
+              value={form.name}
+              onChange={(event) => updateName(event.target.value)}
+              onPressEnter={handleCreate}
+            />
+          </ProjectAvatarField>
         </Flexbox>
         <Flexbox gap={6}>
           <Text fontSize={13} weight={500}>
@@ -151,24 +189,20 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
             {t(slugValid ? 'create.slugDescription' : 'create.slugInvalid')}
           </Text>
         </Flexbox>
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('create.mainAgentLabel')}
-          </Text>
-          <MainAgentField
-            agentId={mainAgentId}
-            disabled={form.loading}
-            onChange={(id) => updateForm({ mainAgentId: id })}
-          />
-          <Text fontSize={12} type="secondary">
-            {t('create.mainAgentDescription')}
-          </Text>
-        </Flexbox>
+        <MainAgentSection
+          agentId={mainAgentId}
+          disabled={form.loading}
+          mode={form.mainAgentMode}
+          projectAvatar={form.avatar}
+          projectName={form.name}
+          onAgentChange={(id) => updateForm({ mainAgentId: id })}
+          onModeChange={(mainAgentMode) => updateForm({ mainAgentMode })}
+        />
       </Flexbox>
       <ModalFooter>
         <Button onClick={close}>{t('cancel', { ns: 'common' })}</Button>
         <Button
-          disabled={!createInput}
+          disabled={!createInput || form.avatarUploading}
           loading={form.loading}
           type="primary"
           onClick={handleCreate}

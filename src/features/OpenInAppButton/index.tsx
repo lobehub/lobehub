@@ -1,7 +1,13 @@
 import { isDesktop } from '@lobechat/const';
 import type { OpenInAppId } from '@lobechat/electron-client-ipc';
-import { DropdownMenu, type DropdownMenuProps, Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  type DropdownMenuProps,
+  Icon,
+  Tooltip,
+} from '@lobehub/ui';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

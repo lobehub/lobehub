@@ -2,24 +2,22 @@
 
 import { agentDisplayName } from '@lobechat/types';
 import {
+  ActionIcon,
+  Button,
   Center,
+  confirmModal,
   ContextMenuTrigger,
   createStaticStyles,
   cssVar,
+  type DropdownItem,
+  DropdownMenu,
   Empty,
   Flexbox,
   Icon,
   SearchBar,
-  Tooltip,
-} from '@lobehub/ui';
-import {
-  ActionIcon,
-  Button,
-  confirmModal,
-  type DropdownItem,
-  DropdownMenu,
   Text,
   toast,
+  Tooltip,
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {

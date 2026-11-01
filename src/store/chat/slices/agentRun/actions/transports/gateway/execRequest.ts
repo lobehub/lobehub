@@ -140,6 +140,11 @@ export const resolveUserInterventionConfig = () => ({
   allowList: toolInterventionSelectors.allowList(useUserStore.getState()),
 });
 
+type NewTopicProjectInput = {
+  projectId?: string;
+  projectWorkingDirectoryId?: string;
+};
+
 /**
  * The `appContext` of a Gateway run request: what the server acts on, read
  * from the conversation the send came from.
@@ -150,16 +155,17 @@ export const buildExecAppContext = (
     executionContext,
     initialTopicMetadata,
     messageContext = executionContext,
-    newTopicProject: { projectId, projectWorkingDirectoryId } = {},
+    newTopicProject,
   }: {
     executionContext: ConversationContext;
     /** Seed metadata for the topic this run creates. */
     initialTopicMetadata?: Partial<ChatTopicMetadata>;
     messageContext?: ConversationContext;
     /** The project directory — or, without one, the project — the topic this run creates is bound to. */
-    newTopicProject?: { projectId?: string; projectWorkingDirectoryId?: string };
+    newTopicProject?: NewTopicProjectInput;
   },
 ): ExecAgentAppContext => {
+  const { projectId, projectWorkingDirectoryId }: NewTopicProjectInput = newTopicProject ?? {};
   const newThread = resolveNewThreadIntent(executionContext);
 
   return {

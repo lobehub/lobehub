@@ -70,3 +70,16 @@ export const isEditableTarget = (target: EventTarget | null): boolean => {
   if (element.isContentEditable) return true;
   return !!element.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]');
 };
+
+/**
+ * How many of `tasks` another member created. A workspace batch delete may
+ * remove them (same scope as deleting one task), so the confirmation has to
+ * say so explicitly. Tasks without a recorded creator are not counted.
+ */
+export const countTasksCreatedByOthers = (
+  tasks: readonly { createdByUserId?: string | null }[],
+  userId: string | null | undefined,
+): number => {
+  if (!userId) return 0;
+  return tasks.filter((task) => !!task.createdByUserId && task.createdByUserId !== userId).length;
+};
