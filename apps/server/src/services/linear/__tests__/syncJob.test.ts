@@ -4,11 +4,13 @@ import { describe, expect, it } from 'vitest';
 import type { LinearSyncJobRow } from '@/database/models/linear';
 
 import {
+  LINEAR_SYNC_MAX_ROUNDS,
   LINEAR_SYNC_STALE_MS,
   LINEAR_SYNC_UNCLAIMED_MS,
   mergeLinearSyncResults,
   nextLinearSyncRound,
   toLinearSyncJobView,
+  withinRoundCap,
 } from '../syncJob';
 
 const now = Date.UTC(2026, 9, 27, 12);
@@ -111,5 +113,23 @@ describe('mergeLinearSyncResults', () => {
         { resumed: false },
       ),
     ).toMatchObject({ closed: 3, created: 100, skippedCount: 1, unchanged: 100 });
+  });
+});
+
+describe('withinRoundCap', () => {
+  const cap = LINEAR_SYNC_MAX_ROUNDS;
+
+  it('lets rounds on below the cap', () => {
+    expect(withinRoundCap({ cursor: 'a' }, cap - 1, true)).toEqual({ cursor: 'a' });
+  });
+
+  it('turns a capped resumed run into the closing pass', () => {
+    expect(withinRoundCap({ cursor: 'a' }, cap, true)).toEqual({ sweep: true });
+    expect(withinRoundCap({ sweep: true }, cap, true)).toEqual({ sweep: true });
+  });
+
+  it('ends a capped run whose last round already read from the start', () => {
+    expect(withinRoundCap({ cursor: 'a' }, cap + 1, false)).toBeUndefined();
+    expect(withinRoundCap(undefined, cap, true)).toBeUndefined();
   });
 });

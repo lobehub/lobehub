@@ -198,15 +198,11 @@ export class LinearSyncJobService {
       }
       // A rule run that hit its per-round cap goes on by itself, so the user
       // does not have to press Sync once per hundred issues.
-      // The closing pass from the start is not a creating round: it still
-      // runs when the creating rounds used up the cap, so a long run never
-      // ends without checking the issues it linked earlier.
       const proposed =
         this.continueJob && metadata.kind === 'rule'
           ? nextLinearSyncRound(metadata.cursor, round)
           : undefined;
-      const next =
-        proposed && (proposed.sweep || rounds < LINEAR_SYNC_MAX_ROUNDS) ? proposed : undefined;
+      const next = withinRoundCap(proposed, rounds, metadata.cursor !== undefined);
       const outcome = { ...metadata, cursor: undefined, result, rounds };
       if (next) {
         log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
@@ -258,6 +254,23 @@ export class LinearSyncJobService {
     );
   }
 }
+
+/**
+ * The next round, once the creating rounds may have used up the cap. The
+ * closing pass from the start is not a creating round: a run that stops at the
+ * cap after reading on from a cursor still takes it, so it never ends without
+ * checking the issues it linked earlier. A round that read from the start has
+ * already done that pass, so the run ends there, asking to be run again if
+ * issues remain.
+ */
+export const withinRoundCap = (
+  proposed: { cursor?: string; sweep?: true } | undefined,
+  rounds: number,
+  resumed: boolean,
+): { cursor?: string; sweep?: true } | undefined => {
+  if (!proposed || proposed.sweep || rounds < LINEAR_SYNC_MAX_ROUNDS) return proposed;
+  return resumed ? { sweep: true } : undefined;
+};
 
 /** A round's outcome as stored and shown; the resume point travels in the job's `cursor`. */
 const withoutResumePoint = (round: LinearFilterSyncResult): LinearSyncResult => {

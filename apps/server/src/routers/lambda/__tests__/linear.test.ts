@@ -365,14 +365,21 @@ describe('linearRouter', () => {
         ]);
       });
 
-      it(`stops after ${LINEAR_SYNC_MAX_ROUNDS} rounds`, async () => {
+      it(`stops creating after ${LINEAR_SYNC_MAX_ROUNDS} rounds, but still takes the closing pass`, async () => {
         let page = 0;
-        mocks.syncByFilter.mockImplementation(async () => round(100, true, String(++page * 100)));
+        mocks.syncByFilter.mockImplementation(async (_token, _filter, options) => {
+          // The pass from the start finds more than one round can create.
+          if (!options.startAfter && page > 0) return round(0, true, '100');
+          page += 1;
+          return round(100, true, String(page * 100));
+        });
         const { id } = await startRule();
 
         await drainHandOffs();
 
-        expect(mocks.syncByFilter).toHaveBeenCalledTimes(LINEAR_SYNC_MAX_ROUNDS);
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(LINEAR_SYNC_MAX_ROUNDS + 1);
+        expect(startAfterOfCalls().at(-1)).toBeUndefined();
+        // Issues remain, so the run asks to be run again.
         expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
           {
             id,
