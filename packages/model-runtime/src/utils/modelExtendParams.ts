@@ -1,8 +1,8 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
 import type {
   AiModelReasoningConfig,
-  AiModelReasoningEffortSettings,
   ExtendParamsType,
+  ResolvedReasoningEffortSettings,
 } from 'model-bank/aiModel';
 import { MODEL_REASONING_CONFIG_KEYS, resolveReasoningEffortLevel } from 'model-bank/aiModel';
 
@@ -117,9 +117,10 @@ export interface ApplyModelExtendParamsContext {
   extendParams: ExtendParamsType[] | undefined;
   model: string;
   /**
-   * The model's reasoning effort control (`settings.reasoningEffort` from its model card).
+   * The model's reasoning effort control with its default resolved
+   * (`resolveReasoningEffortSettings`).
    */
-  reasoningEffort?: AiModelReasoningEffortSettings;
+  reasoningEffort?: ResolvedReasoningEffortSettings;
 }
 
 /**

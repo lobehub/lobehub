@@ -14,6 +14,7 @@ import {
   type AiModelReasoningConfig,
   type ExtendParamsType,
   resolveReasoningEffortLevel,
+  resolveReasoningEffortSettings,
 } from 'model-bank';
 import { ModelProvider } from 'model-bank/modelProvider';
 
@@ -86,11 +87,13 @@ export const resolveModelExtendParamList = async (
     }
   }
 
-  const modelReasoningEffort =
-    userModelRow?.reasoningEffort ??
-    modelCard?.reasoningEffort ??
-    canonicalModelCard?.reasoningEffort ??
-    undefined;
+  const modelReasoningEffort = resolveReasoningEffortSettings(
+    userModelRow?.reasoningEffort ?? modelCard?.reasoningEffort ?? undefined,
+    // The own card first, so a user row without a default inherits the card's.
+    [modelCard, ...cards.filter((card) => card !== modelCard && matchesModel(card, model))].map(
+      (card) => card?.reasoningEffort ?? undefined,
+    ),
+  );
 
   return {
     canonicalModelCard,

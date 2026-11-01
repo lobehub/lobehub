@@ -1,5 +1,5 @@
 import type { AiProviderModelListItem } from 'model-bank';
-import { AiModelSourceEnum } from 'model-bank/aiModel';
+import { AiModelSourceEnum, resolveReasoningEffortSettings } from 'model-bank/aiModel';
 
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 import { ModelSearchImplement } from '@/types/search';
@@ -125,11 +125,27 @@ const modelExtendParams = (id: string, provider: string) => (s: AIProviderStoreS
 };
 
 /**
- * The model's reasoning effort control (`settings.reasoningEffort`): the
- * selectable levels and the level it runs at when the user picked none.
+ * The model's reasoning effort control: the selectable levels and the level it
+ * runs at when the user picked none. Resolved in the same order as the runtime
+ * (`resolveModelExtendParamList`): the enabled row (user settings merged over
+ * the card), then the same model under other providers, so the shown level is
+ * the sent level.
  */
-const modelReasoningEffortSettings = (id: string, provider: string) => (s: AIProviderStoreState) =>
-  getEnabledModelById(id, provider)(s)?.settings?.reasoningEffort;
+const modelReasoningEffortSettings =
+  (id: string, provider: string) => (s: AIProviderStoreState) => {
+    const own = getEnabledModelById(id, provider)(s);
+    const ownCard = s.builtinAiModelList.find(
+      (item) => item.id === id && item.providerId === provider,
+    );
+    const sameModel = [...(s.enabledAiModels ?? []), ...s.builtinAiModelList].filter(
+      (item) => item.id === id && item.providerId !== provider,
+    );
+
+    return resolveReasoningEffortSettings(
+      own?.settings?.reasoningEffort ?? ownCard?.settings?.reasoningEffort,
+      [ownCard, ...sameModel].map((item) => item?.settings?.reasoningEffort),
+    );
+  };
 
 const isModelHasReasoningMode = (id: string, provider: string) => (s: AIProviderStoreState) =>
   !!modelExtendParams(id, provider)(s)?.includes('reasoningMode');

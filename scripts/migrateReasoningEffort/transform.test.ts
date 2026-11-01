@@ -128,7 +128,7 @@ describe('migrateModelSettings', () => {
     ).toEqual({ reasoningEffort: cardSpec });
   });
 
-  it('builds a middle-default spec for custom rows without a card', () => {
+  it('builds a spec without a default for custom rows without a card', () => {
     expect(
       migrateModelSettings(
         { extendParams: ['deepseekV4ReasoningEffort', 'enableReasoning'] },
@@ -136,14 +136,14 @@ describe('migrateModelSettings', () => {
       ),
     ).toEqual({
       extendParams: ['enableReasoning'],
-      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
+      reasoningEffort: { controlsThinking: true, levels: ['none', 'high', 'max'] },
     });
   });
 
   it('is idempotent', () => {
     const migrated = migrateModelSettings({ extendParams: ['effort'] }, { hasProviderCard: false });
     expect(migrated).toEqual({
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'max'] },
     });
     expect(migrateModelSettings(migrated, { hasProviderCard: false })).toBeUndefined();
   });

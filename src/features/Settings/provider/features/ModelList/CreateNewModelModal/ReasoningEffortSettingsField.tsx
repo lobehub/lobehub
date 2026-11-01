@@ -7,7 +7,11 @@ import {
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { setReasoningEffortControlsThinking, updateReasoningEffortLevels } from './utils';
+import {
+  setReasoningEffortControlsThinking,
+  setReasoningEffortDefault,
+  updateReasoningEffortLevels,
+} from './utils';
 
 interface ReasoningEffortSettingsFieldProps {
   disabled?: boolean;
@@ -17,8 +21,9 @@ interface ReasoningEffortSettingsFieldProps {
 
 /**
  * Declares a custom model's reasoning effort control: the levels its API
- * accepts and the one sent when the user has not picked any. Clearing every
- * level removes the control.
+ * accepts and, optionally, the one sent when the user has not picked any.
+ * Clearing every level removes the control; clearing the default lets it
+ * resolve from the same model under other providers, else the middle level.
  */
 const ReasoningEffortSettingsField = memo<ReasoningEffortSettingsFieldProps>(
   ({ disabled, onChange, value }) => {
@@ -58,11 +63,15 @@ const ReasoningEffortSettingsField = memo<ReasoningEffortSettingsFieldProps>(
               {t('providerModels.item.modelConfig.reasoningEffort.default')}
             </Text>
             <Select
+              allowClear
               disabled={disabled}
               options={value.levels.map((level) => ({ label: labelOf(level), value: level }))}
+              placeholder={t('providerModels.item.modelConfig.reasoningEffort.defaultPlaceholder')}
               style={{ minWidth: 160 }}
               value={value.default}
-              onChange={(level) => onChange?.({ ...value, default: level })}
+              onChange={(level?: ReasoningEffortLevel) =>
+                onChange?.(setReasoningEffortDefault(value, level))
+              }
             />
           </Flexbox>
         )}

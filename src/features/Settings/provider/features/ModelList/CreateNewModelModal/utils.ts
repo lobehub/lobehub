@@ -32,7 +32,7 @@ export const hasDuplicateModelId = (id: string | undefined, existingModelIds: st
 /**
  * Rebuilds a custom model's effort control after its level checkboxes change.
  * Clearing every level removes the control; the chosen default is kept while
- * it is still offered, otherwise the middle level takes over.
+ * it is still offered, otherwise it is cleared and resolves at runtime.
  */
 export const updateReasoningEffortLevels = (
   value: AiModelReasoningEffortSettings | undefined,
@@ -43,8 +43,17 @@ export const updateReasoningEffortLevels = (
   const next = createReasoningEffortSettings(levels, {
     controlsThinking: value?.controlsThinking,
   });
-  if (value && next.levels.includes(value.default)) next.default = value.default;
+  if (value?.default && next.levels.includes(value.default)) next.default = value.default;
   return next;
+};
+
+/** Sets or clears (`undefined`) the declared default level. */
+export const setReasoningEffortDefault = (
+  value: AiModelReasoningEffortSettings,
+  level: ReasoningEffortLevel | undefined,
+): AiModelReasoningEffortSettings => {
+  const { default: _, ...rest } = value;
+  return level ? { ...rest, default: level } : rest;
 };
 
 /** Sets whether the effort also switches thinking (`controlsThinking`). */

@@ -1,6 +1,6 @@
 'use client';
 
-import type { AiModelReasoningEffortSettings, ReasoningEffortLevel } from 'model-bank';
+import type { ReasoningEffortLevel, ResolvedReasoningEffortSettings } from 'model-bank';
 import { resolveReasoningEffortLevel } from 'model-bank/aiModel';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ export interface ReasoningEffortSliderProps {
   disabled?: boolean;
   onChange?: (value: ReasoningEffortLevel) => void;
   /** The model card's effort control; the slider renders its levels and default. */
-  settings: AiModelReasoningEffortSettings;
+  settings: ResolvedReasoningEffortSettings;
   value?: ReasoningEffortLevel;
 }
 

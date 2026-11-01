@@ -166,7 +166,7 @@ export interface MigrateModelSettingsContext {
  * Moves a user model row's legacy effort extend param into
  * `settings.reasoningEffort`. Rows backed by a provider card only drop the key;
  * custom and remote-only rows get a spec — the same-id card's when one exists,
- * else the legacy key's levels with the middle level as default.
+ * else the legacy key's levels without a default (it resolves at runtime).
  */
 export const migrateModelSettings = (
   settings: unknown,

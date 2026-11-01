@@ -315,6 +315,8 @@ export default {
   'providerModels.item.modelConfig.reasoningEffort.controlsThinking':
     'Effort also switches thinking: Off disables thinking, any other level enables it',
   'providerModels.item.modelConfig.reasoningEffort.default': 'Default',
+  'providerModels.item.modelConfig.reasoningEffort.defaultPlaceholder':
+    'Not set: uses the same model from other providers, else the middle level',
   'providerModels.item.modelConfig.reasoningEffort.extra':
     'Select the effort levels this model accepts. The default is sent when the user has not picked one; leave all unchecked if the model has no effort control.',
   'providerModels.item.modelConfig.reasoningEffort.title': 'Reasoning Effort',

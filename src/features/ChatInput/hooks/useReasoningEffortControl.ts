@@ -3,8 +3,8 @@
 import isEqual from 'fast-deep-equal';
 import type {
   AiModelReasoningConfig,
-  AiModelReasoningEffortSettings,
   ReasoningEffortLevel,
+  ResolvedReasoningEffortSettings,
 } from 'model-bank';
 import { REASONING_MODES, resolveReasoningEffortLevel } from 'model-bank/aiModel';
 import { useCallback } from 'react';
@@ -34,7 +34,7 @@ export interface ReasoningEffortControl {
  * it, otherwise the card default — the same level the runtime sends.
  */
 export const resolveReasoningEffortValue = (
-  settings: AiModelReasoningEffortSettings | undefined,
+  settings: ResolvedReasoningEffortSettings | undefined,
   config: AiModelReasoningConfig | undefined,
 ): ReasoningEffortLevel | undefined =>
   settings ? resolveReasoningEffortLevel(settings, config?.reasoningEffort) : undefined;

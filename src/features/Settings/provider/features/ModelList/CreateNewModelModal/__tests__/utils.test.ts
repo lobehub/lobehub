@@ -46,14 +46,14 @@ describe('updateReasoningEffortLevels', () => {
     ).toEqual({ controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] });
   });
 
-  it('falls back to the middle level when the default is unchecked', () => {
+  it('clears the default when it is unchecked, so it resolves at runtime', () => {
     expect(
       updateReasoningEffortLevels({ default: 'max', levels: ['low', 'high', 'max'] }, [
         'low',
         'medium',
         'high',
       ]),
-    ).toEqual({ default: 'medium', levels: ['low', 'medium', 'high'] });
+    ).toEqual({ levels: ['low', 'medium', 'high'] });
   });
 });
 

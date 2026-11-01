@@ -23,8 +23,9 @@ export const ReasoningEffortLevelSchema = z.enum(REASONING_EFFORT_LEVELS);
 /**
  * A model's reasoning effort control, declared once on its card
  * (`settings.reasoningEffort`). The UI renders `levels`, and the runtime always
- * sends the effective level — the user's pick, else `default` — so the level
- * shown is the level the upstream runs at.
+ * sends the effective level — the user's pick, else the resolved default (see
+ * `resolveReasoningEffortSettings`) — so the level shown is the level the
+ * upstream runs at.
  */
 export interface AiModelReasoningEffortSettings {
   /**
@@ -35,9 +36,12 @@ export interface AiModelReasoningEffortSettings {
    */
   controlsThinking?: boolean;
   /**
-   * Level used when the user has not picked one. Must be one of `levels`.
+   * Level used when the user has not picked one; must be one of `levels`.
+   * Declare it only when the upstream documents it. When omitted, the default
+   * comes from the same model's card under another provider, else the middle
+   * level.
    */
-  default: ReasoningEffortLevel;
+  default?: ReasoningEffortLevel;
   /**
    * Selectable levels, ordered low → high.
    */
@@ -47,17 +51,17 @@ export interface AiModelReasoningEffortSettings {
 export const AiModelReasoningEffortSettingsSchema = z
   .object({
     controlsThinking: z.boolean().optional(),
-    default: ReasoningEffortLevelSchema,
+    default: ReasoningEffortLevelSchema.optional(),
     levels: z.array(ReasoningEffortLevelSchema).min(1),
   })
-  .refine((value) => value.levels.includes(value.default), {
+  .refine((value) => value.default === undefined || value.levels.includes(value.default), {
     message: 'default must be one of levels',
     path: ['default'],
   });
 
 /**
- * The middle level of a list (upper middle for an even count), used as the
- * default for models whose upstream default was not researched.
+ * The middle level of a list (upper middle for an even count): the last
+ * fallback when no card of the model declares a default.
  */
 export const getMiddleReasoningEffortLevel = (
   levels: readonly ReasoningEffortLevel[],
@@ -71,7 +75,8 @@ export const sortReasoningEffortLevels = (
 ): ReasoningEffortLevel[] => REASONING_EFFORT_LEVELS.filter((level) => levels.includes(level));
 
 /**
- * Builds a card declaration from a level list, defaulting to its middle level.
+ * Builds a card declaration from a level list. `default` is set only when given,
+ * so an undocumented default still resolves through `resolveReasoningEffortSettings`.
  */
 export const createReasoningEffortSettings = (
   levels: readonly ReasoningEffortLevel[],
@@ -80,18 +85,54 @@ export const createReasoningEffortSettings = (
   const sorted = sortReasoningEffortLevels(levels);
   return {
     ...(options.controlsThinking ? { controlsThinking: true } : {}),
-    default: options.default ?? getMiddleReasoningEffortLevel(sorted),
+    ...(options.default ? { default: options.default } : {}),
     levels: sorted,
   };
 };
 
 /**
- * The level a model runs at: the saved pick when the card still offers it,
- * otherwise the card default. A pick the card no longer offers (the card's
- * levels changed after it was saved) is not sent.
+ * A reasoning effort control whose default has been resolved; what the UI shows
+ * and the runtime sends.
+ */
+export type ResolvedReasoningEffortSettings = AiModelReasoningEffortSettings & {
+  default: ReasoningEffortLevel;
+};
+
+/**
+ * Resolves the control a model instance runs with. The own card's control wins,
+ * else the same model's control under another provider (aggregators serve
+ * models without copying their settings). The default is the own declared one,
+ * else the first same-model declared default this control offers, else the
+ * middle level. `sameModelSettings` are the same model id's controls under
+ * other providers.
+ *
+ * @example
+ * // aihubmix card without a default; anthropic declares high
+ * resolveReasoningEffortSettings({ levels: ['low', 'medium', 'high', 'max'] }, [
+ *   { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
+ * ]); // → default 'high'
+ */
+export const resolveReasoningEffortSettings = (
+  own: AiModelReasoningEffortSettings | undefined,
+  sameModelSettings: readonly (AiModelReasoningEffortSettings | undefined)[] = [],
+): ResolvedReasoningEffortSettings | undefined => {
+  const settings = own ?? sameModelSettings.find(Boolean);
+  if (!settings || settings.levels.length === 0) return undefined;
+
+  const inherited = [settings, ...sameModelSettings]
+    .map((candidate) => candidate?.default)
+    .find((level) => !!level && settings.levels.includes(level));
+
+  return { ...settings, default: inherited ?? getMiddleReasoningEffortLevel(settings.levels) };
+};
+
+/**
+ * The level a model runs at: the saved pick when the control still offers it,
+ * otherwise the resolved default. A pick the control no longer offers (the
+ * card's levels changed after it was saved) is not sent.
  */
 export const resolveReasoningEffortLevel = (
-  settings: AiModelReasoningEffortSettings,
+  settings: ResolvedReasoningEffortSettings,
   picked?: ReasoningEffortLevel | null,
 ): ReasoningEffortLevel => (picked && settings.levels.includes(picked) ? picked : settings.default);
 

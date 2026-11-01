@@ -119,6 +119,43 @@ describe('resolveModelParams', () => {
       expect(facts.modelReasoningEffort).toEqual({ default: 'high', levels: ['low', 'high'] });
       expect(facts.resolvedExtendParams).toMatchObject({ reasoning_effort: 'high' });
     });
+
+    it('takes an undeclared default from the same model under another provider', async () => {
+      const facts = await resolveModelParams(
+        request({ provider: 'lobehub' }),
+        providers({
+          listModelCards: () => [
+            { ...cards[3], reasoningEffort: { levels: ['low', 'medium', 'high'] } },
+            {
+              ...cards[0],
+              reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high'] },
+            },
+          ],
+        }),
+      );
+      expect(facts.modelReasoningEffort?.default).toBe('high');
+      expect(facts.resolvedExtendParams).toMatchObject({ reasoning_effort: 'high' });
+    });
+
+    it('falls back to the middle level when no card declares a default', async () => {
+      const facts = await resolveModelParams(
+        request(),
+        providers({
+          listModelCards: () => [{ ...cards[0], reasoningEffort: { levels: ['high', 'max'] } }],
+        }),
+      );
+      expect(facts.resolvedExtendParams).toMatchObject({ reasoning_effort: 'max' });
+    });
+
+    it('lets a user row spec without a default inherit the card default', async () => {
+      const facts = await resolveModelParams(
+        request(),
+        providers({
+          getUserModelRow: async () => ({ reasoningEffort: { levels: ['low', 'medium'] } }),
+        }),
+      );
+      expect(facts.modelReasoningEffort).toEqual({ default: 'medium', levels: ['low', 'medium'] });
+    });
   });
 
   describe('reasoning config precedence', () => {

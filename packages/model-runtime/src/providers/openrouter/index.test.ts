@@ -478,8 +478,8 @@ describe('LobeOpenRouterAI - custom features', () => {
       const gpt51 = models.find((m) => m.id === 'openai/gpt-5.1-mini');
 
       expect(gpt55?.settings?.extendParams).toEqual(['textVerbosity']);
+      // No documented default: it resolves at runtime (middle level for these ids).
       expect(gpt55?.settings?.reasoningEffort).toEqual({
-        default: 'medium',
         levels: ['none', 'low', 'medium', 'high', 'xhigh'],
       });
       expect(gpt52?.settings?.reasoningEffort).toEqual(gpt55?.settings?.reasoningEffort);
@@ -525,7 +525,7 @@ describe('LobeOpenRouterAI - custom features', () => {
       const geminiFlash = models.find((m) => m.id === 'google/gemini-3-flash');
 
       const proEffort = geminiPro?.settings?.reasoningEffort;
-      expect(proEffort).toEqual({ default: 'high', levels: ['low', 'high'] });
+      expect(proEffort).toEqual({ levels: ['low', 'high'] });
       const flashLevels = geminiFlash?.settings?.reasoningEffort?.levels;
       expect(flashLevels).toEqual(['minimal', 'low', 'medium', 'high']);
     });
