@@ -141,6 +141,8 @@ const CaseEditor = memo<CaseEditorProps>(
           environment,
           expected: testCase?.content?.expected,
           input,
+          originalEnvironment: testCase ? ownEnvironmentOf(testCase) : draft?.environment,
+          originalMessages: testCase ? testCase.content?.messages : draft?.messages,
           turns,
         });
         const evalConfig = ruleLines.length > 0 ? { judgePrompt: ruleLines.join('\n') } : null;
