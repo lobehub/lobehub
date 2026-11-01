@@ -67,6 +67,25 @@ export const startLinearRuleSyncJob = async (
   return taskId;
 };
 
+/**
+ * Queue the next round of a rule run that stopped at its per-round cap. The
+ * same job goes back to pending with the total so far, so it stays the one run
+ * of its rule (a click on Sync joins it) and is handed off again like a new one.
+ */
+export const continueLinearRuleSyncJob = async (
+  db: LobeChatDatabase,
+  userId: string,
+  workspaceId: string | undefined,
+  taskId: string,
+  metadata: LinearSyncJobMetadata,
+): Promise<void> => {
+  await new AsyncTaskModel(db, userId, workspaceId).update(taskId, {
+    metadata,
+    status: AsyncTaskStatus.Pending,
+  });
+  await dispatchJob(db, userId, workspaceId, taskId);
+};
+
 const recordJob = (
   db: LobeChatDatabase,
   userId: string,

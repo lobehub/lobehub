@@ -122,7 +122,10 @@ export interface LinearSyncResult {
   skipped: { identifier: string; reason: LinearSyncSkipReason }[];
   /** Every skipped issue, including those past the `skipped` list. Absent in older results. */
   skippedCount?: number;
-  /** More issues matched than one run imports; run again for the rest. */
+  /**
+   * More issues matched than one run imports. A rule run continues on its own
+   * until this clears; it stays set only when the run stopped early.
+   */
   truncated: boolean;
   unchanged: number;
   updated: number;
@@ -160,7 +163,10 @@ export interface LinearSyncJobMetadata {
   issueIds?: string[];
   kind: 'issues' | 'rule';
   projectId: string;
+  /** The outcome so far; while a rule run continues, the total of its finished rounds. */
   result?: LinearSyncResult;
+  /** Rounds a rule run has finished; each creates at most a fixed number of tasks. */
+  rounds?: number;
   /** The saved rule being run (`kind: 'rule'`). */
   ruleId?: string;
 }

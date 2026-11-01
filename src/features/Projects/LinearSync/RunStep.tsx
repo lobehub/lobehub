@@ -11,6 +11,7 @@ import {
   formatLinearSyncResult,
   isActiveLinearSyncJob,
   linearSyncJobErrorMessage,
+  linearSyncJobProgress,
   linearSyncSkippedCount,
 } from './utils';
 
@@ -105,7 +106,9 @@ const RunStep = memo<RunStepProps>(({ actions, job, pendingIssueCount }) => {
         title={
           issueCount
             ? t('linear.sync.job.runningIssues', { count: issueCount })
-            : t('linear.sync.job.runningRule')
+            : job?.result?.created
+              ? linearSyncJobProgress(job, t)
+              : t('linear.sync.job.runningRule')
         }
       />
     );

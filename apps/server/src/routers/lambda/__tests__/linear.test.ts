@@ -14,7 +14,7 @@ import {
   workspaceMembers,
   workspaces,
 } from '@/database/schemas';
-import { LinearSyncJobService } from '@/server/services/linear/syncJob';
+import { LINEAR_SYNC_MAX_ROUNDS, LinearSyncJobService } from '@/server/services/linear/syncJob';
 
 import { linearRouter } from '../linear';
 
@@ -255,6 +255,130 @@ describe('linearRouter', () => {
         teamName: 'Engineering',
       });
       expect(saved.lastRunAt).toBeInstanceOf(Date);
+    });
+
+    describe('when a rule matches more issues than one round creates', () => {
+      const round = (created: number, truncated: boolean) => ({
+        ...syncResult,
+        created,
+        skipped: [{ identifier: `ENG-${created}`, reason: 'closed' as const }],
+        skippedCount: 1,
+        truncated,
+        unchanged: 7,
+        updated: 1,
+      });
+
+      const startRule = async () => {
+        const connection = await connect({ userId });
+        mocks.getToken.mockResolvedValue('token');
+        mocks.runSync.mockResolvedValue({ ok: true });
+        const rule = await caller({ userId }).createSyncRule({
+          connectionId: connection.id,
+          projectId,
+          stateTypes: ['unstarted'],
+          teamId: 'team-1',
+          teamName: 'Engineering',
+        });
+        const { id } = await caller({ userId }).startRuleSync({ ruleId: rule.id });
+        return { id, rule };
+      };
+
+      /** Play the async router: run each hand-off until no new one is queued. */
+      const drainHandOffs = async () => {
+        const service = new LinearSyncJobService(serverDB, userId);
+        for (let handled = 0; handled < mocks.runSync.mock.calls.length; handled++) {
+          await service.run(mocks.runSync.mock.calls[handled][0].taskId);
+          for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+        }
+      };
+
+      it('keeps going in the background as one run, adding up what each round created', async () => {
+        mocks.syncByFilter
+          .mockResolvedValueOnce(round(100, true))
+          .mockResolvedValueOnce(round(100, true))
+          .mockResolvedValueOnce(round(42, false));
+        const { id, rule } = await startRule();
+
+        const service = new LinearSyncJobService(serverDB, userId);
+        await service.run(id);
+        for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+
+        // Queued again by itself, with the total so far; a click on Sync joins it.
+        expect(mocks.runSync).toHaveBeenCalledTimes(2);
+        expect(mocks.runSync).toHaveBeenLastCalledWith({ taskId: id, workspaceId: undefined });
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: null, id, result: { created: 100, truncated: true }, status: 'pending' },
+        ]);
+        expect(await caller({ userId }).startRuleSync({ ruleId: rule.id })).toEqual({ id });
+
+        await drainHandOffs();
+
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(3);
+        const jobs = await caller({ userId }).listSyncJobs({ projectId });
+        expect(jobs).toHaveLength(1);
+        expect(jobs[0]).toMatchObject({
+          error: null,
+          id,
+          // Writes add up; what a round only looked at comes from the last one.
+          result: { created: 242, skippedCount: 1, truncated: false, unchanged: 7, updated: 3 },
+          status: 'success',
+        });
+        const [saved] = await caller({ userId }).listSyncRules({ projectId });
+        expect(saved.lastResult).toMatchObject({ created: 242, truncated: false });
+      });
+
+      it('stops when a round creates nothing, and asks to run again', async () => {
+        mocks.syncByFilter
+          .mockResolvedValueOnce(round(100, true))
+          .mockResolvedValueOnce(round(0, true));
+        const { id } = await startRule();
+
+        await drainHandOffs();
+
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(2);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { id, result: { created: 100, truncated: true }, status: 'success' },
+        ]);
+      });
+
+      it(`stops after ${LINEAR_SYNC_MAX_ROUNDS} rounds`, async () => {
+        mocks.syncByFilter.mockResolvedValue(round(100, true));
+        const { id } = await startRule();
+
+        await drainHandOffs();
+
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(LINEAR_SYNC_MAX_ROUNDS);
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          {
+            id,
+            result: { created: LINEAR_SYNC_MAX_ROUNDS * 100, truncated: true },
+            status: 'success',
+          },
+        ]);
+      });
+
+      it('fails the run when the next round cannot be handed off', async () => {
+        mocks.syncByFilter.mockResolvedValue(round(100, true));
+        const { id } = await startRule();
+        mocks.runSync.mockRejectedValue(
+          new TRPCClientError('Invalid JWT token', {
+            result: {
+              error: {
+                code: -32_001,
+                data: { code: 'UNAUTHORIZED', httpStatus: 401 },
+                message: 'Invalid JWT token',
+              },
+            },
+          } as any),
+        );
+
+        await new LinearSyncJobService(serverDB, userId).run(id);
+        for (let i = 0; i < 50; i++) await new Promise((resolve) => setImmediate(resolve));
+
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'failed', id, status: 'error' },
+        ]);
+      });
     });
 
     it('queues one run when the same rule is started twice at once', async () => {

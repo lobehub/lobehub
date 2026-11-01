@@ -8,7 +8,12 @@ import { CircleAlertIcon, CircleCheckIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { formatLinearSyncResult, isActiveLinearSyncJob, linearSyncJobErrorMessage } from './utils';
+import {
+  formatLinearSyncResult,
+  isActiveLinearSyncJob,
+  linearSyncJobErrorMessage,
+  linearSyncJobProgress,
+} from './utils';
 
 const styles = stylex.create({
   list: {
@@ -56,7 +61,7 @@ const SyncJobs = memo<SyncJobsProps>(({ jobs, rules }) => {
   };
 
   const detailOf = (job: LinearSyncJobView) => {
-    if (isActiveLinearSyncJob(job)) return t('linear.sync.job.inProgress');
+    if (isActiveLinearSyncJob(job)) return linearSyncJobProgress(job, t);
     if (job.status === 'error') return linearSyncJobErrorMessage(job.error, t);
     return job.result ? formatLinearSyncResult(job.result, t) : '';
   };

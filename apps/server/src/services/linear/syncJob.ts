@@ -31,6 +31,31 @@ export const LINEAR_SYNC_HEARTBEAT_MS = 60 * 1000;
  * expired on the way) is given up on much sooner than a running one.
  */
 export const LINEAR_SYNC_UNCLAIMED_MS = 2 * 60 * 1000;
+/**
+ * Rounds one rule run takes before it stops and asks to be run again. Each
+ * round creates at most `MAX_TASKS_CREATED_PER_SYNC` tasks, so this bounds a
+ * run at about 5,000 new tasks.
+ */
+export const LINEAR_SYNC_MAX_ROUNDS = 50;
+
+/**
+ * The outcome of a run that took several rounds. Each round re-reads the
+ * issues before it, so counts of what a round only looked at (unchanged, kept
+ * edits, skipped) come from the latest round, which saw the most; what a round
+ * wrote happens once and adds up.
+ */
+export const mergeLinearSyncResults = (
+  previous: LinearSyncResult | undefined,
+  latest: LinearSyncResult,
+): LinearSyncResult =>
+  previous
+    ? {
+        ...latest,
+        closed: previous.closed + latest.closed,
+        created: previous.created + latest.created,
+        updated: previous.updated + latest.updated,
+      }
+    : latest;
 
 export const toLinearSyncJobView = (
   row: LinearSyncJobRow,
@@ -95,10 +120,34 @@ export class LinearSyncJobService {
       );
     }, LINEAR_SYNC_HEARTBEAT_MS);
     try {
-      const result = await this.execute(metadata);
+      const round = await this.execute(metadata);
+      const rounds = (metadata.rounds ?? 0) + 1;
+      const result = mergeLinearSyncResults(metadata.result, round);
+      if (metadata.kind === 'rule' && metadata.ruleId) {
+        await LinearSyncRuleModel.recordRun(this.db, metadata.ruleId, this.scope, result);
+      }
+      // A rule run that hit its per-round cap goes on by itself, so the user
+      // does not have to press Sync once per hundred issues. A round that
+      // created nothing would only repeat itself, so the run stops there.
+      if (
+        metadata.kind === 'rule' &&
+        round.truncated &&
+        round.created > 0 &&
+        rounds < LINEAR_SYNC_MAX_ROUNDS
+      ) {
+        log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
+        // Imported here: the module hands jobs to the async router, which imports this one.
+        const { continueLinearRuleSyncJob } = await import('./startSyncJob');
+        await continueLinearRuleSyncJob(this.db, this.userId, this.workspaceId, taskId, {
+          ...metadata,
+          result,
+          rounds,
+        });
+        return;
+      }
       await this.asyncTaskModel.update(taskId, {
         duration: Date.now() - startedAt,
-        metadata: { ...metadata, result },
+        metadata: { ...metadata, result, rounds },
         status: AsyncTaskStatus.Success,
       });
     } catch (error) {
@@ -139,13 +188,11 @@ export class LinearSyncJobService {
       : null;
     if (!rule || rule.projectId !== metadata.projectId) throw new LinearSyncJobError('unavailable');
     const token = await getLinearAccessToken(this.db, rule.connectionId);
-    const result = await sync.syncByFilter(
+    return sync.syncByFilter(
       token,
       { linearProjectId: rule.linearProjectId, stateTypes: rule.stateTypes, teamId: rule.teamId },
       options,
     );
-    await LinearSyncRuleModel.recordRun(this.db, rule.id, scope, result);
-    return result;
   }
 }
 

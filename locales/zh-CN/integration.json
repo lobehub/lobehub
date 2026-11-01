@@ -86,6 +86,7 @@
   "linear.sync.job.failed": "同步失败",
   "linear.sync.job.finished": "Linear 同步完成：{{result}}",
   "linear.sync.job.inProgress": "同步中…",
+  "linear.sync.job.inProgressCreated": "后台同步中 · 已新建 {{count}} 个",
   "linear.sync.job.keptLocalEdits": "有 {{count}} 个任务在 LobeHub 中改过，已保留你的修改。",
   "linear.sync.job.leave": "后台继续",
   "linear.sync.job.listTitle": "同步记录",

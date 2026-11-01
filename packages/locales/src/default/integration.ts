@@ -111,6 +111,7 @@ export default {
   'linear.sync.job.failed': 'Sync failed',
   'linear.sync.job.finished': 'Linear sync finished: {{result}}',
   'linear.sync.job.inProgress': 'Syncing…',
+  'linear.sync.job.inProgressCreated': 'Syncing in the background · {{count}} created so far',
   'linear.sync.job.keptLocalEdits': '{{count}} tasks were edited in LobeHub; your edits were kept.',
   'linear.sync.job.leave': 'Continue in background',
   'linear.sync.job.listTitle': 'Sync runs',
