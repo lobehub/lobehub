@@ -385,6 +385,15 @@ export class TaskTopicModel {
       .orderBy(desc(taskTopics.seq));
   }
 
+  async findByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
+    if (taskIds.length === 0) return [];
+
+    return this.db
+      .select()
+      .from(taskTopics)
+      .where(and(inArray(taskTopics.taskId, taskIds), this.ownership()));
+  }
+
   async findRunningByTaskIds(taskIds: string[]): Promise<TaskTopicItem[]> {
     if (taskIds.length === 0) return [];
 

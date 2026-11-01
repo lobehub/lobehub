@@ -223,6 +223,24 @@ export const deleteIfStatus = async (
   return deleted.length > 0;
 };
 
+/**
+ * Bulk counterpart of {@link deleteIfStatus}: delete each task only while it
+ * still has the status the caller locked and decided on. Returns the ids that
+ * were actually removed.
+ */
+export const deleteIfStatusForIds = async (
+  ctx: TaskModelContext,
+  expected: { id: string; status: string }[],
+): Promise<string[]> => {
+  if (expected.length === 0) return [];
+  const matches = expected.map(({ id, status }) => and(eq(tasks.id, id), eq(tasks.status, status)));
+  const deleted = await ctx.db
+    .delete(tasks)
+    .where(and(or(...matches), taskOwnership(ctx)))
+    .returning({ id: tasks.id });
+  return deleted.map(({ id }) => id);
+};
+
 /** See {@link delete}: bulk task deletion likewise leaves Work artifacts intact. */
 export const deleteAll = async (
   ctx: TaskModelContext,
@@ -362,6 +380,52 @@ export const updateStatusForIds = async (
   return ctx.db
     .update(tasks)
     .set({ status, updatedAt: new Date(), ...extra })
+    .where(and(inArray(tasks.id, ids), taskOwnership(ctx)))
+    .returning();
+};
+
+/**
+ * Lock a set of tasks for a bulk field edit and return what the edit needs to
+ * decide and describe each row: the values it is about to replace (for the
+ * activity diff and the stale-repo rule) and the visibility its activity row
+ * inherits.
+ */
+export const lockForBulkEdit = async (ctx: TaskModelContext, ids: string[]) => {
+  if (ids.length === 0) return [];
+  return ctx.db
+    .select({
+      archivedAt: tasks.archivedAt,
+      assigneeAgentId: tasks.assigneeAgentId,
+      assigneeUserId: tasks.assigneeUserId,
+      automationMode: tasks.automationMode,
+      config: tasks.config,
+      createdByUserId: tasks.createdByUserId,
+      heartbeatInterval: tasks.heartbeatInterval,
+      id: tasks.id,
+      priority: tasks.priority,
+      schedulePattern: tasks.schedulePattern,
+      status: tasks.status,
+      visibility: tasks.visibility,
+    })
+    .from(tasks)
+    .where(and(inArray(tasks.id, ids), taskOwnership(ctx)))
+    .for('update');
+};
+
+/**
+ * Write the same plain-column patch to many tasks in one statement. Callers
+ * own the invariants (and the assignee repo-selection rule, see
+ * `withStaleReposCleared`) — this is only the set-based write.
+ */
+export const updateFieldsForIds = async (
+  ctx: TaskModelContext,
+  ids: string[],
+  data: Partial<Pick<NewTask, 'assigneeAgentId' | 'assigneeUserId' | 'priority'>>,
+): Promise<TaskItem[]> => {
+  if (ids.length === 0) return [];
+  return ctx.db
+    .update(tasks)
+    .set({ ...data, updatedAt: new Date() })
     .where(and(inArray(tasks.id, ids), taskOwnership(ctx)))
     .returning();
 };

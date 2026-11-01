@@ -1,0 +1,119 @@
+import { toast } from '@lobehub/ui';
+import { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { taskService } from '@/services/task';
+import { useTaskStore } from '@/store/task';
+
+import { useTaskSelectionStore } from './store';
+import { chunkIds, mergeOutcomes, type TaskBatchOutcome } from './taskSelectionModel';
+
+export type TaskBatchStatus = 'backlog' | 'canceled' | 'completed' | 'paused';
+
+export type TaskBatchAction =
+  | { archived: boolean; kind: 'archive' }
+  | { kind: 'delete' }
+  | { kind: 'status'; status: TaskBatchStatus }
+  | {
+      kind: 'update';
+      patch: { assigneeAgentId?: string | null; assigneeUserId?: string | null; priority?: number };
+    };
+
+const runChunk = (action: TaskBatchAction, ids: string[]): Promise<TaskBatchOutcome> => {
+  switch (action.kind) {
+    case 'archive': {
+      return taskService.batchArchive(ids, action.archived);
+    }
+    case 'delete': {
+      return taskService.batchDelete(ids);
+    }
+    case 'status': {
+      return taskService.batchUpdateStatus(ids, action.status);
+    }
+    case 'update': {
+      return taskService.batchUpdate({ ids, ...action.patch });
+    }
+  }
+};
+
+/**
+ * Apply one action to the current selection: one request per 500 tasks (the
+ * server's batch limit), then a single list refresh and a single summary
+ * toast. Tasks that failed stay selected so the user can retry them.
+ */
+export const useTaskBatchActions = () => {
+  const { t } = useTranslation('chat');
+  const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
+  const running = useTaskSelectionStore((s) => !!s.progress);
+
+  const run = useCallback(
+    async (action: TaskBatchAction) => {
+      const { progress, selectedIds, setProgress } = useTaskSelectionStore.getState();
+      // One batch at a time: a second action must not race the first.
+      if (progress) return;
+      const ids = [...selectedIds];
+      if (ids.length === 0) return;
+
+      setProgress({ done: 0, total: ids.length });
+      const outcomes: TaskBatchOutcome[] = [];
+      let requestError: unknown;
+      try {
+        // Sequential: each chunk is already a set-based write on the server,
+        // and ordering keeps a later chunk from racing an earlier one.
+        let done = 0;
+        for (const chunk of chunkIds(ids)) {
+          outcomes.push(await runChunk(action, chunk));
+          done += chunk.length;
+          setProgress({ done, total: ids.length });
+        }
+      } catch (error) {
+        requestError = error;
+      }
+      await refreshTaskList().catch(() => undefined);
+      setProgress(undefined);
+
+      const { failed, skipped, updated } = mergeOutcomes(outcomes);
+      const unprocessed = ids.length - updated.length - skipped.length - failed.length;
+      const failedCount = failed.length + Math.max(unprocessed, 0);
+
+      if (requestError && updated.length === 0) {
+        toast.error(
+          requestError instanceof Error && requestError.message
+            ? requestError.message
+            : t('taskList.bulk.result.error'),
+        );
+        return;
+      }
+
+      const parts = [
+        t(
+          action.kind === 'delete'
+            ? 'taskList.bulk.result.deleted'
+            : 'taskList.bulk.result.updated',
+          { count: updated.length },
+        ),
+      ];
+      if (skipped.length > 0)
+        parts.push(t('taskList.bulk.result.skipped', { count: skipped.length }));
+      if (failedCount > 0) parts.push(t('taskList.bulk.result.failed', { count: failedCount }));
+      const message = parts.join(' · ');
+      if (failedCount > 0) toast.warning(message);
+      else toast.success(message);
+
+      const selection = useTaskSelectionStore.getState();
+      if (failedCount > 0) {
+        // Keep exactly what still needs attention selected.
+        const done = new Set([...updated, ...skipped.map((item) => item.id)]);
+        useTaskSelectionStore.setState({
+          panelOpen: false,
+          selectedIds: ids.filter((id) => !done.has(id)),
+        });
+      } else {
+        selection.clear();
+      }
+    },
+    [refreshTaskList, t],
+  );
+
+  return { run, running };
+};

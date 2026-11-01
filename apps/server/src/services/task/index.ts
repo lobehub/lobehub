@@ -599,6 +599,18 @@ export class TaskService {
     await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
   }
 
+  /**
+   * {@link assertAssigneeUserAssignable} inside the caller's transaction,
+   * locking the member row until it commits — for bulk writes that assign
+   * many tasks in one transaction.
+   */
+  async assertAssigneeUserAssignableLocked(
+    tx: LobeChatDatabase,
+    assigneeUserId: string,
+  ): Promise<void> {
+    await this.assertAssigneeUserAssignableWithDatabase(tx, assigneeUserId, true);
+  }
+
   private async assertAssigneeUserAssignableWithDatabase(
     db: LobeChatDatabase,
     assigneeUserId?: string | null,

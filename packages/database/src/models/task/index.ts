@@ -212,6 +212,10 @@ export class TaskModel {
     return rows.deleteIfStatus(this.ctx, id, status);
   }
 
+  async deleteIfStatusForIds(expected: { id: string; status: string }[]): Promise<string[]> {
+    return rows.deleteIfStatusForIds(this.ctx, expected);
+  }
+
   async deleteAll(options?: { restrictToCreator?: boolean }): Promise<number> {
     return rows.deleteAll(this.ctx, options);
   }
@@ -314,6 +318,17 @@ export class TaskModel {
     extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem[]> {
     return rows.updateStatusForIds(this.ctx, ids, status, extra);
+  }
+
+  async lockForBulkEdit(ids: string[]) {
+    return rows.lockForBulkEdit(this.ctx, ids);
+  }
+
+  async updateFieldsForIds(
+    ids: string[],
+    data: Parameters<typeof rows.updateFieldsForIds>[2],
+  ): Promise<TaskItem[]> {
+    return rows.updateFieldsForIds(this.ctx, ids, data);
   }
 
   // ========== Config ==========
