@@ -19,7 +19,7 @@ import {
   not,
   notInArray,
   or,
-  type SQL,
+  SQL,
   sql,
 } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
@@ -160,7 +160,13 @@ const buildSetCondition = (
   if (!set || set.values.length === 0) return undefined;
   const includesNone = set.values.includes(TASK_LIST_FILTER_NONE);
   const values = set.values.filter((value) => value !== TASK_LIST_FILTER_NONE);
-  const matchesValue = values.length > 0 ? inArray(column, values) : undefined;
+  // inArray overloads a column and an SQL expression separately; it rejects the union.
+  const matchesValue =
+    values.length === 0
+      ? undefined
+      : column instanceof SQL
+        ? inArray(column, values)
+        : inArray(column, values);
   const matchesNone = includesNone ? isNull(column) : undefined;
 
   if (set.operator === 'isNot') {
