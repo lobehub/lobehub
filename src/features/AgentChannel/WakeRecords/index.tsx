@@ -18,6 +18,7 @@ import { Summary } from './Summary';
 import { useRefreshOnReturn } from './useRefreshOnReturn';
 import {
   pageLoadFailed,
+  recordsEmpty,
   useWakeDecisions,
   WAKE_RECORDS_PAGE_SIZE,
   type WakeRecordFilters,
@@ -148,7 +149,7 @@ export const WakeRecords = ({ active = true, botId, disabled }: WakeRecordsProps
         data={data}
         error={error}
         // A page past the end (its last rows marked away) is not an empty list: the pager stays.
-        isEmpty={total === 0}
+        isEmpty={recordsEmpty({ error, total })}
         // A page turn keeps the previous page on screen; only the first load is a skeleton.
         isLoading={isLoading && !data}
         loading={<ListSkeleton />}

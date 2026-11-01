@@ -1,7 +1,7 @@
 import type { BotWakeDecisionPage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { pageLoadFailed, withUserLabel } from './useWakeRecords';
+import { pageLoadFailed, recordsEmpty, withUserLabel } from './useWakeRecords';
 
 vi.mock('@/services/agentBotProvider', () => ({ agentBotProviderService: {} }));
 
@@ -50,5 +50,16 @@ describe('pageLoadFailed', () => {
     expect(pageLoadFailed({ data: undefined, error: new Error('boom'), isLoading: false })).toBe(
       false,
     );
+  });
+});
+
+describe('recordsEmpty', () => {
+  it('is the empty state only when nothing matches and nothing failed', () => {
+    expect(recordsEmpty({ error: undefined, total: 0 })).toBe(true);
+    expect(recordsEmpty({ error: undefined, total: 3 })).toBe(false);
+  });
+
+  it('does not read a failed filter load over a kept empty page as "no records"', () => {
+    expect(recordsEmpty({ error: new Error('boom'), total: 0 })).toBe(false);
   });
 });

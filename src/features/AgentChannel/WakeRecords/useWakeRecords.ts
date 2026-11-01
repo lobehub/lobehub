@@ -43,6 +43,13 @@ export const pageLoadFailed = ({
   isLoading: boolean;
 }): boolean => data !== undefined && !!error && !isLoading;
 
+/**
+ * Nothing matches, and that is the answer, not a failure: an empty page kept on screen by
+ * `keepPreviousData` while the next filter's request failed is an error to show, not "no records".
+ */
+export const recordsEmpty = ({ error, total }: { error: unknown; total: number }): boolean =>
+  total === 0 && !error;
+
 /** Last-30-days counts for one bot. */
 export const useWakeSummary = (botId: string) =>
   useClientDataSWR(botWakeKeys.summary(botId), () => agentBotProviderService.getWakeSummary(botId));
