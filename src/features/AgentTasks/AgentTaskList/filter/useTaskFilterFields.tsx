@@ -42,6 +42,7 @@ import { PRIORITY_META } from '../../features/TaskPriorityTag';
 import TaskStatusIcon from '../../features/TaskStatusIcon';
 import { UnassignedAssigneeIcon } from '../../features/UnassignedAssigneeIcon';
 import { hasWorkspaceMemberDirectory } from '../../shared/memberAssigneeMode';
+import { toAgentFilterOption } from './agentFilterOption';
 import type { TaskFilterValue } from './taskFilterState';
 
 export interface TaskFilterOption {
@@ -149,32 +150,26 @@ export const useTaskFilterFields = ({
     const seenAgents = new Set<string>();
     if (inboxAgentId) {
       seenAgents.add(inboxAgentId);
-      agentOptions.push({
-        icon: (
-          <Avatar
-            avatar={inboxMeta?.avatar || DEFAULT_INBOX_AVATAR}
-            background={inboxMeta?.backgroundColor ?? undefined}
-            size={OPTION_ICON_SIZE}
-          />
-        ),
-        label: agentDisplayName(inboxMeta, t('inbox.title')),
-        value: inboxAgentId,
-      });
+      agentOptions.push(
+        toAgentFilterOption({
+          avatar: inboxMeta?.avatar || DEFAULT_INBOX_AVATAR,
+          backgroundColor: inboxMeta?.backgroundColor,
+          id: inboxAgentId,
+          label: agentDisplayName(inboxMeta, t('inbox.title')),
+        }),
+      );
     }
     for (const agent of sidebarAgents) {
       if (agent.type !== 'agent' || seenAgents.has(agent.id)) continue;
       seenAgents.add(agent.id);
-      agentOptions.push({
-        icon: (
-          <Avatar
-            avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
-            background={agent.backgroundColor ?? undefined}
-            size={OPTION_ICON_SIZE}
-          />
-        ),
-        label: agentDisplayName(agent, t('taskList.filter.untitledAgent')),
-        value: agent.id,
-      });
+      agentOptions.push(
+        toAgentFilterOption({
+          avatar: typeof agent.avatar === 'string' ? agent.avatar : undefined,
+          backgroundColor: agent.backgroundColor,
+          id: agent.id,
+          label: agentDisplayName(agent, t('taskList.filter.untitledAgent')),
+        }),
+      );
     }
     const agentField: TaskFilterSetFieldDef = {
       icon: BotIcon,
