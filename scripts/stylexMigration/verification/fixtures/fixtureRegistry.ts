@@ -62,6 +62,7 @@ export const styleFixtureSchema = z
           id: z.string().min(1),
           kind: z.enum(['component', 'host', 'portal']),
           selector: z.string().min(1),
+          variants: z.array(z.string().min(1)).min(1).optional(),
         }),
       )
       .min(1),
@@ -74,6 +75,17 @@ export const styleFixtureSchema = z
       context.addIssue({ code: 'custom', message: 'DUPLICATE_FIXTURE_VARIANT' });
     if (new Set(fixture.probeWidths).size !== fixture.probeWidths.length)
       context.addIssue({ code: 'custom', message: 'DUPLICATE_PROBE_WIDTH' });
+    if (new Set(fixture.surfaces.map((surface) => surface.id)).size !== fixture.surfaces.length)
+      context.addIssue({ code: 'custom', message: 'DUPLICATE_SURFACE_ID' });
+    for (const surface of fixture.surfaces)
+      if (
+        surface.variants &&
+        (new Set(surface.variants).size !== surface.variants.length ||
+          surface.variants.some(
+            (id) => !fixture.styleVariants.some((variant) => variant.id === id),
+          ))
+      )
+        context.addIssue({ code: 'custom', message: 'INVALID_SURFACE_VARIANTS' });
     if (
       fixture.sizeContract &&
       fixture.probeWidths.some(
