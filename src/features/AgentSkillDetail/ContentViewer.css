@@ -1,19 +1,19 @@
 /* The code lines are rendered inside @lobehub/ui's Highlighter, so StyleX cannot reach them. */
-.codeWrapper pre {
+.lobe-content-viewer-cb2c5013-code-wrapper pre {
   margin: 0;
 }
 
-.codeWrapper code {
+.lobe-content-viewer-cb2c5013-code-wrapper code {
   counter-reset: line;
 }
 
-.codeWrapper :global(.line) {
+.lobe-content-viewer-cb2c5013-code-wrapper .line {
   width: 100% !important;
   margin-inline: 0 !important;
   padding-inline: 0 !important;
 }
 
-.codeWrapper :global(.line)::before {
+.lobe-content-viewer-cb2c5013-code-wrapper .line::before {
   content: counter(line);
   counter-increment: line;
   user-select: none;

@@ -1,13 +1,13 @@
 'use client';
 
+import './ContentViewer.css';
+
 import { type SkillItem } from '@lobechat/types';
 import { CopyButton, Highlighter, Markdown } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { sx } from '@/styles/sx';
-
-import moduleStyles from './ContentViewer.module.css';
 
 const styles = stylex.create({
   codeWrapper: {
@@ -188,7 +188,7 @@ const ContentViewer = memo<ContentViewerProps>(
     }
 
     return (
-      <div {...sx([styles.codeWrapper], moduleStyles.codeWrapper)}>
+      <div {...sx([styles.codeWrapper], 'lobe-content-viewer-cb2c5013-code-wrapper')}>
         <CopyButton
           content={content}
           style={{ position: 'absolute', right: 8, top: 0, zIndex: 1 }}

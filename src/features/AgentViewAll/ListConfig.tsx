@@ -1,5 +1,7 @@
 'use client';
 
+import './ListConfig.css';
+
 import { ActionIcon, Flexbox, Icon, Popover, Select, Switch, Tabs } from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import {
@@ -14,7 +16,6 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 
-import styles from './ListConfig.module.css';
 import type { AgentGroupBy, AgentListViewOptions, AgentOrderBy } from './listViewOptions';
 
 type ViewMode = 'card' | 'list';
@@ -126,7 +127,7 @@ const ListConfig = memo<ListConfigProps>(
           onChange={(key) => setViewMode(key as ViewMode)}
         />
         <Form
-          className={styles.form}
+          className={'lobe-list-config-9ad0ef6d-form'}
           form={form}
           items={formItems}
           itemsType={'flat'}

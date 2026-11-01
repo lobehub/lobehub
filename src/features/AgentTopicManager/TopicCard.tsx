@@ -1,5 +1,7 @@
 'use client';
 
+import './TopicCard.css';
+
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
 import { Block, Checkbox, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
@@ -16,7 +18,6 @@ import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
 import { useTopicsViewStore } from './store';
-import moduleStyles from './TopicCard.module.css';
 import { getProjectInfo } from './utils';
 
 const styles = stylex.create({
@@ -164,7 +165,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
       {project && (
         <Flexbox gap={4}>
           <Tag
-            className={moduleStyles.projectTag}
+            className={'lobe-topic-card-2f172269-project-tag'}
             icon={<Icon icon={FolderIcon} size={11} />}
             size={'small'}
             title={project.path}
@@ -173,7 +174,7 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
           </Tag>
           {project.branch && (
             <Tag
-              className={moduleStyles.projectTag}
+              className={'lobe-topic-card-2f172269-project-tag'}
               icon={<Icon icon={GitBranchIcon} size={11} />}
               size={'small'}
               title={project.branch}

@@ -1,10 +1,10 @@
+import './ModelRatingRadar.css';
+
 import { RadarChart } from '@lobehub/charts';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import type { ModelRating, ModelRatingSource } from 'model-bank';
 import type { FC } from 'react';
 import { memo } from 'react';
-
-import moduleStyles from './ModelRatingRadar.module.css';
 
 /** display order around the hexagon, starting from the top vertex, clockwise */
 export const RATING_DIMENSION_ORDER = [
@@ -38,8 +38,10 @@ export interface RadarDimensionDatum {
   tooltip?: string;
 }
 
-/** Class names of the radar's chart DOM overrides (see ModelRatingRadar.module.css). */
-export const radarStyles = moduleStyles;
+/** Class names of the radar's chart DOM overrides (see ModelRatingRadar.css). */
+export const radarStyles = {
+  radar: 'lobe-model-rating-radar-dfbbb915-radar',
+} as const;
 
 interface ModelRatingRadarProps {
   dimensions: RadarDimensionDatum[];

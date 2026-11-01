@@ -1,3 +1,5 @@
+import './index.css';
+
 import { Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { Button, Select, type SelectProps, Switch, Tag, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -12,7 +14,6 @@ import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { sx } from '@/styles/sx';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-import moduleStyles from './index.module.css';
 import { resolveEnableTargetProviderId, resolveStaleModelState } from './resolveStaleModelState';
 
 /**
@@ -354,7 +355,7 @@ const ModelSelect = memo<ModelSelectProps>(
       <TooltipGroup>
         <Select
           allowClear={allowClear}
-          className={moduleStyles.select}
+          className={'lobe-model-select-2db5f479-select'}
           classNames={{ itemIndicator: ITEM_INDICATOR_CLASSNAME }}
           defaultValue={value ? `${value.provider}/${value.model}` : null}
           disabled={disabled}
@@ -362,7 +363,7 @@ const ModelSelect = memo<ModelSelectProps>(
           loading={loading || enabling}
           options={finalOptions}
           placeholder={placeholder}
-          popupClassName={sx([styles.popup], moduleStyles.popup).className}
+          popupClassName={sx([styles.popup], 'lobe-model-select-2db5f479-popup').className}
           popupMatchSelectWidth={popupWidth === undefined ? false : popupWidth}
           size={size}
           value={value ? `${value.provider}/${value.model}` : null}

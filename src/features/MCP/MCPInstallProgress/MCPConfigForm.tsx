@@ -1,3 +1,5 @@
+import './MCPConfigForm.css';
+
 import { Button, Flexbox, Markdown } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -9,8 +11,6 @@ import { useTranslation } from 'react-i18next';
 import ItemRender from '@/components/JSONSchemaConfig/ItemRender';
 import { transformPluginSettings } from '@/features/PluginSettings';
 import { useToolStore } from '@/store/tool';
-
-import moduleStyles from './MCPConfigForm.module.css';
 
 interface MCPConfigFormProps {
   configSchema: any;
@@ -116,7 +116,7 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
                 />
               ),
               desc: item.desc && (
-                <Markdown className={moduleStyles.markdown} variant={'chat'}>
+                <Markdown className={'lobe-mcpconfig-form-a050f829-markdown'} variant={'chat'}>
                   {item.desc as string}
                 </Markdown>
               ),

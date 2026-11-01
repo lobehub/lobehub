@@ -7,8 +7,8 @@
  * there is no `polygon` element inside the grid group. The chart DOM belongs
  * to @lobehub/charts, so StyleX cannot reach it.
  */
-.radar :global(.recharts-polar-grid) line,
-.radar :global(.recharts-polar-grid) path,
-.radar :global(.recharts-polar-grid) circle {
+.lobe-model-rating-radar-dfbbb915-radar .recharts-polar-grid line,
+.lobe-model-rating-radar-dfbbb915-radar .recharts-polar-grid path,
+.lobe-model-rating-radar-dfbbb915-radar .recharts-polar-grid circle {
   stroke: var(--lobe-color-fill-secondary);
 }

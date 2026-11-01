@@ -1,10 +1,13 @@
+import './styles.css';
+
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
-import moduleStyles from './styles.module.css';
-
-/** Class names for the descendant rules StyleX cannot express (see styles.module.css). */
-export const descendantStyles = moduleStyles;
+/** Class names for the descendant rules StyleX cannot express (see styles.css). */
+export const descendantStyles = {
+  dropdownMenu: 'lobe-model-switch-panel-7fffbb6a-dropdown-menu',
+  trigger: 'lobe-model-switch-panel-7fffbb6a-trigger',
+} as const;
 
 export const styles = stylex.create({
   container: {

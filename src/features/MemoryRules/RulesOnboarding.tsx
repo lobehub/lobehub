@@ -1,5 +1,7 @@
 'use client';
 
+import './RulesOnboarding.css';
+
 import { Button, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -9,8 +11,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { sx } from '@/styles/sx';
-
-import moduleStyles from './RulesOnboarding.module.css';
 
 const styles = stylex.create({
   actions: {
@@ -150,7 +150,9 @@ const Row = ({ action, description, icon, meta, separated, title }: RowProps) =>
       <span {...stylex.props(styles.rowDescription)}>{description}</span>
     </span>
     {meta && <span {...stylex.props(styles.rowMeta)}>{meta}</span>}
-    {action && <span {...sx([styles.rowAction], moduleStyles.rowAction)}>{action}</span>}
+    {action && (
+      <span {...sx([styles.rowAction], 'lobe-rules-onboarding-dcf30d3e-row-action')}>{action}</span>
+    )}
   </div>
 );
 

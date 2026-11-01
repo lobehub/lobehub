@@ -1,10 +1,10 @@
+import './index.css';
+
 import { type ConnectionConfig } from '@lobehub/market-types';
 import { Block, cx, Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { genServerConfig } from '@/features/MCP/utils';
-
-import styles from './index.module.css';
 
 interface PlatformProps {
   connection?: ConnectionConfig;
@@ -20,7 +20,7 @@ const Platform = memo<PlatformProps>(({ lite, identifier, connection }) => {
     <Block gap={lite ? 0 : 16} padding={4} variant={lite ? 'outlined' : 'borderless'}>
       <Highlighter
         fullFeatured
-        className={cx(lite && styles.lite)}
+        className={cx(lite && 'lobe-platform-65cd1ddc-lite')}
         fileName={'MCP server config'}
         language={'json'}
         variant={'filled'}

@@ -1,5 +1,5 @@
-.card {
-position: relative;
+.lobe-agent-card-2f4e89d4-card {
+  position: relative;
 
   overflow: hidden;
   display: flex;
@@ -22,8 +22,8 @@ position: relative;
   }
 }
 
-.cover {
---cover-ink: color-mix(in srgb, var(--lobe-color-bg-container) 30%, transparent);
+.lobe-agent-card-2f4e89d4-cover {
+  --cover-ink: color-mix(in srgb, var(--lobe-color-bg-container) 30%, transparent);
   --cover-line: color-mix(in srgb, var(--lobe-color-bg-container) 22%, transparent);
   --cover-faint: color-mix(in srgb, var(--lobe-color-bg-container) 15%, transparent);
 
@@ -114,8 +114,8 @@ position: relative;
   }
 }
 
-.avatarRing {
-position: relative;
+.lobe-agent-card-2f4e89d4-avatar-ring {
+  position: relative;
 
   overflow: hidden;
   display: inline-flex;
@@ -132,18 +132,18 @@ position: relative;
   background-clip: padding-box;
 }
 
-.avatarRingGroup {
-border-radius: var(--lobe-border-radius-lg);
+.lobe-agent-card-2f4e89d4-avatar-ring-group {
+  border-radius: var(--lobe-border-radius-lg);
 }
 
-.avatarPlain {
-& img:global(.lobe-fluent-emoji) {
+.lobe-agent-card-2f4e89d4-avatar-plain {
+  & img.lobe-fluent-emoji {
     transform: scale(0.72);
   }
 }
 
-.name {
-width: 100%;
+.lobe-agent-card-2f4e89d4-name {
+  width: 100%;
   margin-block-start: 8px;
 
   font-size: 14px;
@@ -151,8 +151,8 @@ width: 100%;
   line-height: 22px;
 }
 
-.roleRow {
-display: flex;
+.lobe-agent-card-2f4e89d4-role-row {
+  display: flex;
   justify-content: center;
 
   width: 100%;
@@ -160,8 +160,8 @@ display: flex;
   margin-block-start: 4px;
 }
 
-.role {
-overflow: hidden;
+.lobe-agent-card-2f4e89d4-role {
+  overflow: hidden;
 
   max-width: 100%;
   padding-inline: 8px;
@@ -176,8 +176,8 @@ overflow: hidden;
   background: var(--lobe-color-fill-tertiary);
 }
 
-.description {
-overflow: hidden;
+.lobe-agent-card-2f4e89d4-description {
+  overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -192,8 +192,8 @@ overflow: hidden;
   overflow-wrap: anywhere;
 }
 
-.owner {
-display: flex;
+.lobe-agent-card-2f4e89d4-owner {
+  display: flex;
   gap: 6px;
   align-items: center;
   align-self: stretch;
@@ -207,15 +207,15 @@ display: flex;
   color: var(--lobe-color-text-tertiary);
 }
 
-.ownerName {
-overflow: hidden;
+.lobe-agent-card-2f4e89d4-owner-name {
+  overflow: hidden;
   min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.grid {
-display: grid;
+.lobe-agent-card-2f4e89d4-grid {
+  display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: 12px;
 
@@ -223,8 +223,8 @@ display: grid;
   min-width: 0;
 }
 
-.actions {
-position: absolute;
+.lobe-agent-card-2f4e89d4-actions {
+  position: absolute;
   inset-block-start: 8px;
   inset-inline-end: 8px;
 
@@ -240,15 +240,15 @@ position: absolute;
   }
 }
 
-.link {
-display: block;
+.lobe-agent-card-2f4e89d4-link {
+  display: block;
   min-width: 0;
   height: 100%;
   color: inherit;
 }
 
-.wrapper {
-position: relative;
+.lobe-agent-card-2f4e89d4-wrapper {
+  position: relative;
   min-width: 0;
   height: 100%;
 
