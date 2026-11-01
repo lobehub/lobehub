@@ -20,6 +20,11 @@ import { confirm, outputJson, printTable, truncate } from '../../utils/format';
 import { log } from '../../utils/logger';
 import { resolveAppUrlBuilder } from '../task/url';
 import { registerGoalAccessCommands } from './access';
+import {
+  ensureCreatedGoalTaskModel,
+  parseGoalModelConfig,
+  registerGoalAssignmentCommands,
+} from './assignment';
 import { registerGoalGraphEditCommands } from './graphEdit';
 import {
   type GoalMetricState,
@@ -591,6 +596,8 @@ export function registerGoalCommand(program: Command) {
       '--task-agent <id>',
       "Dedicated executor for the goal's tasks (defaults to the goal agent)",
     )
+    .option('--task-model <model>', "Model the goal's tasks run on (needs --task-provider)")
+    .option('--task-provider <provider>', 'Provider of --task-model')
     .option('--project <id>', 'Project ID')
     .option(
       '--visibility <visibility>',
@@ -643,6 +650,10 @@ export function registerGoalCommand(program: Command) {
         ...((options.task as string[] | undefined) ?? []),
         ...(options.taskFile ? parseTaskFile(await readFile(options.taskFile, 'utf8')) : []),
       ];
+      const taskModel = parseGoalModelConfig(
+        { model: options.taskModel, provider: options.taskProvider },
+        { model: '--task-model', provider: '--task-provider' },
+      );
       const seedProblem = goalSeedDependencyProblem(seedTasks);
       if (seedProblem) throw new Error(`--task-file: ${seedProblem}`);
       const operationId = process.env.LOBEHUB_OPERATION_ID;
@@ -711,6 +722,7 @@ export function registerGoalCommand(program: Command) {
         projectId: options.project,
         requirement: options.requirement,
         title,
+        taskModelConfig: taskModel ?? undefined,
         tasks: seedTasks.length ? seedTasks : undefined,
         visibility: options.visibility,
       };
@@ -744,6 +756,7 @@ export function registerGoalCommand(program: Command) {
           `The server did not draw these dependsOn edges (it may predate dependsOn); add them with \`lh goal add-edge\`: ${undrawn.join('; ')}`,
         );
       const turnToken = 'turnToken' in result ? result.turnToken : undefined;
+      await ensureCreatedGoalTaskModel(client, result.data!.goal, taskModel, turnToken);
       // `goal.create` returns the whole graph snapshot, so the id is on its
       // goal — `result.data.id` is undefined, and the CLI cannot resolve the
       // router's types to catch that, which is how it reached a printed URL.
@@ -1172,6 +1185,7 @@ export function registerGoalCommand(program: Command) {
     );
 
   registerGoalAccessCommands(goal);
+  registerGoalAssignmentCommands(goal);
 
   goal
     .command('bind-topic <id>')

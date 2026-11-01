@@ -170,9 +170,8 @@ vi.mock('@/server/services/messenger/push', () => ({
 vi.mock('@/server/services/bot/agentBotProviderSettings', () => ({
   assertBotAccessSettings: vi.fn(),
   invalidateBotAfterUpdate: vi.fn().mockResolvedValue(undefined),
-  mergeBotSettingsForPersist: vi.fn(function (_platform, settings) {
-    return settings;
-  }),
+  mergeBotSettingsForCreate: vi.fn(async (_db, _agentId, _platform, settings) => settings),
+  mergeBotSettingsForPersist: vi.fn((_platform, settings) => settings),
 }));
 
 // Mock platform API constructors

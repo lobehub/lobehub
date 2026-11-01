@@ -97,11 +97,20 @@ const tableSchema = z
     }
   });
 
-const outputSchema = z.discriminatedUnion('type', [
+// Free-form: a layout binds to it by path. The byte limit above bounds its size.
+const dataSchema = z.object({
+  data: z.record(z.string(), z.unknown()),
+  meta: metaSchema,
+  type: z.literal('data'),
+});
+
+/** One widget output document, without the stdout framing. */
+export const widgetOutputSchema = z.discriminatedUnion('type', [
   statSchema,
   listSchema,
   seriesSchema,
   tableSchema,
+  dataSchema,
 ]);
 
 export type WidgetOutputErrorCode =
@@ -135,7 +144,7 @@ const extractJson = (stdout: string): unknown => {
 
 /**
  * Check a script's stdout against the widget output contract (stat / list /
- * series / table) and the version's declared output type.
+ * series / table / data) and the version's declared output type.
  *
  * `meta.complete === false` is accepted and reported as `partial`: the run
  * finishes with status `partial` — its output is shown, but callers must not
@@ -149,7 +158,7 @@ export const parseWidgetOutput = (
     return fail('EMPTY_OUTPUT', 'Script printed nothing to stdout; expected one JSON document');
   }
 
-  const bytes = Buffer.byteLength(stdout, 'utf8');
+  const bytes = new TextEncoder().encode(stdout).byteLength;
   if (bytes > WIDGET_OUTPUT_LIMITS.bytes) {
     return fail(
       'OUTPUT_TOO_LARGE',
@@ -164,7 +173,7 @@ export const parseWidgetOutput = (
     return fail('INVALID_JSON', 'stdout is not a JSON document');
   }
 
-  const parsed = outputSchema.safeParse(raw);
+  const parsed = widgetOutputSchema.safeParse(raw);
   if (!parsed.success) {
     const tooBig = parsed.error.issues.some((issue) => issue.code === 'too_big');
     const detail = parsed.error.issues

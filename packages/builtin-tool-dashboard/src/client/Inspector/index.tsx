@@ -13,6 +13,7 @@ import type {
   DashboardApiNameType,
   DryRunWidgetState,
   GetWidgetRunsState,
+  ListWidgetPresetsState,
   RequestPublishState,
   UpdateDashboardState,
   WidgetDraftState,
@@ -62,10 +63,17 @@ const useChip = (apiName: DashboardApiNameType, props: Props): ReactNode => {
       const state = props.pluginState as CreateDashboardState | undefined;
       return state?.title ?? args.title;
     }
+    case DashboardApiName.listWidgetPresets: {
+      const state = props.pluginState as ListWidgetPresetsState | undefined;
+      return state ? String(state.presets.length) : undefined;
+    }
     case DashboardApiName.createWidgetDraft:
     case DashboardApiName.updateWidgetDraft: {
       const state = props.pluginState as WidgetDraftState | undefined;
-      return [args.title, state && `v${state.version}`].filter(Boolean).join(' · ') || undefined;
+      return (
+        [args.title ?? args.presetId, state && `v${state.version}`].filter(Boolean).join(' · ') ||
+        undefined
+      );
     }
     case DashboardApiName.dryRunWidget: {
       const state = props.pluginState as DryRunWidgetState | undefined;

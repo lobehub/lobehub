@@ -558,6 +558,28 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ command: 'lh agent list' });
     });
 
+    // Regression: only the workspace scope travelled, so `lh goal plan` on the
+    // device failed with "Current manager operation ID required" and a goal
+    // managed from a device never left planning.
+    it('passes the run id to the device, in personal runs too', async () => {
+      const proxy = buildProxy({ operationId: 'op-1' });
+      await proxy[LocalSystemApiName.runCommand]({
+        command: 'lh goal plan goal_1 --file plan.json',
+      });
+
+      expect(parseArgs().env).toEqual({ LOBEHUB_OPERATION_ID: 'op-1' });
+    });
+
+    it('passes the run id alongside the workspace scope', async () => {
+      const proxy = buildProxy({ operationId: 'op-1', workspaceId: 'ws-42' });
+      await proxy[LocalSystemApiName.runCommand]({ command: 'npm run sync' });
+
+      expect(parseArgs().env).toEqual({
+        LOBEHUB_OPERATION_ID: 'op-1',
+        LOBEHUB_WORKSPACE_ID: 'ws-42',
+      });
+    });
+
     it('lets a model-supplied env win', async () => {
       const proxy = buildProxy({ workspaceId: 'ws-42' });
       await proxy[LocalSystemApiName.runCommand]({
