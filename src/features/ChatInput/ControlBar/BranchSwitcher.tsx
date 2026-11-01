@@ -1,3 +1,5 @@
+import './gitMenuTrigger.css';
+
 import type { DeviceGitWorktreeListItem } from '@lobechat/types';
 import {
   confirmModal,
@@ -46,7 +48,6 @@ import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
 import { openCreateBranchModal } from './CreateBranchModal';
-import gitMenuTriggerStyles from './gitMenuTrigger.module.css';
 import { openRenameBranchModal } from './RenameBranchModal';
 import { useBranchList } from './useBranchList';
 import { useSwitchWorktree } from './useSwitchWorktree';
@@ -436,7 +437,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
         <DropdownMenuTrigger>
-          <div className={gitMenuTriggerStyles.trigger}>{children}</div>
+          <div className={'lobe-git-menu-trigger-7cf96368-trigger'}>{children}</div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>

@@ -1,5 +1,7 @@
 'use client';
 
+import './CommentItem.css';
+
 import { AgentIcon } from '@lobehub/icons';
 import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -10,8 +12,6 @@ import { useTranslation } from 'react-i18next';
 
 import Rate from '@/components/RatingOverview/Rate';
 import { type SkillCommentItem } from '@/types/discover';
-
-import moduleStyles from './CommentItem.module.css';
 
 const styles = stylex.create({
   author: {
@@ -105,7 +105,7 @@ const CommentItem = memo<{ item: SkillCommentItem }>(({ item }) => {
         </Flexbox>
         <Text className={stylex.props(styles.date).className}>{createdAt}</Text>
       </Flexbox>
-      <Markdown className={moduleStyles.content} variant={'chat'}>
+      <Markdown className={'lobe-comment-item-3223608e-content'} variant={'chat'}>
         {item.content}
       </Markdown>
     </Flexbox>

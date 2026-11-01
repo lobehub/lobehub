@@ -1,13 +1,13 @@
 'use client';
 
+import './EvidenceComparisonCard.css';
+
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 
 import { sx } from '@/styles/sx';
-
-import contentStyles from './EvidenceComparisonCard.module.css';
 
 /** The `metadata.comparison` an evidence artifact may carry (authored at ingest). */
 export interface EvidenceComparisonMeta {
@@ -158,7 +158,9 @@ export const EvidenceComparisonCard = memo<EvidenceComparisonCardProps>(
                 <span {...stylex.props(styles.caption)}>{side.caption}</span>
               </div>
             )}
-            <div {...sx([styles.content], contentStyles.content)}>{side.content}</div>
+            <div {...sx([styles.content], 'lobe-evidence-comparison-card-81032bc4-content')}>
+              {side.content}
+            </div>
           </div>
         ))}
       </div>
