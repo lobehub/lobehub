@@ -52,7 +52,11 @@ export async function mergeBotSettingsForCreate(
 ): Promise<Record<string, unknown> | undefined> {
   const merged = mergeBotSettingsForPersist(platform, settings);
   const key = BOT_WAKE_SETTING_KEYS.disabled;
-  if (settings?.[key] !== undefined || !merged || !(key in merged)) return merged;
+  if (settings?.[key] !== undefined) return merged;
+  // Omitted settings persist as `{}`, where an absent switch reads as on: the defaults are written
+  // so the switch can be set.
+  const withDefaults = merged ?? mergeBotSettingsForPersist(platform, {});
+  if (!withDefaults || !(key in withDefaults)) return merged;
 
   const agent = await db.query.agents.findFirst({
     columns: { agencyConfig: true },
@@ -60,7 +64,7 @@ export async function mergeBotSettingsForCreate(
   });
   if (!agent?.agencyConfig?.heterogeneousProvider) return merged;
 
-  return { ...merged, [key]: true };
+  return { ...withDefaults, [key]: true };
 }
 
 /**
