@@ -59,7 +59,7 @@ const RESULT_MARKER = 'LOBE_DRIVE_DOWNLOAD_RESULT ';
  * the reason.
  */
 const SCRIPT = String.raw`
-import base64, errno, json, mimetypes, os, posixpath, shutil, stat, sys, tempfile, time, urllib.error, urllib.request, zipfile
+import base64, errno, json, mimetypes, os, posixpath, stat, sys, tempfile, time, urllib.error, urllib.request, zipfile
 
 MARKER = ${JSON.stringify(RESULT_MARKER)}
 NOFOLLOW = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
@@ -155,9 +155,20 @@ try:
         base = posixpath.dirname(target)
         handle, cleanup = tempfile.mkstemp(dir="/tmp" if os.path.isdir("/tmp") else None, suffix=".zip")
         os.close(handle)
+        # The drive can change between the two walks, so the ceilings hold
+        # again here, on what is actually read rather than on what was listed.
+        packed_bytes = 0
+        packed_entries = 0
+
+        def over_limit():
+            if packed_bytes > max_bytes or packed_entries > max_files:
+                done(ok=False, code="TOO_LARGE", bytes=packed_bytes, files=packed_entries)
+
         with zipfile.ZipFile(cleanup, "w", zipfile.ZIP_DEFLATED, allowZip64=True, compresslevel=1) as archive:
             try:
                 for rel, dirnames, files, dir_fd in walk():
+                    packed_entries += 1
+                    over_limit()
                     name = posixpath.relpath(rel, base) if base else rel
                     if not files and not dirnames:
                         archive.writestr(zip_info(name + "/", os.fstat(dir_fd)), b"")
@@ -174,10 +185,18 @@ try:
                             current = os.fstat(source.fileno())
                             if not stat.S_ISREG(current.st_mode):
                                 continue
+                            packed_entries += 1
+                            over_limit()
                             entry = zip_info(posixpath.join(name, file_name), current)
                             entry.compress_type = zipfile.ZIP_DEFLATED
                             with archive.open(entry, "w", force_zip64=True) as sink:
-                                shutil.copyfileobj(source, sink, 1024 * 1024)
+                                while True:
+                                    chunk = source.read(1024 * 1024)
+                                    if not chunk:
+                                        break
+                                    packed_bytes += len(chunk)
+                                    over_limit()
+                                    sink.write(chunk)
             except OSError as error:
                 read_failed(target, error)
         upload_fd = os.open(cleanup, os.O_RDONLY)
