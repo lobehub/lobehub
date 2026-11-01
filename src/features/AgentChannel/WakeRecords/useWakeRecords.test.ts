@@ -1,7 +1,7 @@
 import type { BotWakeDecisionPage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { withUserLabel } from './useWakeRecords';
+import { pageLoadFailed, withUserLabel } from './useWakeRecords';
 
 vi.mock('@/services/agentBotProvider', () => ({ agentBotProviderService: {} }));
 
@@ -33,5 +33,22 @@ describe('withUserLabel', () => {
 
   it('leaves an unloaded page alone', () => {
     expect(withUserLabel(undefined, 'a', null)).toBeUndefined();
+  });
+});
+
+describe('pageLoadFailed', () => {
+  const shown = { items: [], total: 42 };
+
+  it('reports a failed page turn while the previous page is still shown', () => {
+    expect(pageLoadFailed({ data: shown, error: new Error('boom'), isLoading: false })).toBe(true);
+  });
+
+  it('stays quiet while the page loads, when it loaded, and before anything loaded', () => {
+    expect(pageLoadFailed({ data: shown, error: new Error('boom'), isLoading: true })).toBe(false);
+    expect(pageLoadFailed({ data: shown, error: undefined, isLoading: false })).toBe(false);
+    // The first load's failure is the boundary's full error state, not this inline one.
+    expect(pageLoadFailed({ data: undefined, error: new Error('boom'), isLoading: false })).toBe(
+      false,
+    );
   });
 });

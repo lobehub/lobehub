@@ -9,13 +9,19 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import AsyncError from '@/components/AsyncError';
 import { mutate as mutateGlobal } from '@/libs/swr';
 import { botWakeKeys } from '@/libs/swr/keys';
 
 import { RecordTable } from './RecordTable';
 import { Summary } from './Summary';
 import { useRefreshOnReturn } from './useRefreshOnReturn';
-import { useWakeDecisions, WAKE_RECORDS_PAGE_SIZE, type WakeRecordFilters } from './useWakeRecords';
+import {
+  pageLoadFailed,
+  useWakeDecisions,
+  WAKE_RECORDS_PAGE_SIZE,
+  type WakeRecordFilters,
+} from './useWakeRecords';
 
 /** Matches `SCOPE_READ_DEFAULT_DAYS` on the server; the summary reports it too. */
 const WINDOW_DAYS = 30;
@@ -166,6 +172,9 @@ export const WakeRecords = ({ active = true, botId, disabled }: WakeRecordsProps
         }
         onRetry={() => void mutate()}
       >
+        {pageLoadFailed({ data, error, isLoading }) && (
+          <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
+        )}
         <RecordTable
           disabled={disabled}
           items={items}

@@ -29,6 +29,20 @@ export const withUserLabel = (
     items: page.items.map((item) => (item.id === decisionId ? { ...item, userLabel } : item)),
   };
 
+/**
+ * The page asked for failed while another one is still on screen. `keepPreviousData` keeps the
+ * old rows in `data`, so without this the failure would pass for the new page's rows.
+ */
+export const pageLoadFailed = ({
+  data,
+  error,
+  isLoading,
+}: {
+  data: unknown;
+  error: unknown;
+  isLoading: boolean;
+}): boolean => data !== undefined && !!error && !isLoading;
+
 /** Last-30-days counts for one bot. */
 export const useWakeSummary = (botId: string) =>
   useClientDataSWR(botWakeKeys.summary(botId), () => agentBotProviderService.getWakeSummary(botId));
