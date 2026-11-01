@@ -91,7 +91,7 @@ describe('application generation chains', () => {
       recentMessages: ['alice: deploy failed again'],
     });
 
-    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v1');
+    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v2');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.name).toBe('bot_reply_opener');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.schema.required).toEqual([
       'acknowledge',
@@ -116,6 +116,8 @@ describe('application generation chains', () => {
     const { messages } = chainBotReplyOpener({ canOpenThread: false, message: 'hi' });
 
     expect(messages[1].content).toContain('A thread is not available here');
+    // A threadless platform's group chat is neither a thread nor a DM.
+    expect(messages[1].content).not.toContain('direct message');
     expect(messages[1].content).not.toContain('may move the conversation');
   });
 
