@@ -5,6 +5,10 @@ import { lambdaClient } from '@/libs/trpc/client';
 class MemoryCRUDService {
   // ============ Identity CRUD ============
 
+  deletePersona = async () => {
+    return lambdaClient.userMemory.deletePersona.mutate();
+  };
+
   deleteAll = async () => {
     return lambdaClient.userMemory.deleteAll.mutate();
   };
@@ -33,6 +37,14 @@ class MemoryCRUDService {
 
   getContexts = async () => {
     return lambdaClient.userMemory.getContexts.query();
+  };
+
+  getContextStories = async () => {
+    return lambdaClient.userMemory.getContextStories.query();
+  };
+
+  getContextStory = async (id: string) => {
+    return lambdaClient.userMemory.getContextStory.query({ id });
   };
 
   updateContext = async (

@@ -1,0 +1,527 @@
+import { UserInteractionApiName } from '@lobechat/builtin-tool-user-interaction';
+import { buildTaskRunPrompt, type TaskRunPromptGoalLoop } from '@lobechat/prompts';
+import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types';
+
+import { AcceptanceModel } from '@/database/models/acceptance';
+import type { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
+import { MessageModel } from '@/database/models/message';
+import type { TaskModel } from '@/database/models/task';
+import type { TaskTopicModel } from '@/database/models/taskTopic';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
+import { VerifyRubricModel } from '@/database/models/verifyRubric';
+import { VerifyRunModel } from '@/database/models/verifyRun';
+import type { LobeChatDatabase } from '@/database/type';
+import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
+import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
+import {
+  countChargedTaskAttempts,
+  countUnchargedRuns,
+  resolveTaskAttemptBudget,
+} from '@/server/services/goal/recoveryPolicy';
+import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptanceResolution';
+
+/** Cap on unresolved checks carried into the next round's prompt. */
+const MAX_GOAL_FAILED_CHECKS = 8;
+
+/** Cap on earlier questions to the owner carried into the next round's prompt. */
+const MAX_GOAL_ASKED_QUESTIONS = 8;
+const MAX_ASKED_ANSWER_CHARS = 500;
+
+/**
+ * What earlier rounds of a Task asked the owner, and what came back. Every
+ * builder shape records the question under the same `askUserQuestion` API, with
+ * the answer — or the notice that none arrived — as the tool message's text.
+ */
+const readAskedQuestions = async (
+  deps: BuildTaskPromptDeps,
+  topicIds: string[],
+): Promise<NonNullable<TaskRunPromptGoalLoop['askedQuestions']>> => {
+  const calls = await new MessageModel(
+    deps.db,
+    deps.userId,
+    deps.workspaceId,
+  ).listToolCallsInTopics({
+    apiName: UserInteractionApiName.askUserQuestion,
+    limit: MAX_GOAL_ASKED_QUESTIONS,
+    topicIds,
+  });
+  return calls.flatMap((call) => {
+    let questions: string[] = [];
+    try {
+      const args = JSON.parse(call.arguments ?? '{}') as {
+        question?: unknown;
+        questions?: Array<{ question?: unknown }>;
+      };
+      questions = [
+        ...(Array.isArray(args.questions) ? args.questions.map((q) => q?.question) : []),
+        args.question,
+      ].filter((q): q is string => typeof q === 'string' && !!q.trim());
+    } catch {
+      // Unreadable arguments: nothing to tell the next round about.
+    }
+    if (questions.length === 0) return [];
+    const answer = call.content?.trim();
+    return [
+      {
+        answer:
+          answer && answer.length > MAX_ASKED_ANSWER_CHARS
+            ? `${answer.slice(0, MAX_ASKED_ANSWER_CHARS)}…`
+            : answer || undefined,
+        questions,
+      },
+    ];
+  });
+};
+
+/**
+ * Whether the verifier actually judged this result. `pending` / `running` rows
+ * are planned checks, and `errored` means the verifier never ran — neither says
+ * anything about the delivery.
+ */
+const isJudgedResult = (result: { status: string; verdict: string | null }) =>
+  result.status !== 'errored' &&
+  (!!result.verdict || result.status === 'passed' || result.status === 'failed');
+
+/**
+ * For a goal task that already ran at least one round, collect what the next
+ * round must know: the previous round's unresolved checks (with the verifier's
+ * why/suggestion) and the user's reject comment, both read off the task's
+ * acceptance aggregate. Best-effort — any lookup failure degrades to the bare
+ * round counters so prompt building never blocks a run.
+ */
+const resolveGoalLoopContext = async (
+  task: TaskItem,
+  deps: BuildTaskPromptDeps,
+): Promise<TaskRunPromptGoalLoop | undefined> => {
+  const { db, userId, workspaceId } = deps;
+  const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(task.id);
+  if (!goal || !task.totalTopics) return undefined;
+
+  const budget = resolveTaskAttemptBudget(goal);
+  // Runs lost to a machine problem (offline device, usage limit, transport fault)
+  // are not rounds the budget counts, so the agent is not told it is on a later
+  // round than the coordinator thinks.
+  const taskRuns = await deps.taskTopicModel.findByTaskId(task.id).catch(() => []);
+  const unchargedRuns = countUnchargedRuns(taskRuns);
+  const context: TaskRunPromptGoalLoop = {
+    maxRounds: Number.isFinite(budget) ? budget : null,
+    round: countChargedTaskAttempts(task, unchargedRuns) + 1,
+  };
+
+  // Each round is a fresh conversation, so a question an earlier round asked —
+  // and its answer — never reached the next one. Rounds kept re-asking the
+  // owner the same thing, timing out, and delivering "awaiting confirmation".
+  const askedQuestions = await readAskedQuestions(
+    deps,
+    taskRuns.flatMap((run) => (run.topicId ? [run.topicId] : [])),
+  ).catch(() => []);
+  if (askedQuestions.length > 0) context.askedQuestions = askedQuestions;
+
+  try {
+    const acceptance = await new AcceptanceModel(db, userId, workspaceId).findBySubject(
+      'task',
+      task.id,
+    );
+    if (!acceptance) return context;
+
+    const runs = await new VerifyRunModel(db, userId, workspaceId).listByAcceptance(acceptance.id);
+    const last = runs.at(-1);
+    if (!last) return context;
+
+    // The owner's latest verdict is the instruction until they give another.
+    // A rework's own rounds carry no decision, so a retry after its first
+    // attempt failed must still read the comment the owner sent it back with.
+    const decided = runs.findLast((run) => !!run.userDecision);
+    if (decided?.userDecision === 'reject') {
+      const comment = (decided.decisionDetail as { comment?: string } | null)?.comment;
+      if (comment) context.rejectComment = comment;
+    }
+
+    const automaticReview = [...runs].reverse().find((run) => run.metadata?.goalReview)
+      ?.metadata?.goalReview;
+    if (automaticReview && automaticReview.status !== 'passed') {
+      context.automaticReviewFeedback = automaticReview.feedback;
+    }
+
+    // A round is planned (every check `pending`) before its verifier runs, so
+    // the newest round is often still unjudged when the next attempt starts. Take
+    // each check's newest JUDGED result across the chain instead; reading only
+    // the newest round handed that attempt "close the gaps below" with no gaps.
+    // Keyed like the acceptance union: a flow node's check is its own occurrence
+    // even when several nodes reuse one criterion asset.
+    type PlanItem = {
+      id: string;
+      sourceCriterionId?: string | null;
+      sourceFlowNode?: unknown;
+      supersedes?: string[];
+      title: string;
+    };
+    const logicalId = (item: PlanItem) =>
+      item.sourceFlowNode ? item.id : (item.sourceCriterionId ?? item.id);
+    const logicalByCheckItem = new Map<string, string>();
+    for (const run of runs) {
+      for (const item of (run.plan ?? []) as PlanItem[]) {
+        logicalByCheckItem.set(item.id, logicalId(item));
+      }
+    }
+    const roundByRun = new Map(runs.map((run) => [run.id, run.roundIndex ?? 0]));
+    const results = await new VerifyCheckResultModel(db, userId, workspaceId).listByRuns(
+      runs.map((run) => run.id),
+    );
+    type JudgedEntry = { result: (typeof results)[number]; round: number };
+    const latestJudged = new Map<string, JudgedEntry>();
+    for (const result of results) {
+      if (!isJudgedResult(result)) continue;
+      const id = logicalByCheckItem.get(result.checkItemId) ?? result.checkItemId;
+      const round = roundByRun.get(result.verifyRunId ?? '') ?? 0;
+      const current = latestJudged.get(id);
+      if (!current || round >= current.round) latestJudged.set(id, { result, round });
+    }
+
+    // As in the acceptance union, a successor that never ran inherits the verdict
+    // of the checks it `supersedes` (and of what those superseded, in turn).
+    const supersedesById = new Map<string, string[]>();
+    for (const run of runs) {
+      for (const item of (run.plan ?? []) as PlanItem[]) {
+        if (item.supersedes?.length) supersedesById.set(logicalId(item), item.supersedes);
+      }
+    }
+    const judgedFor = (id: string, seen = new Set<string>()): JudgedEntry | undefined => {
+      if (seen.has(id)) return undefined;
+      seen.add(id);
+      const own = latestJudged.get(id);
+      if (own) return own;
+      const inherited = (supersedesById.get(id) ?? [])
+        .map((oldId) => judgedFor(logicalByCheckItem.get(oldId) ?? oldId, seen))
+        .filter((entry): entry is JudgedEntry => !!entry);
+      return inherited.sort((a, b) => b.round - a.round)[0];
+    };
+
+    const failed = ((last.plan ?? []) as PlanItem[]).flatMap((item) => {
+      const r = judgedFor(logicalId(item))?.result;
+      if (!r || (r.status !== 'failed' && r.verdict !== 'failed' && r.verdict !== 'uncertain'))
+        return [];
+      return [{ title: item.title, why: r.suggestion || r.toulmin?.reasoning || undefined }];
+    });
+    if (failed.length > 0) context.failedChecks = failed.slice(0, MAX_GOAL_FAILED_CHECKS);
+    return context;
+  } catch {
+    return context;
+  }
+};
+
+export interface BuildTaskPromptDeps {
+  briefModel: BriefModel;
+  db: LobeChatDatabase;
+  taskModel: TaskModel;
+  taskTopicModel: TaskTopicModel;
+  userId: string;
+  workspaceId?: string;
+}
+
+export interface BuiltTaskPrompt {
+  /** The Task carries an active Acceptance, so the builder needs the evidence
+   * tool mounted for the whole run — it submits while it works. */
+  acceptanceEnabled: boolean;
+  /** Merged, deduplicated list of fileIds (task instruction + all comments)
+   * to forward to execAgent so files arrive as multimodal inputs. */
+  fileIds: string[];
+  prompt: string;
+}
+
+/**
+ * Server-side orchestrator: fetches task context from the DB and renders the
+ * prompt that `task.run` injects into the agent runtime.
+ *
+ * Pure prompt rendering lives in `@lobechat/prompts` (`buildTaskRunPrompt`).
+ * This wrapper is the DB-aware layer that assembles the input from models.
+ */
+export async function buildTaskPrompt(
+  task: TaskItem,
+  deps: BuildTaskPromptDeps,
+  extraPrompt?: string,
+): Promise<BuiltTaskPrompt> {
+  const { briefModel, db, taskModel, taskTopicModel, userId, workspaceId } = deps;
+
+  const [topics, briefs, comments, subtasks, dependencies, documents] = await Promise.all([
+    task.totalTopics && task.totalTopics > 0
+      ? taskTopicModel.findWithHandoff(task.id, 4).catch(() => [])
+      : Promise.resolve([]),
+    briefModel.findByTaskId(task.id).catch(() => []),
+    taskModel.getComments(task.id).catch(() => []),
+    taskModel.findSubtasks(task.id).catch(() => []),
+    taskModel.getDependencies(task.id).catch(() => []),
+    taskModel
+      .getTreePinnedDocuments(task.id)
+      .catch((): WorkspaceData => ({ nodeMap: {}, tree: [] })),
+  ]);
+
+  // Derive fileIds from the persisted Lexical state. editor_data is the
+  // single source of truth — fileId is recovered from the URL in each node
+  // (proxy URL form via regex; pre-signed dev URLs via files.url lookup).
+  const extractCtx = { db, userId, workspaceId };
+  const [taskFileIds, ...commentFileIdLists] = await Promise.all([
+    extractFileIdsFromEditorData(task.editorData, extractCtx),
+    ...comments.map((c) => extractFileIdsFromEditorData(c.editorData, extractCtx)),
+  ]);
+  const commentFileIdsMap: Record<string, string[]> = {};
+  comments.forEach((c, i) => {
+    const ids = commentFileIdLists[i];
+    if (ids.length > 0) commentFileIdsMap[c.id] = ids;
+  });
+
+  // Metadata-only lookup (name + fileType) for prompt rendering. Full content
+  // for the agent comes via `execAgent.fileIds` → `resolveAttachmentsByFileIds`.
+  // `signUrls: false` skips presigned-URL fetches we don't need for prompts.
+  const allFileIds = Array.from(
+    new Set([...taskFileIds, ...Object.values(commentFileIdsMap).flat()]),
+  );
+  const fileMetadata = await resolveAttachmentMetadata({
+    db,
+    fileIds: allFileIds,
+    signUrls: false,
+    userId,
+    workspaceId,
+  });
+  const fileMetaById = new Map(fileMetadata.map((f) => [f.id, f]));
+
+  const toFileMetas = (ids: string[]) =>
+    ids
+      .map((id) => fileMetaById.get(id))
+      .filter((f): f is (typeof fileMetadata)[number] => !!f)
+      .map((f) => ({ fileType: f.fileType, id: f.id, name: f.name }));
+
+  const subtaskIds = subtasks.map((s: any) => s.id);
+  const subtaskDeps =
+    subtaskIds.length > 0
+      ? await taskModel.getDependenciesByTaskIds(subtaskIds).catch(() => [])
+      : [];
+  const subtaskIdToIdentifier = new Map(subtasks.map((s: any) => [s.id, s.identifier]));
+  const subtaskDepMap = new Map<string, { id: string; identifier: string }>();
+  for (const dep of subtaskDeps as any[]) {
+    const depIdentifier = subtaskIdToIdentifier.get(dep.dependsOnId);
+    if (depIdentifier)
+      subtaskDepMap.set(dep.taskId, { id: dep.dependsOnId, identifier: depIdentifier });
+  }
+
+  const depTaskIds = [...new Set(dependencies.map((d: any) => d.dependsOnId))];
+  const depTasks = await taskModel.findByIds(depTaskIds);
+  const depIdToIdentifier = new Map(depTasks.map((t: any) => [t.id, t.identifier]));
+
+  let parentIdentifier: string | null = null;
+  let parentTaskContext:
+    | {
+        id: string;
+        identifier: string;
+        instruction: string;
+        name?: string | null;
+        subtasks?: Array<{
+          blockedBy?: string;
+          blockedById?: string;
+          id: string;
+          identifier: string;
+          name?: string | null;
+          priority?: number | null;
+          status: string;
+        }>;
+      }
+    | undefined;
+
+  if (task.parentTaskId) {
+    const parent = await taskModel.findById(task.parentTaskId);
+    parentIdentifier = parent?.identifier || null;
+    if (parent) {
+      const siblings = await taskModel.findSubtasks(task.parentTaskId).catch(() => []);
+      const siblingIds = siblings.map((s: any) => s.id);
+      const siblingDeps =
+        siblingIds.length > 0
+          ? await taskModel.getDependenciesByTaskIds(siblingIds).catch(() => [])
+          : [];
+      const siblingIdToIdentifier = new Map(siblings.map((s: any) => [s.id, s.identifier]));
+      const siblingDepMap = new Map<string, { id: string; identifier: string }>();
+      for (const dep of siblingDeps as any[]) {
+        const depId = siblingIdToIdentifier.get(dep.dependsOnId);
+        if (depId) siblingDepMap.set(dep.taskId, { id: dep.dependsOnId, identifier: depId });
+      }
+
+      parentTaskContext = {
+        id: parent.id,
+        identifier: parent.identifier,
+        instruction: parent.instruction,
+        name: parent.name,
+        subtasks: siblings.map((s: any) => ({
+          id: s.id,
+          blockedBy: siblingDepMap.get(s.id)?.identifier,
+          blockedById: siblingDepMap.get(s.id)?.id,
+          identifier: s.identifier,
+          name: s.name,
+          priority: s.priority,
+          status: s.status,
+        })),
+      };
+    }
+  }
+
+  const taskFiles = toFileMetas(taskFileIds);
+
+  // Delivery-acceptance context: resolve the Task's Acceptance policy and the
+  // referenced criteria so the builder knows
+  // what to self-evidence while it works. Run-time handles (verifyRunId /
+  // checkItemId) don't exist yet at prompt-build time — the verify skill
+  // resolves those at runtime from the builder's operationId.
+  // Recurring tasks (schedule / heartbeat) never get a verify plan (see
+  // instantiateVerifyPlanOnStart) — don't tell the builder to self-evidence
+  // acceptance criteria whose run-time plan will never exist.
+  const resolvedAcceptance = task.automationMode
+    ? undefined
+    : await resolveTaskAcceptance(db, userId, task.id, workspaceId).catch(() => undefined);
+  const verifyConfig = resolvedAcceptance?.config;
+  const verifyEnabled = !!resolvedAcceptance && verifyConfig?.enabled !== false;
+  let verifyCriteria: Array<{
+    required?: boolean;
+    requiredEvidence?: Array<{ hint?: string; type: string }>;
+    title: string;
+  }> = [];
+  if (
+    verifyEnabled &&
+    verifyConfig &&
+    (verifyConfig.verifyRubricId || verifyConfig.verifyCriteriaIds?.length)
+  ) {
+    const criterionModel = new VerifyCriterionModel(db, userId, workspaceId);
+    const rubricModel = new VerifyRubricModel(db, userId, workspaceId);
+    const collected = (
+      await Promise.all([
+        verifyConfig.verifyRubricId
+          ? rubricModel.getCriteria(verifyConfig.verifyRubricId).catch(() => [])
+          : Promise.resolve([]),
+        verifyConfig.verifyCriteriaIds?.length
+          ? criterionModel.findByIds(verifyConfig.verifyCriteriaIds).catch(() => [])
+          : Promise.resolve([]),
+      ])
+    ).flat();
+    const seen = new Set<string>();
+    verifyCriteria = collected
+      .filter((c) => !seen.has(c.id) && seen.add(c.id))
+      .map((c) => {
+        const raw = (c.verifierConfig as Record<string, unknown> | null)?.requiredEvidence;
+        return {
+          required: c.required,
+          requiredEvidence: Array.isArray(raw)
+            ? (raw as Array<{ hint?: string; type: string }>)
+            : undefined,
+          title: c.title,
+        };
+      });
+  }
+
+  const goalLoop = await resolveGoalLoopContext(task, deps);
+
+  const prompt = buildTaskRunPrompt({
+    ...(goalLoop ? { goalLoop } : {}),
+    activities: {
+      briefs: briefs.map((b: any) => ({
+        createdAt: b.createdAt,
+        id: b.id,
+        priority: b.priority,
+        resolvedAction: b.resolvedAction,
+        resolvedAt: b.resolvedAt,
+        resolvedComment: b.resolvedComment,
+        summary: b.summary,
+        title: b.title,
+        type: b.type,
+      })),
+      comments: comments.map((c: any) => {
+        const files = toFileMetas(commentFileIdsMap[c.id] ?? []);
+        return {
+          agentId: c.authorAgentId,
+          content: c.content,
+          createdAt: c.createdAt,
+          ...(files.length > 0 ? { files } : {}),
+          id: c.id,
+        };
+      }),
+      subtasks: subtasks.map((s: any) => ({
+        createdAt: s.createdAt,
+        id: s.id,
+        identifier: s.identifier,
+        name: s.name,
+        status: s.status,
+      })),
+      topics: (topics as any[]).map((t) => {
+        const handoff = t.handoff as TaskTopicHandoff | null;
+        return {
+          createdAt: t.createdAt,
+          handoff,
+          id: t.topicId || t.id,
+          seq: t.seq,
+          status: t.status,
+          title: handoff?.title || t.title,
+        };
+      }),
+    },
+    extraPrompt,
+    parentTask: parentTaskContext,
+    task: {
+      assigneeAgentId: task.assigneeAgentId,
+      automationMode: task.automationMode,
+      dependencies: dependencies.map((d: any) => ({
+        dependsOn: depIdToIdentifier.get(d.dependsOnId) ?? d.dependsOnId,
+        dependsOnId: d.dependsOnId,
+        type: d.type,
+      })),
+      description: task.description,
+      ...(taskFiles.length > 0 ? { files: taskFiles } : {}),
+      heartbeatInterval: task.heartbeatInterval,
+      id: task.id,
+      identifier: task.identifier,
+      instruction: task.instruction,
+      name: task.name,
+      parentIdentifier,
+      parentTaskId: task.parentTaskId,
+      priority: task.priority,
+      review: taskModel.getReviewConfig(task) as any,
+      schedulePattern: task.schedulePattern,
+      scheduleTimezone: task.scheduleTimezone,
+      status: task.status,
+      verify: verifyEnabled
+        ? {
+            criteria: verifyCriteria,
+            enabled: true,
+            maxIterations: verifyConfig?.maxIterations,
+            requirement: resolvedAcceptance?.requirement,
+          }
+        : undefined,
+      subtasks: subtasks.map((s: any) => ({
+        id: s.id,
+        blockedBy: subtaskDepMap.get(s.id)?.identifier,
+        blockedById: subtaskDepMap.get(s.id)?.id,
+        identifier: s.identifier,
+        name: s.name,
+        priority: s.priority,
+        status: s.status,
+      })),
+    },
+    workspace: documents.tree.map((rootNode) => {
+      const rootDoc = documents.nodeMap[rootNode.id];
+      return {
+        children: rootNode.children.map((child) => {
+          const childDoc = documents.nodeMap[child.id];
+          return {
+            createdAt: childDoc?.createdAt,
+            documentId: child.id,
+            size: childDoc?.charCount ?? undefined,
+            sourceTaskIdentifier: childDoc?.sourceTaskIdentifier ?? undefined,
+            title: childDoc?.title,
+          };
+        }),
+        createdAt: rootDoc?.createdAt,
+        documentId: rootNode.id,
+        title: rootDoc?.title,
+      };
+    }),
+  });
+
+  return { acceptanceEnabled: verifyEnabled, fileIds: allFileIds, prompt };
+}

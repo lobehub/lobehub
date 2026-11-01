@@ -1,0 +1,154 @@
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import {
+  chainVerifyReport,
+  type JudgeEvidence,
+  REPORT_NARRATIVE_JSON_SCHEMA,
+  VERIFY_REPORT_PROMPT_VERSION,
+} from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
+import debug from 'debug';
+
+import { DocumentModel } from '@/database/models/document';
+import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
+import { VerifyReportModel } from '@/database/models/verifyReport';
+import type { LobeChatDatabase } from '@/database/type';
+import { AiGenerationService } from '@/server/services/aiGeneration';
+
+import { countStats, meanConfidence, rollupVerdict } from './reportRollup';
+import { resolveVerifyResponseLanguage } from './responseLanguage';
+import { ReportNarrativeSchema } from './schema';
+
+const log = debug('lobe-server:verify-reporter');
+
+export interface GenerateReportParams {
+  deliverable: string;
+  goal: string;
+  modelConfig: { model: string; provider: string };
+  /** The verification session to summarize (the canonical run-anchor). */
+  verifyRunId: string;
+}
+
+/**
+ * Builds the LLM-authored verify report (a generated artifact) for a
+ * verification session. The verdict and statistics are computed deterministically
+ * from the session's results here; only the `summary` / `content` narrative comes
+ * from the model, so the card can never contradict the rollup. Upserts per run
+ * (regenerating overwrites in place).
+ *
+ * This is the server-side LLM reporter — distinct from `verify.upsertReport`,
+ * which lets a standalone harness write a report it computed itself.
+ */
+export class VerifyReporterService {
+  private readonly db: LobeChatDatabase;
+  private readonly userId: string;
+  private readonly resultModel: VerifyCheckResultModel;
+  private readonly evidenceModel: VerifyEvidenceModel;
+  private readonly reportModel: VerifyReportModel;
+  private readonly documentModel: DocumentModel;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
+    this.evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
+    this.reportModel = new VerifyReportModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
+  }
+
+  async generateReport(params: GenerateReportParams) {
+    const { verifyRunId, goal, deliverable, modelConfig } = params;
+
+    const results = await this.resultModel.listByRun(verifyRunId);
+    if (results.length === 0) {
+      log('generateReport: no results for run %s, skipping', verifyRunId);
+      return null;
+    }
+
+    const evidenceRows = await this.evidenceModel.listByRun(verifyRunId);
+    const documentIds = [
+      ...new Set(evidenceRows.flatMap((row) => (row.documentId ? [row.documentId] : []))),
+    ];
+    const documents = await this.documentModel.findByIds(documentIds);
+    const documentContent = new Map(documents.map((document) => [document.id, document.content]));
+    const evidenceByItem = new Map<string, JudgeEvidence[]>();
+    for (const row of evidenceRows) {
+      const list = evidenceByItem.get(row.checkItemId) ?? [];
+      list.push({
+        content: row.documentId ? documentContent.get(row.documentId) : row.content,
+        description: row.description,
+        documentId: row.documentId,
+        type: row.type,
+      });
+      evidenceByItem.set(row.checkItemId, list);
+    }
+
+    const verdict = rollupVerdict(results);
+    const stats = countStats(results);
+
+    const chain = chainVerifyReport({
+      deliverable,
+      goal,
+      items: results.map((r) => ({
+        confidence: r.confidence,
+        evidence: evidenceByItem.get(r.checkItemId),
+        reasoning: r.toulmin?.reasoning,
+        status: r.status,
+        suggestion: r.suggestion,
+        title: r.checkItemTitle,
+        verdict: r.verdict,
+      })),
+      language: await resolveVerifyResponseLanguage(this.db, this.userId),
+      stats,
+      verdict,
+    });
+
+    const narrative = await this.buildNarrative(chain, modelConfig);
+
+    return this.reportModel.upsertByRun({
+      content: narrative?.content ?? null,
+      failedChecks: stats.failed,
+      generatedBy: modelConfig.model,
+      overallConfidence: meanConfidence(results),
+      passedChecks: stats.passed,
+      reviewedByUser: false,
+      summary: narrative?.summary ?? null,
+      totalChecks: stats.total,
+      uncertainChecks: stats.uncertain,
+      verdict,
+      verifyRunId,
+    });
+  }
+
+  /** Generate the narrative, degrading to no prose (stats-only card) on failure. */
+  private async buildNarrative(
+    chain: ReturnType<typeof chainVerifyReport>,
+    modelConfig: { model: string; provider: string },
+  ) {
+    try {
+      const ai = new AiGenerationService(this.db, this.userId);
+      const raw = await ai.generateObject(
+        {
+          ...chain,
+          model: modelConfig.model,
+          provider: modelConfig.provider,
+          schema: REPORT_NARRATIVE_JSON_SCHEMA,
+        },
+        {
+          metadata: { trigger: RequestTrigger.Verify },
+          tracing: {
+            promptVersion: VERIFY_REPORT_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.VerifyReport,
+            schemaName: REPORT_NARRATIVE_JSON_SCHEMA.name,
+          } satisfies TracingOptions,
+        },
+      );
+      const parsed = ReportNarrativeSchema.safeParse(raw);
+      return parsed.success ? parsed.data : null;
+    } catch (error) {
+      log('report narrative generation failed (non-fatal): %O', error);
+      return null;
+    }
+  }
+}

@@ -10,9 +10,11 @@ import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';
-import { RouteVariants } from '@/utils/server/routeVariants';
+import { DEFAULT_LANG, locales, RouteVariants } from '@/utils/server/routeVariants';
 
-import { nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
+import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
+import { isShareSpaRoute } from '../shareRoutes';
+import { isAlwaysWorkbenchSpaRoute, isWorkbenchSpaRoute } from '../workbenchRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
@@ -22,12 +24,41 @@ const logBetterAuth = debug('middleware:better-auth');
 // Dev-only debug proxy route should bypass all middleware rewrites.
 const dangerousLocalDevProxyRoute = '/_dangerous_local_dev_proxy';
 
+// The locale is embedded raw into rewrite paths (/spa-auth/${locale}, /spa/${route}).
+// An unvalidated value (e.g. ?hl=../../api/dev) would let the URL parser collapse the
+// traversal and rewrite to a confused internal target, so allowlist it before use.
+const toSafeLocale = (locale: string): Locales =>
+  (locales as readonly string[]).includes(locale) ? (locale as Locales) : DEFAULT_LANG;
+
+const persistLocaleCookie = (
+  response: NextResponse,
+  request: NextRequest,
+  explicitlyLocale: Locales | undefined,
+) => {
+  if (!explicitlyLocale) return;
+  const existingLocale = request.cookies.get(LOBE_LOCALE_COOKIE)?.value as Locales | undefined;
+  if (existingLocale) return;
+  response.cookies.set(LOBE_LOCALE_COOKIE, explicitlyLocale, {
+    // 90 days is a balanced persistence for locale preference
+    maxAge: 60 * 60 * 24 * 90,
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  });
+};
+
 export function defineConfig() {
-  const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc'];
+  // `/oauth/connector` is a backend route handler (custom connector OAuth callback);
+  // the rest of `/oauth/*` (e.g. /oauth/callback/success) are SPA pages, so scope
+  // the passthrough to the connector subtree only.
+  const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc', '/oauth/connector'];
 
   const defaultMiddleware = (request: NextRequest) => {
     const url = new URL(request.url);
     logDefault('Processing request: %s %s', request.method, request.url);
+
+    // Public installation instructions must remain readable by coding agents.
+    if (url.pathname === '/acceptance/skill.md') return NextResponse.next();
 
     // skip all api requests
     if (backendApiEndpoints.some((path) => url.pathname.startsWith(path))) {
@@ -63,10 +94,12 @@ export function defineConfig() {
       locale,
     });
 
+    const safeLocale = toSafeLocale(locale);
+
     // 2. Create normalized preference values
     const route = RouteVariants.serializeVariants({
       isMobile: device.type === 'mobile',
-      locale,
+      locale: safeLocale,
     });
 
     logDefault('Serialized route variant: %s', route);
@@ -94,6 +127,49 @@ export function defineConfig() {
       return NextResponse.next();
     }
 
+    const isAuthSpaRoute = authSpaRoutes.some(
+      (route) => url.pathname === route || url.pathname.startsWith(`${route}/`),
+    );
+
+    // Auth SPA routes: rewrite to /spa-auth/[locale]/[[...path]] catch-all
+    if (isAuthSpaRoute) {
+      const authSpaPath = `/spa-auth/${safeLocale}${url.pathname}`;
+      logDefault('Auth SPA route, rewriting to: %s', authSpaPath);
+      url.pathname = authSpaPath;
+
+      const response = NextResponse.rewrite(url);
+      persistLocaleCookie(response, request, explicitlyLocale);
+
+      return response;
+    }
+
+    // Share pages are responsive on their own, so they get one bundle for every
+    // device rather than a mobile variant.
+    if (isShareSpaRoute(url.pathname)) {
+      const sharePath = `/spa-share/${safeLocale}${url.pathname}`;
+      logDefault('Share SPA route, rewriting to: %s', sharePath);
+      url.pathname = sharePath;
+
+      const response = NextResponse.rewrite(url);
+      persistLocaleCookie(response, request, explicitlyLocale);
+
+      return response;
+    }
+
+    if (
+      isAlwaysWorkbenchSpaRoute(url.pathname) ||
+      (device.type === 'mobile' && isWorkbenchSpaRoute(url.pathname))
+    ) {
+      const workbenchPath = `/spa-workbench/${safeLocale}${url.pathname}`;
+      logDefault('Workbench SPA route, rewriting to: %s', workbenchPath);
+      url.pathname = workbenchPath;
+
+      const response = NextResponse.rewrite(url);
+      persistLocaleCookie(response, request, explicitlyLocale);
+
+      return response;
+    }
+
     const isNextjsRoute = nextjsOnlyRoutes.some((r) => url.pathname.startsWith(r));
 
     // SPA routes: rewrite to /spa/[variants]/[...path] catch-all
@@ -103,21 +179,7 @@ export function defineConfig() {
       url.pathname = spaPath;
 
       const response = NextResponse.rewrite(url);
-
-      // If locale explicitly provided via query (?hl=), persist it in cookie
-      if (explicitlyLocale) {
-        const existingLocale = request.cookies.get(LOBE_LOCALE_COOKIE)?.value as
-          | Locales
-          | undefined;
-        if (!existingLocale) {
-          response.cookies.set(LOBE_LOCALE_COOKIE, explicitlyLocale, {
-            maxAge: 60 * 60 * 24 * 90,
-            path: '/',
-            sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
-          });
-        }
-      }
+      persistLocaleCookie(response, request, explicitlyLocale);
 
       return response;
     }
@@ -141,27 +203,7 @@ export function defineConfig() {
     // build rewrite response first
     const rewrite = NextResponse.rewrite(url, { status: 200 });
 
-    // If locale explicitly provided via query (?hl=), persist it in cookie when user has no prior preference
-    if (explicitlyLocale) {
-      const existingLocale = request.cookies.get(LOBE_LOCALE_COOKIE)?.value as Locales | undefined;
-      if (!existingLocale) {
-        rewrite.cookies.set(LOBE_LOCALE_COOKIE, explicitlyLocale, {
-          // 90 days is a balanced persistence for locale preference
-          maxAge: 60 * 60 * 24 * 90,
-
-          path: '/',
-          sameSite: 'lax',
-          secure: process.env.NODE_ENV === 'production',
-        });
-        logDefault('Persisted explicit locale to cookie (no prior cookie): %s', explicitlyLocale);
-      } else {
-        logDefault(
-          'Locale cookie exists (%s), skip overwrite with %s',
-          existingLocale,
-          explicitlyLocale,
-        );
-      }
-    }
+    persistLocaleCookie(rewrite, request, explicitlyLocale);
 
     return rewrite;
   };
@@ -173,12 +215,17 @@ export function defineConfig() {
     '/api/webhooks(.*)',
     '/api/workflows(.*)',
     '/api/agent(.*)',
+    '/api/acceptance-review(.*)',
     '/api/dev(.*)',
     '/webapi(.*)',
     '/trpc(.*)',
     // version
     '/api/version',
     '/api/desktop/(.*)',
+    // Composio OAuth callback — hit via a cross-site redirect from the provider
+    // after Composio-managed auth; only renders a popup-closing page, so it must
+    // not be session-gated.
+    '/api/composio/oauth/callback',
     // better auth
     '/signin',
     '/signup',
@@ -188,13 +235,38 @@ export function defineConfig() {
     // oauth
     // Make only the consent view public (GET page), not other oauth paths
     '/oauth/consent/(.*)',
+    // Custom connector OAuth callback — hit via a cross-site redirect from the
+    // provider, carries its own code+state, so it must not be session-gated.
+    '/oauth/connector/callback',
     '/oidc/handoff',
     '/oidc/device/auth',
     '/oidc/token',
+    // OIDC protocol endpoints a client reads before (or without) any browser
+    // session: discovery and JWKS are public by spec, and userinfo authenticates
+    // with the bearer access token the provider itself checks. Session-gating them
+    // redirects non-browser callers to the sign-in HTML, which is what a
+    // third-party app registered through Settings → OAuth Apps hits first.
+    '/oidc/.well-known/openid-configuration',
+    '/oidc/jwks',
+    '/oidc/me',
+    // The review popup's last page: a code or a refusal for the opener, never a session read.
+    '/oidc/review/callback',
+    // Interaction details for the consent/login page — must be reachable
+    // before the user has a session, so it cannot be session-gated.
+    '/oidc/interaction/(.*)',
     // market
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
+    // retired standalone report links (/verify/:runId) — they now redirect to
+    // the run's acceptance round, and must stay reachable without a session:
+    // the run id is still the read capability, enforced by the run's own
+    // `visibility` in `verify.getRunAcceptanceRound`.
+    '/verify/(.*)',
+    // acceptance decision page — the id is the capability; the tRPC layer
+    // enforces the aggregate's `visibility` (a private aggregate 404s for
+    // anyone but the owner / workspace members).
+    '/acceptance/(.*)',
     // messenger verify-im — page itself handles unauth (in-page sign-in CTA)
     // and the random_id token is the actual capability check; no need for
     // session-protected access at the middleware layer.
@@ -238,6 +310,13 @@ export function defineConfig() {
         if (hl) {
           signInUrl.searchParams.set('hl', hl);
           logBetterAuth('Preserving locale to sign-in: hl=%s', hl);
+        }
+        // Preserve marketing attribution (e.g. sign-ups originating from Market)
+        // so it survives the auth detour and reaches the sign-up page.
+        const utmSource = req.nextUrl.searchParams.get('utm_source');
+        if (utmSource) {
+          signInUrl.searchParams.set('utm_source', utmSource);
+          logBetterAuth('Preserving utm_source to sign-in: %s', utmSource);
         }
         return Response.redirect(signInUrl);
       }

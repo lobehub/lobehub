@@ -1,7 +1,9 @@
 'use client';
 
-import { Alert, Highlighter } from '@lobehub/ui';
-import { memo } from 'react';
+import { Alert } from '@lobehub/ui';
+import { lazy, memo, Suspense } from 'react';
+
+const Highlighter = lazy(() => import('@lobehub/ui/es/Highlighter/index'));
 
 interface AlertFallbackProps {
   error: Error;
@@ -21,9 +23,16 @@ const AlertFallback = memo<AlertFallbackProps>(({ error, resetErrorBoundary, tit
       type="secondary"
       extra={
         error?.stack ? (
-          <Highlighter actionIconSize="small" language="plaintext" padding={8} variant="borderless">
-            {error.stack}
-          </Highlighter>
+          <Suspense fallback={null}>
+            <Highlighter
+              actionIconSize="small"
+              language="plaintext"
+              padding={8}
+              variant="borderless"
+            >
+              {error.stack}
+            </Highlighter>
+          </Suspense>
         ) : undefined
       }
       onClose={resetErrorBoundary}

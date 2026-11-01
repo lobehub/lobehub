@@ -5,6 +5,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import { projectPublicModel } from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
 import type {
   CreateModelRequest,
@@ -14,13 +15,18 @@ import type {
   UpdateModelRequest,
 } from '../types/model.type';
 
+// `stt` was renamed to the standard `asr`. Old rows / deprecated API inputs are
+// normalized at the service boundary instead of running a bulk data migration —
+// responses always emit `asr`, and `stt` is never persisted for new writes.
+const normalizeModelType = <T>(type: T): T => (type === 'stt' ? ('asr' as T) : type);
+
 /**
  * Model service implementation class (dedicated to Hono API)
  * Provides model query and grouping functionality
  */
 export class ModelService extends BaseService {
-  constructor(db: LobeChatDatabase, userId: string | null) {
-    super(db, userId);
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+    super(db, userId, workspaceId);
   }
 
   /**
@@ -45,9 +51,8 @@ export class ModelService extends BaseService {
       const conditions = [];
 
       // Add permission condition directly to the main conditions array
-      if (permissionResult.condition?.userId) {
-        conditions.push(eq(aiModels.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(aiModels, permissionResult.condition);
+      if (permissionWhere) conditions.push(permissionWhere);
 
       // Handle ModelsListQuery-specific parameters
       const { page, pageSize, keyword, provider, type, enabled } = request;
@@ -68,7 +73,14 @@ export class ModelService extends BaseService {
       }
 
       if (type) {
-        conditions.push(eq(aiModels.type, type));
+        const normalizedType = normalizeModelType(type);
+        // Match both the new `asr` and the legacy `stt` so un-migrated rows
+        // still surface when a client filters by the standard type.
+        conditions.push(
+          normalizedType === 'asr'
+            ? or(eq(aiModels.type, 'asr'), eq(aiModels.type, 'stt'))
+            : eq(aiModels.type, normalizedType),
+        );
       }
 
       if (typeof enabled === 'boolean') {
@@ -92,7 +104,9 @@ export class ModelService extends BaseService {
       ]);
 
       return {
-        models: result,
+        models: result.map((model) =>
+          projectPublicModel({ ...model, type: normalizeModelType(model.type) }),
+        ),
         total: totalResult[0]?.count ?? 0,
       };
     } catch (error) {
@@ -117,9 +131,8 @@ export class ModelService extends BaseService {
 
       const conditions = [eq(aiModels.providerId, providerId), eq(aiModels.id, modelId)];
 
-      if (permissionResult.condition?.userId) {
-        conditions.push(eq(aiModels.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(aiModels, permissionResult.condition);
+      if (permissionWhere) conditions.push(permissionWhere);
 
       const model = await this.db.query.aiModels.findFirst({ where: and(...conditions) });
 
@@ -127,7 +140,7 @@ export class ModelService extends BaseService {
         throw this.createNotFoundError(`模型 ${providerId}/${modelId} 不存在`);
       }
 
-      return model;
+      return projectPublicModel({ ...model, type: normalizeModelType(model.type) });
     } catch (error) {
       this.handleServiceError(error, '获取模型详情');
     }
@@ -154,7 +167,7 @@ export class ModelService extends BaseService {
           where: and(
             eq(aiModels.id, payload.id),
             eq(aiModels.providerId, payload.providerId),
-            eq(aiModels.userId, this.userId),
+            this.buildWorkspaceWhere(aiModels),
           ),
         });
 
@@ -179,12 +192,12 @@ export class ModelService extends BaseService {
             releasedAt: payload.releasedAt ?? null,
             sort: payload.sort ?? null,
             source: payload.source ?? null,
-            type: payload.type ?? 'chat',
-            userId: this.userId,
+            type: normalizeModelType(payload.type ?? 'chat'),
+            ...this.buildWorkspacePayload({}),
           })
           .returning();
 
-        return created;
+        return projectPublicModel(created);
       });
     } catch (error) {
       this.handleServiceError(error, '创建模型');
@@ -211,9 +224,8 @@ export class ModelService extends BaseService {
       }
 
       const conditions = [eq(aiModels.providerId, providerId), eq(aiModels.id, modelId)];
-      if (permissionResult.condition?.userId) {
-        conditions.push(eq(aiModels.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(aiModels, permissionResult.condition);
+      if (permissionWhere) conditions.push(permissionWhere);
 
       return await this.db.transaction(async (tx) => {
         const existingModel = await tx.query.aiModels.findFirst({ where: and(...conditions) });
@@ -237,7 +249,7 @@ export class ModelService extends BaseService {
           ...(payload.releasedAt !== undefined && { releasedAt: payload.releasedAt }),
           ...(payload.sort !== undefined && { sort: payload.sort }),
           ...(payload.source !== undefined && { source: payload.source }),
-          ...(payload.type !== undefined && { type: payload.type }),
+          ...(payload.type !== undefined && { type: normalizeModelType(payload.type) }),
           updatedAt: new Date(),
         } as Record<string, unknown>;
 
@@ -255,7 +267,7 @@ export class ModelService extends BaseService {
           throw this.createBusinessError('更新模型失败');
         }
 
-        return updated;
+        return projectPublicModel(updated);
       });
     } catch (error) {
       this.handleServiceError(error, '更新模型');

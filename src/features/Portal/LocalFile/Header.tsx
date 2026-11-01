@@ -1,66 +1,49 @@
 'use client';
 
-import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE, isDesktop } from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui';
-import { ArrowLeft, X } from 'lucide-react';
-import { Fragment, memo } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { FolderOpen } from 'lucide-react';
+import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { SESSION_CHAT_TOPIC_PAGE_URL, SESSION_CHAT_TOPIC_URL } from '@/const/url';
-import NavHeader from '@/features/NavHeader';
+import PortalHeader from '@/features/Portal/components/Header';
+import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import TabStrip from './TabStrip';
 
-const Header = memo(() => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const params = useParams<{ aid?: string; topicId?: string }>();
-  const [canGoBack, goBack, clearPortalStack] = useChatStore((s) => [
-    chatPortalSelectors.canGoBack(s),
-    s.goBack,
-    s.clearPortalStack,
-  ]);
-  const isTopicPageRoute =
-    !!params.aid &&
-    !!params.topicId &&
-    location.pathname.startsWith(SESSION_CHAT_TOPIC_PAGE_URL(params.aid, params.topicId));
+const Header = memo<{ onClose?: () => void }>(({ onClose }) => {
+  const { t } = useTranslation('chat');
+  const activeLocalFilePath = useChatStore(chatPortalSelectors.activeLocalFilePath);
+  // Remote device and sandbox paths cannot be revealed in the local filesystem.
+  const isRemoteFile = useChatStore(chatPortalSelectors.isCurrentLocalFileRemote);
+  const handleOpenFileFolder = useCallback(() => {
+    if (!activeLocalFilePath) return;
+
+    void localFileService.openFileFolder(activeLocalFilePath);
+  }, [activeLocalFilePath]);
 
   return (
-    <NavHeader
-      showTogglePanelButton={false}
+    <PortalHeader
+      // The tab strip runs the full header height and starts at the edge.
+      paddingInline={0}
       style={{ padding: '0 8px 0 0' }}
-      left={
-        <Fragment>
-          {canGoBack && (
-            <ActionIcon icon={ArrowLeft} size={DESKTOP_HEADER_ICON_SMALL_SIZE} onClick={goBack} />
-          )}
-          <TabStrip />
-        </Fragment>
-      }
-      right={
-        <Fragment>
+      title={<TabStrip />}
+      rightExtra={
+        isDesktop &&
+        activeLocalFilePath &&
+        !isRemoteFile && (
           <ActionIcon
-            icon={X}
+            aria-label={t('workingPanel.files.showInSystem')}
+            icon={FolderOpen}
             size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-            onClick={() => {
-              if (params.aid && params.topicId && isTopicPageRoute) {
-                navigate(SESSION_CHAT_TOPIC_URL(params.aid, params.topicId));
-                return;
-              }
-
-              clearPortalStack();
-            }}
+            title={t('workingPanel.files.showInSystem')}
+            onClick={handleOpenFileFolder}
           />
-        </Fragment>
+        )
       }
-      styles={{
-        left: {
-          flex: 1,
-          minWidth: 0,
-        },
-      }}
+      onClose={onClose}
     />
   );
 });

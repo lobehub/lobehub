@@ -1,6 +1,13 @@
 'use client';
 
-import { AccordionItem, Flexbox, Text } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+  Flexbox,
+  Text,
+} from '@lobehub/ui';
 import {
   Activity,
   Award,
@@ -16,10 +23,11 @@ import {
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
 import { isModifierClick } from '@/utils/navigation';
 
@@ -49,56 +57,56 @@ interface BenchmarkListProps {
 
 const BenchmarkList = memo<BenchmarkListProps>(({ activeKey, itemKey }) => {
   const { t } = useTranslation('eval');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const benchmarkList = useEvalStore((s) => s.benchmarkList);
   const isInit = useEvalStore((s) => s.benchmarkListInit);
 
   return (
-    <AccordionItem
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      title={
-        <Flexbox horizontal align="center" gap={4}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('sidebar.benchmarks')}
-          </Text>
-          {benchmarkList.length > 0 && (
-            <Text fontSize={11} type="secondary">
-              {benchmarkList.length}
+    <AccordionItem value={itemKey}>
+      <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger>
+          <Flexbox horizontal align="center" gap={4}>
+            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+              {t('sidebar.benchmarks')}
+            </Text>
+            {benchmarkList.length > 0 && (
+              <Text fontSize={12} type="secondary">
+                {benchmarkList.length}
+              </Text>
+            )}
+          </Flexbox>
+        </AccordionTrigger>
+      </AccordionHeader>
+      <AccordionPanel>
+        <Flexbox gap={1} paddingBlock={1}>
+          {!isInit ? (
+            <SkeletonList rows={3} />
+          ) : benchmarkList.length > 0 ? (
+            benchmarkList.map((b: any) => (
+              <WorkspaceLink
+                key={b.id}
+                to={`/eval/bench/${b.id}`}
+                onClick={(e) => {
+                  if (isModifierClick(e)) return;
+                  e.preventDefault();
+                  navigate(`/eval/bench/${b.id}`);
+                }}
+              >
+                <NavItem
+                  active={activeKey === `bench-${b.id}`}
+                  icon={getSystemIcon(b.id)}
+                  iconSize={16}
+                  title={b.name}
+                />
+              </WorkspaceLink>
+            ))
+          ) : (
+            <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">
+              {t('benchmark.empty')}
             </Text>
           )}
         </Flexbox>
-      }
-    >
-      <Flexbox gap={1} paddingBlock={1}>
-        {!isInit ? (
-          <SkeletonList rows={3} />
-        ) : benchmarkList.length > 0 ? (
-          benchmarkList.map((b: any) => (
-            <Link
-              key={b.id}
-              to={`/eval/bench/${b.id}`}
-              onClick={(e) => {
-                if (isModifierClick(e)) return;
-                e.preventDefault();
-                navigate(`/eval/bench/${b.id}`);
-              }}
-            >
-              <NavItem
-                active={activeKey === `bench-${b.id}`}
-                icon={getSystemIcon(b.id)}
-                iconSize={16}
-                title={b.name}
-              />
-            </Link>
-          ))
-        ) : (
-          <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">
-            {t('benchmark.empty')}
-          </Text>
-        )}
-      </Flexbox>
+      </AccordionPanel>
     </AccordionItem>
   );
 });

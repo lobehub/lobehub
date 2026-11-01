@@ -1,20 +1,19 @@
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
-import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
+import { isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
-import { type ItemType } from 'antd/es/menu/interface';
 import { BrainCircuit, Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
-import { type PropsWithChildren } from 'react';
-import { memo, useMemo } from 'react';
+import type { PropsWithChildren } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 
 import useBusinessMenuItems from '@/business/client/features/User/useBusinessMenuItems';
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
 import DataImporter from '@/features/DataImporter';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useNavLayout } from '@/hooks/useNavLayout';
-import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
@@ -55,14 +54,12 @@ export const useMenu = () => {
   ]);
   const { userPanel } = useNavLayout();
   const businessMenuItems = useBusinessMenuItems(isLogin);
-  const { isIOS, isAndroid } = usePlatform();
+  const hasActiveWorkspace = useHasActiveWorkspace();
+  const navigate = useWorkspaceAwareNavigate();
 
-  const downloadUrl = useMemo(() => {
-    if (isIOS) return DOWNLOAD_URL.ios;
-    if (isAndroid) return DOWNLOAD_URL.android;
-    return DOWNLOAD_URL.default;
-  }, [isIOS, isAndroid]);
-
+  // Navigation items navigate from the row's `onClick` instead of wrapping the
+  // label in a link: a link only covers the label text, so clicks on the icon
+  // or the row padding closed the panel without navigating.
   const settings: MenuProps['items'] = [
     {
       extra: isDesktop ? (
@@ -73,32 +70,22 @@ export const useMenu = () => {
       icon: <Icon icon={Settings2} />,
       key: 'setting',
       label: (
-        <Link to="/settings">
-          <NewVersionBadge showBadge={hasNewVersion}>{t('userPanel.setting')}</NewVersionBadge>
-        </Link>
+        <NewVersionBadge showBadge={hasNewVersion}>
+          {t(hasActiveWorkspace ? 'userPanel.workspaceSetting' : 'userPanel.setting')}
+        </NewVersionBadge>
       ),
+      onClick: () => navigate('/settings'),
     },
     ...(userPanel.showMemory
       ? [
           {
             icon: <Icon icon={BrainCircuit} />,
             key: 'memory',
-            label: <Link to="/memory">{t('tab.memory')}</Link>,
+            label: t('tab.memory'),
+            onClick: () => navigate('/memory', { escape: true }),
           },
         ]
       : []),
-  ];
-
-  const getDesktopApp: MenuProps['items'] = [
-    {
-      icon: <Icon icon={Download} />,
-      key: 'get-desktop-app',
-      label: (
-        <a href={downloadUrl} rel="noopener noreferrer" target="_blank">
-          {t('getDesktopApp')}
-        </a>
-      ),
-    },
   ];
 
   const helps: MenuProps['items'] = [
@@ -115,16 +102,24 @@ export const useMenu = () => {
         </a>
       ),
     },
-  ].filter(Boolean) as ItemType[];
+  ].filter(Boolean) as MenuProps['items'];
+
+  const getApp: MenuProps['items'] = [
+    {
+      icon: <Icon icon={Download} />,
+      key: 'get-app',
+      label: t('getApp'),
+      onClick: () => navigate('/apps', { escape: true }),
+    },
+  ];
 
   const mainItems = [
     {
-      type: 'divider',
+      type: 'divider' as const,
     },
 
     ...(isLogin ? settings : []),
     ...businessMenuItems,
-    ...(!isDesktop ? [{ type: 'divider' as const }, ...getDesktopApp] : []),
     ...(userPanel.showDataImporter && isLogin
       ? [
           {
@@ -138,6 +133,7 @@ export const useMenu = () => {
         ]
       : []),
     ...(!hideDocs ? helps : []),
+    ...getApp,
   ]
     .filter(Boolean)
     // Remove consecutive dividers to prevent double divider lines
@@ -153,9 +149,6 @@ export const useMenu = () => {
           icon: <Icon icon={LogOut} />,
           key: 'logout',
           label: <span>{t('signout', { ns: 'auth' })}</span>,
-        },
-        {
-          type: 'divider',
         },
       ]
     : [];

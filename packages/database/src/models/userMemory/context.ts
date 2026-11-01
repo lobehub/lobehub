@@ -1,8 +1,9 @@
+import type { UserMemoryContext, UserMemoryContextInsert } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
-import type { NewUserMemoryContext, UserMemoryContext } from '../../schemas';
 import { userMemories, userMemoriesContexts } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildUserMemoryWhere } from './where';
 
 export class UserMemoryContextModel {
   private userId: string;
@@ -13,7 +14,11 @@ export class UserMemoryContextModel {
     this.db = db;
   }
 
-  create = async (params: Omit<NewUserMemoryContext, 'userId'>) => {
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
+  }
+
+  create = async (params: Omit<UserMemoryContextInsert, 'userId'>) => {
     const [result] = await this.db
       .insert(userMemoriesContexts)
       .values({ ...params, userId: this.userId })
@@ -25,7 +30,7 @@ export class UserMemoryContextModel {
   delete = async (id: string) => {
     return this.db.transaction(async (tx) => {
       const context = await tx.query.userMemoriesContexts.findFirst({
-        where: and(eq(userMemoriesContexts.id, id), eq(userMemoriesContexts.userId, this.userId)),
+        where: and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)),
       });
 
       if (!context) {
@@ -37,38 +42,38 @@ export class UserMemoryContextModel {
         ? (context.userMemoryIds as string[])
         : [];
 
+      // Delete the authorized child while its live-parent guard still matches.
+      await tx
+        .delete(userMemoriesContexts)
+        .where(and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)));
+
       if (memoryIds.length > 0) {
         for (const memoryId of memoryIds) {
           await tx
             .delete(userMemories)
-            .where(and(eq(userMemories.id, memoryId), eq(userMemories.userId, this.userId)));
+            .where(and(eq(userMemories.id, memoryId), this.memoryWhere(userMemories)));
         }
       }
-
-      // Delete the context entry
-      await tx
-        .delete(userMemoriesContexts)
-        .where(and(eq(userMemoriesContexts.id, id), eq(userMemoriesContexts.userId, this.userId)));
 
       return { success: true };
     });
   };
 
   deleteAll = async () => {
-    return this.db.delete(userMemoriesContexts).where(eq(userMemoriesContexts.userId, this.userId));
+    return this.db.delete(userMemoriesContexts).where(this.memoryWhere(userMemoriesContexts));
   };
 
   query = async (limit = 50) => {
     return this.db.query.userMemoriesContexts.findMany({
       limit,
       orderBy: [desc(userMemoriesContexts.createdAt)],
-      where: eq(userMemoriesContexts.userId, this.userId),
+      where: this.memoryWhere(userMemoriesContexts),
     });
   };
 
   findById = async (id: string) => {
     return this.db.query.userMemoriesContexts.findFirst({
-      where: and(eq(userMemoriesContexts.id, id), eq(userMemoriesContexts.userId, this.userId)),
+      where: and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)),
     });
   };
 
@@ -76,6 +81,6 @@ export class UserMemoryContextModel {
     return this.db
       .update(userMemoriesContexts)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(userMemoriesContexts.id, id), eq(userMemoriesContexts.userId, this.userId)));
+      .where(and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)));
   };
 }

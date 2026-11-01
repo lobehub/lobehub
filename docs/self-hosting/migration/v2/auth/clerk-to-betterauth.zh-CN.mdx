@@ -220,7 +220,7 @@ CLERK_TO_BETTERAUTH_DRY_RUN=1
 
 ```bash
 # 运行导出脚本（会根据 CLERK_TO_BETTERAUTH_MODE 自动选择密钥和输出路径）
-npx tsx scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
+bun run scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
 ```
 
 这将自动创建 `scripts/clerk-to-betterauth/test/clerk_users.json`，包含额外的用户数据。
@@ -229,7 +229,7 @@ npx tsx scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
 
 ```bash
 # 运行迁移（CLERK_TO_BETTERAUTH_DRY_RUN=1，只打印日志不修改数据库）
-npx tsx scripts/clerk-to-betterauth/index.ts
+bun run scripts/clerk-to-betterauth/index.ts
 ```
 
 检查输出日志，确认无异常后继续下一步。
@@ -240,10 +240,10 @@ npx tsx scripts/clerk-to-betterauth/index.ts
 
 ```bash
 # 执行迁移
-npx tsx scripts/clerk-to-betterauth/index.ts
+bun run scripts/clerk-to-betterauth/index.ts
 
 # 验证迁移结果
-npx tsx scripts/clerk-to-betterauth/verify.ts
+bun run scripts/clerk-to-betterauth/verify.ts
 ```
 
 验证测试环境迁移结果无误后，继续下一步。
@@ -258,10 +258,10 @@ npx tsx scripts/clerk-to-betterauth/verify.ts
 
 ```bash
 # 导出生产环境用户数据
-npx tsx scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
+bun run scripts/clerk-to-betterauth/export-clerk-users-with-api.ts
 
 # 运行迁移（dry-run 模式验证）
-npx tsx scripts/clerk-to-betterauth/index.ts
+bun run scripts/clerk-to-betterauth/index.ts
 ```
 
 检查输出日志，确认无异常后继续下一步。
@@ -272,10 +272,10 @@ npx tsx scripts/clerk-to-betterauth/index.ts
 
 ```bash
 # 执行迁移
-npx tsx scripts/clerk-to-betterauth/index.ts
+bun run scripts/clerk-to-betterauth/index.ts
 
 # 验证迁移结果
-npx tsx scripts/clerk-to-betterauth/verify.ts
+bun run scripts/clerk-to-betterauth/verify.ts
 ```
 
 ### 步骤 7：配置 Better Auth 并重新部署

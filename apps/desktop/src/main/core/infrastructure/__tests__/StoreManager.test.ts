@@ -18,7 +18,9 @@ const { mockStoreInstance, mockMakeSureDirExist, MockStore } = vi.hoisted(() => 
     set: vi.fn(),
   };
 
-  const MockStore = vi.fn().mockImplementation(() => mockStoreInstance);
+  const MockStore = vi.fn(function () {
+    return mockStoreInstance;
+  });
 
   return {
     MockStore,
@@ -30,16 +32,6 @@ const { mockStoreInstance, mockMakeSureDirExist, MockStore } = vi.hoisted(() => 
 // Mock electron-store
 vi.mock('electron-store', () => ({
   default: MockStore,
-}));
-
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
 }));
 
 // Mock file-system utils

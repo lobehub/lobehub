@@ -33,7 +33,9 @@ beforeEach(() => {
     src: '',
   };
 
-  mockImage = vi.fn().mockImplementation(() => mockImageInstance);
+  mockImage = vi.fn(function () {
+    return mockImageInstance;
+  });
   vi.stubGlobal('Image', mockImage);
 
   // Mock URL methods using vi.spyOn (preserves other URL functionality)
@@ -49,7 +51,7 @@ describe('getImageDimensions', () => {
     loadHandler?.();
     const result = await resultPromise;
 
-    expect(result).toEqual({ height: 600, width: 800 });
+    expect(result).toEqual({ height: 600, ratio: 1.3333, width: 800 });
     expect(mockImage).toHaveBeenCalledTimes(1);
     expect(mockCreateObjectURL).toHaveBeenCalledWith(imageFile);
     expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
@@ -63,7 +65,7 @@ describe('getImageDimensions', () => {
     loadHandler?.();
     const result = await resultPromise;
 
-    expect(result).toEqual({ height: 600, width: 800 });
+    expect(result).toEqual({ height: 600, ratio: 1.3333, width: 800 });
     expect(mockImage).toHaveBeenCalledTimes(1);
     // Data URI should not use createObjectURL
     expect(mockCreateObjectURL).not.toHaveBeenCalled();

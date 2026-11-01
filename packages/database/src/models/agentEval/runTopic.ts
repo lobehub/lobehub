@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, lt, or } from 'drizzle-orm';
 
 import {
   agentEvalRuns,
@@ -9,30 +9,40 @@ import {
   topics,
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export class AgentEvalRunTopicModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentEvalRunTopics);
 
   /**
    * Batch create run-topic associations
    */
   batchCreate = async (items: Omit<NewAgentEvalRunTopic, 'userId'>[]) => {
     if (items.length === 0) return [];
-    const withUserId = items.map((item) => ({ ...item, userId: this.userId }));
+    const withUserId = items.map((item) => ({
+      ...item,
+      userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
+    }));
     return this.db.insert(agentEvalRunTopics).values(withUserId).returning();
   };
 
   /**
    * Find all topics for a run (with TestCase and Topic details)
    */
-  findByRunId = async (runId: string) => {
-    const rows = await this.db
+  findByRunId = async (runId: string, pagination?: { limit?: number; offset?: number }) => {
+    const query = this.db
       .select({
         createdAt: agentEvalRunTopics.createdAt,
         evalResult: agentEvalRunTopics.evalResult,
@@ -48,10 +58,30 @@ export class AgentEvalRunTopicModel {
       .from(agentEvalRunTopics)
       .leftJoin(agentEvalTestCases, eq(agentEvalRunTopics.testCaseId, agentEvalTestCases.id))
       .leftJoin(topics, eq(agentEvalRunTopics.topicId, topics.id))
-      .where(and(eq(agentEvalRunTopics.runId, runId), eq(agentEvalRunTopics.userId, this.userId)))
-      .orderBy(asc(agentEvalTestCases.sortOrder));
+      .where(and(eq(agentEvalRunTopics.runId, runId), this.ownership()))
+      .orderBy(asc(agentEvalTestCases.sortOrder), asc(agentEvalRunTopics.topicId))
+      .$dynamic();
 
-    return rows;
+    if (pagination?.limit !== undefined) {
+      query.limit(pagination.limit);
+    }
+
+    if (pagination?.offset !== undefined) {
+      query.offset(pagination.offset);
+    }
+
+    return query;
+  };
+
+  /**
+   * Count topics for a run
+   */
+  countByRunId = async (runId: string) => {
+    const result = await this.db
+      .select({ value: count() })
+      .from(agentEvalRunTopics)
+      .where(and(eq(agentEvalRunTopics.runId, runId), this.ownership()));
+    return Number(result[0]?.value) || 0;
   };
 
   /**
@@ -60,7 +90,7 @@ export class AgentEvalRunTopicModel {
   deleteByRunId = async (runId: string) => {
     return this.db
       .delete(agentEvalRunTopics)
-      .where(and(eq(agentEvalRunTopics.runId, runId), eq(agentEvalRunTopics.userId, this.userId)));
+      .where(and(eq(agentEvalRunTopics.runId, runId), this.ownership()));
   };
 
   /**
@@ -82,12 +112,7 @@ export class AgentEvalRunTopicModel {
       .from(agentEvalRunTopics)
       .leftJoin(agentEvalRuns, eq(agentEvalRunTopics.runId, agentEvalRuns.id))
       .leftJoin(topics, eq(agentEvalRunTopics.topicId, topics.id))
-      .where(
-        and(
-          eq(agentEvalRunTopics.testCaseId, testCaseId),
-          eq(agentEvalRunTopics.userId, this.userId),
-        ),
-      )
+      .where(and(eq(agentEvalRunTopics.testCaseId, testCaseId), this.ownership()))
       .orderBy(desc(agentEvalRunTopics.createdAt));
 
     return rows;
@@ -117,7 +142,7 @@ export class AgentEvalRunTopicModel {
         and(
           eq(agentEvalRunTopics.runId, runId),
           eq(agentEvalRunTopics.testCaseId, testCaseId),
-          eq(agentEvalRunTopics.userId, this.userId),
+          this.ownership(),
         ),
       )
       .limit(1);
@@ -136,7 +161,7 @@ export class AgentEvalRunTopicModel {
       .set({ status: 'error', evalResult: { error: 'Aborted' } })
       .where(
         and(
-          eq(agentEvalRunTopics.userId, this.userId),
+          this.ownership(),
           eq(agentEvalRunTopics.runId, runId),
           or(eq(agentEvalRunTopics.status, 'pending'), eq(agentEvalRunTopics.status, 'running')),
         ),
@@ -151,7 +176,7 @@ export class AgentEvalRunTopicModel {
       .set({ status: 'timeout' })
       .where(
         and(
-          eq(agentEvalRunTopics.userId, this.userId),
+          this.ownership(),
           eq(agentEvalRunTopics.runId, runId),
           eq(agentEvalRunTopics.status, 'running'),
           lt(agentEvalRunTopics.createdAt, deadline),
@@ -165,7 +190,7 @@ export class AgentEvalRunTopicModel {
       .delete(agentEvalRunTopics)
       .where(
         and(
-          eq(agentEvalRunTopics.userId, this.userId),
+          this.ownership(),
           eq(agentEvalRunTopics.runId, runId),
           eq(agentEvalRunTopics.testCaseId, testCaseId),
         ),
@@ -181,7 +206,7 @@ export class AgentEvalRunTopicModel {
       .delete(agentEvalRunTopics)
       .where(
         and(
-          eq(agentEvalRunTopics.userId, this.userId),
+          this.ownership(),
           eq(agentEvalRunTopics.runId, runId),
           or(eq(agentEvalRunTopics.status, 'error'), eq(agentEvalRunTopics.status, 'timeout')),
         ),
@@ -205,7 +230,7 @@ export class AgentEvalRunTopicModel {
       .set(value)
       .where(
         and(
-          eq(agentEvalRunTopics.userId, this.userId),
+          this.ownership(),
           eq(agentEvalRunTopics.runId, runId),
           eq(agentEvalRunTopics.topicId, topicId),
         ),

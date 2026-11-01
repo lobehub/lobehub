@@ -1,18 +1,13 @@
-import React, { memo } from 'react';
+import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
-import { NavPanelPortal } from '@/features/NavPanel';
-import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import Content from './Content';
 
-import Header from './Header';
-
-const Sidebar = memo(() => {
+const Sidebar = () => {
   return (
     <NavPanelPortal navKey="discover">
-      <SideBarLayout header={<Header />} />
+      <Content />
     </NavPanelPortal>
   );
-});
-
-Sidebar.displayName = 'DisocverSidebar';
+};
 
 export default Sidebar;

@@ -1,8 +1,7 @@
 'use client';
 
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
-import { Checkbox, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Checkbox, createStaticStyles, cssVar, cx, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -77,6 +76,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   listContainer: css`
     overflow-x: hidden;
+
+    /* Blockify the inline-flex Base UI Checkbox labels — without this the todo
+       rows flow inline and wrap several per line. */
+    display: flex;
+    flex-direction: column;
 
     margin-block-start: 8px;
     padding-block: 4px;

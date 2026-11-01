@@ -29,9 +29,12 @@ const OllamaDesktopSetupGuide = memo<{ id?: string }>(({ id }) => {
       }
       desc={
         <Trans
-          components={[<span key="0" />, <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />]}
           i18nKey={'OllamaSetupGuide.install.description'}
           ns={'components'}
+          components={[
+            <span key="0" />,
+            <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />,
+          ]}
         />
       }
     />

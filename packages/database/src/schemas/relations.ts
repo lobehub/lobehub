@@ -13,13 +13,16 @@ import {
 import { agentShares } from './agentShare';
 import { asyncTasks } from './asyncTask';
 import { chatGroups, chatGroupsAgents } from './chatGroup';
+import { documentCommentMentions, documentComments } from './documentComment';
 import { documentHistories } from './documentHistory';
+import { documentLikes } from './documentLike';
 import { documents, files, knowledgeBases } from './file';
 import { generationBatches, generations, generationTopics } from './generation';
 import { messageGroups, messages, messagesFiles, messageTranslates } from './message';
 import { chunks, documentChunks, unstructuredChunks } from './rag';
 import { sessionGroups, sessions } from './session';
 import { threads, topicDocuments, topics } from './topic';
+import { topicCommentMentions, topicComments } from './topicComment';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -63,9 +66,9 @@ export const filesToSessions = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.sessionId] }),
     userIdIdx: index('files_to_sessions_user_id_idx').on(t.userId),
+    workspaceIdIdx: index('files_to_sessions_workspace_id_idx').on(t.workspaceId),
     fileIdIdx: index('files_to_sessions_file_id_idx').on(t.fileId),
     sessionIdIdx: index('files_to_sessions_session_id_idx').on(t.sessionId),
-    workspaceIdIdx: index('files_to_sessions_workspace_id_idx').on(t.workspaceId),
   }),
 );
 
@@ -83,9 +86,9 @@ export const fileChunks = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.chunkId] }),
     userIdIdx: index('file_chunks_user_id_idx').on(t.userId),
+    workspaceIdIdx: index('file_chunks_workspace_id_idx').on(t.workspaceId),
     fileIdIdx: index('file_chunks_file_id_idx').on(t.fileId),
     chunkIdIdx: index('file_chunks_chunk_id_idx').on(t.chunkId),
-    workspaceIdIdx: index('file_chunks_workspace_id_idx').on(t.workspaceId),
   }),
 );
 export type NewFileChunkItem = typeof fileChunks.$inferInsert;
@@ -96,6 +99,69 @@ export const topicRelations = relations(topics, ({ one, many }) => ({
     references: [sessions.id],
   }),
   documents: many(topicDocuments),
+  comments: many(topicComments),
+}));
+
+export const documentCommentsRelations = relations(documentComments, ({ many, one }) => ({
+  author: one(users, {
+    fields: [documentComments.authorUserId],
+    references: [users.id],
+  }),
+  document: one(documents, {
+    fields: [documentComments.documentId],
+    references: [documents.id],
+  }),
+  mentions: many(documentCommentMentions),
+  workspace: one(workspaces, {
+    fields: [documentComments.workspaceId],
+    references: [workspaces.id],
+  }),
+}));
+
+export const documentCommentMentionsRelations = relations(documentCommentMentions, ({ one }) => ({
+  comment: one(documentComments, {
+    fields: [documentCommentMentions.commentId],
+    references: [documentComments.id],
+  }),
+  mentionedUser: one(users, {
+    fields: [documentCommentMentions.mentionedUserId],
+    references: [users.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [documentCommentMentions.workspaceId],
+    references: [workspaces.id],
+  }),
+}));
+
+export const topicCommentsRelations = relations(topicComments, ({ one, many }) => ({
+  topic: one(topics, {
+    fields: [topicComments.topicId],
+    references: [topics.id],
+  }),
+  message: one(messages, {
+    fields: [topicComments.messageId],
+    references: [messages.id],
+  }),
+  author: one(users, {
+    fields: [topicComments.authorUserId],
+    references: [users.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [topicComments.workspaceId],
+    references: [workspaces.id],
+  }),
+  mentions: many(topicCommentMentions),
+}));
+
+export const topicCommentMentionsRelations = relations(topicCommentMentions, ({ one }) => ({
+  comment: one(topicComments, {
+    fields: [topicCommentMentions.commentId],
+    references: [topicComments.id],
+  }),
+  mentionedUser: one(users, {
+    fields: [topicCommentMentions.mentionedUserId],
+    references: [users.id],
+  }),
 }));
 
 export const threadsRelations = relations(threads, ({ one }) => ({
@@ -256,7 +322,24 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
   }),
   topics: many(topicDocuments),
   chunks: many(documentChunks),
+  comments: many(documentComments),
+  likes: many(documentLikes),
   histories: many(documentHistories),
+}));
+
+export const documentLikesRelations = relations(documentLikes, ({ one }) => ({
+  document: one(documents, {
+    fields: [documentLikes.documentId],
+    references: [documents.id],
+  }),
+  user: one(users, {
+    fields: [documentLikes.userId],
+    references: [users.id],
+  }),
+  workspace: one(workspaces, {
+    fields: [documentLikes.workspaceId],
+    references: [workspaces.id],
+  }),
 }));
 
 export const documentHistoriesRelations = relations(documentHistories, ({ one }) => ({

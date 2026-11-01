@@ -1,19 +1,13 @@
-import React, { memo } from 'react';
+import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
-import { NavPanelPortal } from '@/features/NavPanel';
-import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import GroupSidebarContent from './Content';
 
-import Body from './Body';
-import Header from './Header';
-
-const Sidebar = memo(() => {
+const Sidebar = () => {
   return (
     <NavPanelPortal navKey="group">
-      <SideBarLayout body={<Body />} header={<Header />} />
+      <GroupSidebarContent />
     </NavPanelPortal>
   );
-});
-
-Sidebar.displayName = 'ChatSidebar';
+};
 
 export default Sidebar;

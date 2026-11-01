@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { messages, messageTranslates } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -16,8 +16,8 @@ import { ChatService } from './chat.service';
 type MessageTranslateItem = typeof messageTranslates.$inferSelect;
 
 export class MessageTranslateService extends BaseService {
-  constructor(db: LobeChatDatabase, userId: string | null) {
-    super(db, userId);
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+    super(db, userId, workspaceId);
   }
 
   /**
@@ -32,7 +32,10 @@ export class MessageTranslateService extends BaseService {
 
     try {
       const result = await this.db.query.messageTranslates.findFirst({
-        where: eq(messageTranslates.id, messageId),
+        where: and(
+          eq(messageTranslates.id, messageId),
+          this.buildWorkspaceWhere(messageTranslates),
+        ),
       });
 
       if (!result) {
@@ -74,7 +77,7 @@ export class MessageTranslateService extends BaseService {
     try {
       // First fetch the original message content and sessionId
       const messageInfo = await this.db.query.messages.findFirst({
-        where: eq(messages.id, translateData.messageId),
+        where: and(eq(messages.id, translateData.messageId), this.buildWorkspaceWhere(messages)),
       });
 
       if (!messageInfo) {
@@ -84,7 +87,7 @@ export class MessageTranslateService extends BaseService {
       this.log('info', '原始消息内容', { originalMessage: messageInfo.content });
 
       // Use ChatService for translation, passing sessionId to use the correct model configuration
-      const chatService = new ChatService(this.db, this.userId);
+      const chatService = new ChatService(this.db, this.userId, this.workspaceId);
       const translatedContent = await chatService.translate({
         ...translateData,
         sessionId: messageInfo.sessionId,
@@ -116,7 +119,7 @@ export class MessageTranslateService extends BaseService {
     try {
       // Check if message exists
       const messageInfo = await this.db.query.messages.findFirst({
-        where: eq(messages.id, data.messageId),
+        where: and(eq(messages.id, data.messageId), this.buildWorkspaceWhere(messages)),
       });
       if (!messageInfo) {
         throw this.createCommonError('未找到要更新翻译信息的消息');
@@ -130,7 +133,7 @@ export class MessageTranslateService extends BaseService {
           from: data.from,
           id: data.messageId,
           to: data.to,
-          userId: this.userId,
+          ...this.buildWorkspacePayload({}),
         })
         .onConflictDoUpdate({
           set: {
@@ -168,14 +171,21 @@ export class MessageTranslateService extends BaseService {
     try {
       // Check if the translation message exists
       const originalTranslation = await this.db.query.messageTranslates.findFirst({
-        where: eq(messageTranslates.id, messageId),
+        where: and(
+          eq(messageTranslates.id, messageId),
+          this.buildWorkspaceWhere(messageTranslates),
+        ),
       });
 
       if (!originalTranslation) {
         throw this.createNotFoundError('翻译消息不存在');
       }
 
-      await this.db.delete(messageTranslates).where(eq(messageTranslates.id, messageId));
+      await this.db
+        .delete(messageTranslates)
+        .where(
+          and(eq(messageTranslates.id, messageId), this.buildWorkspaceWhere(messageTranslates)),
+        );
 
       return { deleted: true, messageId };
     } catch (error) {

@@ -14,6 +14,7 @@ import AddButton from './AddButton';
 const Header = memo(() => {
   const { t } = useTranslation('common');
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
+
   return (
     <>
       <SideBarHeaderLayout

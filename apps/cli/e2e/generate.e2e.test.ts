@@ -91,14 +91,6 @@ describe('lh generate - E2E', () => {
     });
   });
 
-  // ── tts ───────────────────────────────────────────────
-
-  describe('tts', () => {
-    it('should reject invalid backend', () => {
-      expect(() => run('gen tts "hello" --backend invalid')).toThrow();
-    });
-  });
-
   // ── asr ───────────────────────────────────────────────
 
   describe('asr', () => {

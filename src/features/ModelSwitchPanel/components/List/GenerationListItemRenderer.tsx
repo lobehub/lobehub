@@ -2,6 +2,8 @@
 
 import {
   ActionIcon,
+  cssVar,
+  cx,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -11,20 +13,21 @@ import {
   Icon,
   menuSharedStyles,
 } from '@lobehub/ui';
-import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { ProviderItemRender } from '@/components/ModelSelect';
 import type { PricingMode } from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import ModelDetailPanel from '@/features/ModelSwitchPanel/components/ModelDetailPanel';
 import { styles as modelSwitchPanelStyles } from '@/features/ModelSwitchPanel/styles';
 import type { ListItem } from '@/features/ModelSwitchPanel/types';
 import { menuKey } from '@/features/ModelSwitchPanel/utils';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import type { EnabledProviderWithModels } from '@/types/index';
 
 import GenerationMultipleProvidersItem from './GenerationMultipleProvidersItem';
@@ -42,7 +45,8 @@ export interface GenerationListItemRendererProps {
 const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
   ({ item, activeKey, onClose, onModelChange, enabledList, ModelItemComponent, pricingMode }) => {
     const { t } = useTranslation('components');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
+    const activeSlug = useActiveWorkspaceSlug();
     const [detailOpen, setDetailOpen] = useState(false);
 
     switch (item.type) {
@@ -89,7 +93,7 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
                 e.stopPropagation();
                 const url = urlJoin('/settings/provider', item.provider.id || 'all');
                 if (e.ctrlKey || e.metaKey) {
-                  window.open(url, '_blank');
+                  window.open(buildWorkspaceAwarePath(url, activeSlug), '_blank');
                 } else {
                   navigate(url);
                 }
@@ -139,7 +143,6 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
                 <ModelItemComponent
                   {...item.model}
                   providerId={item.provider.id}
-                  showBadge={false}
                   showPopover={false}
                 />
               </DropdownMenuSubmenuTrigger>
@@ -182,7 +185,6 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
                 <ModelItemComponent
                   {...item.data.model}
                   providerId={singleProvider.id}
-                  showBadge={false}
                   showPopover={false}
                 />
               </DropdownMenuSubmenuTrigger>

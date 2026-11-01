@@ -51,3 +51,8 @@ export const debugResponse = (response: any) => {
   console.log(`\n[no stream response] ${getTime()}\n`);
   console.log(JSON.stringify(response) + '\n');
 };
+
+export const debugPayload = (payload: any) => {
+  console.log('[requestPayload]');
+  console.log(JSON.stringify(payload), '\n');
+};

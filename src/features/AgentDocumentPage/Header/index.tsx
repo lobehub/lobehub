@@ -1,0 +1,119 @@
+'use client';
+
+import { agentDisplayName } from '@lobechat/types';
+import { ActionIcon, cssVar, cx, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
+import { MoreHorizontal } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import ShareButton from '@/business/client/features/PageShare/ShareButton';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { AutoSaveHint } from '@/features/EditorCanvas';
+import NavHeader from '@/features/NavHeader';
+import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+import { oneLineEllipsis } from '@/styles';
+
+import { useMenu } from './useMenu';
+
+interface HeaderProps {
+  agentDocumentId?: string;
+  agentId: string;
+  documentId: string;
+  /** Hide editor-only actions for original uploaded files. */
+  fileBacked?: boolean;
+  itemError?: unknown;
+  onBack: () => void;
+  onDeleted: () => void;
+  onToggleTopicPanel?: () => void;
+  title?: string;
+  /** Topic panel visibility; omit while the page has no topic panel. */
+  topicPanelExpand?: boolean;
+  updatedAt?: Date | string | null;
+}
+
+const Header = memo<HeaderProps>(
+  ({
+    agentId,
+    agentDocumentId,
+    documentId,
+    fileBacked,
+    itemError,
+    onBack,
+    onDeleted,
+    title,
+    topicPanelExpand,
+    onToggleTopicPanel,
+    updatedAt,
+  }) => {
+    const { t } = useTranslation(['file', 'chat']);
+    const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
+    const showTitleError = !!itemError && !title;
+    const resolvedTitle = showTitleError
+      ? t('workingPanel.resources.error', { ns: 'chat' })
+      : title || t('pageEditor.titlePlaceholder');
+    const { menuItems } = useMenu({
+      agentDocumentId,
+      agentId,
+      documentId,
+      onDeleted,
+      fileBacked,
+      title,
+      updatedAt,
+    });
+
+    return (
+      <NavHeader
+        left={
+          <Flexbox horizontal align={'center'} gap={4} style={{ minWidth: 0 }}>
+            {/* Breadcrumb: agent → document. The agent label returns to chat. */}
+            <Flexbox
+              horizontal
+              align={'center'}
+              style={{ cursor: 'pointer', flexShrink: 0 }}
+              onClick={onBack}
+            >
+              <Text style={{ color: cssVar.colorTextSecondary }}>
+                {agentDisplayName(meta, t('untitledAgent', { ns: 'chat' }))}
+              </Text>
+            </Flexbox>
+            <Text style={{ color: cssVar.colorTextQuaternary, flexShrink: 0 }}>/</Text>
+            <Text
+              className={cx(oneLineEllipsis)}
+              style={{ color: showTitleError ? cssVar.colorError : undefined, minWidth: 0 }}
+              weight={500}
+            >
+              {resolvedTitle}
+            </Text>
+            <DropdownMenu
+              iconSpaceMode={'group'}
+              items={menuItems}
+              placement={'bottomLeft'}
+              popupProps={{ style: { minWidth: 200 } }}
+            >
+              <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+            </DropdownMenu>
+          </Flexbox>
+        }
+        right={
+          <Flexbox horizontal align={'center'} gap={4}>
+            {documentId && !fileBacked && <AutoSaveHint documentId={documentId} />}
+            {documentId && !fileBacked && <ShareButton documentId={documentId} />}
+            {topicPanelExpand !== undefined && (
+              <ToggleRightPanelButton
+                hideWhenExpanded
+                expand={topicPanelExpand}
+                onToggle={onToggleTopicPanel}
+              />
+            )}
+          </Flexbox>
+        }
+      />
+    );
+  },
+);
+
+Header.displayName = 'AgentDocumentPageHeader';
+
+export default Header;

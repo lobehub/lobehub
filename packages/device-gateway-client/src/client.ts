@@ -2,8 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import os from 'node:os';
 
+import type { DeviceMetricSample } from '@lobechat/types';
 import WebSocket from 'ws';
 
+import { toDeviceGatewayWebSocketUrl } from './endpoint';
+import { DeviceTunnelHost } from './tunnel';
 import type {
   AgentRunAckMessage,
   AgentRunRequestMessage,
@@ -12,6 +15,8 @@ import type {
   GatewayClientEvents,
   MessageApiRequestMessage,
   MessageApiResponseMessage,
+  RpcRequestMessage,
+  RpcResponseMessage,
   ServerMessage,
   SystemInfoRequestMessage,
   SystemInfoResponseMessage,
@@ -26,6 +31,21 @@ const HEARTBEAT_INTERVAL = 30_000; // 30s
 const INITIAL_RECONNECT_DELAY = 1000; // 1s
 const MAX_RECONNECT_DELAY = 30_000; // 30s
 const MAX_MISSED_HEARTBEATS = 3; // Force reconnect after 3 missed acks
+/**
+ * Budget for the whole pre-connected window: TCP + TLS + HTTP upgrade AND the
+ * `auth_success` reply. Neither phase raises an event of its own when it simply
+ * hangs, so without a deadline the client waits on the OS TCP timeout — observed
+ * stalling a reconnect for 15+ minutes while the device sat offline.
+ */
+const CONNECT_TIMEOUT = 15_000; // 15s
+const METRICS_ACK_TIMEOUT_MS = 15_000;
+/**
+ * Close reason the gateway sends when a newer socket with the same
+ * `connectionId` takes over. `connectionId` is persisted per install, so this
+ * is how a second process of the same install (two `lh connect` sharing one
+ * home) shows up.
+ */
+const REPLACED_CLOSE_REASON = 'Replaced by new connection';
 
 // ─── Logger Interface ───
 
@@ -60,46 +80,95 @@ export interface GatewayClientOptions {
    * replace its own previous socket should pass a persisted value.
    */
   connectionId?: string;
+  /**
+   * How long to wait for a connection to become fully authenticated before
+   * abandoning it and retrying (default: 15s).
+   */
+  connectTimeoutMs?: number;
   deviceId?: string;
   gatewayUrl?: string;
   logger?: GatewayClientLogger;
   serverUrl?: string;
   token: string;
   tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
+  /**
+   * Serve HTTP tunnel requests: the gateway relays a browser request to a
+   * loopback port on this machine (`http://127.0.0.1:<port>/…`) so a dev server
+   * running here can be opened from the cloud UI. Default: enabled. Callers
+   * that must never expose local ports can turn it off; the gateway then gets a
+   * `TUNNEL_DISABLED` ack instead of silence.
+   */
+  tunnel?: boolean;
+  userAgent?: string;
   userId?: string;
+  /**
+   * When set, the connection enrolls as a WORKSPACE-owned device: the gateway
+   * routes it to the `workspace:<id>` principal (reachable by all members)
+   * instead of the signer's personal one. The connect token must carry a
+   * matching `workspace_id` claim or the gateway rejects the socket.
+   */
+  workspaceId?: string;
 }
 
 export class GatewayClient extends EventEmitter {
   private ws: WebSocket | null = null;
+  private tunnelHost: DeviceTunnelHost | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectDelay = INITIAL_RECONNECT_DELAY;
   private missedHeartbeats = 0;
   private status: ConnectionStatus = 'disconnected';
+  private pendingMetricAcks = new Map<
+    string,
+    { reject: (error: Error) => void; resolve: () => void }
+  >();
   private intentionalDisconnect = false;
+  /**
+   * When each socket abandoned mid-handshake was abandoned. Only such a socket
+   * can reach the gateway after its successor and knock it off with the
+   * takeover reason: an opened socket was registered before the successor
+   * existed. Each can do that at most once, and only within `connectTimeoutMs`
+   * (the handshake budget), so a takeover consumes one live entry and anything
+   * beyond them is another client.
+   */
+  private inFlightAbandons: number[] = [];
   private deviceId: string;
   private connectionId: string;
   private channel?: string;
   private gatewayUrl: string;
   private token: string;
   private tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
+  private userAgent?: string;
   private userId?: string;
+  private workspaceId?: string;
   private serverUrl?: string;
   private logger: GatewayClientLogger;
   private autoReconnect: boolean;
+  private connectTimeoutMs: number;
 
   constructor(options: GatewayClientOptions) {
     super();
     this.token = options.token;
     this.tokenType = options.tokenType;
+    this.userAgent = options.userAgent;
     this.gatewayUrl = options.gatewayUrl || DEFAULT_GATEWAY_URL;
     this.deviceId = options.deviceId || randomUUID();
     this.connectionId = options.connectionId || randomUUID();
     this.channel = options.channel;
     this.serverUrl = options.serverUrl;
     this.userId = options.userId;
+    this.workspaceId = options.workspaceId;
     this.logger = options.logger || noopLogger;
     this.autoReconnect = options.autoReconnect ?? true;
+    this.connectTimeoutMs = options.connectTimeoutMs ?? CONNECT_TIMEOUT;
+    if (options.tunnel !== false) {
+      this.tunnelHost = new DeviceTunnelHost({
+        backlog: () => this.ws?.bufferedAmount ?? 0,
+        logger: this.logger,
+        send: (frame) => this.sendMessage(frame),
+      });
+    }
   }
 
   // ─── Public API ───
@@ -158,6 +227,10 @@ export class GatewayClient extends EventEmitter {
   }
 
   async disconnect(): Promise<void> {
+    // Explicit log so a permanent stop (e.g. the auth_failed path calls
+    // disconnect()) is provable from logs instead of inferred from the
+    // absence of later reconnect lines.
+    this.logger.info('Intentional disconnect; auto-reconnect disabled');
     this.intentionalDisconnect = true;
     this.cleanup();
     this.setStatus('disconnected');
@@ -177,10 +250,47 @@ export class GatewayClient extends EventEmitter {
     });
   }
 
+  /**
+   * Push a batch of health samples to the gateway (its only store) and resolve
+   * once the gateway acks it. Rejects when not connected, when the connection
+   * drops mid-flight, or when no ack arrives in time — the caller keeps the
+   * batch and retries later.
+   */
+  reportMetrics(samples: DeviceMetricSample[]): Promise<void> {
+    if (this.status !== 'connected' || this.ws?.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error('Gateway not connected'));
+    }
+    const batchId = randomUUID();
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingMetricAcks.delete(batchId);
+        reject(new Error('Timed out waiting for device_metrics_ack'));
+      }, METRICS_ACK_TIMEOUT_MS);
+      this.pendingMetricAcks.set(batchId, {
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+        resolve: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+      });
+      this.sendMessage({ batchId, samples, type: 'device_metrics' });
+    });
+  }
+
   sendSystemInfoResponse(response: Omit<SystemInfoResponseMessage, 'type'>): void {
     this.sendMessage({
       ...response,
       type: 'system_info_response',
+    });
+  }
+
+  sendRpcResponse(response: Omit<RpcResponseMessage, 'type'>): void {
+    this.sendMessage({
+      ...response,
+      type: 'rpc_response',
     });
   }
 
@@ -202,7 +312,15 @@ export class GatewayClient extends EventEmitter {
       const wsUrl = this.buildWsUrl();
       this.logger.debug(`Connecting to: ${wsUrl}`);
 
-      const ws = new WebSocket(wsUrl);
+      // `handshakeTimeout` bounds TCP+TLS+upgrade inside `ws` itself, which turns
+      // a black-holed handshake into a normal error/close pair. The watchdog
+      // below is the belt to that suspenders: it also covers the phase `ws`
+      // knows nothing about — an opened socket whose `auth_success` never lands.
+      const wsOptions = {
+        handshakeTimeout: this.connectTimeoutMs,
+        ...(this.userAgent ? { headers: { 'User-Agent': this.userAgent } } : {}),
+      };
+      const ws = new WebSocket(wsUrl, wsOptions);
 
       ws.on('open', this.handleOpen);
       ws.on('message', this.handleMessage);
@@ -210,6 +328,7 @@ export class GatewayClient extends EventEmitter {
       ws.on('error', this.handleError);
 
       this.ws = ws;
+      this.startConnectWatchdog();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       this.logger.error('Failed to create WebSocket:', msg);
@@ -223,8 +342,9 @@ export class GatewayClient extends EventEmitter {
   }
 
   private buildWsUrl(): string {
-    const wsProtocol = this.gatewayUrl.startsWith('https') ? 'wss' : 'ws';
-    const host = this.gatewayUrl.replace(/^https?:\/\//, '');
+    // Keeps a path prefix (`https://host/gw` → `wss://host/gw/ws`) and tolerates
+    // a trailing slash in a hand-entered address.
+    const url = toDeviceGatewayWebSocketUrl(this.gatewayUrl);
     const params = new URLSearchParams({
       connectionId: this.connectionId,
       deviceId: this.deviceId,
@@ -236,18 +356,40 @@ export class GatewayClient extends EventEmitter {
       params.set('channel', this.channel);
     }
 
-    // Service token mode: pass userId in query
-    if (this.userId) {
+    // Workspace device: route to the `workspace:<id>` principal. Otherwise the
+    // personal path passes userId. (The DO re-validates the token's claim, so
+    // the routing param alone grants nothing.)
+    if (this.workspaceId) {
+      params.set('workspaceId', this.workspaceId);
+    } else if (this.userId) {
       params.set('userId', this.userId);
     }
 
-    return `${wsProtocol}://${host}/ws?${params.toString()}`;
+    url.search = params.toString();
+    return url.toString();
+  }
+
+  /**
+   * Best-effort JWT `exp` readout for auth logs. Internal backoff/heartbeat
+   * reconnects reuse `this.token`, so whether the token was already expired
+   * at auth time is the deciding fact when diagnosing auth failures from
+   * logs. Never logs the token itself.
+   */
+  private describeTokenExpiry(): string {
+    try {
+      const payload = JSON.parse(Buffer.from(this.token.split('.')[1], 'base64url').toString());
+      if (typeof payload.exp !== 'number') return 'token exp: none';
+      const expired = Date.now() >= payload.exp * 1000;
+      return `token exp: ${new Date(payload.exp * 1000).toISOString()}${expired ? ' (EXPIRED)' : ''}`;
+    } catch {
+      return 'token exp: unparsable';
+    }
   }
 
   // ─── WebSocket Event Handlers ───
 
   private handleOpen = () => {
-    this.logger.info('WebSocket connected, sending auth...');
+    this.logger.info(`WebSocket connected, sending auth... (${this.describeTokenExpiry()})`);
     this.reconnectDelay = INITIAL_RECONNECT_DELAY;
     this.setStatus('authenticating');
 
@@ -267,6 +409,7 @@ export class GatewayClient extends EventEmitter {
       switch (message.type) {
         case 'auth_success': {
           this.logger.info('Authentication successful');
+          this.clearConnectWatchdog();
           this.setStatus('connected');
           this.startHeartbeat();
           this.emit('connected');
@@ -302,6 +445,11 @@ export class GatewayClient extends EventEmitter {
           break;
         }
 
+        case 'rpc_request': {
+          this.emit('rpc_request', message as RpcRequestMessage);
+          break;
+        }
+
         case 'agent_run_request': {
           this.emit('agent_run_request', message as AgentRunRequestMessage);
           break;
@@ -310,6 +458,31 @@ export class GatewayClient extends EventEmitter {
         case 'auth_expired': {
           this.logger.warn('Received auth_expired from gateway');
           this.emit('auth_expired');
+          break;
+        }
+
+        case 'device_metrics_ack': {
+          const pending = this.pendingMetricAcks.get(message.batchId);
+          this.pendingMetricAcks.delete(message.batchId);
+          pending?.resolve();
+          break;
+        }
+
+        case 'tunnel_open':
+        case 'tunnel_data':
+        case 'tunnel_ack':
+        case 'tunnel_close':
+        case 'tunnel_ws_open':
+        case 'tunnel_ws_message':
+        case 'tunnel_ws_close': {
+          if (this.tunnelHost) this.tunnelHost.handleFrame(message);
+          else if (message.type === 'tunnel_open' || message.type === 'tunnel_ws_open')
+            this.sendMessage({
+              connId: message.connId,
+              error: 'TUNNEL_DISABLED',
+              ok: false,
+              type: message.type === 'tunnel_open' ? 'tunnel_open_ack' : 'tunnel_ws_open_ack',
+            });
           break;
         }
 
@@ -325,7 +498,34 @@ export class GatewayClient extends EventEmitter {
   private handleClose = (code: number, reason: Buffer) => {
     this.logger.info(`WebSocket closed: code=${code} reason=${reason.toString()}`);
     this.stopHeartbeat();
+    // In-flight tunnels can't survive the socket: their frames have nowhere to
+    // go and the browser side is already being failed by the gateway.
+    this.tunnelHost?.closeAll('DEVICE_DISCONNECTED');
+    this.rejectPendingMetricAcks();
+    // `handshakeTimeout` closes the socket on its own, so the watchdog must be
+    // disarmed here or it would fire later and force a SECOND reconnect on top
+    // of the one this close already scheduled.
+    this.clearConnectWatchdog();
     this.ws = null;
+
+    if (
+      !this.intentionalDisconnect &&
+      reason.toString() === REPLACED_CLOSE_REASON &&
+      !this.consumeInFlightAbandon()
+    ) {
+      // Another client holding our connectionId just took over. Reconnecting
+      // would knock it off in turn: the two would trade the connection every
+      // second, and each tool call would land on whichever connected last —
+      // including a getCommandOutput sent to the process that never ran the
+      // command. Newest wins; this one stays down.
+      this.logger.warn(
+        'Connection taken over by another client with the same connection id; not reconnecting',
+      );
+      this.setStatus('disconnected');
+      this.emit('replaced');
+      this.emit('disconnected');
+      return;
+    }
 
     if (!this.intentionalDisconnect && this.autoReconnect) {
       this.setStatus('reconnecting');
@@ -335,6 +535,13 @@ export class GatewayClient extends EventEmitter {
       this.emit('disconnected');
     }
   };
+
+  /** Attribute a takeover to one of our own late sockets, if one can still land. */
+  private consumeInFlightAbandon(): boolean {
+    const now = Date.now();
+    this.inFlightAbandons = this.inFlightAbandons.filter((at) => now - at <= this.connectTimeoutMs);
+    return this.inFlightAbandons.shift() !== undefined;
+  }
 
   private handleError = (error: Error) => {
     this.logger.error('WebSocket error:', error.message);
@@ -349,17 +556,7 @@ export class GatewayClient extends EventEmitter {
     this.heartbeatTimer = setInterval(() => {
       this.missedHeartbeats++;
       if (this.missedHeartbeats > MAX_MISSED_HEARTBEATS) {
-        this.logger.warn(`Missed ${this.missedHeartbeats} heartbeat acks, forcing reconnect`);
-        this.closeWebSocket();
-        // Listeners are detached in closeWebSocket; handleClose won't run — drive reconnect here
-        this.stopHeartbeat();
-        if (this.autoReconnect) {
-          this.setStatus('reconnecting');
-          this.scheduleReconnect();
-        } else {
-          this.setStatus('disconnected');
-          this.emit('disconnected');
-        }
+        this.forceReconnect(`Missed ${this.missedHeartbeats} heartbeat acks, forcing reconnect`);
         return;
       }
       this.sendMessage({ type: 'heartbeat' });
@@ -370,6 +567,45 @@ export class GatewayClient extends EventEmitter {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
+    }
+  }
+
+  // ─── Connect watchdog ───
+
+  private startConnectWatchdog() {
+    this.clearConnectWatchdog();
+    this.connectWatchdogTimer = setTimeout(() => {
+      this.connectWatchdogTimer = null;
+      this.forceReconnect(
+        `No authenticated connection within ${this.connectTimeoutMs}ms (status: ${this.status}), forcing reconnect`,
+      );
+    }, this.connectTimeoutMs);
+  }
+
+  private clearConnectWatchdog() {
+    if (this.connectWatchdogTimer) {
+      clearTimeout(this.connectWatchdogTimer);
+      this.connectWatchdogTimer = null;
+    }
+  }
+
+  /**
+   * Abandon the current socket and drive the retry ourselves. `closeWebSocket`
+   * detaches our listeners, so `handleClose` will NOT run — every forced path
+   * has to schedule the next attempt itself or the client goes quiet for good.
+   */
+  private forceReconnect(reason: string) {
+    this.logger.warn(reason);
+    this.closeWebSocket();
+    this.stopHeartbeat();
+    this.clearConnectWatchdog();
+
+    if (this.autoReconnect) {
+      this.setStatus('reconnecting');
+      this.scheduleReconnect();
+    } else {
+      this.setStatus('disconnected');
+      this.emit('disconnected');
     }
   }
 
@@ -416,11 +652,25 @@ export class GatewayClient extends EventEmitter {
     }
   }
 
+  /** An ack can no longer arrive on this socket; fail the batches so the sampler retries. */
+  private rejectPendingMetricAcks() {
+    for (const pending of this.pendingMetricAcks.values()) {
+      pending.reject(new Error('Gateway connection closed'));
+    }
+    this.pendingMetricAcks.clear();
+  }
+
   private closeWebSocket() {
+    // Every teardown funnels through here — including `forceReconnect`, which
+    // detaches `handleClose` — so tunnels must be released here or a forced
+    // reconnect would leave loopback fetches running and slots consumed.
+    this.tunnelHost?.closeAll('DEVICE_DISCONNECTED');
+    this.rejectPendingMetricAcks();
     if (!this.ws) {
       return;
     }
     const ws = this.ws;
+    if (ws.readyState === WebSocket.CONNECTING) this.inFlightAbandons.push(Date.now());
     const suppressCloseError = (error: Error) => {
       this.logger.debug(`Ignoring WebSocket error during close: ${error.message}`);
     };
@@ -454,6 +704,7 @@ export class GatewayClient extends EventEmitter {
   private cleanup() {
     this.stopHeartbeat();
     this.clearReconnectTimer();
+    this.clearConnectWatchdog();
     this.closeWebSocket();
   }
 }

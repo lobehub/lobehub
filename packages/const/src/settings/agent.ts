@@ -11,7 +11,6 @@ import { DEFAULT_MODEL } from './llm';
 
 export const DEFAUTT_AGENT_TTS_CONFIG: LobeAgentTTSConfig = {
   showAllLocaleVoice: false,
-  sttLocale: 'auto',
   ttsService: 'openai',
   voice: {
     openai: 'alloy',
@@ -29,6 +28,7 @@ export const DEFAULT_AGENT_CHAT_CONFIG: LobeAgentChatConfig = {
   enableContextCompression: true,
   enableFollowUpChips: false,
   enableHistoryCount: false,
+  enableStaleToolResultTrim: true,
   enableStreaming: true,
   historyCount: 20,
   reasoningBudgetToken: 1024,

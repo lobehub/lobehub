@@ -1,3 +1,4 @@
+import type { ChatTopicStatus } from '@lobechat/types';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,20 +9,26 @@ import { useDropdownMenu } from './useDropdownMenu';
 
 interface TopicItemProps {
   active: boolean;
+  agentId?: string;
+  fav?: boolean;
   onClose: () => void;
   onDelete?: (topicId: string) => void;
   onTopicChange: (topicId: string) => void;
+  status?: ChatTopicStatus | null;
   topicId: string;
   topicTitle: string;
 }
 
 const TopicItem = memo<TopicItemProps>(
-  ({ active, onClose, onDelete, onTopicChange, topicId, topicTitle }) => {
+  ({ active, agentId, fav, onClose, onDelete, onTopicChange, status, topicId, topicTitle }) => {
     const { t } = useTranslation('topic');
 
     const dropdownMenu = useDropdownMenu({
+      agentId,
+      fav,
       onClose,
       onDelete,
+      status,
       topicId,
       topicTitle,
     });

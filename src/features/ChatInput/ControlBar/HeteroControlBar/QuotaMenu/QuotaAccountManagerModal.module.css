@@ -1,0 +1,13 @@
+.radioGroup {
+  width: 100%;
+}
+
+/* Targets the RadioGroup's own label / text DOM, which has no className hook. */
+.radioGroup > label {
+  width: 100%;
+}
+
+.radioGroup > label > span:last-child {
+  flex: 1;
+  min-width: 0;
+}

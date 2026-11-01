@@ -1,9 +1,12 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/utils';
 import type OpenAI from 'openai';
 
 import type { OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import { normalizeAnthropicToolSchema } from '../../utils/anthropicToolSchema';
+import { resolveImageMimeTypeFromBase64 } from '../../utils/imageMimeType';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { parseDataUri } from '../../utils/uriParser';
+import { type InlineImageBudgetOptions, inlineImagesWithinBudget } from './inlineImageBudget';
 
 const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([
   'image/jpeg',
@@ -45,9 +48,10 @@ export const buildAnthropicBlock = async (
   Anthropic.ContentBlock | Anthropic.ImageBlockParam | AnthropicVideoBlockParam | undefined
 > => {
   switch (content.type) {
+    case 'redacted_thinking':
     case 'thinking': {
       // just pass-through the content
-      return content as any;
+      return content;
     }
 
     case 'text': {
@@ -327,9 +331,15 @@ export const buildAnthropicMessage = async (
 };
 
 export const buildAnthropicMessages = async (
-  oaiMessages: OpenAIChatMessage[],
-  options: { enabledContextCaching?: boolean } = {},
+  inputMessages: OpenAIChatMessage[],
+  options: {
+    enabledContextCaching?: boolean;
+    /** Overrides for the inline image budget, e.g. a provider's lower body limit. */
+    imageBudget?: Partial<InlineImageBudgetOptions>;
+  } = {},
 ): Promise<Anthropic.Messages.MessageParam[]> => {
+  // Every image is inlined as base64, so keep the request under the body limit first.
+  const oaiMessages = await inlineImagesWithinBudget(inputMessages, options.imageBudget);
   const messages: Anthropic.Messages.MessageParam[] = [];
 
   // === Two-pass strategy to guarantee tool_use / tool_result pairing ===
@@ -460,17 +470,19 @@ export const buildAnthropicTools = (
 ) => {
   if (!tools) return;
 
-  return tools.map(
-    (tool, index): Anthropic.Tool => ({
+  return tools.map((tool, index): Anthropic.Tool => {
+    // OpenAI SDK v6 made `ChatCompletionTool` a function|custom union; lobehub only sends function tools.
+    const { function: fn } = tool as OpenAI.ChatCompletionFunctionTool;
+    return {
       cache_control:
         options.enabledContextCaching && index === tools.length - 1
           ? { type: 'ephemeral' }
           : undefined,
-      description: tool.function.description,
-      input_schema: tool.function.parameters as Anthropic.Tool.InputSchema,
-      name: tool.function.name,
-    }),
-  );
+      description: fn.description,
+      input_schema: normalizeAnthropicToolSchema(fn.parameters) as Anthropic.Tool.InputSchema,
+      name: fn.name,
+    };
+  });
 };
 
 export const buildSearchTool = (): Anthropic.WebSearchTool20250305 => {

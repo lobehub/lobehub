@@ -5,26 +5,26 @@ import { SquarePenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { usePageStore } from '@/store/page';
+import { usePermission } from '@/hooks/usePermission';
+import { pageActions } from '@/store/page';
 
 const AddButton = memo(() => {
   const { t } = useTranslation('file');
-
-  const createNewPage = usePageStore((s) => s.createNewPage);
+  const { allowed: canCreate } = usePermission('create_content');
 
   const handleNewDocument = () => {
+    if (!canCreate) return;
+
     const untitledTitle = t('pageList.untitled');
-    createNewPage(untitledTitle);
+    pageActions.createNewPage(untitledTitle);
   };
 
   return (
     <ActionIcon
+      disabled={!canCreate}
       icon={SquarePenIcon}
+      size={{ blockSize: 32, size: 18 }}
       title={t('header.newPageButton')}
-      size={{
-        blockSize: 32,
-        size: 18,
-      }}
       onClick={handleNewDocument}
     />
   );

@@ -1,0 +1,326 @@
+import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
+import { type LobeChatDatabase } from '@lobechat/database';
+import {
+  type ChatSemanticSearchChunk,
+  type FileSearchResult,
+  RequestTrigger,
+  type SemanticSearchSchemaType,
+} from '@lobechat/types';
+import { and, inArray } from 'drizzle-orm';
+import pMap from 'p-map';
+
+import { ChunkModel } from '@/database/models/chunk';
+import { DocumentModel } from '@/database/models/document';
+import { FileModel } from '@/database/models/file';
+import type { FtsSearchKnowledgeBaseDocumentHit } from '@/database/repositories/ftsSearch';
+import { knowledgeBaseFiles } from '@/database/schemas';
+import { isFileBackedPlaceholder } from '@/database/utils/fileBackedPlaceholder';
+import { readOriginalCharCount } from '@/database/utils/parsedDocument';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
+import { getServerDefaultFilesConfig } from '@/server/globalConfig';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { DocumentService } from '@/server/services/document';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
+
+export interface FileContentResult {
+  content: string;
+  error?: string;
+  fileId: string;
+  filename: string;
+  metadata?: Record<string, any> | null;
+  /** Original character count when the stored text was cut at parse time. */
+  originalCharCount?: number;
+  preview?: string;
+  totalCharCount?: number;
+  totalLineCount?: number;
+}
+
+export interface SemanticSearchForChatResult {
+  chunks: ChatSemanticSearchChunk[];
+  documents: FtsSearchKnowledgeBaseDocumentHit[];
+  errors?: { bm25?: string; vector?: string };
+  fileResults: FileSearchResult[];
+  /**
+   * Raw rejection reasons preserved for callers (e.g. lambda chunk router)
+   * that need to map provider errors to TRPCError codes. Present only when
+   * a search path failed.
+   */
+  rejections?: { bm25?: unknown; vector?: unknown };
+  totalResults: number;
+}
+
+const groupAndRankFiles = (chunks: ChatSemanticSearchChunk[], topK: number): FileSearchResult[] => {
+  const fileMap = new Map<string, FileSearchResult>();
+
+  for (const chunk of chunks) {
+    const fileId = chunk.fileId || 'unknown';
+    const fileName = chunk.fileName || `File ${fileId}`;
+
+    if (!fileMap.has(fileId)) {
+      fileMap.set(fileId, { fileId, fileName, relevanceScore: 0, topChunks: [] });
+    }
+
+    fileMap.get(fileId)!.topChunks.push({
+      id: chunk.id,
+      similarity: chunk.similarity,
+      text: chunk.text || '',
+    });
+  }
+
+  for (const fileResult of fileMap.values()) {
+    fileResult.topChunks.sort((a, b) => b.similarity - a.similarity);
+    const top3 = fileResult.topChunks.slice(0, 3);
+    fileResult.relevanceScore =
+      top3.reduce((sum, chunk) => sum + chunk.similarity, 0) / top3.length;
+    fileResult.topChunks = fileResult.topChunks.slice(0, 3);
+  }
+
+  return Array.from(fileMap.values())
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .slice(0, topK);
+};
+
+/**
+ * Shared query service for knowledge base RAG (semantic search + file content
+ * retrieval). Used by both the lambda chunk router and the builtin
+ * knowledge-base tool server runtime so the orchestration only lives in one
+ * place.
+ */
+export class KnowledgeBaseSearchService {
+  private serverDB: LobeChatDatabase;
+  private userId: string;
+  private chunkModel: ChunkModel;
+  private documentModel: DocumentModel;
+  private fileModel: FileModel;
+  private documentServiceInstance?: DocumentService;
+  private callerAgentVisibility?: 'private' | 'public' | null;
+
+  private workspaceId?: string;
+
+  constructor(
+    serverDB: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
+    this.serverDB = serverDB;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+    this.callerAgentVisibility = callerAgentVisibility;
+    this.chunkModel = new ChunkModel(serverDB, userId, workspaceId);
+    // Public-agent gate: `documentModel.ownership()` excludes caller-private
+    // rows, so a workspace-shared agent cannot resolve chunks back to a
+    // private document body. Chunks themselves don't yet have a visibility
+    // mirror (spec §2.3 defers that migration), so the doc-layer gate is the
+    // enforcement point today.
+    this.documentModel = new DocumentModel(serverDB, userId, workspaceId, callerAgentVisibility);
+    this.fileModel = new FileModel(serverDB, userId, workspaceId);
+  }
+
+  private get documentService() {
+    this.documentServiceInstance ??= new DocumentService(
+      this.serverDB,
+      this.userId,
+      this.workspaceId,
+      this.callerAgentVisibility,
+    );
+    return this.documentServiceInstance;
+  }
+
+  async semanticSearchForChat(
+    input: SemanticSearchSchemaType,
+  ): Promise<SemanticSearchForChatResult> {
+    const topK = input.topK ?? 20;
+    const knowledgeIds = input.knowledgeIds ?? [];
+
+    // Path 1: vector search over file chunks
+    const vectorPath = async (): Promise<ChatSemanticSearchChunk[]> => {
+      const { model, provider } =
+        getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
+      const modelRuntime = await initModelRuntimeFromDB(
+        this.serverDB,
+        this.userId,
+        provider,
+        this.workspaceId,
+      );
+
+      // slice content to make sure in the context window limit
+      const query = input.query.length > 8000 ? input.query.slice(0, 8000) : input.query;
+
+      const embeddings = await modelRuntime.embeddings(
+        { dimensions: 1024, input: query, model },
+        { metadata: { trigger: RequestTrigger.SemanticSearch }, user: this.userId },
+      );
+
+      let finalFileIds = input.fileIds ?? [];
+      if (knowledgeIds.length > 0) {
+        // Scope the knowledge-base → file resolution to the caller so a user
+        // cannot resolve another user's knowledgeBaseId to the victim's fileIds.
+        const knowledgeFiles = await this.serverDB.query.knowledgeBaseFiles.findMany({
+          where: and(
+            inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              knowledgeBaseFiles,
+            ),
+          ),
+        });
+        finalFileIds = knowledgeFiles.map((f) => f.fileId).concat(finalFileIds);
+      }
+
+      return this.chunkModel.semanticSearchForChat({
+        embedding: embeddings![0],
+        fileIds: finalFileIds,
+        query: input.query,
+        topK,
+      });
+    };
+
+    // Path 2: BM25 search over KB-scoped custom/document documents
+    const bm25Path = async (): Promise<FtsSearchKnowledgeBaseDocumentHit[]> => {
+      if (knowledgeIds.length === 0) return [];
+      /**
+       * BM25 results already contain snippets, so provider selection and the
+       * public-agent visibility gate must both be resolved before the search.
+       */
+      const ftsSearchRepo = await createFtsSearchRepo({
+        callerAgentVisibility: this.callerAgentVisibility,
+        db: this.serverDB,
+        userId: this.userId,
+        usage: 'knowledge_base',
+        workspaceId: this.workspaceId,
+      });
+      return ftsSearchRepo.searchKnowledgeBaseDocuments(input.query, knowledgeIds, topK);
+    };
+
+    const [vectorResult, bm25Result] = await Promise.allSettled([vectorPath(), bm25Path()]);
+
+    const chunks: ChatSemanticSearchChunk[] =
+      vectorResult.status === 'fulfilled' ? vectorResult.value : [];
+    const documents: FtsSearchKnowledgeBaseDocumentHit[] =
+      bm25Result.status === 'fulfilled' ? bm25Result.value : [];
+
+    const errors: { bm25?: string; vector?: string } = {};
+    const rejections: { bm25?: unknown; vector?: unknown } = {};
+
+    if (vectorResult.status === 'rejected') {
+      const error = vectorResult.reason as any;
+      const errorType = error?.errorType;
+      errors.vector = error?.message || errorType || 'Vector search failed';
+      rejections.vector = error;
+      console.error('[KnowledgeBaseSearchService] vector path failed', error);
+    }
+    if (bm25Result.status === 'rejected') {
+      const error = bm25Result.reason as any;
+      errors.bm25 = error?.message || 'BM25 search failed';
+      rejections.bm25 = error;
+      console.error('[KnowledgeBaseSearchService] BM25 path failed', error);
+    }
+
+    const fileResults = groupAndRankFiles(chunks, topK);
+
+    return {
+      chunks,
+      documents,
+      errors: Object.keys(errors).length > 0 ? errors : undefined,
+      fileResults,
+      rejections: Object.keys(rejections).length > 0 ? rejections : undefined,
+      totalResults: chunks.length + documents.length,
+    };
+  }
+
+  async getFileContents(ids: string[]): Promise<FileContentResult[]> {
+    return pMap(
+      ids,
+      async (id) => {
+        // ---- Branch A: docs_* — read documents.content directly ----
+        // KB inline documents (custom/document) have no S3 file.
+        if (id.startsWith('docs_')) {
+          const doc = await this.documentModel.findById(id);
+          if (!doc) {
+            return {
+              content: '',
+              error: 'Document not found',
+              fileId: id,
+              filename: `Unknown document ${id}`,
+            };
+          }
+          // A file uploaded into an agent's Documents panel is an empty row pointing at the
+          // original file; its text only exists once the file is parsed.
+          if (isFileBackedPlaceholder(doc)) {
+            return this.readFileContent(doc.fileId!, {
+              filename: doc.title || doc.filename || undefined,
+              resultId: id,
+            });
+          }
+          const content = doc.content ?? '';
+          const lines = content.split('\n');
+          return {
+            content,
+            fileId: id,
+            filename: doc.title || doc.filename || 'Untitled',
+            metadata: doc.metadata,
+            originalCharCount: readOriginalCharCount(doc.metadata),
+            preview: lines.slice(0, 5).join('\n'),
+            totalCharCount: content.length,
+            totalLineCount: lines.length,
+          };
+        }
+
+        // ---- Branch B: file_* — original file/parse path ----
+        return this.readFileContent(id, { resultId: id });
+      },
+      { concurrency: 3 },
+    );
+  }
+
+  /**
+   * Read a file's parsed text, parsing it on first read.
+   *
+   * `resultId` is echoed back as `fileId` so callers can match results to the ids they asked for.
+   */
+  private async readFileContent(
+    fileId: string,
+    { filename, resultId }: { filename?: string; resultId: string },
+  ): Promise<FileContentResult> {
+    const file = await this.fileModel.findById(fileId);
+    if (!file) {
+      return {
+        content: '',
+        error: 'File not found',
+        fileId: resultId,
+        filename: filename ?? `Unknown file ${resultId}`,
+      };
+    }
+
+    // `findByFileId` skips agent-document placeholders, so a hit is always parsed text.
+    let document: { content: string | null; metadata: Record<string, any> | null } | undefined =
+      await this.documentModel.findByFileId(fileId);
+
+    if (!document) {
+      try {
+        document = await this.documentService.parseFile(fileId);
+      } catch (error) {
+        return {
+          content: '',
+          error: `Failed to parse file: ${(error as Error).message}`,
+          fileId: resultId,
+          filename: filename ?? file.name,
+        };
+      }
+    }
+
+    const content = document.content || '';
+    const lines = content.split('\n');
+    return {
+      content,
+      fileId: resultId,
+      filename: filename ?? file.name,
+      metadata: document.metadata,
+      originalCharCount: readOriginalCharCount(document.metadata),
+      preview: lines.slice(0, 5).join('\n'),
+      totalCharCount: content.length,
+      totalLineCount: lines.length,
+    };
+  }
+}

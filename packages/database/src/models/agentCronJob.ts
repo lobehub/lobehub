@@ -8,27 +8,36 @@ import type {
 } from '../schemas/agentCronJob';
 import { agentCronJobs } from '../schemas/agentCronJob';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class AgentCronJobModel {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId?: string) {
+  constructor(db: LobeChatDatabase, userId?: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId!;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentCronJobs);
 
   // Create a new cron job
   async create(data: CreateAgentCronJobData): Promise<AgentCronJob> {
     const cronJob = await this.db
       .insert(agentCronJobs)
-      .values({
-        ...data,
-        // Initialize remaining executions to match max executions
-        remainingExecutions: data.maxExecutions,
-
-        userId: this.userId,
-      } as NewAgentCronJob)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            ...data,
+            // Initialize remaining executions to match max executions
+            remainingExecutions: data.maxExecutions,
+          },
+        ) as NewAgentCronJob,
+      )
       .returning();
 
     return cronJob[0];
@@ -39,7 +48,7 @@ export class AgentCronJobModel {
     const result = await this.db
       .select()
       .from(agentCronJobs)
-      .where(and(eq(agentCronJobs.id, id), eq(agentCronJobs.userId, this.userId)))
+      .where(and(eq(agentCronJobs.id, id), this.ownership()))
       .limit(1);
 
     return result[0] || null;
@@ -50,7 +59,7 @@ export class AgentCronJobModel {
     return this.db
       .select()
       .from(agentCronJobs)
-      .where(and(eq(agentCronJobs.agentId, agentId), eq(agentCronJobs.userId, this.userId)))
+      .where(and(eq(agentCronJobs.agentId, agentId), this.ownership()))
       .orderBy(desc(agentCronJobs.createdAt));
   }
 
@@ -59,7 +68,7 @@ export class AgentCronJobModel {
     return this.db
       .select()
       .from(agentCronJobs)
-      .where(eq(agentCronJobs.userId, this.userId))
+      .where(this.ownership())
       .orderBy(desc(agentCronJobs.lastExecutedAt));
   }
 
@@ -109,7 +118,7 @@ export class AgentCronJobModel {
     const result = await this.db
       .update(agentCronJobs)
       .set(updateData)
-      .where(and(eq(agentCronJobs.id, id), eq(agentCronJobs.userId, this.userId)))
+      .where(and(eq(agentCronJobs.id, id), this.ownership()))
       .returning();
 
     return result[0] || null;
@@ -119,7 +128,7 @@ export class AgentCronJobModel {
   async delete(id: string): Promise<boolean> {
     const result = await this.db
       .delete(agentCronJobs)
-      .where(and(eq(agentCronJobs.id, id), eq(agentCronJobs.userId, this.userId)))
+      .where(and(eq(agentCronJobs.id, id), this.ownership()))
       .returning();
 
     return result.length > 0;
@@ -181,7 +190,7 @@ export class AgentCronJobModel {
         totalExecutions: 0,
         updatedAt: new Date(),
       })
-      .where(and(eq(agentCronJobs.id, id), eq(agentCronJobs.userId, this.userId)))
+      .where(and(eq(agentCronJobs.id, id), this.ownership()))
       .returning();
 
     return result[0] || null;
@@ -194,7 +203,7 @@ export class AgentCronJobModel {
       .from(agentCronJobs)
       .where(
         and(
-          eq(agentCronJobs.userId, this.userId),
+          this.ownership(),
           eq(agentCronJobs.enabled, true),
           gt(agentCronJobs.remainingExecutions, 0),
           sql`${agentCronJobs.remainingExecutions} <= ${threshold}`,
@@ -208,7 +217,7 @@ export class AgentCronJobModel {
     return this.db
       .select()
       .from(agentCronJobs)
-      .where(and(eq(agentCronJobs.userId, this.userId), eq(agentCronJobs.enabled, enabled)))
+      .where(and(this.ownership(), eq(agentCronJobs.enabled, enabled)))
       .orderBy(desc(agentCronJobs.updatedAt));
   }
 
@@ -232,7 +241,7 @@ export class AgentCronJobModel {
         totalJobs: sql<number>`count(*)`,
       })
       .from(agentCronJobs)
-      .where(eq(agentCronJobs.userId, this.userId));
+      .where(this.ownership());
 
     const stats = result[0];
     return {
@@ -251,7 +260,7 @@ export class AgentCronJobModel {
         enabled,
         updatedAt: new Date(),
       })
-      .where(and(inArray(agentCronJobs.id, ids), eq(agentCronJobs.userId, this.userId)))
+      .where(and(inArray(agentCronJobs.id, ids), this.ownership()))
       .returning();
 
     return result.length;
@@ -262,7 +271,7 @@ export class AgentCronJobModel {
     const result = await this.db
       .select({ count: sql<number>`count(*)` })
       .from(agentCronJobs)
-      .where(and(eq(agentCronJobs.agentId, agentId), eq(agentCronJobs.userId, this.userId)));
+      .where(and(eq(agentCronJobs.agentId, agentId), this.ownership()));
 
     return Number(result[0].count);
   }
@@ -276,7 +285,7 @@ export class AgentCronJobModel {
   }): Promise<{ jobs: AgentCronJob[]; total: number }> {
     const { agentId, enabled, limit = 20, offset = 0 } = options;
 
-    const whereConditions = [eq(agentCronJobs.userId, this.userId)];
+    const whereConditions = [this.ownership()];
 
     if (agentId) {
       whereConditions.push(eq(agentCronJobs.agentId, agentId));

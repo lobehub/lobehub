@@ -1,0 +1,420 @@
+// The parse-side unwrap in src/store/tool/slices/builtin/executors/worktreeDetection.ts
+// mirrors this wrapper shape — keep the accepted forms in sync.
+const SHELL_WRAPPER_PATTERN =
+  /^(?:\/usr\/bin\/env\s+)?(?:\/\S+\/)?(?:bash|sh|zsh)\s+(?:-lc|-c|-l\s+-c)\s+(\S[\s\S]*)$/;
+
+const CAT_OPTION_PATTERN = /^-[a-z]+$/i;
+const SED_RANGE_PATTERN = /^(\d+)(?:,(\d+))?p$/;
+
+const hasShellControlOperator = (value: string) =>
+  /\|\||&&|[|;<>`]/.test(value) || value.includes('$(');
+
+const hasUnsafeShellControlOperator = (value: string) =>
+  /\|\||&&|[;<>`]/.test(value) || value.includes('$(');
+
+const stripOuterShellQuotes = (value: string) => {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) return trimmed;
+
+  const quote = trimmed[0];
+  if ((quote !== '"' && quote !== "'") || trimmed.at(-1) !== quote) return trimmed;
+
+  const body = trimmed.slice(1, -1);
+  if (quote === "'") return body.replaceAll("'\\''", "'");
+
+  return body
+    .replaceAll('\\"', '"')
+    .replaceAll('\\`', '`')
+    .replaceAll('\\$', '$')
+    .replaceAll('\\\\', '\\');
+};
+
+const stripShellWrapper = (command?: string) => {
+  const trimmed = command?.trim() || '';
+  if (!trimmed) return '';
+
+  const match = trimmed.match(SHELL_WRAPPER_PATTERN);
+  if (!match) return trimmed;
+
+  return stripOuterShellQuotes(match[1]) || trimmed;
+};
+
+const pushToken = (tokens: string[], token: string) => {
+  if (token) tokens.push(token);
+};
+
+const tokenizeShellLike = (command: string): string[] | undefined => {
+  const tokens: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | undefined;
+  let escaping = false;
+
+  for (const char of command) {
+    if (escaping) {
+      current += char;
+      escaping = false;
+      continue;
+    }
+
+    if (char === '\\' && quote !== "'") {
+      escaping = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = undefined;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char === '|') {
+      pushToken(tokens, current);
+      current = '';
+      tokens.push('|');
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      pushToken(tokens, current);
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (quote || escaping) return;
+  pushToken(tokens, current);
+
+  return tokens;
+};
+
+const parseLineRange = (range: string) => {
+  const match = range.match(SED_RANGE_PATTERN);
+  if (!match) return;
+
+  return {
+    endLine: match[2] ? Number(match[2]) : undefined,
+    startLine: Number(match[1]),
+  };
+};
+
+const getSingleFileToken = (token?: string) => {
+  if (!token || token === '-' || hasShellControlOperator(token)) return;
+  return token;
+};
+
+export interface CodexReadFileCommandDisplay {
+  endLine?: number;
+  filePath: string;
+  startLine?: number;
+}
+
+const parseSedReadCommand = (tokens: string[]): CodexReadFileCommandDisplay | undefined => {
+  if (tokens[0] !== 'sed') return;
+
+  const printOption = tokens[1];
+  if (printOption !== '-n' && printOption !== '--quiet' && printOption !== '--silent') return;
+
+  const range = parseLineRange(tokens[2] || '');
+  if (!range) return;
+
+  const targetIndex = tokens[3] === '--' ? 4 : 3;
+  if (tokens.length !== targetIndex + 1) return;
+
+  const filePath = getSingleFileToken(tokens[targetIndex]);
+  if (!filePath) return;
+
+  return { ...range, filePath };
+};
+
+const parseCatReadCommand = (tokens: string[]): CodexReadFileCommandDisplay | undefined => {
+  if (tokens[0] !== 'cat') return;
+
+  let targetIndex = 1;
+  while (CAT_OPTION_PATTERN.test(tokens[targetIndex] || '')) targetIndex += 1;
+  if (tokens[targetIndex] === '--') targetIndex += 1;
+  if (tokens.length !== targetIndex + 1) return;
+
+  const filePath = getSingleFileToken(tokens[targetIndex]);
+  if (!filePath) return;
+
+  return { filePath };
+};
+
+export const getCodexReadFileCommandDisplay = (
+  command?: string,
+): CodexReadFileCommandDisplay | undefined => {
+  const displayCommand = stripShellWrapper(command);
+  if (!displayCommand || hasShellControlOperator(displayCommand)) return;
+
+  const tokens = tokenizeShellLike(displayCommand);
+  if (!tokens) return;
+
+  return parseSedReadCommand(tokens) || parseCatReadCommand(tokens);
+};
+
+const RG_OPTIONS_WITH_VALUE = new Set([
+  '-A',
+  '-B',
+  '-C',
+  '-g',
+  '-m',
+  '-t',
+  '-T',
+  '--after-context',
+  '--before-context',
+  '--colors',
+  '--context',
+  '--context-separator',
+  '--engine',
+  '--field-context-separator',
+  '--field-match-separator',
+  '--glob',
+  '--iglob',
+  '--json-seq',
+  '--max-columns',
+  '--max-count',
+  '--max-depth',
+  '--max-filesize',
+  '--mmap',
+  '--path-separator',
+  '--pre',
+  '--replace',
+  '--sort',
+  '--sortr',
+  '--type',
+  '--type-add',
+  '--type-clear',
+  '--type-not',
+]);
+
+const RG_PATTERN_OPTIONS = new Set(['-e', '--regexp']);
+
+const splitRgPipeline = (tokens: string[]) => {
+  const pipeIndexes = tokens.reduce<number[]>((indexes, token, index) => {
+    if (token === '|') indexes.push(index);
+    return indexes;
+  }, []);
+
+  if (pipeIndexes.length === 0) return [tokens];
+  if (pipeIndexes.length > 1) return;
+
+  const pipeIndex = pipeIndexes[0];
+  const first = tokens.slice(0, pipeIndex);
+  const second = tokens.slice(pipeIndex + 1);
+
+  if (first[0] !== 'rg' || second[0] !== 'rg' || !first.includes('--files')) return;
+
+  return [second];
+};
+
+const getAttachedRgPattern = (token: string) => {
+  if (token.startsWith('--regexp=')) return token.slice('--regexp='.length);
+  if (token.startsWith('-e') && token.length > 2) return token.slice(2);
+};
+
+const isRgOptionWithAttachedValue = (token: string) =>
+  ['-A', '-B', '-C', '-g', '-m', '-t', '-T'].some(
+    (option) => token.startsWith(option) && token.length > option.length,
+  ) || /^--[^=]+=/.test(token);
+
+const getRgPatternFromTokens = (tokens: string[]) => {
+  if (tokens[0] !== 'rg') return;
+
+  for (let index = 1; index < tokens.length; index++) {
+    const token = tokens[index];
+    if (!token) continue;
+
+    const attachedPattern = getAttachedRgPattern(token);
+    if (attachedPattern) return attachedPattern;
+
+    if (RG_PATTERN_OPTIONS.has(token)) {
+      return tokens[index + 1];
+    }
+
+    if (token === '--') {
+      return tokens[index + 1];
+    }
+
+    if (RG_OPTIONS_WITH_VALUE.has(token)) {
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith('-')) {
+      if (isRgOptionWithAttachedValue(token)) continue;
+      continue;
+    }
+
+    return token;
+  }
+};
+
+export interface CodexGrepCommandDisplay {
+  pattern: string;
+}
+
+export const getCodexGrepCommandDisplay = (
+  command?: string,
+): CodexGrepCommandDisplay | undefined => {
+  const displayCommand = stripShellWrapper(command);
+  if (!displayCommand || hasUnsafeShellControlOperator(displayCommand)) return;
+
+  const tokens = tokenizeShellLike(displayCommand);
+  if (!tokens) return;
+  if (!tokens.includes('|') && tokens.includes('--files')) return;
+
+  const rgCommands = splitRgPipeline(tokens);
+  if (!rgCommands) return;
+
+  const pattern = getRgPatternFromTokens(rgCommands.at(-1) || []);
+  if (!pattern) return;
+
+  return { pattern };
+};
+
+/** Program families we give a dedicated label + brand icon instead of the generic terminal chip. */
+export type CodexCommandProgram = 'agent-browser' | 'git' | 'node' | 'python';
+
+export type AgentBrowserAction =
+  | 'click'
+  | 'eval'
+  | 'fill'
+  | 'focus'
+  | 'get'
+  | 'navigate'
+  | 'press'
+  | 'screenshot'
+  | 'snapshot'
+  | 'type'
+  | 'wait';
+
+export interface AgentBrowserCommandDisplay {
+  action: AgentBrowserAction;
+  value?: string;
+}
+
+const AGENT_BROWSER_GLOBAL_OPTIONS_WITH_VALUE = new Set([
+  '--cdp',
+  '--headers',
+  '--profile',
+  '--session',
+]);
+
+const AGENT_BROWSER_ACTIONS = new Set<AgentBrowserAction>([
+  'click',
+  'eval',
+  'fill',
+  'focus',
+  'get',
+  'navigate',
+  'press',
+  'screenshot',
+  'snapshot',
+  'type',
+  'wait',
+]);
+
+/** Reduce agent-browser CLI plumbing to the user-visible browser action. */
+export const getAgentBrowserCommandDisplay = (
+  command?: string,
+): AgentBrowserCommandDisplay | undefined => {
+  const displayCommand = stripShellWrapper(command);
+  if (!displayCommand) return;
+
+  const tokens = tokenizeShellLike(displayCommand);
+  if (!tokens) return;
+
+  let index = 0;
+  while (index < tokens.length && ENV_ASSIGNMENT_PATTERN.test(tokens[index] || '')) index += 1;
+
+  const executable = tokens[index]?.split('/').at(-1);
+  if (executable !== 'agent-browser') return;
+  index += 1;
+
+  while (index < tokens.length) {
+    const token = tokens[index];
+    if (!token) return;
+    if (AGENT_BROWSER_GLOBAL_OPTIONS_WITH_VALUE.has(token)) {
+      index += 2;
+      continue;
+    }
+    if (token.startsWith('-')) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+
+  const rawAction = tokens[index];
+  const action = rawAction === 'open' || rawAction === 'goto' ? 'navigate' : rawAction;
+  if (!AGENT_BROWSER_ACTIONS.has(action as AgentBrowserAction)) return;
+
+  const args = tokens.slice(index + 1);
+  const firstArgument = args.find((token) => !token.startsWith('-') && token !== '&&');
+  const value = (() => {
+    switch (action) {
+      case 'snapshot': {
+        return;
+      }
+      case 'eval': {
+        // JavaScript is an implementation detail, not a useful user-facing
+        // summary. Keep the semantic action while hiding the executed source.
+        return;
+      }
+      case 'navigate': {
+        return firstArgument?.replace(/^https?:\/\//i, '');
+      }
+      case 'get': {
+        return args[0] === 'url' || args[0] === 'title' ? args[0] : args[1] || args[0];
+      }
+      default: {
+        return firstArgument;
+      }
+    }
+  })();
+
+  return { action: action as AgentBrowserAction, value };
+};
+
+const PROGRAM_BY_BASENAME: Record<string, CodexCommandProgram> = {
+  'agent-browser': 'agent-browser',
+  'git': 'git',
+  'node': 'node',
+  'python': 'python',
+  'python3': 'python',
+};
+
+const ENV_ASSIGNMENT_PATTERN = /^[A-Z_]\w*=/i;
+
+/**
+ * Classify the leading executable of a codex command (e.g. `node app.js` → `node`).
+ * Unwraps `bash -lc "..."`, skips leading `KEY=value` env assignments, and normalizes an
+ * absolute path to its basename (`/usr/bin/python3` → `python3`). Returns undefined for
+ * anything not in {@link PROGRAM_BY_BASENAME}.
+ */
+export const getCodexCommandProgram = (command?: string): CodexCommandProgram | undefined => {
+  const displayCommand = stripShellWrapper(command);
+  if (!displayCommand) return;
+
+  const tokens = tokenizeShellLike(displayCommand);
+  if (!tokens) return;
+
+  let index = 0;
+  while (index < tokens.length && ENV_ASSIGNMENT_PATTERN.test(tokens[index] || '')) index += 1;
+
+  const head = tokens[index];
+  if (!head) return;
+
+  const basename = head.split('/').at(-1) || head;
+  return PROGRAM_BY_BASENAME[basename];
+};

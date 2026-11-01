@@ -19,11 +19,15 @@ LobeHub provides some additional configuration options when deployed, which can 
 
   <Card href={'environment-variables/model-provider'} title={'Model Service Providers'} />
 
-  <Cards href={'environment-variables/auth'} title={'Authentication'} />
+  <Card href={'environment-variables/auth'} title={'Authentication'} />
 
-  <Cards href={'environment-variables/s3'} title={'S3 Storage Service'} />
+  <Card href={'environment-variables/s3'} title={'S3 Storage Service'} />
 
-  <Cards href={'environment-variables/analytics'} title={'Data Analytics'} />
+  <Card href={'environment-variables/cloud-sandbox'} title={'Cloud Sandbox'} />
+
+  <Card href={'environment-variables/analytics'} title={'Data Analytics'} />
+
+  <Card href={'advanced/full-text-search'} title={'Full-Text Search'} />
 </Cards>
 
 ## Building a Custom Image with Overridden `NEXT_PUBLIC` Variables
@@ -55,7 +59,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           repository: lobehub/lobehub
 

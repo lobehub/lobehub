@@ -1,7 +1,7 @@
 'use client';
 
 import { DonutChart } from '@lobehub/charts';
-import { useTheme } from 'antd-style';
+import { useTheme } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

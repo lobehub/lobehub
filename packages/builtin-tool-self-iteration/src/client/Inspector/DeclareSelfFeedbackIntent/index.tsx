@@ -2,7 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { CheckCircle2, CircleAlert } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -75,8 +75,8 @@ export const DeclareSelfFeedbackIntentInspector = memo<
 
   if (isArgumentsStreaming && !hasContext) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-        <span>{title}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={shinyTextStyles.shinyText}>{title}</span>
       </div>
     );
   }
@@ -84,14 +84,10 @@ export const DeclareSelfFeedbackIntentInspector = memo<
   const isSettled = !isArgumentsStreaming && !isLoading && !!pluginState;
 
   return (
-    <div
-      style={{ flexWrap: 'wrap', gap: 4 }}
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
-    >
-      <span>{title}</span>
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {title}
+      </span>
       {summary && (
         <span className={cx(highlightTextStyles.primary, styles.summary)}>{summary}</span>
       )}

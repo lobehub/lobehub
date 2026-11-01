@@ -4,6 +4,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { documents, documentShares, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface DocumentShareAccessResult {
   document: typeof documents.$inferSelect;
@@ -17,12 +18,23 @@ export interface DocumentShareAccessResult {
 
 export class DocumentShareModel {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.db = db;
   }
+
+  // document_shares.visibility is share semantics ('private' | 'link'), not the
+  // workspace row-visibility ('public' | 'private') — pass only the scope
+  // columns so buildWorkspaceWhere never filters on it.
+  private ownership = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: documentShares.userId, workspaceId: documentShares.workspaceId },
+    );
 
   create = async (
     documentId: string,
@@ -34,7 +46,12 @@ export class DocumentShareModel {
     const [doc] = await this.db
       .select({ id: documents.id })
       .from(documents)
-      .where(and(eq(documents.id, documentId), eq(documents.userId, this.userId)))
+      .where(
+        and(
+          eq(documents.id, documentId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+        ),
+      )
       .limit(1);
 
     if (!doc) {
@@ -43,12 +60,16 @@ export class DocumentShareModel {
 
     const [result] = await this.db
       .insert(documentShares)
-      .values({
-        documentId,
-        permission: params.permission ?? 'read',
-        userId: this.userId,
-        visibility: params.visibility ?? 'private',
-      })
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            documentId,
+            permission: params.permission ?? 'read',
+            visibility: params.visibility ?? 'private',
+          },
+        ),
+      )
       .onConflictDoNothing({ target: documentShares.documentId })
       .returning();
 
@@ -63,7 +84,7 @@ export class DocumentShareModel {
     const [result] = await this.db
       .update(documentShares)
       .set({ updatedAt: new Date(), visibility })
-      .where(and(eq(documentShares.documentId, documentId), eq(documentShares.userId, this.userId)))
+      .where(and(eq(documentShares.documentId, documentId), this.ownership()))
       .returning();
 
     return result || null;
@@ -73,7 +94,7 @@ export class DocumentShareModel {
     const [result] = await this.db
       .update(documentShares)
       .set({ permission, updatedAt: new Date() })
-      .where(and(eq(documentShares.documentId, documentId), eq(documentShares.userId, this.userId)))
+      .where(and(eq(documentShares.documentId, documentId), this.ownership()))
       .returning();
 
     return result || null;
@@ -82,9 +103,7 @@ export class DocumentShareModel {
   deleteByDocumentId = async (documentId: string) => {
     return this.db
       .delete(documentShares)
-      .where(
-        and(eq(documentShares.documentId, documentId), eq(documentShares.userId, this.userId)),
-      );
+      .where(and(eq(documentShares.documentId, documentId), this.ownership()));
   };
 
   getByDocumentId = async (documentId: string) => {
@@ -98,7 +117,7 @@ export class DocumentShareModel {
         visibility: documentShares.visibility,
       })
       .from(documentShares)
-      .where(and(eq(documentShares.documentId, documentId), eq(documentShares.userId, this.userId)))
+      .where(and(eq(documentShares.documentId, documentId), this.ownership()))
       .limit(1);
 
     return result[0] || null;
@@ -145,6 +164,8 @@ export class DocumentShareModel {
     const isOwner = !!accessUserId && row.document.userId === accessUserId;
 
     if (!isOwner) {
+      // 'private' (or no share record) is creator-only, even inside a
+      // workspace; only 'link' opens the page to other viewers.
       const hasShare = !!row.visibility;
       if (!hasShare || row.visibility === 'private') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'This page is private' });

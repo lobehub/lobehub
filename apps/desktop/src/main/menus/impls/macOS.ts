@@ -1,13 +1,16 @@
 import path from 'node:path';
 
+import { DOWNLOAD_URL, GITHUB, GITHUB_ISSUES, OFFICIAL_SITE } from '@lobechat/const/url';
+import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, BrowserWindow, clipboard, Menu, shell } from 'electron';
+import { app, clipboard, Menu, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 import { HETERO_AGENT_DIR } from '@/const/heteroAgent';
 import NotificationCtr from '@/controllers/NotificationCtr';
 import SystemController from '@/controllers/SystemCtr';
 
+import { buildDockMenuTemplate, buildTrayMenuTemplate } from '../trayMenu';
 import type { ContextMenuData, IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
 
@@ -15,6 +18,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
   private appMenu: Menu | null = null;
   private dockMenu: Menu | null = null;
   private trayMenu: Menu | null = null;
+  private navigationSnapshot: TrayNavigationSnapshot = { agents: [], pinned: [], recent: [] };
 
   buildAndSetAppMenu(options?: MenuOptions): Menu {
     const template = this.getAppMenuTemplate(options);
@@ -45,10 +49,15 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
     return Menu.buildFromTemplate(template);
   }
 
-  buildTrayMenu(): Menu {
-    const template = this.getTrayMenuTemplate();
+  buildTrayMenu(snapshot: TrayNavigationSnapshot = { agents: [], pinned: [], recent: [] }): Menu {
+    const template = buildTrayMenuTemplate(this.app, snapshot);
     this.trayMenu = Menu.buildFromTemplate(template);
     return this.trayMenu;
+  }
+
+  updateDockMenu(snapshot: TrayNavigationSnapshot): void {
+    this.navigationSnapshot = snapshot;
+    this.buildAndSetDockMenu();
   }
 
   refresh(options?: MenuOptions): void {
@@ -89,7 +98,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             click: async () => {
               const mainWindow = this.app.browserManager.getMainWindow();
               mainWindow.show();
-              mainWindow.broadcast('navigate', { path: '/settings' });
+              mainWindow.broadcast('createNewTab', { path: '/settings' });
             },
             label: t('macOS.preferences'),
           },
@@ -128,6 +137,11 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             },
             label: t('file.newTab'),
           },
+          {
+            accelerator: 'Shift+Command+N',
+            click: (_item, targetWindow) => this.openNewWindow(targetWindow),
+            label: t('file.newWindow'),
+          },
           { type: 'separator' },
           {
             accelerator: 'Alt+Command+A',
@@ -164,16 +178,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           { type: 'separator' },
           {
             accelerator: 'CmdOrCtrl+W',
-            click: () => {
-              const focused = BrowserWindow.getFocusedWindow();
-              if (!focused) return;
-              const mainWindow = this.app.browserManager.getMainWindow();
-              if (focused === mainWindow.browserWindow) {
-                mainWindow.broadcast('closeCurrentTabOrWindow');
-              } else {
-                focused.close();
-              }
-            },
+            click: (_item, targetWindow) => this.closeFocusedTabOrWindow(targetWindow),
             label: t('window.close'),
           },
         ],
@@ -202,9 +207,9 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
       {
         label: t('view.title'),
         submenu: [
-          { label: t('view.reload'), role: 'reload' },
-          { label: t('view.forceReload'), role: 'forceReload' },
-          { accelerator: 'F12', label: t('dev.devTools'), role: 'toggleDevTools' },
+          this.buildReloadMenuItem(t('view.reload')),
+          this.buildReloadMenuItem(t('view.forceReload'), true),
+          this.buildDevToolsMenuItem(t('dev.devTools'), 'F12'),
           { type: 'separator' },
           this.buildZoomMenuItem('reset', t('view.resetZoom'), 'CmdOrCtrl+0'),
           ...this.buildZoomMenuItems('in', t('view.zoomIn'), 'CmdOrCtrl+=', ['CmdOrCtrl+Plus']),
@@ -248,7 +253,15 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
       },
       {
         label: t('window.title'),
+        // Keep the role so macOS still appends the open-window list, but supply
+        // the submenu — Electron's generated one carries its own English labels.
         role: 'windowMenu',
+        submenu: [
+          { label: t('window.minimize'), role: 'minimize' },
+          { label: t('window.zoom'), role: 'zoom' },
+          { type: 'separator' },
+          { label: t('window.front'), role: 'front' },
+        ],
       },
       {
         label: t('help.title'),
@@ -256,23 +269,29 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         submenu: [
           {
             click: async () => {
-              await shell.openExternal('https://lobehub.com');
+              await shell.openExternal(OFFICIAL_SITE);
             },
             label: t('help.visitWebsite'),
           },
           {
             click: async () => {
-              await shell.openExternal('https://github.com/lobehub/lobe-chat');
+              await shell.openExternal(GITHUB);
             },
             label: t('help.githubRepo'),
           },
           {
             click: async () => {
-              await shell.openExternal('https://github.com/lobehub/lobe-chat/issues/new/choose');
+              await shell.openExternal(GITHUB_ISSUES);
             },
             label: t('help.reportIssue'),
           },
           { type: 'separator' },
+          {
+            click: () => {
+              this.app.browserManager.retrieveByIdentifier('processExplorer').show();
+            },
+            label: t('help.processExplorer'),
+          },
           {
             click: () => {
               const logsPath = app.getPath('logs');
@@ -454,6 +473,13 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
       case 'latest': {
         return { enabled: false, label: t('common.isLatestVersion') };
       }
+      // snap / tar.gz / a runtime-less AppImage cannot replace themselves.
+      case 'unsupported': {
+        return {
+          click: () => shell.openExternal(DOWNLOAD_URL.default),
+          label: t('common.updateUnsupported'),
+        };
+      }
       default: {
         return {
           click: () => this.app.updaterManager.checkForUpdates({ manual: true }),
@@ -517,6 +543,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         },
         label: t('context.saveImage'),
       });
+      template.push(this.buildCopyImageMenuItem(t('context.copyImage'), data!));
       template.push({
         click: () => {
           clipboard.writeText(data!.srcURL!);
@@ -603,6 +630,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
         },
         label: t('context.saveImage'),
       });
+      template.push(this.buildCopyImageMenuItem(t('context.copyImage'), data!));
       template.push({
         click: () => {
           clipboard.writeText(data!.srcURL!);
@@ -724,23 +752,9 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
   private buildAndSetDockMenu() {
     if (!app.dock?.setMenu) return;
 
-    this.dockMenu = Menu.buildFromTemplate(this.getDockMenuTemplate());
+    this.dockMenu = Menu.buildFromTemplate(
+      buildDockMenuTemplate(this.app, this.navigationSnapshot),
+    );
     app.dock.setMenu(this.dockMenu);
-  }
-
-  private getDockMenuTemplate(): MenuItemConstructorOptions[] {
-    const t = this.app.i18n.ns('menu');
-    const appName = app.getName();
-
-    return [
-      {
-        click: () => this.app.browserManager.showMainWindow(),
-        label: t('tray.show', { appName }),
-      },
-      {
-        click: () => this.app.screenCaptureManager.startSession(),
-        label: t('tray.openMiniToolbar'),
-      },
-    ];
   }
 }

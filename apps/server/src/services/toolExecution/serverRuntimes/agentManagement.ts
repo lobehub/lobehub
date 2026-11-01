@@ -1,0 +1,626 @@
+import {
+  AgentManagementIdentifier,
+  type CallAgentParams,
+  type CreateAgentParams,
+  type DeleteAgentParams,
+  type DuplicateAgentParams,
+  type GetAgentDetailParams,
+  type InstallPluginParams,
+  type SearchAgentParams,
+  type SearchMarketToolsParams,
+  type UpdateAgentParams,
+  type UpdatePromptParams,
+} from '@lobechat/builtin-tool-agent-management';
+import { buildBackgroundSubAgentReceipt } from '@lobechat/builtin-tool-lobe-agent';
+import { searchAgentsResultsPrompt } from '@lobechat/prompts';
+import {
+  getPluginMode,
+  type HeterogeneousProviderConfig,
+  parsePluginEntry,
+  upsertPluginMode,
+} from '@lobechat/types';
+import debug from 'debug';
+
+import { AgentModel } from '@/database/models/agent';
+import { ConnectorModel } from '@/database/models/connector';
+import { PluginModel } from '@/database/models/plugin';
+import { AgentService } from '@/server/services/agent';
+import { DiscoverService } from '@/server/services/discover';
+
+import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import { startBackgroundSubAgent } from './backgroundSubAgent';
+import { searchMarketTools } from './marketToolSearch';
+import {
+  NEXT_RUN_NOTE,
+  resolveOrInstallMarketPlugin,
+  unresolvablePluginResult,
+} from './pluginResolution';
+import { type ServerRuntimeRegistration } from './types';
+
+const handleError = (error: unknown, message: string): ToolExecutionResult => {
+  const err = error as Error;
+  return { content: `${message}: ${err.message}`, success: false };
+};
+
+/** Max results per searchAgent call (mirrored in the tool manifest: "max: 20") */
+const MAX_SEARCH_AGENT_LIMIT = 20;
+
+const log = debug('lobe-server:agent-management-runtime');
+
+export const agentManagementRuntime: ServerRuntimeRegistration = {
+  factory: (context) => {
+    if (!context.userId || !context.serverDB) {
+      throw new Error('userId and serverDB are required for Agent Management execution');
+    }
+
+    const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
+    const agentService = new AgentService(context.serverDB, context.userId, context.workspaceId);
+    const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
+    const connectorModel = new ConnectorModel(
+      context.serverDB,
+      context.userId,
+      context.workspaceId,
+    );
+    // Same identity requirement as the Agent Builder runtime: built without an
+    // identity, DiscoverService sends no credentials and every market read fails
+    // as `unauthorized`.
+    const discoverService = new DiscoverService({
+      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+    });
+
+    return {
+      callAgent: async (
+        params: CallAgentParams,
+        ctx: ToolExecutionContext,
+      ): Promise<ToolExecutionResult> => {
+        const { agentId, instruction } = params;
+
+        if (ctx.isSubAgent) {
+          return {
+            content: 'Agent calls cannot be triggered from within another sub-agent.',
+            error: {
+              code: 'NESTED_AGENT_CALL_NOT_ALLOWED',
+              message: 'Agent calls cannot be triggered from within another sub-agent.',
+            },
+            success: false,
+          };
+        }
+
+        if (!ctx.subAgent) {
+          return {
+            content: 'Agent execution is not available in this runtime.',
+            error: { code: 'AGENT_CALL_UNAVAILABLE' },
+            success: false,
+          };
+        }
+
+        if (!instruction || typeof instruction !== 'string') {
+          return {
+            content: 'instruction is required.',
+            error: { code: 'INVALID_ARGUMENTS', message: 'instruction is required.' },
+            success: false,
+          };
+        }
+
+        const background = params.runInBackground === true;
+
+        // The target's name titles its thread and, for a background call, is who
+        // the reply is delivered as.
+        const targetTitle = (await agentModel.getAgentConfigById(agentId))?.title;
+
+        const runner = ctx.subAgent;
+        const startRun = () =>
+          runner.run({
+            agentId,
+            background,
+            description: targetTitle || `Call agent ${agentId}`,
+            instruction,
+            timeout: 1_800_000,
+          });
+
+        let runResult: Awaited<ReturnType<typeof startRun>>;
+        if (background) {
+          const outcome = await startBackgroundSubAgent({
+            db: context.serverDB!,
+            groupId: ctx.groupId,
+            retryHint: 'Call callAgent again without runInBackground to wait for the reply.',
+            start: startRun,
+            threadId: ctx.threadId,
+            topicId: ctx.topicId,
+            userId: context.userId!,
+            workspaceId: context.workspaceId,
+          });
+          if ('refusal' in outcome) {
+            return {
+              content: outcome.refusal.message,
+              error: { code: outcome.refusal.code, message: outcome.refusal.message },
+              success: false,
+            };
+          }
+          runResult = outcome.result;
+        } else {
+          runResult = await startRun();
+        }
+        const { started, error, subOperationId, threadId, toolMessageId } = runResult;
+
+        if (!started) {
+          const detail = error ? `: ${error}` : '.';
+          const message = `Agent "${agentId}" failed to start${detail}`;
+          return {
+            content: message,
+            error: { code: 'AGENT_CALL_START_FAILED', message },
+            success: false,
+          };
+        }
+
+        // Detached: the receipt is the whole tool result; the reply arrives later
+        // as a message from the target. It goes into the runner's placeholder,
+        // which anchors the thread.
+        if (background) {
+          return { content: buildBackgroundSubAgentReceipt(), success: true, toolMessageId };
+        }
+
+        return {
+          content: '',
+          deferred: true,
+          state: {
+            status: 'pending',
+            subOperationId,
+            targetAgentId: agentId,
+            threadId,
+          },
+          success: true,
+        };
+      },
+
+      createAgent: async (params: CreateAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          // Guard against LLM double-encoding: if array fields are JSON strings, parse them.
+          const parseArrayParam = (v: any): string[] | undefined => {
+            if (typeof v === 'string') {
+              try {
+                return JSON.parse(v);
+              } catch {
+                return undefined;
+              }
+            }
+            return v;
+          };
+
+          const agent = await agentModel.create({
+            avatar: params.avatar,
+            backgroundColor: params.backgroundColor,
+            description: params.description,
+            model: params.model,
+            openingMessage: params.openingMessage,
+            openingQuestions: parseArrayParam(params.openingQuestions),
+            plugins: parseArrayParam(params.plugins),
+            provider: params.provider,
+            systemRole: params.systemRole,
+            tags: parseArrayParam(params.tags),
+            title: params.title,
+          });
+
+          return {
+            content: `Successfully created agent "${params.title}" with ID: ${agent.id}`,
+            state: { agentId: agent.id, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to create agent');
+        }
+      },
+
+      deleteAgent: async (params: DeleteAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          await agentModel.delete(params.agentId);
+          return {
+            content: `Successfully deleted agent ${params.agentId}`,
+            state: { agentId: params.agentId, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to delete agent');
+        }
+      },
+
+      duplicateAgent: async (params: DuplicateAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          const result = await agentModel.duplicate(params.agentId, params.newTitle);
+          if (!result) {
+            return { content: `Agent "${params.agentId}" not found.`, success: false };
+          }
+          return {
+            content: `Successfully duplicated agent. New agent ID: ${result.agentId}${params.newTitle ? ` with title "${params.newTitle}"` : ''}`,
+            state: { newAgentId: result.agentId, sourceAgentId: params.agentId, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to duplicate agent');
+        }
+      },
+
+      getAgentDetail: async (params: GetAgentDetailParams): Promise<ToolExecutionResult> => {
+        try {
+          const agent = await agentModel.getAgentConfigById(params.agentId);
+
+          if (!agent) {
+            // searchAgent can surface marketplace agents (short-code ids) that
+            // have no local agents row; read their detail through the market
+            // fallback instead of reporting a false "not found" (same behavior
+            // as the client AgentManagerRuntime).
+            const marketDetail = await getMarketAgentDetail(discoverService, params.agentId);
+            if (marketDetail) return marketDetail;
+
+            return { content: `Agent "${params.agentId}" not found.`, success: false };
+          }
+
+          // Normalize to identifier strings (annotated with mode when not
+          // pinned) — `agent.plugins` is the raw AgentPluginEntry[] (string |
+          // {identifier, mode}), but both the LLM-facing summary and the
+          // GetAgentDetailState.config.plugins contract expect string[].
+          // Passing object-shaped entries through to the client would break
+          // GetAgentDetailRender's <Tag key={plugin}>{plugin}</Tag>.
+          const pluginSummaries = agent.plugins?.map((entry) => {
+            const { identifier, mode } = parsePluginEntry(entry);
+            return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+          });
+
+          const detail = {
+            config: {
+              model: agent.model,
+              openingMessage: agent.openingMessage,
+              openingQuestions: agent.openingQuestions,
+              plugins: pluginSummaries,
+              provider: agent.provider,
+              systemRole: agent.systemRole,
+            },
+            meta: {
+              avatar: agent.avatar,
+              backgroundColor: agent.backgroundColor,
+              description: agent.description,
+              tags: agent.tags,
+              title: agent.title,
+            },
+          };
+
+          const parts: string[] = [];
+          if (detail.meta.title) parts.push(`**${detail.meta.title}**`);
+          if (detail.meta.description) parts.push(detail.meta.description);
+          if (detail.config.model)
+            parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
+          if (detail.config.plugins?.length) {
+            parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+          }
+          if (detail.config.systemRole) parts.push(`System Prompt: ${detail.config.systemRole}`);
+
+          return {
+            content: parts.length > 0 ? parts.join('\n') : `Agent "${params.agentId}" found.`,
+            state: { agentId: params.agentId, ...detail, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to get agent detail');
+        }
+      },
+
+      installPlugin: async (params: InstallPluginParams): Promise<ToolExecutionResult> => {
+        try {
+          const { agentId, identifier, source } = params;
+          const agent = await agentModel.getAgentConfigById(agentId);
+          if (!agent) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
+          // Pin only an id the runtime can load: a builtin, a connector, or a
+          // plugin whose manifest lists its APIs (fetched from the marketplace
+          // when not installed yet). Registering a bare row here used to report
+          // success for ids that never produced a tool.
+          const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
+            identifier,
+            { connectorModel, discoverService, pluginModel },
+            { agentId, source },
+          );
+          if (resolution.status !== 'loadable')
+            return unresolvablePluginResult(identifier, resolution);
+
+          // upsertPluginMode preserves an already-pinned entry (string or
+          // object) as-is and flips a disabled entry back to pinned in place,
+          // instead of blindly pushing a duplicate bare-string identifier.
+          if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
+            await agentModel.updateConfig(agentId, {
+              plugins: upsertPluginMode(
+                agent.plugins ?? undefined,
+                identifier,
+                'pinned',
+              ) as unknown as string[],
+            });
+          }
+
+          return {
+            content: `Successfully enabled plugin "${identifier}" for agent "${agentId}".${installedNow ? NEXT_RUN_NOTE : ''}`,
+            state: { installed: true, pluginId: identifier, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to install plugin');
+        }
+      },
+
+      searchAgent: async (params: SearchAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          const source = params.source || 'all';
+          const limit = Math.min(params.limit || 10, MAX_SEARCH_AGENT_LIMIT);
+          const offset = Math.max(params.offset || 0, 0);
+          const results: Array<{
+            avatar?: string | null;
+            backgroundColor?: string | null;
+            description?: string | null;
+            heteroType?: HeterogeneousProviderConfig['type'];
+            id: string;
+            isMarket?: boolean;
+            title?: string | null;
+          }> = [];
+
+          let userTotal = 0;
+          let marketTotal = 0;
+
+          if (source === 'user' || source === 'all') {
+            // This is the CRUD surface: every id it returns can be forwarded to
+            // `deleteAgent` / `updateAgent`. The inbox is product-owned and must
+            // not be deletable (see `AgentModel.delete`), so keep it out of the
+            // management search instead of letting a delete proposal reach it.
+            const [userAgents, total] = await Promise.all([
+              agentModel.queryAgents({
+                includeInbox: false,
+                keyword: params.keyword,
+                limit,
+                offset,
+              }),
+              agentModel.countAgents({ includeInbox: false, keyword: params.keyword }),
+            ]);
+            userTotal = total;
+            results.push(...userAgents.map((a) => ({ ...a, isMarket: false })));
+          }
+
+          // Marketplace search returns the first page only — offset does not apply
+          if (source === 'market' || source === 'all') {
+            const marketResult = await discoverService.getAssistantList({
+              pageSize: limit,
+              q: params.keyword,
+              ...(params.category && { category: params.category }),
+            });
+            marketTotal = marketResult.totalCount ?? marketResult.items.length;
+            results.push(
+              ...marketResult.items.map((a) => ({
+                avatar: a.avatar,
+                backgroundColor: a.backgroundColor,
+                description: a.description,
+                id: a.identifier,
+                isMarket: true,
+                title: a.title,
+              })),
+            );
+          }
+
+          const sliced = results.slice(0, limit);
+          const totalCount = userTotal + marketTotal;
+
+          // hasMore tracks workspace agents only: marketplace results are not offset-paged
+          const shownUserCount = sliced.filter((a) => !a.isMarket).length;
+          const hasMore = offset + shownUserCount < userTotal;
+
+          const content = searchAgentsResultsPrompt({
+            agents: sliced.map((a) => ({
+              description: a.description ?? undefined,
+              heteroType: a.heteroType,
+              id: a.id,
+              isMarket: a.isMarket,
+              title: a.title ?? undefined,
+            })),
+            hasMore,
+            marketTotal,
+            maxLimit: MAX_SEARCH_AGENT_LIMIT,
+            offset,
+            requestedLimit: params.limit,
+            source,
+            userTotal,
+          });
+
+          return {
+            content,
+            state: {
+              agents: sliced,
+              hasMore,
+              keyword: params.keyword,
+              offset,
+              source,
+              totalCount,
+            },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to search agents');
+        }
+      },
+
+      searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
+        searchMarketTools({ discoverService, pluginModel }, params),
+
+      updateAgent: async (params: UpdateAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          const { agentId } = params;
+          let { config, meta } = params;
+
+          // Existence guard: a Drizzle UPDATE on a missing/foreign agent row is a
+          // silent 0-row no-op, so writes would "succeed" without persisting
+          // anything. Fail loudly like the config path already does. Uses the
+          // lightweight existsById probe instead of getAgentConfigById, which
+          // needlessly enriches the row with knowledge associations just to
+          // test existence.
+          const exists = await agentModel.existsById(agentId);
+          if (!exists) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
+          // Guard against LLM double-encoding: parse strings if needed
+          if (typeof config === 'string') {
+            try {
+              config = JSON.parse(config as string);
+            } catch {
+              config = undefined;
+            }
+          }
+          if (typeof meta === 'string') {
+            try {
+              meta = JSON.parse(meta as string);
+            } catch {
+              meta = undefined;
+            }
+          }
+
+          const updatedParts: string[] = [];
+
+          if (config && Object.keys(config).length > 0) {
+            await agentService.updateAgentConfig(agentId, config);
+            updatedParts.push(`config: ${Object.keys(config).join(', ')}`);
+          }
+
+          if (meta && Object.keys(meta).length > 0) {
+            await agentModel.update(agentId, meta as Record<string, unknown>);
+            updatedParts.push(`meta: ${Object.keys(meta).join(', ')}`);
+          }
+
+          if (updatedParts.length === 0) {
+            return { content: 'No fields to update.', state: { success: true }, success: true };
+          }
+
+          return {
+            content: `Successfully updated agent. Updated ${updatedParts.join('; ')}`,
+            state: { agentId, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to update agent');
+        }
+      },
+
+      updatePrompt: async (params: UpdatePromptParams): Promise<ToolExecutionResult> => {
+        try {
+          const { agentId, prompt } = params;
+
+          // Existence guard: same 0-row silent no-op hazard as updateAgent.
+          // Lightweight existsById probe (see updateAgent note).
+          const exists = await agentModel.existsById(agentId);
+          if (!exists) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
+          await agentModel.update(agentId, { editorData: null, systemRole: prompt } as Record<
+            string,
+            unknown
+          >);
+
+          return {
+            content: prompt
+              ? `Successfully updated system prompt (${prompt.length} characters)`
+              : 'Successfully cleared system prompt',
+            state: { newPrompt: prompt, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to update prompt');
+        }
+      },
+    };
+  },
+  identifier: AgentManagementIdentifier,
+};
+
+/**
+ * Best-effort marketplace detail lookup for ids that have no local agents row.
+ * Mirrors the client `AgentManagerRuntime.getMarketAgentDetail`; market config
+ * almost never carries `agencyConfig`, so the hetero runtime descriptor is
+ * intentionally not mirrored here (apps/server does not depend on
+ * `@lobechat/agent-manager-runtime`).
+ */
+const getMarketAgentDetail = async (
+  discoverService: DiscoverService,
+  agentId: string,
+): Promise<ToolExecutionResult | null> => {
+  let detail: Awaited<ReturnType<DiscoverService['getAssistantDetail']>>;
+  try {
+    detail = await discoverService.getAssistantDetail({
+      identifier: agentId,
+      source: 'new',
+    });
+  } catch (error) {
+    // Market lookup is best-effort: fall through to the local "not found",
+    // but keep the failure observable instead of silent.
+    log(
+      'getAgentDetail: market fallback lookup failed for identifier=%s: %s',
+      agentId,
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+
+  const config = detail?.config as Record<string, any> | undefined;
+  if (!detail || !config) return null;
+
+  const plugins = config.plugins?.map((entry: any) => {
+    const { identifier, mode } = parsePluginEntry(entry);
+    return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+  }) as string[] | undefined;
+
+  // Marketplace configs can carry the model as an object
+  // ({ model, provider, parameters }) — extract the nested model/provider so
+  // the LLM-facing summary and GetAgentDetailRender never see "[object
+  // Object]" (same normalization as src/services/agent.ts).
+  let provider = config.provider as string | undefined;
+  let model = config.model as string | undefined;
+  if (model !== null && typeof model === 'object') {
+    const { model: modelName, provider: modelProvider } = model as {
+      model?: string;
+      provider?: string;
+    };
+    model = modelName;
+    provider = provider ?? modelProvider;
+  }
+  const systemRole = config.systemRole as string | undefined;
+
+  const parts: string[] = [];
+  if (detail.title) parts.push(`**${detail.title}**`);
+  if (detail.description) parts.push(detail.description);
+  if (model) parts.push(`Model: ${provider ? `${provider}/` : ''}${model}`);
+  if (plugins?.length) parts.push(`Plugins: ${plugins.join(', ')}`);
+  if (systemRole) parts.push(`System Prompt: ${systemRole}`);
+  parts.push(
+    'ℹ️ This is a marketplace agent (read-only). Install it into a workspace before editing.',
+  );
+
+  return {
+    content: parts.join('\n'),
+    state: {
+      agentId,
+      config: {
+        model,
+        openingMessage: config.openingMessage as string | undefined,
+        openingQuestions: config.openingQuestions as string[] | undefined,
+        plugins,
+        provider,
+        systemRole,
+      },
+      isMarket: true,
+      meta: {
+        avatar: detail.avatar,
+        backgroundColor: detail.backgroundColor,
+        description: detail.description,
+        tags: detail.tags,
+        title: detail.title,
+      },
+      success: true,
+    },
+    success: true,
+  };
+};

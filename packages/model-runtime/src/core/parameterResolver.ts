@@ -1,4 +1,7 @@
-import { hasTemperatureTopPConflict, shouldOmitSamplingParams } from '../const/models';
+import {
+  hasTemperatureTopPConflict,
+  shouldOmitSamplingParams,
+} from '../providers/anthropic/modelId';
 
 /**
  * Chat completion parameter configuration

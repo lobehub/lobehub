@@ -1,5 +1,6 @@
 import { ActionIcon, Button, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import fastDeepEqual from 'fast-deep-equal';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { type CSSProperties } from 'react';
@@ -12,35 +13,25 @@ import { FormInput } from '@/components/FormInput';
 import { type KeyValueItem } from './utils';
 import { localListToRecord, recordToLocalList } from './utils';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    position: relative;
-
-    width: 100%;
-    padding: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  input: css`
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-  `,
-  row: css`
-    margin-block-end: 8px;
-
-    &:last-child {
-      margin-block-end: 0;
-    }
-  `,
-  title: css`
-    margin-block-end: 8px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  container: {
+    position: 'relative',
+    width: '100%',
+    padding: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  input: { fontFamily: cssVar.fontFamilyCode, fontSize: '12px' },
+  row: { marginBlockEnd: { 'default': '8px', ':last-child': '0' } },
+  title: { marginBlockEnd: '8px', color: cssVar.colorTextTertiary },
+});
 
 export interface KeyValueEditorProps {
   addButtonText?: string;
   deleteTooltip?: string;
+  disabled?: boolean;
   duplicateKeyErrorText?: string;
   keyPlaceholder?: string;
   onChange?: (value: Record<string, string>) => void;
@@ -58,6 +49,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
     addButtonText,
     duplicateKeyErrorText,
     deleteTooltip,
+    disabled,
     style,
   }) => {
     const { t } = useTranslation('components');
@@ -73,6 +65,8 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
     }, [value]);
 
     const triggerChange = (newItems: KeyValueItem[]) => {
+      if (disabled) return;
+
       const keysCount: Record<string, number> = {};
       newItems.forEach((item) => {
         const trimmedKey = item.key.trim();
@@ -89,21 +83,29 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
     };
 
     const handleAdd = () => {
+      if (disabled) return;
+
       const newItems = [...items, { id: uuidv4(), key: '', value: '' }];
       triggerChange(newItems);
     };
 
     const handleRemove = (id: string) => {
+      if (disabled) return;
+
       const newItems = items.filter((item) => item.id !== id);
       triggerChange(newItems);
     };
 
     const handleKeyChange = (id: string, newKey: string) => {
+      if (disabled) return;
+
       const newItems = items.map((item) => (item.id === id ? { ...item, key: newKey } : item));
       triggerChange(newItems);
     };
 
     const handleValueChange = (id: string, newValue: string) => {
+      if (disabled) return;
+
       const newItems = items.map((item) => (item.id === id ? { ...item, value: newValue } : item));
       triggerChange(newItems);
     };
@@ -126,8 +128,8 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
     const duplicateKeys = getDuplicateKeys(items);
 
     return (
-      <div className={styles.container} style={style}>
-        <Flexbox horizontal className={styles.title} gap={8}>
+      <div className={stylex.props(styles.container).className} style={style}>
+        <Flexbox horizontal className={stylex.props(styles.title).className} gap={8}>
           <Flexbox flex={1}>{keyPlaceholder || t('KeyValueEditor.keyPlaceholder')}</Flexbox>
           <Flexbox flex={2}>{valuePlaceholder || t('KeyValueEditor.valuePlaceholder')}</Flexbox>
           <Flexbox style={{ width: 30 }} />
@@ -139,16 +141,18 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
               <Flexbox
                 horizontal
                 align="flex-start"
-                className={styles.row}
+                className={stylex.props(styles.row).className}
                 gap={8}
                 key={item.id}
                 width={'100%'}
               >
                 <Flexbox flex={1} style={{ position: 'relative' }}>
                   <FormInput
-                    className={styles.input}
+                    aria-invalid={isDuplicate || undefined}
+                    className={stylex.props(styles.input).className}
+                    data-invalid={isDuplicate || undefined}
+                    disabled={disabled}
                     placeholder={keyPlaceholder || t('KeyValueEditor.keyPlaceholder')}
-                    status={isDuplicate ? 'error' : undefined}
                     value={item.key}
                     variant={'filled'}
                     onChange={(e) => handleKeyChange(item.id, e)}
@@ -168,7 +172,8 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
                 </Flexbox>
                 <Flexbox flex={2}>
                   <FormInput
-                    className={styles.input}
+                    className={stylex.props(styles.input).className}
+                    disabled={disabled}
                     placeholder={valuePlaceholder || t('KeyValueEditor.valuePlaceholder')}
                     value={item.value}
                     variant={'filled'}
@@ -176,6 +181,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
                   />
                 </Flexbox>
                 <ActionIcon
+                  disabled={disabled}
                   icon={LucideTrash}
                   size={'small'}
                   style={{ marginTop: 4 }}
@@ -187,6 +193,7 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
           })}
           <Button
             block
+            disabled={disabled}
             icon={<Icon icon={LucidePlus} />}
             size={'small'}
             style={{ marginTop: items.length > 0 ? 16 : 8 }}

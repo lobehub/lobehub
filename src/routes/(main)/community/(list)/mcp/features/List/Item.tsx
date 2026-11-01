@@ -13,55 +13,43 @@ import {
   Tooltip,
 } from '@lobehub/ui';
 import { Spotlight } from '@lobehub/ui/awesome';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ClockIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import InstallationIcon from '@/components/MCPDepsIcon';
 import OfficialIcon from '@/components/OfficialIcon';
 import PublishedTime from '@/components/PublishedTime';
 import Scores from '@/features/MCP/Scores';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { discoverService } from '@/services/discover';
 import { type DiscoverMcpItem } from '@/types/discover';
 
 import ConnectionTypeTag from './ConnectionTypeTag';
 import MetaInfo from './MetaInfo';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    author: css`
-      color: ${cssVar.colorTextDescription};
-    `,
-    code: css`
-      font-family: ${cssVar.fontFamilyCode};
-    `,
-    desc: css`
-      flex: 1;
-      margin: 0 !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    footer: css`
-      margin-block-start: 16px;
-      border-block-start: 1px dashed ${cssVar.colorBorder};
-      background: ${cssVar.colorBgContainer};
-    `,
-    secondaryDesc: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
-    `,
-    title: css`
-      margin: 0 !important;
-      font-size: 16px !important;
-      font-weight: 500 !important;
-
-      &:hover {
-        color: ${cssVar.colorLink};
-      }
-    `,
-  };
+const styles = stylex.create({
+  author: { color: cssVar.colorTextDescription },
+  desc: { flex: '1', margin: '0', color: cssVar.colorTextSecondary },
+  footer: {
+    marginBlockStart: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorder,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  secondaryDesc: { fontSize: '12px', color: cssVar.colorTextDescription },
+  title: {
+    margin: '0',
+    fontSize: '16px',
+    fontWeight: 500,
+    color: { 'default': null, ':hover': cssVar.colorLink },
+  },
 });
 
 const McpItem = memo<DiscoverMcpItem>(
@@ -86,7 +74,7 @@ const McpItem = memo<DiscoverMcpItem>(
     github,
   }) => {
     const { t } = useTranslation('discover');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const link = urlJoin('/community/mcp', identifier);
 
     const handleClick = useCallback(() => {
@@ -148,18 +136,18 @@ const McpItem = memo<DiscoverMcpItem>(
                   overflow: 'hidden',
                 }}
               >
-                <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
-                  <Text ellipsis as={'h2'} className={styles.title}>
+                <WorkspaceLink style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
+                  <Text ellipsis as={'h2'} className={stylex.props(styles.title).className}>
                     {name}
                   </Text>
-                </Link>
+                </WorkspaceLink>
                 {isOfficial && (
                   <Tooltip title={t('isOfficial')}>
                     <OfficialIcon />
                   </Tooltip>
                 )}
               </Flexbox>
-              {author && <div className={styles.author}>{author}</div>}
+              {author && <div className={stylex.props(styles.author).className}>{author}</div>}
             </Flexbox>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>
@@ -190,7 +178,7 @@ const McpItem = memo<DiscoverMcpItem>(
           />
           <Text
             as={'p'}
-            className={styles.desc}
+            className={stylex.props(styles.desc).className}
             ellipsis={{
               rows: 3,
             }}
@@ -200,12 +188,15 @@ const McpItem = memo<DiscoverMcpItem>(
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.secondaryDesc}
+            className={stylex.props(styles.secondaryDesc).className}
             justify={'space-between'}
           >
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
-              <PublishedTime className={styles.secondaryDesc} date={updatedAt} />
+              <PublishedTime
+                className={stylex.props(styles.secondaryDesc).className}
+                date={updatedAt}
+              />
             </Flexbox>
             <Flexbox horizontal align={'center'} gap={8}>
               {t(`mcp.categories.${category}.name` as any)}
@@ -227,13 +218,13 @@ const McpItem = memo<DiscoverMcpItem>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.footer}
+          className={stylex.props(styles.footer).className}
           justify={'space-between'}
           padding={16}
         >
           <ConnectionTypeTag type={connectionType} />
           <MetaInfo
-            className={styles.secondaryDesc}
+            className={stylex.props(styles.secondaryDesc).className}
             installCount={installCount}
             stars={github?.stars}
           />

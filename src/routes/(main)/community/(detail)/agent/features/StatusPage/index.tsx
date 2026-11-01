@@ -1,18 +1,18 @@
 'use client';
 
-import { ExclamationCircleOutlined, FolderOpenOutlined } from '@ant-design/icons';
-import { Button, FluentEmoji, Text } from '@lobehub/ui';
-import { Result } from 'antd';
+import { Button, FluentEmoji, Result, Text } from '@lobehub/ui';
+import { CircleAlertIcon, FolderOpenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 interface StatusPageProps {
   status: 'unpublished' | 'archived' | 'deprecated';
 }
 
 const StatusPage = memo<StatusPageProps>(({ status }) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
 
   const handleBackToMarket = () => {
@@ -64,9 +64,9 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
   const isArchived = status === 'archived';
   const statusKey = isArchived ? 'archived' : 'deprecated';
   const statusIcon = isArchived ? (
-    <FolderOpenOutlined style={{ color: '#8c8c8c' }} />
+    <FolderOpenIcon color={'#8c8c8c'} />
   ) : (
-    <ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />
+    <CircleAlertIcon color={'#ff4d4f'} />
   );
 
   return (

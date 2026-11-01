@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Icon } from '@lobehub/ui';
 import { Activity, CheckCircle2, Clock, Hourglass, Pause, XCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +36,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 4px;
     align-items: center;
 
-    font-size: 11px;
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
     line-height: 1;
   `,

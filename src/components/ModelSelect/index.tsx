@@ -1,10 +1,13 @@
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { type ChatModelCard } from '@lobechat/types';
 import { type IconAvatarProps } from '@lobehub/icons';
-import { LobeHub, ModelIcon, ProviderIcon } from '@lobehub/icons';
+import { LobeHub } from '@lobehub/icons';
 import { type FlexboxProps } from '@lobehub/ui';
-import { Avatar, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, useResponsive } from 'antd-style';
+import { Avatar, Flexbox, Icon, Tag, Text, Tooltip, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
+  AudioLines,
   Infinity as InfinityIcon,
   LucideEye,
   LucideImage,
@@ -14,43 +17,42 @@ import {
 } from 'lucide-react';
 import { type ModelAbilities } from 'model-bank';
 import numeral from 'numeral';
-import { type CSSProperties, type FC } from 'react';
+import { type CSSProperties, type FC, type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProductLogo } from '@/components/Branding/ProductLogo';
+import { ModelIcon, ProviderIcon } from '@/components/LobeIcons';
+import { isCustomBranding } from '@/const/version';
 import { type AiProviderSourceType } from '@/types/aiProvider';
 import { formatTokenNumber } from '@/utils/format';
 
 import NewModelBadgeI18n, { NewModelBadge as NewModelBadgeCore } from './NewModelBadge';
+import RoutingBadge from './RoutingBadge';
 
 export const TAG_CLASSNAME = 'lobe-model-info-tags';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  tag: css`
-    cursor: default;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px !important;
-    height: 20px;
-    border-radius: 4px;
-  `,
-  token: css`
-    width: 36px !important;
-    height: 20px;
-    border-radius: 4px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
-
-type TooltipStyles = typeof styles;
+const styles = stylex.create({
+  tag: {
+    cursor: 'default',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+  },
+  token: {
+    width: '36px',
+    height: '20px',
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface ModelInfoTagsProps extends ModelAbilities {
   contextWindowTokens?: number | null;
@@ -63,7 +65,7 @@ interface ModelInfoTagsProps extends ModelAbilities {
 
 interface FeatureTagsProps extends Pick<
   ModelAbilities,
-  'files' | 'imageOutput' | 'vision' | 'video' | 'functionCall'
+  'files' | 'imageOutput' | 'vision' | 'video' | 'audio' | 'functionCall'
 > {
   disableTooltip?: boolean;
   placement: 'top' | 'right';
@@ -102,6 +104,7 @@ const FeatureTagItem = memo<FeatureTagItemProps>(
 
 const FeatureTags = memo<FeatureTagsProps>(
   ({
+    audio,
     disableTooltip,
     files,
     functionCall,
@@ -153,6 +156,15 @@ const FeatureTags = memo<FeatureTagsProps>(
         />
         <FeatureTagItem
           className={tagClassName}
+          color={'gold'}
+          disableTooltip={disableTooltip}
+          enabled={audio}
+          icon={AudioLines}
+          placement={placement}
+          title={t('ModelSelect.featureTag.audio')}
+        />
+        <FeatureTagItem
+          className={tagClassName}
           color={'info'}
           disableTooltip={disableTooltip}
           enabled={functionCall}
@@ -170,18 +182,16 @@ const Context = memo(
     contextWindowTokens,
     disableTooltip,
     placement,
-    styles,
   }: {
     contextWindowTokens: number;
     disableTooltip?: boolean;
     placement: 'top' | 'right';
-    styles: TooltipStyles;
   }) => {
     const { t } = useTranslation('components');
     const tokensText = contextWindowTokens === 0 ? '∞' : formatTokenNumber(contextWindowTokens);
 
     const tag = (
-      <Tag className={styles.token} size={'small'}>
+      <Tag className={stylex.props(styles.token).className} size={'small'}>
         {contextWindowTokens === 0 ? <InfinityIcon size={17} strokeWidth={1.6} /> : tokensText}
       </Tag>
     );
@@ -212,12 +222,13 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
         width={'fit-content'}
       >
         <FeatureTags
+          audio={model.audio}
           disableTooltip={disableTooltip}
           files={model.files}
           functionCall={model.functionCall}
           imageOutput={model.imageOutput}
           placement={placement}
-          tagClassName={styles.tag}
+          tagClassName={stylex.props(styles.tag).className ?? ''}
           video={model.video}
           vision={model.vision}
         />
@@ -226,7 +237,6 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
             contextWindowTokens={model.contextWindowTokens}
             disableTooltip={disableTooltip}
             placement={placement}
-            styles={styles}
           />
         )}
       </Flexbox>
@@ -234,10 +244,19 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
   },
 );
 
-interface ModelItemRenderProps extends ChatModelCard, Partial<Omit<FlexboxProps, 'id' | 'title'>> {
+interface ModelItemRenderProps extends ChatModelCard, Pick<FlexboxProps, 'className' | 'style'> {
   abilities?: ModelAbilities;
+  audio?: boolean;
+  /** Replaces the default ability tags on the right side of the row */
+  extra?: ReactNode;
+  /** Inline marker after the name (and secondary text), e.g. an image-output icon */
+  nameSuffix?: ReactNode;
   newBadgeLabel?: string;
   proBadgeLabel?: string;
+  /** The provider the row belongs to, which some markers read the id against */
+  provider?: string;
+  /** Muted text right after the model name, e.g. the current reasoning effort */
+  secondaryText?: string;
   showInfoTag?: boolean;
 }
 
@@ -245,18 +264,24 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
   ({
     showInfoTag = true,
     abilities,
+    audio,
     contextWindowTokens,
+    extra,
     files,
     functionCall,
     imageOutput,
+    nameSuffix,
     newBadgeLabel,
     proBadgeLabel,
+    provider,
+    secondaryText,
     video,
     vision,
     id,
     displayName,
     releasedAt,
-    ...rest
+    className,
+    style,
   }) => {
     const { mobile } = useResponsive();
     const displayNameOrId = displayName || id;
@@ -265,14 +290,14 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
       <Flexbox
         horizontal
         align={'center'}
+        className={className}
         gap={32}
         justify={'space-between'}
-        {...rest}
         style={{
           overflow: 'hidden',
           position: 'relative',
           width: '100%',
-          ...rest.style,
+          ...style,
         }}
       >
         <Flexbox
@@ -291,6 +316,13 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
           >
             {displayNameOrId}
           </Text>
+          {secondaryText && (
+            <Text style={{ flex: 'none' }} type={'secondary'}>
+              {secondaryText}
+            </Text>
+          )}
+          {nameSuffix}
+          <RoutingBadge id={id} provider={provider} />
           {newBadgeLabel ? (
             <NewModelBadgeCore label={newBadgeLabel} releasedAt={releasedAt} />
           ) : (
@@ -302,17 +334,19 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
             </Tag>
           )}
         </Flexbox>
-        {showInfoTag && (
-          <ModelInfoTags
-            contextWindowTokens={contextWindowTokens}
-            files={files ?? abilities?.files}
-            functionCall={functionCall ?? abilities?.functionCall}
-            imageOutput={imageOutput ?? abilities?.imageOutput}
-            style={{ zoom: 0.9 }}
-            video={video ?? abilities?.video}
-            vision={vision ?? abilities?.vision}
-          />
-        )}
+        {extra ??
+          (showInfoTag && (
+            <ModelInfoTags
+              audio={audio ?? abilities?.audio}
+              contextWindowTokens={contextWindowTokens}
+              files={files ?? abilities?.files}
+              functionCall={functionCall ?? abilities?.functionCall}
+              imageOutput={imageOutput ?? abilities?.imageOutput}
+              style={{ zoom: 0.9 }}
+              video={video ?? abilities?.video}
+              vision={vision ?? abilities?.vision}
+            />
+          ))}
       </Flexbox>
     );
   },
@@ -348,6 +382,8 @@ export const ProviderItemRender = memo<ProviderItemRenderProps>(
             style={isMono ? { filter: 'grayscale(1)' } : {}}
             title={name}
           />
+        ) : isCustomBranding && provider === BRANDING_PROVIDER ? (
+          <ProductLogo size={size} type={isMono ? 'mono' : 'flat'} />
         ) : provider === 'lobehub' ? (
           <LobeHub.Morden size={size} />
         ) : (

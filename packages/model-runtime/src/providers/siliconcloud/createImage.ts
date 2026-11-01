@@ -1,4 +1,3 @@
-import { imageUrlToBase64 } from '@lobechat/utils';
 import createDebug from 'debug';
 import type { RuntimeImageGenParamsValue } from 'model-bank';
 
@@ -6,6 +5,7 @@ import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
 import type { CreateImagePayload, CreateImageResponse } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
+import { referenceImageUrlToBase64 } from '../../utils/referenceImageCache';
 import { parseDataUri } from '../../utils/uriParser';
 
 const log = createDebug('lobe-image:siliconcloud');
@@ -27,7 +27,7 @@ async function convertToDataURI(imageUrl: string): Promise<string> {
   }
 
   if (type === 'url') {
-    const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(imageUrl);
+    const { base64: urlBase64, mimeType: urlMimeType } = await referenceImageUrlToBase64(imageUrl);
     return `data:${urlMimeType};base64,${urlBase64}`;
   }
 

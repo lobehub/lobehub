@@ -3,14 +3,23 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type SkillResourceTreeNode } from '@lobechat/types';
-import { Button, Drawer, Flexbox } from '@lobehub/ui';
-import { Alert, App, Form as AForm, Popconfirm, Skeleton } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import {
+  Alert,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Drawer,
+  Flexbox,
+  toast,
+} from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 
 import SkillEditForm, { type SkillEditFormValues } from './SkillEditForm';
@@ -59,11 +68,11 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   const { t } = useTranslation('setting');
   const { t: tp } = useTranslation('plugin');
   const { t: tc } = useTranslation('common');
-  const { message } = App.useApp();
+
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const [selectedFile, setSelectedFile] = useState('SKILL.md');
   const [saving, setSaving] = useState(false);
-  const [form] = AForm.useForm();
 
   const { data, isLoading } = useToolStore((s) => s.useFetchAgentSkillDetail)(
     open ? skillId : undefined,
@@ -72,7 +81,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
 
   const skillDetail = data?.skillDetail;
-  const resourceTree = data?.resourceTree ?? [];
+  const resourceTree = useMemo(() => data?.resourceTree ?? [], [data?.resourceTree]);
   const contentMap = useMemo(() => buildContentMap(resourceTree), [resourceTree]);
 
   const initialValues: SkillEditFormValues = useMemo(
@@ -84,6 +93,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   );
 
   const handleSubmit = async (values: SkillEditFormValues) => {
+    if (!canEdit) return;
     setSaving(true);
     try {
       await updateAgentSkill({
@@ -91,38 +101,44 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
         id: skillId,
         manifest: { description: values.description },
       });
-      message.success(t('agentSkillEdit.saveSuccess'));
+      toast.success(t('agentSkillEdit.saveSuccess'));
       onClose();
     } finally {
       setSaving(false);
     }
   };
 
+  const form = useForm<SkillEditFormValues>({ initialValues, onSubmit: handleSubmit });
+
   const handleDelete = async () => {
+    if (!canEdit) return;
     await deleteAgentSkill(skillId);
-    message.success(tp('dev.deleteSuccess'));
+    toast.success(tp('dev.deleteSuccess'));
     onClose();
   };
 
   const footer = (
     <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
-      <Popconfirm
-        arrow={false}
-        cancelText={tc('cancel')}
-        okText={tc('ok')}
-        placement={'topLeft'}
-        title={tp('dev.confirmDeleteDevPlugin')}
-        okButtonProps={{
-          danger: true,
-          type: 'primary',
-        }}
-        onConfirm={handleDelete}
+      <Button
+        danger
+        disabled={!canEdit}
+        onClick={() =>
+          confirmModal({
+            cancelText: tc('cancel'),
+            okButtonProps: { danger: true },
+            okText: tc('ok'),
+            onOk: handleDelete,
+            content: tp('dev.confirmDeleteDevPlugin'),
+            title: tc('delete'),
+          })
+        }
       >
-        <Button danger>{tc('delete')}</Button>
-      </Popconfirm>
+        {tc('delete')}
+      </Button>
       <Flexbox horizontal gap={12}>
         <Button onClick={onClose}>{tc('cancel')}</Button>
         <Button
+          disabled={!canEdit}
           loading={saving}
           type={'primary'}
           onClick={() => {
@@ -137,7 +153,6 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
 
   return (
     <Drawer
-      destroyOnHidden
       containerMaxWidth={'auto'}
       footer={footer}
       height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
@@ -146,16 +161,12 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
       push={false}
       title={t('agentSkillEdit.title')}
       styles={{
-        body: { padding: 0 },
-        bodyContent: { height: '100%' },
+        bodyContent: { height: '100%', padding: 0 },
       }}
-      onClose={(e) => {
-        e.stopPropagation();
-        onClose();
-      }}
+      onClose={onClose}
     >
       {isLoading ? (
-        <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />
+        <ArticleSkeleton rows={8} style={{ padding: 16 }} />
       ) : (
         <Flexbox
           horizontal
@@ -181,10 +192,10 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
               }}
             >
               <SkillEditForm
+                disabled={!canEdit}
                 form={form}
                 initialValues={initialValues}
                 name={skillDetail?.name}
-                onSubmit={handleSubmit}
               />
             </div>
             {selectedFile !== 'SKILL.md' && (

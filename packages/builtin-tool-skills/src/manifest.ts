@@ -18,7 +18,7 @@ export const SkillsManifest: BuiltinToolManifest = {
     runCommandApi,
     {
       description:
-        "Execute a shell command or script specified in a skill's instructions. Use this when a skill's content instructs you to run CLI commands (e.g., npx, npm, pip). The system automatically uses the current skill context from the most recent runSkill call. Returns the command output.",
+        "Execute a shell command or script specified in a skill's instructions. Use this when a skill's content instructs you to run CLI commands (e.g., npx, npm, pip). The system automatically uses the current skill context from the most recent activateSkill call. Returns the command output.",
       humanIntervention: 'required',
       name: SkillsApiName.execScript,
       parameters: {

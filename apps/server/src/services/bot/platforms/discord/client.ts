@@ -1,0 +1,703 @@
+import type { DiscordAdapter } from '@chat-adapter/discord';
+import { createDiscordAdapter } from '@chat-adapter/discord';
+import type { Chat as ChatBot, Message } from 'chat';
+import debug from 'debug';
+
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
+import {
+  BOT_RUNTIME_STATUSES,
+  getRuntimeStatusErrorMessage,
+  updateBotRuntimeStatus,
+} from '@/server/services/gateway/runtimeStatus';
+
+import { warnAttachmentFailures } from '../attachmentDelivery';
+import {
+  type BotPlatformRuntimeContext,
+  type BotProviderConfig,
+  type ChatPatchOptions,
+  ClientFactory,
+  messengerContentText,
+  type PlatformClient,
+  type PlatformMessenger,
+  type ReplyTargets,
+  type UsageStats,
+  type ValidationResult,
+} from '../types';
+import { formatUsageStats } from '../utils';
+import { DiscordApi } from './api';
+import { isSoloDiscordBotThread } from './chatComposition';
+import { DISCORD_BOT_TOKEN_PATTERN, DISCORD_PUBLIC_KEY_PATTERN } from './const';
+import {
+  collectDiscordMentionNames,
+  resolveDiscordMentions,
+  sanitizeDiscordUserInput,
+} from './mentions';
+import {
+  patchDiscordForwardedInteractions,
+  patchDiscordMentionThreads,
+  patchDiscordMessageEdits,
+} from './patch';
+import { batchDiscordFiles, materializeAttachmentsForDiscord } from './sendAttachments';
+
+const log = debug('bot-platform:discord:bot');
+
+/** `discord:<guild>:<channel>` with a real guild: not a DM, not already inside a thread. */
+const isTopLevelGuildChannel = (threadId: string): boolean => {
+  const [platform, guildId, channelId, discordThreadId] = threadId.split(':');
+
+  return (
+    platform === 'discord' && !!guildId && guildId !== '@me' && !!channelId && !discordThreadId
+  );
+};
+
+const CONNECTED_STATUS_TTL_BUFFER_MS = 60 * 1000;
+const DEFAULT_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+export interface GatewayListenerOptions {
+  durationMs?: number;
+  waitUntil?: (task: Promise<any>) => void;
+  /**
+   * Override the URL the Gateway listener forwards events to. Defaults to
+   * `${appUrl}/api/agent/webhooks/discord/${applicationId}` (the per-agent
+   * bot path). Set when the same gateway connection should drive a different
+   * surface — e.g. the LobeHub Messenger forwards to
+   * `/api/agent/messenger/webhooks/discord`.
+   */
+  webhookUrl?: string;
+}
+
+function extractChannelId(platformThreadId: string): string {
+  const parts = platformThreadId.split(':');
+  return parts[3] || parts[2];
+}
+
+function isSubscribableThread(platformThreadId: string): boolean {
+  const [, guildId, , discordThreadId] = platformThreadId.split(':');
+
+  // Keep DM conversations multi-turn, but avoid subscribing to top-level guild channels.
+  return guildId === '@me' || !!discordThreadId;
+}
+
+const BOT_NAMES_TTL_MS = 60 * 60 * 1000;
+const BOT_NAMES_RETRY_MS = 60 * 1000;
+
+class DiscordGatewayClient implements PlatformClient {
+  readonly id = 'discord';
+  readonly applicationId: string;
+
+  private abort = new AbortController();
+  private bot: ChatBot<any> | null = null;
+  private botNames?: { expiresAt: number; names: string[] };
+  private guildNicknames = new Map<string, { expiresAt: number; nickname?: string }>();
+  private config: BotProviderConfig;
+  private context: BotPlatformRuntimeContext;
+  private discord: DiscordApi;
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopped = false;
+
+  constructor(config: BotProviderConfig, context: BotPlatformRuntimeContext) {
+    this.config = config;
+    this.context = context;
+    this.applicationId = config.applicationId;
+    this.discord = new DiscordApi(config.credentials.botToken);
+  }
+
+  // --- Lifecycle ---
+
+  async start(options?: GatewayListenerOptions): Promise<void> {
+    log('Starting DiscordBot appId=%s', this.applicationId);
+
+    this.stopped = false;
+    this.abort = new AbortController();
+    const durationMs = options?.durationMs ?? DEFAULT_DURATION_MS;
+    const runtimeStatusTtlMs = durationMs + CONNECTED_STATUS_TTL_BUFFER_MS;
+    await updateBotRuntimeStatus(
+      {
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.starting,
+      },
+      { redisClient: this.context.redisClient as any, ttlMs: runtimeStatusTtlMs },
+    );
+
+    try {
+      if (this.bot) {
+        await this.bot.shutdown().catch(() => {});
+        this.bot = null;
+      }
+
+      const adapter = this.buildAdapter();
+
+      const { Chat, ConsoleLogger } = await import('chat');
+
+      const chatConfig: any = {
+        adapters: { discord: adapter },
+        userName: `lobehub-gateway-${this.applicationId}`,
+      };
+
+      if (this.context.redisClient) {
+        const { createIoRedisState } = await import('@chat-adapter/state-ioredis');
+        chatConfig.state = createIoRedisState({
+          client: this.context.redisClient as any,
+          logger: new ConsoleLogger(),
+        });
+      }
+
+      const bot = new Chat(chatConfig);
+      this.bot = bot;
+      await bot.initialize();
+
+      const discordAdapter = (bot as any).adapters.get('discord') as DiscordAdapter;
+      const waitUntil = options?.waitUntil ?? ((task: Promise<any>) => task.catch(() => {}));
+
+      const webhookUrl =
+        options?.webhookUrl ??
+        `${(this.context.appUrl || '').trim()}/api/agent/webhooks/discord/${this.applicationId}`;
+
+      await discordAdapter.startGatewayListener(
+        { waitUntil },
+        durationMs,
+        this.abort.signal,
+        webhookUrl,
+      );
+
+      // Auto-refresh by default. Skip ONLY when an explicit `waitUntil` is
+      // passed (the serverless / GatewayManager call sites manage their own
+      // lifecycle). Persist `webhookUrl` across the refresh cycle so callers
+      // that overrode the forwarding target keep their override.
+      const shouldAutoRefresh = !options?.waitUntil;
+      if (shouldAutoRefresh) {
+        const refreshOptions: GatewayListenerOptions | undefined = options?.webhookUrl
+          ? { webhookUrl: options.webhookUrl }
+          : undefined;
+        this.refreshTimer = setTimeout(() => {
+          if (this.abort.signal.aborted || this.stopped) return;
+
+          log(
+            'DiscordBot appId=%s duration elapsed (%dh), refreshing...',
+            this.applicationId,
+            durationMs / 3_600_000,
+          );
+          this.abort.abort();
+          this.start(refreshOptions).catch((err) => {
+            log('Failed to refresh DiscordBot appId=%s: %O', this.applicationId, err);
+          });
+        }, durationMs);
+      }
+
+      await updateBotRuntimeStatus(
+        {
+          applicationId: this.applicationId,
+          platform: this.id,
+          status: BOT_RUNTIME_STATUSES.connected,
+        },
+        { redisClient: this.context.redisClient as any, ttlMs: runtimeStatusTtlMs },
+      );
+
+      log('DiscordBot appId=%s started, webhookUrl=%s', this.applicationId, webhookUrl);
+    } catch (error) {
+      await updateBotRuntimeStatus(
+        {
+          applicationId: this.applicationId,
+          errorMessage: getRuntimeStatusErrorMessage(error),
+          platform: this.id,
+          status: BOT_RUNTIME_STATUSES.failed,
+        },
+        { redisClient: this.context.redisClient as any, ttlMs: runtimeStatusTtlMs },
+      );
+      throw error;
+    }
+  }
+
+  async stop(): Promise<void> {
+    log('Stopping DiscordBot appId=%s', this.applicationId);
+    this.stopped = true;
+    if (this.refreshTimer) {
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+    this.abort.abort();
+    if (this.bot) {
+      await this.bot.shutdown().catch(() => {});
+      this.bot = null;
+    }
+    await updateBotRuntimeStatus(
+      {
+        applicationId: this.applicationId,
+        platform: this.id,
+        status: BOT_RUNTIME_STATUSES.disconnected,
+      },
+      { redisClient: this.context.redisClient as any },
+    );
+  }
+
+  // --- Runtime Operations ---
+
+  applyChatPatches(chatBot: ChatBot<any>, options?: ChatPatchOptions): void {
+    patchDiscordForwardedInteractions(chatBot);
+    patchDiscordMessageEdits(chatBot);
+    if (options?.deferMentionThread) {
+      patchDiscordMentionThreads(chatBot, options.deferMentionThread);
+    }
+  }
+
+  createAdapter(): Record<string, any> {
+    return {
+      discord: this.buildAdapter(),
+    };
+  }
+
+  /**
+   * `@chat-adapter/discord` falls back to `userName: "bot"` and never resolves
+   * the real bot name, while chat-sdk's `detectMention` treats `@<userName>`
+   * in the message text as a mention. Without an explicit name, any message
+   * containing a literal "@bot" counts as an @-mention of EVERY Discord bot in
+   * the thread. Real mentions are matched by the adapter through
+   * `data.mentions` / `<@applicationId>`, so the text fallback only needs a
+   * per-bot name that natural text never contains.
+   */
+  private buildAdapter(): DiscordAdapter {
+    return createDiscordAdapter({
+      applicationId: this.config.applicationId,
+      botToken: this.config.credentials.botToken,
+      publicKey: this.config.credentials.publicKey,
+      userName: `lobehub-discord-${this.config.applicationId}`,
+    });
+  }
+
+  /**
+   * Add the triggering user to the auto-created reply thread so Discord
+   * notifies them and the thread shows up in their client. Only applies to
+   * guild threads (4-segment composite); DMs and top-level channels deliver
+   * in place. Best-effort: a failure (missing permission, user left the
+   * guild) must never affect the reply flow.
+   */
+  async ensureThreadMember(platformThreadId: string, platformUserId: string): Promise<void> {
+    const parts = platformThreadId.split(':');
+    // Format: discord:guildId:channelId:discordThreadId
+    if (parts.length !== 4 || parts[1] === '@me' || !parts[3] || !platformUserId) return;
+
+    try {
+      await this.discord.addThreadMember(parts[3], platformUserId);
+      log('ensureThreadMember: added user %s to thread %s', platformUserId, parts[3]);
+    } catch (error) {
+      log('ensureThreadMember: failed (non-fatal): %O', error);
+    }
+  }
+
+  async isSoloBotConversation(platformThreadId: string): Promise<boolean> {
+    const parts = platformThreadId.split(':');
+    // Only real guild threads have a member list scoped narrowly enough to
+    // establish 1:1 composition. DMs are already handled by thread.isDM;
+    // top-level guild channels stay mention-only because Discord has no
+    // per-channel member list and GUILD_MEMBERS is a privileged intent.
+    if (parts.length !== 4 || parts[1] === '@me' || !parts[3]) return false;
+
+    return isSoloDiscordBotThread(this.discord, this.applicationId, parts[3]);
+  }
+
+  getMessenger(platformThreadId: string): PlatformMessenger {
+    const channelId = extractChannelId(platformThreadId);
+    const threadId = platformThreadId.split(':')[3];
+    const discord = this.discord;
+    return {
+      addReaction: (messageId, emoji) => discord.createReaction(channelId, messageId, emoji),
+      createMessage: async (content) => {
+        const text = messengerContentText(content);
+        const attachments = typeof content === 'string' ? undefined : content.attachments;
+        if (!attachments?.length) {
+          await discord.createMessage(channelId, text);
+          return;
+        }
+        const { failures, files } = await materializeAttachmentsForDiscord(attachments);
+        warnAttachmentFailures('bot-platform:discord:reply', failures);
+        if (files.length === 0) {
+          await discord.createMessage(channelId, text);
+          return;
+        }
+        const batches = batchDiscordFiles(files);
+        for (const [i, batch] of batches.entries()) {
+          await discord.createMessage(channelId, i === 0 ? text : '', batch);
+        }
+      },
+      // editMessage: keep the text-only contract. Editing a message to add
+      // attachments is an advanced flow (PATCH with `attachments[]` keep-set
+      // + `files[]` adds) that isn't worth the complexity for the bot reply
+      // path — new chunks with attachments flow through `createMessage`.
+      editMessage: (messageId, content) =>
+        discord.editMessage(channelId, messageId, messengerContentText(content)),
+      removeReaction: (messageId, emoji) => discord.removeOwnReaction(channelId, messageId, emoji),
+      replaceReaction: async (messageId, prevEmoji, nextEmoji) => {
+        if (prevEmoji === nextEmoji) return;
+        // Add first so the user always sees at least one bot reaction; if
+        // the add fails, the previous emoji survives as a readable state.
+        if (nextEmoji) await discord.createReaction(channelId, messageId, nextEmoji);
+        if (prevEmoji) await discord.removeOwnReaction(channelId, messageId, prevEmoji);
+      },
+      triggerTyping: () => discord.triggerTyping(channelId),
+      updateThreadName: (name) => {
+        return threadId ? discord.updateChannelName(threadId, name) : Promise.resolve();
+      },
+    };
+  }
+
+  /**
+   * Resolve attachments on an inbound Discord message into `AttachmentSource[]`.
+   *
+   * Discord is the easiest case: attachments come with a public CDN URL
+   * (`https://cdn.discordapp.com/...`) that requires no auth, and the URL
+   * field IS preserved by `Message.toJSON`. So this method just walks the
+   * surviving attachment metadata and forwards URLs to `ingestAttachment`,
+   * which `fetch()`es them with no special handling.
+   *
+   * Discord ALSO has the `referenced_message.attachments` quirk: if a user
+   * @-mentions the bot while replying to an earlier message that had
+   * attachments, the chat-sdk only exposes the current message's
+   * attachments. We dig into `message.raw.referenced_message.attachments`
+   * to recover the quoted message's files. The Discord webhook payload
+   * uses snake_case (`content_type`, `filename`), so we normalize them.
+   */
+  async extractFiles(message: Message): Promise<AttachmentSource[] | undefined> {
+    type DiscordRefAttachment = {
+      content_type?: string;
+      filename?: string;
+      size?: number;
+      url?: string;
+    };
+    type DirectAttachment = {
+      mimeType?: string;
+      name?: string;
+      size?: number;
+      type?: string;
+      url?: string;
+    };
+
+    const directAttachments = (message as any).attachments as DirectAttachment[] | undefined;
+    const raw = (message as any).raw as Record<string, any> | undefined;
+    const refAttachments = raw?.referenced_message?.attachments as
+      DiscordRefAttachment[] | undefined;
+
+    log(
+      'extractFiles: msgId=%s, direct=%d, referenced=%d',
+      (message as any).id,
+      directAttachments?.length ?? 0,
+      refAttachments?.length ?? 0,
+    );
+
+    const results: AttachmentSource[] = [];
+
+    // 1. Direct attachments on the current message
+    for (const att of directAttachments ?? []) {
+      if (!att.url) continue;
+      results.push({
+        mimeType: att.mimeType,
+        name: att.name,
+        size: att.size,
+        url: att.url,
+      });
+    }
+
+    // 2. Attachments from a quoted (referenced) message
+    for (const att of refAttachments ?? []) {
+      if (!att.url) continue;
+      results.push({
+        mimeType: att.content_type,
+        name: att.filename,
+        size: att.size,
+        url: att.url,
+      });
+    }
+
+    return results.length > 0 ? results : undefined;
+  }
+
+  extractChatId(platformThreadId: string): string {
+    return extractChannelId(platformThreadId);
+  }
+
+  /**
+   * Resolve the message sender's preferred Discord locale.
+   *
+   * Discord intentionally does **not** include `User.locale` in MESSAGE_CREATE
+   * Gateway events: the field is only populated by `GET /users/@me` for the
+   * authenticated user and is gated behind the `identify` OAuth2 scope. There
+   * is no member-, presence-, or guild-membership event that surfaces another
+   * user's preferred language either. So for DMs and group `@mentions` we
+   * cannot detect locale at all — the router will fall back to the channel's
+   * platform default.
+   *
+   * The two fields we *can* read both live on `INTERACTION_CREATE` payloads
+   * (slash commands, message components):
+   * - `raw.locale` — the invoking user's client locale (`pt-BR`, `zh-CN`, …)
+   * - `raw.guild_locale` — the guild's `preferred_locale`; used as a soft
+   *   fallback for community guilds when the user-level field is missing
+   *
+   * Returns `undefined` outside those interaction paths so the router can
+   * apply the platform default.
+   */
+  extractAuthorLocale(message: Message): string | undefined {
+    const raw = (message as any).raw as Record<string, any> | undefined;
+    if (!raw) return undefined;
+    const interactionLocale = raw.locale;
+    if (typeof interactionLocale === 'string' && interactionLocale.length > 0) {
+      return interactionLocale;
+    }
+    const guildLocale = raw.guild_locale;
+    if (typeof guildLocale === 'string' && guildLocale.length > 0) {
+      return guildLocale;
+    }
+    return undefined;
+  }
+
+  formatReply(body: string, stats?: UsageStats): string {
+    if (!stats || !this.config.settings?.showUsageStats) return body;
+    return `${body}\n\n-# ${formatUsageStats(stats)}`;
+  }
+
+  parseMessageId(compositeId: string): string {
+    return compositeId;
+  }
+
+  /**
+   * Discord thread-starter messages live in the parent channel, not the thread.
+   * When the message ID matches the Discord thread segment, route the reaction
+   * to the parent channel so the API call targets the correct channel.
+   */
+  resolveReactionThreadId(threadId: string, messageId: string): string {
+    const parts = threadId.split(':');
+    // Format: discord:guildId:channelId:discordThreadId
+    if (parts.length === 4 && parts[3] === messageId) {
+      return parts.slice(0, 3).join(':');
+    }
+    return threadId;
+  }
+
+  /**
+   * Surface the parent channel for the group allowlist. When the bot is
+   * @-mentioned in a parent channel, Discord spawns an auto-reply thread
+   * and `thread.channelId` resolves to the **thread** (segment 3 of the
+   * composite). Operators, however, paste the *parent* channel ID
+   * (segment 2 — what Discord's "Copy Channel ID" returns). Returning the
+   * parent here lets `shouldHandleGroup` accept either form.
+   */
+  extraGroupAllowlistChannels(platformThreadId: string): string[] {
+    const parts = platformThreadId.split(':');
+    // Format: discord:guildId:channelId[:discordThreadId]
+    // Only when there's a thread segment is the parent distinct from
+    // `thread.channelId` (which already maps to the thread). For
+    // top-level channels the router already supplies `parts[2]`.
+    if (parts.length === 4 && parts[2]) return [parts[2]];
+    return [];
+  }
+
+  resolveMentions(text: string, message?: unknown): string {
+    return resolveDiscordMentions(text, collectDiscordMentionNames(message), this.applicationId);
+  }
+
+  sanitizeUserInput(text: string, message?: unknown): string {
+    return sanitizeDiscordUserInput(text, this.applicationId, message);
+  }
+
+  shouldSubscribe(threadId: string): boolean {
+    return isSubscribableThread(threadId);
+  }
+
+  shouldExpireIdleTopic(threadId: string): boolean {
+    // Only DMs are an unbounded stream; a guild thread is one conversation.
+    const [, guildId, , discordThreadId] = threadId.split(':');
+    return guildId === '@me' || !discordThreadId;
+  }
+
+  /**
+   * What people call the bot: its account names and, for a guild conversation, its nickname in
+   * that server ("Nasa" for an account named "Shadow Arvin"). The account names are read once an
+   * hour: renaming a bot is rare, and each read is a REST call. A failed refresh keeps serving the
+   * last known names and waits a minute before asking again, so an outage costs one request a
+   * minute rather than one per message.
+   */
+  getBotNames = async (platformThreadId?: string): Promise<string[]> => {
+    const [names, nickname] = await Promise.all([
+      this.getAccountNames(),
+      this.getGuildNickname(platformThreadId?.split(':')[1]),
+    ]);
+
+    return nickname && !names.includes(nickname) ? [...names, nickname] : names;
+  };
+
+  private getAccountNames = async (): Promise<string[]> => {
+    const now = Date.now();
+    if (this.botNames && this.botNames.expiresAt > now) return this.botNames.names;
+
+    try {
+      const names = await this.discord.getBotNames();
+      this.botNames = { expiresAt: now + BOT_NAMES_TTL_MS, names };
+
+      return names;
+    } catch (error) {
+      if (!this.botNames) throw error;
+      log('getBotNames refresh failed, keeping the last known names: %O', error);
+      this.botNames = { ...this.botNames, expiresAt: now + BOT_NAMES_RETRY_MS };
+
+      return this.botNames.names;
+    }
+  };
+
+  /**
+   * The bot's nickname in one server, read once an hour per server like the account names. A server
+   * nickname is optional, so a failed read only loses it: it keeps the last known value and waits
+   * a minute before asking again.
+   */
+  private getGuildNickname = async (guildId: string | undefined): Promise<string | undefined> => {
+    if (!guildId || guildId === '@me') return undefined;
+
+    const now = Date.now();
+    const cached = this.guildNicknames.get(guildId);
+    if (cached && cached.expiresAt > now) return cached.nickname;
+
+    try {
+      const nickname = await this.discord.getGuildNickname(guildId, this.applicationId);
+      this.guildNicknames.set(guildId, { expiresAt: now + BOT_NAMES_TTL_MS, nickname });
+
+      return nickname;
+    } catch (error) {
+      log('getGuildNickname failed for guild %s: %O', guildId, error);
+      this.guildNicknames.set(guildId, {
+        expiresAt: now + BOT_NAMES_RETRY_MS,
+        nickname: cached?.nickname,
+      });
+
+      return cached?.nickname;
+    }
+  };
+
+  /**
+   * A message at the top level of a guild channel can be answered in the channel, or in a thread
+   * spawned off it and named after its subject. DMs and messages inside a thread have no choice.
+   */
+  getReplyTargets(
+    threadId: string,
+    message: { id?: string; raw?: unknown },
+  ): ReplyTargets | undefined {
+    if (!isTopLevelGuildChannel(threadId)) return undefined;
+
+    return {
+      channel: threadId,
+      namesThread: true,
+      openThread: (name) => this.openThreadForChannelWake(threadId, message.raw, name),
+    };
+  }
+
+  /**
+   * Spawn a Discord thread off the triggering message when the bot wakes
+   * in a top-level guild channel via a watch-keyword match. The chat-sdk
+   * adapter only auto-creates a thread on @-mention (see chat-adapter
+   * discord/handleForwardedMessageEvent), so without this hook the
+   * keyword path would reply directly in the parent channel and clutter
+   * it with bot output.
+   *
+   * Returns the upgraded composite threadId (`discord:guildId:channelId:newThreadId`)
+   * so the caller can swap `thread.id` and have all downstream chat-sdk
+   * calls — `setReaction`, `subscribe`, `post`, `startTyping` — target
+   * the new sub-thread. The reaction call still lands on the parent
+   * channel because `resolveReactionThreadId` strips the thread segment
+   * when the message ID equals the thread starter.
+   *
+   * Skipped for DMs (`guildId === '@me'`) and for already-spawned threads
+   * (4-segment IDs); both deliver replies in the right context as-is.
+   * Best-effort: any API failure logs and returns undefined so the
+   * router falls back to the parent channel rather than dropping the
+   * message.
+   */
+  async openThreadForChannelWake(
+    threadId: string,
+    messageRaw: unknown,
+    name?: string,
+  ): Promise<string | undefined> {
+    if (!isTopLevelGuildChannel(threadId)) return undefined;
+    const [, guildId, channelId] = threadId.split(':');
+    const raw = messageRaw as Record<string, unknown> | undefined;
+    const messageId = typeof raw?.id === 'string' ? raw.id : undefined;
+    if (!messageId) return undefined;
+
+    // Without a name, mirror chat-sdk's @-mention auto-thread name format
+    // (see chat-adapter discord/createDiscordThread) so operators see a
+    // consistent thread title regardless of which path opened it; the
+    // callback later renames it after the topic title.
+    const threadName = name?.trim() || `Thread ${new Date().toLocaleString()}`;
+    try {
+      const result = await this.discord.startThreadFromMessage(channelId, messageId, threadName);
+      const newThreadId = `discord:${guildId}:${channelId}:${result.id}`;
+      log(
+        'openThreadForChannelWake: spawned thread for keyword wake, channel=%s, msg=%s, thread=%s',
+        channelId,
+        messageId,
+        result.id,
+      );
+      return newThreadId;
+    } catch (error) {
+      log(
+        'openThreadForChannelWake failed; falling back to channel %s for msg %s: %O',
+        channelId,
+        messageId,
+        error,
+      );
+      return undefined;
+    }
+  }
+
+  async registerBotCommands(
+    commands: Array<{
+      command: string;
+      description: string;
+      options?: Array<{ description: string; name: string; required?: boolean }>;
+    }>,
+  ): Promise<void> {
+    await this.discord.registerCommands(this.applicationId, commands);
+    log('DiscordBot appId=%s registered %d commands', this.applicationId, commands.length);
+  }
+}
+
+export class DiscordClientFactory extends ClientFactory {
+  createClient(config: BotProviderConfig, context: BotPlatformRuntimeContext): PlatformClient {
+    return new DiscordGatewayClient(config, context);
+  }
+
+  async validateCredentials(credentials: Record<string, string>): Promise<ValidationResult> {
+    const errors: Array<{ field: string; message: string }> = [];
+
+    if (!credentials.botToken) errors.push({ field: 'botToken', message: 'Bot Token is required' });
+    if (!credentials.publicKey)
+      errors.push({ field: 'publicKey', message: 'Public Key is required' });
+
+    if (errors.length > 0) return { errors, valid: false };
+
+    // Name the actual problem before spending a round-trip on it — a
+    // malformed public key can't be caught by the API call at all, and a
+    // malformed token would come back as a generic auth failure.
+    if (!new RegExp(DISCORD_PUBLIC_KEY_PATTERN).test(credentials.publicKey))
+      errors.push({
+        field: 'publicKey',
+        message: 'Public Key must be a 64-character hex string',
+      });
+    if (!new RegExp(DISCORD_BOT_TOKEN_PATTERN).test(credentials.botToken))
+      errors.push({
+        field: 'botToken',
+        message: 'Bot Token must be three dot-separated segments, as shown in the Discord portal',
+      });
+
+    if (errors.length > 0) return { errors, valid: false };
+
+    try {
+      const res = await fetch('https://discord.com/api/v10/users/@me', {
+        headers: { Authorization: `Bot ${credentials.botToken}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return { valid: true };
+    } catch {
+      return {
+        errors: [{ field: 'botToken', message: 'Failed to authenticate with Discord API' }],
+        valid: false,
+      };
+    }
+  }
+}

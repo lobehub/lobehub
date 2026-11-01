@@ -7,23 +7,31 @@ import type { PluginOption, ViteDevServer } from 'vite';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+import { canvasRuntimeEntries } from './plugins/vite/canvasRuntime';
+import { customBrandingLoadingScreen } from './plugins/vite/customBrandingLoadingScreen';
 import { viteEnvRestartKeys } from './plugins/vite/envRestartKeys';
+import { lobeUiImportSources } from './plugins/vite/lobeUiImports';
 import {
   createSharedRolldownOutput,
   sharedModulePreload,
   sharedOptimizeDeps,
+  sharedPwaGlobIgnores,
+  sharedPwaRuntimeCaching,
+  sharedRendererDedupe,
   sharedRendererDefine,
   sharedRendererPlugins,
 } from './plugins/vite/sharedRendererConfig';
 import { vercelSkewProtection } from './plugins/vite/vercelSkewProtection';
+import { createViteWatchOptions } from './plugins/vite/watchOptions';
 
 const isMobile = process.env.MOBILE === 'true';
+const isAuth = process.env.AUTH === 'true';
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
 
 Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 
 const isDev = process.env.NODE_ENV !== 'production';
-const platform = isMobile ? 'mobile' : 'web';
+const platform = isAuth ? 'auth' : isMobile ? 'mobile' : 'web';
 const enableViteDevTools = process.env.LOBE_VITE_DEVTOOLS === 'true';
 
 const resolveCommandExecutable = (cmd: string) => {
@@ -101,33 +109,91 @@ const openExternalBrowser = async (
 };
 
 export default defineConfig({
-  base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
+  base: isDev ? '/' : process.env.VITE_CDN_BASE || (isAuth ? '/_spa-auth/' : '/_spa/'),
   build: {
     modulePreload: sharedModulePreload,
-    outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
+    outDir: isAuth ? 'dist/auth' : isMobile ? 'dist/mobile' : 'dist/desktop',
     reportCompressedSize: false,
     rolldownOptions: {
       ...(enableViteDevTools && { devtools: {} }),
-      input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
-      output: createSharedRolldownOutput({ strictExecutionOrder: true }),
+      input: path.resolve(
+        __dirname,
+        isAuth ? 'index.auth.html' : isMobile ? 'index.mobile.html' : 'index.html',
+      ),
+      output: createSharedRolldownOutput({
+        initialEntries: {
+          main: path.resolve(
+            __dirname,
+            isAuth ? 'index.auth.html' : isMobile ? 'index.mobile.html' : 'index.html',
+          ),
+          // Mobile/auth have no Canvas consumer, so the plugin emits no runtime entries.
+          ...(!isAuth && !isMobile && canvasRuntimeEntries),
+        },
+        strictExecutionOrder: true,
+      }),
+      preserveEntrySignatures: 'allow-extension',
     },
   },
-  define: sharedRendererDefine({ isMobile, isElectron: false }),
+  define: {
+    ...sharedRendererDefine({ isMobile, isElectron: false }),
+  },
   experimental: {
     bundledDev: false,
   },
   resolve: {
+    dedupe: sharedRendererDedupe,
     tsconfigPaths: true,
   },
-  optimizeDeps: sharedOptimizeDeps,
+  optimizeDeps: {
+    ...sharedOptimizeDeps,
+    // Web rewrites UI imports to individual modules. Forcing its root barrel
+    // into the optimizer would still pre-bundle every deferred UI dependency.
+    include: [
+      ...sharedOptimizeDeps.include.filter((dependency) => dependency !== '@lobehub/ui'),
+      // Excluded ESM UI modules still need their nested CommonJS shims optimized.
+      '@lobehub/ui > use-sync-external-store/shim',
+      '@lobehub/ui > use-sync-external-store/shim/with-selector',
+      '@lobehub/ui > lru_map',
+      '@lobehub/ui > style-to-js',
+      '@lobehub/ui > @primer/octicons',
+      '@lobehub/ui > extend',
+      '@lobehub/ui > dayjs/plugin/advancedFormat.js',
+      '@lobehub/ui > dayjs/plugin/customParseFormat.js',
+      '@lobehub/ui > dayjs/plugin/localeData.js',
+      '@lobehub/ui > dayjs/plugin/weekday.js',
+      '@lobehub/ui > dayjs/plugin/weekOfYear.js',
+      '@lobehub/ui > dayjs/plugin/weekYear.js',
+    ],
+    exclude: [...sharedOptimizeDeps.exclude, ...lobeUiImportSources, '@lobehub/icons'],
+  },
   plugins: [
-    vercelSkewProtection(),
-    viteEnvRestartKeys(['APP_URL']),
-    enableViteDevTools && DevTools({
-      build: {
-        withApp: true,
+    isMobile &&
+      isDev && {
+        name: 'mobile-runtime-html-dev-entry',
+        enforce: 'pre' as const,
+        configureServer(server: ViteDevServer) {
+          server.middlewares.use((req, _res, next) => {
+            const raw = req.url;
+            if (!raw) return next();
+            const q = raw.indexOf('?');
+            const pathOnly = q === -1 ? raw : raw.slice(0, q);
+            const search = q === -1 ? '' : raw.slice(q);
+            if (pathOnly === '/' || pathOnly === '/index.html') {
+              req.url = `/index.mobile.html${search}`;
+            }
+            next();
+          });
+        },
       },
-    }),
+    vercelSkewProtection(),
+    customBrandingLoadingScreen(),
+    viteEnvRestartKeys(['APP_URL']),
+    enableViteDevTools &&
+      DevTools({
+        build: {
+          withApp: true,
+        },
+      }),
     ...sharedRendererPlugins({ platform }),
 
     isDev && {
@@ -249,52 +315,66 @@ export default defineConfig({
       },
     },
 
-    VitePWA({
-      injectRegister: null,
-      manifest: false,
-      registerType: 'prompt',
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,woff2}'],
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-        runtimeCaching: [
-          {
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'google-fonts-stylesheets' },
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-          },
-          {
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: { maxAgeSeconds: 60 * 60 * 24 * 365, maxEntries: 30 },
+    !isAuth &&
+      VitePWA({
+        injectRegister: null,
+        manifest: false,
+        registerType: 'prompt',
+        workbox: {
+          globIgnores: sharedPwaGlobIgnores,
+          globPatterns: ['**/*.{js,css,html,woff2}'],
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          runtimeCaching: [
+            ...sharedPwaRuntimeCaching,
+            {
+              handler: 'StaleWhileRevalidate',
+              options: { cacheName: 'google-fonts-stylesheets' },
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             },
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-          },
-          {
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'image-assets',
-              expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 100 },
+            {
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-webfonts',
+                expiration: { maxAgeSeconds: 60 * 60 * 24 * 365, maxEntries: 30 },
+              },
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
             },
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico|avif)$/i,
-          },
-          {
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxAgeSeconds: 60 * 5, maxEntries: 50 },
+            {
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'image-assets',
+                expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 100 },
+              },
+              urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico|avif)$/i,
             },
-            urlPattern: /\/(api|trpc)\/.*/i,
-          },
-        ],
-      },
-    }),
+            {
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'api-cache',
+                expiration: { maxAgeSeconds: 60 * 5, maxEntries: 50 },
+              },
+              urlPattern: /\/(api|trpc)\/.*/i,
+            },
+          ],
+        },
+      }),
   ].filter(Boolean) as PluginOption[],
 
   server: {
     cors: true,
     host: true,
-    port: 9876,
+    port: isMobile
+      ? Number(process.env.MOBILE_SPA_PORT) || 3012
+      : isAuth
+        ? Number(process.env.AUTH_SPA_PORT) || 3013
+        : Number(process.env.SPA_PORT) || 9876,
+    // The dev orchestrator (scripts/devStartupSequence.mts) pre-resolves a free
+    // port and injects it via env; never silently drift to another port, since
+    // downstream consumers locate this server through that env contract.
+    strictPort: true,
+    // Transform imports when requested, rather than racing ahead through the
+    // chat shell's large dependency graph while the optimizer is still running.
+    preTransformRequests: false,
     proxy: {
       '/api': `http://localhost:${process.env.PORT || 3010}`,
       '/oidc': `http://localhost:${process.env.PORT || 3010}`,
@@ -302,51 +382,13 @@ export default defineConfig({
       '/webapi': `http://localhost:${process.env.PORT || 3010}`,
     },
     warmup: {
+      // Pre-transform entry modules; Vite follows their static imports on demand.
+      // Whole-tree globs also compile lazy routes, tests and server-only packages.
       clientFiles: [
-        // src/ business code
-        './src/initialize.ts',
-        './src/spa/**/*.tsx',
-        './src/business/**/*.{ts,tsx}',
-        './src/components/**/*.{ts,tsx}',
-        './src/config/**/*.ts',
-        './src/const/**/*.ts',
-        './src/envs/**/*.ts',
-        './src/features/**/*.{ts,tsx}',
-        './src/helpers/**/*.ts',
-        './src/hooks/**/*.{ts,tsx}',
-        './src/layout/**/*.{ts,tsx}',
-        './src/libs/**/*.{ts,tsx}',
-        './src/locales/**/*.ts',
-        './src/routes/**/*.{ts,tsx}',
-        './src/services/**/*.ts',
-        './src/store/**/*.{ts,tsx}',
-        './src/styles/**/*.ts',
-        './src/utils/**/*.{ts,tsx}',
-
-        // monorepo packages
-        './packages/types/src/**/*.ts',
-        './packages/const/src/**/*.ts',
-        './packages/utils/src/**/*.ts',
-        './packages/context-engine/src/**/*.ts',
-        './packages/prompts/src/**/*.ts',
-        './packages/model-bank/src/**/*.ts',
-        './packages/model-runtime/src/**/*.ts',
-        './packages/agent-runtime/src/**/*.ts',
-        './packages/conversation-flow/src/**/*.ts',
-        './packages/electron-client-ipc/src/**/*.ts',
-        './packages/builtin-agents/src/**/*.ts',
-        './packages/builtin-skills/src/**/*.ts',
-        './packages/builtin-tool-*/src/**/*.ts',
-        './packages/builtin-tools/src/**/*.ts',
-        './packages/business/*/src/**/*.ts',
-        './packages/config/src/**/*.ts',
-        './packages/edge-config/src/**/*.ts',
-        './packages/editor-runtime/src/**/*.ts',
-        './packages/fetch-sse/src/**/*.ts',
-        './packages/desktop-bridge/src/**/*.ts',
-        './packages/python-interpreter/src/**/*.ts',
-        './packages/agent-manager-runtime/src/**/*.ts',
+        './src/spa/entry.auth.tsx',
+        ...(isAuth ? [] : [isMobile ? './src/spa/entry.mobile.tsx' : './src/spa/entry.web.tsx']),
       ],
     },
+    watch: createViteWatchOptions([__dirname]),
   },
 });

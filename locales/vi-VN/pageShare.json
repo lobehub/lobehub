@@ -1,0 +1,22 @@
+{
+  "error.invalidFormat.desc": "Bạn vẫn có thể đọc nó. Bố cục có thể khác so với bản gốc.",
+  "error.invalidFormat.ownerHint": "Lưu lại trong trình chỉnh sửa để khôi phục bố cục ban đầu.",
+  "error.invalidFormat.title": "Trang này không thể hiển thị theo định dạng ban đầu",
+  "popover.copyLink": "Sao chép liên kết",
+  "popover.copyLinkSuccess": "Liên kết đã được sao chép",
+  "popover.linkHint": "Bất kỳ ai có liên kết đều có thể xem trang này",
+  "popover.permissionLink": "Bất kỳ ai có liên kết",
+  "popover.permissionPrivate": "Riêng tư",
+  "popover.permissionWorkspace": "Bất kỳ ai trong không gian làm việc",
+  "popover.privateHint": "Chỉ bạn mới có thể truy cập trang này",
+  "popover.sectionViews_one": "{{count}} lượt xem",
+  "popover.sectionViews_other": "{{count}} lượt xem",
+  "popover.title": "Chia sẻ Trang",
+  "popover.updateError": "Không thể cập nhật cài đặt chia sẻ",
+  "popover.visibility": "Khả năng hiển thị",
+  "popover.visibilityUpdated": "Khả năng hiển thị đã được cập nhật",
+  "popover.workspaceHint": "Bất kỳ ai trong không gian làm việc này đều có thể xem trang này",
+  "shareButton.label": "Chia sẻ",
+  "shell.sharedBy": "Được chia sẻ bởi {{name}}",
+  "shell.updatedAt": "Cập nhật {{relative}}"
+}

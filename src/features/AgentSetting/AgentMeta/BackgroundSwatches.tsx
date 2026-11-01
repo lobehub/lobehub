@@ -6,11 +6,19 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_BACKGROUND_COLOR } from '@/const/meta';
 
 interface BackgroundSwatchesProps extends Omit<ColorSwatchesProps, 'colors'> {
+  disabled?: boolean;
   onValuesChange?: ColorSwatchesProps['onChange'];
 }
 
 const BackgroundSwatches = memo<BackgroundSwatchesProps>(
-  ({ defaultValue = DEFAULT_BACKGROUND_COLOR, value, onChange, onValuesChange, ...rest }) => {
+  ({
+    defaultValue = DEFAULT_BACKGROUND_COLOR,
+    value,
+    onChange,
+    onValuesChange,
+    disabled,
+    ...rest
+  }) => {
     const { t } = useTranslation('color');
 
     const colors = useMemo(
@@ -77,7 +85,15 @@ const BackgroundSwatches = memo<BackgroundSwatchesProps>(
         colors={colors}
         defaultValue={defaultValue}
         value={value}
+        style={{
+          cursor: disabled ? 'not-allowed' : undefined,
+          opacity: disabled ? 0.5 : undefined,
+          pointerEvents: disabled ? 'none' : undefined,
+          ...rest.style,
+        }}
         onChange={(v) => {
+          if (disabled) return;
+
           onChange?.(v);
           onValuesChange?.(v);
         }}

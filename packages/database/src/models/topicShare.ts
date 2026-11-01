@@ -4,6 +4,13 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { agents, chatGroups, chatGroupsAgents, topics, topicShares } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import {
+  normalizeInboxAgentAvatar,
+  normalizeInboxAgentMeta,
+  normalizeInboxAgentTitle,
+} from '../utils/inboxAgent';
+import { notTrashed } from '../utils/softDelete';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 export type TopicShareData = NonNullable<
   Awaited<ReturnType<(typeof TopicShareModel)['findByShareId']>>
@@ -12,11 +19,22 @@ export type TopicShareData = NonNullable<
 export class TopicShareModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  // topic_shares.visibility is share semantics ('private' | 'link'), not the
+  // workspace row-visibility ('public' | 'private') — pass only the scope
+  // columns so buildWorkspaceWhere never filters on it.
+  private ownership = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      { userId: topicShares.userId, workspaceId: topicShares.workspaceId },
+    );
 
   /**
    * Create or get existing share for a topic.
@@ -24,9 +42,12 @@ export class TopicShareModel {
    * If record already exists, returns the existing one.
    */
   create = async (topicId: string, visibility: ShareVisibility = 'private') => {
-    // First verify the topic belongs to the user
+    // First verify the topic belongs to the user (or workspace).
     const topic = await this.db.query.topics.findFirst({
-      where: and(eq(topics.id, topicId), eq(topics.userId, this.userId)),
+      where: and(
+        eq(topics.id, topicId),
+        buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+      ),
     });
 
     if (!topic) {
@@ -37,8 +58,12 @@ export class TopicShareModel {
       .insert(topicShares)
       .values({
         topicId,
-        userId: this.userId,
+        // Keep the topic creator as the share owner even when a workspace
+        // admin manages the share — downstream access checks treat this
+        // column as ownerId for private-share visibility.
+        userId: topic.userId,
         visibility,
+        workspaceId: this.workspaceId ?? null,
       })
       .onConflictDoNothing({ target: topicShares.topicId })
       .returning();
@@ -58,7 +83,7 @@ export class TopicShareModel {
     const [result] = await this.db
       .update(topicShares)
       .set({ updatedAt: new Date(), visibility })
-      .where(and(eq(topicShares.topicId, topicId), eq(topicShares.userId, this.userId)))
+      .where(and(eq(topicShares.topicId, topicId), this.ownership()))
       .returning();
 
     return result || null;
@@ -70,7 +95,7 @@ export class TopicShareModel {
   deleteByTopicId = async (topicId: string) => {
     return this.db
       .delete(topicShares)
-      .where(and(eq(topicShares.topicId, topicId), eq(topicShares.userId, this.userId)));
+      .where(and(eq(topicShares.topicId, topicId), this.ownership()));
   };
 
   /**
@@ -85,7 +110,7 @@ export class TopicShareModel {
         visibility: topicShares.visibility,
       })
       .from(topicShares)
-      .where(and(eq(topicShares.topicId, topicId), eq(topicShares.userId, this.userId)))
+      .where(and(eq(topicShares.topicId, topicId), this.ownership()))
       .limit(1);
 
     return result[0] || null;
@@ -102,6 +127,7 @@ export class TopicShareModel {
         agentBackgroundColor: agents.backgroundColor,
         agentId: topics.agentId,
         agentMarketIdentifier: agents.marketIdentifier,
+        agentName: agents.name,
         agentSlug: agents.slug,
         agentTitle: agents.title,
         groupAvatar: chatGroups.avatar,
@@ -116,9 +142,15 @@ export class TopicShareModel {
         title: topics.title,
         topicId: topics.id,
         visibility: topicShares.visibility,
+        workspaceId: topicShares.workspaceId,
       })
       .from(topicShares)
-      .innerJoin(topics, eq(topicShares.topicId, topics.id))
+      // A share is resolved with no user scope at all (that is the point of a
+      // public link), so it never passes through `buildWorkspaceWhere` and has
+      // to carry the recycle-bin gate itself: a trashed topic keeps its
+      // `topic_shares` row and its messages until purge, and without this an
+      // anonymous visitor could keep reading a deleted conversation.
+      .innerJoin(topics, and(eq(topicShares.topicId, topics.id), notTrashed(topics.isDeleted)))
       .leftJoin(agents, eq(topics.agentId, agents.id))
       .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
       .where(eq(topicShares.id, shareId))
@@ -143,6 +175,8 @@ export class TopicShareModel {
           avatar: agents.avatar,
           backgroundColor: agents.backgroundColor,
           id: agents.id,
+          name: agents.name,
+          slug: agents.slug,
           title: agents.title,
         })
         .from(chatGroupsAgents)
@@ -151,10 +185,21 @@ export class TopicShareModel {
         .orderBy(asc(chatGroupsAgents.order))
         .limit(4);
 
-      groupMembers = members;
+      groupMembers = members.map(({ slug, ...member }) =>
+        normalizeInboxAgentMeta(member, { slug }),
+      );
     }
 
-    return { ...share, groupMembers };
+    return {
+      ...share,
+      agentAvatar: normalizeInboxAgentAvatar(share.agentAvatar, {
+        slug: share.agentSlug,
+      }),
+      agentTitle: normalizeInboxAgentTitle(share.agentTitle, {
+        slug: share.agentSlug,
+      }),
+      groupMembers,
+    };
   };
 
   /**
@@ -186,7 +231,7 @@ export class TopicShareModel {
     const isOwner = accessUserId && share.ownerId === accessUserId;
 
     // Only check visibility for non-owners
-    // 'private' - only owner can view
+    // 'private' - only the share creator can view, even inside a workspace
     // 'link' - anyone with the link can view
     if (!isOwner && share.visibility === 'private') {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' });

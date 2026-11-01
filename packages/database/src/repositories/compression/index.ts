@@ -5,12 +5,20 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { MessageGroupItem } from '../../schemas';
 import { messageGroups, messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export interface CreateCompressionGroupParams {
   content: string;
   editorData?: any;
   messageIds: string[];
   metadata: CompressionGroupMetadata;
+  topicId: string;
+}
+
+export interface FinalizeCompressionGroupParams {
+  content: string;
+  groupId: string;
+  sourceGroupIds?: string[];
   topicId: string;
 }
 
@@ -31,11 +39,19 @@ export interface CompressionGroupResult {
 export class CompressionRepository {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private groupsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageGroups);
+
+  private messagesOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
 
   /**
    * Create a compression group and mark messages as compressed
@@ -56,6 +72,7 @@ export class CompressionRepository {
         topicId,
         type: MessageGroupType.Compression,
         userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
       })
       .returning()) as MessageGroupItem[];
 
@@ -78,7 +95,7 @@ export class CompressionRepository {
       .from(messageGroups)
       .where(
         and(
-          eq(messageGroups.userId, this.userId),
+          this.groupsOwnership(),
           eq(messageGroups.topicId, topicId),
           eq(messageGroups.type, MessageGroupType.Compression),
         ),
@@ -118,7 +135,7 @@ export class CompressionRepository {
       const existing = await this.db
         .select({ description: messageGroups.description })
         .from(messageGroups)
-        .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
+        .where(and(eq(messageGroups.id, groupId), this.groupsOwnership()));
 
       const existingMetadata = existing[0]?.description ? JSON.parse(existing[0].description) : {};
       updateData.description = JSON.stringify({ ...existingMetadata, ...metadata });
@@ -127,7 +144,70 @@ export class CompressionRepository {
     await this.db
       .update(messageGroups)
       .set(updateData)
-      .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
+      .where(and(eq(messageGroups.id, groupId), this.groupsOwnership()));
+  }
+
+  /**
+   * Finalize a new compression group and atomically supersede prior groups.
+   * Source messages move before their old groups are deleted so the cascade
+   * never removes conversation history.
+   */
+  async finalizeCompressionGroup(params: FinalizeCompressionGroupParams): Promise<void> {
+    const { content, groupId, topicId } = params;
+    const requestedSourceGroupIds = [
+      ...new Set((params.sourceGroupIds ?? []).filter((id) => id !== groupId)),
+    ];
+
+    await this.db.transaction(async (trx) => {
+      const finalizedGroups = await trx
+        .update(messageGroups)
+        .set({ content, updatedAt: new Date() })
+        .where(
+          and(
+            eq(messageGroups.id, groupId),
+            eq(messageGroups.topicId, topicId),
+            eq(messageGroups.type, MessageGroupType.Compression),
+            this.groupsOwnership(),
+          ),
+        )
+        .returning({ id: messageGroups.id });
+
+      if (finalizedGroups.length === 0) {
+        throw new Error(`Compression group not found: ${groupId}`);
+      }
+
+      if (requestedSourceGroupIds.length === 0) return;
+
+      const sourceGroups = await trx
+        .select({ id: messageGroups.id })
+        .from(messageGroups)
+        .where(
+          and(
+            inArray(messageGroups.id, requestedSourceGroupIds),
+            eq(messageGroups.topicId, topicId),
+            eq(messageGroups.type, MessageGroupType.Compression),
+            this.groupsOwnership(),
+          ),
+        );
+      const sourceGroupIds = sourceGroups.map((group) => group.id);
+
+      if (sourceGroupIds.length === 0) return;
+
+      await trx
+        .update(messages)
+        .set({ messageGroupId: groupId })
+        .where(
+          and(
+            this.messagesOwnership(),
+            eq(messages.topicId, topicId),
+            inArray(messages.messageGroupId, sourceGroupIds),
+          ),
+        );
+
+      await trx
+        .delete(messageGroups)
+        .where(and(this.groupsOwnership(), inArray(messageGroups.id, sourceGroupIds)));
+    });
   }
 
   /**
@@ -141,7 +221,7 @@ export class CompressionRepository {
     const existing = await this.db
       .select({ metadata: messageGroups.metadata })
       .from(messageGroups)
-      .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
+      .where(and(eq(messageGroups.id, groupId), this.groupsOwnership()));
 
     const existingData = (existing[0]?.metadata as Record<string, unknown>) || {};
     const newMetadata = { ...existingData, ...metadata };
@@ -149,7 +229,7 @@ export class CompressionRepository {
     await this.db
       .update(messageGroups)
       .set({ metadata: newMetadata, updatedAt: new Date() })
-      .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
+      .where(and(eq(messageGroups.id, groupId), this.groupsOwnership()));
   }
 
   /**
@@ -161,7 +241,7 @@ export class CompressionRepository {
     await this.db
       .update(messages)
       .set({ messageGroupId: groupId })
-      .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds)));
+      .where(and(this.messagesOwnership(), inArray(messages.id, messageIds)));
   }
 
   /**
@@ -173,7 +253,7 @@ export class CompressionRepository {
     await this.db
       .update(messages)
       .set({ messageGroupId: null })
-      .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds)));
+      .where(and(this.messagesOwnership(), inArray(messages.id, messageIds)));
   }
 
   /**
@@ -184,7 +264,7 @@ export class CompressionRepository {
     const [message] = await this.db
       .select({ metadata: messages.metadata })
       .from(messages)
-      .where(and(eq(messages.id, messageId), eq(messages.userId, this.userId)));
+      .where(and(eq(messages.id, messageId), this.messagesOwnership()));
 
     if (!message) return;
 
@@ -194,7 +274,7 @@ export class CompressionRepository {
     await this.db
       .update(messages)
       .set({ metadata: newMetadata })
-      .where(and(eq(messages.id, messageId), eq(messages.userId, this.userId)));
+      .where(and(eq(messages.id, messageId), this.messagesOwnership()));
   }
 
   /**
@@ -206,7 +286,7 @@ export class CompressionRepository {
       .from(messages)
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.messagesOwnership(),
           eq(messages.topicId, topicId),
           isNull(messages.messageGroupId),
         ),
@@ -221,7 +301,7 @@ export class CompressionRepository {
     return this.db
       .select()
       .from(messages)
-      .where(and(eq(messages.userId, this.userId), eq(messages.messageGroupId, groupId)))
+      .where(and(this.messagesOwnership(), eq(messages.messageGroupId, groupId)))
       .orderBy(messages.createdAt);
   }
 
@@ -233,11 +313,11 @@ export class CompressionRepository {
     await this.db
       .update(messages)
       .set({ messageGroupId: null })
-      .where(and(eq(messages.userId, this.userId), eq(messages.messageGroupId, groupId)));
+      .where(and(this.messagesOwnership(), eq(messages.messageGroupId, groupId)));
 
     // 2. Delete the group
     await this.db
       .delete(messageGroups)
-      .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
+      .where(and(eq(messageGroups.id, groupId), this.groupsOwnership()));
   }
 }

@@ -2,22 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeOpenRouterAI, params } from './index';
 
-const provider = 'openrouter';
-const defaultBaseURL = 'https://openrouter.ai/api/v1';
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 
-testProvider({
-  provider,
-  defaultBaseURL,
-  chatModel: 'mistralai/mistral-7b-instruct:free',
-  Runtime: LobeOpenRouterAI,
-  chatDebugEnv: 'DEBUG_OPENROUTER_CHAT_COMPLETION',
-  test: {
-    skipAPICall: true,
-  },
-});
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -39,36 +30,6 @@ afterEach(() => {
 });
 
 describe('LobeOpenRouterAI - custom features', () => {
-  describe('Params Export', () => {
-    it('should export params object', () => {
-      expect(params).toBeDefined();
-      expect(params.provider).toBe('openrouter');
-      expect(params.baseURL).toBe('https://openrouter.ai/api/v1');
-    });
-
-    it('should have chatCompletion configuration', () => {
-      expect(params.chatCompletion).toBeDefined();
-      expect(params.chatCompletion.handlePayload).toBeDefined();
-    });
-
-    it('should have constructorOptions with headers', () => {
-      expect(params.constructorOptions).toBeDefined();
-      expect(params.constructorOptions.defaultHeaders).toBeDefined();
-      expect(params.constructorOptions.defaultHeaders['HTTP-Referer']).toBe('https://lobehub.com');
-      expect(params.constructorOptions.defaultHeaders['X-Title']).toBe('LobeHub');
-    });
-
-    it('should have debug configuration', () => {
-      expect(params.debug).toBeDefined();
-      expect(params.debug.chatCompletion).toBeDefined();
-    });
-
-    it('should have models function', () => {
-      expect(params.models).toBeDefined();
-      expect(typeof params.models).toBe('function');
-    });
-  });
-
   describe('Debug Configuration', () => {
     it('should disable debug by default', () => {
       delete process.env.DEBUG_OPENROUTER_CHAT_COMPLETION;
@@ -85,13 +46,6 @@ describe('LobeOpenRouterAI - custom features', () => {
   });
 
   describe('Constructor Options', () => {
-    it('should set default headers', () => {
-      const instance = new LobeOpenRouterAI({ apiKey: 'test' });
-      expect(instance).toBeDefined();
-      // Headers are set in constructorOptions but not directly accessible
-      // We can verify by checking that the instance was created successfully
-    });
-
     it('should use custom base URL when provided', () => {
       const customBaseURL = 'https://custom.openrouter.ai/api/v1';
       const instance = new LobeOpenRouterAI({ apiKey: 'test', baseURL: customBaseURL });
@@ -1347,29 +1301,24 @@ describe('LobeOpenRouterAI - custom features', () => {
       expect(models).toEqual([]);
     });
 
-    it('should return empty array when fetch fails', async () => {
+    it('should throw when fetch fails', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
           ok: false,
+          status: 401,
         }),
       );
 
-      const models = await params.models();
-
-      expect(models).toEqual([]);
+      await expect(params.models()).rejects.toThrow(
+        'OpenRouter models API request failed with status 401',
+      );
     });
 
-    it('should return empty array when fetch throws error', async () => {
+    it('should throw when fetch throws error', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
 
-      const models = await params.models();
-
-      expect(models).toEqual([]);
-      expect(console.error).toHaveBeenCalledWith(
-        'Failed to fetch OpenRouter frontend models:',
-        expect.any(Error),
-      );
+      await expect(params.models()).rejects.toThrow('Network error');
     });
 
     it('should handle models with missing optional fields', async () => {

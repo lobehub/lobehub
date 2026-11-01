@@ -5,15 +5,24 @@
   "exports": {
     ".": "./src/index.ts",
     "./store": "./src/store/types.ts",
-    "./recorder": "./src/recorder/index.ts"
+    "./recorder": "./src/recorder/index.ts",
+    "./replay": "./src/replay/index.ts"
   },
   "main": "./src/index.ts",
   "bin": {
     "agent-tracing": "./src/cli/index.ts",
     "at": "./src/cli/index.ts"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "dependencies": {
+    "@lobechat/eval-rubric": "workspace:*",
     "commander": "^13.1.0",
-    "gpt-tokenizer": "^3.4.0"
+    "gpt-tokenizer": "^3.4.0",
+    "model-bank": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "5.0.0"
   }
 }

@@ -1,0 +1,266 @@
+import type * as ModelBankModule from 'model-bank';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AiAgentService } from '../index';
+
+const { mockCreateOperation, mockGetAgentConfig, mockMessageCreate } = vi.hoisted(() => ({
+  mockCreateOperation: vi.fn(),
+  mockGetAgentConfig: vi.fn(),
+  mockMessageCreate: vi.fn(),
+}));
+
+vi.mock('@/libs/trusted-client', () => ({
+  generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
+  getTrustedClientTokenForSession: vi.fn().mockResolvedValue(undefined),
+  isTrustedClientEnabled: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock('@/database/models/message', () => ({
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn(),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: mockGetAgentConfig,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/plugin', () => ({
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(null),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/thread', () => ({
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/agentRuntime', () => ({
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+    };
+  }),
+}));
+
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/composio', () => ({
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
+}));
+
+vi.mock('@/server/modules/Mecha', () => ({
+  createServerAgentToolsEngine: vi.fn().mockReturnValue({
+    generateToolsDetailed: vi.fn().mockReturnValue({ enabledToolIds: [], tools: [] }),
+    getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
+  }),
+  serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
+}));
+
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: {
+    isConfigured: false,
+    queryDeviceList: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
+}));
+
+// The share path's atomic cap reservations open real DB transactions — stub
+// them so the forced-headless test below can drive execAgent with a bare mock db.
+vi.mock('../shareVisitorAbuseGuards', () => ({
+  reserveShareVisitorTopic: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+  reserveShareVisitorTurn: vi.fn().mockResolvedValue({ id: 'msg-1' }),
+}));
+
+vi.mock('model-bank', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelBankModule>();
+  return {
+    ...actual,
+    LOBE_DEFAULT_MODEL_LIST: [
+      {
+        abilities: { functionCall: true, video: false, vision: true },
+        id: 'gpt-4',
+        providerId: 'openai',
+      },
+    ],
+  };
+});
+
+describe('AiAgentService.execAgent - headless approval default', () => {
+  let service: AiAgentService;
+  const mockDb = {} as any;
+  const userId = 'test-user-id';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockCreateOperation.mockResolvedValue({
+      autoStarted: true,
+      messageId: 'queue-msg-1',
+      operationId: 'op-123',
+      success: true,
+    });
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: '',
+    });
+    service = new AiAgentService(mockDb, userId);
+  });
+
+  it('should default to headless approval mode when userInterventionConfig is not provided', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'headless' });
+  });
+
+  it('should respect explicit userInterventionConfig when provided', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Hello',
+      userInterventionConfig: { approvalMode: 'manual' },
+    });
+
+    expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'manual' });
+  });
+
+  it('forwards clientIp / userAgent into the createOperation appContext when provided', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      clientIp: '203.0.113.7',
+      prompt: 'Hello',
+      userAgent: 'Mozilla/5.0 (Test)',
+    });
+
+    expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.appContext).toMatchObject({
+      clientIp: '203.0.113.7',
+      userAgent: 'Mozilla/5.0 (Test)',
+    });
+  });
+
+  it('leaves clientIp / userAgent undefined in the createOperation appContext when not provided', async () => {
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+    const { appContext } = mockCreateOperation.mock.calls[0][0];
+    expect(appContext.clientIp).toBeUndefined();
+    expect(appContext.userAgent).toBeUndefined();
+  });
+
+  const shareGate = {
+    agentId: 'agent-1',
+    shareConfig: { toolGrants: [] },
+    shareId: 'share-1',
+    visitorUserId: 'visitor-1',
+  };
+
+  it('honors the visitor-selected approval mode on a share-visitor run', async () => {
+    // The visitor is the approver of a share run, so their own mode drives it.
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Hello',
+      shareGate,
+      userInterventionConfig: { approvalMode: 'auto-run' },
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'auto-run' });
+  });
+
+  it('falls back to manual, never headless, for a share-visitor run without a config', async () => {
+    // `headless` would auto-run `'required'` calls, granting consent the
+    // visitor never gave.
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', shareGate });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.userInterventionConfig).toEqual({ approvalMode: 'manual' });
+  });
+
+  it('should respect explicit allow-list approval mode with allowList', async () => {
+    const config = { allowList: ['tool-a', 'tool-b'], approvalMode: 'allow-list' as const };
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Hello',
+      userInterventionConfig: config,
+    });
+
+    expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.userInterventionConfig).toEqual(config);
+  });
+});

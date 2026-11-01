@@ -22,6 +22,7 @@ export enum DiscoverTab {
   Providers = 'provider',
   Skills = 'skill',
   User = 'user',
+  Workspace = 'workspace',
 }
 
 export type IdentifiersResponse = {

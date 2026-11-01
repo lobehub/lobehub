@@ -1,13 +1,25 @@
 'use client';
 
-import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Avatar,
+  Block,
+  confirmModal,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { t as translate } from 'i18next';
 import { DownloadIcon, Loader2, MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors } from '@/store/tool/selectors';
@@ -36,12 +48,26 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+const openMarketSkillDetailModal = (identifier: string) =>
+  createModal({
+    content: (
+      <Suspense fallback={<div style={{ height: '100%' }} />}>
+        <MarketSkillDetail identifier={identifier} />
+      </Suspense>
+    ),
+    footer: null,
+    styles: { content: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } },
+    title: translate('dev.title.skillDetails', { ns: 'plugin' }),
+    width: 960,
+  });
+
 const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, identifier }) => {
   const { t } = useTranslation('plugin');
   const { t: tc } = useTranslation('common');
-  const [detailOpen, setDetailOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const installed = useToolStore(agentSkillsSelectors.isAgentSkill(identifier));
   const installedSkill = useToolStore(agentSkillsSelectors.getAgentSkillByIdentifier(identifier));
@@ -51,7 +77,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
   ]);
 
   const handleInstall = useCallback(async () => {
-    if (installing || installed) return;
+    if (!canCreate || installing || installed) return;
     setInstalling(true);
     try {
       await agentSkillService.importFromMarket(identifier);
@@ -61,10 +87,10 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
     } finally {
       setInstalling(false);
     }
-  }, [identifier, installing, installed, refreshAgentSkills]);
+  }, [canCreate, identifier, installing, installed, refreshAgentSkills]);
 
   const handleUninstall = useCallback(() => {
-    if (!installedSkill) return;
+    if (!canEdit || !installedSkill) return;
     confirmModal({
       cancelText: tc('cancel'),
       content: t('store.actions.confirmUninstall'),
@@ -75,7 +101,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
       },
       title: t('store.actions.uninstall'),
     });
-  }, [installedSkill, deleteAgentSkill, t, tc]);
+  }, [canEdit, installedSkill, deleteAgentSkill, t, tc]);
 
   const handleDownload = useCallback(async () => {
     if (!installedSkill?.zipFileHash) return;
@@ -110,6 +136,7 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
               : []),
             {
               danger: true,
+              disabled: !canEdit,
               icon: <Icon icon={Trash2} />,
               key: 'uninstall',
               label: t('store.actions.uninstall'),
@@ -117,54 +144,46 @@ const MarketSkillItem = memo<DiscoverSkillItem>(({ name, icon, description, iden
             },
           ]}
         >
-          <ActionIcon icon={MoreVerticalIcon} loading={loading} />
+          <ActionIcon disabled={!canEdit} icon={MoreVerticalIcon} loading={loading} />
         </DropdownMenu>
       );
     }
 
     if (installing) return <ActionIcon loading icon={Loader2} />;
 
-    return <ActionIcon icon={Plus} title={t('store.actions.install')} onClick={handleInstall} />;
+    return (
+      <ActionIcon
+        disabled={!canCreate}
+        icon={Plus}
+        title={t('store.actions.install')}
+        onClick={handleInstall}
+      />
+    );
   };
 
   return (
-    <>
-      <Flexbox className={itemStyles.container} gap={0}>
-        <Block
-          horizontal
-          align={'center'}
-          gap={12}
-          paddingBlock={12}
-          paddingInline={12}
-          variant={'outlined'}
-        >
-          <Avatar avatar={icon || name} shape={'square'} size={40} style={{ flex: 'none' }} />
-          <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <Flexbox horizontal align="center" gap={8}>
-              <span className={styles.title} onClick={() => setDetailOpen(true)}>
-                {name}
-              </span>
-              <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />
-            </Flexbox>
-            {description && <span className={itemStyles.description}>{description}</span>}
-          </Flexbox>
-          {renderAction()}
-        </Block>
-      </Flexbox>
-      <Modal
-        destroyOnHidden
-        footer={null}
-        open={detailOpen}
-        styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
-        title={t('dev.title.skillDetails')}
-        width={960}
-        onCancel={() => setDetailOpen(false)}
+    <Flexbox className={itemStyles.container} gap={0}>
+      <Block
+        horizontal
+        align={'center'}
+        gap={12}
+        paddingBlock={12}
+        paddingInline={12}
+        variant={'outlined'}
       >
-        <Suspense fallback={<div style={{ height: '100%' }} />}>
-          <MarketSkillDetail identifier={identifier} />
-        </Suspense>
-      </Modal>
-    </>
+        <Avatar avatar={icon || name} shape={'square'} size={40} style={{ flex: 'none' }} />
+        <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
+          <Flexbox horizontal align="center" gap={8}>
+            <span className={styles.title} onClick={() => openMarketSkillDetailModal(identifier)}>
+              {name}
+            </span>
+            <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />
+          </Flexbox>
+          {description && <span className={itemStyles.description}>{description}</span>}
+        </Flexbox>
+        {renderAction()}
+      </Block>
+    </Flexbox>
   );
 });
 

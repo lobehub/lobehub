@@ -1,36 +1,40 @@
 'use client';
 
 import type { TaskTemplate } from '@lobechat/const';
-import { ActionIcon, Button, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
-import { createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Markdown } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createModal,
+  Divider,
+  type ModalInstance,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
 import { Clock, X } from 'lucide-react';
 import { memo, useEffect, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 
+import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
-import { SkillAuthRow } from './SkillAuthRow';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
 import { useScheduleText } from './useScheduleText';
 import { useTaskTemplateCreate } from './useTaskTemplateCreate';
 import { useVisibleAuthSpecs } from './useVisibleAuthSpecs';
 
 interface TaskTemplateDetailContentProps {
-  onCreated: (templateId: string) => void;
+  onCreated: (templateId: number) => void;
   template: TaskTemplate;
 }
 
 const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
   ({ template, onCreated }) => {
-    const { t } = useTranslation('taskTemplate');
     const { close } = useModalContext();
 
     const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
 
-    const title = t(`${template.id}.title`, { defaultValue: '' });
-    const description = t(`${template.id}.description`, { defaultValue: '' });
-    const instruction = t(`${template.id}.instruction`, { defaultValue: '' });
+    const title = template.title;
+    const description = template.description;
+    const instruction = template.instruction;
 
     const visibleAuthSpecs = useVisibleAuthSpecs(template);
     const scheduleText = useScheduleText(template.cronPattern);
@@ -75,7 +79,7 @@ const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
 
         {instruction.trim().length > 0 && (
           <>
-            <Divider dashed style={{ marginBlock: 0 }} />
+            <Divider dashed />
             <Markdown variant={'chat'}>{instruction}</Markdown>
           </>
         )}
@@ -83,8 +87,9 @@ const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
         {visibleAuthSpecs.length > 0 && (
           <Flexbox gap={6}>
             {visibleAuthSpecs.map((spec) => (
-              <SkillAuthRow
-                key={`${spec.source}:${spec.provider}`}
+              <ConnectorAuthRow
+                disabled={disabled}
+                key={`${spec.source}:${spec.identifier}`}
                 spec={spec}
                 onError={handleConnectError}
               />
@@ -111,7 +116,7 @@ const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
 TaskTemplateDetailContent.displayName = 'TaskTemplateDetailContent';
 
 interface CreateTaskTemplateDetailModalOptions {
-  onCreated: (templateId: string) => void;
+  onCreated: (templateId: number) => void;
   template: TaskTemplate;
 }
 

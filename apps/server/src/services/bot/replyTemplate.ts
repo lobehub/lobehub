@@ -1,0 +1,1017 @@
+import {
+  formatErrorRef,
+  getErrorCodeSpec,
+  normalizeChatMessageError,
+} from '@lobechat/model-runtime/errors';
+import type {
+  ChatErrorBudgetContext,
+  ChatErrorDispatchContext,
+  ChatErrorHeterogeneousContext,
+} from '@lobechat/types';
+
+import type { StepPresentationData } from '../agentRuntime/types';
+import { getExtremeAck } from './ackPhrases';
+// Import from the leaf modules (`const` / `utils`) instead of the
+// `./platforms` barrel: the barrel instantiates every platform definition
+// (and its ClientFactory) at import time, and platform leaf files such as the
+// Telegram Guest outbound path import this template for localized copy.
+import { type BotReplyLocale } from './platforms/const';
+import { formatDuration } from './platforms/utils';
+import { renderDispatchError } from './renderDispatchError';
+import { renderHeterogeneousError } from './renderHeterogeneousError';
+
+// Use raw Unicode emoji instead of Chat SDK emoji placeholders,
+// because bot-callback webhooks send via DiscordPlatformClient directly
+// (not through the Chat SDK adapter that resolves placeholders).
+const EMOJI_THINKING = '💭';
+
+// ==================== Message Splitting ====================
+
+const DEFAULT_CHAR_LIMIT = 1800;
+
+export function splitMessage(text: string, limit = DEFAULT_CHAR_LIMIT): string[] {
+  if (text.length <= limit) {
+    // Whitespace-only input would be rejected by Telegram as "message text is empty",
+    // so drop it here rather than letting downstream make a guaranteed-failing API call.
+    return text.trim() ? [text] : [];
+  }
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= limit) {
+      if (remaining.trim()) chunks.push(remaining);
+      break;
+    }
+
+    // Try to find a paragraph break
+    let splitAt = remaining.lastIndexOf('\n\n', limit);
+    // Fall back to line break
+    if (splitAt <= 0) splitAt = remaining.lastIndexOf('\n', limit);
+    // Hard cut
+    if (splitAt <= 0) splitAt = limit;
+
+    const chunk = remaining.slice(0, splitAt);
+    // A boundary near the start (e.g. text begins with "\n\n") can produce a
+    // whitespace-only chunk; emitting it would trigger Telegram's empty-text
+    // 400 and silently drop the rest of the reply.
+    if (chunk.trim()) chunks.push(chunk);
+    remaining = remaining.slice(splitAt).replace(/^\n+/, '');
+  }
+
+  return chunks;
+}
+
+// ==================== Params ====================
+
+type ToolCallItem = { apiName: string; arguments?: string; identifier: string };
+type ToolResultItem = { apiName: string; identifier: string; isSuccess?: boolean; output?: string };
+
+export interface RenderStepParams extends StepPresentationData {
+  elapsedMs?: number;
+  lastContent?: string;
+  lastToolsCalling?: ToolCallItem[];
+  totalToolCalls?: number;
+}
+
+// ==================== Helpers ====================
+
+function formatToolName(tc: { apiName: string; identifier: string }): string {
+  if (tc.identifier) return `**${tc.identifier}·${tc.apiName}**`;
+  return `**${tc.apiName}**`;
+}
+
+function formatToolCall(tc: ToolCallItem): string {
+  if (tc.arguments) {
+    try {
+      const args = JSON.parse(tc.arguments);
+      const entries = Object.entries(args);
+      if (entries.length > 0) {
+        const [k, v] = entries[0];
+        return `${formatToolName(tc)}(${k}: ${JSON.stringify(v)})`;
+      }
+    } catch {
+      // invalid JSON, show name only
+    }
+  }
+  return formatToolName(tc);
+}
+
+export function summarizeOutput(
+  output: string | undefined,
+  isSuccess?: boolean,
+): string | undefined {
+  if (!output) return undefined;
+  const trimmed = output.trim();
+  if (trimmed.length === 0) return undefined;
+
+  const chars = trimmed.length;
+  const status = isSuccess === false ? 'error' : 'success';
+  return `${status}: ${chars.toLocaleString()} chars`;
+}
+
+function formatPendingTools(toolsCalling: ToolCallItem[]): string {
+  return toolsCalling.map((tc) => `○ ${formatToolCall(tc)}`).join('\n');
+}
+
+function formatCompletedTools(
+  toolsCalling: ToolCallItem[],
+  toolsResult?: ToolResultItem[],
+): string {
+  return toolsCalling
+    .map((tc, i) => {
+      const callStr = `⏺ ${formatToolCall(tc)}`;
+      const result = toolsResult?.[i];
+      const summary = summarizeOutput(result?.output, result?.isSuccess);
+      if (summary) {
+        return `${callStr}\n⎿  ${summary}`;
+      }
+      return callStr;
+    })
+    .join('\n');
+}
+
+export { formatDuration, formatTokens } from './platforms/utils';
+
+function renderProgressHeader(
+  params: { elapsedMs?: number; totalToolCalls?: number },
+  lng?: BotReplyLocale,
+): string {
+  const { elapsedMs, totalToolCalls } = params;
+  if (!totalToolCalls || totalToolCalls <= 0) return '';
+
+  const time = elapsedMs && elapsedMs > 0 ? ` · ${formatDuration(elapsedMs)}` : '';
+  return getSystemStrings(lng).toolsCallingHeader(totalToolCalls, time);
+}
+
+// ==================== 1. Start ====================
+
+export const renderStart = getExtremeAck;
+
+// ==================== 2. LLM Generating ====================
+
+/**
+ * LLM step just finished. Returns the message body (no usage stats).
+ * Stats are handled separately via `PlatformClient.formatReply`.
+ */
+export function renderLLMGenerating(params: RenderStepParams, lng?: BotReplyLocale): string {
+  const { content, elapsedMs, lastContent, reasoning, toolsCalling, totalToolCalls } = params;
+  const displayContent = (content || lastContent)?.trim();
+  const header = renderProgressHeader({ elapsedMs, totalToolCalls }, lng);
+
+  // Sub-state: LLM decided to call tools → show content + pending tool calls (○)
+  if (toolsCalling && toolsCalling.length > 0) {
+    const toolsList = formatPendingTools(toolsCalling);
+
+    if (displayContent) return `${header}${displayContent}\n\n${toolsList}`;
+    return `${header}${toolsList}`;
+  }
+
+  // Sub-state: has reasoning (thinking)
+  if (reasoning && !content) {
+    return `${header}${EMOJI_THINKING} ${reasoning?.trim()}`;
+  }
+
+  // Sub-state: pure text content (waiting for next step)
+  if (displayContent) {
+    return `${header}${displayContent}`;
+  }
+
+  return `${header}${EMOJI_THINKING} ${getSystemStrings(lng).processing}`;
+}
+
+// ==================== 3. Tool Executing ====================
+
+/**
+ * Tool step just finished, LLM is next.
+ * Returns the message body (no usage stats).
+ */
+export function renderToolExecuting(params: RenderStepParams, lng?: BotReplyLocale): string {
+  const { elapsedMs, lastContent, lastToolsCalling, toolsResult, totalToolCalls } = params;
+  const header = renderProgressHeader({ elapsedMs, totalToolCalls }, lng);
+  const processing = `${EMOJI_THINKING} ${getSystemStrings(lng).processing}`;
+
+  const parts: string[] = [];
+
+  if (header) parts.push(header.trimEnd());
+
+  if (lastContent) parts.push(lastContent.trim());
+
+  if (lastToolsCalling && lastToolsCalling.length > 0) {
+    parts.push(formatCompletedTools(lastToolsCalling, toolsResult));
+    parts.push(processing);
+  } else {
+    parts.push(processing);
+  }
+
+  return parts.join('\n\n');
+}
+
+// ==================== 4. Final Output ====================
+
+/**
+ * Returns the final reply body (content only, no usage stats).
+ * Stats are handled separately via `PlatformClient.formatReply`.
+ */
+export function renderFinalReply(content: string): string {
+  return content.trimEnd();
+}
+
+// ==================== System message strings ====================
+
+/**
+ * Static strings emitted by the bot itself (errors, stopped notices, DM
+ * rejection). Keyed by IETF locale so it lines up with the project-wide
+ * `Locales` set; new platform languages can be added by dropping in another
+ * entry without touching the type. A missing locale falls back to `en-US`
+ * at lookup time, so we never silently render `undefined`.
+ *
+ * Agent conversation content is produced by the LLM and is not routed
+ * through this map.
+ */
+type SystemStrings = {
+  cmdApproveDisabled: string;
+  cmdApproveFailed: string;
+  cmdApproveNotOwner: string;
+  cmdApproveSuccess: (label: string) => string;
+  cmdApproveUnknownCode: string;
+  cmdApproveUsage: string;
+  cmdFeedbackError: string;
+  cmdFeedbackSubmitted: string;
+  cmdFeedbackSubmittedWithLink: (issueUrl: string) => string;
+  cmdFeedbackUsage: string;
+  cmdModeSetAgent: string;
+  cmdModeSetChat: string;
+  cmdModeStatus: (mode?: 'agent' | 'chat') => string;
+  cmdModeUsage: string;
+  cmdNewReset: string;
+  cmdStopNotActive: string;
+  cmdStopRequested: string;
+  cmdStopUnable: string;
+  cmdWhoami: (params: WhoamiReplyParams) => string;
+  cmdWhoamiUnavailable: string;
+  dmPairingApplicantApproved: string;
+  dmPairingCapacityExceeded: string;
+  dmPairingCode: (code: string) => string;
+  dmPairingUnavailable: string;
+  dmRejectedAllowlist: string;
+  dmRejectedDisabled: string;
+  error: string;
+  errorExceededContextWindow: string;
+  errorInvalidProviderAPIKey: string;
+  errorCommandConnectionClosed: string;
+  errorContentModeration: string;
+  errorDeviceUnreachable: string;
+  errorDeviceResponseTimeout: string;
+  errorEmptyCompletion: string;
+  errorModelRefusal: string;
+  errorHarnessInternal: string;
+  errorFreePlanLimit: string;
+  errorInsufficientCredits: string;
+  errorInsufficientMemberBudget: string;
+  errorInsufficientWorkspaceCredits: string;
+  errorSubscriptionPlanLimit: string;
+  errorLocationNotSupported: string;
+  errorModelNotFound: string;
+  errorNoAvailableProvider: string;
+  errorPermissionDenied: string;
+  errorProviderUnavailable: string;
+  errorQuotaLimitReached: string;
+  errorRateLimited: string;
+  errorSystemInfra: string;
+  errorTimeout: string;
+  errorTransientNetwork: string;
+  errorUserGeneric: string;
+  errorWithDetails: (details: string, operationId?: string) => string;
+  errorWithId: (operationId: string) => string;
+  groupRejectedAllowlist: string;
+  groupRejectedDisabled: string;
+  /**
+   * Telegram Guest Mode strings. Unlike the rest of this dictionary these
+   * carry Telegram HTML (not Markdown), because the Guest outbound pipeline
+   * (`guestOutbound` / `answerGuestQuery`) renders Telegram HTML directly.
+   * Locale comes from the summoning user's `language_code`, not the
+   * platform default.
+   */
+  guestAttachmentOverflow: string;
+  guestLinkButton: string;
+  guestLinkPromptChat: string;
+  guestLinkPromptDm: string;
+  guestLinkTitle: string;
+  guestMediaUnavailable: string;
+  guestPairingCapacityExceeded: string;
+  guestPairingCode: (code: string) => string;
+  guestPairingUnavailable: string;
+  guestRejectedAllowlist: string;
+  guestRejectedDisabled: string;
+  guestTextTruncated: (limit: number) => string;
+  inlineError: (message: string) => string;
+  processing: string;
+  /**
+   * Generic "user is not on the allowlist" copy used when the global
+   * `allowFrom` gate rejects an inbound non-DM event. Delivered via
+   * ephemeral (Slack) or as an out-of-band DM (Discord/Telegram fallback),
+   * so the wording avoids "direct messages" — the sender did not try to DM.
+   */
+  senderRejected: string;
+  stoppedDefault: string;
+  toolsCallingHeader: (count: number, time: string) => string;
+};
+
+const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
+  'en-US': {
+    cmdApproveDisabled: 'Pairing is not enabled on this bot.',
+    cmdApproveFailed:
+      "Couldn't save the approval — the bot's settings may be unavailable. The pairing code is still valid; please try `/approve` again in a moment.",
+    cmdApproveNotOwner: 'Only the bot owner can approve pairing requests.',
+    cmdApproveSuccess: (label) => `Approved ${label}.`,
+    cmdApproveUnknownCode: 'That pairing code is unknown or has expired.',
+    cmdApproveUsage: 'Usage: `/approve <code>`',
+    cmdFeedbackError: "Couldn't send your feedback right now. Please try again in a moment.",
+    cmdFeedbackSubmitted: 'Thanks — your feedback has been sent to the LobeHub team.',
+    cmdFeedbackSubmittedWithLink: (issueUrl) =>
+      `Thanks — your feedback has been sent to the LobeHub team. Tracked at: ${issueUrl}`,
+    cmdFeedbackUsage:
+      'Usage: `/feedback <your message>` — sends feedback directly to the LobeHub team (no AI reply).',
+    cmdModeSetAgent: 'Switched to Agent Mode — replies can use tools and run multi-step tasks.',
+    cmdModeSetChat: 'Switched to Chat Mode — replies are plain conversation without tools.',
+    cmdModeStatus: (mode) =>
+      mode
+        ? `Current mode: ${mode === 'agent' ? 'Agent Mode' : 'Chat Mode'}. Use \`/mode agent\` or \`/mode chat\` to switch.`
+        : "Current mode: default (follows the agent's configuration). Use `/mode agent` or `/mode chat` to switch.",
+    cmdModeUsage: 'Usage: `/mode agent` or `/mode chat`.',
+    cmdNewReset: 'Conversation reset. Your next message will start a new topic.',
+    cmdStopNotActive: 'No active execution to stop.',
+    cmdStopRequested: 'Stop requested.',
+    cmdStopUnable: 'Unable to stop the current execution.',
+    cmdWhoami: ({ isOperator, userId, userName }) => {
+      const lines = [`Your platform user ID: \`${userId}\``];
+      if (userName) lines.push(`Display name: ${userName}`);
+      lines.push(
+        isOperator
+          ? 'This ID is already set as the bot operator in Advanced Settings.'
+          : 'Paste it into Advanced Settings → "Your Platform User ID" on the bot channel page so AI tools can reach you and pairing approvals work.',
+      );
+      return lines.join('\n');
+    },
+    cmdWhoamiUnavailable:
+      "Couldn't read your user ID from this message — the platform didn't include a sender ID.",
+    dmPairingApplicantApproved: "You've been approved. Send your message again.",
+    dmPairingCapacityExceeded:
+      'This bot is handling too many pairing requests right now. Please try again in a few minutes.',
+    dmPairingCode: (code) =>
+      `To DM this bot, send this pairing code to the bot's owner: \`${code}\`. They run \`/approve ${code}\` to grant you access. The code expires in 1 hour.`,
+    dmPairingUnavailable: 'Pairing is temporarily unavailable on this bot. Please try again later.',
+    dmRejectedAllowlist:
+      "Sorry, you aren't authorized to send direct messages to this bot. Please contact the bot's owner if you need access.",
+    dmRejectedDisabled:
+      "This bot isn't accepting direct messages. Please reach out by mentioning it in a shared channel or group instead.",
+    error: '**Agent Execution Failed**',
+    errorExceededContextWindow:
+      "**Context window exceeded.**\nThe conversation is too long for this model. Send `/new` to start a fresh topic, or switch to a model with a larger context window in the agent's settings.",
+    errorCommandConnectionClosed:
+      '**Command session disconnected.**\nThe agent lost its command connection before finishing. Please retry. If this keeps happening, check the sandbox or device connection and review the server logs for the operation.',
+    errorContentModeration:
+      "**Blocked by the content-safety filter.**\nThe model provider's safety filter rejected the request or response. Please rephrase and try again.",
+    errorDeviceResponseTimeout:
+      "**The device didn't respond in time.**\nIt may be offline or asleep, or it may still be starting this run. Check that the LobeHub desktop app (or the `lh` CLI) is connected and whether this run is already in progress, then try again.",
+    errorDeviceUnreachable:
+      "**Couldn't reach the device this agent runs on.**\nThe run never started. Check that the LobeHub desktop app (or the `lh` CLI) is running and connected, then try again — or bind this agent to another online device in its settings.",
+    errorEmptyCompletion:
+      "**The model provider returned an empty response.**\nEven without visible content, this request may still incur charges. You can retry, or switch models in the agent's settings and try again.",
+    errorModelRefusal:
+      '**The model declined to answer this request.**\nTry rephrasing it, or switch models in the agent settings and try again.',
+    errorHarnessInternal:
+      '**Something went wrong on our side.**\nThe agent run hit an internal error, which has been logged. Please try again — if it keeps happening, share the Operation ID below with support.',
+    errorFreePlanLimit:
+      '**Free plan limit reached.**\nThe free-plan allowance this bot runs on is used up. Ask the bot owner to upgrade to a paid plan on the LobeHub website to keep going.',
+    errorInsufficientCredits:
+      "**Not enough credits.**\nThe credits this bot runs on can't cover this model's estimated cost. Ask the bot owner to top up credits or upgrade their plan on the LobeHub website, or switch to a less expensive model in the agent's settings.",
+    errorInsufficientMemberBudget:
+      "**Member budget in this workspace is used up.**\nThe bot owner's spending allowance in this workspace can't cover this run's estimated cost — topping up credits won't change it. Ask a workspace admin to raise the bot owner's member budget, or switch to a less expensive model in the agent's settings.",
+    errorInsufficientWorkspaceCredits:
+      "**Workspace credits exhausted.**\nThis workspace's shared credits can't cover this run's estimated cost. Ask a workspace admin to top up or upgrade the workspace, or switch to a less expensive model in the agent's settings.",
+    errorSubscriptionPlanLimit:
+      "**Plan limit reached.**\nThe subscription plan this bot runs on can't cover this request — either its credits are used up for this billing period, or the plan doesn't include this model. Ask the bot owner to upgrade or top up their plan on the LobeHub website, or configure a custom model API in the agent's provider settings.",
+    errorInvalidProviderAPIKey:
+      "**Invalid or missing API key.**\nThe configured model provider rejected its API key. Please verify the key in the agent's provider settings (it may be expired, revoked, or mistyped) and try again.",
+    errorLocationNotSupported:
+      "**Region not supported.**\nThe configured model provider isn't available from this server's region. Please switch to a different provider or model in the agent's settings.",
+    errorModelNotFound:
+      "**Model not found.**\nThe configured model isn't available — it may have been removed or renamed. Please pick a different model in the agent's settings.",
+    errorNoAvailableProvider:
+      "**No model provider configured.**\nThis bot's agent has no available model provider — please add an API key and enable a provider in the agent's settings, then try again.",
+    errorPermissionDenied:
+      "**Permission denied by the model provider.**\nThe API key doesn't have access to the requested model or operation. Please check the key's permissions, or switch to a model your account is authorized to use.",
+    errorProviderUnavailable:
+      "**Model provider temporarily unavailable.**\nThe model provider is overloaded or unavailable right now. Please wait a moment and try again, or switch to a different model in the agent's settings.",
+    errorQuotaLimitReached:
+      "**Provider quota exhausted.**\nThe configured model provider is out of quota or rate-limited. Please wait a moment and try again, top up the account, or switch to a different provider in the agent's settings.",
+    errorRateLimited:
+      "**Too many requests.**\nThe model provider is rate-limiting requests right now. Please wait a moment before trying again, or switch to a different model in the agent's settings.",
+    errorSystemInfra:
+      '**A temporary system error occurred.**\nThe request hit a transient infrastructure issue on our side and could not be completed. Please try again in a moment.',
+    errorTimeout:
+      '**The agent run timed out.**\nThe operation ran too long without progress and was stopped. Please try again; if the task is large, try breaking it into smaller steps.',
+    errorTransientNetwork:
+      "**Network error talking to the model provider.**\nThe connection to the model provider timed out or dropped. This is usually temporary — please try again in a moment. If it keeps happening, try a different model in the agent's settings.",
+    errorUserGeneric:
+      "**The agent run couldn't be completed.**\nPlease check your input or the agent's settings and try again.",
+    errorWithDetails: (details, operationId) =>
+      operationId
+        ? `**Agent Execution Failed**\nOperation ID: \`${operationId}\`\nDetails:\n\`\`\`\n${details}\n\`\`\``
+        : `**Agent Execution Failed**. Details:\n\`\`\`\n${details}\n\`\`\``,
+    errorWithId: (operationId) => `**Agent Execution Failed**\nOperation ID: \`${operationId}\``,
+    groupRejectedAllowlist:
+      "This bot isn't enabled in this channel. Please contact the bot's owner if you need access.",
+    groupRejectedDisabled:
+      "This bot doesn't respond in groups or channels. Please reach out via direct message instead.",
+    guestAttachmentOverflow:
+      '<i>Additional attachments could not be listed in this Guest Mode reply.</i>',
+    guestLinkButton: 'Open Bot',
+    guestLinkPromptChat: 'Continue in a private chat with this bot to link your LobeHub account.',
+    guestLinkPromptDm:
+      'Open a private chat with this bot and send /start to link your LobeHub account.',
+    guestLinkTitle: 'Link LobeHub',
+    guestMediaUnavailable: 'This attachment can’t be delivered in Telegram Guest Mode.',
+    guestPairingCapacityExceeded:
+      'This bot is handling too many Guest Mode access requests right now. Please try again in a few minutes.',
+    guestPairingCode: (code) =>
+      `To use this bot in Guest Mode, send this pairing code to the bot's owner: \`${code}\`. They run \`/approve ${code}\` to grant you access. The code expires in 1 hour.`,
+    guestPairingUnavailable:
+      'Guest Mode pairing is temporarily unavailable on this bot. Please try again later.',
+    guestRejectedAllowlist:
+      "Sorry, you aren't authorized to use this bot in Guest Mode. Please contact the bot's owner if you need access.",
+    guestRejectedDisabled: 'Guest Mode is disabled for this bot.',
+    guestTextTruncated: (limit) =>
+      `Response truncated because Telegram Guest Mode supports one ${limit}-character reply.`,
+    inlineError: (message) => `**Error**: ${message}`,
+    processing: 'Processing...',
+    senderRejected:
+      "Sorry, you aren't authorized to interact with this bot. Please contact the bot's owner if you need access.",
+    stoppedDefault: 'Execution stopped.',
+    toolsCallingHeader: (count, time) => `> total **${count}** tools calling ${time}\n\n`,
+  },
+  'zh-CN': {
+    cmdApproveDisabled: '该机器人未启用配对审批模式。',
+    cmdApproveFailed: '保存审批失败，机器人设置暂不可用。配对码仍然有效，请稍后重试 `/approve`。',
+    cmdApproveNotOwner: '只有机器人管理员可以审批配对请求。',
+    cmdApproveSuccess: (label) => `已审批 ${label}。`,
+    cmdApproveUnknownCode: '该配对码不存在或已过期。',
+    cmdApproveUsage: '用法：`/approve <配对码>`',
+    cmdFeedbackError: '发送反馈失败，请稍后再试。',
+    cmdFeedbackSubmitted: '已收到，感谢反馈，已转交 LobeHub 团队。',
+    cmdFeedbackSubmittedWithLink: (issueUrl) =>
+      `已收到，感谢反馈，已转交 LobeHub 团队。跟踪链接：${issueUrl}`,
+    cmdFeedbackUsage:
+      '用法：`/feedback <你的反馈内容>` —— 反馈会直达 LobeHub 团队，不会触发 AI 回复。',
+    cmdModeSetAgent: '已切换到 Agent 模式 —— 回复可调用工具并执行多步任务。',
+    cmdModeSetChat: '已切换到 Chat 模式 —— 仅进行纯对话，不调用工具。',
+    cmdModeStatus: (mode) =>
+      mode
+        ? `当前模式：${mode === 'agent' ? 'Agent 模式' : 'Chat 模式'}。使用 \`/mode agent\` 或 \`/mode chat\` 切换。`
+        : '当前模式：默认（跟随 Agent 配置）。使用 `/mode agent` 或 `/mode chat` 切换。',
+    cmdModeUsage: '用法：`/mode agent` 或 `/mode chat`。',
+    cmdNewReset: '对话已重置，下一条消息会开启新话题。',
+    cmdStopNotActive: '当前没有正在执行的任务可以停止。',
+    cmdStopRequested: '已发出停止请求。',
+    cmdStopUnable: '无法停止当前执行。',
+    cmdWhoami: ({ isOperator, userId, userName }) => {
+      const lines = [`你的平台用户 ID：\`${userId}\``];
+      if (userName) lines.push(`显示名称：${userName}`);
+      lines.push(
+        isOperator
+          ? '该 ID 已经是这个机器人「高级设置」中配置的管理员 ID。'
+          : '把它填到机器人渠道页「高级设置 → 你的平台用户 ID」，AI 工具就能主动联系你，配对审批也会生效。',
+      );
+      return lines.join('\n');
+    },
+    cmdWhoamiUnavailable: '无法从这条消息中读取你的用户 ID —— 平台没有提供发送者 ID。',
+    dmPairingApplicantApproved: '已通过审批，请重新发送你的消息。',
+    dmPairingCapacityExceeded: '该机器人当前待审批请求过多，请稍后再试。',
+    dmPairingCode: (code) =>
+      `若要私信该机器人，请把以下配对码发给机器人管理员：\`${code}\`，他们将通过 \`/approve ${code}\` 命令为你授权。配对码 1 小时后失效。`,
+    dmPairingUnavailable: '配对功能暂时不可用，请稍后再试。',
+    dmRejectedAllowlist: '抱歉，您没有私信该机器人的权限。如需访问请联系机器人管理员。',
+    dmRejectedDisabled: '该机器人不接受私信。请在共享频道或群组里 @它来联系。',
+    error: '**Agent 执行失败**',
+    errorExceededContextWindow:
+      '**上下文已超出模型上限**\n当前对话长度超过了该模型的上下文窗口。可以发送 `/new` 开启新话题，或在 Agent 设置中切换到上下文更大的模型后重试。',
+    errorCommandConnectionClosed:
+      '**命令会话已断开**\nAgent 在完成前丢失了命令连接。请重试；如果该问题持续出现，请检查 sandbox 或设备连接，并结合 Operation ID 查看服务端日志。',
+    errorContentModeration:
+      '**被内容安全策略拦截**\n模型 Provider 的安全策略拒绝了本次请求或回复。请调整内容后重试。',
+    errorDeviceResponseTimeout:
+      '**设备未及时响应**\n设备可能已离线或休眠，也可能仍在启动本次运行。请确认 LobeHub 桌面端（或 `lh` CLI）已连接、且没有正在进行的本次运行后，再重试。',
+    errorDeviceUnreachable:
+      '**无法连接到运行该 Agent 的设备**\n本次执行没有启动。请确认 LobeHub 桌面端（或 `lh` CLI）正在运行且已连接后重试，也可以在 Agent 设置中改绑其他在线设备。',
+    errorEmptyCompletion:
+      '**模型供应商返回了空内容**\n即使没有可显示的内容，本次请求仍可能产生费用。你可以重试，或在 Agent 设置中切换模型后再试。',
+    errorModelRefusal:
+      '**模型拒绝回答该请求**\n请尝试调整表述，或在 Agent 设置中切换其他模型后重试。',
+    errorHarnessInternal:
+      '**我们这边出了点问题**\nAgent 执行遇到内部错误，已记录。请重试；如果持续出现，请把下方 Operation ID 提供给支持人员。',
+    errorFreePlanLimit:
+      '**免费计划额度已用尽**\n该机器人所使用的免费计划额度已经用完。请联系机器人所有者前往 LobeHub 网页端升级到付费计划后继续。',
+    errorInsufficientCredits:
+      '**积分余额不足**\n该机器人所使用的积分不足以覆盖本次模型调用的预估费用。请联系机器人所有者前往 LobeHub 网页端充值积分或升级订阅计划，或在 Agent 设置中切换到费用更低的模型。',
+    errorInsufficientMemberBudget:
+      '**该工作区的成员预算已用尽**\n机器人所有者在当前工作区的成员预算不足以覆盖本次运行的预估费用，充值积分不会改变该预算。请联系工作区管理员提高机器人所有者的成员预算，或在 Agent 设置中切换到费用更低的模型。',
+    errorInsufficientWorkspaceCredits:
+      '**工作区额度已用尽**\n当前工作区的共享额度不足以覆盖本次运行的预估费用。请联系工作区管理员充值或升级工作区，或在 Agent 设置中切换到费用更低的模型。',
+    errorSubscriptionPlanLimit:
+      '**已达到订阅计划限制**\n该机器人所使用的订阅计划无法覆盖本次请求：可能是本周期的订阅积分已用完，也可能是当前计划不包含该模型。请联系机器人所有者前往 LobeHub 网页端升级计划或充值，或在 Agent 的 Provider 设置中配置自定义模型 API。',
+    errorInvalidProviderAPIKey:
+      '**API Key 无效或缺失**\n所配置的模型 Provider 拒绝了 API Key，可能已过期、被吊销或填写错误。请到 Agent 的 Provider 设置中检查并更新 API Key 后重试。',
+    errorLocationNotSupported:
+      '**当前区域不被支持**\n所配置的模型 Provider 不允许从该服务器所在区域访问。请在 Agent 设置中切换到其他 Provider 或模型。',
+    errorModelNotFound:
+      '**未找到对应模型**\n所配置的模型不可用，可能已下线或更名。请在 Agent 设置中选择其他模型后重试。',
+    errorNoAvailableProvider:
+      '**未配置可用的模型 Provider**\n该机器人的 Agent 当前没有可用的模型 Provider，请在 Agent 设置中添加 API Key 并启用一个 Provider 后重试。',
+    errorPermissionDenied:
+      '**模型 Provider 拒绝访问**\nAPI Key 没有访问该模型或操作的权限。请检查 Key 的权限范围，或在 Agent 设置中切换到当前账户已授权的模型。',
+    errorProviderUnavailable:
+      '**模型 Provider 暂时不可用**\n模型 Provider 当前过载或不可用。请稍后重试，或在 Agent 设置中切换到其他模型。',
+    errorQuotaLimitReached:
+      '**Provider 配额已用尽**\n所配置的模型 Provider 已达到配额上限或被限流。请稍后重试、为账户充值，或在 Agent 设置中切换到其他 Provider。',
+    errorRateLimited:
+      '**请求过于频繁**\n模型 Provider 正在限流。请稍后再试，或在 Agent 设置中切换到其他模型。',
+    errorSystemInfra:
+      '**发生了临时系统错误**\n由于我们这边的临时基础设施问题，本次请求未能完成。请稍后重试。',
+    errorTimeout:
+      '**Agent 执行超时**\n操作长时间无进展，已被中止。请重试；如果任务较大，可尝试拆分成更小的步骤。',
+    errorTransientNetwork:
+      '**与模型 Provider 的网络连接异常**\n连接模型 Provider 时超时或中断。通常是临时问题，请稍后重试；如果反复出现，可在 Agent 设置中换一个模型。',
+    errorUserGeneric: '**Agent 执行未能完成**\n请检查你的输入或 Agent 设置后重试。',
+    errorWithDetails: (details, operationId) =>
+      operationId
+        ? `**Agent 执行失败**\nOperation ID: \`${operationId}\`\n详细信息：\n\`\`\`\n${details}\n\`\`\``
+        : `**Agent 执行失败**，详细信息：\n\`\`\`\n${details}\n\`\`\``,
+    errorWithId: (operationId) => `**Agent 执行失败**\nOperation ID: \`${operationId}\``,
+    groupRejectedAllowlist: '该机器人未在此频道启用。如需访问请联系机器人管理员。',
+    groupRejectedDisabled: '该机器人不在群组或频道中响应。请通过私信联系。',
+    guestAttachmentOverflow: '<i>更多附件无法在这条访客模式回复中列出。</i>',
+    guestLinkButton: '打开机器人',
+    guestLinkPromptChat: '请在私聊中继续，以完成 LobeHub 账户关联。',
+    guestLinkPromptDm: '请私聊该机器人并发送 /start，以完成 LobeHub 账户关联。',
+    guestLinkTitle: '关联 LobeHub',
+    guestMediaUnavailable: '该附件无法通过 Telegram 访客模式送达。',
+    guestPairingCapacityExceeded: '该机器人当前待处理的访客模式访问请求过多，请稍后再试。',
+    guestPairingCode: (code) =>
+      `若要通过访客模式使用该机器人，请把以下配对码发给机器人管理员：\`${code}\`，他们将通过 \`/approve ${code}\` 命令为你授权。配对码 1 小时后失效。`,
+    guestPairingUnavailable: '访客模式配对功能暂时不可用，请稍后再试。',
+    guestRejectedAllowlist:
+      '抱歉，您没有通过访客模式使用该机器人的权限。如需访问请联系机器人管理员。',
+    guestRejectedDisabled: '该机器人已禁用访客模式。',
+    guestTextTruncated: (limit) =>
+      `回复已被截断：Telegram 访客模式仅支持一条 ${limit} 字符的回复。`,
+    inlineError: (message) => `**错误**：${message}`,
+    processing: '处理中…',
+    senderRejected: '抱歉，您没有与该机器人交互的权限。如需访问请联系机器人管理员。',
+    stoppedDefault: '执行已停止。',
+    toolsCallingHeader: (count, time) => `> 共 **${count}** 次工具调用 ${time}\n\n`,
+  },
+};
+
+const DEFAULT_REPLY_LOCALE: BotReplyLocale = 'en-US';
+
+const getSystemStrings = (lng: BotReplyLocale = DEFAULT_REPLY_LOCALE): SystemStrings =>
+  SYSTEM_STRINGS[lng] ?? SYSTEM_STRINGS[DEFAULT_REPLY_LOCALE]!;
+
+export function renderError(operationId?: string, lng?: BotReplyLocale): string {
+  const strings = getSystemStrings(lng);
+  return operationId ? strings.errorWithId(operationId) : strings.error;
+}
+
+/**
+ * Map known `AgentRuntimeError` codes to the `SystemStrings` field that
+ * carries the friendly, actionable copy for that failure mode. This is the
+ * precise tier: when we recognize the exact code we show copy tailored to it.
+ *
+ * Codes not in this map fall back to {@link FALLBACK_ERROR_BY_ATTRIBUTION}
+ * (a per-`attribution` tier), and only then to the generic `Operation ID`
+ * template.
+ *
+ * When adding a new code: extend `SystemStrings`, drop the copy into both the
+ * `en-US` and `zh-CN` dictionaries, then add the mapping here.
+ */
+const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
+  // ── user-fixable config / input (attribution: user) ──
+  ContentModeration: 'errorContentModeration',
+  // Every "we could not reach a run device" flavour (gateway unconfigured,
+  // device offline, registration gone) arrives under this one type — see
+  // `HETERO_DISPATCH_ERROR_TYPES`. Without it a hetero dispatch failure fell to
+  // the legacy tier and told an IM user nothing but an Operation ID.
+  DeviceGatewayNotConfigured: 'errorDeviceUnreachable',
+  DeviceResponseTimeout: 'errorDeviceResponseTimeout',
+  ExceededContextWindow: 'errorExceededContextWindow',
+  // Managed credits: all three codes come out of the same cost-admission gate,
+  // so the fix is topping up / upgrading — not editing the input (without them
+  // here the plan-limit pair fell to the `user` tier's "check your input").
+  // `InsufficientBudgetForModel` is "balance below this run's estimate";
+  // `FreePlanLimit` / `SubscriptionPlanLimit` mean the plan itself is the
+  // limit — its allowance is exhausted, or (per the error taxonomy) the tier
+  // doesn't cover the requested model — so their copy points at the plan
+  // rather than at a cheaper model, and doesn't claim the credits are spent. `budget` then refines any of them by the allowance that
+  // actually ran out (see {@link BUDGET_SCOPE_ERROR}).
+  FreePlanLimit: 'errorFreePlanLimit',
+  InsufficientBudgetForModel: 'errorInsufficientCredits',
+  SubscriptionPlanLimit: 'errorSubscriptionPlanLimit',
+  InsufficientQuota: 'errorQuotaLimitReached',
+  InvalidProviderAPIKey: 'errorInvalidProviderAPIKey',
+  LocationNotSupportError: 'errorLocationNotSupported',
+  ModelNotFound: 'errorModelNotFound',
+  NoAvailableProvider: 'errorNoAvailableProvider',
+  PermissionDenied: 'errorPermissionDenied',
+  QuotaLimitReached: 'errorQuotaLimitReached',
+  // ── transient provider / capacity (attribution: provider) ──
+  ModelEmptyCompletion: 'errorEmptyCompletion',
+  ModelRefusal: 'errorModelRefusal',
+  NoAvailableChannel: 'errorProviderUnavailable',
+  ProviderContentPolicyViolation: 'errorContentModeration',
+  ProviderServiceUnavailable: 'errorProviderUnavailable',
+  RateLimitExceeded: 'errorRateLimited',
+  // ── network / infra (attribution: system) ──
+  // ProviderNetworkError is the one system-attributed code that *is* about the
+  // model provider, so it keeps the provider-specific "switch model" copy. Other
+  // system codes (state-store reads) hit the provider-neutral `system` fallback.
+  ProviderNetworkError: 'errorTransientNetwork',
+  // ── harness watchdog: harness-owned but retry-friendly, so it gets its
+  //    own retry-oriented copy rather than the generic internal-error tier ──
+  OperationInactivityTimeout: 'errorTimeout',
+};
+
+/**
+ * When a specific error code has no precise copy above, fall back to a message
+ * keyed on the error's `attribution` (from the model-runtime error taxonomy) so
+ * the user still learns *who owns the failure* and whether to retry — instead of
+ * a bare Operation ID. Unknown / absent attribution falls through to the legacy
+ * template.
+ */
+const FALLBACK_ERROR_BY_ATTRIBUTION: Record<string, keyof SystemStrings> = {
+  harness: 'errorHarnessInternal',
+  provider: 'errorProviderUnavailable',
+  // Provider-neutral: `system` covers infra failures (state-store reads, etc.)
+  // where the LLM provider/model is not involved, so the copy must NOT blame the
+  // provider or suggest switching models. ProviderNetworkError, the one
+  // provider-related system code, is mapped precisely above.
+  system: 'errorSystemInfra',
+  user: 'errorUserGeneric',
+};
+
+/**
+ * Refine the insufficient-credits copy by the allowance that actually ran out,
+ * as named by `ChatErrorBudgetContext['budgetTypeAtError']`.
+ *
+ * The default copy tells the user to top up or upgrade, which is wrong — and
+ * actively misleading — for an allowance that isn't theirs to pay for: a
+ * member whose own workspace allowance is spent can top up all day without
+ * unblocking the run, and a shared workspace pool is the admin's to refill.
+ * Tags this map doesn't recognize keep the per-code copy.
+ *
+ * Two things are deliberately NOT said. Runs triggered from a shared channel
+ * (or by any non-owner) are billed to the *bot owner's* allowance — see
+ * `BotMessageRouter.registerHandlers` — so the copy never addresses the reader
+ * as the payer ("your budget"): the person reading it usually can't act on it,
+ * the bot owner or a workspace admin can. And the figures are never quoted:
+ * a reply carrying `availableCredits` would publish the owner's balance to
+ * whoever mentioned the bot.
+ */
+const BUDGET_SCOPE_ERROR = new Map<string, keyof SystemStrings>([
+  ['workspace', 'errorInsufficientWorkspaceCredits'],
+  ['workspace_member', 'errorInsufficientMemberBudget'],
+]);
+
+/** Copy keys produced by the cost-admission gate, i.e. the ones `budget` may refine. */
+const BUDGET_ADMISSION_KEYS = new Set<keyof SystemStrings>([
+  'errorFreePlanLimit',
+  'errorInsufficientCredits',
+  'errorSubscriptionPlanLimit',
+]);
+
+/**
+ * Append the Operation ID as a traceable footer so operators can still grep
+ * logs for the failure even when the user-facing copy is a friendly, actionable
+ * message rather than the raw "Operation ID" line.
+ */
+const appendOperationId = (value: string, operationId: string | undefined): string =>
+  operationId ? `${value}\nOperation ID: \`${operationId}\`` : value;
+
+// `command aborted due to connection close` reaches us under a few stable
+// codes: the raw `500` fallback, or — once `formatErrorForState` pattern-refines
+// the Upstash/ioredis disconnect — `StateStorePersistError` (write path) /
+// `StateStoreReadError` (blocking-read path). The message stays the precise
+// signal; the type gate just has to let these through so the specific
+// "command session disconnected" guidance still wins over the generic tiers.
+const COMMAND_CONNECTION_CLOSED_TYPES = new Set([
+  '500',
+  'StateStorePersistError',
+  'StateStoreReadError',
+]);
+
+const isCommandConnectionClosedError = (
+  errorType: string | undefined,
+  errorMessage: string | undefined,
+) => {
+  if (errorType && !COMMAND_CONNECTION_CLOSED_TYPES.has(errorType)) return false;
+  if (!errorMessage) return false;
+
+  return /command aborted due to connection close/i.test(errorMessage);
+};
+
+/**
+ * Render an agent-execution failure for the user, in three tiers:
+ *
+ * 1. **Precise** — switch on the stable `errorType` code (from
+ *    `AgentRuntimeError.chat`) for copy tailored to that exact failure mode.
+ *    An insufficient-credits code is refined once more by `budget`, which
+ *    names *which* allowance ran out (see {@link BUDGET_SCOPE_ERROR}).
+ * 2. **Attribution** — when the code is unknown, fall back to a message keyed
+ *    on `attribution` (network / provider / harness / user) so the user still
+ *    learns who owns the failure and whether to retry.
+ * 3. **Legacy** — when neither is known, the opaque `Operation ID` template.
+ *
+ * Allowlisted external-agent (`heterogeneous`) and fail-fast dispatch
+ * (`dispatch`) contexts take precedence over all three tiers.
+ *
+ * The Operation ID is appended as a footer to every tier (not the whole
+ * message) so it stays traceable in logs without being the only thing the
+ * user sees.
+ */
+export function renderAgentError(
+  errorType: string | undefined,
+  errorMessage: string | undefined,
+  operationId: string | undefined,
+  lng?: BotReplyLocale,
+  attribution?: string,
+  budget?: ChatErrorBudgetContext,
+  heterogeneous?: ChatErrorHeterogeneousContext,
+  dispatch?: ChatErrorDispatchContext,
+): string {
+  const strings = getSystemStrings(lng);
+  const heteroReply = renderHeterogeneousError(heterogeneous);
+  if (heteroReply) return appendOperationId(heteroReply, operationId);
+  // A run that failed before its agent started: name the cause (missing
+  // sandbox credential, device-access fallback) instead of the bare legacy tier.
+  const dispatchReply = renderDispatchError(dispatch, lng);
+  if (dispatchReply) return appendOperationId(dispatchReply, operationId);
+
+  const normalized = normalizeChatMessageError({
+    message: errorMessage,
+    type: errorType ?? 'AgentRuntimeError',
+  });
+  // Classify legacy generic envelopes before selecting channel-specific copy.
+  // Unknown inputs retain the caller's fallback behavior.
+  const spec = getErrorCodeSpec(String(normalized.type));
+  if (spec && !spec.isFallback) {
+    errorType = spec.code;
+    attribution = spec.attribution;
+  }
+  const withReference = (value: string) => {
+    const reference = formatErrorRef(errorType);
+    const footer = reference
+      ? `\n${lng === 'zh-CN' ? '错误码' : 'Error code'}: \`${reference}\``
+      : '';
+    return appendOperationId(`${value}${footer}`, operationId);
+  };
+
+  if (isCommandConnectionClosedError(errorType, errorMessage)) {
+    return withReference(strings.errorCommandConnectionClosed);
+  }
+
+  const friendlyKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
+  const stringKey =
+    (friendlyKey && BUDGET_ADMISSION_KEYS.has(friendlyKey) && budget?.budgetTypeAtError
+      ? BUDGET_SCOPE_ERROR.get(budget.budgetTypeAtError)
+      : undefined) ??
+    friendlyKey ??
+    (attribution ? FALLBACK_ERROR_BY_ATTRIBUTION[attribution] : undefined);
+  if (stringKey) {
+    const value = strings[stringKey];
+    if (typeof value === 'string') {
+      return withReference(value);
+    }
+  }
+
+  // Legacy tier: nothing friendly matched. The raw `errorMessage` deliberately
+  // stays out of the reply — IM channels can hold arbitrary members, so runtime
+  // error text is server-side triage material only (b4aa51baa, #13998). Callers
+  // that hold a thrown error should classify it first (see
+  // `renderThrownAgentError`) so it lands on one of the tiers above instead.
+  return operationId ? strings.errorWithId(operationId) : strings.error;
+}
+
+export function renderStopped(message?: string, lng?: BotReplyLocale): string {
+  return message ?? getSystemStrings(lng).stoppedDefault;
+}
+
+/**
+ * Verbose error template used when we want to surface the underlying error
+ * message verbatim (typically for stale-topic or FK violations where the raw
+ * detail helps the operator diagnose the failure).
+ */
+export function renderErrorWithDetails(
+  details: string,
+  lng?: BotReplyLocale,
+  operationId?: string,
+): string {
+  return getSystemStrings(lng).errorWithDetails(details, operationId);
+}
+
+/**
+ * Compact `**Error**: …` line used as a last-resort handler-level fallback
+ * when an unexpected exception escapes the bridge / catch-all path.
+ */
+export function renderInlineError(message: string, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).inlineError(message);
+}
+
+export type CommandReplyKey =
+  | 'cmdApproveDisabled'
+  | 'cmdApproveFailed'
+  | 'cmdApproveNotOwner'
+  | 'cmdApproveUnknownCode'
+  | 'cmdApproveUsage'
+  | 'cmdFeedbackError'
+  | 'cmdFeedbackSubmitted'
+  | 'cmdFeedbackUsage'
+  | 'cmdModeSetAgent'
+  | 'cmdModeSetChat'
+  | 'cmdModeUsage'
+  | 'cmdNewReset'
+  | 'cmdStopNotActive'
+  | 'cmdStopRequested'
+  | 'cmdStopUnable'
+  | 'cmdWhoamiUnavailable'
+  | 'dmPairingApplicantApproved';
+
+/**
+ * Render a slash-command response (e.g. `/new`, `/stop`). Centralized so the
+ * command handlers don't each carry their own English literal.
+ */
+export function renderCommandReply(key: CommandReplyKey, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng)[key];
+}
+
+export type GuestCopyKey =
+  | 'guestAttachmentOverflow'
+  | 'guestLinkButton'
+  | 'guestLinkPromptChat'
+  | 'guestLinkPromptDm'
+  | 'guestLinkTitle'
+  | 'guestMediaUnavailable';
+
+/**
+ * Render a Telegram Guest Mode system string (link prompts, truncation and
+ * attachment notices). Unlike command replies the locale is not the platform
+ * default: a Guest summon can come from any Telegram user, so callers pass
+ * the summoning user's normalized `language_code` when known and fall back
+ * to the platform default otherwise. The values carry Telegram HTML, not
+ * Markdown - the Guest outbound pipeline renders Telegram HTML directly.
+ */
+export function renderGuestCopy(key: GuestCopyKey, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng)[key];
+}
+
+/** Truncation notice for the Guest Mode single-reply budget (text 4096 / caption 1024). */
+export function renderGuestTruncated(limit: number, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).guestTextTruncated(limit);
+}
+
+export interface WhoamiReplyParams {
+  /** True when the caller's ID already matches the bot's configured `settings.userId`. */
+  isOperator: boolean;
+  userId: string;
+  userName?: string;
+}
+
+/**
+ * Render the `/whoami` reply: echoes the caller's platform user ID (Feishu /
+ * Lark `open_id`, Telegram numeric ID, …) with a pointer to the settings
+ * field it belongs in. This is how operators discover the value for
+ * "Your Platform User ID" on platforms that expose no self-service lookup.
+ */
+export function renderWhoami(params: WhoamiReplyParams, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).cmdWhoami(params);
+}
+
+/**
+ * Render the `/mode` status reply (no-arg invocation). `mode` is the explicit
+ * per-conversation override when one was set via `/mode agent|chat`; undefined
+ * means the conversation follows the agent's configured default.
+ */
+export function renderModeStatus(mode?: 'agent' | 'chat', lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).cmdModeStatus(mode);
+}
+
+/**
+ * Render the owner-facing confirmation when `/approve` succeeds. The label
+ * is the applicant's display name when known, otherwise their platform
+ * user ID — owners shouldn't have to do the lookup themselves to know what
+ * they just approved.
+ */
+export function renderApproveSuccess(label: string, lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).cmdApproveSuccess(label);
+}
+
+/**
+ * Render the `/feedback` success reply. When the feedback backend returns a
+ * tracked issue URL, surface it so the user knows where to follow up — for
+ * Slack / Discord that surface autolinks the URL, on Telegram it remains
+ * tappable in monospace.
+ */
+export function renderFeedbackSubmitted(issueUrl?: string, lng?: BotReplyLocale): string {
+  const strings = getSystemStrings(lng);
+  return issueUrl ? strings.cmdFeedbackSubmittedWithLink(issueUrl) : strings.cmdFeedbackSubmitted;
+}
+
+/**
+ * Render the system message a stranger sees after their first DM when the
+ * bot is in pairing mode. Variants:
+ *
+ * - `code`: a fresh pairing code was issued. Bake the code into the body
+ *   so it's copy-pastable from the chat client without follow-up.
+ * - `capacity-exceeded`: per-bot pending cap hit; no code created. Tell
+ *   the applicant to retry rather than silently dropping them.
+ * - `unavailable`: Redis isn't wired (pairing requires it for cross-process
+ *   pending state). Surface the temporary state so the operator can fix
+ *   the deployment instead of debugging mysterious silence.
+ */
+export function renderDmPairing(
+  variant: 'capacity-exceeded' | 'code' | 'unavailable',
+  lng?: BotReplyLocale,
+  params?: { code?: string },
+): string {
+  const strings = getSystemStrings(lng);
+  if (variant === 'code' && params?.code) return strings.dmPairingCode(params.code);
+  if (variant === 'capacity-exceeded') return strings.dmPairingCapacityExceeded;
+  return strings.dmPairingUnavailable;
+}
+
+export function renderGuestPairing(
+  variant: 'capacity-exceeded' | 'code' | 'unavailable',
+  lng?: BotReplyLocale,
+  params?: { code?: string },
+): string {
+  const strings = getSystemStrings(lng);
+  if (variant === 'code' && params?.code) return strings.guestPairingCode(params.code);
+  if (variant === 'capacity-exceeded') return strings.guestPairingCapacityExceeded;
+  return strings.guestPairingUnavailable;
+}
+
+/**
+ * Render the system message shown to a sender whose DM was blocked by the
+ * channel's DM Policy. We split disabled vs allowlist so the user can act on
+ * the answer (e.g. ping in a channel instead, or ask the owner for access).
+ */
+export function renderDmRejected(reason: 'disabled' | 'allowlist', lng?: BotReplyLocale): string {
+  const strings = getSystemStrings(lng);
+  return reason === 'disabled' ? strings.dmRejectedDisabled : strings.dmRejectedAllowlist;
+}
+
+/**
+ * Render the system message shown when an inbound non-DM event was blocked
+ * by Group Policy. Same disabled-vs-allowlist split as
+ * {@link renderDmRejected} so the sender can pivot (try DM, ask the owner).
+ */
+export function renderGroupRejected(
+  reason: 'disabled' | 'allowlist',
+  lng?: BotReplyLocale,
+): string {
+  const strings = getSystemStrings(lng);
+  return reason === 'disabled' ? strings.groupRejectedDisabled : strings.groupRejectedAllowlist;
+}
+
+export function renderGuestRejected(
+  reason: 'disabled' | 'allowlist',
+  lng?: BotReplyLocale,
+): string {
+  const strings = getSystemStrings(lng);
+  return reason === 'disabled' ? strings.guestRejectedDisabled : strings.guestRejectedAllowlist;
+}
+
+/**
+ * Render the system message shown when the **global `allowFrom`** gate
+ * rejected the sender of a non-DM event (group / channel / thread). The
+ * notice is delivered out-of-band — ephemerally on Slack, via DM fallback
+ * on Discord/Telegram — so the copy intentionally avoids "direct messages"
+ * (the sender did not try to DM, they @-mentioned in a group).
+ */
+export function renderSenderRejected(lng?: BotReplyLocale): string {
+  return getSystemStrings(lng).senderRejected;
+}
+
+// ==================== Dispatcher ====================
+
+/**
+ * Dispatch to the correct template based on step state.
+ * Returns message body only — caller handles stats via platform.
+ */
+export function renderStepProgress(params: RenderStepParams, lng?: BotReplyLocale): string {
+  if (params.stepType === 'call_llm') {
+    return renderLLMGenerating(params, lng);
+  }
+  return renderToolExecuting(params, lng);
+}

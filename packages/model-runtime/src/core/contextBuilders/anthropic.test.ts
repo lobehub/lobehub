@@ -1,4 +1,4 @@
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import type { OpenAI } from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +13,7 @@ import {
 
 // Mock the parseDataUri function since it's an implementation detail
 vi.mock('../../utils/uriParser');
-vi.mock('@lobechat/utils', async (importOriginal) => ({
+vi.mock('../../utils/imageToBase64', async (importOriginal) => ({
   ...((await importOriginal()) as object),
   imageUrlToBase64: vi.fn(),
 }));
@@ -571,6 +571,24 @@ describe('anthropicHelpers', () => {
         content: [
           { thinking: 'Let me think about this...', type: 'thinking', signature: 'sig123' },
           { type: 'text', text: 'Here is my response.' },
+        ],
+        role: 'assistant',
+      });
+    });
+
+    it('should preserve redacted thinking in assistant history', async () => {
+      const message: OpenAIChatMessage = {
+        content: [
+          { data: 'encrypted-thinking', type: 'redacted_thinking' },
+          { text: 'Here is my response.', type: 'text' },
+        ],
+        role: 'assistant',
+      };
+
+      await expect(buildAnthropicMessage(message)).resolves.toEqual({
+        content: [
+          { data: 'encrypted-thinking', type: 'redacted_thinking' },
+          { text: 'Here is my response.', type: 'text' },
         ],
         role: 'assistant',
       });

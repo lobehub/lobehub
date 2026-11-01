@@ -3,17 +3,17 @@
 import { ChartColumnBigIcon, LogOut, UserCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { type CellProps } from '@/components/Cell';
 import Cell from '@/components/Cell';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { ProfileTabs } from '@/store/global/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 const Category = memo(() => {
   const [isLogin, signOut] = useUserStore((s) => [authSelectors.isLogin(s), s.logout]);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('auth');
   const items: CellProps[] = [
     {

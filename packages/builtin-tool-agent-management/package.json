@@ -8,11 +8,17 @@
     "./executor": "./src/executor.ts"
   },
   "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
   "dependencies": {
     "@lobechat/agent-manager-runtime": "workspace:*",
+    "@lobechat/builtin-tool-agent-builder": "workspace:*",
+    "@lobechat/business-const": "workspace:*",
     "@lobechat/const": "workspace:*",
-    "lucide-react": "*",
-    "react-router-dom": "*"
+    "@lobechat/heterogeneous-agents": "workspace:*",
+    "lucide-react": "^1.22.0",
+    "react-router": "^8.1.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

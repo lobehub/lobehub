@@ -55,7 +55,7 @@ const Conversation = memo(() => {
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ model, provider });
+  const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
 
   const handleAgentChange = useCallback(
     (id: string) => {
@@ -93,7 +93,7 @@ const Conversation = memo(() => {
           leftContent={leftContent}
           sendAreaPrefix={modelSelector}
           sendButtonProps={COMPACT_SEND_BUTTON_PROPS}
-          showRuntimeConfig={false}
+          showControlBar={false}
         />
       </Flexbox>
     </DragUploadZone>

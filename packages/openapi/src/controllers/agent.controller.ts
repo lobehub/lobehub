@@ -14,6 +14,21 @@ import type {
  * Handles Agent-related HTTP requests and responses
  */
 export class AgentController extends BaseController {
+  async duplicateAgent(c: Context) {
+    try {
+      const { id } = this.getParams<{ id: string }>(c);
+      const body = await this.getBody<{ title?: string }>(c);
+      const service = new AgentService(
+        await this.getDatabase(),
+        this.getUserId(c)!,
+        this.getWorkspaceId(c),
+      );
+      return this.success(c, await service.duplicateAgent(id, body.title), 'Agent duplicated', 201);
+    } catch (error) {
+      return this.handleError(c, error);
+    }
+  }
+
   /**
    * Retrieves a list of all Agents in the system
    * GET /api/v1/agents/list
@@ -25,7 +40,7 @@ export class AgentController extends BaseController {
       const request = await this.getQuery<GetAgentsRequest>(c);
 
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       const agentsList = await agentService.queryAgents(request);
 
       return this.success(c, agentsList, 'Agent list retrieved successfully');
@@ -45,7 +60,7 @@ export class AgentController extends BaseController {
       const body = await this.getBody<CreateAgentRequest>(c);
 
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       const createdAgent = await agentService.createAgent(body);
 
       return this.success(c, createdAgent, 'Agent created successfully');
@@ -71,7 +86,7 @@ export class AgentController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       const updatedAgent = await agentService.updateAgent(updateRequest);
 
       return this.success(c, updatedAgent, 'Agent updated successfully');
@@ -92,7 +107,7 @@ export class AgentController extends BaseController {
       const request: AgentDeleteRequest = { agentId: id };
 
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       await agentService.deleteAgent(request);
 
       return this.success(c, null, 'Agent deleted successfully');
@@ -111,7 +126,7 @@ export class AgentController extends BaseController {
     try {
       const { id: agentId } = this.getParams<{ id: string }>(c);
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       const agent = await agentService.getAgentById(agentId);
 
       if (!agent) {

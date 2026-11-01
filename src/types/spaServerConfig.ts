@@ -19,9 +19,18 @@ export interface AnalyticsConfig {
 
 export interface SPAClientEnv {
   marketBaseUrl?: string;
+  marketSkillInstallBaseUrl?: string;
   pyodideIndexUrl?: string;
   pyodidePipIndexUrl?: string;
   s3FilePath?: string;
+}
+
+export interface AuthSPAServerConfig {
+  analyticsConfig: AnalyticsConfig;
+  config: GlobalServerConfig;
+  enableOIDC: boolean;
+  featureFlags: Partial<IFeatureFlags>;
+  globalCDN?: boolean;
 }
 
 export interface SPAServerConfig {

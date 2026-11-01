@@ -1,0 +1,993 @@
+import { MessagesEngine } from '@lobechat/context-engine';
+import { type UIChatMessage } from '@lobechat/types';
+import { describe, expect, it, vi } from 'vitest';
+
+import { serverMessagesEngine } from '../index';
+
+// Helper to compute expected date content from SystemDateProvider
+const getCurrentDateContent = () => {
+  const tz = 'UTC';
+  const today = new Date();
+  const year = today.toLocaleString('en-US', { timeZone: tz, year: 'numeric' });
+  const month = today.toLocaleString('en-US', { month: '2-digit', timeZone: tz });
+  const day = today.toLocaleString('en-US', { day: '2-digit', timeZone: tz });
+  return `Current date: ${year}-${month}-${day} (${tz})`;
+};
+
+describe('serverMessagesEngine', () => {
+  const createBasicMessages = (): UIChatMessage[] => [
+    {
+      content: 'Hello',
+      createdAt: Date.now(),
+      id: 'msg-1',
+      role: 'user',
+      updatedAt: Date.now(),
+    } as UIChatMessage,
+    {
+      content: 'Hi there!',
+      createdAt: Date.now(),
+      id: 'msg-2',
+      role: 'assistant',
+      updatedAt: Date.now(),
+    } as UIChatMessage,
+  ];
+
+  /**
+   * These cover the wrapper→engine seam rather than the injectors themselves.
+   * The injectors had unit tests and still shipped dead: `serverMessagesEngine`
+   * destructures a fixed parameter list, so a field it does not name is
+   * dropped, and the call site passes an intermediate object, which disables
+   * excess-property checking. Nothing but a test at this boundary catches it.
+   */
+  describe('system-message context forwarded to the engine', () => {
+    it('forwards project instructions', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        projectInstructions: [{ content: 'Use bun, not npm.', source: 'AGENTS.md' }],
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      const system = result.find((message) => message.role === 'system')?.content;
+      expect(system).toContain('<project_instructions source="AGENTS.md">');
+      expect(system).toContain('Use bun, not npm.');
+    });
+
+    it('forwards the connector ownership note', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        connectorOwnershipNote: 'Gmail runs on Alice’s account.',
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      expect(result.find((message) => message.role === 'system')?.content).toContain(
+        'Gmail runs on Alice’s account.',
+      );
+    });
+
+    it('keeps the connector note ahead of the project instructions', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        connectorOwnershipNote: 'CONNECTOR-NOTE',
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        projectInstructions: [{ content: 'PROJECT-RULE', source: 'AGENTS.md' }],
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      // `discoverTools` runs before `prepareOperation`, so this is the order the
+      // old string appends produced; reversing it changes which block the model
+      // reads last.
+      const system = String(result.find((message) => message.role === 'system')?.content ?? '');
+      expect(system.indexOf('CONNECTOR-NOTE')).toBeGreaterThan(-1);
+      expect(system.indexOf('CONNECTOR-NOTE')).toBeLessThan(system.indexOf('PROJECT-RULE'));
+    });
+
+    it('leaves the system message alone when a run has neither', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'You are helpful.',
+      });
+
+      const system = String(result.find((message) => message.role === 'system')?.content ?? '');
+      expect(system).not.toContain('<project_instructions');
+    });
+  });
+
+  describe('TODO context', () => {
+    const items = [{ status: 'processing' as const, text: 'Keep server context in sync' }];
+
+    it('forwards non-empty planTodo state to MessagesEngine', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        planTodo: { enabled: true, todos: { items, updatedAt: 'now' } },
+        provider: 'openai',
+      });
+      const userMessages = result.filter((message) => message.role === 'user');
+
+      expect(userMessages).toHaveLength(2);
+      expect(userMessages[0].content).toBe('Hello');
+      expect(userMessages[1].content).toContain('<todo_context>');
+      expect(userMessages[1].content).toContain('Keep server context in sync');
+    });
+
+    it('does not inject an empty TODO state', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        planTodo: { enabled: true, todos: { items: [], updatedAt: 'canonical-clear' } },
+        provider: 'openai',
+      });
+
+      expect(result.find((message) => message.role === 'user')?.content).not.toContain(
+        '<todo_context>',
+      );
+    });
+
+    it('matches client-style stepContext and server planTodo output', async () => {
+      const todos = { items, updatedAt: 'same' };
+      const clientResult = await new MessagesEngine({
+        enableSystemDate: false,
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+        stepContext: { todos },
+      }).process();
+      const { messages: serverResult } = await serverMessagesEngine({
+        messages: createBasicMessages(),
+        model: 'gpt-4',
+        planTodo: { enabled: true, todos },
+        provider: 'openai',
+      });
+
+      expect(
+        serverResult.filter((message) => message.role === 'user').map(({ content }) => content),
+      ).toEqual(
+        clientResult.messages
+          .filter((message) => message.role === 'user')
+          .map(({ content }) => content),
+      );
+    });
+  });
+
+  describe('basic functionality', () => {
+    it('should process messages with required parameters', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(Array.isArray(result)).toBe(true);
+      // 3 messages: system date + 2 original messages
+      expect(result.length).toBe(3);
+      expect(result[0]).toEqual({ content: getCurrentDateContent(), role: 'system' });
+      result.forEach((msg) => {
+        expect(msg).toHaveProperty('role');
+        expect(msg).toHaveProperty('content');
+        // Should be cleaned up (no extra fields)
+        expect(msg).not.toHaveProperty('createdAt');
+        expect(msg).not.toHaveProperty('updatedAt');
+      });
+    });
+
+    it('should inject system role', async () => {
+      const messages = createBasicMessages();
+      const systemRole = 'You are a helpful assistant';
+
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+
+      expect(result[0].role).toBe('system');
+      expect(result[0].content).toBe(systemRole + '\n\n' + getCurrentDateContent());
+    });
+
+    it('renders the cloud-sandbox workspace placeholders to the ephemeral wording unless the builder supplies them', async () => {
+      const messages = createBasicMessages();
+      const systemRole =
+        '<env>{{sandbox_workspace}}</env><session>{{sandbox_session_files}}</session>';
+
+      // No additionalVariables — the run got no persistent workspace: the
+      // original ephemeral-session wording must render, never the literal tokens.
+      const { messages: fallback } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(fallback[0].content).not.toContain('{{sandbox_workspace}}');
+      expect(fallback[0].content).not.toContain('{{sandbox_session_files}}');
+      expect(fallback[0].content).toContain(
+        'Files created here are temporary and session-specific',
+      );
+      expect(fallback[0].content).toContain('Files from previous sessions may not persist');
+
+      // The builder's persistent-workspace guidance overrides both fallbacks.
+      const { messages: resolved } = await serverMessagesEngine({
+        additionalVariables: {
+          sandbox_session_files: '- Files in your working directory persist',
+          sandbox_workspace: '- Your working directory is a persistent workspace',
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(resolved[0].content).toContain(
+        '<env>- Your working directory is a persistent workspace</env>',
+      );
+      expect(resolved[0].content).toContain(
+        '<session>- Files in your working directory persist</session>',
+      );
+      expect(resolved[0].content).not.toContain('temporary and session-specific');
+    });
+
+    it('renders {{workingDirectory}} to a fallback instead of leaking the literal ', async () => {
+      const messages = createBasicMessages();
+      const systemRole = '<working-directory>{{workingDirectory}}</working-directory>';
+
+      // No additionalVariables — e.g. a web-originated device run whose bound cwd
+      // could not be resolved. The literal must never survive into the prompt.
+      const { messages: fallback } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(fallback[0].content).not.toContain('{{workingDirectory}}');
+      expect(fallback[0].content).toContain('(not specified, use user Home directory as default)');
+
+      // A resolved cwd (deviceSystemInfo.workingDirectory) overrides the fallback.
+      const { messages: resolved } = await serverMessagesEngine({
+        additionalVariables: { workingDirectory: '/Users/tj/project' },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(resolved[0].content).toContain(
+        '<working-directory>/Users/tj/project</working-directory>',
+      );
+      expect(resolved[0].content).not.toContain('(not specified');
+    });
+
+    it('renders every temporal placeholder instead of leaking the literal', async () => {
+      const messages = createBasicMessages();
+      const systemRole =
+        'Date: {{date}} Day: {{day}} Weekday: {{weekday}} Hour: {{hour}} ' +
+        'Minute: {{minute}} Second: {{second}} Month: {{month}} Year: {{year}} ' +
+        'ISO: {{iso}} Timestamp: {{timestamp}} Locale: {{locale}}';
+
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+        userTimezone: 'Asia/Shanghai',
+      });
+
+      expect(result[0].content).not.toContain('{{');
+      expect(result[0].content).toMatch(/ISO: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/);
+      expect(result[0].content).toMatch(/Timestamp: \d{13}/);
+      expect(result[0].content).toMatch(
+        /Weekday: (Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/,
+      );
+      expect(result[0].content).toContain('Locale: en-US');
+    });
+
+    it('lets additionalVariables override the locale fallback', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        additionalVariables: { locale: 'zh-CN' },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'Locale: {{locale}}',
+      });
+
+      expect(result[0].content).toContain('Locale: zh-CN');
+      expect(result[0].content).not.toContain('en-US');
+    });
+
+    it('renders wall-clock components in the user timezone', async () => {
+      const messages = createBasicMessages();
+
+      // Kiritimati is UTC+14 — always a different hour (and often day) than UTC,
+      // so a UTC-based rendering cannot accidentally pass.
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'Hour: {{hour}} Day: {{day}}',
+        userTimezone: 'Pacific/Kiritimati',
+      });
+
+      const expected = new Intl.DateTimeFormat('en-US', {
+        day: '2-digit',
+        hour: '2-digit',
+        hourCycle: 'h23',
+        timeZone: 'Pacific/Kiritimati',
+      }).formatToParts(new Date());
+      const partsMap = Object.fromEntries(expected.map((part) => [part.type, part.value]));
+
+      expect(result[0].content).toContain(`Hour: ${partsMap.hour}`);
+      expect(result[0].content).toContain(`Day: ${partsMap.day}`);
+    });
+
+    it('should inject model knowledge cutoff when provided', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        modelKnowledgeCutoff: '2024-06',
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      });
+
+      expect(result[0].role).toBe('system');
+      expect(result[0].content).toBe(
+        'You are a helpful assistant\n\n' +
+          getCurrentDateContent() +
+          '\n\nModel knowledge cutoff: 2024-06',
+      );
+    });
+
+    it('should inject model name and id when displayName is provided', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'claude-fable-5',
+        modelDisplayName: 'Fable 5',
+        modelKnowledgeCutoff: '2026-01',
+        provider: 'lobehub',
+        systemRole: 'You are a helpful assistant',
+      });
+
+      expect(result[0].role).toBe('system');
+      expect(result[0].content).toBe(
+        'You are a helpful assistant\n\n' +
+          getCurrentDateContent() +
+          '\n\nCurrent model: Fable 5 (claude-fable-5)\nModel knowledge cutoff: 2026-01',
+      );
+    });
+
+    it('should handle empty messages', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: [],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      // SystemDateProvider injects a system date message even with empty input
+      expect(result).toEqual([{ content: getCurrentDateContent(), role: 'system' }]);
+    });
+
+    it('should include file URLs in server-side file context', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: [
+          {
+            content: 'Read this',
+            createdAt: Date.now(),
+            fileList: [
+              {
+                fileType: 'text/plain',
+                id: 'file1',
+                name: 'test.txt',
+                size: 100,
+                url: 'https://app.example.com/f/file1',
+              },
+            ],
+            id: 'msg-1',
+            role: 'user',
+            updatedAt: Date.now(),
+          } as UIChatMessage,
+        ],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((message) => message.role === 'user');
+      const content = userMessage?.content as any[];
+
+      expect(content[0].text).toContain('url="https://app.example.com/f/file1"');
+    });
+
+    it('sends attachments planned for preview as previews', async () => {
+      const content = 'row,value\n'.repeat(1000);
+      const { messages: result } = await serverMessagesEngine({
+        attachmentPreviewFileIds: ['file1'],
+        messages: [
+          {
+            content: 'Read this',
+            createdAt: Date.now(),
+            fileList: [
+              {
+                content,
+                fileType: 'text/csv',
+                id: 'file1',
+                name: 'data.csv',
+                size: content.length,
+                url: 'https://app.example.com/f/file1',
+              },
+            ],
+            id: 'msg-1',
+            role: 'user',
+            updatedAt: Date.now(),
+          } as UIChatMessage,
+        ],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((message) => message.role === 'user');
+      const text = (userMessage?.content as any[])[0].text as string;
+
+      expect(text).toContain('truncated="true"');
+      expect(text).not.toContain(content);
+    });
+
+    it('should pass active topic document initial context into MessagesEngine', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        initialContext: {
+          activeTopicDocument: {
+            agentDocumentId: 'agd_1',
+            documentId: 'docs_1',
+            title: 'Topic Doc',
+          },
+        },
+        messages: [
+          {
+            content: '继续修改',
+            createdAt: Date.now(),
+            id: 'msg-1',
+            role: 'user',
+            updatedAt: Date.now(),
+          } as UIChatMessage,
+        ],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((message) => message.role === 'user');
+
+      expect(userMessage?.content).toContain('<active_topic_document>');
+      expect(userMessage?.content).toContain('agent_document_id="agd_1"');
+    });
+  });
+
+  describe('knowledge injection', () => {
+    it('should inject file contents', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        knowledge: {
+          fileContents: [
+            {
+              content: 'File content here',
+              fileId: 'file-1',
+              filename: 'test.txt',
+            },
+          ],
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      });
+
+      // Should have system message with knowledge
+      const systemMessage = result.find((m) => m.role === 'system');
+      expect(systemMessage).toBeDefined();
+    });
+
+    it('should inject knowledge bases', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        knowledge: {
+          knowledgeBases: [
+            {
+              description: 'Test knowledge base',
+              id: 'kb-1',
+              name: 'Test KB',
+            },
+          ],
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      });
+
+      expect(result.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('tools configuration', () => {
+    it('should handle tools system roles', async () => {
+      const messages = createBasicMessages();
+      const mockManifests = [
+        {
+          identifier: 'tool1',
+          api: [{ name: 'action', description: 'Tool 1 action', parameters: {} }],
+          meta: { title: 'Tool 1' },
+          type: 'default' as const,
+          systemRole: 'Tool 1 instructions',
+        },
+        {
+          identifier: 'tool2',
+          api: [{ name: 'action', description: 'Tool 2 action', parameters: {} }],
+          meta: { title: 'Tool 2' },
+          type: 'default' as const,
+        },
+      ];
+
+      const { messages: result } = await serverMessagesEngine({
+        capabilities: { isCanUseFC: () => true },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole: 'Base system role',
+        toolsConfig: {
+          manifests: mockManifests,
+          tools: ['tool1', 'tool2'],
+        },
+      });
+
+      // Should inject tool system role when manifests are provided
+      const systemMessage = result.find((msg) => msg.role === 'system');
+      expect(systemMessage).toBeDefined();
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('should skip tool system role when no manifests', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        toolsConfig: {
+          manifests: [],
+          tools: [],
+        },
+      });
+
+      // Without manifests, no tool-related system role should be injected
+      const systemMessages = result.filter((msg) => msg.role === 'system');
+      const hasToolSystemRole = systemMessages.some((msg) => {
+        const content = typeof msg.content === 'string' ? msg.content : '';
+        return content.includes('plugins');
+      });
+      expect(hasToolSystemRole).toBe(false);
+    });
+  });
+
+  describe('capabilities injection', () => {
+    it('should use provided isCanUseFC', async () => {
+      const messages = createBasicMessages();
+      const isCanUseFC = vi.fn().mockReturnValue(true);
+
+      await serverMessagesEngine({
+        capabilities: { isCanUseFC },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        toolsConfig: { tools: ['tool1'] },
+      });
+
+      expect(isCanUseFC).toHaveBeenCalled();
+    });
+
+    it('should default to true for capabilities when not provided', async () => {
+      const messages = createBasicMessages();
+
+      // Should not throw
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('stale tool result trimming', () => {
+    const READ_CONTENT = 'x'.repeat(120_000);
+
+    // A readFile result superseded by a later write to the same path, outside
+    // the default recency window and past the default size gate, so the trim
+    // fires unless the switch disables it. No createdAt → cold cache.
+    const supersededReadMessages = (): UIChatMessage[] =>
+      [
+        {
+          content: '',
+          id: 'a1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'readFile',
+              arguments: JSON.stringify({ path: '/a.ts' }),
+              id: 'call-readFile',
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+        },
+        {
+          content: READ_CONTENT,
+          id: 't1',
+          plugin: {
+            apiName: 'readFile',
+            arguments: JSON.stringify({ path: '/a.ts' }),
+            identifier: 'lobe-local-system',
+          },
+          pluginState: { loc: [0, 200], path: '/a.ts' },
+          role: 'tool',
+          tool_call_id: 'call-readFile',
+        },
+        {
+          content: '',
+          id: 'a2',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'writeFile',
+              arguments: JSON.stringify({ path: '/a.ts' }),
+              id: 'call-writeFile',
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+        },
+        {
+          content: 'Successfully wrote to /a.ts',
+          id: 't2',
+          plugin: {
+            apiName: 'writeFile',
+            arguments: JSON.stringify({ path: '/a.ts' }),
+            identifier: 'lobe-local-system',
+          },
+          pluginState: { path: '/a.ts', success: true },
+          role: 'tool',
+          tool_call_id: 'call-writeFile',
+        },
+        ...Array.from({ length: 21 }, (_, i) => ({
+          content: `recent ${i}`,
+          id: `pad-${i}`,
+          role: 'assistant',
+        })),
+      ] as unknown as UIChatMessage[];
+
+    const payloadText = (messages: any[]) =>
+      messages
+        .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+        .join('\n');
+
+    it('trims stale tool results by default', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: supersededReadMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const payload = payloadText(result);
+      expect(payload).not.toContain(READ_CONTENT);
+      expect(payload).toContain('superseded by a later write');
+    });
+
+    it('forwards enableStaleToolResultTrim: false to the engine', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        enableStaleToolResultTrim: false,
+        messages: supersededReadMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const payload = payloadText(result);
+      expect(payload).toContain(READ_CONTENT);
+      expect(payload).not.toContain('superseded by a later write');
+    });
+  });
+
+  describe('user memory injection', () => {
+    it('should inject user memories when provided', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        userMemory: {
+          fetchedAt: Date.now(),
+          memories: {
+            contexts: [
+              {
+                description: 'Test context',
+                id: 'ctx-1',
+                title: 'Test',
+              },
+            ],
+            experiences: [],
+            preferences: [],
+          },
+        },
+      });
+
+      // User memories are injected as a consolidated user message before the first user message
+      // Note: meta/id fields are removed by the engine cleanup step, so assert via content.
+      const injection = result.find(
+        (m: any) => m.role === 'user' && String(m.content).includes('<user_memory>'),
+      );
+      expect(injection).toBeDefined();
+      expect(injection!.role).toBe('user');
+    });
+
+    it('should skip user memory when memories is undefined', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        userMemory: {
+          fetchedAt: Date.now(),
+          memories: undefined,
+        },
+      });
+
+      // Should still work without memories
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('extended contexts', () => {
+    it('should inject Agent Builder context when provided', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        agentBuilderContext: {
+          config: { model: 'gpt-4', systemRole: 'Test role' },
+          meta: { description: 'Test agent', title: 'Test' },
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('input template', () => {
+    it('should apply input template to user messages', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'user input',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const { messages: result } = await serverMessagesEngine({
+        inputTemplate: 'Please respond to: {{text}}',
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((m) => m.role === 'user');
+      expect(userMessage?.content).toBe('Please respond to: user input');
+    });
+  });
+
+  describe('history summary', () => {
+    it('should inject history summary when provided', async () => {
+      const messages = createBasicMessages();
+      const historySummary = 'Previous conversation about AI';
+
+      const { messages: result } = await serverMessagesEngine({
+        historySummary,
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      // Should contain history summary in system message
+      const systemMessages = result.filter((m) => m.role === 'system');
+      const hasHistorySummary = systemMessages.some(
+        (m) => typeof m.content === 'string' && m.content.includes(historySummary),
+      );
+      expect(hasHistorySummary).toBe(true);
+    });
+
+    it('should use custom formatHistorySummary', async () => {
+      const messages = createBasicMessages();
+      const historySummary = 'test summary';
+      const formatHistorySummary = vi.fn((s: string) => `<custom>${s}</custom>`);
+
+      await serverMessagesEngine({
+        formatHistorySummary,
+        historySummary,
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(formatHistorySummary).toHaveBeenCalledWith(historySummary);
+    });
+  });
+
+  describe('userTimezone parameter', () => {
+    it('should pass userTimezone as timezone to MessagesEngine', async () => {
+      const constructorSpy = vi.spyOn(MessagesEngine.prototype, 'process').mockResolvedValue({
+        messages: [],
+      } as any);
+
+      const messages = createBasicMessages();
+
+      await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        userTimezone: 'Asia/Shanghai',
+      });
+
+      expect(constructorSpy).toHaveBeenCalled();
+      constructorSpy.mockRestore();
+    });
+
+    it('should use userTimezone in variable generators for time-related values', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'What time is it? {{timezone}}',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const { messages: result } = await serverMessagesEngine({
+        inputTemplate: '{{text}} (tz: {{timezone}})',
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        userTimezone: 'America/New_York',
+      });
+
+      const userMessage = result.find((m) => m.role === 'user');
+      expect(userMessage?.content).toContain('America/New_York');
+    });
+  });
+
+  describe('additionalVariables parameter', () => {
+    it('should merge additionalVariables into variableGenerators', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'test input',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const { messages: result } = await serverMessagesEngine({
+        additionalVariables: {
+          customVar: 'custom-value',
+        },
+        inputTemplate: '{{text}} {{customVar}}',
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((m) => m.role === 'user');
+      expect(userMessage?.content).toContain('custom-value');
+    });
+
+    it('should handle empty additionalVariables', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        additionalVariables: {},
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+
+  describe('extended context params forwarding', () => {
+    it('should forward discordContext when provided', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        discordContext: {
+          channel: { id: 'ch-1', name: 'general' },
+          guild: { id: 'guild-1', name: 'Test Guild' },
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+    });
+
+    it('should forward evalContext when provided', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        evalContext: {
+          envPrompt: 'This is an evaluation environment',
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+    });
+
+    it('should forward agentManagementContext when provided', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        agentManagementContext: {
+          availablePlugins: [
+            { identifier: 'web-browsing', name: 'Web Browsing', type: 'builtin' as const },
+          ],
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+    });
+
+    it('should handle multiple extended contexts simultaneously', async () => {
+      const messages = createBasicMessages();
+
+      const { messages: result } = await serverMessagesEngine({
+        agentBuilderContext: {
+          config: { model: 'gpt-4', systemRole: 'Test role' },
+          meta: { description: 'Test agent', title: 'Test' },
+        },
+        discordContext: {
+          channel: { id: 'ch-1', name: 'general' },
+          guild: { id: 'guild-1', name: 'Test Guild' },
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      expect(result).toBeDefined();
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
+});

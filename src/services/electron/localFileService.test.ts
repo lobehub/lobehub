@@ -1,0 +1,401 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  isTerminalLocalFileError,
+  LocalFileResponseError,
+  localFileService,
+} from './localFileService';
+
+const mockLocalSystem = vi.hoisted(() => ({
+  getExternalAssetForPublishUrl: vi.fn(),
+  getLocalFilePreviewUrl: vi.fn(),
+  handleCopyFiles: vi.fn(),
+  handleCreateDirectory: vi.fn(),
+  handleCreateFile: vi.fn(),
+  trashLocalFiles: vi.fn(),
+}));
+
+vi.mock('@/utils/electron/ipc', () => ({
+  ensureElectronIpc: () => ({
+    localSystem: mockLocalSystem,
+  }),
+}));
+
+describe('localFileService', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('fetches text local-file preview from the preview URL', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/index.html',
+    });
+    const fetchMock = vi.fn(async () => {
+      return {
+        blob: vi.fn(),
+        headers: { get: vi.fn(() => 'text/html; charset=utf-8') },
+        ok: true,
+        text: vi.fn(async () => '<h1>Local</h1>'),
+      } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const preview = await localFileService.getLocalFilePreview({
+      path: '/repo/index.html',
+      workingDirectory: '/repo',
+    });
+
+    expect(mockLocalSystem.getLocalFilePreviewUrl).toHaveBeenCalledWith({
+      path: '/repo/index.html',
+      workingDirectory: '/repo',
+    });
+    expect(fetchMock).toHaveBeenCalledWith('localfile://preview/index.html');
+    expect(preview).toEqual({
+      content: '<h1>Local</h1>',
+      contentType: 'text/html',
+      resourceBaseUrl: undefined,
+      type: 'text',
+    });
+  });
+
+  it('reports the preview protocol status so a deleted / denied file is terminal', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/gone.md',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => ({ headers: { get: vi.fn() }, ok: false, status: 404 }) as unknown as Response,
+      ),
+    );
+
+    const error = await localFileService
+      .getLocalFilePreview({ path: '/repo/gone.md', workingDirectory: '/repo' })
+      .catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(LocalFileResponseError);
+    expect((error as LocalFileResponseError).status).toBe(404);
+    expect(isTerminalLocalFileError(error)).toBe(true);
+    expect(isTerminalLocalFileError(new LocalFileResponseError(403))).toBe(true);
+    expect(isTerminalLocalFileError(new LocalFileResponseError(500))).toBe(false);
+    expect(isTerminalLocalFileError(new Error('Failed to load local file: 404'))).toBe(false);
+  });
+
+  it('treats a file that vanished before its preview URL exists as terminal', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      code: 'not_found',
+      error: 'ENOENT: no such file or directory',
+      success: false,
+    });
+
+    const error = await localFileService
+      .getLocalFilePreview({ path: '/repo/gone.md', workingDirectory: '/repo' })
+      .catch((reason: unknown) => reason);
+
+    expect(isTerminalLocalFileError(error)).toBe(true);
+    expect((error as LocalFileResponseError).status).toBe(404);
+  });
+
+  it('returns the entry directory as the HTML workspace resource base URL', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview-session/pages/index.html',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            headers: { get: vi.fn(() => 'text/html; charset=utf-8') },
+            ok: true,
+            text: vi.fn(async () => '<link rel="stylesheet" href="../assets/app.css">'),
+          }) as unknown as Response,
+      ),
+    );
+
+    const preview = await localFileService.getLocalFilePreview({
+      path: '/repo/pages/index.html',
+      resourceScope: 'workspace',
+      workingDirectory: '/repo',
+    });
+
+    expect(mockLocalSystem.getLocalFilePreviewUrl).toHaveBeenCalledWith({
+      path: '/repo/pages/index.html',
+      resourceScope: 'workspace',
+      workingDirectory: '/repo',
+    });
+    expect(preview).toEqual({
+      content: '<link rel="stylesheet" href="../assets/app.css">',
+      contentType: 'text/html',
+      resourceBaseUrl: 'localfile://preview-session/pages/',
+      type: 'text',
+    });
+  });
+
+  it('throws when the preview URL cannot be created', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      error: 'outside safe path',
+      success: false,
+    });
+
+    await expect(
+      localFileService.getLocalFilePreview({
+        path: '/repo/index.html',
+        workingDirectory: '/repo',
+      }),
+    ).rejects.toThrow('outside safe path');
+  });
+
+  it('forwards image-only preview constraints to Electron', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/image.png',
+    });
+    const fetchMock = vi.fn(async () => {
+      return {
+        blob: vi.fn(async () => new Blob(['image'])),
+        headers: { get: vi.fn(() => 'image/png') },
+        ok: true,
+        text: vi.fn(),
+      } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await localFileService.getLocalFilePreview({
+      accept: 'image',
+      path: '/repo/image.png',
+      workingDirectory: '/repo',
+    });
+
+    expect(mockLocalSystem.getLocalFilePreviewUrl).toHaveBeenCalledWith({
+      accept: 'image',
+      path: '/repo/image.png',
+      workingDirectory: '/repo',
+    });
+  });
+
+  it('rejects non-image responses before reading the body for image-only previews', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/.env',
+    });
+    const textMock = vi.fn(async () => 'SECRET=value');
+    const fetchMock = vi.fn(async () => {
+      return {
+        blob: vi.fn(),
+        headers: { get: vi.fn(() => 'text/plain; charset=utf-8') },
+        ok: true,
+        text: textMock,
+      } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      localFileService.getLocalFilePreview({
+        accept: 'image',
+        path: '/repo/.env',
+        workingDirectory: '/repo',
+      }),
+    ).rejects.toThrow('Unsupported local file preview type');
+    expect(textMock).not.toHaveBeenCalled();
+  });
+
+  const videoResponse = (size: number, blob = vi.fn()) =>
+    ({
+      blob,
+      body: { cancel: vi.fn(async () => {}) },
+      headers: new Headers({
+        'content-length': String(size),
+        'content-type': 'video/mp4',
+        'x-preview-modified-at': '1700000000123',
+      }),
+      ok: true,
+    }) as unknown as Response;
+
+  it('describes a local video without keeping its bytes in the preview result', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/demo.mp4',
+    });
+    const blobMock = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => videoResponse(3, blobMock)),
+    );
+
+    const preview = await localFileService.getLocalFilePreview({
+      path: '/repo/demo.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(preview).toEqual({
+      contentType: 'video/mp4',
+      revision: '3:1700000000123',
+      type: 'video',
+    });
+    expect(blobMock).not.toHaveBeenCalled();
+  });
+
+  it('marks an oversized local video as an unpreviewable binary', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/huge.mp4',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => videoResponse(500 * 1024 * 1024)),
+    );
+
+    const preview = await localFileService.getLocalFilePreview({
+      path: '/repo/huge.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(preview).toEqual({ contentType: 'video/mp4', oversized: true, type: 'binary' });
+  });
+
+  it('reads a local video for playback with the caller abort signal', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/demo.mp4',
+    });
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'video/mp4' });
+    const fetchMock = vi.fn(async () =>
+      videoResponse(
+        3,
+        vi.fn(async () => blob),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    const result = await localFileService.readLocalVideo(
+      { path: '/repo/demo.mp4', workingDirectory: '/repo' },
+      controller.signal,
+    );
+
+    expect(result).toEqual({ blob, ok: true });
+    expect(fetchMock).toHaveBeenCalledWith('localfile://preview/demo.mp4', {
+      signal: controller.signal,
+    });
+  });
+
+  it('refuses to read an oversized local video for playback', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/huge.mp4',
+    });
+    const blobMock = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => videoResponse(500 * 1024 * 1024, blobMock)),
+    );
+
+    const result = await localFileService.readLocalVideo({
+      path: '/repo/huge.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'oversized' });
+    expect(blobMock).not.toHaveBeenCalled();
+  });
+
+  it('reads local file bytes from the preview URL', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/font.woff2',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            arrayBuffer: vi.fn(async () => new Uint8Array([10, 20, 30]).buffer),
+            headers: { get: vi.fn(() => 'font/woff2') },
+            ok: true,
+          }) as unknown as Response,
+      ),
+    );
+
+    const result = await localFileService.readLocalFileBytes({
+      path: '/repo/font.woff2',
+      workingDirectory: '/repo',
+    });
+
+    expect(result).toEqual({
+      bytes: new Uint8Array([10, 20, 30]),
+      contentType: 'font/woff2',
+    });
+  });
+
+  it('uses the dedicated publish IPC channel for external bytes', async () => {
+    mockLocalSystem.getExternalAssetForPublishUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://publish/font.woff2',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          ({
+            arrayBuffer: vi.fn(async () => new Uint8Array([10, 20]).buffer),
+            headers: { get: vi.fn(() => 'font/woff2') },
+            ok: true,
+          }) as unknown as Response,
+      ),
+    );
+
+    await expect(
+      localFileService.readExternalAssetForPublish({
+        path: '/outside/font.woff2',
+        workingDirectory: '/repo',
+      }),
+    ).resolves.toEqual({ bytes: new Uint8Array([10, 20]), contentType: 'font/woff2' });
+
+    expect(mockLocalSystem.getExternalAssetForPublishUrl).toHaveBeenCalledWith({
+      path: '/outside/font.woff2',
+      workingDirectory: '/repo',
+    });
+    expect(mockLocalSystem.getLocalFilePreviewUrl).not.toHaveBeenCalled();
+  });
+
+  describe('file tree mutations', () => {
+    it('routes create / mkdir / copy / trash to their localSystem IPC methods', async () => {
+      mockLocalSystem.handleCreateFile.mockResolvedValue({ path: '/p/a.ts', success: true });
+      mockLocalSystem.handleCreateDirectory.mockResolvedValue({ path: '/p/dir', success: true });
+      mockLocalSystem.handleCopyFiles.mockResolvedValue([
+        { sourcePath: '/p/a.ts', success: true, targetPath: '/p/a copy.ts' },
+      ]);
+      mockLocalSystem.trashLocalFiles.mockResolvedValue({
+        items: [{ path: '/p/a.ts', success: true }],
+        success: true,
+      });
+
+      await expect(localFileService.createLocalFile({ path: '/p/a.ts' })).resolves.toEqual({
+        path: '/p/a.ts',
+        success: true,
+      });
+      await expect(localFileService.createLocalDirectory({ path: '/p/dir' })).resolves.toEqual({
+        path: '/p/dir',
+        success: true,
+      });
+      await expect(
+        localFileService.copyLocalFiles({ items: [{ sourcePath: '/p/a.ts' }] }),
+      ).resolves.toEqual([{ sourcePath: '/p/a.ts', success: true, targetPath: '/p/a copy.ts' }]);
+      await expect(localFileService.trashLocalFiles({ paths: ['/p/a.ts'] })).resolves.toEqual({
+        items: [{ path: '/p/a.ts', success: true }],
+        success: true,
+      });
+
+      expect(mockLocalSystem.handleCreateFile).toHaveBeenCalledWith({ path: '/p/a.ts' });
+      expect(mockLocalSystem.handleCreateDirectory).toHaveBeenCalledWith({ path: '/p/dir' });
+      expect(mockLocalSystem.handleCopyFiles).toHaveBeenCalledWith({
+        items: [{ sourcePath: '/p/a.ts' }],
+      });
+      expect(mockLocalSystem.trashLocalFiles).toHaveBeenCalledWith({ paths: ['/p/a.ts'] });
+    });
+  });
+});

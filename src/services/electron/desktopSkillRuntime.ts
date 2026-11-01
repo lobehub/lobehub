@@ -35,12 +35,21 @@ class DesktopSkillRuntimeService {
   async resolveExecutionDirectory(
     activatedSkills?: ExecScriptActivatedSkill[],
   ): Promise<string | undefined> {
-    // Use the first activated skill to resolve the execution directory
-    const firstSkill = activatedSkills?.[0];
-    if (!firstSkill) return undefined;
+    if (!activatedSkills?.length) return undefined;
 
-    const skill = await this.resolveSkill({ id: firstSkill.id, name: firstSkill.name });
-    return this.prepareSkillDirectoryForSkill(skill);
+    // Walk from the most recent activation and use the first one that
+    // resolves to a packaged (zip-backed) DB skill — id-less filesystem/
+    // builtin activations never resolve here and must not shadow a packaged
+    // skill activated before/after them. Mirrors the server exec paths'
+    // "last resolvable skill wins the cwd" semantics.
+    for (const activated of [...activatedSkills].reverse()) {
+      const skill = await this.resolveSkill({ id: activated.id, name: activated.name });
+      if (!skill?.zipFileHash) continue;
+
+      return this.prepareSkillDirectoryForSkill(skill);
+    }
+
+    return undefined;
   }
 
   async resolveReferenceFullPath(params: {

@@ -10,6 +10,9 @@ import type {
 import { AiModelTypeSchema, ModelProvider } from 'model-bank';
 
 import type { ModelProviderKey } from '../types';
+import { EMBEDDING_MODEL_KEYWORDS } from './modelTypeKeywords';
+
+export { EMBEDDING_MODEL_KEYWORDS } from './modelTypeKeywords';
 
 export interface ModelProcessorConfig {
   excludeKeywords?: readonly string[]; // Do not add tags to models that match
@@ -44,10 +47,14 @@ export const MODEL_LIST_CONFIGS = {
   },
   google: {
     excludeKeywords: ['tts'],
-    functionCallKeywords: ['gemini', '!-image-', 'gemma-4'],
-    imageOutputKeywords: ['-image-'],
-    reasoningKeywords: ['thinking', '-2.5-', '!-image-', '-3-', 'gemma-4'],
-    searchKeywords: ['-search', '!-image-', 'gemma-4'],
+    // Nano Banana ids (`gemini-nano-banana-2.1`, `nano-banana-pro-preview`) lack `-image-` but are
+    // native image-output models with thinking and no function calling. Search is limited to the
+    // versioned `gemini-nano-banana-*` ids, the only aliases the runtime sends Google Search for
+    // (`supportsGoogleSearchOnImageResponseModel`).
+    functionCallKeywords: ['gemini', '!-image-', '!nano-banana', 'gemma-4'],
+    imageOutputKeywords: ['-image-', 'nano-banana'],
+    reasoningKeywords: ['thinking', '-2.5-', '!-image-', '-3-', 'gemma-4', 'nano-banana'],
+    searchKeywords: ['-search', '!-image-', 'gemma-4', 'gemini-nano-banana'],
     videoKeywords: ['-2.5-', '!-image-', '-3-'],
     visionKeywords: ['gemini', 'learnlm', 'gemma-4'],
   },
@@ -69,7 +76,7 @@ export const MODEL_LIST_CONFIGS = {
   longcat: {
     functionCallKeywords: ['longcat'],
     reasoningKeywords: ['thinking'],
-    visionKeywords: [],
+    visionKeywords: ['omni'],
   },
   minimax: {
     functionCallKeywords: ['minimax'],
@@ -83,8 +90,16 @@ export const MODEL_LIST_CONFIGS = {
   },
   moonshot: {
     functionCallKeywords: ['moonshot', 'kimi'],
-    reasoningKeywords: ['thinking', 'k2.5'],
-    visionKeywords: ['vision', 'kimi-latest', 'kimi-thinking-preview', 'k2.5'],
+    reasoningKeywords: ['thinking', 'k2.5', 'k2.6', 'k2.7', 'kimi-k3'],
+    visionKeywords: [
+      'vision',
+      'kimi-latest',
+      'kimi-thinking-preview',
+      'k2.5',
+      'k2.6',
+      'k2.7',
+      'kimi-k3',
+    ],
   },
   openai: {
     excludeKeywords: ['audio'],
@@ -104,7 +119,7 @@ export const MODEL_LIST_CONFIGS = {
       'qwen3',
     ],
     reasoningKeywords: ['qvq', 'qwq', 'qwen3', '!-instruct-', '!-coder-'],
-    visionKeywords: ['qvq', '-vl', '-omni'],
+    visionKeywords: ['qvq', '-vl', '-omni', 'qwen3.'],
   },
   replicate: {
     imageOutputKeywords: [
@@ -182,6 +197,11 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   zhipu: ['glm'],
 } as const;
 
+export {
+  isDeepSeekThinkingEligibleModel,
+  isDeepSeekV4FamilyModel,
+} from '../providers/deepseek/modelId';
+
 // Image model keyword configuration
 export const IMAGE_MODEL_KEYWORDS = [
   'dall-e',
@@ -202,9 +222,6 @@ export const IMAGE_MODEL_KEYWORDS = [
   '^V_2',
   '^V_1',
 ] as const;
-
-// Embedding model keyword configuration
-export const EMBEDDING_MODEL_KEYWORDS = ['embedding', 'embed', 'bge', 'm3e'] as const;
 
 const AI_MODEL_TYPE_SET = new Set<AiModelType>(AiModelTypeSchema.options);
 
@@ -273,9 +290,11 @@ const isKeywordListMatch = (modelId: string, keywords: readonly string[]): boole
  * @param provider Provider type
  * @returns Matching local model configuration
  */
+// Accepts either a provider id or a model-family key — at runtime it simply
+// looks up a same-named export in model-bank and skips when absent.
 const findKnownModelByProvider = async (
   modelId: string,
-  provider: keyof typeof MODEL_LIST_CONFIGS,
+  provider: ModelProviderKey | keyof typeof MODEL_LIST_CONFIGS,
 ): Promise<any> => {
   const lowerModelId = modelId.toLowerCase();
 
@@ -660,13 +679,13 @@ const processModelCard = (
 export const processModelList = async (
   modelList: Array<{ id: string }>,
   config: ModelProcessorConfig,
-  provider?: keyof typeof MODEL_LIST_CONFIGS,
+  provider?: ModelProviderKey,
 ): Promise<ChatModelCard[]> => {
   const { loadModels } = await import('model-bank');
   const builtinModels = await loadModels();
 
   // If provider is provided, try to get the local configuration for that provider
-  const providerLocalConfig = await getProviderLocalConfig(provider as ModelProviderKey);
+  const providerLocalConfig = await getProviderLocalConfig(provider);
 
   return Promise.all(
     modelList.map(async (model) => {

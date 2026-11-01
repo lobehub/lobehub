@@ -14,6 +14,7 @@ Its primary purpose is to provide a unified interface for reading different file
   - **Word**: `.docx` files.
   - **Excel**: `.xlsx`, `.xls` files, with each worksheet as a `Page`.
   - **PowerPoint**: `.pptx` files, with each slide as a `Page`.
+  - **Jupyter Notebook**: `.ipynb` files, converted to markdown (one page per cell); token-heavy outputs become short sized placeholders.
 - **Standardized Output**: Always returns `Promise<Document>`. A `Document` object represents a loaded file, containing an array of `Page` objects that represent the logical units of the file (pages, slides, worksheets, text blocks, etc.).
 - **Hierarchical Structure**: Uses a structure where `Document` contains `Page[]`, better reflecting the original organization of the file.
 - **Rich Metadata**: Provides detailed metadata at both `Document` and `Page` levels, including file information, content statistics, and structural information.

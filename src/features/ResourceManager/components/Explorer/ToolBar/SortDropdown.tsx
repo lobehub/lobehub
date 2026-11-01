@@ -1,11 +1,10 @@
-import { DropdownMenu, Icon } from '@lobehub/ui';
+import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
 import { type LucideIcon } from 'lucide-react';
 import { ArrowDownAZ, CalendarIcon, Check, HardDriveIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type MenuProps } from '@/components/Menu';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
 
@@ -25,7 +24,7 @@ const SortDropdown = memo(() => {
 
   const selectedKey = sorter || 'createdAt';
 
-  const menuItems: MenuProps['items'] = useMemo(
+  const menuItems: DropdownItem[] = useMemo(
     () =>
       sortOptions.map((option) => ({
         extra: option.key === selectedKey ? <Icon icon={Check} /> : undefined,

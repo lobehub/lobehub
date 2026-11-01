@@ -8,6 +8,8 @@ import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import TaskAvatar from '@/features/Conversation/Messages/Tasks/shared/TaskAvatar';
+import { useMessageCommentCount } from '@/features/TopicComment/hooks';
+import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -28,7 +30,7 @@ interface TaskMessageProps {
   isLatestItem?: boolean;
 }
 
-const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
+const TaskMessage = memo<TaskMessageProps>(({ id, disableEditing }) => {
   const { t } = useTranslation('chat');
 
   // Get message and actionsConfig from ConversationStore
@@ -58,18 +60,20 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
     } else {
       openChatSettings();
     }
-  }, [isInbox]);
+  }, [isInbox, openChatSettings, toggleSystemRole]);
 
   const onDoubleClick = useDoubleClickEdit({ disableEditing, error, id, role });
 
   // Use taskTitle from metadata if available, otherwise fall back to avatar title
   const title = metadata?.taskTitle || avatar?.title;
+  const { count: commentCount, topicId: commentTopicId } = useMessageCommentCount(id);
 
   return (
     <ChatItem
       showTitle
       aboveMessage={null}
       actions={<AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} />}
+      agentId={agentId ?? null}
       avatar={{ ...avatar, title }}
       customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       customErrorRender={(error) => <ErrorMessageExtra data={item} error={error} />}
@@ -80,6 +84,11 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing }) => {
       placement={'left'}
       time={createdAt}
       titleAddon={<Tag>{t('task.subtask')}</Tag>}
+      actionAddon={
+        commentCount > 0 && commentTopicId ? (
+          <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
+        ) : undefined
+      }
       error={
         errorContent && error && (message === LOADING_FLAT || !message) ? errorContent : undefined
       }

@@ -1,0 +1,597 @@
+import { randomBytes } from 'node:crypto';
+
+import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
+import {
+  buildMappedBusinessModelFields,
+  resolveBusinessModelMapping,
+} from '@lobechat/business-model-runtime';
+import {
+  ChatErrorType,
+  RequestTrigger,
+  type VideoGenerationAsset,
+  type VideoGenerationRoute,
+  type VideoGenerationTaskMetadata,
+} from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
+import { TRPCError } from '@trpc/server';
+import debug from 'debug';
+import { and, eq, inArray } from 'drizzle-orm';
+import { supportsConversationalVideoEdit } from 'model-bank/standardParameters';
+import { z } from 'zod';
+
+import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
+import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
+import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
+import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { GenerationModel } from '@/database/models/generation';
+import { GenerationTopicModel } from '@/database/models/generationTopic';
+import { UserModel } from '@/database/models/user';
+import {
+  asyncTasks,
+  generationBatches,
+  generations,
+  type NewGeneration,
+  type NewGenerationBatch,
+} from '@/database/schemas';
+import { getServerDB } from '@/database/server';
+import type { LobeChatDatabase } from '@/database/type';
+import { appEnv } from '@/envs/app';
+import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { FileService } from '@/server/services/file';
+import { getVideoAvgLatencies, getVideoLatencyKey } from '@/server/services/generation/latency';
+import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
+import { fillVideoPricingDefaults } from '@/server/services/generation/videoPricingDefaults';
+import { after } from '@/server/utils/scheduleAfterResponse';
+import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
+
+import { createVideoTaskSubmitError } from './error';
+
+const log = debug('lobe-video:lambda');
+
+const getVideoGenerationRoute = (value: unknown): VideoGenerationRoute | undefined => {
+  if (!isRecord(value) || typeof value.apiType !== 'string') return;
+
+  return {
+    apiType: value.apiType,
+    ...(typeof value.channelId === 'string' ? { channelId: value.channelId } : {}),
+    ...(typeof value.routerId === 'string' ? { routerId: value.routerId } : {}),
+  };
+};
+
+type ChargeErrorBatch = NonNullable<
+  Awaited<ReturnType<typeof chargeBeforeGenerate>>['errorBatch']
+>;
+
+/**
+ * An error batch (insufficient budget, frozen workspace, …) links each generation to
+ * an errored async task after inserting it, so the returned rows may lack
+ * `asyncTaskId`. Callers such as the generateVideo tool need that id to read the
+ * real failure reason, so fill it in from the persisted rows.
+ */
+const withErrorBatchAsyncTaskIds = async (
+  db: LobeChatDatabase,
+  userId: string,
+  errorBatch: ChargeErrorBatch,
+): Promise<ChargeErrorBatch> => {
+  const items = errorBatch.data?.generations;
+  if (!Array.isArray(items)) return errorBatch;
+
+  const missingIds = items
+    .filter((item) => !item.asyncTaskId && typeof item.id === 'string')
+    .map((item) => item.id as string);
+  if (missingIds.length === 0) return errorBatch;
+
+  const rows = await db.query.generations.findMany({
+    columns: { asyncTaskId: true, id: true },
+    where: and(inArray(generations.id, missingIds), eq(generations.userId, userId)),
+  });
+  const taskIdByGenerationId = new Map(rows.map((row) => [row.id, row.asyncTaskId]));
+
+  return {
+    ...errorBatch,
+    data: {
+      ...errorBatch.data,
+      generations: items.map((item) =>
+        item.asyncTaskId || !item.id
+          ? item
+          : { ...item, asyncTaskId: taskIdByGenerationId.get(item.id) ?? item.asyncTaskId },
+      ),
+    },
+  };
+};
+
+const videoProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+  const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
+
+  return opts.next({
+    ctx: {
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
+      fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      generationTopicModel: new GenerationTopicModel(ctx.serverDB, ctx.userId, wsId),
+    },
+  });
+});
+
+const videoCreateProcedure = videoProcedure.use(withScopedPermission('file:upload'));
+
+const createVideoInputSchema = z.object({
+  generationTopicId: z.string(),
+  model: z.string(),
+  params: z
+    .object({
+      aspectRatio: z.string().optional(),
+      cameraFixed: z.boolean().optional(),
+      duration: z.number().optional(),
+      endImageUrl: z.string().nullish(),
+      generateAudio: z.boolean().optional(),
+      imageUrl: z.string().nullish(),
+      prompt: z.string(),
+      resolution: z.string().optional(),
+      seed: z.number().nullish(),
+    })
+    .passthrough(),
+  previousGenerationId: z.string().optional(),
+  provider: z.string(),
+});
+export type CreateVideoServicePayload = z.infer<typeof createVideoInputSchema>;
+
+export const videoRouter = router({
+  createVideo: videoCreateProcedure
+    .input(createVideoInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
+      const wsId = ctx.workspaceId ?? undefined;
+      const { generationTopicId, previousGenerationId, provider, model } = input;
+
+      const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
+      // Everything downstream (billing, stored config, provider request) sees the same params
+      const params = await fillVideoPricingDefaults({
+        model: resolvedModelId,
+        params: input.params,
+        provider,
+      });
+
+      // Reject lobehub model ids that are no longer in the model bank so callers get a
+      // clear error instead of an opaque downstream failure when the resolved channel
+      // model is no longer in the model bank.
+      if (
+        provider === BRANDING_PROVIDER &&
+        !(await isLobeHubModelAvailable(resolvedModelId, 'video', {
+          getUserEmail: async () => (await UserModel.findById(serverDB, userId))?.email,
+        }))
+      ) {
+        throw new TRPCError({
+          cause: { data: { modelType: 'video', requestedModel: model } },
+          code: 'BAD_REQUEST',
+          message: ChatErrorType.LobeHubModelDeprecated,
+        });
+      }
+
+      log('Starting video creation process, input: %O', input);
+
+      // Normalize image URLs to S3 keys for database storage
+      let configForDatabase = { ...params };
+      const referenceImageUrls = Array.isArray(params.imageUrls)
+        ? params.imageUrls.filter((url): url is string => typeof url === 'string')
+        : [];
+
+      // Process multiple reference images
+      if (referenceImageUrls.length > 0) {
+        try {
+          const imageKeys = (
+            await Promise.all(
+              referenceImageUrls.map(async (url) => {
+                const key = await fileService.getKeyFromFullUrl(url);
+                if (key) log('Converted image URL to key: %s -> %s', url, key);
+                return key ?? url;
+              }),
+            )
+          ).filter(Boolean);
+
+          configForDatabase = { ...configForDatabase, imageUrls: imageKeys };
+        } catch (error) {
+          console.error('Error converting imageUrls to keys: %O', error);
+        }
+      }
+
+      // Process first-frame imageUrl
+      if (typeof params.imageUrl === 'string' && params.imageUrl) {
+        try {
+          const key = await fileService.getKeyFromFullUrl(params.imageUrl);
+          if (key) {
+            log('Converted imageUrl to key: %s -> %s', params.imageUrl, key);
+            configForDatabase = { ...configForDatabase, imageUrl: key };
+          }
+        } catch (error) {
+          console.error('Error converting imageUrl to key: %O', error);
+        }
+      }
+
+      // Process last-frame endImageUrl
+      if (typeof params.endImageUrl === 'string' && params.endImageUrl) {
+        try {
+          const key = await fileService.getKeyFromFullUrl(params.endImageUrl);
+          if (key) {
+            log('Converted endImageUrl to key: %s -> %s', params.endImageUrl, key);
+            configForDatabase = { ...configForDatabase, endImageUrl: key };
+          }
+        } catch (error) {
+          console.error('Error converting endImageUrl to key: %O', error);
+        }
+      }
+
+      // In development, convert localhost proxy URLs to S3 URLs for API access
+      let generationParams = params;
+      if (process.env.NODE_ENV === 'development') {
+        const updates: Record<string, unknown> = {};
+
+        if (typeof params.imageUrl === 'string' && params.imageUrl) {
+          const s3Url = await fileService.getFullFileUrl(configForDatabase.imageUrl as string);
+          if (s3Url) {
+            log('Dev: converted imageUrl proxy URL to S3 URL: %s -> %s', params.imageUrl, s3Url);
+            updates.imageUrl = s3Url;
+          }
+        }
+
+        if (typeof params.endImageUrl === 'string' && params.endImageUrl) {
+          const s3Url = await fileService.getFullFileUrl(configForDatabase.endImageUrl as string);
+          if (s3Url) {
+            log(
+              'Dev: converted endImageUrl proxy URL to S3 URL: %s -> %s',
+              params.endImageUrl,
+              s3Url,
+            );
+            updates.endImageUrl = s3Url;
+          }
+        }
+
+        if (referenceImageUrls.length > 0) {
+          const s3Urls = await Promise.all(
+            ((configForDatabase.imageUrls as string[] | undefined) ?? []).map(
+              async (value, index) =>
+                value === referenceImageUrls[index]
+                  ? value
+                  : (await fileService.getFullFileUrl(value)) || referenceImageUrls[index],
+            ),
+          );
+          updates.imageUrls = s3Urls;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          generationParams = { ...params, ...updates };
+        }
+      }
+
+      // Step 0: Pre-charge (atomic budget deduction to prevent concurrent abuse)
+      const generationTopic = await generationTopicModel.findById(generationTopicId);
+      if (!generationTopic) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid generation topic' });
+      }
+
+      let previousInteractionId: string | undefined;
+      let previousRoute: VideoGenerationRoute | undefined;
+      if (previousGenerationId) {
+        if (!supportsConversationalVideoEdit(resolvedModelId)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'The selected model does not support conversational video editing',
+          });
+        }
+
+        const previousGeneration = await new GenerationModel(serverDB, userId, wsId).findById(
+          previousGenerationId,
+        );
+        if (!previousGeneration) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Previous video generation not found',
+          });
+        }
+
+        const previousBatch = await serverDB.query.generationBatches.findFirst({
+          where: and(
+            eq(generationBatches.id, previousGeneration.generationBatchId),
+            eq(generationBatches.userId, userId),
+          ),
+        });
+        const previousAsset = previousGeneration.asset as VideoGenerationAsset | null;
+
+        if (
+          !previousBatch ||
+          previousBatch.generationTopicId !== generationTopicId ||
+          previousBatch.provider !== provider ||
+          previousBatch.model !== model ||
+          !previousAsset?.interactionId
+        ) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Previous video generation cannot be edited with the selected model',
+          });
+        }
+
+        previousInteractionId = previousAsset.interactionId;
+        const previousTask = previousGeneration.asyncTaskId
+          ? await asyncTaskModel.findById(previousGeneration.asyncTaskId)
+          : undefined;
+        previousRoute = getVideoGenerationRoute(
+          (previousTask?.metadata as VideoGenerationTaskMetadata | null)?.route,
+        );
+        generationParams = { ...generationParams, task: 'edit' };
+      }
+
+      const { errorBatch, prechargeResult } = await chargeBeforeGenerate({
+        generationTopicId,
+        model,
+        params,
+        provider,
+        providerParams: generationParams,
+        spendOrigin: ctx.spendOrigin,
+        userId,
+        workspaceId: wsId,
+      });
+      if (errorBatch) return withErrorBatchAsyncTaskIds(serverDB, userId, errorBatch);
+
+      // Generate a one-time token for webhook callback verification
+      const webhookToken = randomBytes(32).toString('hex');
+
+      // Step 1: Atomically create all database records in a transaction
+      const {
+        asyncTaskCreatedAt,
+        asyncTaskId,
+        batch: createdBatch,
+        generation: createdGeneration,
+      } = await serverDB.transaction(async (tx) => {
+        log('Starting database transaction for video generation');
+
+        // 1. Create generationBatch
+        const newBatch: NewGenerationBatch = {
+          config: {
+            ...configForDatabase,
+          },
+          generationTopicId,
+          model,
+          prompt: params.prompt,
+          provider,
+          userId,
+          workspaceId: wsId,
+        };
+        log('Creating generation batch: %O', newBatch);
+        const [batch] = await tx.insert(generationBatches).values(newBatch).returning();
+        log('Generation batch created: %s', batch.id);
+
+        // 2. Create single generation (video is always 1)
+        const newGeneration: NewGeneration = {
+          generationBatchId: batch.id,
+          seed: params.seed ?? null,
+          userId,
+          workspaceId: wsId,
+        };
+        const [generation] = await tx.insert(generations).values(newGeneration).returning();
+        log('Generation created: %s', generation.id);
+
+        // 3. Create asyncTask with precharge metadata
+        const [asyncTask] = await tx
+          .insert(asyncTasks)
+          .values({
+            metadata: {
+              ...(prechargeResult ? { precharge: prechargeResult } : {}),
+              ...(previousGenerationId ? { previousGenerationId } : {}),
+              // The completion charge runs in a webhook/polling context that no
+              // longer sees this request; carry the origin so the spend stays
+              // attributed to it.
+              ...(ctx.spendOrigin ? { spendOrigin: ctx.spendOrigin } : {}),
+              webhookToken,
+            },
+            status: AsyncTaskStatus.Pending,
+            type: AsyncTaskType.VideoGeneration,
+            userId,
+            workspaceId: wsId,
+          })
+          .returning();
+        log('Async task created: %s', asyncTask.id);
+
+        // 4. Link asyncTask to generation
+        await tx
+          .update(generations)
+          .set({ asyncTaskId: asyncTask.id })
+          .where(and(eq(generations.id, generation.id), eq(generations.userId, userId)));
+
+        return {
+          asyncTaskCreatedAt: asyncTask.createdAt,
+          asyncTaskId: asyncTask.id,
+          batch,
+          generation,
+        };
+      });
+
+      log('Database transaction completed. Calling model runtime for video generation.');
+
+      // Step 2: Call model runtime to submit video generation task
+      try {
+        const modelRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, wsId);
+
+        const callbackBaseUrl = appEnv.WEBHOOK_PROXY_URL || appEnv.APP_URL;
+        // Append to the base instead of resolving a root-relative path, which would drop a
+        // reverse-proxy prefix such as `https://host/lobehub`.
+        const callbackUrl = new URL(
+          `${callbackBaseUrl.replace(/\/+$/, '')}/api/webhooks/video/${provider}`,
+        );
+        callbackUrl.searchParams.set('model', resolvedModelId);
+        callbackUrl.searchParams.set('token', webhookToken);
+        log('Using callback URL: %s', callbackUrl);
+
+        const requestMetadata: Record<string, unknown> = { trigger: RequestTrigger.Video };
+        const response = await modelRuntime.createVideo(
+          {
+            callbackUrl: callbackUrl.toString(),
+            model: resolvedModelId,
+            params: generationParams,
+            previousInteractionId,
+          },
+          {
+            metadata: requestMetadata,
+            preferredCompletionMode: appEnv.VIDEO_GENERATION_PREFER_WEBHOOK ? 'webhook' : 'polling',
+            route: previousRoute,
+          },
+        );
+
+        if (!response) throw new Error('Video generation is not supported by this runtime');
+
+        log('Video task submitted successfully, inferenceId: %s', response.inferenceId);
+
+        const route = getVideoGenerationRoute(requestMetadata.routeAttempt);
+        const taskMetadata: VideoGenerationTaskMetadata = {
+          completionMode: response.completionMode,
+          ...(prechargeResult ? { precharge: prechargeResult } : {}),
+          ...(previousGenerationId ? { previousGenerationId } : {}),
+          ...(route ? { route } : {}),
+          // This object replaces the metadata written at insert time, so keep the
+          // spend origin the completion charge relies on.
+          ...(ctx.spendOrigin ? { spendOrigin: ctx.spendOrigin } : {}),
+          webhookToken,
+        };
+
+        const schedulePolling = (inferenceId: string) => {
+          after(async () => {
+            log('Background video polling scheduled for task: %s', asyncTaskId);
+
+            try {
+              const db = await getServerDB();
+
+              await processBackgroundVideoPolling(db, {
+                asyncTaskCreatedAt,
+                asyncTaskId,
+                generationBatchId: createdBatch.id,
+                generationId: createdGeneration.id,
+                generationTopicId,
+                inferenceId,
+                model,
+                prechargeResult,
+                previousGenerationId,
+                provider,
+                route,
+                spendOrigin: ctx.spendOrigin,
+                userId,
+                workspaceId: wsId,
+              });
+
+              log('Background video polling completed for task: %s', asyncTaskId);
+            } catch (error) {
+              console.error('[video] Background polling failed:', error);
+            }
+          });
+        };
+
+        if (response.completionMode === 'webhook') {
+          // Webhook-based provider (e.g. Volcengine): wait for callback
+          log('Webhook-based provider detected, waiting for callback');
+
+          await asyncTaskModel.update(asyncTaskId, {
+            inferenceId: response.inferenceId,
+            metadata: taskMetadata,
+            status: AsyncTaskStatus.Processing,
+          });
+        } else {
+          // Polling-based provider (e.g. OpenAI Sora): use background polling
+          log('Polling-based provider detected (inferenceId only), scheduling background polling');
+
+          await asyncTaskModel.update(asyncTaskId, {
+            inferenceId: response.inferenceId,
+            metadata: taskMetadata,
+            status: AsyncTaskStatus.Processing,
+          });
+
+          schedulePolling(response.inferenceId);
+
+          log('After() hook registered for background video polling: %s', asyncTaskId);
+        }
+      } catch (e) {
+        console.error('Failed to submit video generation task:', e);
+
+        const providerContentPolicyMessage = await getProviderContentPolicyErrorMessage({
+          error: e,
+          provider,
+          trigger: RequestTrigger.Video,
+          userId,
+        });
+        await asyncTaskModel.update(asyncTaskId, {
+          error: createVideoTaskSubmitError(e, providerContentPolicyMessage),
+          status: AsyncTaskStatus.Error,
+        });
+
+        if (prechargeResult) {
+          try {
+            await chargeAfterGenerate({
+              isError: true,
+              metadata: {
+                asyncTaskId,
+                generationBatchId: createdBatch.id,
+                topicId: generationTopicId,
+                ...buildMappedBusinessModelFields({
+                  provider,
+                  requestedModelId: resolvedModelId === model ? undefined : model,
+                  resolvedModelId,
+                }),
+              },
+              model: resolvedModelId,
+              prechargeResult,
+              provider,
+              userId,
+              workspaceId: wsId,
+            });
+          } catch (chargeError) {
+            console.error('[video] chargeAfterGenerate failed:', chargeError);
+          }
+        }
+      }
+
+      log('Video creation process completed: %O', {
+        batchId: createdBatch.id,
+        generationId: createdGeneration.id,
+      });
+
+      return {
+        data: {
+          batch: createdBatch,
+          generations: [{ ...createdGeneration, asyncTaskId }],
+        },
+        success: true,
+      };
+    }),
+
+  getModelLatencies: authedProcedure
+    .input(
+      z.object({
+        models: z
+          .array(z.object({ model: z.string().min(1), provider: z.string().min(1) }))
+          .max(200),
+      }),
+    )
+    .query(async ({ input }) => {
+      const latencies = await getVideoAvgLatencies(input.models);
+      const uniqueModels = [
+        ...new Map(input.models.map((item) => [getVideoLatencyKey(item), item])).values(),
+      ];
+
+      return uniqueModels.map(({ model, provider }) => ({
+        avgLatencyMs: latencies.get(getVideoLatencyKey({ model, provider })) ?? null,
+        model,
+        provider,
+      }));
+    }),
+
+  getVideoFreeQuota: authedProcedure
+    .input(z.object({ model: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return getVideoFreeQuota(ctx.userId, input.model);
+    }),
+});
+
+export type VideoRouter = typeof videoRouter;

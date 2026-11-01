@@ -1,12 +1,11 @@
 'use client';
 
-import { Input, Select, TextArea } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
-import { App, Form } from 'antd';
+import { cssVar, Input, Select, TextArea, toast, useModalContext } from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
 
 const toIdentifier = (name: string) =>
@@ -24,19 +23,10 @@ export interface CreateBenchmarkContentProps {
 const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoadingChange }) => {
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
-  const { message } = App.useApp();
-  const navigate = useNavigate();
-  const [form] = Form.useForm();
+
+  const navigate = useWorkspaceAwareNavigate();
   const [identifierTouched, setIdentifierTouched] = useState(false);
   const createBenchmark = useEvalStore((s) => s.createBenchmark);
-
-  const nameValue = Form.useWatch('name', form);
-
-  useEffect(() => {
-    if (!identifierTouched && nameValue) {
-      form.setFieldValue('identifier', toIdentifier(nameValue));
-    }
-  }, [nameValue, identifierTouched, form]);
 
   const handleFinish = async (values: any) => {
     onLoadingChange?.(true);
@@ -47,44 +37,56 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
         name: values.name.trim(),
         tags: values.tags?.length > 0 ? values.tags : undefined,
       });
-      message.success(t('benchmark.create.success'));
+      toast.success(t('benchmark.create.success'));
       close();
       if (result?.id) {
         navigate(`/eval/bench/${result.id}`);
       }
     } catch {
-      message.error(t('benchmark.create.error'));
+      toast.error(t('benchmark.create.error'));
     } finally {
       onLoadingChange?.(false);
     }
   };
 
+  const form = useForm({
+    onSubmit: handleFinish,
+  });
+  const nameValue = useWatch(form, 'name');
+
+  useEffect(() => {
+    if (!identifierTouched && nameValue) {
+      form.setValue('identifier', toIdentifier(nameValue));
+    }
+  }, [nameValue, identifierTouched, form]);
+
   return (
-    <Form form={form} layout="vertical" name={formId} onFinish={handleFinish}>
-      <Form.Item
+    <Form form={form} id={formId} layout="vertical">
+      <Form.Field
         label={t('benchmark.create.name.label')}
         name="name"
-        rules={[{ message: t('benchmark.create.nameRequired'), required: true }]}
+        required={t('benchmark.create.nameRequired')}
       >
         <Input autoFocus placeholder={t('benchmark.create.name.placeholder')} />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
+      <Form.Field
         label={t('benchmark.create.identifier.label')}
         name="identifier"
-        rules={[{ message: t('benchmark.create.identifierRequired'), required: true }]}
+        required={t('benchmark.create.identifierRequired')}
       >
         <Input
           placeholder={t('benchmark.create.identifier.placeholder')}
+          style={{ fontFamily: cssVar.fontFamilyCode }}
           onChange={() => setIdentifierTouched(true)}
         />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('benchmark.create.description.label')} name="description">
+      <Form.Field label={t('benchmark.create.description.label')} name="description">
         <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('benchmark.create.tags.label')} name="tags" style={{ marginBottom: 0 }}>
+      <Form.Field label={t('benchmark.create.tags.label')} name="tags">
         <Select
           mode="tags"
           open={false}
@@ -92,7 +94,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
           style={{ width: '100%' }}
           tokenSeparators={[',', '，', ' ']}
         />
-      </Form.Item>
+      </Form.Field>
     </Form>
   );
 };

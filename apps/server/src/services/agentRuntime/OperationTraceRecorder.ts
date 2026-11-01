@@ -1,0 +1,488 @@
+import type { ExecutionSnapshot, ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
+import type { ChatMessageErrorAttribution, ChatMessageErrorSeverity } from '@lobechat/types';
+import debug from 'debug';
+
+import type { StepCompletionReason, StepPresentationData } from './types';
+
+const log = debug('lobe-server:operation-trace-recorder');
+
+type SignalEvent = { [key: string]: unknown; type: string };
+
+export interface AppendStepParams {
+  afterStepSignalEvents: SignalEvent[];
+  /**
+   * Agent state BEFORE this step ran. Used to derive the message baseline,
+   * activatedStepTools delta, and the partial header (model / provider).
+   */
+  agentState: any;
+  beforeStepSignalEvents: SignalEvent[];
+  /**
+   * Context engine input/output captured for this step. Delivered via
+   * `RuntimeExecutorContext.tracingContextEngine` rather than through the
+   * `events` array, so CE payloads (agentDocuments, systemRole, …) stay out
+   * of the Redis state pipeline.
+   *
+   * Context: agent-runtime state blob was hitting Upstash Redis 10MB limit
+   * because ~97% of each step payload was tracing-only fields. Routing CE
+   * via tracingContextEngine keeps it in trace only, keeping Redis state lean.
+   *
+   * `metadata` carries the pipeline's per-request decisions (trim stats,
+   * cache-warmth gate inputs/outputs, truncation counts) — small scalar
+   * records, safe to store every step.
+   */
+  contextEngine?: { input?: unknown; metadata?: unknown; output?: unknown };
+  currentContext?: { payload?: unknown; phase?: string; stepContext?: unknown };
+  externalRetryCount: number;
+  presentation: StepPresentationData;
+  startedAt: number;
+  stepIndex: number;
+  /**
+   * Result of running this step. Carries new messages, raw events, and the
+   * post-step activatedStepTools list.
+   */
+  stepResult: { events?: unknown[]; newState: any };
+}
+
+export interface FinalizeParams {
+  /**
+   * Events to merge into the last partial step before save. Used by the
+   * success path to attach agentSignal completion events to the trailing
+   * step. Error path leaves this empty.
+   */
+  appendEventsToLastStep?: SignalEvent[];
+  completionReason: StepCompletionReason;
+  /**
+   * Top-level error on the persisted snapshot. The classification fields
+   * (`attribution`, `category`, `severity`, …) mirror `ChatMessageError` and
+   * are sourced from `ERROR_CODE_SPECS` at the runtime catch site; unknown
+   * codes simply omit them.
+   */
+  error?: {
+    attribution?: ChatMessageErrorAttribution;
+    body?: unknown;
+    category?: string;
+    countAsFailure?: boolean;
+    httpStatus?: number;
+    message: string;
+    numericId?: number;
+    retryable?: boolean;
+    severity?: ChatMessageErrorSeverity;
+    type: string;
+  };
+  /**
+   * Synthetic step record for the error path. The real failing step never
+   * reached `appendStep` because the executor threw before the partial push,
+   * so the catch caller passes this to keep step counts aligned with the
+   * assistant message that triggered the call. See .
+   */
+  failedStep?: { startedAt: number; stepIndex: number; stepType?: 'call_llm' | 'call_tool' };
+  state: any;
+}
+
+/**
+ * Encapsulates per-operation trace snapshot accumulation and finalization.
+ *
+ * Built on top of an `ISnapshotStore` (S3 in production, file-system in dev).
+ * The recorder owns:
+ * - Partial header init (model / provider on first step)
+ * - Per-step incremental message diffing + heavy-event stripping
+ * - Finalize into the canonical S3 path on completion or error
+ *
+ * Callers don't need to gate on `enabled` — when the underlying store is null,
+ * methods are no-ops.
+ */
+export class OperationTraceRecorder {
+  /**
+   * The partial this invocation is accumulating, kept in memory so a step
+   * boundary no longer pays a full read-modify-write of the whole trace.
+   * Measured in production (Tempo, 75 steps): ~570ms GET + ~960ms PUT per step,
+   * on the critical path between two steps of an inlined run.
+   */
+  private cached: { operationId: string; partial: Partial<ExecutionSnapshot> } | null = null;
+
+  /** In-flight upload, if any. Never rejects — `drainSaves` logs and continues. */
+  private pendingSave: Promise<void> | undefined;
+
+  /** Set when the cached partial has steps the store has not seen yet. */
+  private dirty = false;
+
+  /** Aborts the upload in flight when this invocation stops owning the operation. */
+  private saveAbort: AbortController | undefined;
+
+  constructor(private readonly store: ISnapshotStore | null) {}
+
+  get enabled(): boolean {
+    return this.store !== null;
+  }
+
+  async appendStep(operationId: string, params: AppendStepParams): Promise<void> {
+    if (!this.store) return;
+
+    try {
+      const partial = await this.loadCachedPartial(operationId);
+
+      this.initPartialHeader(partial, params.agentState);
+
+      if (!partial.steps) partial.steps = [];
+      const newStep = this.buildStepSnapshot(params);
+      this.deduplicateCeSnapshot(newStep, partial.steps);
+      partial.steps.push(newStep);
+
+      // Upload in the background: the next step only needs the in-memory copy,
+      // and the upload overlaps with it instead of delaying it. Anything that
+      // reads the partial from another process waits via `flushPartial`.
+      this.scheduleSave(operationId);
+    } catch (e) {
+      log('[%s] snapshot step recording failed: %O', operationId, e);
+    }
+  }
+
+  /**
+   * Wait for the accumulated partial to become durable. Required before any
+   * other process reads it: a queue hand-off, a parked operation, or
+   * finalization.
+   */
+  async flushPartial(): Promise<void> {
+    if (!this.store) return;
+
+    if (this.dirty && this.cached) this.scheduleSave(this.cached.operationId);
+    await this.pendingSave;
+  }
+
+  /**
+   * Drop the in-memory partial without uploading it. Used when this invocation
+   * loses the operation lock: the worker that took over owns the partial now,
+   * and writing ours over it would roll back the steps it recorded.
+   */
+  discardPartial(): void {
+    this.dirty = false;
+    this.cached = null;
+    // An upload already in flight was started while this invocation still owned
+    // the operation, and carries a partial the new owner has moved past. Abort
+    // it rather than let it land on top of theirs.
+    this.saveAbort?.abort();
+    this.saveAbort = undefined;
+  }
+
+  private async loadCachedPartial(operationId: string): Promise<Partial<ExecutionSnapshot>> {
+    if (this.cached?.operationId === operationId) return this.cached.partial;
+
+    // A different operation must not inherit this cache, and its queued upload
+    // still points at the object we are about to forget — land it first.
+    if (this.cached) await this.flushPartial();
+
+    const partial = (await this.store!.loadPartial(operationId)) ?? { steps: [] };
+    this.cached = { operationId, partial };
+    return partial;
+  }
+
+  private scheduleSave(operationId: string): void {
+    this.dirty = true;
+    if (this.pendingSave) return;
+
+    this.pendingSave = this.drainSaves(operationId).finally(() => {
+      this.pendingSave = undefined;
+    });
+  }
+
+  /**
+   * Uploads until the cached partial is clean. Steps appended while an upload is
+   * in flight are picked up by the next iteration, so a fast run collapses
+   * several step appends into one upload instead of one upload per step.
+   */
+  private async drainSaves(operationId: string): Promise<void> {
+    while (this.dirty) {
+      this.dirty = false;
+
+      const partial = this.cached?.operationId === operationId ? this.cached.partial : undefined;
+      if (!partial) return;
+
+      const abort = new AbortController();
+      this.saveAbort = abort;
+      try {
+        await this.store!.savePartial(operationId, partial, { signal: abort.signal });
+      } catch (e) {
+        // Matches the previous behaviour: a failed partial upload degrades the
+        // trace, it never fails the step that produced it. An abort lands here
+        // too — the partial it carried is deliberately not written.
+        log('[%s] partial snapshot upload failed: %O', operationId, e);
+      } finally {
+        if (this.saveAbort === abort) this.saveAbort = undefined;
+      }
+    }
+  }
+
+  async finalize(operationId: string, params: FinalizeParams): Promise<void> {
+    if (!this.store) return;
+
+    try {
+      // Land whatever is still queued: the upload in flight writes the same
+      // object we are about to finalize, and `removePartial` below must not
+      // race an upload that would resurrect the partial afterwards.
+      await this.flushPartial();
+
+      const partial =
+        this.cached?.operationId === operationId
+          ? this.cached.partial
+          : await this.store.loadPartial(operationId);
+      if (!partial) {
+        // No partial recorded — nothing to finalize. Skip rather than write
+        // an empty snapshot.
+        return;
+      }
+
+      if (params.appendEventsToLastStep?.length && partial.steps?.length) {
+        const lastStep = partial.steps.at(-1);
+        if (lastStep) {
+          lastStep.events = [...(lastStep.events ?? []), ...params.appendEventsToLastStep];
+        }
+      }
+
+      if (params.failedStep) {
+        if (!partial.steps) partial.steps = [];
+        // The success path may have already appended this step to the partial
+        // before a later failure (e.g. saveAgentState or queue scheduling
+        // throwing post-append). In that case attach the error event to the
+        // existing record instead of pushing a duplicate stepIndex —
+        // duplicates corrupt ordering and per-step metrics in trace
+        // reconstruction.
+        const existing = partial.steps.find((s) => s.stepIndex === params.failedStep!.stepIndex);
+        if (existing) {
+          if (params.error) {
+            existing.events = [...(existing.events ?? []), { error: params.error, type: 'error' }];
+          }
+        } else {
+          const now = Date.now();
+          partial.steps.push({
+            completedAt: now,
+            events: params.error ? [{ error: params.error, type: 'error' }] : undefined,
+            executionTimeMs: now - params.failedStep.startedAt,
+            startedAt: params.failedStep.startedAt,
+            stepIndex: params.failedStep.stepIndex,
+            stepType: params.failedStep.stepType ?? 'call_tool',
+            totalCost: params.state?.cost?.total ?? 0,
+            totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
+          });
+        }
+      }
+
+      const metadata = (params.state?.metadata ?? {}) as any;
+      const origin = params.state?.origin ?? {};
+      const finalizedSteps = (partial.steps ?? []).sort((a, b) => a.stepIndex - b.stepIndex);
+      const snapshot = {
+        agentId: origin.agentId,
+        completedAt: Date.now(),
+        completionReason: params.completionReason,
+        error: params.error,
+        externalRetryCount:
+          typeof metadata?.externalRetryCount === 'number'
+            ? metadata.externalRetryCount
+            : undefined,
+        model: partial.model,
+        operationId,
+        provider: partial.provider,
+        retryDelayExpression: params.state?.host?.queue?.retryDelay,
+        startedAt: partial.startedAt ?? Date.now(),
+        steps: finalizedSteps,
+        topicId: origin.topicId,
+        totalCost: params.state?.cost?.total ?? 0,
+        // Trust the finalized step array over `state.stepCount`: on the error
+        // path stepCount comes from Redis and reflects the last completed
+        // step, so it lags behind the synthetic failed step we just appended.
+        totalSteps: finalizedSteps.length || (params.state?.stepCount ?? 0),
+        totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
+        traceId: operationId,
+        userId: origin.userId,
+      };
+
+      await this.store.save(snapshot as any);
+      // Forget the partial before deleting it, so a late `appendStep` on this
+      // recorder cannot re-upload the object we just removed.
+      this.discardPartial();
+      // Human intervention and async tools can continue this operation id. Keep
+      // the partial alongside the readable waiting snapshot until the real end.
+      if (
+        params.completionReason !== 'waiting_for_human' &&
+        params.completionReason !== 'waiting_for_async_tool'
+      ) {
+        await this.store.removePartial(operationId);
+      }
+    } catch (e) {
+      log('[%s] snapshot finalize failed (reason=%s): %O', operationId, params.completionReason, e);
+    }
+  }
+
+  /**
+   * Strip `contextEngine` input/output/metadata fields that are identical to the
+   * most-recently stored values in previous steps. The viewer reconstructs the
+   * full snapshot by walking back through the step list (same pattern as
+   * messagesBaseline + messagesDelta).
+   */
+  private deduplicateCeSnapshot(step: StepSnapshot, prevSteps: StepSnapshot[]): void {
+    if (!step.contextEngine) return;
+
+    let lastInputJson: string | undefined;
+    let lastMetadataJson: string | undefined;
+    let lastOutputJson: string | undefined;
+
+    for (let i = prevSteps.length - 1; i >= 0; i--) {
+      const prev = prevSteps[i];
+      if (!prev.contextEngine) continue;
+      if (lastInputJson === undefined && prev.contextEngine.input !== undefined) {
+        lastInputJson = JSON.stringify(prev.contextEngine.input);
+      }
+      if (lastMetadataJson === undefined && prev.contextEngine.metadata !== undefined) {
+        lastMetadataJson = JSON.stringify(prev.contextEngine.metadata);
+      }
+      if (lastOutputJson === undefined && prev.contextEngine.output !== undefined) {
+        lastOutputJson = JSON.stringify(prev.contextEngine.output);
+      }
+      if (
+        lastInputJson !== undefined &&
+        lastMetadataJson !== undefined &&
+        lastOutputJson !== undefined
+      )
+        break;
+    }
+
+    const storeInput =
+      lastInputJson === undefined || JSON.stringify(step.contextEngine.input) !== lastInputJson;
+    const storeMetadata =
+      step.contextEngine.metadata !== undefined &&
+      (lastMetadataJson === undefined ||
+        JSON.stringify(step.contextEngine.metadata) !== lastMetadataJson);
+    const storeOutput =
+      lastOutputJson === undefined || JSON.stringify(step.contextEngine.output) !== lastOutputJson;
+
+    step.contextEngine = {
+      ...(storeInput ? { input: step.contextEngine.input } : {}),
+      ...(storeMetadata ? { metadata: step.contextEngine.metadata } : {}),
+      ...(storeOutput ? { output: step.contextEngine.output } : {}),
+    };
+  }
+
+  private initPartialHeader(partial: any, agentState: any): void {
+    if (partial.startedAt) return;
+    partial.startedAt = Date.now();
+    partial.model = agentState?.world?.agent?.model ?? agentState?.modelRuntimeConfig?.model;
+    partial.provider =
+      agentState?.world?.agent?.provider ?? agentState?.modelRuntimeConfig?.provider;
+  }
+
+  private buildStepSnapshot(params: AppendStepParams): StepSnapshot {
+    const {
+      agentState,
+      afterStepSignalEvents,
+      beforeStepSignalEvents,
+      contextEngine: ceInput,
+      currentContext,
+      externalRetryCount,
+      presentation,
+      startedAt,
+      stepIndex,
+      stepResult,
+    } = params;
+
+    // Incremental diff: only store message delta + baseline at reset points.
+    const prevMessages = agentState?.messages ?? [];
+    const afterMessages = stepResult.newState.messages;
+    const isCompression = (stepResult.events as any[])?.some(
+      (e) => e.type === 'compression_complete',
+    );
+    const isBaseline = stepIndex === 0 || isCompression;
+    const messagesDelta = afterMessages.slice(prevMessages.length);
+
+    // CE data is structural state, not a streaming event — delivered via the
+    // typed `contextEngine` field on AppendStepParams (sourced from
+    // RuntimeExecutorContext.tracingContextEngine). Uses the same delta
+    // pattern as messagesBaseline/messagesDelta.
+    const contextEngine: StepSnapshot['contextEngine'] = ceInput
+      ? { input: ceInput.input, metadata: ceInput.metadata, output: ceInput.output }
+      : undefined;
+
+    // Strip heavy/redundant data from events before persisting to snapshot.
+    const rawEvents = (stepResult.events as any[]) ?? [];
+    const snapshotEvents = [
+      ...beforeStepSignalEvents,
+      ...rawEvents
+        .filter((e) => e.type !== 'llm_stream')
+        .map((e) => {
+          if (e.type === 'done' && e.finalState) {
+            // Remove reconstructible fields from finalState:
+            // - messages: from messagesBaseline + messagesDelta chain
+            // - operationToolSet: from toolsetBaseline (step 0)
+            // - toolManifestMap/tools/toolSourceMap: legacy mirrors of operationToolSet
+            // - world.expertise (and its legacy top-level copy): immutable
+            //   operation-level snapshot retained in working state
+            const {
+              expertise: _expertise,
+              messages: _msgs,
+              operationToolSet: _ots,
+              toolManifestMap: _tmm,
+              toolSourceMap: _tsm,
+              tools: _tools,
+              world: _world,
+              // activatedStepTools is kept since it's the cumulative record
+              ...restState
+            } = e.finalState;
+            const { expertise: _worldExpertise, ...worldRest } = _world ?? {};
+            return {
+              ...e,
+              finalState: _world ? { ...restState, world: worldRest } : restState,
+            };
+          }
+          return e;
+        }),
+      ...afterStepSignalEvents,
+    ];
+
+    // Strip toolResults from payload (already in step.toolsResult).
+    let snapshotPayload: unknown = currentContext?.payload;
+    if (
+      snapshotPayload &&
+      typeof snapshotPayload === 'object' &&
+      'toolResults' in snapshotPayload
+    ) {
+      const { toolResults: _tr, ...restPayload } = snapshotPayload as Record<string, unknown>;
+      snapshotPayload = restPayload;
+    }
+
+    // Compute activatedStepTools delta (newly discovered tools in this step).
+    const prevActivated = agentState?.activatedStepTools ?? [];
+    const afterActivated = stepResult.newState.activatedStepTools ?? [];
+    const activatedStepToolsDelta =
+      afterActivated.length > prevActivated.length
+        ? afterActivated.slice(prevActivated.length)
+        : undefined;
+
+    return {
+      activatedStepToolsDelta,
+      contextEngine,
+      completedAt: Date.now(),
+      content: presentation.content,
+      context: {
+        payload: snapshotPayload,
+        phase: currentContext?.phase ?? 'unknown',
+        stepContext: currentContext?.stepContext,
+      },
+      events: snapshotEvents,
+      executionTimeMs: presentation.executionTimeMs,
+      externalRetryCount,
+      inputTokens: presentation.stepInputTokens,
+      isCompressionReset: isCompression || undefined,
+      messagesBaseline: isBaseline ? prevMessages : undefined,
+      messagesDelta,
+      outputTokens: presentation.stepOutputTokens,
+      reasoning: presentation.reasoning,
+      startedAt,
+      stepIndex,
+      stepType: presentation.stepType,
+      // Store operation-level toolset once at step 0
+      toolsetBaseline: stepIndex === 0 ? agentState?.operationToolSet : undefined,
+      toolsCalling: presentation.toolsCalling,
+      toolsResult: presentation.toolsResult,
+      totalCost: presentation.stepCost ?? 0,
+      totalTokens: presentation.stepTotalTokens ?? 0,
+    };
+  }
+}

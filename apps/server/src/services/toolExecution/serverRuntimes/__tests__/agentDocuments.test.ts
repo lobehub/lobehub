@@ -1,0 +1,713 @@
+import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { TaskModel } from '@/database/models/task';
+import { WorkspaceModel } from '@/database/models/workspace';
+import { AgentDocumentsService } from '@/server/services/agentDocuments';
+
+import type { ToolExecutionContext } from '../../types';
+import { agentDocumentsRuntime } from '../agentDocuments';
+
+const agentDocumentToolOutcomeMocks = vi.hoisted(() => ({
+  emitAgentDocumentToolOutcomeSafely: vi.fn(),
+}));
+
+vi.mock('@/server/services/agentDocuments');
+vi.mock('@/database/models/task');
+vi.mock('@/database/models/workspace');
+vi.mock('@/server/services/agentDocuments/toolOutcome', () => agentDocumentToolOutcomeMocks);
+vi.mock('@/envs/app', () => ({
+  appEnv: { APP_URL: 'https://app.example.com' },
+}));
+
+describe('agentDocumentsRuntime', () => {
+  it('should have correct identifier', () => {
+    expect(agentDocumentsRuntime.identifier).toBe('lobe-agent-documents');
+  });
+
+  it('should throw if userId is missing', () => {
+    expect(() =>
+      agentDocumentsRuntime.factory({ serverDB: {} as any, toolManifestMap: {} }),
+    ).toThrow('userId and serverDB are required for Agent Documents execution');
+  });
+
+  it('should throw if serverDB is missing', () => {
+    expect(() => agentDocumentsRuntime.factory({ toolManifestMap: {}, userId: 'user-1' })).toThrow(
+      'userId and serverDB are required for Agent Documents execution',
+    );
+  });
+
+  it('fails closed when a Share document call has no topic context', () => {
+    expect(() =>
+      agentDocumentsRuntime.factory({
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        serverDB: {} as any,
+        toolManifestMap: {},
+        userId: 'user-1',
+      }),
+    ).toThrow('topicId is required for Agent Share document execution');
+  });
+});
+
+describe('agentDocumentsRuntime auto-pin to task', () => {
+  const newDoc = {
+    documentId: 'documents-row-id',
+    filename: 'daily-brief',
+    id: 'agent-doc-assoc-id',
+    title: 'Daily Brief',
+  };
+
+  let serviceImpl: {
+    copyDocumentById: ReturnType<typeof vi.fn>;
+    createDocument: ReturnType<typeof vi.fn>;
+    createForTopic: ReturnType<typeof vi.fn>;
+    getDocumentSnapshotById: ReturnType<typeof vi.fn>;
+    listDocuments: ReturnType<typeof vi.fn>;
+    listDocumentsForTopic: ReturnType<typeof vi.fn>;
+    renameDocumentById: ReturnType<typeof vi.fn>;
+  };
+  let pinDocument: ReturnType<typeof vi.fn>;
+  let findWorkspaceById: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely.mockClear();
+    serviceImpl = {
+      copyDocumentById: vi.fn().mockResolvedValue(newDoc),
+      countChildren: vi.fn().mockResolvedValue(new Map()),
+      createDocument: vi.fn().mockResolvedValue(newDoc),
+      createForTopic: vi.fn().mockResolvedValue(newDoc),
+      getDocumentSnapshotById: vi.fn().mockResolvedValue(newDoc),
+      listDocuments: vi.fn().mockResolvedValue([newDoc]),
+      listDocumentsForTopic: vi.fn().mockResolvedValue([newDoc]),
+      renameDocumentById: vi.fn().mockResolvedValue(newDoc),
+    };
+    pinDocument = vi.fn().mockResolvedValue(undefined);
+    findWorkspaceById = vi.fn().mockResolvedValue({ slug: 'lobe-team' });
+
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return serviceImpl as any;
+    });
+    vi.mocked(TaskModel).mockImplementation(function () {
+      return { pinDocument } as any;
+    });
+    vi.mocked(WorkspaceModel).mockImplementation(function () {
+      return { findById: findWorkspaceById } as any;
+    });
+  });
+
+  const buildContext = (
+    taskId?: string,
+    workspaceId?: string,
+    taskRows: Array<{ workspaceId: string | null }> = [{ workspaceId: null }],
+    overrides?: Partial<ToolExecutionContext>,
+  ) => {
+    // Mock the workspace lookup chain that `pinToTask` runs against the task
+    // row. Returning `workspaceId: null` reproduces personal-mode behavior.
+    const limit = vi.fn().mockResolvedValue(taskRows);
+    const where = vi.fn().mockReturnValue({ limit });
+    const from = vi.fn().mockReturnValue({ where });
+    const select = vi.fn().mockReturnValue({ from });
+    return {
+      serverDB: { select } as never,
+      taskId,
+      toolManifestMap: {},
+      userId: 'user-1',
+      workspaceId,
+      ...overrides,
+    };
+  };
+
+  it('pins newly created document when taskId is in context', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
+
+    expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
+  });
+
+  it('fails before document mutation when a legacy task anchor was trashed', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('trashed-task', undefined, []));
+
+    await expect(
+      runtime.createDocument(
+        { content: 'body', title: 'Must not write to personal scope' },
+        { agentId: 'agent-1' },
+      ),
+    ).rejects.toThrow('missing or trashed task trashed-task');
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('validates a trashed task before mutation when workspace context is present', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('trashed-task', 'workspace-1', []));
+
+    await expect(
+      runtime.createDocument(
+        { content: 'body', title: 'Must not write before task validation' },
+        { agentId: 'agent-1' },
+      ),
+    ).rejects.toThrow('missing or trashed task trashed-task');
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('fails before document mutation when task and context workspaces differ', async () => {
+    const runtime = agentDocumentsRuntime.factory(
+      buildContext('task-1', 'workspace-1', [{ workspaceId: 'workspace-2' }]),
+    );
+
+    await expect(
+      runtime.createDocument(
+        { content: 'body', title: 'Must not cross workspace scopes' },
+        { agentId: 'agent-1' },
+      ),
+    ).rejects.toThrow('Task task-1 belongs to workspace workspace-2, not workspace-1');
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('uses the recovered task workspace for both document mutation and pinning', async () => {
+    const context = buildContext('task-1', undefined, [{ workspaceId: 'workspace-1' }]);
+    const runtime = agentDocumentsRuntime.factory(context);
+
+    await runtime.createDocument({ content: 'body', title: 'Scoped' }, { agentId: 'agent-1' });
+
+    expect(AgentDocumentsService).toHaveBeenLastCalledWith(
+      context.serverDB,
+      'user-1',
+      'workspace-1',
+      undefined,
+      { type: 'ordinary' },
+    );
+    expect(TaskModel).toHaveBeenLastCalledWith(context.serverDB, 'user-1', 'workspace-1');
+  });
+
+  it('emits create outcomes with the agent document binding id', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
+
+    expect(agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentDocumentId: 'agent-doc-assoc-id',
+        apiName: 'createDocument',
+        relation: 'created',
+      }),
+    );
+  });
+
+  it('marks hinted create outcomes as skill document intents', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.createDocument(
+      { content: 'body', hintIsSkill: true, title: 'Reusable Workflow' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiName: 'createDocument',
+        hintIsSkill: true,
+      }),
+    );
+  });
+
+  it('emits copy outcomes with the agent document binding id', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.copyDocument({ id: 'source-agent-doc-id' }, { agentId: 'agent-1' });
+
+    expect(agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentDocumentId: 'agent-doc-assoc-id',
+        apiName: 'copyDocument',
+        relation: 'created',
+      }),
+    );
+  });
+
+  it('emits update outcomes with the input agent document binding id', async () => {
+    serviceImpl.createDocument.mockClear();
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.renameDocument(
+      { id: 'agent-doc-assoc-id', newTitle: 'Renamed' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentDocumentId: 'agent-doc-assoc-id',
+        apiName: 'renameDocument',
+        relation: 'updated',
+      }),
+    );
+  });
+
+  it('skips pin when no taskId is provided', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext());
+
+    await runtime.createDocument({ content: 'body', title: 'Daily Brief' }, { agentId: 'agent-1' });
+
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('pins documents created via createTopicDocument', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.createDocument(
+      { content: 'body', scope: 'currentTopic', title: 'Topic Note' },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+
+    expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
+  });
+
+  it('pins documents produced by copyDocument', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.copyDocument(
+      { id: 'agent-doc-assoc-id', newTitle: 'Copy' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(pinDocument).toHaveBeenCalledWith('task-1', 'documents-row-id', 'agent');
+  });
+
+  it('does not pin when service returns undefined (e.g. copy of missing doc)', async () => {
+    serviceImpl.copyDocumentById.mockResolvedValue(undefined);
+    const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));
+
+    await runtime.copyDocument({ id: 'missing' }, { agentId: 'agent-1' });
+
+    expect(pinDocument).not.toHaveBeenCalled();
+  });
+
+  it('includes the workspace slug in generated document URLs', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext(undefined, 'workspace-1'));
+
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(findWorkspaceById).toHaveBeenCalledWith('workspace-1');
+    expect(result.content).toContain(
+      'https://app.example.com/lobe-team/agent/agent-1/docs/documents-row-id',
+    );
+  });
+
+  it('omits document URLs for workspace-scoped runs when the workspace slug cannot be resolved', async () => {
+    findWorkspaceById.mockResolvedValueOnce(undefined);
+    const runtime = agentDocumentsRuntime.factory(buildContext(undefined, 'workspace-1'));
+
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.content).toBe(
+      'Created document "Daily Brief" (internal id: agent-doc-assoc-id).',
+    );
+  });
+
+  it('forces Share creation and listing into the visitor current-topic scope', async () => {
+    const runtime = agentDocumentsRuntime.factory(
+      buildContext(undefined, undefined, undefined, {
+        agentShareVisitor: {
+          agentId: 'agent-1',
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+        topicId: 'topic-1',
+      }),
+    );
+
+    const created = await runtime.createDocument(
+      {
+        content: 'body',
+        hintIsSkill: true,
+        parentId: 'creator-folder',
+        scope: 'agent',
+        title: 'Visitor Note',
+      },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+    await runtime.listDocuments(
+      { parentId: 'creator-folder', scope: 'agent' },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+
+    expect(serviceImpl.createForTopic).toHaveBeenCalledWith(
+      'agent-1',
+      'Visitor Note',
+      'body',
+      'topic-1',
+    );
+    expect(serviceImpl.createDocument).not.toHaveBeenCalled();
+    expect(serviceImpl.listDocumentsForTopic).toHaveBeenCalledWith('agent-1', 'topic-1', 'all', {
+      includeArchivedToolResults: true,
+    });
+    expect(serviceImpl.listDocuments).not.toHaveBeenCalled();
+    expect(created.content).not.toContain('https://app.example.com');
+    expect(created.state).toMatchObject({ readonly: true });
+    expect(AgentDocumentsService).toHaveBeenLastCalledWith(
+      expect.anything(),
+      'user-1',
+      undefined,
+      undefined,
+      {
+        shareId: 'share-1',
+        topicId: 'topic-1',
+        type: 'agentShare',
+        visitorUserId: 'visitor-1',
+      },
+    );
+  });
+});
+
+describe('agentDocumentsRuntime Work registration state', () => {
+  // Work registration is now manifest-driven: the runtime no longer emits intents
+  // via `context.onWorkRegistration`. Instead every mutating API stamps a uniform
+  // identity block (`agentDocumentId` / `agentId` / `documentId`) into its result
+  // `state`, which the generic dispatch-layer resolver reads. These tests assert
+  // the runtime surfaces that block (create + delete-via-pre-read) and does NOT
+  // call the legacy sink.
+  const newDoc = {
+    documentId: 'documents-row-id',
+    filename: 'daily-brief',
+    id: 'agent-doc-assoc-id',
+    title: 'Daily Brief',
+  };
+
+  let serviceImpl: Record<string, ReturnType<typeof vi.fn>>;
+
+  beforeEach(() => {
+    agentDocumentToolOutcomeMocks.emitAgentDocumentToolOutcomeSafely.mockClear();
+    serviceImpl = {
+      createDocument: vi.fn().mockResolvedValue(newDoc),
+      getDocumentSnapshotById: vi.fn().mockResolvedValue(newDoc),
+      removeDocumentById: vi.fn().mockResolvedValue(true),
+    };
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return serviceImpl as any;
+    });
+    vi.mocked(TaskModel).mockImplementation(function () {
+      return { pinDocument: vi.fn() } as any;
+    });
+    vi.mocked(WorkspaceModel).mockImplementation(function () {
+      return { findById: vi.fn().mockResolvedValue({ slug: 'lobe-team' }) } as any;
+    });
+  });
+
+  const buildContext = (onWorkRegistration?: ToolExecutionContext['onWorkRegistration']) => ({
+    onWorkRegistration,
+    serverDB: {} as never,
+    toolManifestMap: {},
+    userId: 'user-1',
+    workspaceId: 'workspace-1',
+  });
+
+  it('surfaces the document identity block in create state without emitting an intent', async () => {
+    const onWorkRegistration = vi.fn();
+    const runtime = agentDocumentsRuntime.factory(buildContext(onWorkRegistration));
+
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.state).toMatchObject({
+      agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
+      documentId: 'documents-row-id',
+    });
+    expect(onWorkRegistration).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the document identity block in remove state via the pre-read', async () => {
+    const runtime = agentDocumentsRuntime.factory(buildContext());
+
+    const result = await runtime.removeDocument(
+      { id: 'agent-doc-assoc-id' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(serviceImpl.getDocumentSnapshotById).toHaveBeenCalledWith(
+      'agent-doc-assoc-id',
+      'agent-1',
+    );
+    expect(result.success).toBe(true);
+    expect(result.state).toMatchObject({
+      agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
+      deleted: true,
+      documentId: 'documents-row-id',
+    });
+  });
+});
+
+describe('AgentDocumentsExecutionRuntime.createDocument', () => {
+  const makeStub = () => ({
+    copyDocument: vi.fn(),
+    createDocument: vi.fn(),
+    createTopicDocument: vi.fn(),
+    listDocuments: vi.fn(),
+    listTopicDocuments: vi.fn(),
+    modifyNodes: vi.fn(),
+    readDocument: vi.fn(),
+    removeDocument: vi.fn(),
+    renameDocument: vi.fn(),
+    replaceDocumentContent: vi.fn(),
+    updateLoadRule: vi.fn(),
+  });
+
+  it('returns both agentDocuments.id and documents.id in create state', async () => {
+    const stub = makeStub();
+    stub.createDocument.mockResolvedValue({
+      documentId: 'documents-row-id',
+      filename: 'daily-brief',
+      id: 'agent-doc-assoc-id',
+      title: 'Daily Brief',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub);
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.state).toEqual({
+      agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
+      documentId: 'documents-row-id',
+    });
+  });
+
+  it('forwards parentId when creating a document in a folder', async () => {
+    const stub = makeStub();
+    stub.createDocument.mockResolvedValue({
+      documentId: 'documents-row-id',
+      filename: 'daily-brief',
+      id: 'agent-doc-assoc-id',
+      title: 'Daily Brief',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub);
+    await runtime.createDocument(
+      { content: 'body', parentId: 'folder-doc-id', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(stub.createDocument).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      content: 'body',
+      parentId: 'folder-doc-id',
+      title: 'Daily Brief',
+    });
+  });
+
+  it('includes a document URL when a URL builder is configured', async () => {
+    const stub = makeStub();
+    stub.createDocument.mockResolvedValue({
+      documentId: 'docs_document-row-id',
+      filename: 'daily-brief',
+      id: 'agent-doc-assoc-id',
+      title: 'Daily Brief',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub, {
+      getDocumentUrl: ({ agentId, documentId }) =>
+        `https://app.example.com/agent/${agentId}/docs/${documentId}`,
+    });
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain(
+      'https://app.example.com/agent/agent-1/docs/docs_document-row-id',
+    );
+    expect(result.content).toContain('clickable markdown link');
+    expect(result.content).toContain('Internal id agent-doc-assoc-id');
+    expect(result.content).toContain('never show it to the user');
+  });
+
+  it('refuses to run without agentId', async () => {
+    const stub = makeStub();
+    const runtime = new AgentDocumentsExecutionRuntime(stub);
+
+    const result = await runtime.createDocument({ content: 'body', title: 'T' }, {});
+
+    expect(result.success).toBe(false);
+    expect(stub.createDocument).not.toHaveBeenCalled();
+  });
+
+  it('creates a document in the current topic when scope is currentTopic', async () => {
+    const stub = makeStub();
+    stub.createTopicDocument.mockResolvedValue({
+      documentId: 'documents-row-id',
+      filename: 'topic-note',
+      id: 'agent-doc-assoc-id',
+      title: 'Topic Note',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub);
+    const result = await runtime.createDocument(
+      { content: 'body', scope: 'currentTopic', title: 'Topic Note' },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.state).toEqual({
+      agentDocumentId: 'agent-doc-assoc-id',
+      agentId: 'agent-1',
+      documentId: 'documents-row-id',
+    });
+    expect(stub.createTopicDocument).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      content: 'body',
+      scope: 'currentTopic',
+      title: 'Topic Note',
+      topicId: 'topic-1',
+    });
+    expect(stub.createDocument).not.toHaveBeenCalled();
+  });
+
+  it('refuses current topic creation without topicId', async () => {
+    const stub = makeStub();
+    const runtime = new AgentDocumentsExecutionRuntime(stub);
+
+    const result = await runtime.createDocument(
+      { content: 'body', scope: 'currentTopic', title: 'Topic Note' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result).toMatchObject({
+      content: 'Cannot create current topic document without topicId context.',
+      success: false,
+    });
+    expect(stub.createTopicDocument).not.toHaveBeenCalled();
+  });
+
+  it('blocks replaceDocumentContent for the current page document', async () => {
+    const stub = makeStub();
+    stub.readDocument.mockResolvedValue({
+      content: 'body',
+      documentId: 'documents-row-id',
+      id: 'agent-doc-assoc-id',
+      title: 'Daily Brief',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub);
+    const result = await runtime.replaceDocumentContent(
+      { content: 'updated', id: 'agent-doc-assoc-id' },
+      {
+        agentId: 'agent-1',
+        currentDocumentId: 'documents-row-id',
+        scope: 'page',
+      },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({
+      code: 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN',
+      kind: 'replan',
+    });
+    expect(stub.replaceDocumentContent).not.toHaveBeenCalled();
+  });
+
+  it('still allows replacing a different agent document in page scope', async () => {
+    const stub = makeStub();
+    stub.readDocument.mockResolvedValue({
+      content: 'body',
+      documentId: 'documents-row-id-2',
+      id: 'agent-doc-assoc-id-2',
+      title: 'Other Doc',
+    });
+    stub.replaceDocumentContent.mockResolvedValue({
+      content: 'updated',
+      documentId: 'documents-row-id-2',
+      id: 'agent-doc-assoc-id-2',
+      title: 'Other Doc',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub);
+    const result = await runtime.replaceDocumentContent(
+      { content: 'updated', id: 'agent-doc-assoc-id-2' },
+      {
+        agentId: 'agent-1',
+        currentDocumentId: 'documents-row-id',
+        scope: 'page',
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(stub.replaceDocumentContent).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      content: 'updated',
+      id: 'agent-doc-assoc-id-2',
+    });
+  });
+});
+
+describe('AgentDocumentsExecutionRuntime.listDocuments', () => {
+  const makeStub = () => ({
+    copyDocument: vi.fn(),
+    createDocument: vi.fn(),
+    createTopicDocument: vi.fn(),
+    listDocuments: vi.fn(),
+    listTopicDocuments: vi.fn(),
+    modifyNodes: vi.fn(),
+    readDocument: vi.fn(),
+    removeDocument: vi.fn(),
+    renameDocument: vi.fn(),
+    replaceDocumentContent: vi.fn(),
+    updateLoadRule: vi.fn(),
+  });
+
+  it('lists current topic documents while preserving agent document ids', async () => {
+    const stub = makeStub();
+    stub.listTopicDocuments.mockResolvedValue([
+      {
+        documentId: 'documents-row-id',
+        filename: 'topic-note',
+        id: 'agent-doc-assoc-id',
+        title: 'Topic Note',
+      },
+    ]);
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub);
+    const result = await runtime.listDocuments(
+      { scope: 'currentTopic' },
+      { agentId: 'agent-1', topicId: 'topic-1' },
+    );
+
+    const documents = [
+      {
+        documentId: 'documents-row-id',
+        filename: 'topic-note',
+        id: 'agent-doc-assoc-id',
+        title: 'Topic Note',
+      },
+    ];
+    expect(result).toEqual({
+      content: JSON.stringify(documents),
+      state: { documents },
+      success: true,
+    });
+    expect(stub.listTopicDocuments).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      scope: 'currentTopic',
+      sourceType: 'all',
+      topicId: 'topic-1',
+    });
+    expect(stub.listDocuments).not.toHaveBeenCalled();
+  });
+});

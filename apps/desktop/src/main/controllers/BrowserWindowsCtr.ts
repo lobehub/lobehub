@@ -92,6 +92,13 @@ export default class BrowserWindowsCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  isWindowFullScreen() {
+    return this.withSenderIdentifier((identifier) => {
+      return this.app.browserManager.isWindowFullScreen(identifier);
+    });
+  }
+
+  @IpcMethod()
   setWindowAlwaysOnTop(flag: boolean) {
     this.withSenderIdentifier((identifier) => {
       this.app.browserManager.setWindowAlwaysOnTop(identifier, flag);
@@ -190,6 +197,7 @@ export default class BrowserWindowsCtr extends ControllerModule {
    */
   @IpcMethod()
   async createMultiInstanceWindow(params: {
+    inheritCurrentWindowSize?: boolean;
     path: string;
     templateId: WindowTemplateIdentifiers;
     uniqueId?: string;
@@ -197,10 +205,20 @@ export default class BrowserWindowsCtr extends ControllerModule {
     try {
       console.info('[BrowserWindowsCtr] Creating multi-instance window:', params);
 
+      const inheritedWindowSize = params.inheritCurrentWindowSize
+        ? this.withSenderIdentifier((identifier) => {
+            const currentBounds = this.app.browserManager.getWindowSize(identifier);
+            if (!currentBounds) return undefined;
+
+            return { height: currentBounds.height, width: currentBounds.width };
+          })
+        : undefined;
+
       const result = this.app.browserManager.createMultiInstanceWindow(
         params.templateId,
         params.path,
         params.uniqueId,
+        inheritedWindowSize,
       );
 
       // Show the window

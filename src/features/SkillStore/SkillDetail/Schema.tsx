@@ -1,11 +1,11 @@
 'use client';
 
 import { type SkillItem } from '@lobechat/types';
-import { Flexbox, Segmented, Skeleton, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Tabs, Tag } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ArticleSkeleton } from '@/components/Skeleton';
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
@@ -36,7 +36,6 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Schema = memo(() => {
   const { t } = useTranslation('discover');
-  const { t: ts } = useTranslation('setting');
   const { tools, toolsLoading, skillContent } = useDetailContext();
   const [activeKey, setActiveKey] = useState<string[]>([]);
   const [mode, setMode] = useState<ModeType>(ModeType.Docs);
@@ -51,7 +50,7 @@ const Schema = memo(() => {
   if (toolsLoading) {
     return (
       <Flexbox gap={16}>
-        <Skeleton active paragraph={{ rows: 4 }} />
+        <ArticleSkeleton rows={4} />
       </Flexbox>
     );
   }
@@ -64,15 +63,13 @@ const Schema = memo(() => {
             <Title level={3} tag={<Tag>{toolsCount}</Tag>}>
               {t('mcp.details.schema.tools.title')}
             </Title>
-            <Segmented
-              shape="round"
-              value={mode}
-              variant="outlined"
-              options={[
-                { label: t('mcp.details.schema.mode.docs'), value: ModeType.Docs },
-                { label: 'JSON', value: ModeType.JSON },
+            <Tabs
+              activeKey={mode}
+              items={[
+                { key: ModeType.Docs, label: t('mcp.details.schema.mode.docs') },
+                { key: ModeType.JSON, label: 'JSON' },
               ]}
-              onChange={(v) => setMode(v as ModeType)}
+              onChange={(key) => setMode(key as ModeType)}
             />
           </Flexbox>
           <p style={{ marginBottom: 24 }}>{t('mcp.details.schema.tools.desc')}</p>

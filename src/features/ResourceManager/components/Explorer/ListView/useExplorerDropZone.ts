@@ -2,7 +2,7 @@ import type { DragEvent, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 
-import { useDragActive } from '@/routes/(main)/resource/features/DndContextWrapper';
+import { useDragActive } from '@/features/ResourceManager/DndContextWrapper';
 
 export const useExplorerDropZone = (virtuosoRef: RefObject<VirtuosoHandle | null>) => {
   const isDragActive = useDragActive();

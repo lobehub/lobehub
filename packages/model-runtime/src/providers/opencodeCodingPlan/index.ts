@@ -1,11 +1,23 @@
-import { ModelProvider } from 'model-bank';
+import { pickNonEmptyString } from '../../utils/object';
+import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
-import type { ChatStreamPayload } from '../../types';
+import type {
+  ChatMethodOptions,
+  ChatStreamPayload,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
+} from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import {
+  isKimiNativeThinkingModel,
+  isKimiReasoningEffortModel,
+  isKimiReasoningModel,
+} from '../moonshot/modelId';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 // ============================================================================
 // Constants
@@ -19,24 +31,24 @@ const MODELS_DEV_URL = 'https://models.dev/api.json';
 // ============================================================================
 
 interface ModelsDevModel {
-  id: string;
-  name?: string;
-  family?: string;
-  provider?: { npm?: string };
-  release_date?: string;
+  [key: string]: any;
   attachment?: boolean;
-  reasoning?: boolean;
-  tool_call?: boolean;
-  structured_output?: boolean;
-  modalities?: { input?: string[]; output?: string[] };
-  limit?: { context?: number; output?: number };
   cost?: {
     input?: number;
     output?: number;
     cache_read?: number;
     cache_write?: number;
   };
-  [key: string]: any;
+  family?: string;
+  id: string;
+  limit?: { context?: number; output?: number };
+  modalities?: { input?: string[]; output?: string[] };
+  name?: string;
+  provider?: { npm?: string };
+  reasoning?: boolean;
+  release_date?: string;
+  structured_output?: boolean;
+  tool_call?: boolean;
 }
 
 interface ModelsDevData {
@@ -55,6 +67,7 @@ interface ModelsCache {
    */
   interleavedIds: Set<string>;
   modelsDev: Record<string, ModelsDevModel>;
+  responsesIds: Set<string>;
 }
 
 // Fallback: models that need Anthropic SDK (used when models.dev is unavailable)
@@ -75,6 +88,13 @@ const FALLBACK_INTERLEAVED_IDS: ReadonlySet<string> = new Set([
   'mimo-v2.5-pro',
 ]);
 
+// Fallback: models that require OpenAI's Responses API when models.dev is
+// unreachable. Mirrors OpenCode Go's documented endpoint matrix.
+const FALLBACK_RESPONSES_IDS: ReadonlySet<string> = new Set([
+  'muse-spark-1.2-contributor',
+  'muse-spark-1.3-contributor',
+]);
+
 let cachedModelsData: ModelsCache | null = null;
 
 // ============================================================================
@@ -84,6 +104,7 @@ let cachedModelsData: ModelsCache | null = null;
 /**
  * Fetch models.dev data and derive all per-provider fields from it:
  *   - `anthropicModels`  (models whose `provider.npm` is the Anthropic SDK)
+ *   - `responsesIds`     (models whose `provider.npm` is the OpenAI SDK)
  *   - `interleavedIds`   (models with `interleaved.field` set, needing
  *                         special reasoning_content handling)
  *   - `modelsDev`        (raw model map for enrichment)
@@ -107,19 +128,25 @@ const fetchModelsDevData = async (): Promise<ModelsCache> => {
     const anthropicModels = Object.values(models)
       .filter((m) => m.provider?.npm === '@ai-sdk/anthropic')
       .map((m) => m.id);
+    const responsesIds = new Set(
+      Object.values(models)
+        .filter((m) => m.provider?.npm === '@ai-sdk/openai')
+        .map((m) => m.id),
+    );
 
     const interleavedIds = new Set<string>();
     for (const m of Object.values(models)) {
       if (m?.interleaved?.field) interleavedIds.add(m.id);
     }
 
-    cachedModelsData = { anthropicModels, interleavedIds, modelsDev: models };
+    cachedModelsData = { anthropicModels, interleavedIds, modelsDev: models, responsesIds };
     return cachedModelsData;
   } catch {
     cachedModelsData = {
       anthropicModels: [],
       interleavedIds: new Set(),
       modelsDev: {},
+      responsesIds: new Set(),
     };
     return cachedModelsData;
   }
@@ -136,6 +163,13 @@ const getInterleavedModelIds = (): ReadonlySet<string> => {
     return cachedModelsData.interleavedIds;
   }
   return FALLBACK_INTERLEAVED_IDS;
+};
+
+const getResponsesModelIds = (): ReadonlySet<string> => {
+  if (cachedModelsData && cachedModelsData.responsesIds.size > 0) {
+    return cachedModelsData.responsesIds;
+  }
+  return FALLBACK_RESPONSES_IDS;
 };
 
 /**
@@ -215,8 +249,9 @@ const enrichWithModelsDev = (
 // Reasoning Content Helpers
 // ============================================================================
 
-// Kimi K2.x models expose reasoning on the OpenAI-compatible route
-const isKimiThinkingToggleModel = (model: string) => model.startsWith('kimi-k2.');
+// Kimi dot-versioned k2 models (k2.5+) and later generations (k3+) expose
+// reasoning on the OpenAI-compatible route
+const isKimiThinkingToggleModel = isKimiReasoningModel;
 
 // Models in `interleavedIds` need:
 //   1. reason → reasoning_content conversion
@@ -272,14 +307,20 @@ export const sanitizeJsonSchema = (schema: any): any => {
         nested[k] = sanitizeJsonSchema(v);
       }
       result[key] = nested;
-    } else if (
-      ['allOf', 'anyOf', 'oneOf', 'prefixItems'].includes(key) &&
-      Array.isArray(value)
-    ) {
+    } else if (['allOf', 'anyOf', 'oneOf', 'prefixItems'].includes(key) && Array.isArray(value)) {
       result[key] = value.map(sanitizeJsonSchema);
     } else if (
-      ['items', 'additionalProperties', 'not', 'contains', 'if', 'then', 'else',
-       'unevaluatedItems', 'unevaluatedProperties'].includes(key)
+      [
+        'items',
+        'additionalProperties',
+        'not',
+        'contains',
+        'if',
+        'then',
+        'else',
+        'unevaluatedItems',
+        'unevaluatedProperties',
+      ].includes(key)
     ) {
       result[key] = sanitizeJsonSchema(value);
     } else {
@@ -294,19 +335,28 @@ export const sanitizeJsonSchema = (schema: any): any => {
 // ============================================================================
 
 /**
- * Build OpenAI-compatible payload with reasoning_content handling.
- * Applies to models with interleaved reasoning_content and Kimi K2.x models.
+ * Select Responses-only models and build OpenAI-compatible payloads with
+ * reasoning_content handling for interleaved and Kimi K2.x models.
  */
 const buildOpenAIPayload = (
   payload: ChatStreamPayload,
 ): OpenAI.ChatCompletionCreateParamsStreaming => {
   const model = payload.model;
+  if (getResponsesModelIds().has(model)) {
+    return { ...payload, apiMode: 'responses' } as OpenAI.ChatCompletionCreateParamsStreaming;
+  }
+
   const isKimi = isKimiThinkingToggleModel(model);
   const interleaved = isInterleavedModel(model);
 
   if (!isKimi && !interleaved) return payload as any;
 
-  const thinkingExplicitlyDisabled = (payload as any).thinking?.type === 'disabled';
+  // Native-thinking Kimi models (k2.7-code, k3+) cannot turn reasoning off, so a
+  // saved disabled-thinking setting must be ignored: they still require
+  // reasoning_content round-trip and reject a `thinking: disabled` payload.
+  const nativeThinking = isKimiNativeThinkingModel(model);
+  const thinkingExplicitlyDisabled =
+    !nativeThinking && (payload as any).thinking?.type === 'disabled';
   const shouldForceReasoning = (interleaved || isKimi) && !thinkingExplicitlyDisabled;
 
   const messages = payload.messages.map((message: any) => {
@@ -367,8 +417,18 @@ const buildOpenAIPayload = (
     messages,
     response_format,
     tools,
-    ...(!thinkingExplicitlyDisabled && reasoning_effort ? { reasoning_effort } : {}),
-    ...(thinking?.type === 'enabled' || thinking?.type === 'disabled'
+    // Kimi K3+ only accepts reasoning_effort 'max' (also the server default) — drop
+    // any other saved effort instead of sending a value the API rejects
+    ...(!thinkingExplicitlyDisabled &&
+    reasoning_effort &&
+    (!isKimiReasoningEffortModel(model) || reasoning_effort === 'max')
+      ? { reasoning_effort }
+      : {}),
+    // K3+ models configure reasoning via top-level reasoning_effort only and
+    // reject the K2.x-only `thinking` param; native-thinking models never get
+    // `disabled` re-emitted (the toggle does not exist for them).
+    ...(!isKimiReasoningEffortModel(model) &&
+    (thinking?.type === 'enabled' || (thinking?.type === 'disabled' && !nativeThinking))
       ? { thinking: { type: thinking.type } }
       : {}),
     stream: payload.stream ?? true,
@@ -386,6 +446,11 @@ const LobeOpenCodeCodingPlanOpenAI = createOpenAICompatibleRuntime({
   chatCompletion: { handlePayload: buildOpenAIPayload },
   debug: {
     chatCompletion: () => process.env.DEBUG_OPENCODE_GO_CHAT_COMPLETION === '1',
+  },
+  generateObject: {
+    get useResponseModels() {
+      return [...getResponsesModelIds()];
+    },
   },
 });
 
@@ -431,7 +496,7 @@ export const params = {
       );
     }
   },
-  routers: async (options) => {
+  routers: async (options, runtimeContext?: { model?: string }) => {
     const baseURL = options.baseURL || GO_BASE_URL;
 
     const anthropicModels = await getAnthropicModels();
@@ -443,6 +508,16 @@ export const params = {
         models: anthropicModels,
         options: { ...options, baseURL: stripV1(baseURL) },
       },
+      // DeepSeek models via the deepseek runtime (OpenAI-compatible endpoint)
+      {
+        apiType: 'deepseek',
+        models: resolveProviderRouteModels(
+          'deepseek',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
+        ),
+        options: { ...options, baseURL, sdkType: 'openai' },
+      },
       // OpenAI-compatible fallback for all other models
       {
         apiType: 'openai',
@@ -453,4 +528,37 @@ export const params = {
   },
 } satisfies CreateRouterRuntimeOptions;
 
-export const LobeOpenCodeCodingPlanAI = createRouterRuntime(params);
+export class LobeOpenCodeCodingPlanAI extends createRouterRuntime(params) {
+  private getSessionHeaders(metadata?: Record<string, unknown>) {
+    return {
+      'User-Agent': 'lobehub',
+      'x-opencode-client': 'lobehub',
+      // Callers preserve topic identity or reuse a task ID across related calls.
+      // Only requests without either identity receive a standalone session.
+      'x-opencode-session':
+        pickNonEmptyString(metadata?.topicId) ??
+        pickNonEmptyString(metadata?.taskId) ??
+        crypto.randomUUID(),
+    };
+  }
+
+  override async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+    return super.chat(payload, {
+      ...options,
+      requestHeaders: {
+        ...this.getSessionHeaders(options?.metadata),
+        ...options?.requestHeaders,
+      },
+    });
+  }
+
+  override async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+    return super.generateObject(payload, {
+      ...options,
+      headers: {
+        ...this.getSessionHeaders(options?.metadata),
+        ...options?.headers,
+      },
+    });
+  }
+}

@@ -39,9 +39,10 @@ export const createProtocolHandler = (urlType: string) => (action: string) =>
   protocolDecorator(urlType, action);
 
 interface IControllerModule {
-  afterAppReady?: () => void;
+  afterAppReady?: () => Promise<void> | void;
+  afterFirstFrame?: () => Promise<void> | void;
   app: App;
-  beforeAppReady?: () => void;
+  beforeAppReady?: () => Promise<void> | void;
 }
 
 export class ControllerModule extends IpcService implements IControllerModule {

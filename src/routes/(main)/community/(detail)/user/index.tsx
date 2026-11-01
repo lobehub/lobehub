@@ -1,18 +1,23 @@
 'use client';
 
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router';
 
+import { useCommunityWorkspaceProfile } from '@/business/client/hooks/useCommunityWorkspaceProfile';
+import AsyncError from '@/components/AsyncError';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useMarketAuth, useMarketUserProfile } from '@/layout/AuthProvider/MarketAuth';
 import { type MarketUserProfile } from '@/layout/AuthProvider/MarketAuth/types';
 import { useDiscoverStore } from '@/store/discover';
+import { userSelectors } from '@/store/discover/selectors';
 
 import NotFound from '../components/NotFound';
+import { resolveWorkspaceCommunityProfileRedirect } from '../workspace/features/resolveWorkspaceProfileEdit';
 import { UserDetailProvider } from './features/DetailProvider';
 import UserHeader from './features/Header';
 import UserContent from './features/UserContent';
 import { useUserDetail } from './features/useUserDetail';
-import Loading from './loading';
 
 interface UserDetailPageProps {
   mobile?: boolean;
@@ -20,31 +25,45 @@ interface UserDetailPageProps {
 
 const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
   const params = useParams<{ slug: string }>();
+  const location = useLocation();
   const username = decodeURIComponent(params.slug ?? '');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
+  const { isWorkspaceScope } = useCommunityWorkspaceProfile();
 
   const { checkAndShowClaimableResources, getCurrentUserInfo, isAuthenticated, openProfileSetup } =
     useMarketAuth();
 
   const useUserProfile = useDiscoverStore((s) => s.useUserProfile);
-  const { data, isLoading, mutate } = useUserProfile({ username });
+  const { error, isLoading, mutate, queryKey } = useUserProfile({ username });
+  // The replica view of this profile; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(userSelectors.userProfile(queryKey));
 
-  // Get current user's profile to check ownership by userName
+  // When inside a workspace scope, /community/user/:slug and /community/org/:slug are not the
+  // right surface — redirect to the dedicated workspace community page.
+  useEffect(() => {
+    const redirectTo = resolveWorkspaceCommunityProfileRedirect({
+      isWorkspaceScope,
+      pathname: location.pathname,
+      search: location.search,
+    });
+    if (redirectTo) navigate(redirectTo, { replace: true });
+  }, [isWorkspaceScope, location.pathname, location.search, navigate]);
+
   const currentUser = getCurrentUserInfo();
   const { data: currentUserProfile } = useMarketUserProfile(currentUser?.sub);
 
-  // Check if the current user is viewing their own profile
   const isOwner =
-    isAuthenticated && !!currentUser && data?.user?.namespace === currentUserProfile?.namespace;
+    !isWorkspaceScope &&
+    isAuthenticated &&
+    !!currentUser &&
+    data?.user?.namespace === currentUserProfile?.namespace;
 
   // Track if we've already checked for claimable resources in this session
   const hasCheckedClaimable = useRef(false);
 
-  // Check for claimable resources when owner visits their profile
   useEffect(() => {
     if (isOwner && !hasCheckedClaimable.current) {
       hasCheckedClaimable.current = true;
-      // Pass mutate callback to refresh page data after claim
       checkAndShowClaimableResources(() => {
         mutate();
       });
@@ -53,18 +72,14 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
 
   const { handleStatusChange } = useUserDetail({ onMutate: mutate });
 
-  // Handle profile edit with navigation on userName change
   const handleEditProfile = useCallback(
     (onSuccess?: (profile: MarketUserProfile) => void) => {
       const currentUserName = data?.user?.userName || data?.user?.namespace;
       openProfileSetup((profile) => {
-        // Call the original onSuccess callback if provided
         onSuccess?.(profile);
 
-        // Refresh page data to show updated profile
         mutate();
 
-        // Navigate to new URL if userName changed
         const newUserName = profile.userName || profile.namespace;
         if (newUserName && newUserName !== currentUserName) {
           navigate(`/community/user/${newUserName}`, { replace: true });
@@ -88,6 +103,7 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
       plugins,
     } = data;
     const totalInstalls = agents.reduce((sum, agent) => sum + (agent.installCount || 0), 0);
+
     return {
       agentCount: agents.length,
       agentGroups: agentGroups || [],
@@ -106,9 +122,11 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
       totalInstalls,
       user,
     };
-  }, [data, isOwner, mobile, handleEditProfile, handleStatusChange]);
-
-  if (isLoading) return <Loading />;
+  }, [data, handleEditProfile, handleStatusChange, isOwner, mobile]);
+  if (data === undefined) {
+    if (isLoading) return <RouteLoading />;
+    if (error) return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;
+  }
   if (!contextConfig) return <NotFound />;
 
   return (
@@ -119,8 +137,8 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
   );
 });
 
-export const MobileUserDetailPage = memo(() => {
+export const MobileUserDetailPage = () => {
   return <UserDetailPage mobile={true} />;
-});
+};
 
 export default UserDetailPage;

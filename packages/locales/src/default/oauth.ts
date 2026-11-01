@@ -1,0 +1,99 @@
+export default {
+  'authorizeError.backToHome': 'Back to Home',
+  'authorizeError.code': 'Error code',
+  'authorizeError.reason.access_denied': 'The authorization was denied.',
+  'authorizeError.reason.invalid_client': 'This app could not be found, or it has been disabled.',
+  'authorizeError.reason.invalid_redirect_uri':
+    "The app asked to send you back to an address it hasn't registered, so the request was stopped to protect your account. If you develop this app, add this redirect URI in its OAuth app settings.",
+  'authorizeError.reason.invalid_request':
+    'The authorization request is malformed or missing required parameters.',
+  'authorizeError.reason.invalid_scope':
+    'The app requested permissions it is not allowed to request.',
+  'authorizeError.reason.server_error': 'Something went wrong on our side. Please try again later.',
+  'authorizeError.reason.unauthorized_client':
+    'This app is not allowed to use this sign-in method.',
+  'authorizeError.reason.unknown': 'The authorization request could not be completed.',
+  'authorizeError.title': "Authorization Can't Continue",
+  'consent.buttons.accept': 'Authorize',
+  'consent.buttons.deny': 'Deny',
+  'consent.description':
+    'The application {{clientName}} is requesting authorization for your account',
+  'consent.error.sessionInvalid.message':
+    'The authorization session has expired or is invalid. Please restart the authorization process.',
+  'consent.error.sessionInvalid.title': 'Invalid Authorization Session',
+  'consent.error.title': 'An Error Occurred',
+  'consent.error.unknown.message': 'An unknown error occurred while loading authorization details.',
+  'consent.error.unsupportedInteraction.message': 'Unsupported interaction type: {{promptName}}',
+  'consent.error.unsupportedInteraction.title': 'Unsupported Interaction Type',
+  'consent.acceptanceReview.denied':
+    'You do not have access to this acceptance, so it cannot be reviewed from this page.',
+  'consent.acceptanceReview.target': 'Review the acceptance: {{title}}',
+  'consent.permissionsTitle': 'Requesting the following permissions:',
+  'consent.redirectUri': 'You will be redirected to after successful authorization',
+  'consent.redirecting': 'Authorization successful, redirecting...',
+  'consent.scope.acceptance-review':
+    'Comment on this acceptance and accept or send it back from its preview page',
+  'consent.scope.email': 'Access your email address',
+  'consent.scope.offline_access': 'Allow the client to access your data',
+  'consent.scope.openid': 'Authenticate using your LobeHub account',
+  'consent.scope.profile': 'Access your basic profile information (name, avatar, etc.)',
+  'consent.scope.sync-read': 'Read your synchronized data',
+  'consent.scope.sync-write': 'Write and update your synchronized data',
+  'consent.thirdParty.developedBy': 'By {{developerName}}',
+  'consent.thirdParty.notice':
+    'This application is created by a third-party developer and is not operated by LobeHub. Once authorized, it can act on your behalf and use your account quota.',
+  'consent.thirdParty.privacyPolicy': 'Privacy Policy',
+  'consent.thirdParty.unknownDeveloper': 'a third-party developer',
+  'consent.title': 'Authorize {{clientName}}',
+  'device.confirm.authorize': 'Authorize',
+  'device.confirm.codeHint': 'Confirm that this code matches the one shown in your terminal.',
+  'device.confirm.deny': 'Deny',
+  'device.confirm.description': '{{clientName}} is requesting access',
+  'device.confirm.title': 'Authorize Device',
+  'device.error.aborted': 'Authorization was denied.',
+  'device.error.alreadyUsed': 'This code has already been used. Please request a new code.',
+  'device.error.expired': 'This code has expired. Please request a new code.',
+  'device.error.noCode': 'No device code was provided. Please enter a valid code.',
+  'device.error.notFound': 'Invalid code. Please check and try again.',
+  'device.error.unknown': 'An error occurred. Please try again.',
+  'device.input.description': 'Enter the code displayed on your device to authorize access.',
+  'device.input.placeholder': 'XXXX-XXXX',
+  'device.input.submit': 'Submit',
+  'device.input.title': 'Enter Device Code',
+  'device.success.description':
+    'You have successfully authorized the device. You can close this browser tab and return to your terminal.',
+  'device.success.title': 'Authorization Successful',
+  'error.backToHome': 'Back to Home',
+  'error.desc': 'OAuth authorization failed, reason: {{reason}}',
+  'error.reason.internal_error': 'Internal Server Error',
+  'error.reason.invalid_request': 'Invalid Request Parameters',
+  'error.title': 'Authorization Failed',
+  'handoff.desc.processing':
+    'The application is processing the authorization and will redirect to the next page soon...',
+  'handoff.desc.success':
+    'An attempt has been made to open the desktop application. If it does not open automatically, please switch manually. You can close this browser window later.',
+  'handoff.title.processing': 'Authorization in progress...',
+  'handoff.title.success': 'Authorization completed',
+  'login.button': 'Confirm Sign In',
+  'login.description':
+    'The application {{clientName}} is requesting to use your account for sign-in',
+  'login.title': 'Sign in to {{clientName}}',
+  'login.userWelcome': 'Welcome back, ',
+  'success.subTitle':
+    'You have successfully authorized the application to access your account. You may now close this page.',
+  'success.title': 'Authorization Successful',
+  'consent.acceptanceReview.registered': 'Registered',
+  'consent.acceptanceReview.siteDenied':
+    'You’re not a member of this project, so you can’t review this site. Ask a project maintainer to invite you, or switch accounts.',
+  'consent.acceptanceReview.siteProject': 'Project {{project}}',
+  'consent.acceptanceReview.siteProjectRole': 'Project {{project}} · Your role: {{role}}',
+  'consent.acceptanceReview.siteTarget': 'Review the site: {{site}}',
+  'consent.acceptanceReview.unregisteredHint':
+    'Nothing was shared. If this address is yours, add it under Project settings › Sites.',
+  'consent.acceptanceReview.unregisteredTitle': 'This address isn’t registered for the site',
+  'consent.scope.acceptance-review-site':
+    'Comment on this site’s review from the site itself, for 8 hours',
+  'consent.acceptanceReview.role.viewer': 'Read-only',
+  'consent.acceptanceReview.role.member': 'Can edit',
+  'consent.acceptanceReview.role.admin': 'Administrator',
+};

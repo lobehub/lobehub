@@ -1,0 +1,22 @@
+{
+  "error.invalidFormat.desc": "您仍然可以閱讀它。版面配置可能與原始版本不同。",
+  "error.invalidFormat.ownerHint": "在編輯器中重新儲存以恢復原始版面配置。",
+  "error.invalidFormat.title": "此頁面無法以原始格式顯示",
+  "popover.copyLink": "複製連結",
+  "popover.copyLinkSuccess": "連結已複製",
+  "popover.linkHint": "任何擁有此連結的人都可以查看此頁面",
+  "popover.permissionLink": "任何擁有連結的人",
+  "popover.permissionPrivate": "私人",
+  "popover.permissionWorkspace": "工作區中的任何人",
+  "popover.privateHint": "只有您可以訪問此頁面",
+  "popover.sectionViews_one": "{{count}} 次查看",
+  "popover.sectionViews_other": "{{count}} 次查看",
+  "popover.title": "分享頁面",
+  "popover.updateError": "更新分享設定失敗",
+  "popover.visibility": "可見性",
+  "popover.visibilityUpdated": "可見性已更新",
+  "popover.workspaceHint": "此工作區中的任何人都可以查看此頁面",
+  "shareButton.label": "分享",
+  "shell.sharedBy": "由 {{name}} 分享",
+  "shell.updatedAt": "更新於 {{relative}}"
+}

@@ -15,7 +15,7 @@ export class ModelController extends BaseController {
       const query = this.getQuery<ModelsListQuery>(c);
 
       const db = await this.getDatabase();
-      const modelService = new ModelService(db, this.getUserId(c));
+      const modelService = new ModelService(db, this.getUserId(c), this.getWorkspaceId(c));
 
       const result = await modelService.getModels(query);
 
@@ -34,7 +34,7 @@ export class ModelController extends BaseController {
       const { providerId, modelId } = this.getParams<{ modelId: string; providerId: string }>(c);
 
       const db = await this.getDatabase();
-      const modelService = new ModelService(db, this.getUserId(c));
+      const modelService = new ModelService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await modelService.getModelDetail(providerId, modelId);
 
       return this.success(c, result, 'Model details retrieved successfully');
@@ -56,7 +56,7 @@ export class ModelController extends BaseController {
       }
 
       const db = await this.getDatabase();
-      const modelService = new ModelService(db, this.getUserId(c));
+      const modelService = new ModelService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await modelService.createModel(body);
 
       return this.success(c, result, 'Model created successfully');
@@ -79,7 +79,7 @@ export class ModelController extends BaseController {
       }
 
       const db = await this.getDatabase();
-      const modelService = new ModelService(db, this.getUserId(c));
+      const modelService = new ModelService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await modelService.updateModel(providerId, modelId, body);
 
       return this.success(c, result, 'Model updated successfully');

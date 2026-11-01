@@ -2,22 +2,7 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeLMStudioAI, params } from './index';
-
-const provider = ModelProvider.LMStudio;
-const defaultBaseURL = 'http://127.0.0.1:1234/v1';
-
-testProvider({
-  Runtime: LobeLMStudioAI,
-  chatDebugEnv: 'DEBUG_LMSTUDIO_CHAT_COMPLETION',
-  chatModel: 'deepseek-r1',
-  defaultBaseURL,
-  provider,
-  test: {
-    skipAPICall: true,
-  },
-});
 
 describe('LobeLMStudioAI - custom features', () => {
   let instance: InstanceType<typeof LobeLMStudioAI>;

@@ -1,5 +1,7 @@
 export { createEditLocalFileInspector } from './EditLocalFile';
+export { GITHUB_TOOL_NAMES, GitHubInspector } from './GitHub';
 export { createGlobLocalFilesInspector } from './GlobLocalFiles';
+export { GoalCommandInspector } from './GoalCommand';
 export { createGrepContentInspector } from './GrepContent';
 export { LINEAR_TOOL_NAMES, LinearInspector } from './Linear';
 export { createListLocalFilesInspector } from './ListLocalFiles';

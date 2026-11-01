@@ -4,6 +4,8 @@ export const DOCUMENT_HISTORY_QUERY_LIST_LIMIT = 50;
 
 export const FREE_DOCUMENT_HISTORY_WINDOW_DAYS = 30;
 
+export const DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS = 10 * 60 * 1000;
+
 export const DOCUMENT_HISTORY_SOURCE_LIMITS: Record<DocumentHistorySaveSource, number> = {
   autosave: 20,
   manual: 20,

@@ -9,24 +9,40 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Center, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
 import { ClipboardCheckIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import AsyncBoundary from '@/components/AsyncBoundary';
+import { usePermission } from '@/hooks/usePermission';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
-import type { TaskGroupItem, TaskListItem } from '@/store/task/slices/list/initialState';
+import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import { saveToast } from '@/store/utils/saveToast';
 
-import { createTaskModal } from '../CreateTaskModal';
+import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
-import { taskDetailPath } from '../shared/taskDetailPath';
+import { useTaskStatusChange } from '../features/useTaskStatusChange';
 import HiddenColumnsPanel from './HiddenColumnsPanel';
+import {
+  buildKanbanColumns,
+  buildKanbanGroupQuery,
+  canDropTaskIntoKanbanColumn,
+  findKanbanTask,
+  getKanbanAssigneeUpdate,
+  getKanbanColumnCreateDefaults,
+  getKanbanTaskPatch,
+  moveTaskBetweenKanbanGroups,
+  normalizeKanbanGroupBy,
+} from './kanbanBoardModel';
 import KanbanColumn, { COLUMN_I18N_KEYS, COLUMN_STATUS_ICON, COLUMN_WIDTH } from './KanbanColumn';
+import type { TaskListViewOptions } from './listViewOptions';
+import { getCompletedWithin, HIDDEN_WHEN_COMPLETED_STATUSES } from './listViewOptions';
 
 const styles = createStaticStyles(({ css }) => ({
   board: css`
@@ -40,107 +56,176 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface ColumnDef {
-  droppable: boolean;
-  key: string;
-  targetStatus: 'backlog' | 'canceled' | 'completed' | null;
+interface KanbanBoardProps {
+  /** When set, scopes the board (and task creation) to a single agent. */
+  agentId?: string;
+  /** Overrides the generic "no tasks" copy with the collection's own line. */
+  emptyDescription?: string;
+  /**
+   * "My tasks" board: narrows the server groups to the caller's own slice of
+   * the workspace, matching what that tab's list view fetches — including its
+   * lack of an automation filter.
+   */
+  myTaskScope?: 'assigned' | 'created';
+  options: TaskListViewOptions;
+  projectId?: string;
+  routeScope?: TaskItemRouteScope;
 }
 
-const COLUMNS: ColumnDef[] = [
-  { droppable: true, key: 'backlog', targetStatus: 'backlog' },
-  { droppable: false, key: 'running', targetStatus: null },
-  { droppable: false, key: 'needsInput', targetStatus: null },
-  { droppable: true, key: 'done', targetStatus: 'completed' },
-  { droppable: true, key: 'canceled', targetStatus: 'canceled' },
-];
-
-const optimisticMoveTask = (
-  taskGroups: TaskGroupItem[],
-  task: TaskListItem,
-  targetColumnKey: string,
-): TaskGroupItem[] => {
-  return taskGroups.map((group) => {
-    const filtered = (group.tasks as TaskListItem[]).filter(
-      (t) => t.identifier !== task.identifier,
-    );
-    const removed = filtered.length < (group.tasks as TaskListItem[]).length;
-
-    if (group.key === targetColumnKey) {
-      return { ...group, tasks: [...filtered, task], total: filtered.length + 1 };
-    }
-
-    return removed ? { ...group, tasks: filtered, total: group.total - 1 } : group;
-  });
-};
-
-const KanbanBoard = memo(() => {
+const KanbanBoard = memo<KanbanBoardProps>((props) => {
+  const { agentId, emptyDescription, myTaskScope, options, projectId, routeScope } = props;
   const { t } = useTranslation('chat');
-  const navigate = useNavigate();
+  const { allowed: canEditTask } = usePermission('create_content');
+  const groupBy = normalizeKanbanGroupBy(options.groupBy);
+  const excludeStatuses =
+    options.completedTasks === 'none' ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  useFetchTaskGroupList({ allAgents: true });
-
-  const taskGroups = useTaskStore(taskListSelectors.taskGroups);
-  const isInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
-  const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
+  // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
+  // `queryKey` the groups are read by.
+  const { error, isLoading, mutate, queryKey } = useFetchTaskGroupList({
+    ...buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
+    completedWithin: getCompletedWithin(options),
+    includeArchived: options.showArchived,
+  });
+  // Each board query (scope, dimension, filters) is its own store entry, so the
+  // settled signal and the groups always describe the same board.
+  const isTaskGroupListInit = useTaskStore(taskListSelectors.isTaskGroupListInit(queryKey));
+  const currentTaskGroups = useTaskStore(taskListSelectors.taskGroups(queryKey));
+  const updateTask = useTaskStore((s) => s.updateTask);
+  const runTask = useTaskStore((s) => s.runTask);
+  const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const changeTaskStatus = useTaskStatusChange();
 
   const hiddenColumns = useGlobalStore(systemStatusSelectors.taskKanbanHiddenColumns);
   const hiddenPanelCollapsed = useGlobalStore(systemStatusSelectors.taskKanbanHiddenPanelCollapsed);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
   const [activeTask, setActiveTask] = useState<TaskListItem | null>(null);
+  const columns = useMemo(
+    () => buildKanbanColumns(currentTaskGroups, groupBy),
+    [currentTaskGroups, groupBy],
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor),
   );
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    const task = event.active.data.current?.task as TaskListItem | undefined;
-    setActiveTask(task ?? null);
-  }, []);
+  const handleDragStart = useCallback(
+    (event: DragStartEvent) => {
+      if (!canEditTask) return;
+      const task = event.active.data.current?.task as TaskListItem | undefined;
+      setActiveTask(task ?? null);
+    },
+    [canEditTask],
+  );
+
+  /**
+   * Assign-then-run as one action: a failure toast's Retry repeats both steps,
+   * so retrying a failed assignment still starts the task.
+   */
+  const startTask = useCallback(
+    (task: TaskListItem, onAssigned?: () => void): Promise<void> => {
+      const start = async (afterAssign?: () => void): Promise<void> => {
+        const retry = () => {
+          start().catch(() => {});
+        };
+        const current =
+          findKanbanTask(
+            taskListSelectors.taskGroups(queryKey)(useTaskStore.getState()),
+            task.identifier,
+          ) ?? task;
+        if (!current.assigneeAgentId && !current.assigneeUserId && inboxAgentId) {
+          await updateTask(current.identifier, { assigneeAgentId: inboxAgentId }, { retry });
+          afterAssign?.();
+        }
+        try {
+          await runTask(current.identifier, undefined, { throwOnError: true });
+        } catch (error) {
+          saveToast(error, { retry, title: t('taskList.kanban.runFailed') });
+          throw error;
+        }
+      };
+      return start(onAssigned);
+    },
+    [inboxAgentId, queryKey, runTask, t, updateTask],
+  );
 
   const handleDragEnd = useCallback(
     async (event: DragEndEvent) => {
       setActiveTask(null);
+      if (!canEditTask) return;
 
       const { active, over } = event;
       if (!over) return;
 
       const targetColumnKey = over.id as string;
-      const column = COLUMNS.find((c) => c.key === targetColumnKey);
-      if (!column?.droppable || !column.targetStatus) return;
+      const column = columns.find((item) => item.key === targetColumnKey);
 
       const task = active.data.current?.task as TaskListItem | undefined;
       if (!task) return;
+      if (!column || !canDropTaskIntoKanbanColumn(task, groupBy, column)) return;
 
-      if (task.status === column.targetStatus) return;
+      const patch = getKanbanTaskPatch(groupBy, column);
+      if (!patch) return;
+      const assigneeUpdate =
+        groupBy === 'assignee' || groupBy === 'member'
+          ? getKanbanAssigneeUpdate(task, patch)
+          : undefined;
+      if (groupBy === 'status' && task.status === patch.status) return;
+      if ((groupBy === 'assignee' || groupBy === 'member') && !assigneeUpdate) return;
+      if (groupBy === 'priority' && (task.priority ?? 0) === (patch.priority ?? 0)) return;
 
-      const prevGroups = useTaskStore.getState().taskGroups;
-      const nextGroups = optimisticMoveTask(prevGroups, task, targetColumnKey);
-      useTaskStore.setState({ taskGroups: nextGroups }, false, 'kanban/optimisticMove');
+      if (!queryKey) return;
+      // The move is idempotent, so the overlay stays correct when the status
+      // change also patches the card underneath it.
+      const move = useTaskStore.getState().internal_beginTaskGroupOptimistic(queryKey, (value) => ({
+        ...value,
+        groups: moveTaskBetweenKanbanGroups(value.groups, task, targetColumnKey, patch),
+      }));
 
       try {
-        await updateTaskStatus(task.identifier, column.targetStatus);
+        if (groupBy === 'status' && column.targetStatus === 'running') {
+          // Dropping into "In progress" starts the task, same as "Run now". The
+          // assignment refetches the groups (still backlog until the run
+          // starts); the overlay is rebased onto that refetch, so the card
+          // stays in "In progress".
+          await startTask(task);
+        } else if (groupBy === 'status' && column.targetStatus) {
+          const changed = await changeTaskStatus(task.identifier, column.targetStatus);
+          if (!changed) {
+            move.rollback();
+            return;
+          }
+        } else if ((groupBy === 'assignee' || groupBy === 'member') && assigneeUpdate) {
+          await updateTask(task.identifier, assigneeUpdate);
+        } else if (groupBy === 'priority') {
+          await updateTask(task.identifier, { priority: patch.priority ?? 0 });
+        }
+        move.commit();
       } catch {
-        useTaskStore.setState({ taskGroups: prevGroups }, false, 'kanban/revertMove');
+        move.rollback();
+        // A failed start may already have persisted the fallback assignee.
+        if (column.targetStatus === 'running') void refreshTaskList();
       }
     },
-    [updateTaskStatus],
+    [
+      canEditTask,
+      changeTaskStatus,
+      columns,
+      groupBy,
+      queryKey,
+      refreshTaskList,
+      startTask,
+      updateTask,
+    ],
   );
 
   const handleDragCancel = useCallback(() => {
     setActiveTask(null);
   }, []);
-
-  const handleCreateTask = useCallback(() => {
-    createTaskModal({
-      onCreated: (task) => {
-        navigate(taskDetailPath(task.identifier, task.agentId));
-      },
-      showInlineToggle: false,
-    });
-  }, [navigate]);
 
   const handleHideColumn = useCallback(
     (columnKey: string) => {
@@ -168,77 +253,105 @@ const KanbanBoard = memo(() => {
   const hiddenColumnSet = useMemo(() => new Set(hiddenColumns), [hiddenColumns]);
 
   const visibleColumns = useMemo(
-    () => COLUMNS.filter((col) => !hiddenColumnSet.has(col.key)),
-    [hiddenColumnSet],
+    () =>
+      groupBy === 'status' ? columns.filter((column) => !hiddenColumnSet.has(column.key)) : columns,
+    [columns, groupBy, hiddenColumnSet],
   );
 
   const hiddenColumnEntries = useMemo(
     () =>
-      COLUMNS.filter((col) => hiddenColumnSet.has(col.key)).map((col) => ({
-        columnKey: col.key,
-        label: t(COLUMN_I18N_KEYS[col.key] as any),
-        statusIcon: COLUMN_STATUS_ICON[col.key],
-        total: taskGroups.find((group) => group.key === col.key)?.total ?? 0,
-      })),
-    [hiddenColumnSet, t, taskGroups],
+      columns
+        .filter((col) => hiddenColumnSet.has(col.key))
+        .map((col) => ({
+          columnKey: col.key,
+          label: t(COLUMN_I18N_KEYS[col.key] as any),
+          statusIcon: COLUMN_STATUS_ICON[col.key],
+          total: currentTaskGroups.find((group) => group.key === col.key)?.total ?? 0,
+        })),
+    [columns, currentTaskGroups, hiddenColumnSet, t],
   );
 
-  if (!isInit) {
-    return (
-      <Flexbox horizontal className={styles.board}>
-        {visibleColumns.map((col) => (
-          <KanbanColumn
-            loading
-            columnKey={col.key}
-            droppable={false}
-            key={col.key}
-            tasks={[]}
-            total={0}
-          />
-        ))}
-      </Flexbox>
-    );
-  }
+  const totalTasks = currentTaskGroups.reduce((sum, group) => sum + group.total, 0);
+  const skeletonColumns =
+    visibleColumns.length > 0
+      ? visibleColumns
+      : Array.from({ length: 3 }, (_, index) => ({
+          droppable: false,
+          groupMeta: undefined,
+          key: `skeleton-${index}`,
+          targetStatus: null,
+        }));
 
-  const totalTasks = taskGroups.reduce((sum, g) => sum + g.total, 0);
+  const skeletonBoard = (
+    <Flexbox horizontal className={styles.board}>
+      {skeletonColumns.map((col) => (
+        <KanbanColumn
+          loading
+          columnKey={col.key}
+          droppable={false}
+          groupBy={groupBy}
+          groupMeta={col.groupMeta}
+          key={col.key}
+          tasks={[]}
+          total={0}
+        />
+      ))}
+    </Flexbox>
+  );
 
-  if (totalTasks === 0) {
-    return (
-      <Center height={'80vh'} width={'100%'}>
-        <Empty description={t('taskList.empty')} icon={ClipboardCheckIcon} />
-      </Center>
-    );
-  }
+  const emptyState = (
+    <Center height={'80vh'} width={'100%'}>
+      <Empty description={emptyDescription ?? t('taskList.empty')} icon={ClipboardCheckIcon} />
+    </Center>
+  );
 
-  return (
+  const board = (
     <DndContext
       collisionDetection={pointerWithin}
-      sensors={sensors}
+      sensors={canEditTask ? sensors : []}
       onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
       onDragStart={handleDragStart}
     >
       <Flexbox horizontal className={styles.board}>
         {visibleColumns.map((col) => {
-          const group = taskGroups.find((g) => g.key === col.key);
+          const group = currentTaskGroups.find((item) => item.key === col.key);
+          // "My tasks" offers no create entry (its list view has none either):
+          // a task created there carries neither the member assignment nor —
+          // under `created` — any guarantee it lands in the column it was
+          // started from.
+          const createDefaults = myTaskScope
+            ? undefined
+            : getKanbanColumnCreateDefaults(groupBy, col);
+          const droppable =
+            canEditTask &&
+            col.droppable &&
+            (!activeTask || canDropTaskIntoKanbanColumn(activeTask, groupBy, col));
           return (
             <KanbanColumn
+              agentId={agentId}
               columnKey={col.key}
-              droppable={col.droppable}
+              createDefaults={canEditTask ? createDefaults : undefined}
+              droppable={droppable}
+              groupBy={groupBy}
+              groupMeta={col.groupMeta}
               key={col.key}
+              projectId={projectId}
+              routeScope={routeScope}
               tasks={(group?.tasks ?? []) as TaskListItem[]}
               total={group?.total ?? 0}
-              onCreate={col.key === 'backlog' ? handleCreateTask : undefined}
-              onHide={() => handleHideColumn(col.key)}
+              onHide={groupBy === 'status' ? () => handleHideColumn(col.key) : undefined}
             />
           );
         })}
-        <HiddenColumnsPanel
-          collapsed={hiddenPanelCollapsed}
-          columns={hiddenColumnEntries}
-          onRestore={handleRestoreColumn}
-          onToggleCollapsed={handleToggleHiddenPanel}
-        />
+        {groupBy === 'status' && (
+          <HiddenColumnsPanel
+            collapsed={hiddenPanelCollapsed}
+            columns={hiddenColumnEntries}
+            onRestore={handleRestoreColumn}
+            onToggleCollapsed={handleToggleHiddenPanel}
+          />
+        )}
       </Flexbox>
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
@@ -252,11 +365,29 @@ const KanbanBoard = memo(() => {
               width: COLUMN_WIDTH - 8,
             }}
           >
-            <AgentTaskItem task={activeTask} variant="compact" />
+            <AgentTaskItem routeScope={routeScope} task={activeTask} variant="compact" />
           </div>
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+
+  // Error gated ahead of empty by AsyncBoundary so a failed fetch shows Retry
+  // instead of the "no tasks" empty. `data` is the SWR result —
+  // undefined until the first fetch settles.
+  return (
+    <AsyncBoundary
+      data={isTaskGroupListInit || undefined}
+      empty={emptyState}
+      error={error}
+      errorVariant={'block'}
+      isEmpty={totalTasks === 0}
+      isLoading={isLoading || (!isTaskGroupListInit && !error)}
+      loading={skeletonBoard}
+      onRetry={() => mutate()}
+    >
+      {board}
+    </AsyncBoundary>
   );
 });
 

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
+import { initialAgentArtworkSliceState } from '@/store/agent/slices/artwork/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin/initialState';
 
 import { chatConfigByIdSelectors } from './chatConfigByIdSelectors';
@@ -16,6 +17,7 @@ vi.mock('@lobechat/model-runtime', () => ({
 // isDesktop defaults to false in test environment (no __ELECTRON__)
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
+  ...initialAgentArtworkSliceState,
   ...initialAgentSliceState,
   ...initialBuiltinAgentSliceState,
   ...overrides,
@@ -57,6 +59,23 @@ describe('chatConfigByIdSelectors', () => {
       // Returns empty object for non-existent agent
       // Individual selectors (like getHistoryCountById) apply defaults via ?? operator
       expect(chatConfigByIdSelectors.getChatConfigById('non-existent')(state)).toEqual({});
+    });
+
+    it('should return stored chat config without model-specific overrides', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: { enableAgentMode: true, historyCount: 10 },
+            model: 'claude-opus-4-8',
+            provider: 'lobehub',
+          },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getChatConfigById('agent-1')(state)).toMatchObject({
+        enableAgentMode: true,
+        historyCount: 10,
+      });
     });
   });
 
@@ -436,14 +455,13 @@ describe('chatConfigByIdSelectors', () => {
         agentMap: {
           'agent-1': {
             chatConfig: {
-              runtimeEnv: { runtimeMode: { web: 'cloud' }, workingDirectory: '/home' },
+              runtimeEnv: { workingDirectory: '/home' },
             },
           },
         },
       });
 
       expect(chatConfigByIdSelectors.getRuntimeEnvConfigById('agent-1')(state)).toEqual({
-        runtimeMode: { web: 'cloud' },
         workingDirectory: '/home',
       });
     });
@@ -457,14 +475,13 @@ describe('chatConfigByIdSelectors', () => {
     });
   });
 
-  // In test environment, isDesktop is false (no __ELECTRON__), so CURRENT_PLATFORM = 'web'
+  // In test environment, isDesktop is false (no __ELECTRON__), so the
+  // unified executionTarget resolves with web semantics.
   describe('getRuntimeModeById (web platform)', () => {
-    it('should return web runtime mode when set', () => {
+    it('should derive cloud from executionTarget=sandbox', () => {
       const state = createState({
         agentMap: {
-          'agent-1': {
-            chatConfig: { runtimeEnv: { runtimeMode: { web: 'cloud' } } },
-          },
+          'agent-1': { agencyConfig: { executionTarget: 'sandbox' } },
         },
       });
 
@@ -485,42 +502,31 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.getRuntimeModeById('non-existent')(state)).toBe('none');
     });
 
-    it('should ignore desktop runtime mode on web', () => {
+    it('should coerce executionTarget=local to cloud on web (no local filesystem)', () => {
       const state = createState({
         agentMap: {
-          'agent-1': {
-            chatConfig: { runtimeEnv: { runtimeMode: { desktop: 'local' } } },
-          },
-        },
-      });
-
-      // desktop is set but web is not, should fall back to web default
-      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('none');
-    });
-
-    it('should read correct platform when both are set', () => {
-      const state = createState({
-        agentMap: {
-          'agent-1': {
-            chatConfig: {
-              runtimeEnv: { runtimeMode: { desktop: 'local', web: 'cloud' } },
-            },
-          },
+          'agent-1': { agencyConfig: { executionTarget: 'local' } },
         },
       });
 
       expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('cloud');
     });
 
+    it('should gate device target to "none" (device tools are routed separately)', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { agencyConfig: { boundDeviceId: 'device-a', executionTarget: 'device' } },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getRuntimeModeById('agent-1')(state)).toBe('none');
+    });
+
     it('should work with different agents independently', () => {
       const state = createState({
         agentMap: {
-          'agent-1': {
-            chatConfig: { runtimeEnv: { runtimeMode: { web: 'cloud' } } },
-          },
-          'agent-2': {
-            chatConfig: { runtimeEnv: { runtimeMode: { web: 'none' } } },
-          },
+          'agent-1': { agencyConfig: { executionTarget: 'sandbox' } },
+          'agent-2': { agencyConfig: { executionTarget: 'none' } },
           'agent-3': { chatConfig: {} },
         },
       });
@@ -532,12 +538,10 @@ describe('chatConfigByIdSelectors', () => {
   });
 
   describe('isLocalSystemEnabledById', () => {
-    it('should return false on web even with desktop set to local', () => {
+    it('should return false on web even with executionTarget=local (coerced to sandbox)', () => {
       const state = createState({
         agentMap: {
-          'agent-1': {
-            chatConfig: { runtimeEnv: { runtimeMode: { desktop: 'local' } } },
-          },
+          'agent-1': { agencyConfig: { executionTarget: 'local' } },
         },
       });
 

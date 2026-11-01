@@ -149,9 +149,12 @@ export const GET = async (req: NextRequest, context: RouteContext) => {
           market.follows.getFollowing(userId, { limit: 1 }),
           market.follows.getFollowers(userId, { limit: 1 }),
         ]);
+        // `totalCount` is the full-list total returned by the market follows
+        // endpoints (added in market-sdk >= 0.34.0-beta.2). The cast keeps this
+        // building against older published SDK typings until the dep is bumped.
         return NextResponse.json({
-          followersCount: (followers as any).totalCount || (followers as any).total || 0,
-          followingCount: (following as any).totalCount || (following as any).total || 0,
+          followersCount: (followers as { totalCount?: number }).totalCount ?? 0,
+          followingCount: (following as { totalCount?: number }).totalCount ?? 0,
         });
       }
 

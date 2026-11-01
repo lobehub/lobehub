@@ -1,0 +1,1137 @@
+import { ERROR_CODE_SPECS, formatErrorRef } from '@lobechat/model-runtime/errors';
+import { describe, expect, it } from 'vitest';
+
+import type { RenderStepParams } from '../replyTemplate';
+import {
+  formatTokens,
+  renderAgentError,
+  renderCommandReply,
+  renderDmRejected,
+  renderError,
+  renderErrorWithDetails,
+  renderFinalReply,
+  renderGroupRejected,
+  renderGuestCopy,
+  renderGuestPairing,
+  renderGuestRejected,
+  renderGuestTruncated,
+  renderInlineError,
+  renderLLMGenerating,
+  renderSenderRejected,
+  renderStart,
+  renderStepProgress,
+  renderStopped,
+  renderToolExecuting,
+  renderWhoami,
+  splitMessage,
+  summarizeOutput,
+} from '../replyTemplate';
+
+// Helper to build a minimal RenderStepParams with defaults
+function makeParams(overrides: Partial<RenderStepParams> = {}): RenderStepParams {
+  return {
+    executionTimeMs: 0,
+    stepType: 'call_llm' as const,
+    thinking: true,
+    totalCost: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalSteps: 1,
+    totalTokens: 0,
+    ...overrides,
+  };
+}
+
+describe('replyTemplate', () => {
+  // ==================== renderStart ====================
+
+  describe('renderStart', () => {
+    it('should return a non-empty string', () => {
+      const result = renderStart();
+      expect(result).toBeTruthy();
+      expect(typeof result).toBe('string');
+    });
+  });
+
+  // ==================== renderLLMGenerating ====================
+
+  describe('renderLLMGenerating', () => {
+    it('should show content + pending tool call with identifier|apiName and first arg only', () => {
+      expect(
+        renderLLMGenerating(
+          makeParams({
+            content: 'Let me search for that.',
+            thinking: false,
+            toolsCalling: [
+              {
+                apiName: 'web_search',
+                arguments: '{"query":"latest news","limit":10}',
+                identifier: 'builtin',
+              },
+            ],
+          }),
+        ),
+      ).toBe('Let me search for that.\n\n○ **builtin·web_search**(query: "latest news")');
+    });
+
+    it('should show multiple pending tool calls on separate lines with hollow circles', () => {
+      expect(
+        renderLLMGenerating(
+          makeParams({
+            thinking: false,
+            toolsCalling: [
+              { apiName: 'search', arguments: '{"q":"test"}', identifier: 'builtin' },
+              {
+                apiName: 'readUrl',
+                arguments: '{"url":"https://example.com"}',
+                identifier: 'lobe-web-browsing',
+              },
+            ],
+          }),
+        ),
+      ).toBe(
+        '○ **builtin·search**(q: "test")\n○ **lobe-web-browsing·readUrl**(url: "https://example.com")',
+      );
+    });
+
+    it('should handle tool calls without args', () => {
+      expect(
+        renderLLMGenerating(
+          makeParams({
+            thinking: false,
+            toolsCalling: [{ apiName: 'get_time', identifier: 'builtin' }],
+          }),
+        ),
+      ).toBe('○ **builtin·get_time**');
+    });
+
+    it('should handle tool calls with invalid JSON args gracefully', () => {
+      expect(
+        renderLLMGenerating(
+          makeParams({
+            thinking: false,
+            toolsCalling: [{ apiName: 'broken', arguments: 'not json', identifier: 'plugin' }],
+          }),
+        ),
+      ).toBe('○ **plugin·broken**');
+    });
+
+    it('should omit identifier when empty', () => {
+      expect(
+        renderLLMGenerating(
+          makeParams({
+            thinking: false,
+            toolsCalling: [{ apiName: 'search', arguments: '{"q":"test"}', identifier: '' }],
+          }),
+        ),
+      ).toBe('○ **search**(q: "test")');
+    });
+
+    it('should fall back to lastContent when no content', () => {
+      expect(
+        renderLLMGenerating(
+          makeParams({
+            lastContent: 'Previous response',
+            thinking: false,
+            toolsCalling: [{ apiName: 'search', identifier: 'builtin' }],
+          }),
+        ),
+      ).toBe('Previous response\n\n○ **builtin·search**');
+    });
+
+    it('should show thinking when only reasoning present', () => {
+      expect(
+        renderLLMGenerating(
+          makeParams({
+            reasoning: 'Let me think about this...',
+            thinking: false,
+          }),
+        ),
+      ).toBe(`💭 Let me think about this...`);
+    });
+
+    it('should show content with processing when pure text', () => {
+      expect(
+        renderLLMGenerating(
+          makeParams({
+            content: 'Here is my response',
+            thinking: false,
+          }),
+        ),
+      ).toBe(`Here is my response`);
+    });
+
+    it('should show processing fallback when no content at all', () => {
+      expect(renderLLMGenerating(makeParams({ thinking: false }))).toBe(`💭 Processing...`);
+    });
+
+    it('should trim leading/trailing newlines from content to prevent extra blank lines', () => {
+      expect(
+        renderLLMGenerating(
+          makeParams({
+            content: '\n\nHere is my response\n\n',
+            thinking: false,
+            toolsCalling: [{ apiName: 'search', arguments: '{"q":"test"}', identifier: 'builtin' }],
+          }),
+        ),
+      ).toBe('Here is my response\n\n○ **builtin·search**(q: "test")');
+    });
+  });
+
+  // ==================== renderToolExecuting ====================
+
+  describe('renderToolExecuting', () => {
+    it('should show completed tools with filled circle and result', () => {
+      expect(
+        renderToolExecuting(
+          makeParams({
+            lastContent: 'I will search for that.',
+            lastToolsCalling: [
+              { apiName: 'web_search', arguments: '{"query":"test"}', identifier: 'builtin' },
+            ],
+            stepType: 'call_tool',
+            toolsResult: [
+              { apiName: 'web_search', identifier: 'builtin', output: 'Found 3 results' },
+            ],
+          }),
+        ),
+      ).toBe(
+        `I will search for that.\n\n⏺ **builtin·web_search**(query: "test")\n⎿  success: 15 chars\n\n💭 Processing...`,
+      );
+    });
+
+    it('should show completed tools without result when output is empty', () => {
+      expect(
+        renderToolExecuting(
+          makeParams({
+            lastToolsCalling: [{ apiName: 'get_time', identifier: 'builtin' }],
+            stepType: 'call_tool',
+            toolsResult: [{ apiName: 'get_time', identifier: 'builtin' }],
+          }),
+        ),
+      ).toBe(`⏺ **builtin·get_time**\n\n💭 Processing...`);
+    });
+
+    it('should show multiple completed tools with results', () => {
+      expect(
+        renderToolExecuting(
+          makeParams({
+            lastToolsCalling: [
+              { apiName: 'search', arguments: '{"q":"test"}', identifier: 'builtin' },
+              {
+                apiName: 'readUrl',
+                arguments: '{"url":"https://example.com"}',
+                identifier: 'lobe-web-browsing',
+              },
+            ],
+            stepType: 'call_tool',
+            toolsResult: [
+              { apiName: 'search', identifier: 'builtin', output: 'Found 5 results' },
+              {
+                apiName: 'readUrl',
+                identifier: 'lobe-web-browsing',
+                output: 'Page loaded successfully',
+              },
+            ],
+          }),
+        ),
+      ).toBe(
+        `⏺ **builtin·search**(q: "test")\n⎿  success: 15 chars\n⏺ **lobe-web-browsing·readUrl**(url: "https://example.com")\n⎿  success: 24 chars\n\n💭 Processing...`,
+      );
+    });
+
+    it('should show lastContent with processing when no lastToolsCalling', () => {
+      expect(
+        renderToolExecuting(
+          makeParams({
+            lastContent: 'I found some results.',
+            stepType: 'call_tool',
+          }),
+        ),
+      ).toBe(`I found some results.\n\n💭 Processing...`);
+    });
+
+    it('should show processing fallback when no lastContent and no tools', () => {
+      expect(renderToolExecuting(makeParams({ stepType: 'call_tool' }))).toBe(`💭 Processing...`);
+    });
+
+    it('should trim leading/trailing newlines from lastContent to prevent extra blank lines', () => {
+      expect(
+        renderToolExecuting(
+          makeParams({
+            lastContent: '\n\nI will search for that.\n\n',
+            lastToolsCalling: [
+              { apiName: 'search', arguments: '{"q":"test"}', identifier: 'builtin' },
+            ],
+            stepType: 'call_tool',
+            toolsResult: [{ apiName: 'search', identifier: 'builtin', output: 'Found results' }],
+          }),
+        ),
+      ).toBe(
+        `I will search for that.\n\n⏺ **builtin·search**(q: "test")\n⎿  success: 13 chars\n\n💭 Processing...`,
+      );
+    });
+  });
+
+  // ==================== summarizeOutput ====================
+
+  describe('summarizeOutput', () => {
+    it('should return undefined for empty output', () => {
+      expect(summarizeOutput(undefined)).toBeUndefined();
+      expect(summarizeOutput('')).toBeUndefined();
+      expect(summarizeOutput('   ')).toBeUndefined();
+    });
+
+    it('should show char count for output', () => {
+      expect(summarizeOutput('Hello world')).toBe('success: 11 chars');
+    });
+
+    it('should show char count for long output', () => {
+      const long = 'a'.repeat(5000);
+      expect(summarizeOutput(long)).toContain('5,000 chars');
+    });
+
+    it('should show char count for multi-line output', () => {
+      expect(summarizeOutput('line1\nline2\nline3')).toBe('success: 17 chars');
+    });
+
+    it('should show error status when isSuccess is false', () => {
+      expect(summarizeOutput('Something went wrong', false)).toBe('error: 20 chars');
+    });
+
+    it('should show success status when isSuccess is true', () => {
+      expect(summarizeOutput('All good', true)).toBe('success: 8 chars');
+    });
+  });
+
+  // ==================== formatTokens ====================
+
+  describe('formatTokens', () => {
+    it('should return raw number for < 1000', () => {
+      expect(formatTokens(0)).toBe('0');
+      expect(formatTokens(999)).toBe('999');
+    });
+
+    it('should format thousands as k', () => {
+      expect(formatTokens(1000)).toBe('1.0k');
+      expect(formatTokens(1234)).toBe('1.2k');
+      expect(formatTokens(20_400)).toBe('20.4k');
+      expect(formatTokens(999_999)).toBe('1000.0k');
+    });
+
+    it('should format millions as m', () => {
+      expect(formatTokens(1_000_000)).toBe('1.0m');
+      expect(formatTokens(1_234_567)).toBe('1.2m');
+      expect(formatTokens(12_500_000)).toBe('12.5m');
+    });
+  });
+
+  // ==================== renderFinalReply ====================
+
+  describe('renderFinalReply', () => {
+    it('should return content body only (no stats)', () => {
+      expect(renderFinalReply('Here is the answer.')).toBe('Here is the answer.');
+    });
+
+    it('should trim trailing whitespace', () => {
+      expect(renderFinalReply('Answer.  \n\n')).toBe('Answer.');
+    });
+  });
+
+  // ==================== renderError ====================
+
+  describe('renderError', () => {
+    it('should include the operation id when provided', () => {
+      expect(renderError('op-abc-123')).toBe(
+        '**Agent Execution Failed**\nOperation ID: `op-abc-123`',
+      );
+    });
+
+    it('should fall back to a generic header when no operation id is provided', () => {
+      expect(renderError()).toBe('**Agent Execution Failed**');
+    });
+
+    it('renders Chinese copy when locale is zh-CN', () => {
+      expect(renderError(undefined, 'zh-CN')).toBe('**Agent 执行失败**');
+      expect(renderError('op-1', 'zh-CN')).toContain('Agent 执行失败');
+      expect(renderError('op-1', 'zh-CN')).toContain('op-1');
+    });
+
+    it('falls back to English for locales without a translated dictionary', () => {
+      expect(renderError(undefined, 'ja-JP')).toBe('**Agent Execution Failed**');
+    });
+  });
+
+  // ==================== renderAgentError ====================
+
+  describe('renderAgentError', () => {
+    it.each(Object.values(ERROR_CODE_SPECS).filter((spec) => !spec.isFallback))(
+      'renders actionable localized copy and a stable reference for $code',
+      (spec) => {
+        for (const locale of ['en-US', 'zh-CN'] as const) {
+          const output = renderAgentError(
+            spec.code,
+            'private upstream payload',
+            'op-known',
+            locale,
+          );
+          expect(output).toContain(formatErrorRef(spec.code));
+          expect(output).toContain('op-known');
+          expect(output).not.toContain('private upstream payload');
+          expect(output).not.toContain('{{');
+          expect(output.split('\n').length).toBeGreaterThanOrEqual(3);
+        }
+      },
+    );
+
+    it('renders a classified code without dedicated copy through its attribution fallback', () => {
+      const output = renderAgentError(
+        'RequestBodyTooLarge',
+        'secret upstream payload',
+        'op-size',
+        'en-US',
+        'harness',
+      );
+      expect(output).toContain('Error code: `E');
+      expect(output).toContain('op-size');
+      expect(output).not.toContain('Agent Execution Failed');
+      expect(output).not.toContain('secret upstream payload');
+    });
+
+    it('names the unreachable device instead of falling to the legacy tier', () => {
+      // A hetero dispatch failure (device offline / unregistered / no gateway)
+      // reaches the bot as `DeviceGatewayNotConfigured` with no attribution, so
+      // without its own mapping it rendered a bare "Agent Execution Failed".
+      const output = renderAgentError(
+        'DeviceGatewayNotConfigured',
+        '{"error":"DEVICE_NOT_FOUND","success":false}',
+        'op-device',
+      );
+      expect(output).toContain("Couldn't reach the device this agent runs on");
+      expect(output).toContain('op-device');
+      expect(output).not.toContain('Agent Execution Failed');
+      expect(output).not.toContain('DEVICE_NOT_FOUND');
+
+      const zh = renderAgentError('DeviceGatewayNotConfigured', undefined, 'op-device', 'zh-CN');
+      expect(zh).toContain('无法连接到运行该 Agent 的设备');
+      expect(zh).not.toContain('Agent 执行失败');
+    });
+
+    it('classifies a legacy envelope before choosing IM copy', () => {
+      const output = renderAgentError('ProviderBizError', 'insufficient quota', 'op-quota');
+      expect(output).toContain('Provider quota exhausted');
+      expect(output).toContain('Error code: `E');
+    });
+
+    it('renders a known request error in Chinese with a stable reference', () => {
+      const output = renderAgentError('RequestBodyTooLarge', undefined, 'op-size', 'zh-CN');
+      expect(output).toContain('错误码:');
+      expect(output).not.toContain('Something went wrong');
+      expect(output).not.toContain('RequestBodyTooLarge');
+    });
+
+    it('returns the friendly NoAvailableProvider copy and appends the operation id footer', () => {
+      const out = renderAgentError('NoAvailableProvider', undefined, 'op-abc');
+      expect(out).toContain('No model provider configured');
+      // The friendly message guides the user; the op id is appended as a
+      // traceable footer so operators can still find the failure in logs.
+      expect(out).toContain('op-abc');
+    });
+
+    it('renders Chinese NoAvailableProvider copy with operation id footer when locale is zh-CN', () => {
+      const out = renderAgentError('NoAvailableProvider', undefined, 'op-abc', 'zh-CN');
+      expect(out).toContain('未配置可用的模型 Provider');
+      expect(out).toContain('op-abc');
+    });
+
+    it('omits the operation id footer when none is provided', () => {
+      const out = renderAgentError('NoAvailableProvider', undefined, undefined);
+      expect(out).toContain('No model provider configured');
+      expect(out).not.toContain('Operation ID');
+    });
+
+    it('returns the friendly InvalidProviderAPIKey copy', () => {
+      const en = renderAgentError('InvalidProviderAPIKey', undefined, 'op-1');
+      expect(en).toContain('Invalid or missing API key');
+      const zh = renderAgentError('InvalidProviderAPIKey', undefined, 'op-1', 'zh-CN');
+      expect(zh).toContain('API Key 无效');
+    });
+
+    it('returns the friendly ExceededContextWindow copy', () => {
+      expect(renderAgentError('ExceededContextWindow', undefined, 'op-1')).toContain(
+        'Context window exceeded',
+      );
+      expect(renderAgentError('ExceededContextWindow', undefined, 'op-1', 'zh-CN')).toContain(
+        '上下文已超出',
+      );
+    });
+
+    it('returns the friendly InsufficientBudgetForModel copy instead of the generic user fallback', () => {
+      const en = renderAgentError('InsufficientBudgetForModel', undefined, 'op-1');
+      expect(en).toContain('Not enough credits');
+      expect(en).toContain('op-1');
+      const zh = renderAgentError(
+        'InsufficientBudgetForModel',
+        'Workspace budget exceeded',
+        'op-1',
+        'zh-CN',
+        'user',
+      );
+      expect(zh).toContain('积分余额不足');
+      expect(zh).not.toContain('请检查你的输入');
+    });
+
+    // The admission gate emits one of three codes for the same "the allowance
+    // can't cover this" outcome; the plan-limit pair used to fall to the `user`
+    // tier and tell the user to check their input.
+    it('gives every budget-exhaustion code its own credits copy, not "check your input"', () => {
+      const expected: Record<string, string> = {
+        FreePlanLimit: 'Free plan limit reached',
+        InsufficientBudgetForModel: 'Not enough credits',
+        SubscriptionPlanLimit: 'Plan limit reached',
+      };
+
+      for (const [code, header] of Object.entries(expected)) {
+        const out = renderAgentError(code, 'Budget exceeded', 'op-1', 'en-US', 'user');
+
+        expect(out).toContain(header);
+        expect(out).not.toContain("couldn't be completed");
+      }
+    });
+
+    // Runs are billed to the bot owner, not to whoever mentioned the bot, so
+    // the copy must point at the owner / admin instead of calling the reader
+    // the payer.
+    it('addresses the bot owner rather than the reader on every budget tier', () => {
+      const scoped = ['workspace', 'workspace_member', undefined];
+      for (const code of ['FreePlanLimit', 'InsufficientBudgetForModel', 'SubscriptionPlanLimit']) {
+        for (const budgetTypeAtError of scoped) {
+          const out = renderAgentError(code, undefined, 'op-1', 'en-US', 'user', {
+            budgetTypeAtError,
+          });
+
+          expect(out).not.toMatch(/\byour\b/i);
+          expect(out).toMatch(/bot owner|workspace admin/);
+        }
+      }
+    });
+
+    // A workspace member's own allowance ran out and the reply told
+    // them to top up — which does nothing for that allowance — while the numbers
+    // that would have identified the real fault stayed in the trace.
+    describe('budget scope', () => {
+      const budget = {
+        availableCredits: 7_242_747,
+        budgetTypeAtError: 'workspace_member',
+        requiredCredits: 197_391,
+        shortfallCredits: 0,
+      };
+
+      it('names the member allowance instead of telling them to top up', () => {
+        const en = renderAgentError(
+          'InsufficientBudgetForModel',
+          'Workspace budget exceeded',
+          'op-1',
+          'en-US',
+          'user',
+          budget,
+        );
+
+        expect(en).toContain('Member budget in this workspace is used up');
+        expect(en).not.toContain('Not enough credits');
+        expect(en).toContain('Operation ID: `op-1`');
+
+        const zh = renderAgentError(
+          'InsufficientBudgetForModel',
+          'Workspace budget exceeded',
+          'op-1',
+          'zh-CN',
+          'user',
+          budget,
+        );
+
+        expect(zh).toContain('该工作区的成员预算已用尽');
+        expect(zh).not.toContain('积分余额不足');
+      });
+
+      // The workspace gate throws SubscriptionPlanLimit (not
+      // InsufficientBudgetForModel) when the run couldn't be priced upfront; the
+      // scope still wins over the per-code copy.
+      it('refines the plan-limit codes by scope too', () => {
+        const out = renderAgentError('SubscriptionPlanLimit', undefined, 'op-1', 'en-US', 'user', {
+          ...budget,
+          budgetTypeAtError: 'workspace_member',
+        });
+
+        expect(out).toContain('Member budget in this workspace is used up');
+        expect(out).not.toContain('Plan limit reached');
+      });
+
+      it('names the shared workspace pool for a workspace-scoped allowance', () => {
+        const en = renderAgentError(
+          'InsufficientBudgetForModel',
+          undefined,
+          'op-1',
+          'en-US',
+          'user',
+          { ...budget, budgetTypeAtError: 'workspace' },
+        );
+
+        expect(en).toContain('Workspace credits exhausted');
+
+        const zh = renderAgentError(
+          'InsufficientBudgetForModel',
+          undefined,
+          'op-1',
+          'zh-CN',
+          'user',
+          { ...budget, budgetTypeAtError: 'workspace' },
+        );
+
+        expect(zh).toContain('工作区额度已用尽');
+      });
+
+      it('keeps the personal credits copy for an unrecognized or absent scope', () => {
+        expect(
+          renderAgentError('InsufficientBudgetForModel', undefined, 'op-1', 'en-US', 'user', {
+            ...budget,
+            budgetTypeAtError: 'some_new_scope',
+          }),
+        ).toContain('Not enough credits');
+
+        expect(
+          renderAgentError('InsufficientBudgetForModel', undefined, 'op-1', 'en-US', 'user', {
+            availableCredits: 12,
+            requiredCredits: 34,
+          }),
+        ).toContain('Not enough credits');
+      });
+
+      // Runs mentioned from a shared channel are billed to the bot owner, so the
+      // reply must name the scope without publishing the owner's balance to
+      // everyone in the channel.
+      it('never quotes the allowance figures, only the scope', () => {
+        for (const lng of ['en-US', 'zh-CN'] as const) {
+          const out = renderAgentError(
+            'InsufficientBudgetForModel',
+            undefined,
+            'op-1',
+            lng,
+            'user',
+            budget,
+          );
+
+          expect(out).not.toContain('7.24M');
+          expect(out).not.toContain('7242747');
+          expect(out).not.toContain('197,391');
+          expect(out).not.toContain('197391');
+        }
+      });
+    });
+
+    it('resolves the legacy rate-limit alias separately from exhausted quota', () => {
+      const a = renderAgentError('QuotaLimitReached', undefined, 'op-1');
+      const b = renderAgentError('InsufficientQuota', undefined, 'op-1');
+      expect(a).toContain('Too many requests');
+      expect(b).toContain('quota');
+      expect(a).toContain('E3001');
+      expect(b).toContain('E2001');
+    });
+
+    it('uses friendly copy for command connection close failures wrapped as 500 errors', () => {
+      const en = renderAgentError('500', 'Command aborted due to connection close', 'op-1');
+      expect(en).toContain('Command session disconnected');
+      expect(en).toContain('op-1');
+
+      const zh = renderAgentError(
+        '500',
+        'Command aborted due to connection close',
+        'op-1',
+        'zh-CN',
+      );
+      expect(zh).toContain('命令会话已断开');
+    });
+
+    it('keeps command-disconnect copy after the error is refined to a StateStore code', () => {
+      // formatErrorForState pattern-refines "Command aborted due to connection
+      // close" to StateStorePersistError (write) / StateStoreReadError (read).
+      // The specific disconnect guidance must still win over the harness/system
+      // tiers now that errorType is always populated.
+      const persist = renderAgentError(
+        'StateStorePersistError',
+        'Command aborted due to connection close',
+        'op-1',
+        'en-US',
+        'harness',
+      );
+      expect(persist).toContain('Command session disconnected');
+
+      const read = renderAgentError(
+        'StateStoreReadError',
+        'Command aborted due to connection close',
+        'op-1',
+        'en-US',
+        'system',
+      );
+      expect(read).toContain('Command session disconnected');
+    });
+
+    it('uses provider-neutral copy for system infra errors (no model-provider blame)', () => {
+      // StateStoreReadError is system-attributed but the LLM provider is not
+      // involved — the fallback must not suggest switching models / blame the
+      // provider the way the network copy does.
+      const en = renderAgentError(
+        'StateStoreReadError',
+        'Agent state not found for operation',
+        'op-1',
+        'en-US',
+        'system',
+      );
+      expect(en).toContain('A temporary system error occurred.');
+      expect(en).not.toContain('model provider');
+      expect(en).not.toMatch(/switch to a different model/i);
+      expect(en).toContain('op-1');
+
+      const zh = renderAgentError(
+        'StateStoreReadError',
+        'Agent state not found for operation',
+        'op-1',
+        'zh-CN',
+        'system',
+      );
+      expect(zh).toContain('发生了临时系统错误');
+    });
+
+    it('still gives ProviderNetworkError the provider-specific network copy', () => {
+      // Regression guard: the provider-neutral system fallback must not swallow
+      // the one system-attributed code that IS about the model provider.
+      const out = renderAgentError(
+        'ProviderNetworkError',
+        'fetch failed',
+        'op-1',
+        'en-US',
+        'system',
+      );
+      expect(out).toContain('Network error talking to the model provider');
+    });
+
+    it('falls back to the generic op-id template for unknown error codes without attribution', () => {
+      expect(renderAgentError('SomeNewErrorCode', undefined, 'op-1')).toBe(
+        '**Agent Execution Failed**\nOperation ID: `op-1`',
+      );
+    });
+
+    it('falls back to the generic header when neither errorType nor operationId is known', () => {
+      expect(renderAgentError(undefined, undefined, undefined)).toBe('**Agent Execution Failed**');
+    });
+
+    // The raw runtime message must never reach an IM channel — it is
+    // server-side triage material only (b4aa51baa, #13998). Classification is
+    // what earns the user a reason; the message itself stays out of every tier.
+    it('never leaks the raw error message, on any tier', () => {
+      const secret = 'connect ECONNREFUSED 10.0.0.7:5432';
+
+      expect(renderAgentError('NoAvailableProvider', secret, 'op-1')).not.toContain(secret);
+      expect(
+        renderAgentError('SomeNewErrorCode', secret, 'op-1', undefined, 'harness'),
+      ).not.toContain(secret);
+      expect(renderAgentError('SomeNewErrorCode', secret, 'op-1')).not.toContain(secret);
+    });
+
+    it('surfaces a network message for ProviderNetworkError instead of a bare op id', () => {
+      const en = renderAgentError('ProviderNetworkError', 'fetch failed', 'op-net');
+      expect(en).toContain('Network error talking to the model provider');
+      expect(en).toContain('op-net');
+      expect(en).not.toContain('**Agent Execution Failed**\nOperation ID');
+
+      const zh = renderAgentError('ProviderNetworkError', 'fetch failed', 'op-net', 'zh-CN');
+      expect(zh).toContain('网络连接异常');
+    });
+
+    it('maps provider-capacity codes to the temporarily-unavailable copy', () => {
+      const unavailable = renderAgentError('ProviderServiceUnavailable', undefined, 'op-1');
+      const noChannel = renderAgentError('NoAvailableChannel', undefined, 'op-1');
+      expect(unavailable).toContain('temporarily unavailable');
+      expect(noChannel).toContain('temporarily unavailable');
+      expect(unavailable).toContain('E3002');
+      expect(noChannel).toContain('E3003');
+
+      expect(renderAgentError('RateLimitExceeded', undefined, 'op-1')).toContain(
+        'Too many requests',
+      );
+      const emptyCompletion = renderAgentError('ModelEmptyCompletion', undefined, 'op-1');
+      expect(emptyCompletion).toContain('empty response');
+      expect(emptyCompletion).toContain('may still incur charges');
+      expect(renderAgentError('ModelEmptyCompletion', undefined, 'op-1', 'zh-CN')).toContain(
+        '仍可能产生费用',
+      );
+    });
+
+    it('renders model refusals without blaming provider availability', () => {
+      const en = renderAgentError('ModelRefusal', undefined, 'op-1', 'en-US', 'provider');
+      expect(en).toContain('declined to answer');
+      expect(en).not.toContain('temporarily unavailable');
+
+      const zh = renderAgentError('ModelRefusal', undefined, 'op-1', 'zh-CN', 'provider');
+      expect(zh).toContain('模型拒绝回答');
+      expect(zh).not.toContain('暂时不可用');
+    });
+
+    it('renders provider content-policy violations as content moderation blocks', () => {
+      const en = renderAgentError(
+        'ProviderContentPolicyViolation',
+        undefined,
+        'op-1',
+        'en-US',
+        'provider',
+      );
+      expect(en).toContain('content-safety filter');
+      expect(en).not.toContain('temporarily unavailable');
+
+      const zh = renderAgentError(
+        'ProviderContentPolicyViolation',
+        undefined,
+        'op-1',
+        'zh-CN',
+        'provider',
+      );
+      expect(zh).toContain('内容安全策略拦截');
+      expect(zh).not.toContain('暂时不可用');
+    });
+
+    it('gives OperationInactivityTimeout retry-oriented copy', () => {
+      expect(renderAgentError('OperationInactivityTimeout', undefined, 'op-1')).toContain(
+        'timed out',
+      );
+    });
+
+    it('falls back by attribution when the exact code is unknown', () => {
+      // system → provider-neutral infra copy (must not blame the model provider)
+      expect(renderAgentError('SomeNewInfraCode', undefined, 'op-1', 'en-US', 'system')).toContain(
+        'temporary system error',
+      );
+      // provider → temporarily-unavailable copy
+      expect(renderAgentError('SomeNewCode', undefined, 'op-1', 'en-US', 'provider')).toContain(
+        'temporarily unavailable',
+      );
+      // harness → internal-error copy, op id kept for support
+      const harness = renderAgentError('SomeNewCode', undefined, 'op-h', 'en-US', 'harness');
+      expect(harness).toContain('Something went wrong on our side');
+      expect(harness).toContain('op-h');
+      // user → generic check-your-settings copy
+      expect(renderAgentError('SomeNewCode', undefined, 'op-1', 'en-US', 'user')).toContain(
+        "couldn't be completed",
+      );
+    });
+
+    it('prefers the precise code copy over the attribution fallback', () => {
+      // ProviderNetworkError has precise copy even though attribution=system
+      // would also resolve; the precise tier must win.
+      const out = renderAgentError('InvalidProviderAPIKey', undefined, 'op-1', 'en-US', 'system');
+      expect(out).toContain('Invalid or missing API key');
+      expect(out).not.toContain('Network error');
+    });
+  });
+
+  // ==================== renderStopped ====================
+
+  describe('renderStopped', () => {
+    it('returns the default English message when no message is supplied', () => {
+      expect(renderStopped()).toBe('Execution stopped.');
+    });
+
+    it('returns the default Chinese message when locale is zh-CN', () => {
+      expect(renderStopped(undefined, 'zh-CN')).toBe('执行已停止。');
+    });
+
+    it('passes through an explicit message regardless of locale', () => {
+      expect(renderStopped('Stopped by user.', 'zh-CN')).toBe('Stopped by user.');
+    });
+  });
+
+  // ==================== renderDmRejected ====================
+
+  describe('renderDmRejected', () => {
+    it('renders disabled and allowlist English copy', () => {
+      expect(renderDmRejected('disabled')).toContain("isn't accepting direct messages");
+      expect(renderDmRejected('allowlist')).toContain("aren't authorized");
+    });
+
+    it('renders disabled and allowlist Chinese copy when locale is zh-CN', () => {
+      expect(renderDmRejected('disabled', 'zh-CN')).toContain('不接受私信');
+      expect(renderDmRejected('allowlist', 'zh-CN')).toContain('没有私信该机器人的权限');
+    });
+  });
+
+  // ==================== renderGroupRejected ====================
+
+  describe('renderGroupRejected', () => {
+    it('renders disabled and allowlist English copy', () => {
+      expect(renderGroupRejected('disabled')).toContain("doesn't respond in groups or channels");
+      expect(renderGroupRejected('allowlist')).toContain("isn't enabled in this channel");
+    });
+
+    it('renders disabled and allowlist Chinese copy when locale is zh-CN', () => {
+      expect(renderGroupRejected('disabled', 'zh-CN')).toContain('不在群组或频道中响应');
+      expect(renderGroupRejected('allowlist', 'zh-CN')).toContain('未在此频道启用');
+    });
+  });
+
+  describe('Guest Policy replies', () => {
+    it('renders Guest-specific rejection copy in English and Chinese', () => {
+      expect(renderGuestRejected('disabled')).toContain('Guest Mode is disabled');
+      expect(renderGuestRejected('allowlist')).toContain("aren't authorized to use this bot");
+      expect(renderGuestRejected('disabled', 'zh-CN')).toContain('已禁用访客模式');
+    });
+
+    it('renders Guest pairing codes and operational failures', () => {
+      expect(renderGuestPairing('code', 'en-US', { code: 'PAIR123' })).toContain('PAIR123');
+      expect(renderGuestPairing('code', 'en-US', { code: 'PAIR123' })).toContain('Guest Mode');
+      expect(renderGuestPairing('capacity-exceeded')).toContain('too many Guest Mode');
+      expect(renderGuestPairing('unavailable', 'zh-CN')).toContain('暂时不可用');
+    });
+  });
+
+  // ==================== renderSenderRejected ====================
+
+  describe('renderSenderRejected', () => {
+    it("uses generic 'interact with this bot' phrasing — never 'direct messages'", () => {
+      // The notice is shown out-of-band when a user @-mentioned in a
+      // group; saying "you aren't authorized to send direct messages"
+      // would misdescribe what the user actually did.
+      const en = renderSenderRejected();
+      expect(en).toContain("aren't authorized");
+      expect(en).toContain('interact with this bot');
+      expect(en).not.toContain('direct messages');
+    });
+
+    it('renders Chinese copy when locale is zh-CN, also avoiding DM phrasing', () => {
+      const zh = renderSenderRejected('zh-CN');
+      expect(zh).toContain('交互的权限');
+      expect(zh).not.toContain('私信');
+    });
+  });
+
+  // ==================== renderInlineError / renderErrorWithDetails ====================
+
+  describe('renderInlineError', () => {
+    it('formats a compact **Error** line in English by default', () => {
+      expect(renderInlineError('boom')).toBe('**Error**: boom');
+    });
+
+    it('uses Chinese copy when locale is zh-CN', () => {
+      expect(renderInlineError('boom', 'zh-CN')).toBe('**错误**：boom');
+    });
+  });
+
+  describe('renderErrorWithDetails', () => {
+    it('embeds the raw detail block in English by default', () => {
+      const out = renderErrorWithDetails('stack trace');
+      expect(out).toContain('Agent Execution Failed');
+      expect(out).toContain('Details:');
+      expect(out).toContain('stack trace');
+    });
+
+    it('embeds the raw detail block with Chinese label when locale is zh-CN', () => {
+      const out = renderErrorWithDetails('stack trace', 'zh-CN');
+      expect(out).toContain('Agent 执行失败');
+      expect(out).toContain('详细信息');
+      expect(out).toContain('stack trace');
+    });
+
+    it('includes the Operation ID footer when an operationId is provided', () => {
+      const en = renderErrorWithDetails('stack trace', undefined, 'op-xyz');
+      expect(en).toContain('Operation ID: `op-xyz`');
+      expect(en).toContain('stack trace');
+
+      const zh = renderErrorWithDetails('stack trace', 'zh-CN', 'op-xyz');
+      expect(zh).toContain('Operation ID: `op-xyz`');
+      expect(zh).toContain('stack trace');
+    });
+  });
+
+  // ==================== renderCommandReply ====================
+
+  describe('renderCommandReply', () => {
+    it('returns the English copy for each command key by default', () => {
+      expect(renderCommandReply('cmdNewReset')).toContain('Conversation reset');
+      expect(renderCommandReply('cmdStopNotActive')).toContain('No active execution');
+      expect(renderCommandReply('cmdStopRequested')).toBe('Stop requested.');
+      expect(renderCommandReply('cmdStopUnable')).toContain('Unable to stop');
+    });
+
+    it('returns the Chinese copy when locale is zh-CN', () => {
+      expect(renderCommandReply('cmdNewReset', 'zh-CN')).toContain('对话已重置');
+      expect(renderCommandReply('cmdStopNotActive', 'zh-CN')).toContain('没有正在执行');
+      expect(renderCommandReply('cmdStopRequested', 'zh-CN')).toBe('已发出停止请求。');
+      expect(renderCommandReply('cmdStopUnable', 'zh-CN')).toContain('无法停止');
+    });
+  });
+
+  // ==================== renderWhoami ====================
+
+  describe('renderWhoami', () => {
+    it('echoes the caller ID, display name and the settings pointer in English', () => {
+      const text = renderWhoami({ isOperator: false, userId: 'ou_abc123', userName: 'Lin' });
+      expect(text).toContain('`ou_abc123`');
+      expect(text).toContain('Lin');
+      expect(text).toContain('Your Platform User ID');
+    });
+
+    it('omits the display name line when unknown and flags an already-configured operator', () => {
+      const text = renderWhoami({ isOperator: true, userId: 'ou_abc123' });
+      expect(text).toContain('`ou_abc123`');
+      expect(text).not.toContain('Display name');
+      expect(text).toContain('already set as the bot operator');
+    });
+
+    it('renders Chinese copy for zh-CN', () => {
+      const text = renderWhoami(
+        { isOperator: false, userId: 'ou_abc123', userName: '林' },
+        'zh-CN',
+      );
+      expect(text).toContain('你的平台用户 ID：`ou_abc123`');
+      expect(text).toContain('显示名称：林');
+      expect(text).toContain('高级设置');
+      expect(renderCommandReply('cmdWhoamiUnavailable', 'zh-CN')).toContain('无法');
+    });
+  });
+
+  // ==================== renderGuestCopy ====================
+
+  describe('renderGuestCopy', () => {
+    it('returns the English Guest Mode copy by default', () => {
+      expect(renderGuestCopy('guestMediaUnavailable')).toBe(
+        'This attachment can’t be delivered in Telegram Guest Mode.',
+      );
+      expect(renderGuestTruncated(4096)).toContain('4096');
+      expect(renderGuestTruncated(1024)).toContain('1024');
+      expect(renderGuestCopy('guestLinkPromptDm')).toContain('send /start');
+    });
+
+    it('returns the Chinese Guest Mode copy when locale is zh-CN', () => {
+      expect(renderGuestCopy('guestMediaUnavailable', 'zh-CN')).toBe(
+        '该附件无法通过 Telegram 访客模式送达。',
+      );
+      expect(renderGuestTruncated(4096, 'zh-CN')).toContain('4096');
+      expect(renderGuestTruncated(1024, 'zh-CN')).toContain('1024');
+      expect(renderGuestCopy('guestLinkPromptDm', 'zh-CN')).toContain('/start');
+      expect(renderGuestCopy('guestLinkButton', 'zh-CN')).toBe('打开机器人');
+    });
+
+    it('falls back to English for locales without a Guest Mode dictionary', () => {
+      expect(renderGuestCopy('guestLinkButton', 'fr-FR')).toBe('Open Bot');
+    });
+  });
+
+  // ==================== renderStepProgress locale ====================
+
+  describe('renderStepProgress locale', () => {
+    it('uses Chinese "处理中…" placeholder in zh-CN', () => {
+      const out = renderStepProgress(makeParams({ stepType: 'call_llm' }), 'zh-CN');
+      expect(out).toContain('处理中…');
+      expect(out).not.toContain('Processing...');
+    });
+
+    it('uses Chinese tools-calling header in zh-CN', () => {
+      const out = renderStepProgress(
+        makeParams({
+          stepType: 'call_tool',
+          totalToolCalls: 3,
+          elapsedMs: 1500,
+        }),
+        'zh-CN',
+      );
+      expect(out).toContain('共 **3** 次工具调用');
+    });
+  });
+
+  // ==================== renderStart locale ====================
+
+  describe('renderStart locale', () => {
+    it('returns a Chinese ack phrase when locale is zh-CN', () => {
+      // The zh fallback list is small and flat — every entry is non-Latin.
+      const phrase = renderStart('hi', { lng: 'zh-CN' });
+      expect(/[\u4E00-\u9FFF]/.test(phrase)).toBe(true);
+    });
+  });
+
+  // ==================== renderStepProgress (dispatcher) ====================
+
+  describe('renderStepProgress', () => {
+    it('should dispatch to renderLLMGenerating for call_llm with pending tools', () => {
+      expect(
+        renderStepProgress(
+          makeParams({
+            content: 'Looking into it',
+            thinking: false,
+            toolsCalling: [{ apiName: 'search', arguments: '{"q":"test"}', identifier: 'builtin' }],
+          }),
+        ),
+      ).toBe('Looking into it\n\n○ **builtin·search**(q: "test")');
+    });
+
+    it('should dispatch to renderToolExecuting for call_tool with completed tools', () => {
+      expect(
+        renderStepProgress(
+          makeParams({
+            lastContent: 'Previous content',
+            lastToolsCalling: [
+              { apiName: 'search', arguments: '{"q":"test"}', identifier: 'builtin' },
+            ],
+            stepType: 'call_tool',
+            thinking: true,
+            toolsResult: [{ apiName: 'search', identifier: 'builtin', output: 'Found results' }],
+          }),
+        ),
+      ).toBe(
+        `Previous content\n\n⏺ **builtin·search**(q: "test")\n⎿  success: 13 chars\n\n💭 Processing...`,
+      );
+    });
+  });
+
+  // ==================== splitMessage ====================
+
+  describe('splitMessage', () => {
+    it('should return single chunk for short text', () => {
+      expect(splitMessage('hello', 100)).toEqual(['hello']);
+    });
+
+    it('should split at paragraph boundary', () => {
+      const text = 'a'.repeat(80) + '\n\n' + 'b'.repeat(80);
+      expect(splitMessage(text, 100)).toEqual(['a'.repeat(80), 'b'.repeat(80)]);
+    });
+
+    it('should split at line boundary when no paragraph break fits', () => {
+      const text = 'a'.repeat(80) + '\n' + 'b'.repeat(80);
+      expect(splitMessage(text, 100)).toEqual(['a'.repeat(80), 'b'.repeat(80)]);
+    });
+
+    it('should hard-cut when no break found', () => {
+      const text = 'a'.repeat(250);
+      const chunks = splitMessage(text, 100);
+      expect(chunks).toEqual(['a'.repeat(100), 'a'.repeat(100), 'a'.repeat(50)]);
+    });
+
+    it('should handle multiple chunks', () => {
+      const text = 'chunk1\n\nchunk2\n\nchunk3';
+      expect(splitMessage(text, 10)).toEqual(['chunk1', 'chunk2', 'chunk3']);
+    });
+
+    it('should drop empty input rather than emitting a single empty chunk', () => {
+      // Telegram rejects empty/whitespace-only sendMessage as
+      // "message text is empty" — splitMessage must not produce one.
+      expect(splitMessage('', 100)).toEqual([]);
+      expect(splitMessage('   ', 100)).toEqual([]);
+      expect(splitMessage('\n\n\n', 100)).toEqual([]);
+    });
+
+    it('should drop whitespace-only chunks at boundaries', () => {
+      // Leading "\n\n" with a tight limit used to produce ["\n", ...] —
+      // a single newline is treated as empty by Telegram.
+      const chunks = splitMessage('\n\nAAAAAA', 3);
+      for (const c of chunks) expect(c.trim().length).toBeGreaterThan(0);
+      expect(chunks.join('')).toContain('AAA');
+    });
+  });
+});

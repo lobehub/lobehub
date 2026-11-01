@@ -1,0 +1,154 @@
+import type {
+  ClaudeCodeAccountIdentity,
+  ClaudeCodeQuotaReading,
+} from '@lobechat/electron-client-ipc';
+import type {
+  CodexQuotaSnapshot,
+  KimiCodeExtraUsage,
+  KimiCodeQuotaSnapshot,
+  QuotaAccountIdentity,
+  QuotaLimitReading,
+} from '@lobechat/heterogeneous-agents/quota';
+import type { QuotaDeviceAccount } from '@lobechat/types';
+
+import { lambdaClient } from '@/libs/trpc/client';
+
+/**
+ * Renderer-side service for the account-scoped quota data layer (persisted via
+ * the lambda tRPC → server DB). Distinct from `heterogeneousAgentService`, which
+ * fetches the *live* quota from the local CLI login over Electron IPC.
+ */
+class AgentQuotaService {
+  ingestCodexSnapshot = async (params: {
+    identity: QuotaAccountIdentity;
+    readings: QuotaLimitReading[];
+  }) => lambdaClient.agentQuota.ingestSnapshot.mutate({ ...params, provider: 'codex' });
+
+  refreshCodexQuota = async (params: {
+    command?: string;
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+  }): Promise<CodexQuotaSnapshot | null> =>
+    lambdaClient.agentQuota.refreshCodexQuota.mutate(params);
+
+  ingestKimiCodeSnapshot = async (params: {
+    extraUsage?: KimiCodeExtraUsage | null;
+    identity: QuotaAccountIdentity;
+    readings: QuotaLimitReading[];
+  }) => lambdaClient.agentQuota.ingestSnapshot.mutate({ ...params, provider: 'kimi-code' });
+
+  refreshKimiCodeQuota = async (params: {
+    deviceId: string;
+    env?: Record<string, string>;
+    force?: boolean;
+  }): Promise<KimiCodeQuotaSnapshot | null> =>
+    lambdaClient.agentQuota.refreshKimiCodeQuota.mutate(params);
+
+  /** Persist a live Claude snapshot (identity + readings) captured over IPC. */
+  ingestClaudeSnapshot = async (params: {
+    deviceId?: string;
+    identity: ClaudeCodeAccountIdentity;
+    readings: ClaudeCodeQuotaReading[];
+  }) =>
+    lambdaClient.agentQuota.ingestSnapshot.mutate({
+      deviceId: params.deviceId,
+      identity: params.identity,
+      provider: 'claude-code',
+      readings: params.readings.map((r) => ({ ...r, scopeKey: r.scopeKey ?? '' })),
+    });
+
+  listAccounts = async () => lambdaClient.agentQuota.listAccounts.query();
+
+  /**
+   * Newest reading per limit bucket — what the panel renders. Windows are keyed
+   * by `resets_at`, so a limit reported without one (an untouched model-scoped
+   * weekly) only exists here.
+   */
+  getLatestReadings = async (accountId: string) =>
+    lambdaClient.agentQuota.getLatestReadings.query({ accountId });
+
+  /** Recent concrete windows (weekly + session), newest reset first — calendar read model. */
+  getWindows = async (accountId: string, limit?: number) =>
+    lambdaClient.agentQuota.getWindows.query({ accountId, limit });
+
+  /** Full reading series (oldest first) for the burn-down chart / calendar heat. */
+  listSnapshots = async (accountId: string, sinceDays?: number) =>
+    lambdaClient.agentQuota.listSnapshots.query({ accountId, sinceDays });
+
+  /** Per-turn token + cost spend (oldest first) for the calendar's daily totals. */
+  listUsageTurns = async (accountId: string, sinceDays?: number) =>
+    lambdaClient.agentQuota.listUsageTurns.query({ accountId, sinceDays });
+
+  /** Agent runs in flight on an account, newest turn first. */
+  listActiveRuns = async (accountId: string) =>
+    lambdaClient.agentQuota.listActiveRuns.query({ accountId });
+
+  listBindings = async (agentId: string) => lambdaClient.agentQuota.listBindings.query({ agentId });
+
+  /** UI "switch account": pin one account for an agent (Manual mode). */
+  switchAccount = async (agentId: string, accountId: string) =>
+    lambdaClient.agentQuota.switchAccount.mutate({ accountId, agentId });
+
+  bindAccount = async (
+    agentId: string,
+    accountId: string,
+    role: 'pinned' | 'pool' | 'disabled' = 'pool',
+  ) => lambdaClient.agentQuota.bindAccount.mutate({ accountId, agentId, role });
+
+  /** Remove a binding row entirely (drop the account from this agent's pool). */
+  unbindAccount = async (bindingId: string) =>
+    lambdaClient.agentQuota.unbindAccount.mutate({ id: bindingId });
+
+  /** Edit account info (display label, enabled flag). */
+  updateAccount = async (id: string, value: { enabled?: boolean; label?: string }) =>
+    lambdaClient.agentQuota.updateAccount.mutate({ id, value });
+
+  /** The account an agent uses on one device (gateway id); `null` = Auto there. */
+  getDeviceAccount = async (agentId: string, deviceId: string): Promise<QuotaDeviceAccount> =>
+    lambdaClient.agentQuota.getDeviceAccount.query({ agentId, deviceId });
+
+  /** Pin an account for an agent on one device, or return it to Auto (`null`). */
+  setDeviceAccount = async (agentId: string, deviceId: string, accountId: string | null) =>
+    lambdaClient.agentQuota.setDeviceAccount.mutate({ accountId, agentId, deviceId });
+
+  /** Report every login a device holds for a provider; the rest are forgotten there. */
+  syncDeviceLogins = async (
+    deviceId: string,
+    provider: 'claude-code' | 'codex' | 'kimi-code',
+    externalAccountIds: string[],
+  ) => lambdaClient.agentQuota.syncDeviceLogins.mutate({ deviceId, externalAccountIds, provider });
+
+  /** Who the load balancer would pick right now (Auto mode preview + reason). */
+  selectAccountForAgent = async (
+    agentId: string,
+    options?: {
+      /** Gateway id of the device the run spawns on. */
+      deviceId?: string;
+      modelScope?: string;
+      provider?: string;
+      runnableExternalAccountIds?: string[];
+    },
+  ) => lambdaClient.agentQuota.selectAccountForAgent.query({ agentId, ...options });
+
+  /** One assistant turn's consumption → usage ledger (idempotent by message id). */
+  recordUsage = async (params: {
+    agentId?: string;
+    externalAccountId?: string;
+    messageId?: string;
+    model?: string;
+    occurredAt?: number;
+    operationId?: string;
+    provider: 'claude-code' | 'codex' | 'kimi-code';
+    topicId?: string;
+    usage: {
+      cacheRead?: number;
+      cacheWrite5m?: number;
+      input?: number;
+      output?: number;
+      reasoning?: number;
+    };
+  }) => lambdaClient.agentQuota.recordUsage.mutate(params);
+}
+
+export const agentQuotaService = new AgentQuotaService();

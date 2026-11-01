@@ -1,0 +1,527 @@
+import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
+import { notifyVideoCompleted } from '@/business/server/video-generation/notifyVideoCompleted';
+import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { GenerationModel } from '@/database/models/generation';
+import type { LobeChatDatabase } from '@/database/type';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { VideoGenerationService } from '@/server/services/generation/video';
+import { processBackgroundVideoPolling } from '@/server/services/generation/videoBackgroundPolling';
+import { AsyncTaskError, AsyncTaskStatus } from '@/types/asyncTask';
+import { FileSource } from '@/types/files';
+
+const { mockEnsureTopicCover } = vi.hoisted(() => ({ mockEnsureTopicCover: vi.fn() }));
+
+vi.mock('@/database/models/asyncTask');
+vi.mock('@/server/services/generation', () => ({
+  GenerationService: vi.fn(function () {
+    return { ensureTopicCover: mockEnsureTopicCover };
+  }),
+}));
+vi.mock('@/database/models/generation');
+vi.mock('@/server/services/generation/video');
+vi.mock('@/business/server/video-generation/chargeAfterGenerate', () => ({
+  chargeAfterGenerate: vi.fn(),
+}));
+vi.mock('@/business/server/video-generation/notifyVideoCompleted', () => ({
+  notifyVideoCompleted: vi.fn(),
+}));
+vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
+  ...((await importOriginal()) as any),
+  buildMappedBusinessModelFields: vi.fn(() => ({})),
+  resolveBusinessModelMapping: vi.fn(async (_provider: string, model: string) => ({
+    resolvedModelId: model,
+  })),
+}));
+vi.mock('@/utils/sanitizeFileName', () => ({
+  sanitizeFileName: vi.fn(function (...args) {
+    return args.join('-');
+  }),
+}));
+
+vi.mock('debug', () => ({
+  default: () => vi.fn(),
+}));
+
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
+}));
+
+describe('videoBackgroundPolling', () => {
+  const mockAsyncTaskModel = {
+    update: vi.fn(),
+  };
+
+  const mockGenerationModel = {
+    createAssetAndFile: vi.fn(),
+  };
+
+  const mockVideoService = {
+    processVideoForGeneration: vi.fn(),
+  };
+
+  const mockModelRuntime = {
+    handlePollVideoStatus: vi.fn(),
+  };
+
+  const mockDb = {
+    query: {
+      generationBatches: {
+        findFirst: vi.fn().mockResolvedValue({
+          config: {},
+          id: 'batch-123',
+          prompt: 'test-prompt',
+        }),
+      },
+    },
+  } as any as LobeChatDatabase;
+
+  const mockParams = {
+    asyncTaskCreatedAt: new Date('2024-01-01T00:00:00Z'),
+    asyncTaskId: 'task-123',
+    generationBatchId: 'batch-123',
+    generationId: 'gen-456',
+    generationTopicId: 'topic-789',
+    inferenceId: 'inference-abc',
+    model: 'test-model',
+    prechargeResult: { credits: 10 },
+    previousGenerationId: 'gen-source',
+    provider: 'test-provider',
+    userId: 'user-xyz',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return mockAsyncTaskModel as any;
+    });
+    vi.mocked(GenerationModel).mockImplementation(function () {
+      return mockGenerationModel as any;
+    });
+    vi.mocked(VideoGenerationService).mockImplementation(function () {
+      return mockVideoService as any;
+    });
+    vi.mocked(initModelRuntimeFromDB).mockResolvedValue(mockModelRuntime as any);
+    vi.mocked(AsyncTaskModel.claimVideoCompletion).mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  describe('processBackgroundVideoPolling - success path', () => {
+    it('should complete video generation successfully', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+        headers: { 'Content-Type': 'video/mp4' },
+        usage: { completionTokens: 28_960, totalTokens: 29_120 },
+      });
+
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key-123',
+        duration: 10,
+        fileHash: 'hash-abc',
+        fileSize: 1024,
+        height: 1080,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key-456',
+        videoKey: 'video-key-789',
+        width: 1920,
+      });
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      expect(mockModelRuntime.handlePollVideoStatus).toHaveBeenCalledWith(
+        'inference-abc',
+        'test-model',
+        undefined,
+      );
+
+      expect(mockVideoService.processVideoForGeneration).toHaveBeenCalledWith(
+        'https://example.com/video.mp4',
+        { headers: { 'Content-Type': 'video/mp4' } },
+      );
+
+      expect(mockGenerationModel.createAssetAndFile).toHaveBeenCalledWith(
+        'gen-456',
+        expect.objectContaining({
+          coverUrl: 'cover-key-123',
+          duration: 10,
+          height: 1080,
+          interactionId: 'inference-abc',
+          originalUrl: 'https://example.com/video.mp4',
+          previousGenerationId: 'gen-source',
+          thumbnailUrl: 'thumb-key-456',
+          type: 'video',
+          url: 'video-key-789',
+          width: 1920,
+        }),
+        expect.objectContaining({
+          fileHash: 'hash-abc',
+          fileType: 'video/mp4',
+          metadata: expect.objectContaining({
+            dirname: '',
+            duration: 10,
+            filename: 'test-prompt-gen-456.mp4',
+            generationId: 'gen-456',
+            height: 1080,
+            path: 'video-key-789',
+            width: 1920,
+          }),
+          name: 'test-prompt-gen-456.mp4',
+          size: 1024,
+          url: 'video-key-789',
+        }),
+        FileSource.VideoGeneration,
+      );
+
+      expect(mockAsyncTaskModel.update).toHaveBeenCalledWith('task-123', {
+        duration: expect.any(Number),
+        status: AsyncTaskStatus.Success,
+      });
+      // The topic cover is filled before Success so a refreshing client sees it
+      expect(mockEnsureTopicCover).toHaveBeenCalledWith('topic-789', 'thumb-key-456');
+      expect(mockEnsureTopicCover.mock.invocationCallOrder[0]).toBeLessThan(
+        mockAsyncTaskModel.update.mock.invocationCallOrder.at(-1)!,
+      );
+      expect(notifyVideoCompleted).toHaveBeenCalledWith(
+        expect.objectContaining({
+          generationBatchId: 'batch-123',
+          topicId: 'topic-789',
+        }),
+      );
+      expect(chargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'test-model',
+          prechargeResult: { credits: 10 },
+          usage: { completionTokens: 28_960, totalTokens: 29_120 },
+        }),
+      );
+    });
+
+    it('bills output tokens from the downloaded video when the provider reports no usage', async () => {
+      // Resolved once to poll and once to charge
+      vi.mocked(resolveBusinessModelMapping)
+        .mockResolvedValueOnce({ resolvedModelId: 'bytedance/seedance-2.5' } as any)
+        .mockResolvedValueOnce({ resolvedModelId: 'bytedance/seedance-2.5' } as any);
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+      });
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key',
+        duration: 4.04,
+        fileHash: 'hash',
+        fileSize: 1024,
+        frames: 97,
+        height: 592,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key',
+        videoKey: 'video-key',
+        width: 710,
+      });
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      // fal billed 39.815K tokens for this image-to-video output
+      const tokens = 39_815;
+      expect(chargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'bytedance/seedance-2.5',
+          usage: { completionTokens: tokens, totalTokens: tokens },
+        }),
+      );
+    });
+
+    it('should poll the pinned route with the mapped model id instead of the alias', async () => {
+      vi.mocked(resolveBusinessModelMapping).mockResolvedValueOnce({
+        resolvedModelId: 'mapped-model',
+      } as any);
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'failed',
+        error: 'Model API error',
+      });
+      const route = { apiType: 'google', channelId: 'channel-1', routerId: 'router-1' };
+
+      await processBackgroundVideoPolling(mockDb, { ...mockParams, route });
+
+      expect(mockModelRuntime.handlePollVideoStatus).toHaveBeenCalledWith(
+        'inference-abc',
+        'mapped-model',
+        route,
+      );
+    });
+
+    it('should keep spend origin and workspace context on completion', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+      });
+      const spendOrigin = { trigger: 'agent-share' };
+
+      await processBackgroundVideoPolling(mockDb, {
+        ...mockParams,
+        spendOrigin,
+        workspaceId: 'ws-1',
+      });
+
+      expect(notifyVideoCompleted).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'ws-1' }),
+      );
+      expect(chargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ asyncTaskId: 'task-123', trigger: 'agent-share' }),
+          workspaceId: 'ws-1',
+        }),
+      );
+    });
+
+    it('should keep spend origin on the failure refund', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'failed',
+        error: 'Model API error',
+      });
+
+      await processBackgroundVideoPolling(mockDb, {
+        ...mockParams,
+        spendOrigin: { trigger: 'agent-share' },
+      });
+
+      expect(chargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isError: true,
+          metadata: expect.objectContaining({ trigger: 'agent-share' }),
+        }),
+      );
+    });
+
+    it('should skip a polling result already claimed by a webhook', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+      });
+      vi.mocked(AsyncTaskModel.claimVideoCompletion).mockResolvedValueOnce(false);
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      expect(mockVideoService.processVideoForGeneration).not.toHaveBeenCalled();
+      expect(mockGenerationModel.createAssetAndFile).not.toHaveBeenCalled();
+      expect(mockAsyncTaskModel.update).not.toHaveBeenCalled();
+    });
+
+    it('should not persist inline video data as the original URL', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'data:video/mp4;base64,inline-video',
+      });
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key',
+        duration: 10,
+        fileHash: 'hash',
+        fileSize: 1024,
+        height: 1080,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key',
+        videoKey: 'video-key',
+        width: 1920,
+      });
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      expect(mockGenerationModel.createAssetAndFile).toHaveBeenCalledWith(
+        'gen-456',
+        expect.objectContaining({ originalUrl: undefined }),
+        expect.any(Object),
+        FileSource.VideoGeneration,
+      );
+    });
+  });
+
+  describe('processBackgroundVideoPolling - polling behavior', () => {
+    it('should retry polling multiple times until success', async () => {
+      mockModelRuntime.handlePollVideoStatus
+        .mockResolvedValueOnce({ status: 'processing' })
+        .mockResolvedValueOnce({ status: 'processing' })
+        .mockResolvedValueOnce({
+          status: 'success',
+          videoUrl: 'https://example.com/video.mp4',
+        });
+
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key',
+        duration: 10,
+        fileHash: 'hash',
+        fileSize: 1024,
+        height: 1080,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key',
+        videoKey: 'video-key',
+        width: 1920,
+      });
+
+      const pollPromise = processBackgroundVideoPolling(mockDb, mockParams);
+
+      await vi.advanceTimersByTimeAsync(10000);
+
+      await pollPromise;
+
+      expect(mockModelRuntime.handlePollVideoStatus).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('processBackgroundVideoPolling - error handling', () => {
+    it('should handle polling failure with error message', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'failed',
+        error: 'Model API error',
+      });
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      expect(mockAsyncTaskModel.update).toHaveBeenCalledWith('task-123', {
+        error: expect.any(AsyncTaskError),
+        status: AsyncTaskStatus.Error,
+      });
+
+      const errorCall = mockAsyncTaskModel.update.mock.calls[0][1];
+      expect(errorCall.error).toBeInstanceOf(AsyncTaskError);
+      expect(errorCall.error?.name).toBe('ServerError');
+    });
+
+    it('should handle model runtime initialization error', async () => {
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValue(new Error('Runtime init failed'));
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      expect(mockAsyncTaskModel.update).toHaveBeenCalledWith('task-123', {
+        error: expect.any(AsyncTaskError),
+        status: AsyncTaskStatus.Error,
+      });
+    });
+
+    it('should handle video processing error', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+      });
+
+      mockVideoService.processVideoForGeneration.mockRejectedValue(
+        new Error('Video processing failed'),
+      );
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      expect(mockAsyncTaskModel.update).toHaveBeenCalledWith('task-123', {
+        error: expect.any(AsyncTaskError),
+        status: AsyncTaskStatus.Error,
+      });
+    });
+
+    it('should handle asset creation error', async () => {
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+      });
+
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key',
+        duration: 10,
+        fileHash: 'hash',
+        fileSize: 1024,
+        height: 1080,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key',
+        videoKey: 'video-key',
+        width: 1920,
+      });
+
+      mockGenerationModel.createAssetAndFile.mockRejectedValue(new Error('DB error'));
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      expect(mockAsyncTaskModel.update).toHaveBeenCalledWith('task-123', {
+        error: expect.any(AsyncTaskError),
+        status: AsyncTaskStatus.Error,
+      });
+    });
+  });
+
+  describe('polling edge cases', () => {
+    it('should handle network errors during polling gracefully', async () => {
+      mockModelRuntime.handlePollVideoStatus
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValueOnce({ status: 'processing' })
+        .mockResolvedValueOnce({
+          status: 'success',
+          videoUrl: 'https://example.com/video.mp4',
+        });
+
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key',
+        duration: 10,
+        fileHash: 'hash',
+        fileSize: 1024,
+        height: 1080,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key',
+        videoKey: 'video-key',
+        width: 1920,
+      });
+
+      mockGenerationModel.createAssetAndFile.mockResolvedValue(undefined);
+
+      const pollPromise = processBackgroundVideoPolling(mockDb, mockParams);
+      await vi.advanceTimersByTimeAsync(10000);
+      await pollPromise;
+
+      expect(mockModelRuntime.handlePollVideoStatus).toHaveBeenCalledTimes(3);
+      expect(mockAsyncTaskModel.update).toHaveBeenCalledWith(
+        'task-123',
+        expect.objectContaining({ status: AsyncTaskStatus.Success }),
+      );
+    });
+  });
+
+  describe('async task duration calculation', () => {
+    it('should calculate correct duration from start time', async () => {
+      const startTime = new Date('2024-01-01T00:00:00Z');
+      const endTime = new Date('2024-01-01T00:05:00Z');
+
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+      });
+
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key',
+        duration: 10,
+        fileHash: 'hash',
+        fileSize: 1024,
+        height: 1080,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key',
+        videoKey: 'video-key',
+        width: 1920,
+      });
+
+      mockGenerationModel.createAssetAndFile.mockResolvedValue(undefined);
+
+      vi.setSystemTime(endTime);
+
+      await processBackgroundVideoPolling(mockDb, { ...mockParams, asyncTaskCreatedAt: startTime });
+
+      expect(mockAsyncTaskModel.update).toHaveBeenCalledWith(
+        'task-123',
+        expect.objectContaining({
+          duration: expect.any(Number),
+          status: AsyncTaskStatus.Success,
+        }),
+      );
+    });
+  });
+});

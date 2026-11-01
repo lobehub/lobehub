@@ -8,6 +8,16 @@ import { describe, expect, it } from 'vitest';
 import { getDocumentRenderMode } from '../documentRenderMode';
 
 describe('getDocumentRenderMode', () => {
+  /** @example File associations take precedence over filename-based editor selection. */
+  it('keeps uploads in the file view, including after the backing file is removed', () => {
+    /** @example A Markdown upload is still a file, not an editable page. */
+    expect(getDocumentRenderMode({ fileId: 'file-1', filename: 'note.md' })).toEqual({
+      mode: 'file',
+    });
+    /** @example A removed file displays a missing-file state instead of a blank editor. */
+    expect(getDocumentRenderMode({ fileId: null, sourceType: 'file' })).toEqual({ mode: 'file' });
+  });
+
   it('returns editor for SKILL.md skill index', () => {
     expect(getDocumentRenderMode({ fileType: 'skills/index', title: 'SKILL.md' })).toEqual({
       mode: 'editor',
@@ -85,5 +95,28 @@ describe('getDocumentRenderMode', () => {
     expect(getDocumentRenderMode({ fileType: 'agent/plan', title: 'Untitled' })).toEqual({
       mode: 'editor',
     });
+  });
+
+  it('renders an HTML page in the HTML view, whatever its filename', () => {
+    expect(getDocumentRenderMode({ fileType: 'custom/html', filename: 'Goal report' })).toEqual({
+      mode: 'html',
+    });
+    /** @example A `.html` title does not turn the page into a source view. */
+    expect(getDocumentRenderMode({ fileType: 'custom/html', filename: 'report.html' })).toEqual({
+      mode: 'html',
+    });
+    /** @example A knowledge-base page carries a placeholder mirror file but keeps its body inline. */
+    expect(
+      getDocumentRenderMode({
+        fileId: 'kb-mirror',
+        fileType: 'custom/html',
+        filename: 'Goal report',
+        sourceType: 'api',
+      }),
+    ).toEqual({ mode: 'html' });
+    /** @example An uploaded HTML file has a MIME type and is still a file. */
+    expect(
+      getDocumentRenderMode({ fileId: 'file-1', fileType: 'text/html', filename: 'a.html' }),
+    ).toEqual({ mode: 'file' });
   });
 });

@@ -1,0 +1,1132 @@
+import { z } from 'zod';
+
+import type { DeviceLocalFilePreviewFailure } from './deviceFilePreviewFailure';
+
+/** Structured context for an unavailable logical device. */
+export interface DeviceUnavailableErrorData {
+  /** Stable machine-readable availability code. */
+  code: 'DEVICE_NOT_FOUND';
+  /** Logical device requested by the failed dispatch. */
+  deviceId: string;
+  /** Availability failures are safe for an outer caller to reconsider. */
+  retryable: true;
+  /** Principal pool in which presence was checked. */
+  scope: 'personal' | 'workspace';
+  /** Workspace principal, present only for workspace-scoped dispatch. */
+  workspaceId?: string;
+}
+
+export type ProjectSkillScope = 'device' | 'project';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+
+/**
+ * A filesystem skill discovered on the execution device by the client at
+ * request time. Project skills live under the current working directory;
+ * device skills live under the execution device's home directory.
+ * Only frontmatter + the absolute SKILL.md path are carried; the SKILL.md
+ * body and directory tree are loaded on demand at activation time via the
+ * readFile / listFiles tools.
+ */
+export interface ProjectSkillMeta {
+  /** Skill description from SKILL.md frontmatter. */
+  description?: string;
+  /** Skill name from frontmatter (falls back to the directory name). */
+  name: string;
+  /** Absolute path to the skill's SKILL.md on the device filesystem. */
+  path: string;
+  /** Skill filesystem scope: project cwd or execution-device home. */
+  scope?: ProjectSkillScope;
+}
+
+/**
+ * A single project-root agent instructions file (`AGENTS.md` / `CLAUDE.md`) read
+ * from the device filesystem during workspace init. Unlike skills (metadata
+ * only), the full body is carried so it can be injected into the system role and
+ * rendered in web without a second device round-trip. Carried as a list on
+ * {@link WorkspaceInitResult} since multiple files can coexist (e.g. both
+ * `AGENTS.md` and `CLAUDE.md`, or future nested files).
+ */
+export interface WorkspaceInstructions {
+  /** Full file content (capped at read time, e.g. 64KB). */
+  content: string;
+  /** Source file the instructions were read from. */
+  source: 'AGENTS.md' | 'CLAUDE.md';
+}
+
+/**
+ * Result of scanning a bound project directory ("workspace init"): the agent
+ * instructions file plus filesystem skills discovered under project and
+ * device-level `.agents/skills` + `.claude/skills`. Produced in a single device round-trip
+ * (`deviceGateway.initWorkspace`) and cached on `devices.workingDirs[].workspace`
+ * so subsequent runs within the TTL — and the web UI — reuse it without
+ * re-scanning. Intentionally open to growth (env info, git status, …) as more
+ * environment-preparation logic lands.
+ *
+ * The scanned root is not stored here — it is always the enclosing
+ * `WorkingDirEntry.path`.
+ */
+export interface WorkspaceInitResult {
+  /**
+   * Project-root agent instructions files (`AGENTS.md` / `CLAUDE.md`). Empty
+   * when none are present.
+   */
+  instructions: WorkspaceInstructions[];
+  /** Filesystem skills discovered on the execution device (metadata only). */
+  skills: ProjectSkillMeta[];
+}
+
+/**
+ * A working directory source a device has used. Structured (rather than a bare
+ * path string) so metadata such as the detected repo type, active git
+ * branch, and active git worktree survives — a remote client viewing this
+ * device can't re-probe its filesystem, so whatever isn't captured here at the
+ * source is lost.
+ */
+export type WorkingDirRepoType = 'git' | 'github';
+
+export type DeviceGitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
+
+/** A GitHub pull request linked to a branch. */
+export interface DeviceGitLinkedPullRequest {
+  ciStatus?: DeviceGitPullRequestCiStatus;
+  isDraft?: boolean;
+  mergeable?: string;
+  mergedAt?: string | null;
+  mergeStateStatus?: string;
+  number: number;
+  reviewDecision?: string;
+  state: string;
+  title: string;
+  url: string;
+}
+
+export type DeviceGitLinkedPullRequestLookupStatus = 'error' | 'gh-missing' | 'ok';
+
+export interface WorkingDirGithubState {
+  /** Additional PRs targeting the same head branch, beyond the primary one. */
+  extraPullRequestCount?: number;
+  /** GitHub PR linked to the effective working directory's branch. */
+  pullRequest?: DeviceGitLinkedPullRequest | null;
+  /** Lookup status for the linked PR probe. */
+  pullRequestStatus?: DeviceGitLinkedPullRequestLookupStatus;
+}
+
+/**
+ * The remote ref a local branch publishes to.
+ *
+ * Recorded because the local branch name is a DEVICE-LOCAL label: a worktree
+ * generates its own (`worktree-feat+foo`), and a push with an explicit refspec
+ * (`git push origin local:remote`) renames the branch in flight. Carrying the
+ * local name to another machine — or to `gh pr list --head` — yields nothing.
+ * The remote ref is the only branch identity that survives leaving this machine,
+ * which also makes it the handle for re-fetching the topic's output elsewhere.
+ */
+export interface DeviceGitUpstreamRef {
+  /** Branch name ON the remote (`feat/x`), never the local name. */
+  branch: string;
+  /** Remote name (`origin`). */
+  remote: string;
+}
+
+export interface WorkingDirGitState {
+  /**
+   * Active checkout selected under this git source. When absent, the source
+   * path itself is the effective working directory.
+   */
+  activeWorktree?: string;
+  /**
+   * Branch for the effective working directory. Undefined for detached HEAD or
+   * when it has not been probed yet.
+   */
+  branch?: string;
+  /** True when the effective working directory is currently detached. */
+  detached?: boolean;
+  /** GitHub-specific branch metadata such as linked PR and check status. */
+  github?: WorkingDirGithubState;
+  /**
+   * True when the effective working directory is a linked worktree rather than
+   * the source path itself.
+   */
+  isWorktree?: boolean;
+  /**
+   * Remote ref {@link branch} publishes to. Dropped alongside {@link github}
+   * whenever the branch changes — a stale remote ref would bind the topic to
+   * another branch's PR, which is worse than having none.
+   */
+  upstream?: DeviceGitUpstreamRef;
+}
+
+export interface WorkingDirConfig {
+  /**
+   * The code environment picked with this folder. Metadata only on a device:
+   * nothing clones or bootstraps there; the association is kept for later.
+   */
+  environmentId?: string;
+  git?: WorkingDirGitState;
+  path: string;
+  repoType?: WorkingDirRepoType;
+}
+
+export type WorkingDirConfigValue = string | WorkingDirConfig;
+
+export const getWorkingDirSourcePath = (
+  entry?: WorkingDirConfigValue | null,
+): string | undefined => {
+  if (!entry) return undefined;
+  return typeof entry === 'string' ? entry : entry.path;
+};
+
+export const getWorkingDirEffectivePath = (
+  entry?: WorkingDirConfigValue | null,
+): string | undefined => {
+  if (!entry) return undefined;
+  if (typeof entry === 'string') return entry;
+  return entry.git?.activeWorktree || entry.path;
+};
+
+export { deriveWorktreePath } from './worktreePath';
+
+export interface WorkingDirEntry extends WorkingDirConfig {
+  /**
+   * Cached "workspace init" scan of this directory (AGENTS.md + project skills).
+   * Populated server-side at run start via `deviceGateway.initWorkspace` and
+   * reused within the TTL gated by `workspaceScannedAt`. Also read directly by
+   * the web UI to render the project's skills / instructions.
+   */
+  workspace?: WorkspaceInitResult;
+  /**
+   * Epoch ms when `workspace` was last scanned. Hoisted to the top level (out of
+   * `workspace`) so freshness can be checked without deserializing the payload.
+   */
+  workspaceScannedAt?: number;
+}
+
+/** A single live gateway WebSocket connection belonging to a device. */
+export interface DeviceChannel {
+  channel: string | null;
+  connectedAt: string;
+  hostname: string | null;
+  platform: string | null;
+}
+
+/**
+ * The subset every device-listing shape shares — satisfied structurally by both
+ * `DeviceListItem` (settings list / run-target picker) and the runtime's
+ * `DeviceAttachment`, so one ordering serves every surface.
+ */
+export interface DeviceActivityOrder {
+  /** Absent on offline rows, and on a legacy gateway that omits the field. */
+  channels?: { connectedAt: string }[];
+  deviceId: string;
+  lastSeen: string;
+  online: boolean;
+}
+
+/**
+ * Most recent evidence the device was alive, as a timestamp.
+ *
+ * Online rows carry the gateway's live `connectedAt` — authoritative. Offline
+ * rows can only fall back to `lastSeen`, which today means "last REGISTERED",
+ * not "last alive": `devices.lastSeenAt` is stamped on register/enroll and
+ * never refreshed while a connection is held. A box that reconnects on every
+ * boot therefore reports a fresher `lastSeen` than one holding a month-long
+ * session. That staleness is contained by the `online` partition below, and
+ * fixing it needs a writer that stamps liveness — not a change here.
+ */
+const deviceActivityAt = (d: DeviceActivityOrder): number => {
+  // `online` with no channels is reachable: the runtime derives it as `!!live`
+  // and tolerates a gateway that omits `channels`. Fall through rather than
+  // assume a channel exists.
+  const connected = (d.online ? (d.channels ?? []) : [])
+    .map((c) => Date.parse(c.connectedAt))
+    .filter((t) => !Number.isNaN(t));
+  if (connected.length > 0) return Math.max(...connected);
+
+  const lastSeen = Date.parse(d.lastSeen);
+  return Number.isNaN(lastSeen) ? 0 : lastSeen;
+};
+
+/**
+ * Order for every device-listing surface: online first, then most recently
+ * active, then by id.
+ *
+ * `online` is a HARD partition rather than one signal among several — an
+ * offline device must never outrank an online one, however recently it was
+ * seen. The picker renders offline rows `disabled`, so an offline row sorted
+ * above an online one is pure noise pushing the only *pickable* machine out of
+ * a viewport that caps at a few rows.
+ *
+ * `deviceId` breaks ties last so the order is total and STABLE: these lists
+ * poll, and two rows sharing a timestamp must not swap places under the user's
+ * cursor between refreshes.
+ */
+export const compareDeviceByActivity = (a: DeviceActivityOrder, b: DeviceActivityOrder): number => {
+  if (a.online !== b.online) return a.online ? -1 : 1;
+
+  const diff = deviceActivityAt(b) - deviceActivityAt(a);
+  if (diff !== 0) return diff;
+
+  return a.deviceId.localeCompare(b.deviceId);
+};
+
+/** Non-mutating {@link compareDeviceByActivity} — callers pass server-built arrays. */
+export const sortDevicesByActivity = <T extends DeviceActivityOrder>(devices: T[]): T[] =>
+  [...devices].sort(compareDeviceByActivity);
+
+/**
+ * Where a device sits relative to the caller:
+ * - `personal`  — the caller's own machine (`devices.workspace_id IS NULL`).
+ * - `workspace` — a machine enrolled into the caller's current workspace, shared
+ *   across its members. Drives the run-device picker's Personal/Workspace groups.
+ */
+export type DeviceScope = 'personal' | 'workspace';
+
+/**
+ * Visibility of a WORKSPACE-scoped device (same contract as agents/docs/files):
+ * - `public`  — shared with every workspace member (the default pool).
+ * - `private` — enrolled for the enrolling member only; other members never
+ *   see it in lists, pickers, or agent runs.
+ * Personal-scope devices have no visibility dimension (`null` on the list item).
+ */
+export type DeviceVisibility = 'private' | 'public';
+
+/**
+ * One workspace a PERSONAL device was shared into from the personal device
+ * list. `deviceId` is the workspace-scoped twin (a different hash from the
+ * personal deviceId, linked back via `devices.shared_from_device_id`), which
+ * the revoke path passes to `device.removeWorkspaceDevice` under that
+ * workspace's scope.
+ */
+export interface DeviceWorkspaceShare {
+  deviceId: string;
+  visibility: DeviceVisibility;
+  workspaceId: string;
+  workspaceName: string | null;
+}
+
+/**
+ * A device row as returned by the `device.listDevices` query — either a
+ * registered device or an online-only "ghost" (connected but not yet persisted).
+ * The server query is annotated to return `DeviceListItem[]`, so this type is the
+ * contract rather than something inferred from the router.
+ */
+/**
+ * Display-ready info for the user who owns / enrolled a device row, used by
+ * the settings page to show "enrolled by @xxx" and to gate write actions to
+ * "self or workspace owner". The caller can always derive this from `userId`
+ * via a workspace members lookup, but the device list inlines it so the
+ * picker / settings page can render without a second round-trip.
+ */
+export interface DeviceEnroller {
+  avatar: string | null;
+  fullName: string | null;
+  userId: string;
+  username: string | null;
+}
+
+/** What a device is running right now, as the device list summarizes it. */
+export interface DeviceRunningSummary {
+  /** Running topics on the device the caller can see. */
+  count: number;
+  deviceId: string;
+  /** Distinct members who started those runs, most recently active first. */
+  users: DeviceEnroller[];
+}
+
+export interface DeviceListItem {
+  architecture?: string | null;
+  channels: DeviceChannel[];
+  defaultCwd: string | null;
+  deviceId: string;
+  /**
+   * The user who owns this device row:
+   *   - personal scope → the only owner (always equal to the caller).
+   *   - workspace scope → the first member who enrolled the machine; preserved
+   *     on re-enroll. The UI uses this to gate writes to "self or workspace
+   *     owner" so a member can manage their own enrollment without touching
+   *     other members' devices.
+   *   - `null` for ghost rows (online but not yet persisted) — no row to edit
+   *     yet, so any UI gate treats it as not-editable.
+   */
+  enroller: DeviceEnroller | null;
+  friendlyName: string | null;
+  hostname: string | null;
+  identitySource: string | null;
+  lastSeen: string;
+  /**
+   * What the client reported about itself on its last connect — the desktop
+   * app sends `appVersion` (plus runtime versions), the CLI `cliVersion`.
+   * `undefined` for ghost rows.
+   */
+  metadata?: Record<string, string> | null;
+  online: boolean;
+  /**
+   * Client-only: the row was hydrated from the persisted device-list snapshot
+   * and has not been confirmed by a fresh `listDevices` yet. `online` is
+   * `false` and `channels` empty on such rows — presence is unknown, not
+   * offline. Never sent by the server.
+   */
+  onlineUnknown?: boolean;
+  platform: string | null;
+  registered: boolean;
+  /** Personal (own) vs. workspace-enrolled device — drives picker grouping. */
+  scope: DeviceScope;
+  /**
+   * Workspace rows only: true when this enrollment was shared from a member's
+   * personal device (`shared_from_device_id` set) rather than enrolled directly
+   * on the machine — drives the "Shared by {name}" tag in the workspace list.
+   */
+  sharedFromPersonal?: boolean;
+  /**
+   * Personal rows only: the workspaces this machine was shared into from the
+   * personal device list. `undefined` for workspace rows, ghosts, and
+   * never-shared machines.
+   */
+  sharedWorkspaces?: DeviceWorkspaceShare[];
+  /**
+   * Workspace-scope rows only: private (enroller-only) vs public (shared pool).
+   * `null` for personal rows and ghost rows. Rows another member enrolled as
+   * private are filtered out server-side and never reach this list.
+   */
+  visibility: DeviceVisibility | null;
+  workingDirs: WorkingDirEntry[];
+}
+
+export interface DeviceDirectoryBrowseEntry {
+  isSymlink: boolean;
+  name: string;
+  /** Canonical absolute path on the execution device. */
+  path: string;
+  readable: boolean;
+}
+
+export interface DeviceDirectoryBrowseResult {
+  entries: DeviceDirectoryBrowseEntry[];
+  nextCursor?: string;
+  parentPath: string | null;
+  /** Canonical absolute directory currently being browsed. */
+  path: string;
+  pathSeparator: '/' | '\\';
+  roots: string[];
+  truncated: boolean;
+}
+
+/**
+ * Branch name + detached-HEAD flag for a working directory, returned by the
+ * `getGitBranch` device RPC. Mirrors the desktop `GitBranchInfo`.
+ */
+export interface DeviceGitBranchInfo {
+  /** Branch short name, or short SHA when in detached HEAD state. */
+  branch?: string;
+  /** True when HEAD is detached (no branch ref). */
+  detached?: boolean;
+  /** Remote ref the branch publishes to. Absent when unpushed or unresolvable. */
+  upstream?: DeviceGitUpstreamRef;
+}
+
+/**
+ * Result of the `getLinkedPullRequest` device RPC: the PR linked to a branch
+ * (when the repo is a GitHub remote). Mirrors the desktop shape.
+ */
+export interface DeviceGitLinkedPullRequestResult {
+  /** Additional PRs targeting the same head branch, beyond the primary one. */
+  extraCount?: number;
+  /** Null when no PR is linked to the branch. */
+  pullRequest: DeviceGitLinkedPullRequest | null;
+  /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
+  status: DeviceGitLinkedPullRequestLookupStatus;
+  /** Remote ref the lookup queried under — the PR's own head ref when one was found. */
+  upstream?: DeviceGitUpstreamRef;
+}
+
+/** One CI check on a pull request, from `statusCheckRollup` (CheckRun or StatusContext). */
+export interface DeviceGitPullRequestCheck {
+  completedAt?: string;
+  detailsUrl?: string;
+  name: string;
+  required: boolean;
+  startedAt?: string;
+  status: 'cancelled' | 'failure' | 'neutral' | 'pending' | 'skipped' | 'success';
+}
+
+export interface DeviceGitPullRequestComment {
+  author: string;
+  body: string;
+  createdAt: string;
+  id: string;
+}
+
+export interface DeviceGitPullRequestReview {
+  author: string;
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
+  submittedAt: string;
+}
+
+export interface DeviceGitPullRequestCommit {
+  author: string;
+  committedAt: string;
+  message: string;
+  sha: string;
+}
+
+/**
+ * Full pull request detail returned by the `getPullRequestDetail` device RPC.
+ * Backs the Working Sidebar's Pull Request tab.
+ */
+export interface DeviceGitPullRequestDetail {
+  additions: number;
+  author: string;
+  autoMerge?: { method: 'merge' | 'rebase' | 'squash' } | null;
+  baseBehindBy: number;
+  baseRefName: string;
+  body: string;
+  changedFiles: number;
+  checks: DeviceGitPullRequestCheck[];
+  comments: DeviceGitPullRequestComment[];
+  commits: DeviceGitPullRequestCommit[];
+  deletions: number;
+  headRefName: string;
+  headRefOid: string;
+  isCrossRepository: boolean;
+  isDraft: boolean;
+  mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
+  mergedAt?: string;
+  mergeStateStatus:
+    'BEHIND' | 'BLOCKED' | 'CLEAN' | 'DIRTY' | 'DRAFT' | 'HAS_HOOKS' | 'UNKNOWN' | 'UNSTABLE';
+  number: number;
+  repo: { name: string; owner: string };
+  reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
+  reviews: DeviceGitPullRequestReview[];
+  state: 'closed' | 'merged' | 'open';
+  title: string;
+  url: string;
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+/** Result of the `getPullRequestDetail` device RPC. */
+export type DeviceGitPullRequestActivity = Pick<
+  DeviceGitPullRequestDetail,
+  'comments' | 'commits' | 'reviews'
+>;
+
+export interface DeviceGitPullRequestDetailResult {
+  detail: DeviceGitPullRequestDetail | null;
+  status: DeviceGitLinkedPullRequestLookupStatus;
+}
+
+export type DeviceGitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
+
+/** Result of the `getPullRequestMergeContext` device RPC. */
+export interface DeviceGitPullRequestMergeContext {
+  baseBehindBy: number;
+  requiredChecks: string[];
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+/** One `gh pr` mutation dispatched by the `runPullRequestAction` device RPC. */
+export type DeviceGitPullRequestAction =
+  | {
+      admin?: boolean;
+      deleteBranch?: boolean;
+      headRefOid: string;
+      method: DeviceGitPullRequestMergeMethod;
+      type: 'merge';
+    }
+  | { headRefOid: string; method: DeviceGitPullRequestMergeMethod; type: 'autoMerge' }
+  | { type: 'disableAutoMerge' }
+  | { method: 'merge' | 'rebase'; type: 'updateBranch' }
+  | { type: 'ready' }
+  | { body: string; type: 'comment' }
+  | { type: 'close' }
+  | { type: 'reopen' }
+  | { head: string; type: 'deleteBranch' }
+  | { base: string; type: 'changeBase' };
+
+export interface DeviceGitPullRequestActionResult {
+  error?: string;
+  success: boolean;
+}
+
+/**
+ * Working-tree dirty-file counts for a working directory, returned by the
+ * `getGitWorkingTreeStatus` device RPC. Mirrors the desktop shape.
+ */
+export interface DeviceGitWorkingTreeStatus {
+  added: number;
+  clean: boolean;
+  deleted: number;
+  modified: number;
+  total: number;
+}
+
+/**
+ * One git worktree attached to a repository, returned by the `listGitWorktrees`
+ * device RPC. Mirrors the desktop `GitWorktreeListItem`.
+ */
+export interface DeviceGitWorktreeListItem {
+  bare?: boolean;
+  branch?: string;
+  current: boolean;
+  detached?: boolean;
+  head?: string;
+  locked?: boolean;
+  lockReason?: string;
+  path: string;
+  prunable?: boolean;
+  pruneReason?: string;
+  status?: DeviceGitWorkingTreeStatus;
+}
+
+/**
+ * Commit divergence vs the upstream tracking ref, returned by the
+ * `getGitAheadBehind` device RPC. Mirrors the desktop shape.
+ */
+export interface DeviceGitAheadBehind {
+  ahead: number;
+  behind: number;
+  hasUpstream: boolean;
+  pushTarget?: string;
+  pushTargetExists?: boolean;
+  upstream?: string;
+}
+
+/**
+ * One local branch on a device's working directory, returned by the
+ * `listGitBranches` device RPC. Mirrors the desktop `GitBranchListItem` so the
+ * branch switcher consumes the IPC and RPC paths interchangeably.
+ */
+export interface DeviceGitBranchListItem {
+  current: boolean;
+  name: string;
+  upstream?: string;
+}
+
+/** Result of the `checkoutGitBranch` device RPC. Mirrors the desktop shape. */
+export interface DeviceGitCheckoutResult {
+  error?: string;
+  success: boolean;
+}
+
+/**
+ * Result of the `pullGitBranch` / `pushGitBranch` device RPCs. Mirrors the
+ * desktop `GitPullResult` / `GitPushResult` (identical shapes).
+ */
+export interface DeviceGitSyncResult {
+  error?: string;
+  /** True when git reported the branch was already up-to-date. */
+  noop?: boolean;
+  success: boolean;
+}
+
+/**
+ * One per-file diff block in a working-tree / branch diff. Mirrors the desktop
+ * `GitWorkingTreePatch` — shared by both the unstaged and branch-diff RPCs.
+ */
+export interface DeviceGitWorkingTreePatch {
+  /** Number of `+` lines in the patch. */
+  additions: number;
+  /** Number of `-` lines in the patch. */
+  deletions: number;
+  /** Repo-relative path of the file. */
+  filePath: string;
+  /** True when git reported `Binary files … differ` for this entry. */
+  isBinary: boolean;
+  /** Unified diff text. Empty when binary or truncated. */
+  patch: string;
+  /** Diff bucket. */
+  status: 'added' | 'modified' | 'deleted';
+  /** Patch elided because it exceeded the per-file size cap. */
+  truncated: boolean;
+}
+
+/**
+ * Patches collected from a dirty submodule. Mirrors the desktop
+ * `SubmoduleWorkingTreePatches`; composes {@link DeviceGitWorkingTreePatch}.
+ */
+export interface DeviceSubmoduleWorkingTreePatches {
+  /** Absolute path on disk — used as the `cwd` for per-submodule ops. */
+  absolutePath: string;
+  /** Current branch short name inside the submodule, or short SHA when detached. */
+  branch?: string;
+  /** True when the submodule's HEAD is detached. */
+  detached?: boolean;
+  /** Display name — the submodule's directory basename. */
+  name: string;
+  /** Per-file diff blocks inside this submodule. */
+  patches: DeviceGitWorkingTreePatch[];
+  /** Path relative to the parent repo root. */
+  relativePath: string;
+}
+
+/**
+ * Result of the `getGitWorkingTreePatches` device RPC. Mirrors the desktop
+ * `GitWorkingTreePatches`.
+ */
+export interface DeviceGitWorkingTreePatches {
+  /** All dirty file patches in the parent repo. */
+  patches: DeviceGitWorkingTreePatch[];
+  /** One group per dirty submodule. Undefined when none. */
+  submodules?: DeviceSubmoduleWorkingTreePatches[];
+}
+
+/**
+ * Result of the `getGitBranchDiff` device RPC. Mirrors the desktop
+ * `GitBranchDiffPatches`.
+ */
+export interface DeviceGitBranchDiffPatches {
+  /** Resolved base ref the diff was taken against. Undefined when unresolved. */
+  baseRef?: string;
+  /** Current branch short name, or short SHA when detached. */
+  headRef?: string;
+  /** Per-file diff blocks for the parent repo. */
+  patches: DeviceGitWorkingTreePatch[];
+  /** One group per submodule whose pointer differs. Undefined when none. */
+  submodules?: DeviceSubmoduleWorkingTreePatches[];
+}
+
+/**
+ * One remote branch under `refs/remotes/origin/*`, returned by the
+ * `listGitRemoteBranches` device RPC. Mirrors the desktop `GitRemoteBranchListItem`.
+ */
+export interface DeviceGitRemoteBranchListItem {
+  /** Whether this ref is the resolved default branch (origin/HEAD target). */
+  isDefault: boolean;
+  /** Short ref name, e.g. `origin/canary`. */
+  name: string;
+}
+
+/** Result of the `revertGitFile` device RPC. Mirrors the desktop `GitFileRevertResult`. */
+export interface DeviceGitFileRevertResult {
+  error?: string;
+  success: boolean;
+}
+
+/** Result of the `renameGitBranch` device RPC. Mirrors the desktop `GitRenameBranchResult`. */
+export interface DeviceGitRenameBranchResult {
+  error?: string;
+  success: boolean;
+}
+
+/** Result of the `deleteGitBranch` device RPC. Mirrors the desktop `GitDeleteBranchResult`. */
+export interface DeviceGitDeleteBranchResult {
+  error?: string;
+  success: boolean;
+}
+
+/** Result of the `removeGitWorktree` device RPC. Mirrors the desktop shape. */
+export interface DeviceGitRemoveWorktreeResult {
+  error?: string;
+  success: boolean;
+}
+
+/** Result of the `addGitWorktree` device RPC. Mirrors the desktop shape. */
+export interface DeviceGitAddWorktreeResult {
+  error?: string;
+  success: boolean;
+  /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
+  worktreePath?: string;
+}
+
+/**
+ * Repo-relative paths of dirty working-tree files for a directory on a remote
+ * device, returned by the `getGitWorkingTreeFiles` device RPC. Powers the Files
+ * tab's git-status overlay. Mirrors the desktop `GitWorkingTreeFiles`.
+ */
+export interface DeviceGitWorkingTreeFiles {
+  added: string[];
+  deleted: string[];
+  modified: string[];
+}
+
+/** One entry in a device's project file index. Mirrors `ProjectFileIndexEntry`. */
+export interface DeviceProjectFileIndexEntry {
+  /** Directory the index left unexpanded; children come from `listProjectDirectory`. */
+  collapsed?: boolean;
+  /** Whether Git ignore rules match this file or directory. */
+  gitIgnored?: boolean;
+  isDirectory: boolean;
+  name: string;
+  /** Absolute path on the device filesystem. */
+  path: string;
+  /** Path relative to the project root; directories end with `/`. */
+  relativePath: string;
+}
+
+/**
+ * Project file index (tree) for a directory on a remote device, returned by the
+ * `getProjectFileIndex` device RPC. Powers the Files tab's tree. Mirrors the
+ * desktop `ProjectFileIndexResult`.
+ */
+export interface DeviceProjectFileIndexResult {
+  entries: DeviceProjectFileIndexEntry[];
+  indexedAt: string;
+  root: string;
+  source: 'git' | 'glob';
+}
+
+/**
+ * Children of one directory on a remote device, returned by the
+ * `listProjectDirectory` device RPC. Fills in a subtree the index collapsed.
+ */
+export interface DeviceProjectDirectoryListResult {
+  entries: DeviceProjectFileIndexEntry[];
+  truncated: boolean;
+}
+
+export interface DeviceProjectFileSearchResult {
+  entries: DeviceProjectFileIndexEntry[];
+  root: string;
+  searchedAt: string;
+  source: 'git' | 'glob';
+}
+
+export interface DeviceLocalFilePreviewText {
+  content: string;
+  contentType: string;
+  type: 'text';
+}
+
+export interface DeviceLocalFilePreviewImage {
+  base64: string;
+  contentType: string;
+  type: 'image';
+}
+
+/**
+ * Binary document (pdf / office) small enough to preview in-app. Carries the
+ * raw bytes as base64 so they can cross the Gateway/RPC boundary; oversized
+ * documents stay on the `binary` / `pdf` unsupported variants.
+ */
+export interface DeviceLocalFilePreviewDocument {
+  base64: string;
+  contentType: string;
+  type: 'document';
+}
+
+export interface DeviceLocalFilePreviewUnsupported {
+  contentType: string;
+  type: 'binary' | 'pdf' | 'video';
+}
+
+export type DeviceLocalFilePreview =
+  | DeviceLocalFilePreviewDocument
+  | DeviceLocalFilePreviewImage
+  | DeviceLocalFilePreviewText
+  | DeviceLocalFilePreviewUnsupported;
+
+/**
+ * File preview payload for a file on a remote device. Mirrors the desktop local
+ * file preview result but carries binary image content as base64 so it can cross
+ * the Gateway/RPC boundary.
+ */
+export interface DeviceLocalFilePreviewResult extends DeviceLocalFilePreviewFailure {
+  preview?: DeviceLocalFilePreview;
+  success: boolean;
+}
+
+export interface DeviceCopyAssetForPublishResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface DeviceExternalAssetForPublishResult {
+  base64?: string;
+  contentType?: string;
+  error?: string;
+  success: boolean;
+}
+
+/** One file/folder to move within a directory on a remote device. Mirrors `MoveLocalFileParams`. */
+export interface DeviceMoveProjectFileItem {
+  newPath: string;
+  oldPath: string;
+}
+
+/**
+ * Per-item result of the `moveLocalFiles` device RPC. The move is batched and
+ * each item succeeds or fails independently. Mirrors the desktop
+ * `LocalMoveFilesResultItem`.
+ */
+export interface DeviceMoveProjectFileResultItem {
+  error?: string;
+  newPath?: string;
+  sourcePath: string;
+  success: boolean;
+}
+
+/** Result of the `renameLocalFile` device RPC. Mirrors the desktop `RenameLocalFileResult`. */
+export interface DeviceRenameProjectFileResult {
+  error?: string;
+  newPath: string;
+  success: boolean;
+}
+
+/**
+ * Result of the `writeLocalFile` device RPC — saving edited content back to a
+ * file on a remote device. Mirrors the desktop `WriteFileResult`.
+ */
+export interface DeviceWriteProjectFileResult {
+  error?: string;
+  success: boolean;
+}
+
+/**
+ * Result of the `createLocalFile` / `createLocalDirectory` device RPCs. Neither
+ * overwrites: an existing entry fails with `error`. Mirrors the desktop
+ * `CreateLocalEntryResult`.
+ */
+export interface DeviceCreateProjectEntryResult {
+  error?: string;
+  path: string;
+  success: boolean;
+}
+
+/**
+ * One item of a `copyLocalFiles` device RPC. Omitting `targetPath` duplicates
+ * the source next to itself under a Finder-style free name (`name copy.ext`).
+ */
+export interface DeviceCopyProjectFileItem {
+  sourcePath: string;
+  targetPath?: string;
+}
+
+/** Per-item result of the `copyLocalFiles` device RPC. Mirrors `LocalCopyFilesResultItem`. */
+export interface DeviceCopyProjectFileResultItem {
+  error?: string;
+  sourcePath: string;
+  success: boolean;
+  targetPath?: string;
+}
+
+/** Result of the `trashLocalFiles` device RPC. Mirrors the desktop `TrashLocalFilesResult`. */
+export interface DeviceTrashProjectFilesResult {
+  items: { error?: string; path: string; success: boolean }[];
+  success: boolean;
+}
+
+/**
+ * A single project skill (`.agents/skills` / `.claude/skills`) discovered on a
+ * remote device, returned by the `listProjectSkills` device RPC. Mirrors the
+ * desktop `ProjectSkillItem` (`@lobechat/electron-client-ipc`).
+ */
+export interface DeviceProjectSkillItem {
+  description?: string;
+  fileCount: number;
+  files: string[];
+  name: string;
+  /** Absolute path to the SKILL.md file on the device. */
+  path: string;
+  /** Approved root used by the host preview protocol for this skill. */
+  previewRoot: string;
+  scope: ProjectSkillScope;
+  /** Directory containing the SKILL.md. */
+  skillDir: string;
+  source: ProjectSkillSource;
+}
+
+/**
+ * Project/device skills listing returned by the `listProjectSkills` device RPC.
+ * Powers the Resources tab's skills group in device mode. Mirrors the desktop
+ * `ListProjectSkillsResult`.
+ */
+export interface DeviceListProjectSkillsResult {
+  root: string;
+  skills: DeviceProjectSkillItem[];
+  /** Legacy source hint. Per-skill `scope` / `source` fields are authoritative. */
+  source: ProjectSkillSource | null;
+}
+
+/** One Claude Code auto-memory file, from the `listClaudeCodeMemory` device RPC. */
+export interface DeviceClaudeCodeMemoryFile {
+  description?: string;
+  /** The `MEMORY.md` index Claude Code loads into every session. */
+  isIndex: boolean;
+  name: string;
+  /** Absolute path on the device. */
+  path: string;
+  /** Path within the memory directory, `/`-separated. */
+  relativePath: string;
+  size: number;
+  /** Frontmatter memory type: user / feedback / project / reference. */
+  type?: string;
+  updatedAt: number;
+}
+
+/** The agent env keys that move Claude Code's auto memory, sent with `listClaudeCodeMemory`. */
+export interface DeviceClaudeCodeMemoryRunEnv {
+  CLAUDE_CODE_PROJECT_DIR_NAME?: string;
+  CLAUDE_CONFIG_DIR?: string;
+}
+
+/**
+ * Claude Code's auto memory for a project on the device, returned by the
+ * `listClaudeCodeMemory` device RPC. Mirrors device-control's
+ * `ListClaudeCodeMemoryResult`.
+ */
+export interface DeviceListClaudeCodeMemoryResult {
+  files: DeviceClaudeCodeMemoryFile[];
+  /** `~/.claude/projects/<project key>/memory` on the device, present or not. */
+  memoryDir: string;
+}
+
+const gitLinkedPullRequestSchema = z.object({
+  ciStatus: z.enum(['failure', 'pending', 'success', 'unknown']).optional(),
+  isDraft: z.boolean().optional(),
+  mergeable: z.string().optional(),
+  mergeStateStatus: z.string().optional(),
+  mergedAt: z.string().nullable().optional(),
+  number: z.number(),
+  reviewDecision: z.string().optional(),
+  state: z.string(),
+  title: z.string(),
+  url: z.string(),
+});
+
+export const workingDirConfigSchema = z.object({
+  environmentId: z.string().max(255).optional(),
+  git: z
+    .object({
+      activeWorktree: z.string().optional(),
+      branch: z.string().optional(),
+      detached: z.boolean().optional(),
+      github: z
+        .object({
+          extraPullRequestCount: z.number().optional(),
+          pullRequest: gitLinkedPullRequestSchema.nullable().optional(),
+          pullRequestStatus: z.enum(['error', 'gh-missing', 'ok']).optional(),
+        })
+        .optional(),
+      isWorktree: z.boolean().optional(),
+      // Mirrors `WorkingDirGitState.upstream`. A field missing here is not merely
+      // unvalidated — zod strips it, so it would never survive a write.
+      upstream: z
+        .object({
+          branch: z.string(),
+          remote: z.string(),
+        })
+        .optional(),
+    })
+    .optional(),
+  path: z.string(),
+  repoType: z.enum(['git', 'github']).optional(),
+});
+
+/** One TCP port a device is listening on that a tunnel can reach. */
+export interface DeviceListeningPort {
+  command?: string;
+  cwd?: string;
+  /** The listening process runs inside the requested project directory. */
+  inProject: boolean;
+  /** Which loopback address reaches it — `ipv6` means `::1` only. */
+  loopback: 'both' | 'ipv4' | 'ipv6';
+  pid?: number;
+  port: number;
+}
+
+/** Result of the `listListeningPorts` device RPC. */
+export interface DeviceListeningPortsResult {
+  ports: DeviceListeningPort[];
+  /** False when the device has no detector for its platform. */
+  supported: boolean;
+}
+
+// ─── Remote app update ───
+
+/** Mirrors `@lobechat/device-control`'s `AppUpdateStage`. */
+export type DeviceAppUpdateStage =
+  'checking' | 'downloaded' | 'downloading' | 'error' | 'idle' | 'latest' | 'unsupported';
+
+/** Where a device's desktop app update stands, as the device reports it. */
+export interface DeviceAppUpdateState {
+  currentVersion: string;
+  errorMessage?: string;
+  /** Download progress, 0–100, while `stage` is `downloading`. */
+  progress?: number;
+  stage: DeviceAppUpdateStage;
+  /** Version being downloaded or ready to install. */
+  targetVersion?: string;
+}
+
+/**
+ * Why a device couldn't take part in a remote update:
+ * - `unsupported` — the connected client can't update itself remotely (an
+ *   older desktop build, or the CLI answered in the desktop app's place).
+ * - `unavailable` — the device didn't answer (offline, restarting, timeout).
+ */
+export type DeviceAppUpdateFailure = 'unavailable' | 'unsupported';
+
+export type DeviceAppUpdateStateResult =
+  | { state: DeviceAppUpdateState; status: 'ok' }
+  | { message: string; status: DeviceAppUpdateFailure };
+
+export type DeviceAppUpdateInstallResult =
+  { status: 'ok'; targetVersion: string } | { message: string; status: DeviceAppUpdateFailure };
+
+// ─── Interactive terminal (PTY) ───
+//
+// Server-side mirror of `@lobechat/device-control`'s terminal types. An
+// interactive shell over a request/response RPC is a session plus a cursor:
+// the device holds the PTY's output, the caller drains it. Runnable bytes are
+// base64 in both directions — PTY output is not valid UTF-8 at every chunk
+// boundary, and JSON strings cannot carry arbitrary bytes.
+
+/** Result of the `createTerminalSession` device RPC. */
+export interface DeviceCreateTerminalSessionResult {
+  /** Directory the shell actually started in (a missing `cwd` falls back home). */
+  cwd: string;
+  id: string;
+  pid: number;
+  /** Absolute path of the shell binary the device spawned. */
+  shell: string;
+}
+
+/** Result of the `readTerminal` device RPC. */
+export interface DeviceReadTerminalResult {
+  /** Base64 output produced since the caller's cursor; empty when nothing new. */
+  chunk: string;
+  /** Present once the shell has exited. */
+  exitCode?: number;
+  exited: boolean;
+  /** Cursor to pass to the next read. */
+  nextCursor: number;
+}
+
+/** Result of the `closeTerminal` device RPC. */
+export interface DeviceCloseTerminalResult {
+  /** False when the session was already gone (exited, reaped, or never existed). */
+  closed: boolean;
+}
+
+/** A CLI maintenance request is acknowledged before the connection goes away. */
+export interface DeviceCliUpdateOperation {
+  error?: string;
+  fromInstanceId: string;
+  id: string;
+  kind: 'restart' | 'update';
+  stage: 'updating' | 'restarting' | 'failed';
+  targetVersion: string;
+}
+
+export interface DeviceCliUpdateState {
+  activeTasks: number;
+  currentVersion: string;
+  /** Changes on every process start; reconnecting a socket alone is not a restart. */
+  instanceId: string;
+  latestVersion?: string;
+  operation?: DeviceCliUpdateOperation;
+  /** Remote maintenance requires a standalone daemon and a stable installed CLI entry. */
+  supported: boolean;
+  unsupportedReason?: string;
+}
+
+export interface DeviceCliRestartParams {
+  /** Idempotency key, retained when retrying an ambiguous request. */
+  requestId: string;
+  update: boolean;
+}
+
+export type DeviceCliUpdateStateResult =
+  | { state: DeviceCliUpdateState; status: 'ok' }
+  | { message: string; status: 'rejected' | 'unavailable' | 'unsupported' };

@@ -1,7 +1,6 @@
 import { Plans } from '@lobechat/types';
-import { Center, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Atom, Box, CircleSlash, Sparkle, Zap } from 'lucide-react';
+import { Center, createStaticStyles, cssVar, Flexbox, Tag } from '@lobehub/ui';
+import { Atom, Box, CircleSlash, Crown, Gem, Rocket, Sparkle, Zap } from 'lucide-react';
 import { type CSSProperties, type MouseEvent } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -42,15 +41,40 @@ export const themes = {
       color: '#FCFA6E',
     },
   },
-};
+  [Plans.Plus]: {
+    icon: Rocket,
+    theme: {
+      background: 'linear-gradient(45deg, #8B5CF6, #5B21B6)',
+      color: '#EDE9FE',
+    },
+  },
+  [Plans.Pro]: {
+    icon: Crown,
+    theme: {
+      background: 'linear-gradient(45deg, #10B981, #047857)',
+      color: '#D1FAE5',
+    },
+  },
+  [Plans.Max]: {
+    icon: Gem,
+    theme: {
+      background: 'linear-gradient(45deg, #374151, #111827)',
+      color: '#FDE68A',
+    },
+  },
+} satisfies Record<Plans, unknown>;
 
 const styles = createStaticStyles(({ css }) => ({
   icon: css`
     flex: none;
-    border-radius: ${cssVar.borderRadiusLG};
     box-shadow: 0 0 0 1px ${cssVar.colorFillSecondary};
   `,
 }));
+
+const getPlanIconMetrics = (size: number) => ({
+  glyphSize: Math.max(12, Math.round(size / 2)),
+  radius: Math.max(8, Math.round(size / 3)),
+});
 
 interface PlanIconProps {
   className?: string;
@@ -64,11 +88,12 @@ interface PlanIconProps {
 
 const PlanIcon = memo<PlanIconProps>(
   ({ type = 'icon', plan, size = 36, mono, style, className, onClick }) => {
-    const { icon, theme } = themes[plan];
+    const { icon: IconComponent, theme } = themes[plan];
     const { t } = useTranslation('subscription');
     const isTag = type === 'tag';
     const isCombine = type === 'combine';
     const isFree = plan === Plans.Free;
+    const { glyphSize, radius } = getPlanIconMetrics(size);
 
     if (isTag) {
       return (
@@ -91,19 +116,30 @@ const PlanIcon = memo<PlanIconProps>(
       );
     }
 
+    const iconStyle = {
+      ...(mono
+        ? null
+        : {
+            ...theme,
+            border: isFree ? undefined : `2px solid ${theme.color}`,
+          }),
+      alignItems: 'center',
+      borderRadius: radius,
+      display: 'flex',
+      justifyContent: 'center',
+      lineHeight: 0,
+      ...style,
+    } satisfies CSSProperties;
+
     const iconContent = (
       <Center
         className={styles.icon}
         height={size}
+        style={iconStyle}
         width={size}
-        style={
-          mono
-            ? style
-            : { ...theme, border: isFree ? undefined : `2px solid ${theme.color}`, ...style }
-        }
         onClick={onClick}
       >
-        <Icon color={mono ? undefined : theme.color} icon={icon} size={size / 2} />
+        <IconComponent color={mono ? undefined : theme.color} size={glyphSize} />
       </Center>
     );
 

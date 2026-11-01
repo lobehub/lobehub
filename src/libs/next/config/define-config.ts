@@ -2,6 +2,8 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 
+const LANDING_SITEMAP_URL = 'https://lobehub.com/sitemap.xml';
+
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
@@ -41,26 +43,25 @@ export function defineConfig(config: CustomNextConfig) {
               'dist/mobile/**',
 
               'packages/database/migrations/**',
-
-              // Ensure native bindings are included in standalone output.
-              // `@napi-rs/canvas` is loaded via dynamic `require()` (see packages/file-loaders),
-              // which may not be picked up by Next.js output tracing.
-              'node_modules/@napi-rs/canvas/**/*',
-              'node_modules/@napi-rs/canvas-*/**/*',
-              // pnpm real package locations (including platform-specific bindings with `.node`)
-              'node_modules/.pnpm/@napi-rs+canvas*/**/*',
-              'node_modules/.pnpm/@napi-rs+canvas-*/**/*',
             ]
           : []),
       ],
     },
   };
 
-  const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
+  const assetPrefix = (process.env.ASSET_BASE_URL || process.env.NEXT_PUBLIC_ASSET_PREFIX)?.replace(
+    /\/+$/,
+    '',
+  );
 
   const nextConfig: NextConfig = {
     ...(isStandaloneMode ? standaloneConfig : {}),
+    // Stop `next dev` from auto-injecting the nextjs-agent-rules block into AGENTS.md.
+    agentRules: false,
     assetPrefix,
+    // Gated, not unconditional: an asset host that omits Access-Control-Allow-Origin
+    // turns every tag into one the browser refuses to execute. Same-origin needs no opt-in.
+    crossOrigin: assetPrefix ? 'anonymous' : undefined,
 
     compiler: {
       emotion: true,
@@ -109,6 +110,15 @@ export function defineConfig(config: CustomNextConfig) {
           headers: securityHeaders,
           source: '/:path*',
         },
+        // Agent Share visitor pages live under `/agent/:slugOrId` and are
+        // reachable by anyone holding the link. Keep them out of search
+        // indexes (privacy) — the SPA shell is static per variant, so a
+        // per-route `<meta name="robots">` is not an option; the header is.
+        // Listed after the global rule so it overrides `x-robots-tag: all`.
+        {
+          headers: [{ key: 'x-robots-tag', value: 'noindex, nofollow' }],
+          source: '/agent/:path*',
+        },
         {
           headers: [
             {
@@ -116,7 +126,7 @@ export function defineConfig(config: CustomNextConfig) {
               value: 'public, max-age=31536000, immutable',
             },
           ],
-          source: '/icons/(.*).(png|jpe?g|gif|svg|ico|webp)',
+          source: '/app-icons/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
         {
           headers: [
@@ -133,7 +143,7 @@ export function defineConfig(config: CustomNextConfig) {
               value: 'public, max-age=31536000, immutable',
             },
           ],
-          source: '/images/(.*).(png|jpe?g|gif|svg|ico|webp)',
+          source: '/static/app-images/(.*).(png|jpe?g|gif|svg|ico|webp)',
         },
         {
           headers: [
@@ -268,26 +278,31 @@ export function defineConfig(config: CustomNextConfig) {
       outputFileTracingIncludes: config.outputFileTracingIncludes,
     }),
     reactStrictMode: true,
+    // Old clients keep their image URLs; App routes take precedence over this fallback.
+    rewrites: async () => ({
+      fallback: [{ destination: '/static/app-images/:path*', source: '/app-images/:path*' }],
+    }),
     redirects: async () => [
+      // Sitemap generation lives on the landing site; keep legacy app sitemap URLs crawlable.
       {
-        destination: '/sitemap-index.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
         source: '/sitemap.xml',
       },
       {
-        destination: '/sitemap-index.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
         source: '/sitemap-0.xml',
       },
       {
-        destination: '/sitemap/plugins-1.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
-        source: '/sitemap/plugins.xml',
+        source: '/sitemap-index.xml',
       },
       {
-        destination: '/sitemap/assistants-1.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
-        source: '/sitemap/assistants.xml',
+        source: '/sitemap/:path*',
       },
       {
         destination: '/manifest.webmanifest',
@@ -350,12 +365,11 @@ export function defineConfig(config: CustomNextConfig) {
       ...(config.redirects ?? []),
     ],
     // when external packages in dev mode with turbopack, this config will lead to bundle error
-    // @napi-rs/canvas is a native module that can't be bundled by Turbopack
-    // pdfjs-dist uses @napi-rs/canvas for DOMMatrix polyfill in Node.js environment
     serverExternalPackages: config.serverExternalPackages ?? [
       'pdfkit',
-      '@napi-rs/canvas',
       '@lobehub/editor',
+      // Must share one instance with @lobehub/editor's own Yjs binding.
+      'yjs',
       'discord.js',
       'ffmpeg-static',
       'pdfjs-dist',
@@ -363,15 +377,27 @@ export function defineConfig(config: CustomNextConfig) {
       'oidc-provider',
     ],
 
-    transpilePackages: ['mermaid', 'better-auth-harmony'],
+    transpilePackages: ['mermaid'],
     turbopack: {
       rules: {
         ...(isTest
           ? void 0
-          : codeInspectorPlugin({
-              bundler: 'turbopack',
-              hotKeys: ['altKey', 'ctrlKey'],
-            })),
+          : // Narrow the plugin's `**/*.{jsx,tsx,js,ts,mjs,mts}` rule to JSX
+            // files only. The broad glob also matches Turbopack-internal
+            // virtual assets like `[turbopack-ecmascript]/worker/browser/createWorker.ts`
+            // (injected for `new Worker(new URL(...))`), which the webpack
+            // loader shim then tries to read from disk — any page whose module
+            // graph pulls in a web worker dies with "Reading source code for
+            // parsing failed". The inspector only instruments JSX elements, so
+            // jsx/tsx keeps click-to-source fully functional.
+            Object.fromEntries(
+              Object.entries(
+                codeInspectorPlugin({
+                  bundler: 'turbopack',
+                  hotKeys: ['altKey', 'ctrlKey'],
+                }) as Record<string, unknown>,
+              ).map(([glob, rule]) => [glob.replace('{jsx,tsx,js,ts,mjs,mts}', '{jsx,tsx}'), rule]),
+            )),
         '*.md': {
           as: '*.js',
           loaders: ['raw-loader'],

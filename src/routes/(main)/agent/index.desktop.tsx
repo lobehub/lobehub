@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import TopicInPopupGuard from '@/features/TopicPopupGuard';
 import { useTopicInPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';

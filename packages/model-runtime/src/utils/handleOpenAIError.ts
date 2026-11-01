@@ -1,10 +1,12 @@
 import OpenAI from 'openai';
 
+import type { ILobeAgentRuntimeErrorType } from '../types/error';
 import { AgentRuntimeErrorType } from '../types/error';
+import { isErrorCausedByContentFilter } from './isErrorCausedByContentFilter';
 
 export const handleOpenAIError = (
   error: any,
-): { RuntimeError?: 'AgentRuntimeError'; errorResult: any; message?: string } => {
+): { RuntimeError?: ILobeAgentRuntimeErrorType; errorResult: any; message?: string } => {
   let errorResult: any;
 
   // Check if the error is an OpenAI APIError
@@ -26,6 +28,9 @@ export const handleOpenAIError = (
     return {
       errorResult,
       message: error.message,
+      RuntimeError: isErrorCausedByContentFilter(errorResult)
+        ? AgentRuntimeErrorType.ProviderContentPolicyViolation
+        : undefined,
     };
   } else {
     const err = error as Error;

@@ -6,9 +6,16 @@ import createClient from '@azure-rest/ai-inference';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
-import { systemToUserModels } from '../../const/models';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { transformResponseToStream } from '../../core/openaiCompatibleFactory';
+import {
+  appendProviderResponseEvent,
+  appendRawProviderEvent,
+  finalizeProviderResponse,
+  initializeProviderDiagnostics,
+  observeProviderReadableStream,
+  recordProviderError,
+} from '../../core/providerDiagnostics';
 import { createSSEDataExtractor, OpenAIStream } from '../../core/streams';
 import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
@@ -16,6 +23,8 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { StreamingResponse } from '../../utils/response';
 import { sanitizeError } from '../../utils/sanitizeError';
+import { systemToUserModels } from '../openai/modelId';
+import { createAzureAIStreamChunkRecorder } from './providerDiagnostics';
 
 interface AzureAIParams {
   apiKey?: string;
@@ -40,7 +49,15 @@ export class LobeAzureAI implements LobeRuntimeAI {
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
     // Remove internal apiMode parameter to prevent sending to Azure AI API
 
-    const { messages, model, temperature, top_p, apiMode: _, ...params } = payload;
+    const {
+      messages,
+      model,
+      temperature,
+      top_p,
+      apiMode: _,
+      preserveThinking: _pt,
+      ...params
+    } = payload;
     // o1 series models on Azure OpenAI does not support streaming currently
     const enableStreaming = model.includes('o1') ? false : (params.stream ?? true);
 
@@ -54,18 +71,26 @@ export class LobeAzureAI implements LobeRuntimeAI {
             : 'developer'
           : message.role,
     }));
+    const requestBody = {
+      messages: updatedMessages as OpenAI.ChatCompletionMessageParam[],
+      model,
+      ...params,
+      stream: enableStreaming,
+      temperature: model.includes('o3') || model.includes('o4') ? undefined : temperature,
+      tool_choice: params.tools ? 'auto' : undefined,
+      top_p: model.includes('o3') || model.includes('o4') ? undefined : top_p,
+    };
+    const providerResponseDiagnostics = initializeProviderDiagnostics({
+      apiMode: 'azure_ai_chat_completions',
+      diagnostics: options?.diagnostics,
+      endpoint: this.maskSensitiveUrl(this.baseURL),
+      payload: requestBody,
+      sentAt: Date.now(),
+    });
 
     try {
       const response = this.client.path('/chat/completions').post({
-        body: {
-          messages: updatedMessages as OpenAI.ChatCompletionMessageParam[],
-          model,
-          ...params,
-          stream: enableStreaming,
-          temperature: model.includes('o3') || model.includes('o4') ? undefined : temperature,
-          tool_choice: params.tools ? 'auto' : undefined,
-          top_p: model.includes('o3') || model.includes('o4') ? undefined : top_p,
-        },
+        body: requestBody,
       });
 
       if (enableStreaming) {
@@ -102,9 +127,17 @@ export class LobeAzureAI implements LobeRuntimeAI {
           return browserStream;
         })();
 
-        const [prod, debug] = unifiedStream.tee();
+        const observedStream = observeProviderReadableStream(
+          unifiedStream,
+          providerResponseDiagnostics,
+          createAzureAIStreamChunkRecorder(),
+          options?.signal,
+        );
+        let prod = observedStream;
 
         if (process.env.DEBUG_AZURE_AI_CHAT_COMPLETION === '1') {
+          const [productionStream, debug] = observedStream.tee();
+          prod = productionStream;
           debugStream(debug).catch(console.error);
         }
 
@@ -118,6 +151,16 @@ export class LobeAzureAI implements LobeRuntimeAI {
         );
       } else {
         const res = await response;
+        if (providerResponseDiagnostics) {
+          appendRawProviderEvent(providerResponseDiagnostics, res.body);
+          providerResponseDiagnostics.firstEventAt ??= Date.now();
+          providerResponseDiagnostics.responseReceivedAt ??= Date.now();
+          providerResponseDiagnostics.terminalEventReceived = true;
+          appendProviderResponseEvent(providerResponseDiagnostics, {
+            type: 'azure_ai_chat_completion',
+          });
+          await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
+        }
 
         // the azure AI inference response is openai compatible
         const stream = transformResponseToStream(res.body as OpenAI.ChatCompletion);
@@ -129,6 +172,8 @@ export class LobeAzureAI implements LobeRuntimeAI {
         );
       }
     } catch (e) {
+      recordProviderError(providerResponseDiagnostics, e);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
       let error = e as { [key: string]: any; code: string; message: string };
 
       if (error.code) {

@@ -1,8 +1,14 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import {
+  getWorkspaceRolePermissionCodes,
+  PERSONAL_DEFAULT_PERMISSIONS,
+} from '@lobechat/const/rbac';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
-import { LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase } from '@/database/type';
 
-import { RoleItem, permissions, rolePermissions, roles, userRoles } from '../schemas/rbac';
+import type { RoleItem } from '../schemas/rbac';
+import { permissions, rolePermissions, roles, userRoles } from '../schemas/rbac';
+import { workspaceMembers, workspaces } from '../schemas/workspace';
 
 export interface UserPermissionInfo {
   category: string;
@@ -10,6 +16,35 @@ export interface UserPermissionInfo {
   permissionName: string;
   roleName: string;
 }
+
+/**
+ * Optional scope for a permission/role query.
+ *
+ * - `workspaceId: 'xxx'` — workspace mode: built-in permissions come from the
+ *   member's `workspace_members.role` expanded through the in-code
+ *   `WORKSPACE_ROLE_PERMISSIONS` matrix, plus globally-granted DB roles
+ *   (`rbac_user_roles.workspace_id IS NULL`, e.g. `super_admin`). No
+ * per-workspace authorization rows are read.
+ * - `workspaceId` omitted — match **any** DB grant, regardless of workspace.
+ *   This preserves backward-compat with pre-workspace-scope callers (Hono
+ *   routes that just check `agent:read:all` against the whole user, with
+ *   workspace isolation enforced by the resource-level query elsewhere).
+ */
+export interface RbacScopeOptions {
+  userId?: string;
+  workspaceId?: string;
+}
+
+/**
+ * Back-compat shim: existing call sites pass a bare `userId` string as the
+ * second arg. New call sites pass `{ userId?, workspaceId? }`. Normalise both
+ * forms into the option object.
+ */
+const normalizeScope = (arg: string | RbacScopeOptions | undefined): RbacScopeOptions => {
+  if (!arg) return {};
+  if (typeof arg === 'string') return { userId: arg };
+  return arg;
+};
 
 export class RbacModel {
   private userId: string;
@@ -20,13 +55,167 @@ export class RbacModel {
     this.db = db;
   }
 
+  /** Resolve several users' effective workspace grants in two batched queries. */
+  static getWorkspaceUsersPermissions = async ({
+    db,
+    requireMembership = false,
+    userIds,
+    workspaceId,
+  }: {
+    db: LobeChatDatabase;
+    requireMembership?: boolean;
+    userIds: string[];
+    workspaceId: string;
+  }): Promise<Map<string, string[]>> => {
+    const uniqueUserIds = [...new Set(userIds)];
+    if (uniqueUserIds.length === 0) return new Map();
+
+    const [memberships, globalPermissions] = await Promise.all([
+      db
+        .select({
+          primaryOwnerId: workspaces.primaryOwnerId,
+          role: workspaceMembers.role,
+          userId: workspaceMembers.userId,
+        })
+        .from(workspaceMembers)
+        .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            inArray(workspaceMembers.userId, uniqueUserIds),
+            isNull(workspaceMembers.deletedAt),
+          ),
+        ),
+      db
+        .select({ permissionCode: permissions.code, userId: userRoles.userId })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .innerJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+        .where(
+          and(
+            inArray(userRoles.userId, uniqueUserIds),
+            isNull(userRoles.workspaceId),
+            eq(roles.isActive, true),
+            eq(permissions.isActive, true),
+            sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
+          ),
+        ),
+    ]);
+
+    const membershipByUserId = new Map(
+      memberships.map((membership) => [membership.userId, membership]),
+    );
+    const globalPermissionsByUserId = new Map<string, string[]>();
+    for (const { permissionCode, userId } of globalPermissions) {
+      const codes = globalPermissionsByUserId.get(userId) ?? [];
+      codes.push(permissionCode);
+      globalPermissionsByUserId.set(userId, codes);
+    }
+
+    const permissionsByUserId = new Map<string, string[]>();
+    for (const userId of uniqueUserIds) {
+      const membership = membershipByUserId.get(userId);
+      if (requireMembership && !membership) continue;
+
+      const role =
+        membership?.role === 'owner' && membership.primaryOwnerId !== userId
+          ? 'admin'
+          : membership?.role;
+      permissionsByUserId.set(userId, [
+        ...new Set([
+          ...(role ? getWorkspaceRolePermissionCodes(role) : []),
+          ...(globalPermissionsByUserId.get(userId) ?? []),
+        ]),
+      ]);
+    }
+
+    return permissionsByUserId;
+  };
+
   /**
-   * Get all permissions for a specific user
-   * @param userId - User ID to query permissions for
-   * @returns Array of permission codes that the user has
+   * Active membership role of a user in a workspace, or null for non-members.
+   * `workspace_members.role` is the single source of truth for built-in
+   * workspace roles. Owner is bound to `workspaces.primaryOwnerId`: a legacy
+   * non-primary `owner` label (data not yet converged) expands as Admin so it
+   * can never pass Owner-only gates.
    */
-  getUserPermissions = async (userId?: string): Promise<string[]> => {
-    const targetUserId = userId || this.userId;
+  private getWorkspaceMembershipRole = async (
+    userId: string,
+    workspaceId: string,
+  ): Promise<string | null> => {
+    const [row] = await this.db
+      .select({ primaryOwnerId: workspaces.primaryOwnerId, role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    if (row.role === 'owner' && row.primaryOwnerId !== userId) return 'admin';
+    return row.role;
+  };
+
+  /**
+   * Permission codes granted by globally-scoped DB roles only
+   * (`rbac_user_roles.workspace_id IS NULL`, e.g. `super_admin`). Workspace
+   * requests fall back to this after the in-code matrix misses so global
+   * admins keep cross-workspace access.
+   */
+  private getGlobalPermissionCodes = async (
+    userId: string,
+    permissionCodes?: string[],
+  ): Promise<string[]> => {
+    const result = await this.db
+      .select({ permissionCode: permissions.code })
+      .from(userRoles)
+      .innerJoin(roles, eq(userRoles.roleId, roles.id))
+      .innerJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(
+        and(
+          eq(userRoles.userId, userId),
+          isNull(userRoles.workspaceId),
+          permissionCodes
+            ? inArray(permissions.code, permissionCodes)
+            : /* v8 ignore next -- unreachable: the only caller (`hasAnyPermission`) always passes a code array */ undefined,
+          eq(roles.isActive, true),
+          eq(permissions.isActive, true),
+          // Check if role assignment is not expired
+          sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
+        ),
+      );
+    return [...new Set(result.map((row) => row.permissionCode))];
+  };
+
+  /**
+   * Get all permissions for a specific user. Accepts either a plain `userId`
+   * string (legacy global-scope check) or `{ userId?, workspaceId? }`
+   * (workspace-aware). Permission codes returned include the `:all`/`:owner`
+   * scope suffix.
+   *
+   * Workspace mode = in-code matrix expansion of the membership role, unioned
+   * with globally-granted DB roles (super_admin). Per-workspace authorization
+   * rows are not read.
+   */
+  getUserPermissions = async (arg?: string | RbacScopeOptions): Promise<string[]> => {
+    const opts = normalizeScope(arg);
+    const targetUserId = opts.userId || this.userId;
+
+    if (opts.workspaceId) {
+      const permissionsByUserId = await RbacModel.getWorkspaceUsersPermissions({
+        db: this.db,
+        userIds: [targetUserId],
+        workspaceId: opts.workspaceId,
+      });
+      /* v8 ignore next -- unreachable: without `requireMembership` every requested user id gets an entry, so `?? []` never runs */
+      return permissionsByUserId.get(targetUserId) ?? [];
+    }
 
     const result = await this.db
       .select({
@@ -46,16 +235,26 @@ export class RbacModel {
         ),
       );
 
-    return result.map((row) => row.permissionCode);
+    // Personal mode: every authenticated user implicitly holds the `:owner`
+    // baseline over their own data — ordinary accounts have no
+    // `rbac_user_roles` rows, and resource queries are `user_id`-isolated
+    // anyway. DB grants (super_admin etc.) union on top.
+    // De-dupe — the same code can come from multiple roles (e.g. owner +
+    // member if a user somehow ends up with both).
+    return [
+      ...new Set([...PERSONAL_DEFAULT_PERMISSIONS, ...result.map((row) => row.permissionCode)]),
+    ];
   };
 
   /**
-   * Get detailed permission information for a user
-   * @param userId - User ID to query permissions for
-   * @returns Array of detailed permission information
+   * Get detailed permission information for a user. Same scope rules as
+   * `getUserPermissions`.
    */
-  getUserPermissionDetails = async (userId?: string): Promise<UserPermissionInfo[]> => {
-    const targetUserId = userId || this.userId;
+  getUserPermissionDetails = async (
+    arg?: string | RbacScopeOptions,
+  ): Promise<UserPermissionInfo[]> => {
+    const opts = normalizeScope(arg);
+    const targetUserId = opts.userId || this.userId;
 
     return await this.db
       .select({
@@ -73,6 +272,9 @@ export class RbacModel {
           eq(userRoles.userId, targetUserId),
           eq(roles.isActive, true),
           eq(permissions.isActive, true),
+          // Workspace mode restricts to globally-granted roles: built-in
+          // workspace permissions live in the in-code matrix, not the DB.
+          opts.workspaceId ? isNull(userRoles.workspaceId) : undefined,
           // Check if role assignment is not expired
           sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
         ),
@@ -81,44 +283,46 @@ export class RbacModel {
   };
 
   /**
-   * Check if user has a specific permission
-   * @param permissionCode - Permission code to check
-   * @param userId - User ID to check (optional, defaults to instance userId)
-   * @returns Boolean indicating if user has the permission
+   * Check if user has a specific permission. Pass `{ workspaceId }` to scope
+   * the check to a workspace (global grants still apply).
    */
-  hasPermission = async (permissionCode: string, userId?: string): Promise<boolean> => {
-    const targetUserId = userId || this.userId;
-
-    const result = await this.db
-      .select({ count: sql<number>`count(*)` })
-      .from(userRoles)
-      .innerJoin(roles, eq(userRoles.roleId, roles.id))
-      .innerJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(
-        and(
-          eq(userRoles.userId, targetUserId),
-          inArray(permissions.code, [permissionCode]),
-          eq(roles.isActive, true),
-          eq(permissions.isActive, true),
-          // Check if role assignment is not expired
-          sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
-        ),
-      );
-
-    return (result[0]?.count || 0) > 0;
+  hasPermission = async (
+    permissionCode: string,
+    arg?: string | RbacScopeOptions,
+  ): Promise<boolean> => {
+    return this.hasAnyPermission([permissionCode], arg);
   };
 
   /**
-   * Check if user has any of the specified permissions (OR logic)
-   * @param permissionCodes - Array of permission codes to check
-   * @param userId - User ID to check (optional, defaults to instance userId)
-   * @returns Boolean indicating if user has at least one of the permissions
+   * Check if user has any of the specified permissions (OR logic).
    */
-  hasAnyPermission = async (permissionCodes: string[], userId?: string): Promise<boolean> => {
+  hasAnyPermission = async (
+    permissionCodes: string[],
+    arg?: string | RbacScopeOptions,
+  ): Promise<boolean> => {
     if (permissionCodes.length === 0) return false;
 
-    const targetUserId = userId || this.userId;
+    const opts = normalizeScope(arg);
+    const targetUserId = opts.userId || this.userId;
+
+    if (opts.workspaceId) {
+      const membershipRole = await this.getWorkspaceMembershipRole(targetUserId, opts.workspaceId);
+      const matrixCodes = membershipRole
+        ? new Set(getWorkspaceRolePermissionCodes(membershipRole))
+        : null;
+      if (matrixCodes && permissionCodes.some((code) => matrixCodes.has(code))) return true;
+
+      // Matrix miss — a globally-granted role (super_admin) may still allow it.
+      const globalMatches = await this.getGlobalPermissionCodes(targetUserId, permissionCodes);
+      return globalMatches.length > 0;
+    }
+
+    // Personal mode: the implicit `:owner` baseline settles most checks with
+    // zero DB queries. Workspace mode above is untouched — the
+    // membership-role matrix stays the single source of truth there.
+    if (permissionCodes.some((code) => PERSONAL_DEFAULT_PERMISSIONS.includes(code))) {
+      return true;
+    }
 
     const result = await this.db
       .select({ count: sql<number>`count(*)` })
@@ -141,27 +345,26 @@ export class RbacModel {
   };
 
   /**
-   * Check if user has all of the specified permissions (AND logic)
-   * @param permissionCodes - Array of permission codes to check
-   * @param userId - User ID to check (optional, defaults to instance userId)
-   * @returns Boolean indicating if user has all of the permissions
+   * Check if user has all of the specified permissions (AND logic).
    */
-  hasAllPermissions = async (permissionCodes: string[], userId?: string): Promise<boolean> => {
+  hasAllPermissions = async (
+    permissionCodes: string[],
+    arg?: string | RbacScopeOptions,
+  ): Promise<boolean> => {
     if (permissionCodes.length === 0) return true;
 
-    const checks = await Promise.all(
-      permissionCodes.map((code) => this.hasPermission(code, userId)),
-    );
+    const checks = await Promise.all(permissionCodes.map((code) => this.hasPermission(code, arg)));
     return checks.every(Boolean);
   };
 
   /**
-   * Get user's active roles
-   * @param userId - User ID to query roles for
-   * @returns Array of role information
+   * Get user's active DB roles. In workspace mode only globally-granted roles
+   * are returned — built-in workspace roles live on `workspace_members.role`,
+   * not in the RBAC tables.
    */
-  getUserRoles = async (userId?: string): Promise<RoleItem[]> => {
-    const targetUserId = userId || this.userId;
+  getUserRoles = async (arg?: string | RbacScopeOptions): Promise<RoleItem[]> => {
+    const opts = normalizeScope(arg);
+    const targetUserId = opts.userId || this.userId;
 
     return await this.db
       .select({
@@ -183,6 +386,7 @@ export class RbacModel {
         and(
           eq(userRoles.userId, targetUserId),
           eq(roles.isActive, true),
+          opts.workspaceId ? isNull(userRoles.workspaceId) : undefined,
           // Check if role assignment is not expired
           sql`(${userRoles.expiresAt} IS NULL OR ${userRoles.expiresAt} > NOW())`,
         ),

@@ -1,0 +1,22 @@
+{
+  "error.invalidFormat.desc": "Вы все еще можете это прочитать. Макет может отличаться от оригинала.",
+  "error.invalidFormat.ownerHint": "Сохраните его заново в редакторе, чтобы восстановить оригинальный макет.",
+  "error.invalidFormat.title": "Эта страница не может быть показана в ее оригинальном формате",
+  "popover.copyLink": "Скопировать ссылку",
+  "popover.copyLinkSuccess": "Ссылка скопирована",
+  "popover.linkHint": "Любой, у кого есть ссылка, может просмотреть эту страницу",
+  "popover.permissionLink": "Любой, у кого есть ссылка",
+  "popover.permissionPrivate": "Приватная",
+  "popover.permissionWorkspace": "Любой в рабочем пространстве",
+  "popover.privateHint": "Только вы можете получить доступ к этой странице",
+  "popover.sectionViews_one": "{{count}} просмотр",
+  "popover.sectionViews_other": "{{count}} просмотров",
+  "popover.title": "Поделиться страницей",
+  "popover.updateError": "Не удалось обновить настройки общего доступа",
+  "popover.visibility": "Видимость",
+  "popover.visibilityUpdated": "Видимость обновлена",
+  "popover.workspaceHint": "Любой в этом рабочем пространстве может просматривать эту страницу",
+  "shareButton.label": "Поделиться",
+  "shell.sharedBy": "Поделился {{name}}",
+  "shell.updatedAt": "Обновлено {{relative}}"
+}

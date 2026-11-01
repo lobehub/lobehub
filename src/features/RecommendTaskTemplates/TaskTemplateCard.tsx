@@ -1,37 +1,49 @@
 import type { TaskTemplate } from '@lobechat/const';
-import { ActionIcon, Block, Button, Center, Flexbox, Tag, Text } from '@lobehub/ui';
-import { Divider } from 'antd';
-import { cssVar, cx } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  Center,
+  cssVar,
+  cx,
+  Divider,
+  Flexbox,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { Clock, X } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
+import { homeType } from '@/features/Home/components/homeType';
+import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 
+import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
-import { SkillAuthRow } from './SkillAuthRow';
 import { styles } from './style';
-import { createTaskTemplateDetailModal } from './TaskTemplateDetailModal';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
 import { useScheduleText } from './useScheduleText';
 import { useTaskTemplateCreate } from './useTaskTemplateCreate';
 import { useVisibleAuthSpecs } from './useVisibleAuthSpecs';
 
 interface TaskTemplateCardProps {
-  onCreated: (templateId: string) => void;
-  onDismiss: (templateId: string) => void;
+  /** Rail rendering: one scannable line per suggestion, detail lives in the modal. */
+  compact?: boolean;
+  onCreated: (templateId: number) => void;
+  onDismiss: (templateId: number) => void;
   template: TaskTemplate;
 }
 
 export const TaskTemplateCard = memo<TaskTemplateCardProps>(
-  ({ template, onCreated, onDismiss }) => {
-    const { t } = useTranslation('taskTemplate');
+  ({ compact, template, onCreated, onDismiss }) => {
+    const { t } = useTranslation('common');
 
     const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
     const visibleAuthSpecs = useVisibleAuthSpecs(template, { hideMainIconProvider: true });
-    const title = t(`${template.id}.title`, { defaultValue: '' });
-    const description = t(`${template.id}.description`, { defaultValue: '' });
+    const title = template.title;
+    const description = template.description;
 
     const {
       created,
@@ -55,7 +67,9 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     );
 
     const handleOpenDetail = useCallback(() => {
-      createTaskTemplateDetailModal({ onCreated, template });
+      void import('./TaskTemplateDetailModal').then(({ createTaskTemplateDetailModal }) =>
+        createTaskTemplateDetailModal({ onCreated, template }),
+      );
     }, [onCreated, template]);
 
     const handlePrimaryClick = useCallback(
@@ -66,9 +80,39 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
       [handleAddTask],
     );
 
+    if (compact)
+      return (
+        <Flexbox horizontal align={'center'} className={styles.compactRow} gap={4}>
+          <Button
+            className={styles.compactMain}
+            disabled={loading || pendingCreate}
+            type={'text'}
+            onClick={handleOpenDetail}
+          >
+            <Flexbox horizontal align={'flex-start'} gap={10} style={{ width: '100%' }}>
+              <Flexbox flex={'none'} paddingBlock={2}>
+                <TemplateBriefIcon spec={iconSpec} tileSize={RECOMMENDATION_ICON_SIZE.compact} />
+              </Flexbox>
+              <Text
+                className={cx(homeType.itemTitleProse, styles.compactTitle)}
+                style={{ flex: 1 }}
+              >
+                {title}
+              </Text>
+            </Flexbox>
+          </Button>
+          <ActionIcon
+            className={`${styles.dismissBtn} task-template-dismiss`}
+            icon={X}
+            size={'small'}
+            title={t('taskTemplate.action.dismiss.tooltip')}
+            onClick={handleDismiss}
+          />
+        </Flexbox>
+      );
+
     const primaryButton = (
       <Button
-        shadow
         className={briefStyles.actionBtnPrimary}
         disabled={disabled}
         loading={loading || pendingCreate}
@@ -95,7 +139,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
             gap={8}
             style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}
           >
-            <TemplateBriefIcon spec={iconSpec} />
+            <TemplateBriefIcon spec={iconSpec} tileSize={RECOMMENDATION_ICON_SIZE.regular} />
             <Flexbox
               horizontal
               align={'center'}
@@ -112,7 +156,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
                 title={
                   <Center>
                     <span>{scheduleText}</span>
-                    {t('schedule.editableAfterCreateTooltip')}
+                    {t('taskTemplate.schedule.editableAfterCreateTooltip')}
                   </Center>
                 }
               />
@@ -124,18 +168,19 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
               className={`${styles.dismissBtn} task-template-dismiss`}
               icon={X}
               size={'small'}
-              title={t('action.dismiss.tooltip')}
+              title={t('taskTemplate.action.dismiss.tooltip')}
               onClick={handleDismiss}
             />
           </Flexbox>
         </Flexbox>
-        <Divider dashed style={{ marginBlock: 0 }} />
+        <Divider dashed />
         {description.trim().length > 0 ? <BriefCardSummary summary={description} /> : null}
         {visibleAuthSpecs.length > 0 && (
           <Flexbox gap={6} onClick={(e) => e.stopPropagation()}>
             {visibleAuthSpecs.map((spec) => (
-              <SkillAuthRow
-                key={`${spec.source}:${spec.provider}`}
+              <ConnectorAuthRow
+                disabled={disabled}
+                key={`${spec.source}:${spec.identifier}`}
                 spec={spec}
                 onError={handleConnectError}
               />
@@ -145,7 +190,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
           <Flexbox horizontal align={'center'} gap={8}>
             <Tag size={'small'} variant={'outlined'}>
-              {t('card.templateTag')}
+              {t('taskTemplate.card.templateTag')}
             </Tag>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>

@@ -2,10 +2,10 @@ import type { CredType } from '@lobechat/types';
 
 export const CredsApiName = {
   /**
-   * Connect a Klavis integration service via OAuth
-   * Initiates Klavis OAuth flow for third-party services like Gmail, Google Calendar, etc.
+   * Connect a Composio integration service via OAuth
+   * Initiates Composio OAuth flow for third-party services like Gmail, Google Calendar, etc.
    */
-  connectKlavisService: 'connectKlavisService',
+  connectComposioService: 'connectComposioService',
 
   /**
    * Initiate OAuth connection flow
@@ -20,10 +20,10 @@ export const CredsApiName = {
   injectCredsToSandbox: 'injectCredsToSandbox',
 
   /**
-   * Save a new credential
-   * Use when user wants to store sensitive info securely
+   * Ask the user to enter a credential's values in a secure form.
+   * The values go straight to the credential store and never reach the model.
    */
-  saveCreds: 'saveCreds',
+  requestCredsInput: 'requestCredsInput',
 } as const;
 
 export type CredsApiNameType = (typeof CredsApiName)[keyof typeof CredsApiName];
@@ -90,11 +90,16 @@ export interface InjectCredsToSandboxState {
   success: boolean;
 }
 
-export interface SaveCredsParams {
+export interface RequestCredsInputParams {
   /**
    * Optional description for the credential
    */
   description?: string;
+  /**
+   * Names of the values the user fills in, e.g. environment variable names
+   * (`OPENAI_API_KEY`) for kv-env or header names for kv-header
+   */
+  fieldNames: string[];
   /**
    * Unique key for the credential (used for reference)
    */
@@ -106,38 +111,27 @@ export interface SaveCredsParams {
   /**
    * The type of credential
    */
-  type: CredType;
-  /**
-   * Key-value pairs of the credential (for kv-env and kv-header types)
-   */
-  values: Record<string, string>;
+  type: 'kv-env' | 'kv-header';
 }
 
-export interface SaveCredsState {
-  /**
-   * The created credential key
-   */
-  key?: string;
-  /**
-   * Error message if save failed
-   */
-  message?: string;
-  /**
-   * Whether save was successful
-   */
-  success: boolean;
+/**
+ * Plugin state of an approved `requestCredsInput` call. Carries the key only:
+ * the values went from the form to the credential store directly.
+ */
+export interface RequestCredsInputState {
+  key: string;
 }
 
-// ==================== Klavis Service Types ====================
+// ==================== Composio Service Types ====================
 
-export interface ConnectKlavisServiceParams {
+export interface ConnectComposioServiceParams {
   /**
-   * The Klavis service identifier to connect (e.g., 'gmail', 'google-calendar')
+   * The Composio service identifier to connect (e.g., 'gmail', 'google-calendar')
    */
   service: string;
 }
 
-export interface ConnectKlavisServiceState {
+export interface ConnectComposioServiceState {
   /**
    * Whether the service is now connected
    */
@@ -147,9 +141,9 @@ export interface ConnectKlavisServiceState {
    */
   identifier: string;
   /**
-   * OAuth URL (only present when authorization is needed)
+   * OAuth redirect URL (only present when authorization is needed)
    */
-  oauthUrl?: string;
+  redirectUrl?: string;
   /**
    * The service display name
    */

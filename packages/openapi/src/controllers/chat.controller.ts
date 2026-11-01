@@ -20,12 +20,7 @@ export class ChatController extends BaseController {
       const chatParams = (await this.getBody<ChatServiceParams>(c))!;
 
       const db = await this.getDatabase();
-      const chatService = new ChatService(db, userId);
-
-      // If streaming response, return directly
-      if (chatParams.stream) {
-        return await chatService.chat(chatParams);
-      }
+      const chatService = new ChatService(db, userId, this.getWorkspaceId(c));
 
       const result = await chatService.chat(chatParams);
       return this.success(c, result, 'Chat completed successfully');
@@ -45,7 +40,7 @@ export class ChatController extends BaseController {
       const translateParams = (await this.getBody<TranslateServiceParams>(c))!;
 
       const db = await this.getDatabase();
-      const chatService = new ChatService(db, userId);
+      const chatService = new ChatService(db, userId, this.getWorkspaceId(c));
       const result = await chatService.translate(translateParams);
 
       return this.success(c, { translatedText: result }, 'Translation successful');
@@ -65,7 +60,7 @@ export class ChatController extends BaseController {
       const generationParams = (await this.getBody<MessageGenerationParams>(c))!;
 
       const db = await this.getDatabase();
-      const chatService = new ChatService(db, userId);
+      const chatService = new ChatService(db, userId, this.getWorkspaceId(c));
       const result = await chatService.generateReply(generationParams);
 
       return this.success(c, { reply: result }, 'Reply generated successfully');

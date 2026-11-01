@@ -2,6 +2,7 @@ import { and, asc, eq } from 'drizzle-orm';
 
 import { messages } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 /**
  * Maximum character length for the query string used in memory search
@@ -14,10 +15,12 @@ const MAX_QUERY_LENGTH = 7000;
 export class UserMemoryTopicRepository {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
 
   /**
@@ -36,7 +39,7 @@ export class UserMemoryTopicRepository {
       .from(messages)
       .where(
         and(
-          eq(messages.userId, this.userId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages),
           eq(messages.topicId, topicId),
           eq(messages.role, 'user'),
         ),

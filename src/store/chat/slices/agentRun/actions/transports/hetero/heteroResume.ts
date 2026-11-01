@@ -1,0 +1,137 @@
+import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
+import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import type { ChatTopicMetadata } from '@lobechat/types';
+
+import {
+  getHeteroSessionBindingKeyForWorkingDirectory,
+  getHeteroSessionIdForWorkingDirectory,
+} from '@/helpers/heteroSessionByWorkingDirectory';
+
+export type HeteroResumeBlockedReason = 'binding_changed' | 'cwd_changed' | 'missing_bound_cwd';
+
+export interface HeteroResumeDecision {
+  /** True when a saved cwd exists and disagrees with the current cwd. */
+  cwdChanged: boolean;
+  /** Why a saved session could not be resumed safely. */
+  reason?: HeteroResumeBlockedReason;
+  /** Binding key saved with the candidate session. Desktop main validates provider bindings. */
+  resumeBindingKey?: string;
+  /** Session id to resume with, or undefined when resume must be skipped. */
+  resumeSessionId: string | undefined;
+}
+
+export const getNativeHeteroSessionBindingKey = (agentType: string): string =>
+  `native:v1:${agentType}`;
+
+/**
+ * Decide whether we can safely resume a prior heterogeneous-agent session for
+ * the current turn. Claude Code CLI (the current consumer) stores sessions
+ * per-cwd under `~/.claude/projects/<encoded-cwd>/`, so resuming from a
+ * different cwd blows up with "No conversation found with session ID".
+ *
+ * New topics keep a per-cwd session map so switching between worktrees can
+ * restore that worktree's own CLI context. Legacy single-session topics still
+ * resume only when the topic's bound `workingDirectory` is present AND equals
+ * the current cwd. Legacy topics with no workingDirectory are reset — we have
+ * no way to verify them, and silently passing a stale id is exactly what caused
+ * the original failure.
+ */
+export const resolveHeteroResume = (
+  metadata: ChatTopicMetadata | undefined,
+  currentWorkingDirectory: string | undefined,
+  options?: {
+    /** Known binding identity for native subscription auth. */
+    currentBindingKey?: string;
+    /** Provider bindings are resolved authoritatively by Desktop main. */
+    providerBinding?: boolean;
+  },
+): HeteroResumeDecision => {
+  const savedSessionId = metadata?.heteroSessionId;
+  const savedCwd = metadata?.workingDirectory;
+  const cwd = currentWorkingDirectory ?? '';
+  const scopedSessionId = getHeteroSessionIdForWorkingDirectory(metadata, cwd);
+  const scopedBindingKey = getHeteroSessionBindingKeyForWorkingDirectory(metadata, cwd);
+
+  const resolveBinding = (
+    sessionId: string,
+    savedBindingKey: string | undefined,
+  ): HeteroResumeDecision => {
+    if (options?.providerBinding) {
+      return {
+        cwdChanged: false,
+        resumeBindingKey: savedBindingKey,
+        resumeSessionId: sessionId,
+      };
+    }
+
+    // A missing key predates binding identity tracking. Native runs grandfather
+    // that session regardless of the Labs flag; provider-bound runs take the
+    // branch above and let Desktop main reject a missing or changed key.
+    if (!savedBindingKey) {
+      return {
+        cwdChanged: false,
+        resumeSessionId: sessionId,
+      };
+    }
+
+    // A saved provider key still cannot resume under native subscription auth.
+    if (!options?.currentBindingKey || savedBindingKey !== options.currentBindingKey) {
+      return {
+        cwdChanged: false,
+        reason: 'binding_changed',
+        resumeSessionId: undefined,
+      };
+    }
+
+    return {
+      cwdChanged: false,
+      resumeBindingKey: savedBindingKey,
+      resumeSessionId: sessionId,
+    };
+  };
+
+  if (scopedSessionId) {
+    return resolveBinding(scopedSessionId, scopedBindingKey);
+  }
+
+  if (!savedSessionId) {
+    return {
+      cwdChanged: false,
+      resumeSessionId: undefined,
+    };
+  }
+
+  if (savedCwd === undefined) {
+    return {
+      cwdChanged: true,
+      reason: 'missing_bound_cwd',
+      resumeSessionId: undefined,
+    };
+  }
+
+  if (savedCwd !== cwd) {
+    return {
+      cwdChanged: true,
+      reason: 'cwd_changed',
+      resumeSessionId: undefined,
+    };
+  }
+
+  return resolveBinding(savedSessionId, metadata?.heteroSessionBindingKey);
+};
+
+/** Session errors a fresh (non-resumed) CLI session recovers from. */
+export const isRecoverableResumeError = (
+  error: unknown,
+): error is HeterogeneousAgentSessionError & {
+  code:
+    | typeof HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch
+    | typeof HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound;
+} => {
+  if (!error || typeof error !== 'object' || !('code' in error)) return false;
+
+  return (
+    error.code === HeterogeneousAgentSessionErrorCode.ResumeCwdMismatch ||
+    error.code === HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound
+  );
+};

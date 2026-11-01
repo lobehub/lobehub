@@ -5,12 +5,13 @@ import {
   ActionIcon,
   Block,
   Center,
+  createStaticStyles,
+  cssVar,
   DropdownMenu,
   Skeleton,
   stopPropagation,
   Text,
 } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
 import {
   Activity,
   Award,
@@ -26,8 +27,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
 
 const SYSTEM_ICONS = [
@@ -56,7 +57,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const BenchmarkHead = memo<{ id: string }>(({ id }) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
   useFetchBenchmarks();
   const benchmark = useEvalStore((s) => s.benchmarkDetailMap[id]);
@@ -93,7 +94,7 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
       key: b.id,
       label: b.name,
       onClick: () => handleBenchmarkSwitch(b.id),
-      style: b.id === id ? { backgroundColor: 'var(--ant-control-item-bg-active)' } : {},
+      style: b.id === id ? { backgroundColor: cssVar.controlItemBgActive } : {},
     }));
   }, [benchmarkList, handleBenchmarkSwitch, id, styles.menuIcon]);
 
@@ -112,7 +113,7 @@ const BenchmarkHead = memo<{ id: string }>(({ id }) => {
         <Icon size={18} />
       </Center>
       {!name ? (
-        <Skeleton active paragraph={false} title={{ style: { marginBottom: 0 }, width: 80 }} />
+        <Skeleton.Text width={80} />
       ) : (
         <DropdownMenu items={menuItems} placement="bottomRight">
           <Center

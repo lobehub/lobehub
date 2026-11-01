@@ -1,0 +1,12 @@
+{
+  "name": "@lobechat/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --config viteHonoBuild.config.ts",
+    "dev": "vite-node --watch --config viteNodeServer.config.ts src/router-hono/dev.ts",
+    "start": "node dist/standalone.js",
+    "type-check": "tsc --noEmit"
+  }
+}

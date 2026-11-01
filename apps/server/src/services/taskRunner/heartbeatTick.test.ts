@@ -1,0 +1,145 @@
+// @vitest-environment node
+import { TRPCError } from '@trpc/server';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { BriefModel } from '@/database/models/brief';
+
+import { runHeartbeatTick } from './heartbeatTick';
+import { TaskRunnerService } from './index';
+
+const { mockSelectTask, mockSetTaskSchedulerExecutionCallback, mockWhereTask } = vi.hoisted(() => ({
+  mockSelectTask: vi.fn(),
+  mockSetTaskSchedulerExecutionCallback: vi.fn(),
+  mockWhereTask: vi.fn((_condition: SQL) => ({
+    limit: () => mockSelectTask(),
+  })),
+}));
+
+vi.mock('@/database/server', () => ({
+  getServerDB: vi.fn().mockResolvedValue({
+    select: () => ({
+      from: () => ({
+        where: mockWhereTask,
+      }),
+    }),
+  }),
+}));
+
+vi.mock('@/database/models/brief', () => ({
+  BriefModel: vi.fn(),
+}));
+
+vi.mock('@/server/services/taskScheduler', () => ({
+  setTaskSchedulerExecutionCallback: mockSetTaskSchedulerExecutionCallback,
+}));
+
+vi.mock('./index', () => ({
+  TaskRunnerService: vi.fn(),
+}));
+
+describe('runHeartbeatTick', () => {
+  const taskId = 'task-1';
+  const userId = 'user-1';
+
+  const mockBriefModel = {
+    hasUnresolvedUrgentByTask: vi.fn().mockResolvedValue(false),
+  };
+  const mockRunner = {
+    runTask: vi.fn(),
+  };
+
+  const baseTask = (overrides: Partial<Record<string, unknown>> = {}) => ({
+    automationMode: 'heartbeat',
+    heartbeatInterval: 30,
+    id: taskId,
+    identifier: 'T-1',
+    status: 'scheduled',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSelectTask.mockResolvedValue([]);
+    mockBriefModel.hasUnresolvedUrgentByTask.mockResolvedValue(false);
+    (BriefModel as any).mockImplementation(function () {
+      return mockBriefModel;
+    });
+    (TaskRunnerService as any).mockImplementation(function () {
+      return mockRunner;
+    });
+  });
+
+  it('runs the task and excludes transient error briefs from tick gating', async () => {
+    mockSelectTask.mockResolvedValue([baseTask()]);
+    mockRunner.runTask.mockResolvedValue(undefined);
+
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: true, taskIdentifier: 'T-1' });
+    expect(mockBriefModel.hasUnresolvedUrgentByTask).toHaveBeenCalledWith(taskId, {
+      excludeTypes: ['error'],
+    });
+    expect(mockRunner.runTask).toHaveBeenCalledWith({ taskId, trigger: 'heartbeat' });
+  });
+
+  it('excludes trashed tasks from the queued tick lookup', async () => {
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    const condition = mockWhereTask.mock.calls[0][0];
+    expect(new PgDialect().sqlToQuery(condition).sql).toContain('"tasks"."is_deleted" IS NOT TRUE');
+    expect(outcome).toEqual({ ran: false, reason: 'not-found' });
+  });
+
+  it('still skips when a non-error urgent brief requires human input', async () => {
+    mockSelectTask.mockResolvedValue([baseTask()]);
+    mockBriefModel.hasUnresolvedUrgentByTask.mockResolvedValue(true);
+
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: false, reason: 'human-waiting' });
+    expect(mockBriefModel.hasUnresolvedUrgentByTask).toHaveBeenCalledWith(taskId, {
+      excludeTypes: ['error'],
+    });
+    expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
+  it('skips an archived task without running it', async () => {
+    mockSelectTask.mockResolvedValue([baseTask({ archivedAt: new Date() })]);
+
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: false, reason: 'archived' });
+    expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
+  it('skips a stale tick whose generation token no longer matches', async () => {
+    mockSelectTask.mockResolvedValue([
+      baseTask({ context: { scheduler: { tickToken: 'tick-current' } } }),
+    ]);
+
+    const outcome = await runHeartbeatTick(taskId, userId, 'tick-old');
+
+    expect(outcome).toEqual({ ran: false, reason: 'stale-tick' });
+    expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
+  it('allows legacy tokenless ticks when no active generation is stored', async () => {
+    mockSelectTask.mockResolvedValue([baseTask({ context: {} })]);
+    mockRunner.runTask.mockResolvedValue(undefined);
+
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: true, taskIdentifier: 'T-1' });
+  });
+
+  it('returns in-flight when runTask raises a CONFLICT', async () => {
+    mockSelectTask.mockResolvedValue([baseTask()]);
+    mockRunner.runTask.mockRejectedValue(new TRPCError({ code: 'CONFLICT', message: 'busy' }));
+
+    const outcome = await runHeartbeatTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: false, reason: 'in-flight' });
+  });
+});

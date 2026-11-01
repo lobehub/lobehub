@@ -1,0 +1,22 @@
+{
+  "error.invalidFormat.desc": "여전히 읽을 수 있습니다. 레이아웃이 원본과 다를 수 있습니다.",
+  "error.invalidFormat.ownerHint": "원본 레이아웃을 복원하려면 편집기에서 다시 저장하세요.",
+  "error.invalidFormat.title": "이 페이지를 원본 형식으로 표시할 수 없습니다.",
+  "popover.copyLink": "링크 복사",
+  "popover.copyLinkSuccess": "링크가 복사되었습니다",
+  "popover.linkHint": "이 링크를 가진 누구나 이 페이지를 볼 수 있습니다",
+  "popover.permissionLink": "링크를 가진 누구나",
+  "popover.permissionPrivate": "비공개",
+  "popover.permissionWorkspace": "워크스페이스의 모든 사용자",
+  "popover.privateHint": "이 페이지는 오직 본인만 접근할 수 있습니다",
+  "popover.sectionViews_one": "{{count}}회 조회",
+  "popover.sectionViews_other": "{{count}}회 조회",
+  "popover.title": "페이지 공유",
+  "popover.updateError": "공유 설정 업데이트에 실패했습니다",
+  "popover.visibility": "공개 범위",
+  "popover.visibilityUpdated": "공개 범위가 업데이트되었습니다",
+  "popover.workspaceHint": "이 워크스페이스의 모든 사용자가 이 페이지를 볼 수 있습니다",
+  "shareButton.label": "공유",
+  "shell.sharedBy": "{{name}}님이 공유함",
+  "shell.updatedAt": "{{relative}}에 업데이트됨"
+}

@@ -12,7 +12,6 @@ export default defineConfig({
   ],
   optimizeDeps: {
     exclude: ['crypto', 'util', 'tty'],
-    include: ['@lobehub/tts'],
   },
   test: {
     alias: {
@@ -22,6 +21,13 @@ export default defineConfig({
       '@/database': resolve(__dirname, '../database/src'),
       '@/libs/model-runtime': resolve(__dirname, '../model-runtime/src'),
       '@/types': resolve(__dirname, '../types/src'),
+      '@/config': resolve(__dirname, '../app-config/src'),
+      '@/envs': resolve(__dirname, '../env/src'),
+      '@/libs/trpc': resolve(__dirname, '../trpc/src'),
+      '@/locales': resolve(__dirname, '../locales/src'),
+      '@/business/server': resolve(__dirname, '../business-server/src'),
+      '@/server/services': resolve(__dirname, '../../apps/server/src/services'),
+      '@/server/modules': resolve(__dirname, '../../apps/server/src/modules'),
       '@': resolve(__dirname, '../../src'),
 
     },

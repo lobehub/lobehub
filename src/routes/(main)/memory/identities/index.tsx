@@ -1,16 +1,17 @@
 import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { BrainCircuitIcon } from 'lucide-react';
 import { type FC } from 'react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 
+import { MemoryListBoundary } from '@/features/Memory';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 import { useQueryState } from '@/hooks/useQueryParam';
 import ActionBar from '@/routes/(main)/memory/features/ActionBar';
 import CommonFilterBar from '@/routes/(main)/memory/features/FilterBar';
-import { useUserMemoryStore } from '@/store/userMemory';
-import { type TypesEnum } from '@/types/userMemory';
+import { identitySelectors, useUserMemoryStore } from '@/store/userMemory';
+import { isIdentityQueryCurrent } from '@/store/userMemory/slices/identity/projection';
 
 import EditableModal from '../features/EditableModal';
 import Loading from '../features/Loading';
@@ -21,6 +22,9 @@ import IdentityRightPanel from './features/IdentityRightPanel';
 import { type IdentityType } from './features/List';
 import List from './features/List';
 import SegmentedBar from './features/SegmentedBar';
+import { identityListBoundary } from './identityListBoundary';
+import { identityListParamsOf } from './identityListParams';
+import { showIdentityControls } from './showIdentityControls';
 
 const IdentitiesArea = memo(() => {
   const [viewMode, setViewMode] = useState<ViewMode>('timeline');
@@ -30,26 +34,26 @@ const IdentitiesArea = memo(() => {
   const searchValue = searchValueRaw || '';
   const typeFilter = (typeFilterRaw as IdentityType) || 'all';
 
-  const identitiesPage = useUserMemoryStore((s) => s.identitiesPage);
-  const identitiesInit = useUserMemoryStore((s) => s.identitiesInit);
-  const identitiesTotal = useUserMemoryStore((s) => s.identitiesTotal);
-  const identitiesSearchLoading = useUserMemoryStore((s) => s.identitiesSearchLoading);
+  const identities = useUserMemoryStore((s) => s.identities);
+  const identitiesMeta = useUserMemoryStore((s) => s.identitiesMeta);
+  const identitiesInit = useUserMemoryStore(identitySelectors.isIdentitiesInitialized);
+  const identitiesTotal = useUserMemoryStore(identitySelectors.identitiesTotal);
   const useFetchIdentities = useUserMemoryStore((s) => s.useFetchIdentities);
-  const resetIdentitiesList = useUserMemoryStore((s) => s.resetIdentitiesList);
 
-  // Reset list when search or type filter changes
-  useEffect(() => {
-    const types = typeFilter === 'all' ? undefined : [typeFilter as TypesEnum];
-    resetIdentitiesList({ q: searchValue || undefined, types });
-  }, [searchValue, typeFilter]);
+  // Same params the route loader pre-hydrated, so its row is this query's.
+  const requestedQuery = identityListParamsOf(searchValue, typeFilter);
 
-  // Call SWR hook to fetch data
-  const { isLoading } = useFetchIdentities({
-    page: identitiesPage,
-    pageSize: 12,
-    q: searchValue || undefined,
-    types: typeFilter === 'all' ? undefined : [typeFilter as TypesEnum],
-  });
+  // Hydrate the persisted head page, then revalidate. The rows land in
+  // `identities` — read them from the store, never from this hook.
+  const { error, isValidating, revalidate } = useFetchIdentities(requestedQuery);
+
+  // A page painted for another filter set is not the answer on screen yet: the
+  // replica keeps the previous query's rows until the new head page lands, so
+  // the boundary must not read them as this query's (empty) result.
+  const isStaleQuery = !isIdentityQueryCurrent(identitiesMeta, requestedQuery);
+  // A failed revalidation of the painted query keeps its rows; a failed new
+  // query surfaces the failure instead of the previous query's rows.
+  const boundary = identityListBoundary({ error, init: identitiesInit, isStaleQuery });
 
   // Handle search and type changes
   const handleSearch = useCallback(
@@ -66,8 +70,14 @@ const IdentitiesArea = memo(() => {
     [setTypeFilterRaw],
   );
 
-  // Show loading: during search/reset or initial load
-  const showLoading = identitiesSearchLoading || !identitiesInit;
+  // Action bar, type tabs and search are controls over nothing on an empty
+  // collection, so they only render once there is something to act on.
+  const showControls = showIdentityControls({
+    hasFilters: Boolean(searchValue) || typeFilter !== 'all',
+    init: identitiesInit,
+    searchLoading: isStaleQuery,
+    total: identitiesTotal,
+  });
 
   return (
     <Flexbox flex={1} height={'100%'}>
@@ -78,10 +88,12 @@ const IdentitiesArea = memo(() => {
           )
         }
         right={
-          <ActionBar showAnalysis showPurge>
-            <ViewModeSwitcher value={viewMode} onChange={setViewMode} />
-            <WideScreenButton />
-          </ActionBar>
+          showControls && (
+            <ActionBar showAnalysis showPurge>
+              <ViewModeSwitcher value={viewMode} onChange={setViewMode} />
+              <WideScreenButton />
+            </ActionBar>
+          )
         }
       />
       <Flexbox
@@ -91,15 +103,23 @@ const IdentitiesArea = memo(() => {
         width={'100%'}
       >
         <WideScreenContainer gap={32} paddingBlock={48}>
-          <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-            <SegmentedBar typeValue={typeFilter} onTypeChange={handleTypeChange} />
-            <CommonFilterBar searchValue={searchValue} onSearch={handleSearch} />
-          </Flexbox>
-          {showLoading ? (
-            <Loading viewMode={viewMode} />
-          ) : (
-            <List isLoading={isLoading} searchValue={searchValue} viewMode={viewMode} />
+          {showControls && (
+            <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+              <SegmentedBar typeValue={typeFilter} onTypeChange={handleTypeChange} />
+              <CommonFilterBar searchValue={searchValue} onSearch={handleSearch} />
+            </Flexbox>
           )}
+          <MemoryListBoundary
+            data={boundary.showRows ? identities : undefined}
+            error={boundary.error}
+            isInitialized={identitiesInit}
+            isLoading={isValidating}
+            isResetting={boundary.isResetting}
+            loading={<Loading viewMode={viewMode} />}
+            onRetry={() => void revalidate()}
+          >
+            <List isLoading={isValidating} searchValue={searchValue} viewMode={viewMode} />
+          </MemoryListBoundary>
         </WideScreenContainer>
       </Flexbox>
     </Flexbox>

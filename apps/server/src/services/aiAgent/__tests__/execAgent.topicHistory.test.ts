@@ -1,0 +1,316 @@
+import type * as ModelBankModule from 'model-bank';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AiAgentService } from '../index';
+
+// Use vi.hoisted to ensure mock functions are available before vi.mock runs
+const { mockMessageCreate, mockMessageQuery, mockCreateOperation, mockTopicFindById } = vi.hoisted(
+  () => ({
+    mockCreateOperation: vi.fn(),
+    mockMessageCreate: vi.fn(),
+    mockMessageQuery: vi.fn(),
+    mockTopicFindById: vi.fn(),
+  }),
+);
+
+// Mock trusted client to avoid server-side env access
+vi.mock('@/libs/trusted-client', () => ({
+  generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
+  getTrustedClientTokenForSession: vi.fn().mockResolvedValue(undefined),
+  isTrustedClientEnabled: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock('@/database/models/message', () => ({
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: mockMessageQuery,
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/plugin', () => ({
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-new' }),
+      findById: mockTopicFindById,
+      updateMetadata: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
+}));
+
+// Real implementation wraps the create in a `db.transaction(...)` for
+// per-visitor cap enforcement — irrelevant to the read-side guard under test
+// here, and `mockDb = {}` has no `transaction`. Delegate straight to the
+// underlying model methods so a share-gated run in these tests exercises the
+// same message-creation call the non-share path does.
+vi.mock('../shareVisitorAbuseGuards', () => ({
+  // Not exercised by these tests (they all target an existing topic), but
+  // stubbed so an accidental new-topic share run doesn't hit `db.transaction`.
+  reserveShareVisitorTopic: vi.fn().mockResolvedValue({ id: 'topic-shared-new' }),
+  reserveShareVisitorTurn: vi.fn(function (_params, createParams, id) {
+    return mockMessageCreate(createParams, id);
+  }),
+}));
+
+vi.mock('@/database/models/thread', () => ({
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/agentRuntime', () => ({
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+    };
+  }),
+}));
+
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/composio', () => ({
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/server/modules/Mecha', () => ({
+  createServerAgentToolsEngine: vi.fn().mockReturnValue({
+    generateToolsDetailed: vi.fn().mockReturnValue({ enabledToolIds: [], tools: [] }),
+    getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
+  }),
+  serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: {
+    isConfigured: false,
+    queryDeviceList: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+vi.mock('model-bank', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelBankModule>();
+  return {
+    ...actual,
+    LOBE_DEFAULT_MODEL_LIST: [
+      {
+        abilities: { functionCall: true, video: false, vision: true },
+        id: 'gpt-4',
+        providerId: 'openai',
+      },
+    ],
+  };
+});
+
+describe('AiAgentService.execAgent - topic history loading', () => {
+  let service: AiAgentService;
+  const mockDb = {} as any;
+  const userId = 'test-user-id';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockMessageCreate.mockClear();
+    mockMessageQuery.mockClear();
+    mockCreateOperation.mockClear();
+    mockTopicFindById.mockClear();
+
+    mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockCreateOperation.mockResolvedValue({
+      autoStarted: true,
+      messageId: 'queue-msg-1',
+      operationId: 'op-123',
+      success: true,
+    });
+    mockTopicFindById.mockResolvedValue(undefined);
+
+    service = new AiAgentService(mockDb, userId);
+  });
+
+  afterEach(() => {
+    mockMessageCreate.mockClear();
+    mockMessageQuery.mockClear();
+    mockCreateOperation.mockClear();
+    mockTopicFindById.mockClear();
+  });
+
+  describe('when topicId is provided (follow-up message in existing thread)', () => {
+    it('should load history messages from the topic and include them in initialMessages', async () => {
+      // Simulate existing conversation history in the topic
+      const existingMessages = [
+        { content: '你看得见这个引用吗', id: 'msg-prev-1', role: 'user' },
+        { content: '你好！是的，我可以看到你的消息。', id: 'msg-prev-2', role: 'assistant' },
+      ];
+      mockMessageQuery.mockResolvedValue(existingMessages);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-existing' },
+        prompt: '你能复述我说的第一句话吗',
+      });
+
+      // Verify messageModel.query was called to load history for the topic.
+      // `allowShareVisitor` must be false for a non-share run — the history
+      // loader must not opt out of the creator-facing agent-share exclusion.
+      expect(mockMessageQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: 'topic-existing' }),
+        expect.objectContaining({
+          allowShareVisitor: false,
+          postProcessUrl: expect.any(Function),
+        }),
+      );
+
+      // Verify createOperation received all history messages + the new user message
+      expect(mockCreateOperation).toHaveBeenCalled();
+      const createOperationArgs = mockCreateOperation.mock.calls[0][0];
+      const initialMessages = createOperationArgs.initialMessages;
+
+      // Should contain the 2 history messages + 1 new user message = 3 total
+      expect(initialMessages.length).toBe(3);
+      expect(initialMessages[0]).toMatchObject({ content: '你看得见这个引用吗', role: 'user' });
+      expect(initialMessages[1]).toMatchObject({
+        content: '你好！是的，我可以看到你的消息。',
+        role: 'assistant',
+      });
+      expect(initialMessages[2]).toMatchObject({
+        content: '你能复述我说的第一句话吗',
+        role: 'user',
+      });
+    });
+  });
+
+  describe('when no topicId is provided (first message, new conversation)', () => {
+    it('should only include the current user message in initialMessages', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Hello',
+      });
+
+      // createOperation should receive only the new user message
+      expect(mockCreateOperation).toHaveBeenCalled();
+      const createOperationArgs = mockCreateOperation.mock.calls[0][0];
+      const initialMessages = createOperationArgs.initialMessages;
+
+      expect(initialMessages.length).toBe(1);
+      expect(initialMessages[0]).toMatchObject({ content: 'Hello', role: 'user' });
+    });
+  });
+
+  describe('share-visitor topic guard', () => {
+    // Visitor topics carry the CREATOR's own userId (billing attribution) plus
+    // `senderId` set to the visitor — see `packages/database/src/utils/shareVisitor.ts`.
+    // A non-share run must never be able to load one via a leaked/guessed topicId.
+    const visitorTopic = { id: 'topic-visitor', model: null, senderId: 'visitor-1' };
+
+    it('rejects a non-share run whose topicId resolves to a share-visitor topic', async () => {
+      mockTopicFindById.mockResolvedValue(visitorTopic);
+
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          appContext: { topicId: 'topic-visitor' },
+          prompt: 'hi',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      // The guard must fail BEFORE any history read reaches the visitor
+      // transcript.
+      expect(mockMessageQuery).not.toHaveBeenCalled();
+      expect(mockCreateOperation).not.toHaveBeenCalled();
+    });
+
+    it("still allows the visitor's own authorized share run to load the same topic", async () => {
+      mockTopicFindById.mockResolvedValue(visitorTopic);
+      mockMessageQuery.mockResolvedValue([]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-visitor' },
+        prompt: 'hi',
+        shareGate: {
+          agentId: 'agent-1',
+          shareConfig: { toolGrants: [] },
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        },
+      });
+
+      expect(mockCreateOperation).toHaveBeenCalled();
+      // Authorized share run must opt into `allowShareVisitor` so it keeps
+      // seeing its own transcript.
+      expect(mockMessageQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: 'topic-visitor' }),
+        expect.objectContaining({ allowShareVisitor: true }),
+      );
+    });
+  });
+});

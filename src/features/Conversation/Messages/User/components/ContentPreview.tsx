@@ -22,9 +22,8 @@ const ContentPreview = ({ content, id }: ContentPreviewProps) => {
       <Flexbox padding={4}>
         <Button
           block
-          color={'default'}
           size={'small'}
-          variant={'filled'}
+          type={'fill'}
           onClick={() => {
             openMessageDetail(id);
           }}

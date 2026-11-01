@@ -21,6 +21,12 @@ export default class ScreenCaptureCtr extends ControllerModule {
   }
 
   @IpcMethod()
+  async beginCapture(): Promise<boolean> {
+    logger.debug('beginCapture request');
+    return this.app.screenCaptureManager.beginCapture();
+  }
+
+  @IpcMethod()
   async previewWindow(windowId: number): Promise<CapturePreviewResult> {
     logger.debug(`previewWindow request: ${windowId}`);
     return this.app.screenCaptureManager.handlePreviewWindow(windowId);

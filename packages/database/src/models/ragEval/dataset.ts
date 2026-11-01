@@ -1,31 +1,35 @@
 import type { RAGEvalDataSetItem } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
-import type {NewEvalDatasetsItem } from '../../schemas';
+import type { NewEvalDatasetsItem } from '../../schemas';
 import { evalDatasets } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export class EvalDatasetModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, evalDatasets);
 
   create = async (params: NewEvalDatasetsItem) => {
     const [result] = await this.db
       .insert(evalDatasets)
-      .values({ ...params, userId: this.userId })
+      .values({ ...params, userId: this.userId, workspaceId: this.workspaceId ?? null })
       .returning();
     return result;
   };
 
   delete = async (id: string) => {
-    return this.db
-      .delete(evalDatasets)
-      .where(and(eq(evalDatasets.id, id), eq(evalDatasets.userId, this.userId)));
+    return this.db.delete(evalDatasets).where(and(eq(evalDatasets.id, id), this.ownership()));
   };
 
   query = async (knowledgeBaseId: string): Promise<RAGEvalDataSetItem[]> => {
@@ -38,18 +42,13 @@ export class EvalDatasetModel {
         updatedAt: evalDatasets.updatedAt,
       })
       .from(evalDatasets)
-      .where(
-        and(
-          eq(evalDatasets.userId, this.userId),
-          eq(evalDatasets.knowledgeBaseId, knowledgeBaseId),
-        ),
-      )
+      .where(and(this.ownership(), eq(evalDatasets.knowledgeBaseId, knowledgeBaseId)))
       .orderBy(desc(evalDatasets.createdAt));
   };
 
   findById = async (id: string) => {
     return this.db.query.evalDatasets.findFirst({
-      where: and(eq(evalDatasets.id, id), eq(evalDatasets.userId, this.userId)),
+      where: and(eq(evalDatasets.id, id), this.ownership()),
     });
   };
 
@@ -57,6 +56,6 @@ export class EvalDatasetModel {
     return this.db
       .update(evalDatasets)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(evalDatasets.id, id), eq(evalDatasets.userId, this.userId)));
+      .where(and(eq(evalDatasets.id, id), this.ownership()));
   };
 }

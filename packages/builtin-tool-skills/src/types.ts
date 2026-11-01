@@ -8,11 +8,32 @@ export const SkillsApiName = {
   activateSkill: 'activateSkill',
 };
 
+/**
+ * Skill APIs an Agent Share visitor may use. Both are pure reads of skill
+ * content; WHICH skills they can reach is a separate question, answered by the
+ * share's `skillGrants` allowlist inside the server runtime.
+ *
+ * The exec-class APIs (`runCommand` / `execScript`) stay excluded even though
+ * share runs now honor the visitor's approval flow: opening skill script
+ * execution to visitors is a separate decision. `exportFile` is
+ * excluded because its only purpose is pulling artifacts out of an execution
+ * those APIs would have started.
+ *
+ * Shared with the server share gate (`DATA_TOOL_ACCESS_RULES` in
+ * `apps/server/src/services/aiAgent/shareGate/dataToolRules.ts`), which derives its block
+ * list as "every API of this tool that is NOT in this set" — so a newly added
+ * skill API is denied to visitors by default rather than silently exposed.
+ */
+export const AGENT_SHARE_SKILL_API_NAMES = new Set<string>([
+  SkillsApiName.activateSkill,
+  SkillsApiName.readReference,
+]);
+
 export interface ActivateSkillParams {
   name: string;
 }
 
-export type ActivateSkillSource = 'agent' | 'builtin' | 'project' | 'user';
+export type ActivateSkillSource = 'agent' | 'builtin' | 'device' | 'project' | 'user';
 
 export interface ActivateSkillState {
   description?: string;
@@ -30,7 +51,8 @@ export interface ActivateSkillState {
  */
 export interface ExecScriptActivatedSkill {
   description?: string;
-  id: string;
+  /** DB skill id; absent for filesystem/builtin activations — match by `name`. */
+  id?: string;
   name: string;
 }
 
@@ -46,7 +68,20 @@ export interface ExecScriptParams {
 
 export interface ExecScriptState {
   command: string;
-  exitCode: number;
+  executionEnv?: 'device' | 'sandbox';
+  /**
+   * Undefined means the command was still running when the observation window
+   * elapsed — mirrors `CommandResult.exitCode`.
+   */
+  exitCode?: number;
+  outputFiles?: CommandResult['outputFiles'];
+  /** The sandbox workspace was recreated before this command. */
+  sessionExpiredAndRecreated?: boolean;
+  /**
+   * Shell handle for a still-running command, pollable via
+   * `local-system.getCommandOutput`.
+   */
+  shellId?: string;
   success: boolean;
 }
 
@@ -56,8 +91,35 @@ export interface RunCommandOptions {
 }
 
 export interface CommandResult {
-  exitCode: number;
+  /** Upstream execution errors are distinct from a command's ordinary stderr. */
+  error?: unknown;
+  /**
+   * Where the command actually ran. Flows into the tool call's plugin state so
+   * execution-target degradation is observable in the product UI.
+   */
+  executionEnv?: 'device' | 'sandbox';
+  /**
+   * Undefined means the command was still running when the observation window
+   * elapsed — the formatter reports it as still running instead of completed.
+   */
+  exitCode?: number;
   output: string;
+  /**
+   * Saved-output file handles reported by the shell when stdout/stderr exceed
+   * the inline preview (device runs save the full stream to disk) — the only
+   * retrieval path for output the preview truncated.
+   */
+  outputFiles?: {
+    stderr?: { path: string; size?: number; truncated?: boolean };
+    stdout?: { path: string; size?: number; truncated?: boolean };
+  };
+  /** The sandbox workspace was recreated before this command. */
+  sessionExpiredAndRecreated?: boolean;
+  /**
+   * Shell handle for a still-running command, pollable via
+   * `local-system.getCommandOutput`.
+   */
+  shellId?: string;
   stderr?: string;
   success: boolean;
 }

@@ -1,0 +1,591 @@
+// @vitest-environment node
+import { getTestDB } from '@lobechat/database/test-utils';
+import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
+import {
+  AgentAccountBindingModel,
+  AgentProviderAccountModel,
+  AgentQuotaCalibrationModel,
+  AgentQuotaUsageLedgerModel,
+  AgentQuotaWindowModel,
+} from '@/database/models/agentQuota';
+import { agentOperations, agents, users } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
+import { QuotaBindingRole } from '@/database/types/agentQuota';
+
+import { AgentQuotaService } from '../index';
+
+const serverDB: LobeChatDatabase = await getTestDB();
+
+const userId = 'agent-quota-service-user';
+const identity = { email: 'a@example.com', externalAccountId: 'acc-uuid-1' };
+const HOUR = 3_600_000;
+
+/** Four clean 5h windows at ~$5.5 of spend per utilization point. */
+const samples = [
+  { cost: 142, start: Date.parse('2026-07-01T00:00:00Z'), util: 26 },
+  { cost: 300, start: Date.parse('2026-07-01T05:00:00Z'), util: 55 },
+  { cost: 210, start: Date.parse('2026-07-01T10:00:00Z'), util: 38 },
+  { cost: 90, start: Date.parse('2026-07-01T15:00:00Z'), util: 16 },
+];
+
+const readings: QuotaLimitReading[] = samples.flatMap((s) => {
+  const resetsAt = s.start + 5 * HOUR;
+  // two readings per window, rising utilization (monotonic within a window)
+  return [
+    {
+      capturedAt: s.start + HOUR,
+      limitType: 'session',
+      resetsAt,
+      scopeKey: '',
+      utilization: Math.round(s.util / 2),
+    },
+    {
+      capturedAt: s.start + 4 * HOUR,
+      limitType: 'session',
+      resetsAt,
+      scopeKey: '',
+      utilization: s.util,
+    },
+  ];
+});
+
+let service: AgentQuotaService;
+let calibrations: AgentQuotaCalibrationModel;
+let ledger: AgentQuotaUsageLedgerModel;
+let windows: AgentQuotaWindowModel;
+
+beforeEach(async () => {
+  await serverDB.delete(users);
+  await serverDB.insert(users).values({ id: userId });
+  service = new AgentQuotaService(serverDB, userId);
+  calibrations = new AgentQuotaCalibrationModel(serverDB, userId);
+  ledger = new AgentQuotaUsageLedgerModel(serverDB, userId);
+  windows = new AgentQuotaWindowModel(serverDB, userId);
+});
+
+afterEach(async () => {
+  await serverDB.delete(users);
+});
+
+describe('AgentQuotaService.ingestSnapshot', () => {
+  it('calibrates capacity from the ingested windows once ledger spend exists', async () => {
+    // 1) first ingest creates the account (and cannot calibrate yet)
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [],
+    });
+
+    // 2) our own per-turn spend, the other half of the Δutil ↔ Δcost pair
+    for (const [i, s] of samples.entries()) {
+      await ledger.append({
+        accountId: account.id,
+        costUsd: s.cost,
+        externalEventId: `turn-${i}`,
+        model: 'claude-opus-4-8',
+        occurredAt: new Date(s.start + 2 * HOUR),
+        provider: 'claude-code',
+      });
+    }
+
+    // 3) the real production path: readings in → windows + calibration out
+    await service.ingestSnapshot({ identity, provider: 'claude-code', readings });
+
+    expect(await windows.listByAccount(account.id)).toHaveLength(4);
+
+    const latest = await calibrations.latest(account.id, 'session');
+    expect(latest).not.toBeNull();
+    // ~$5.5 per utilization point → ~$550 for a full window
+    expect(Number(latest!.capacityUsd)).toBeGreaterThan(450);
+    expect(Number(latest!.capacityUsd)).toBeLessThan(650);
+    expect(latest!.sampleCount).toBeGreaterThanOrEqual(3);
+  });
+
+  it('writes no calibration when nothing recorded our spend', async () => {
+    // Guards the inverse: with an empty ledger every window reads as "meter moved
+    // but we spent nothing" → contaminated → excluded, so we emit no capacity
+    // rather than a fabricated one. This is why the ledger writer must land
+    // before calibration produces anything in production.
+    const account = await service.ingestSnapshot({ identity, provider: 'claude-code', readings });
+
+    expect(await windows.listByAccount(account.id)).toHaveLength(4);
+    expect(await calibrations.latest(account.id, 'session')).toBeNull();
+  });
+
+  it('persists the Extra Usage wallet on account metadata, and clears it on null', async () => {
+    // The wallet is not a limit reading — it rides the account row so the
+    // persisted panel keeps the Extra Usage section between live samples.
+    const accounts = new AgentProviderAccountModel(serverDB, userId);
+    const extraUsage = {
+      balanceCents: 1234,
+      currency: 'CNY',
+      monthlyChargeLimitCents: 5000,
+      monthlyChargeLimitEnabled: true,
+      monthlyUsedCents: 42,
+      totalCents: 2000,
+    };
+    const account = await service.ingestSnapshot({
+      extraUsage,
+      identity,
+      provider: 'kimi-code',
+      readings: [],
+    });
+    expect((await accounts.findById(account.id))?.metadata?.['extraUsage']).toEqual(extraUsage);
+
+    await service.ingestSnapshot({
+      extraUsage: null,
+      identity,
+      provider: 'kimi-code',
+      readings: [],
+    });
+    expect((await accounts.findById(account.id))?.metadata?.['extraUsage']).toBeNull();
+  });
+});
+
+describe('AgentQuotaService.selectForAgent', () => {
+  it('never routes a caller onto another provider’s account, pinned or pooled', async () => {
+    // Bindings are written provider-blind from the account manager; a claude
+    // caller must not inherit a codex/kimi pin (Codex review on PR #19770).
+    const bindings = new AgentAccountBindingModel(serverDB, userId);
+    await serverDB.insert(agents).values([
+      { id: 'agent-1', slug: 'agent-1', title: 'Agent 1', userId },
+      { id: 'agent-2', slug: 'agent-2', title: 'Agent 2', userId },
+    ]);
+    const claudeAccount = await service.ingestSnapshot({
+      identity: { externalAccountId: 'claude-acc' },
+      provider: 'claude-code',
+      readings: [],
+    });
+    const codexAccount = await service.ingestSnapshot({
+      identity: { externalAccountId: 'codex-acc' },
+      provider: 'codex',
+      readings: [],
+    });
+    await bindings.upsert({
+      accountId: codexAccount.id,
+      agentId: 'agent-1',
+      role: QuotaBindingRole.pinned,
+    });
+
+    // Without a provider the historical behavior is unchanged…
+    expect((await service.selectForAgent('agent-1'))?.accountId).toBe(codexAccount.id);
+    // …but a claude caller skips the foreign pin and finds no route.
+    expect(await service.selectForAgent('agent-1', { provider: 'claude-code' })).toBeNull();
+
+    // A same-provider pin is honored.
+    await bindings.upsert({
+      accountId: claudeAccount.id,
+      agentId: 'agent-2',
+      role: QuotaBindingRole.pinned,
+    });
+    expect((await service.selectForAgent('agent-2', { provider: 'claude-code' }))?.accountId).toBe(
+      claudeAccount.id,
+    );
+  });
+
+  it('balances only across accounts the caller can run, skipping a pin it cannot run', async () => {
+    const bindings = new AgentAccountBindingModel(serverDB, userId);
+    await serverDB.insert(agents).values([{ id: 'agent-3', slug: 'agent-3', title: 'A3', userId }]);
+    const local = await service.ingestSnapshot({
+      identity: { externalAccountId: 'local-acc' },
+      provider: 'claude-code',
+      readings: [],
+    });
+    const remote = await service.ingestSnapshot({
+      identity: { externalAccountId: 'remote-acc' },
+      provider: 'claude-code',
+      readings: [],
+    });
+    await bindings.upsert({ accountId: local.id, agentId: 'agent-3', role: QuotaBindingRole.pool });
+    await bindings.upsert({
+      accountId: remote.id,
+      agentId: 'agent-3',
+      role: QuotaBindingRole.pool,
+    });
+
+    const onlyRemote = { provider: 'claude-code', runnableExternalAccountIds: ['remote-acc'] };
+    const onlyLocal = { provider: 'claude-code', runnableExternalAccountIds: ['local-acc'] };
+    expect((await service.selectForAgent('agent-3', onlyRemote))?.accountId).toBe(remote.id);
+    expect((await service.selectForAgent('agent-3', onlyLocal))?.accountId).toBe(local.id);
+    expect(
+      await service.selectForAgent('agent-3', {
+        provider: 'claude-code',
+        runnableExternalAccountIds: [],
+      }),
+    ).toBeNull();
+
+    // An agent-wide pin the caller cannot run was picked on another machine:
+    // balance across what it can run instead. Where it can run, it still holds.
+    await bindings.upsert({
+      accountId: remote.id,
+      agentId: 'agent-3',
+      role: QuotaBindingRole.pinned,
+    });
+    expect(await service.selectForAgent('agent-3', onlyLocal)).toMatchObject({
+      accountId: local.id,
+      reason: 'balanced',
+    });
+    expect(await service.selectForAgent('agent-3', onlyRemote)).toMatchObject({
+      accountId: remote.id,
+      pinScope: 'agent',
+      reason: 'pinned',
+    });
+  });
+});
+
+describe('AgentQuotaService.planDeviceRouting', () => {
+  const now = Date.parse('2026-07-02T00:00:00Z');
+  const weekly = (utilization: number) => ({
+    capturedAt: now - 60_000,
+    limitType: 'weekly_all',
+    resetsAt: now + 3 * 24 * HOUR,
+    scopeKey: '',
+    utilization,
+  });
+
+  it('sends a pin as the only candidate, and the pool best-first otherwise', async () => {
+    const bindings = new AgentAccountBindingModel(serverDB, userId);
+    await serverDB.insert(agents).values([{ id: 'agent-d', slug: 'agent-d', title: 'D', userId }]);
+    const busy = await service.ingestSnapshot({
+      identity: { email: 'busy@example.com', externalAccountId: 'busy-acc' },
+      provider: 'claude-code',
+      readings: [weekly(80)],
+    });
+    const free = await service.ingestSnapshot({
+      identity: { email: 'free@example.com', externalAccountId: 'free-acc' },
+      provider: 'claude-code',
+      readings: [weekly(10)],
+    });
+    const spent = await service.ingestSnapshot({
+      identity: { externalAccountId: 'spent-acc' },
+      provider: 'claude-code',
+      readings: [weekly(100)],
+    });
+
+    expect(await service.planDeviceRouting('agent-d', { now, provider: 'claude-code' })).toBeNull();
+
+    for (const account of [busy, free, spent])
+      await bindings.upsert({
+        accountId: account.id,
+        agentId: 'agent-d',
+        role: QuotaBindingRole.pool,
+      });
+
+    // An exhausted account is not a candidate; the rest go most headroom first.
+    expect(await service.planDeviceRouting('agent-d', { now, provider: 'claude-code' })).toEqual({
+      candidates: [
+        { externalAccountId: 'free-acc', name: 'free@example.com' },
+        { externalAccountId: 'busy-acc', name: 'busy@example.com' },
+      ],
+      mode: 'balanced',
+    });
+
+    await bindings.upsert({
+      accountId: busy.id,
+      agentId: 'agent-d',
+      role: QuotaBindingRole.pinned,
+    });
+    expect(await service.planDeviceRouting('agent-d', { now, provider: 'claude-code' })).toEqual({
+      candidates: [{ externalAccountId: 'busy-acc', name: 'busy@example.com' }],
+      mode: 'pinned',
+    });
+  });
+});
+
+describe('AgentQuotaService.listLatestReadings', () => {
+  const now = Date.parse('2026-07-02T00:00:00Z');
+  const weeklyReading = {
+    capturedAt: now - 60_000,
+    limitType: 'weekly_all',
+    resetsAt: now + 3 * 24 * HOUR,
+    scopeKey: '',
+    utilization: 21,
+  };
+
+  it('carries a limit the provider reports without a reset time', async () => {
+    // An untouched model-scoped weekly arrives as `resets_at: null`. Windows are
+    // keyed by that instant, so it can only ever exist as a reading — reading
+    // the panel off windows is what made the Fable row invisible.
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [
+        weeklyReading,
+        {
+          capturedAt: now - 60_000,
+          limitType: 'weekly_scoped',
+          resetsAt: null,
+          scopeKey: 'Fable',
+          utilization: 0,
+        },
+      ],
+    });
+
+    expect(await windows.listByAccount(account.id)).toHaveLength(1);
+    expect(await service.listLatestReadings(account.id)).toContainEqual(
+      expect.objectContaining({ limitType: 'weekly_scoped', resetsAt: null, scopeKey: 'Fable' }),
+    );
+  });
+
+  it('counts a rolled-over session window as free when balancing accounts', async () => {
+    // Left at 100% six hours ago: that window has since reset, so the account
+    // is idle — not benched behind an exhausted session.
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [
+        weeklyReading,
+        {
+          capturedAt: now - 6 * HOUR,
+          limitType: 'session',
+          resetsAt: now - HOUR,
+          scopeKey: '',
+          utilization: 100,
+        },
+      ],
+    });
+
+    const [load] = await service.resolveAccountLoads([account.id], now);
+
+    expect(load.sessionUtil).toBe(0);
+    expect(load.rateLimitedUntil).toBeNull();
+    expect(load.weeklyUtil).toBe(21);
+  });
+
+  it('forgets the 5-hour limit once the plan stops reporting it (Max upgraded to Ultra)', async () => {
+    // The Max-era sample carried a session window; every Ultra sample after
+    // its reset carries none. Its row stays the newest in the session bucket.
+    await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [
+        { ...weeklyReading, capturedAt: now - 8 * HOUR },
+        {
+          capturedAt: now - 8 * HOUR,
+          limitType: 'session',
+          resetsAt: now - 6 * HOUR,
+          scopeKey: '',
+          utilization: 40,
+        },
+      ],
+    });
+    const account = await service.ingestSnapshot({
+      identity: { ...identity, planTier: 'ultra' },
+      provider: 'claude-code',
+      readings: [weeklyReading],
+    });
+
+    const latest = await service.listLatestReadings(account.id);
+
+    expect(latest.map((r) => r.limitType)).toEqual(['weekly_all']);
+  });
+});
+
+describe('AgentQuotaService.recordUsage', () => {
+  it('attributes the turn to the account and computes cost from model-bank rates', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-1',
+      model: 'claude-opus-4-8',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'claude-code',
+      usage: { cacheRead: 1_000_000, cacheWrite5m: 100_000, input: 10_000, output: 40_000 },
+    });
+
+    const from = new Date('2026-07-01T00:00:00Z');
+    const to = new Date('2026-07-01T02:00:00Z');
+    // opus 4.8: in $5, out $25, cacheRead $0.5, cacheWrite $6.25 per MTok →
+    // 0.01*5 + 0.04*25 + 1*0.5 + 0.1*6.25 = 2.175
+    expect(await ledger.sumCostUsd(account.id, from, to)).toBeCloseTo(2.175, 6);
+
+    // replayed event (same message id) must not double-count
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-1',
+      model: 'claude-opus-4-8',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'claude-code',
+      usage: { output: 40_000 },
+    });
+    expect(await ledger.sumCostUsd(account.id, from, to)).toBeCloseTo(2.175, 6);
+  });
+
+  it('creates the account for a first-run turn instead of landing it unattributed', async () => {
+    // A codex run can outrun the quota menu's ingestion: the account row does
+    // not exist yet when the first usage arrives (Codex review on PR #19770).
+    const accounts = new AgentProviderAccountModel(serverDB, userId);
+    await service.recordUsage({
+      externalAccountId: 'codex-fresh-acc',
+      messageId: 'msg-first-run',
+      model: 'gpt-5.3-codex',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'codex',
+      usage: { input: 1000, output: 500 },
+    });
+
+    const account = await accounts.findByExternalId('codex', 'codex-fresh-acc');
+    expect(account).not.toBeNull();
+    // The ledger row is attributed to the freshly created account.
+    expect(
+      await ledger.sumCostUsd(
+        account!.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBeGreaterThan(0);
+  });
+
+  it('stores tokens without a cost for a model the bank does not know', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'claude-code',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-unknown-model',
+      model: 'claude-experimental-x',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'claude-code',
+      usage: { output: 40_000 },
+    });
+
+    // row exists (tokens kept) but contributes no fabricated cost
+    expect(
+      await ledger.sumCostUsd(
+        account.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBe(0);
+  });
+
+  it('drops nothing when the account is unknown — row lands unattributed', async () => {
+    await service.recordUsage({
+      externalAccountId: 'never-seen-account',
+      messageId: 'msg-orphan',
+      model: 'claude-opus-4-8',
+      provider: 'claude-code',
+      usage: { output: 1000 },
+    });
+    // no throw = pass; the row is accountId-null and excluded from calibration
+  });
+
+  it('prices a codex turn from the openai model bank, reasoning at the output rate', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'codex',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-codex-1',
+      model: 'gpt-5.3-codex',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'codex',
+      usage: { cacheRead: 1_000_000, input: 10_000, output: 30_000, reasoning: 10_000 },
+    });
+
+    // gpt-5.3-codex: in $1.75, out $14, cacheRead $0.175 per MTok →
+    // 0.01*1.75 + (0.03+0.01)*14 + 1*0.175 = 0.7525
+    expect(
+      await ledger.sumCostUsd(
+        account.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBeCloseTo(0.7525, 6);
+  });
+
+  it('stores tokens without a cost for a codex model the bank does not know', async () => {
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'codex',
+      readings: [],
+    });
+
+    await service.recordUsage({
+      externalAccountId: identity.externalAccountId,
+      messageId: 'msg-unknown-codex-model',
+      model: 'gpt-9-codex',
+      occurredAt: Date.parse('2026-07-01T01:00:00Z'),
+      provider: 'codex',
+      usage: { output: 40_000 },
+    });
+
+    // row exists (tokens kept) but contributes no fabricated cost
+    expect(
+      await ledger.sumCostUsd(
+        account.id,
+        new Date('2026-07-01T00:00:00Z'),
+        new Date('2026-07-01T02:00:00Z'),
+      ),
+    ).toBe(0);
+  });
+});
+
+describe('AgentQuotaService.listActiveRuns', () => {
+  it('only counts runs that billed the account within the last six hours', async () => {
+    const now = Date.parse('2026-07-12T12:00:00Z');
+    const account = await new AgentProviderAccountModel(serverDB, userId).create({
+      provider: 'claude-code',
+    });
+    await serverDB.insert(agents).values({ id: 'active-run-agent', userId });
+    await serverDB.insert(agentOperations).values([
+      { agentId: 'active-run-agent', id: 'op-fresh', status: 'running', userId },
+      // Left `running` by a client that never reported back.
+      { agentId: 'active-run-agent', id: 'op-stale', status: 'running', userId },
+    ]);
+    const turn = (operationId: string, at: number) =>
+      ledger.append({
+        accountId: account.id,
+        occurredAt: new Date(at),
+        operationId,
+        provider: 'claude-code',
+      });
+    await turn('op-fresh', now - HOUR);
+    await turn('op-stale', now - 7 * HOUR);
+
+    const runs = await service.listActiveRuns(account.id, now);
+
+    expect(runs.map((run) => run.operationId)).toEqual(['op-fresh']);
+    expect(runs[0].lastTurnAt).toBe(now - HOUR);
+  });
+});
+
+describe('Codex quota persistence', () => {
+  it('preserves provider bucket names and monthly durations through DB reads and projection', async () => {
+    const capturedAt = Date.now();
+    const reading = {
+      capturedAt,
+      limitName: 'Other models',
+      limitType: 'weekly_all',
+      resetsAt: capturedAt + 100000,
+      scopeKey: 'codex_other',
+      utilization: 41,
+      windowMinutes: 43200,
+    };
+    const account = await service.ingestSnapshot({
+      identity,
+      provider: 'codex',
+      readings: [reading],
+    });
+    expect(await service.listLatestReadings(account.id)).toContainEqual(
+      expect.objectContaining(reading),
+    );
+    expect(await service.listSnapshotSeries(account.id, new Date(capturedAt - 1))).toContainEqual(
+      expect.objectContaining(reading),
+    );
+    expect((await windows.listByAccount(account.id))[0].windowSeconds).toBe(43200 * 60);
+  });
+});

@@ -1,0 +1,315 @@
+/**
+ * @vitest-environment happy-dom
+ */
+import {
+  type IEditor,
+  ReactAlertPlugin,
+  ReactChartPlugin,
+  ReactFootnotePlugin,
+  ReactToolbarPlugin,
+  ReactVideoPlugin,
+} from '@lobehub/editor';
+import { act, render, screen } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createEditorFileUploadTracker } from './editorFileUploadTracker';
+import InternalEditor from './InternalEditor';
+import { LinearFileCard } from './LinearFilePlugin';
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+    <button aria-label={title} type="button" onClick={onClick} />
+  ),
+}));
+
+const editorProps = vi.hoisted(() => ({
+  last: undefined as any,
+  image: undefined as any,
+  /** Props of the `<InlineToolbar>` handed to the toolbar plugin, if any. */
+  toolbar: undefined as any,
+}));
+
+vi.mock('@lobehub/editor/react', () => ({
+  Editor: Object.assign(
+    vi.fn((props: any) => {
+      editorProps.last = props;
+      return <div data-testid="editor" />;
+    }),
+    {
+      withProps: (plugin: unknown, props: any) => {
+        if (props?.defaultBlockImage) editorProps.image = props;
+        if (props?.children?.props?.floating) editorProps.toolbar = props.children.props;
+        return plugin;
+      },
+    },
+  ),
+  useEditorState: () => ({}),
+}));
+
+vi.mock('@lobehub/editor', () => ({
+  ReactAlertPlugin: vi.fn(),
+  ReactChartPlugin: vi.fn(),
+  ReactFootnotePlugin: vi.fn(),
+  ReactImagePlugin: vi.fn(),
+  ReactLinkPlugin: vi.fn(),
+  ReactLiteXmlPlugin: vi.fn(),
+  ReactMathPlugin: vi.fn(),
+  ReactMentionPlugin: vi.fn(),
+  ReactTablePlugin: vi.fn(),
+  ReactToolbarPlugin: vi.fn(),
+  ReactVideoPlugin: vi.fn(),
+}));
+
+vi.mock('@/features/ChatInput/InputEditor/plugins', () => ({
+  createChatInputRichPlugins: () => [],
+}));
+
+vi.mock('./rehostImage', () => ({ needsImageRehost: () => true, rehostImage: vi.fn() }));
+
+vi.mock('./InlineToolbar', () => ({
+  default: () => <div />,
+}));
+
+vi.mock('@/components/FileIcon', () => ({
+  default: ({ fileName }: { fileName: string }) => <div>{fileName}</div>,
+}));
+
+vi.mock('./useImageUpload', () => ({
+  useFileUpload: () => vi.fn(),
+  useImageUpload: () => vi.fn(),
+}));
+
+vi.mock('@lobechat/const', () => ({
+  isDesktop: false,
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: { progress?: number }) =>
+      key === 'file.uploadingProgress' ? `Uploading… ${options?.progress}%` : key,
+  }),
+}));
+
+describe('InternalEditor readonly state', () => {
+  const editor = {
+    getDocument: vi.fn(),
+    getLexicalEditor: vi.fn(() => undefined),
+    setDocument: vi.fn(),
+  } as unknown as IEditor;
+
+  beforeEach(() => {
+    editorProps.last = undefined;
+  });
+
+  it('only rehosts images while the live editor is editable', () => {
+    let editable = false;
+    const liveEditor = {
+      ...editor,
+      getLexicalEditor: () => ({
+        isEditable: () => editable,
+        registerCommand: vi.fn(() => vi.fn()),
+        registerRootListener: vi.fn(() => vi.fn()),
+        registerUpdateListener: vi.fn(() => vi.fn()),
+      }),
+    } as unknown as IEditor;
+    render(<InternalEditor editor={liveEditor} />);
+    expect(editorProps.image.handleRehost).toBeTypeOf('function');
+    expect(editorProps.image.needRehost('https://example.com/image.png')).toBe(false);
+    editable = true;
+    expect(editorProps.image.needRehost('https://example.com/image.png')).toBe(true);
+    editable = false;
+    expect(editorProps.image.needRehost('https://example.com/image.png')).toBe(false);
+  });
+
+  it('passes editable=false to the editor when disabled', () => {
+    render(<InternalEditor disabled editor={editor} />);
+
+    expect(editorProps.last?.editable).toBe(false);
+  });
+
+  it('constrains the editor wrapper to its parent width', () => {
+    const { container } = render(<InternalEditor editor={editor} />);
+
+    expect(container.firstElementChild).toHaveStyle({
+      maxWidth: '100%',
+      overflow: 'hidden',
+      width: '100%',
+    });
+  });
+
+  it('registers the alert, footnote, chart and video nodes the document service can write', () => {
+    render(<InternalEditor editor={editor} />);
+
+    expect(editorProps.last?.plugins).toEqual(
+      expect.arrayContaining([
+        ReactAlertPlugin,
+        ReactChartPlugin,
+        ReactFootnotePlugin,
+        ReactVideoPlugin,
+      ]),
+    );
+  });
+
+  it('registers the floating toolbar when editable', () => {
+    render(<InternalEditor editor={editor} />);
+
+    expect(editorProps.last?.plugins).toContain(ReactToolbarPlugin);
+  });
+
+  it('does not register the floating toolbar when not editable (locked page)', () => {
+    render(<InternalEditor editable={false} editor={editor} />);
+
+    expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+  });
+
+  it('does not register the floating toolbar when disabled', () => {
+    render(<InternalEditor disabled editor={editor} />);
+
+    expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+  });
+
+  describe('readonly selection items', () => {
+    const commentItem = { key: 'comment', label: 'Comment', onClick: () => {} };
+    const askItem = { key: 'ask', label: 'Ask', onClick: () => {} };
+
+    beforeEach(() => {
+      editorProps.toolbar = undefined;
+    });
+
+    it('keeps selection actions reachable on a locked page through a selection-only toolbar', () => {
+      render(
+        <InternalEditor editable={false} editor={editor} readonlySelectionItems={[commentItem]} />,
+      );
+
+      expect(editorProps.last?.plugins).toContain(ReactToolbarPlugin);
+      expect(editorProps.toolbar).toMatchObject({
+        extraItems: [commentItem],
+        floating: true,
+        selectionOnly: true,
+      });
+    });
+
+    it('offers the formatting toolbar with its own extras while editable', () => {
+      render(
+        <InternalEditor
+          editor={editor}
+          readonlySelectionItems={[commentItem]}
+          toolbarExtraItems={[askItem, commentItem]}
+        />,
+      );
+
+      expect(editorProps.last?.plugins).toContain(ReactToolbarPlugin);
+      expect(editorProps.toolbar).toMatchObject({ extraItems: [askItem, commentItem] });
+      expect(editorProps.toolbar?.selectionOnly).toBeUndefined();
+    });
+
+    it('registers nothing when not editable and there is nothing to act on', () => {
+      render(<InternalEditor editable={false} editor={editor} readonlySelectionItems={[]} />);
+
+      expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+    });
+
+    it('never surfaces a toolbar while disabled', () => {
+      render(<InternalEditor disabled editor={editor} readonlySelectionItems={[commentItem]} />);
+
+      expect(editorProps.last?.plugins).not.toContain(ReactToolbarPlugin);
+    });
+  });
+
+  it('renders the current file upload percentage', () => {
+    const tracker = createEditorFileUploadTracker();
+    const file = new File(['video'], 'recording.mp4', { type: 'video/mp4' });
+    const uploadId = tracker.start(file);
+    tracker.update(uploadId, 'uploading', { progress: 42, restTime: 8, speed: 1024 });
+
+    render(
+      <LinearFileCard
+        node={{ getKey: () => 'node-1', name: file.name, status: 'pending' }}
+        uploadTracker={tracker}
+      />,
+    );
+
+    expect(screen.getByText('Uploading… 42%', { exact: false })).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42');
+  });
+
+  it('keeps the final upload status in the processing state', () => {
+    const tracker = createEditorFileUploadTracker();
+    const file = new File(['video'], 'recording.mp4', { type: 'video/mp4' });
+    const uploadId = tracker.start(file);
+    tracker.update(uploadId, 'success', { progress: 100, restTime: 0, speed: 1024 });
+
+    render(
+      <LinearFileCard
+        node={{ getKey: () => 'node-1', name: file.name, status: 'pending' }}
+        uploadTracker={tracker}
+      />,
+    );
+
+    expect(screen.getByText('file.processing', { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText('file.preparing', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it('keeps tracking progress through Strict Mode effect replay', () => {
+    const tracker = createEditorFileUploadTracker();
+    const file = new File(['video'], 'recording.mp4', { type: 'video/mp4' });
+    const uploadId = tracker.start(file);
+
+    render(
+      <StrictMode>
+        <LinearFileCard
+          node={{ getKey: () => 'node-1', name: file.name, status: 'pending' }}
+          uploadTracker={tracker}
+        />
+      </StrictMode>,
+    );
+
+    act(() => {
+      tracker.update(uploadId, 'uploading', { progress: 42, restTime: 8, speed: 1024 });
+    });
+
+    expect(screen.getByText('Uploading… 42%', { exact: false })).toBeInTheDocument();
+  });
+
+  it('releases upload state when a pending file node unmounts', () => {
+    const tracker = createEditorFileUploadTracker();
+    const file = new File(['video'], 'recording.mp4', { type: 'video/mp4' });
+    const uploadId = tracker.start(file);
+
+    const { unmount } = render(
+      <LinearFileCard
+        node={{ getKey: () => 'node-1', name: file.name, status: 'pending' }}
+        uploadTracker={tracker}
+      />,
+    );
+
+    expect(tracker.getSnapshot('node-1')).toBeDefined();
+
+    unmount();
+
+    expect(tracker.getSnapshot('node-1')).toBeUndefined();
+
+    tracker.finish(uploadId);
+    const nextFile = new File(['next'], file.name, { type: file.type });
+    const nextUploadId = tracker.start(nextFile);
+    tracker.bindNode('node-2', nextFile.name);
+
+    expect(tracker.getSnapshot('node-2')?.id).toBe(nextUploadId);
+  });
+
+  it('renders a persisted file card without an upload tracker', () => {
+    render(
+      <LinearFileCard
+        node={{
+          fileUrl: 'https://example.com/report.pdf',
+          name: 'report.pdf',
+          status: 'uploaded',
+        }}
+      />,
+    );
+
+    expect(screen.getAllByText('report.pdf')).not.toHaveLength(0);
+  });
+});

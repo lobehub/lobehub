@@ -3,8 +3,11 @@
 import isEqual from 'fast-deep-equal';
 import { type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 
+import { OFFICIAL_SITE } from '@/const/url';
 import { useToolStore } from '@/store/tool';
+import { loadBuiltinSkill } from '@/store/tool/slices/builtin/loadBuiltinSkills';
 
 import { DetailContext, type DetailContextValue } from './DetailContext';
 
@@ -26,6 +29,12 @@ export const BuiltinAgentSkillDetailProvider = ({
     [identifier, builtinSkills],
   );
 
+  const { data: skillContent } = useSWR(
+    skill ? ['builtin-skill-content', identifier] : null,
+    async () => (await loadBuiltinSkill(identifier))?.content,
+    { revalidateOnFocus: false },
+  );
+
   if (!skill) return null;
 
   const localizedTitle = t(`tools.builtins.${identifier}.title`, {
@@ -40,7 +49,7 @@ export const BuiltinAgentSkillDetailProvider = ({
 
   const value: DetailContextValue = {
     author: 'LobeHub',
-    authorUrl: 'https://lobehub.com',
+    authorUrl: OFFICIAL_SITE,
     config: null as any,
     description: skill.description,
     icon: skill.avatar || '',
@@ -50,7 +59,7 @@ export const BuiltinAgentSkillDetailProvider = ({
     localizedDescription,
     localizedReadme,
     readme: '',
-    skillContent: skill.content,
+    skillContent,
     tools: [],
     toolsLoading: false,
   };

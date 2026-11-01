@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,6 +21,9 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       removeFiles: { mutate: vi.fn() },
       updateFile: { mutate: vi.fn() },
     },
+    upload: {
+      createS3PreSignedUrl: { mutate: vi.fn() },
+    },
   },
 }));
 
@@ -25,11 +32,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('file command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -38,14 +40,17 @@ describe('file command', () => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
-    for (const method of Object.values(mockTrpcClient.file)) {
-      for (const fn of Object.values(method)) {
-        (fn as ReturnType<typeof vi.fn>).mockReset();
+    for (const group of [mockTrpcClient.file, mockTrpcClient.upload]) {
+      for (const method of Object.values(group)) {
+        for (const fn of Object.values(method)) {
+          (fn as ReturnType<typeof vi.fn>).mockReset();
+        }
       }
     }
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -77,13 +82,22 @@ describe('file command', () => {
     });
 
     it('should output JSON when --json flag is used', async () => {
-      const items = [{ id: 'f1', name: 'doc.pdf' }];
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
+      // A file's own `url` is its storage address, so the page link lands in `appUrl`.
+      const items = [{ id: 'f1', name: 'doc.pdf', url: 'https://s3.example.com/doc.pdf' }];
       mockTrpcClient.file.getFiles.query.mockResolvedValue(items);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'file', 'list', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(items, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...items[0], appUrl: 'https://app.lobehub.com/resource/file/f1' }],
+          null,
+          2,
+        ),
+      );
     });
 
     it('should show message when no files found', async () => {
@@ -204,6 +218,121 @@ describe('file command', () => {
 
       expect(mockTrpcClient.file.createFile.mutate).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('already exists'));
+    });
+
+    it('should upload a local file passed as a positional argument', async () => {
+      const tmpFile = path.join(os.tmpdir(), `lh-upload-${process.pid}.txt`);
+      fs.writeFileSync(tmpFile, 'hello world');
+
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue({ ok: true, status: 200, statusText: 'OK' } as Response);
+      mockTrpcClient.file.checkFileHash.mutate.mockResolvedValue({ isExist: false });
+      mockTrpcClient.upload.createS3PreSignedUrl.mutate.mockResolvedValue('https://s3/presigned');
+      mockTrpcClient.file.createFile.mutate.mockResolvedValue({
+        id: 'f-local',
+        url: 'files/x.txt',
+      });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync(['node', 'test', 'file', 'upload', tmpFile]);
+
+        expect(mockTrpcClient.upload.createS3PreSignedUrl.mutate).toHaveBeenCalled();
+        expect(fetchSpy).toHaveBeenCalledWith(
+          'https://s3/presigned',
+          expect.objectContaining({
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            method: 'PUT',
+          }),
+        );
+        expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            fileType: 'text/plain; charset=utf-8',
+            name: path.basename(tmpFile),
+            url: expect.stringContaining('.txt'),
+          }),
+        );
+        expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('File created'));
+      } finally {
+        fetchSpy.mockRestore();
+        fs.rmSync(tmpFile, { force: true });
+      }
+    });
+
+    it('should upload a local file passed via --file', async () => {
+      const tmpFile = path.join(os.tmpdir(), `lh-upload-f-${process.pid}.json`);
+      fs.writeFileSync(tmpFile, '{}');
+
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue({ ok: true, status: 200, statusText: 'OK' } as Response);
+      mockTrpcClient.file.checkFileHash.mutate.mockResolvedValue({ isExist: false });
+      mockTrpcClient.upload.createS3PreSignedUrl.mutate.mockResolvedValue('https://s3/presigned');
+      mockTrpcClient.file.createFile.mutate.mockResolvedValue({ id: 'f-json' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync(['node', 'test', 'file', 'upload', '--file', tmpFile]);
+
+        expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ fileType: 'application/json; charset=utf-8' }),
+        );
+        expect(fetchSpy).toHaveBeenCalledWith(
+          'https://s3/presigned',
+          expect.objectContaining({
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            method: 'PUT',
+          }),
+        );
+      } finally {
+        fetchSpy.mockRestore();
+        fs.rmSync(tmpFile, { force: true });
+      }
+    });
+
+    it('should skip the S3 upload when the local file hash already exists', async () => {
+      const tmpFile = path.join(os.tmpdir(), `lh-upload-dedup-${process.pid}.txt`);
+      fs.writeFileSync(tmpFile, 'dedup me');
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      mockTrpcClient.file.checkFileHash.mutate.mockResolvedValue({
+        isExist: true,
+        url: 'files/2024-01-01/existing.txt',
+      });
+      mockTrpcClient.file.createFile.mutate.mockResolvedValue({ id: 'f-dedup' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync(['node', 'test', 'file', 'upload', tmpFile]);
+
+        // No pre-sign and no S3 PUT should happen
+        expect(mockTrpcClient.upload.createS3PreSignedUrl.mutate).not.toHaveBeenCalled();
+        expect(fetchSpy).not.toHaveBeenCalled();
+        // The record reuses the existing url
+        expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ url: 'files/2024-01-01/existing.txt' }),
+        );
+      } finally {
+        fetchSpy.mockRestore();
+        fs.rmSync(tmpFile, { force: true });
+      }
+    });
+
+    it('should error when local file does not exist', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'file', 'upload', '-f', '/no/such/file.txt']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('File not found'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should error when no source is provided', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'file', 'upload']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Provide a local file path'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 

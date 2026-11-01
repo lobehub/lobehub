@@ -22,7 +22,11 @@ export class AgentGroupController extends BaseController {
   async getAgentGroups(c: Context): Promise<Response> {
     try {
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const agentGroups = await agentGroupService.getAgentGroups();
 
       return this.success(c, agentGroups, 'Agent category list retrieved successfully');
@@ -46,7 +50,11 @@ export class AgentGroupController extends BaseController {
       }
 
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const agentGroup = await agentGroupService.getAgentGroupById(groupId);
 
       if (!agentGroup) {
@@ -70,18 +78,14 @@ export class AgentGroupController extends BaseController {
       const body = await this.getBody<CreateAgentGroupRequest>(c);
 
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const groupId = await agentGroupService.createAgentGroup(body);
 
-      return c.json(
-        {
-          data: { id: groupId },
-          message: 'Agent category created successfully',
-          success: true,
-          timestamp: new Date().toISOString(),
-        },
-        201,
-      );
+      return this.success(c, { id: groupId }, 'Agent category created successfully', 201);
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -108,7 +112,11 @@ export class AgentGroupController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       await agentGroupService.updateAgentGroup(request);
 
       return this.success(c, null, 'Agent category updated successfully');
@@ -136,7 +144,11 @@ export class AgentGroupController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       await agentGroupService.deleteAgentGroup(request);
 
       return this.success(c, null, 'Agent category deleted successfully');

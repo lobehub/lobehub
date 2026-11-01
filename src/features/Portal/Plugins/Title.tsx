@@ -1,39 +1,43 @@
-import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { getBuiltinPortalTitle } from '@lobechat/builtin-tools/portals';
+import type { BuiltinPortalTitle } from '@lobechat/types';
+import { Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { ArrowLeft, Globe } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/features/PluginAvatar';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
+import { chatPortalSelectors, dbMessageSelectors } from '@/store/chat/selectors';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
 const Title = () => {
-  const [closeToolUI, toolUIIdentifier = ''] = useChatStore((s) => [
-    s.closeToolUI,
+  const [toolUIIdentifier = '', messageId] = useChatStore((s) => [
     chatPortalSelectors.toolUIIdentifier(s),
+    chatPortalSelectors.toolMessageId(s),
   ]);
+  const toolUIParams = useChatStore(chatPortalSelectors.toolUIParams, isEqual);
+  const message = useChatStore(dbMessageSelectors.getDbMessageById(messageId || ''), isEqual);
 
-  const { t } = useTranslation('plugin');
   const pluginMeta = useToolStore(toolSelectors.getMetaById(toolUIIdentifier), isEqual);
   const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? toolUIIdentifier;
 
-  if (toolUIIdentifier === WebBrowsingManifest.identifier) {
+  // A tool may ship its own portal header content; otherwise fall back to the
+  // generic plugin avatar + title. The back/close chrome is owned by the header
+  // wrapper (HeaderChrome), so the title slot must not add its own back arrow.
+  const CustomTitle = getBuiltinPortalTitle(toolUIIdentifier) as BuiltinPortalTitle | undefined;
+
+  if (CustomTitle) {
     return (
-      <Flexbox horizontal align={'center'} gap={8}>
-        <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeToolUI()} />
-        <Icon icon={Globe} size={16} />
-        <Text style={{ fontSize: 16 }} type={'secondary'}>
-          {t('search.title')}
-        </Text>
-      </Flexbox>
+      <CustomTitle
+        apiName={message?.plugin?.apiName}
+        identifier={toolUIIdentifier}
+        messageId={messageId || ''}
+        params={toolUIParams}
+      />
     );
   }
+
   return (
-    <Flexbox horizontal align={'center'} gap={4}>
-      <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeToolUI()} />
+    <Flexbox horizontal align={'center'} gap={8}>
       <PluginAvatar identifier={toolUIIdentifier} size={28} />
       <Text style={{ fontSize: 16 }} type={'secondary'}>
         {pluginTitle}

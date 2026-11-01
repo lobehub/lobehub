@@ -11,6 +11,7 @@ import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createZhipuImage } from './createImage';
 import { createZhipuVideo } from './createVideo';
+import { isAlwaysOnThinkingGLMModel, isToolStreamSupportedGLMModel } from './modelId';
 
 export interface ZhipuModelCard {
   description: string;
@@ -18,14 +19,24 @@ export interface ZhipuModelCard {
   modelName: string;
 }
 
+interface ZhipuRuntimeOptions {
+  [key: string]: unknown;
+  disableToolStream?: boolean;
+}
+
+const isFireworksRuntime = (options: ZhipuRuntimeOptions) =>
+  typeof options.baseURL === 'string' && options.baseURL.includes('fireworks.ai');
+
 export const params = {
   baseURL: 'https://open.bigmodel.cn/api/paas/v4',
   chatCompletion: {
-    handlePayload: (payload) => {
+    handlePayload: (payload, options: ZhipuRuntimeOptions = {}) => {
       const {
         enabledSearch,
         max_tokens,
         model,
+        preserveThinking,
+        reasoning_effort,
         stream,
         temperature,
         thinking,
@@ -33,6 +44,39 @@ export const params = {
         top_p,
         ...rest
       } = payload;
+
+      const messages = (rest.messages || []).map((message: any) => {
+        const { reasoning, ...messageRest } = message;
+
+        const reasoningContent =
+          typeof messageRest.reasoning_content === 'string'
+            ? messageRest.reasoning_content
+            : typeof reasoning?.content === 'string'
+              ? reasoning.content
+              : undefined;
+
+        if (reasoningContent !== undefined) {
+          return {
+            ...messageRest,
+            reasoning_content: reasoningContent,
+          };
+        }
+
+        return messageRest;
+      });
+
+      const shouldSetClearThinking = typeof preserveThinking === 'boolean';
+      const thinkingPayload = thinking ? { type: thinking.type } : undefined;
+      const resolvedThinking = shouldSetClearThinking
+        ? {
+            ...thinkingPayload,
+            clear_thinking: !preserveThinking,
+          }
+        : thinkingPayload;
+      // GLM-5.3+ rejects thinking.type=disabled; keep effort-only control.
+      const enforcedThinking = isAlwaysOnThinkingGLMModel(model)
+        ? { ...resolvedThinking, type: 'enabled' as const }
+        : resolvedThinking;
 
       const zhipuTools = enabledSearch
         ? [
@@ -75,13 +119,32 @@ export const params = {
         },
       );
 
+      // Example: Fireworks serves GLM-5.2 but rejects the Z.ai-only `tool_stream` field.
+      const isFireworks = isFireworksRuntime(options);
+      const shouldEnableToolStream =
+        !isFireworks &&
+        !options.disableToolStream &&
+        stream &&
+        isToolStreamSupportedGLMModel(model);
+      const shouldDropReasoningEffort = Boolean(
+        isFireworks && reasoning_effort && enforcedThinking?.type === 'disabled',
+      );
+      // Example rejected by Fireworks GLM-5.2:
+      // { thinking: { type: 'enabled' }, reasoning_effort: 'max' }.
+      const shouldDropThinking = Boolean(
+        isFireworks && reasoning_effort && enforcedThinking?.type !== 'disabled',
+      );
+
       return {
         ...rest,
         ...resolvedParams,
+        messages,
         model,
+        ...(reasoning_effort && !shouldDropReasoningEffort ? { reasoning_effort } : {}),
+        ...(isFireworks && preserveThinking ? { reasoning_history: 'preserved' } : {}),
         stream,
-        thinking: thinking ? { type: thinking.type } : undefined,
-        tool_stream: stream && /^glm-(?:4\.(?:6|7)|5(?:\.1)?)$/.test(model) ? true : undefined,
+        thinking: shouldDropThinking ? undefined : enforcedThinking,
+        tool_stream: shouldEnableToolStream ? true : undefined,
         tools: zhipuTools,
       } as any;
     },
@@ -178,6 +241,6 @@ export const params = {
     return processModelList(standardModelList, MODEL_LIST_CONFIGS.zhipu, 'zhipu');
   },
   provider: ModelProvider.ZhiPu,
-} satisfies OpenAICompatibleFactoryOptions;
+} satisfies OpenAICompatibleFactoryOptions<ZhipuRuntimeOptions>;
 
-export const LobeZhipuAI = createOpenAICompatibleRuntime(params);
+export const LobeZhipuAI = createOpenAICompatibleRuntime<ZhipuRuntimeOptions>(params);

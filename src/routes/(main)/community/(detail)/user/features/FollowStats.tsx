@@ -4,14 +4,28 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDiscoverStore } from '@/store/discover';
+import { socialSelectors } from '@/store/discover/selectors';
+
 import { useUserDetailContext } from './DetailProvider';
 
 const FollowStats = memo(() => {
   const { t } = useTranslation('discover');
   const { user } = useUserDetailContext();
 
-  const followingCount = user.followingCount ?? 0;
-  const followersCount = user.followersCount ?? 0;
+  // Live follow counts: `follow()` / `unfollow()` optimistically patch the
+  // `followCounts` replica entry for this user, so the numbers update immediately
+  // after toggling follow. Fall back to the static profile counts (which come
+  // straight from the authoritative `accounts.*_count` columns) whenever the
+  // live count is missing or 0 — so a not-yet-populated live entry never
+  // clobbers a real count.
+  const useFollowCounts = useDiscoverStore((s) => s.useFollowCounts);
+  const { queryKey } = useFollowCounts(user.id);
+  // The replica view of this entry; the sync hook only reports the fetch flags.
+  const followCounts = useDiscoverStore(socialSelectors.followCounts(queryKey));
+
+  const followingCount = followCounts?.followingCount || user.followingCount || 0;
+  const followersCount = followCounts?.followersCount || user.followersCount || 0;
 
   return (
     <Flexbox horizontal align={'center'} gap={16}>

@@ -1,0 +1,136 @@
+---
+title: 配置云端沙箱
+description: 配置内置云端沙箱能力，包括 Market 和自托管 Onlyboxes。
+tags:
+  - 云端沙箱
+  - Onlyboxes
+  - 自托管
+---
+
+# 配置云端沙箱
+
+云端沙箱用于内置的代码执行、Shell 命令、文件操作和文件导出工具。默认情况下，LobeHub 使用 Market 沙箱；自托管部署可以把同一套工具能力切换到兼容 Onlyboxes 的沙箱提供方。
+
+## 核心环境变量
+
+### `SANDBOX_PROVIDER`
+
+- 类型：可选
+- 描述：选择服务端使用的沙箱提供方。
+- 默认值：`market`
+- 示例：`onlyboxes`
+
+支持的取值：
+
+- `market`：使用现有 Market 沙箱。
+- `onlyboxes`：使用兼容 Onlyboxes 的自托管沙箱 Console。
+
+### `MARKET_BASE_URL`
+
+- 类型：可选
+- 描述：Market 服务的基础 URL。使用官方 Market 时无需配置；仅当你需要连接自托管或专用 Market 服务时设置。
+- 默认值：`https://market.lobehub.com`
+- 示例：`https://market.example.com`
+
+### `MARKET_TRUSTED_CLIENT_ID`
+
+- 类型：可选
+- 描述：Market Trusted Client 的客户端 ID，用于让 LobeHub 服务端代表当前用户调用 Market 能力。需要由对应 Market 服务登记。
+- 默认值：-
+- 示例：`lobechat-com`
+
+### `MARKET_TRUSTED_CLIENT_SECRET`
+
+- 类型：可选
+- 描述：Market Trusted Client 的共享密钥，必须与对应 Market 服务端配置一致。
+- 默认值：-
+- 示例：`your-market-trusted-client-secret`
+
+### `ONLYBOXES_BASE_URL`
+
+- 类型：当 `SANDBOX_PROVIDER=onlyboxes` 时必填
+- 描述：Onlyboxes Console API 的基础 URL，不需要包含 `/api/v1`。
+- 默认值：-
+- 示例：`https://onlyboxes.example.com`
+
+### `ONLYBOXES_JIT_SIGNING_KEY`
+
+- 类型：当 `SANDBOX_PROVIDER=onlyboxes` 时必填
+- 描述：用于签发 Onlyboxes MCP JIT Bearer Token 的 HMAC 密钥，必须与 Onlyboxes Console 的 `CONSOLE_JIT_SIGNING_KEY` 一致。
+- 默认值：-
+- 示例：`onlyboxes-jit-signing-secret`
+
+### `ONLYBOXES_JIT_ISSUER`
+
+- 类型：可选
+- 描述：Onlyboxes JIT Token claims 中使用的签发方。
+- 默认值：`APP_URL`
+- 示例：`https://lobehub.example.com`
+
+### `ONLYBOXES_JIT_TTL_SEC`
+
+- 类型：可选
+- 描述：LobeHub 签发的每个 Onlyboxes JIT Token 的有效期。
+- 默认值：`1800`
+- 示例：`900`
+
+### `ONLYBOXES_LEASE_TTL_SEC`
+
+- 类型：可选
+- 描述：云端沙箱提供方创建持久终端会话时使用的租约时长。
+- 默认值：`900`
+- 示例：`3600`
+
+## Market 配置
+
+默认情况下，LobeHub 使用官方 Market 沙箱，不需要额外配置：
+
+```bash
+# SANDBOX_PROVIDER=market
+```
+
+如果你需要显式使用 Market，或者连接自托管 / 专用 Market 服务，可以配置：
+
+```bash
+SANDBOX_PROVIDER=market
+MARKET_BASE_URL=https://market.example.com
+```
+
+如果该 Market 服务要求 LobeHub 服务端代表当前用户调用沙箱、凭据或技能能力，还需要配置 Trusted Client：
+
+```bash
+MARKET_TRUSTED_CLIENT_ID=lobechat-com
+MARKET_TRUSTED_CLIENT_SECRET=your-market-trusted-client-secret
+```
+
+`MARKET_TRUSTED_CLIENT_ID` 需要在 Market 服务端的可信客户端白名单中，`MARKET_TRUSTED_CLIENT_SECRET` 需要与 Market 服务端共享密钥一致。未配置 Trusted Client 时，Market 侧需要认证的能力会继续使用现有的用户授权流程。
+
+## Onlyboxes 运行时要求
+
+配置的 Onlyboxes worker 需要暴露 `terminalExec` 和 `terminalResource`。LobeHub 使用 `terminalExec` 作为 Shell 命令、代码执行和文件操作的兼容层，并使用 `terminalResource` 通过预签名上传 URL 导出文件。
+
+为了和 Market 沙箱保持能力对等，终端运行镜像应包含：
+
+- `python3`，用于文件操作封装和 Python 执行
+- `node`，用于 JavaScript 执行
+- `npx` 以及可用的 `tsx`，用于 TypeScript 执行
+- `base64`、`find`、`grep` 等常见 Shell 工具
+
+使用 Onlyboxes 时的最小配置：
+
+```bash
+SANDBOX_PROVIDER=onlyboxes
+ONLYBOXES_BASE_URL=https://onlyboxes.example.com
+ONLYBOXES_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
+```
+
+Onlyboxes Console 侧需要配置同一个密钥：
+
+```bash
+CONSOLE_JIT_SIGNING_KEY=onlyboxes-jit-signing-secret
+```
+
+<Callout type={'info'}>
+  文件导出仍会把沙箱内产物写入 LobeHub 配置的 S3 存储。如果用户需要下载沙箱生成的文件，请同时配置 S3
+  相关环境变量。
+</Callout>

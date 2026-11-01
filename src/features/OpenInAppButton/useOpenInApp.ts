@@ -1,10 +1,11 @@
 import { isDesktop } from '@lobechat/const';
 import type { DetectedApp, OpenInAppId } from '@lobechat/electron-client-ipc';
+import { toast } from '@lobehub/ui';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { message } from '@/components/AntdStaticMethods';
+import { openInAppKeys } from '@/libs/swr/keys';
 import { electronOpenInAppService } from '@/services/electron/openInApp';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
@@ -23,7 +24,7 @@ export const useOpenInApp = (workingDirectory: string): UseOpenInAppResult => {
 
   // SWR fetch detection once per session; main caches anyway.
   const { data } = useSWR(
-    isDesktop ? 'open-in-app/detect' : null,
+    isDesktop ? openInAppKeys.detect() : null,
     () => electronOpenInAppService.detectApps(),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
   );
@@ -60,11 +61,11 @@ export const useOpenInApp = (workingDirectory: string): UseOpenInAppResult => {
 
       const err = result.error ?? '';
       if (err.startsWith('Path not found')) {
-        message.error(t('errors.pathNotFound', { path: workingDirectory }));
+        toast.error(t('errors.pathNotFound', { path: workingDirectory }));
       } else if (err.includes('is not installed')) {
-        message.error(t('errors.appNotInstalled', { appName }));
+        toast.error(t('errors.appNotInstalled', { appName }));
       } else {
-        message.error(t('errors.launchFailed', { appName, error: err || t('errors.unknown') }));
+        toast.error(t('errors.launchFailed', { appName, error: err || t('errors.unknown') }));
       }
     },
     [displayNameMap, workingDirectory, userDefault, updatePreference, t],

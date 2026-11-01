@@ -1,22 +1,39 @@
-import type { ExperienceListParams, ExperienceListResult } from '@lobechat/types';
+import type {
+  ExperienceListParams,
+  ExperienceListResult,
+  UserMemoryExperience,
+  UserMemoryExperienceInsert,
+} from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 
-import type { NewUserMemoryExperience, UserMemoryExperience } from '../../schemas';
+import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
 import { userMemories, userMemoriesExperiences } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { buildUserMemoryWhere } from './where';
 
 export class UserMemoryExperienceModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
-  create = async (params: Omit<NewUserMemoryExperience, 'userId'>) => {
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
+  }
+
+  create = async (params: Omit<UserMemoryExperienceInsert, 'userId'>) => {
     const [result] = await this.db
       .insert(userMemoriesExperiences)
       .values({ ...params, userId: this.userId })
@@ -28,10 +45,7 @@ export class UserMemoryExperienceModel {
   delete = async (id: string) => {
     return this.db.transaction(async (tx) => {
       const experience = await tx.query.userMemoriesExperiences.findFirst({
-        where: and(
-          eq(userMemoriesExperiences.id, id),
-          eq(userMemoriesExperiences.userId, this.userId),
-        ),
+        where: and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)),
       });
 
       if (!experience || !experience.userMemoryId) {
@@ -41,25 +55,21 @@ export class UserMemoryExperienceModel {
       // Delete the base user memory (cascade will handle the experience)
       await tx
         .delete(userMemories)
-        .where(
-          and(eq(userMemories.id, experience.userMemoryId), eq(userMemories.userId, this.userId)),
-        );
+        .where(and(eq(userMemories.id, experience.userMemoryId), this.memoryWhere(userMemories)));
 
       return { success: true };
     });
   };
 
   deleteAll = async () => {
-    return this.db
-      .delete(userMemoriesExperiences)
-      .where(eq(userMemoriesExperiences.userId, this.userId));
+    return this.db.delete(userMemoriesExperiences).where(this.memoryWhere(userMemoriesExperiences));
   };
 
   query = async (limit = 50) => {
     return this.db.query.userMemoriesExperiences.findMany({
       limit,
       orderBy: [desc(userMemoriesExperiences.createdAt)],
-      where: eq(userMemoriesExperiences.userId, this.userId),
+      where: this.memoryWhere(userMemoriesExperiences),
     });
   };
 
@@ -77,12 +87,29 @@ export class UserMemoryExperienceModel {
     const bm25MatchQuery = normalizedQuery
       ? normalizeBm25MatchQuery(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
       : '';
+    const candidateResult =
+      normalizedQuery && this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+        ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'memoryExperiences',
+            filters: {
+              ...(tags?.length ? { memoryTagMatch: 'any' as const, memoryTags: tags } : {}),
+              ...(types?.length ? { memoryTypes: types } : {}),
+            },
+            pagination: {},
+            query: {
+              fields: ['parent_title', 'situation', 'key_learning', 'action'],
+              text: normalizedQuery,
+            },
+          })
+        : undefined;
+    const candidateIds = candidateResult?.candidates.map(({ id }) => id);
 
     // Build WHERE conditions
     const conditions: Array<SQL | undefined> = [
-      eq(userMemoriesExperiences.userId, this.userId),
+      this.memoryWhere(userMemoriesExperiences),
+      candidateIds ? inJsonStringArray(userMemoriesExperiences.id, candidateIds) : undefined,
       // Full-text search across title, situation, keyLearning, action
-      normalizedQuery
+      normalizedQuery && !candidateIds
         ? sql`(${userMemories.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('title', ${bm25MatchQuery}, conjunction_mode => true)]) OR ${userMemoriesExperiences.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('situation', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('key_learning', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('action', ${bm25MatchQuery}, conjunction_mode => true)]))`
         : undefined,
       types && types.length > 0 ? inArray(userMemoriesExperiences.type, types) : undefined,
@@ -110,7 +137,7 @@ export class UserMemoryExperienceModel {
     // JOIN condition
     const joinCondition = and(
       eq(userMemories.id, userMemoriesExperiences.userMemoryId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemories),
     );
 
     // Execute queries in parallel
@@ -152,10 +179,7 @@ export class UserMemoryExperienceModel {
 
   findById = async (id: string) => {
     return this.db.query.userMemoriesExperiences.findFirst({
-      where: and(
-        eq(userMemoriesExperiences.id, id),
-        eq(userMemoriesExperiences.userId, this.userId),
-      ),
+      where: and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)),
     });
   };
 
@@ -163,8 +187,6 @@ export class UserMemoryExperienceModel {
     return this.db
       .update(userMemoriesExperiences)
       .set({ ...value, updatedAt: new Date() })
-      .where(
-        and(eq(userMemoriesExperiences.id, id), eq(userMemoriesExperiences.userId, this.userId)),
-      );
+      .where(and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)));
   };
 }

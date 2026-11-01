@@ -2,12 +2,13 @@
 
 import type { RunCommandState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Check, SquareChevronRight, X } from 'lucide-react';
-import { memo } from 'react';
+import { type ComponentType, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
+import { getRunCommandDisplayCommand } from '../../utils/runCommand';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -36,7 +37,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  leadingIcon: css`
+    flex-shrink: 0;
+    margin-inline-end: 6px;
+    color: ${cssVar.colorTextDescription};
+  `,
   statusIcon: css`
+    flex-shrink: 0;
     margin-inline-start: 4px;
   `,
   terminalIcon: css`
@@ -56,29 +63,52 @@ export interface RunCommandInspectorProps extends BuiltinInspectorProps<
   RunCommandArgs,
   RunCommandState
 > {
+  /**
+   * Program brand icon (e.g. Node.js / Git / Python). When provided it leads the whole row —
+   * placed before the label — and the command chip drops its terminal glyph. When omitted, the
+   * default terminal glyph stays inside the command chip.
+   */
+  icon?: ComponentType<{ className?: string; size?: number }>;
   /** i18n key for the API name label, e.g. 'builtins.lobe-local-system.apiName.runCommand' */
   translationKey: string;
 }
 
 export const RunCommandInspector = memo<RunCommandInspectorProps>(
-  ({ args, partialArgs, isArgumentsStreaming, pluginState, isLoading, translationKey }) => {
+  ({
+    args,
+    partialArgs,
+    isArgumentsStreaming,
+    pluginState,
+    isLoading,
+    translationKey,
+    icon: BrandIcon,
+  }) => {
     const { t } = useTranslation('plugin');
 
-    const description = args?.description || partialArgs?.description || args?.command || '';
+    const command = getRunCommandDisplayCommand(args?.command || partialArgs?.command);
+    const description = args?.description || partialArgs?.description || command;
+
+    // Brand icon leads the row (before the label); otherwise the terminal glyph sits in the chip.
+    const leading = BrandIcon ? <BrandIcon className={styles.leadingIcon} size={14} /> : null;
+    const chipIcon = BrandIcon ? null : (
+      <SquareChevronRight className={styles.terminalIcon} size={14} />
+    );
 
     if (isArgumentsStreaming) {
       if (!description)
         return (
-          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span>{t(translationKey as any)}</span>
+          <div className={inspectorTextStyles.root}>
+            {leading}
+            <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
           </div>
         );
 
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t(translationKey as any)}:</span>
+        <div className={inspectorTextStyles.root}>
+          {leading}
+          <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}:</span>
           <span className={styles.chip}>
-            <SquareChevronRight className={styles.terminalIcon} size={14} />
+            {chipIcon}
             <span className={styles.command}>{description}</span>
           </span>
         </div>
@@ -88,11 +118,14 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
     const isSuccess = pluginState?.success || pluginState?.exitCode === 0;
 
     return (
-      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-        <span>{t(translationKey as any)}:</span>
+      <div className={inspectorTextStyles.root}>
+        {leading}
+        <span className={cx(isLoading && shinyTextStyles.shinyText)}>
+          {t(translationKey as any)}:
+        </span>
         {description && (
           <span className={styles.chip}>
-            <SquareChevronRight className={styles.terminalIcon} size={14} />
+            {chipIcon}
             <span className={styles.command}>{description}</span>
           </span>
         )}

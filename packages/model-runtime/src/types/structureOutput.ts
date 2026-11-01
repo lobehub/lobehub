@@ -1,6 +1,7 @@
 import type { ModelUsage } from '@lobechat/types';
 
 import type { ChatCompletionTool, ChatStreamPayload } from './chat';
+import type { ModelPricingContext } from './pricing';
 
 interface GenerateObjectMessage {
   content: string;
@@ -40,6 +41,9 @@ export interface GenerateObjectOptions {
   metadata?: Record<string, unknown>;
 
   onUsage?: (usage: ModelUsage) => void | Promise<void>;
+
+  /** Request-scoped pricing context for model-bank pricing lookups. */
+  pricingContext?: ModelPricingContext;
 
   signal?: AbortSignal;
   /**

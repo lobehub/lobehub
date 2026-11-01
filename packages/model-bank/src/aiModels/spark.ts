@@ -15,6 +15,7 @@ const sparkChatModels: AIChatModelCard[] = [
       'Spark X2-Flash adopts an MoE (Mixture of Experts) architecture with 30 billion total parameters and supports up to a 256K context window. It claims significant improvements in agentic and coding capabilities, and was trained on a cluster of Ascend 910B AI processors.',
     displayName: 'Spark X2 Flash',
     enabled: true,
+    family: 'spark',
     id: 'spark-x2-flash',
     maxOutput: 262_144,
     settings: {
@@ -37,6 +38,7 @@ const sparkChatModels: AIChatModelCard[] = [
       'X2 Capabilities Overview: 1. Introduces dynamic adjustment of reasoning mode, controlled via the `thinking` field. 2. Expanded context length: 64K input tokens and 128K output tokens. 3. Supports Function Call functionality.',
     displayName: 'Spark X2',
     enabled: true,
+    family: 'spark',
     id: 'spark-x2',
     maxOutput: 131_072,
     settings: {
@@ -58,6 +60,7 @@ const sparkChatModels: AIChatModelCard[] = [
     description:
       'X1.5 updates: (1) adds dynamic thinking mode controlled by the `thinking` field; (2) larger context length with 64K input and 64K output; (3) supports FunctionCall.',
     displayName: 'Spark X1.5',
+    family: 'spark',
     id: 'spark-x1.5',
     maxOutput: 65_535,
     settings: {
@@ -84,6 +87,7 @@ const sparkChatModels: AIChatModelCard[] = [
     description:
       'Spark Pro is a high-performance LLM optimized for professional domains, focusing on math, programming, healthcare, and education, with web search and built-in plugins such as weather and date. It delivers strong performance and efficiency in complex knowledge Q&A, language understanding, and advanced text creation, making it an ideal choice for professional use cases.',
     displayName: 'Spark Pro',
+    family: 'spark',
     id: 'generalv3',
     maxOutput: 8192,
     settings: {
@@ -109,6 +113,7 @@ const sparkChatModels: AIChatModelCard[] = [
     description:
       'Spark Max is the most full-featured version, supporting web search and many built-in plugins. Its fully optimized core capabilities, system roles, and function calling deliver excellent performance across complex application scenarios.',
     displayName: 'Spark Max',
+    family: 'spark',
     id: 'generalv3.5',
     maxOutput: 8192,
     settings: {
@@ -142,6 +147,7 @@ const sparkChatModels: AIChatModelCard[] = [
     description:
       'Spark Ultra is the most powerful model in the Spark series, improving text understanding and summarization while upgrading web search. It is a comprehensive solution for boosting workplace productivity and accurate responses, positioning it as a leading intelligent product.',
     displayName: 'Spark 4.0 Ultra',
+    family: 'spark',
     id: '4.0Ultra',
     maxOutput: 32_768,
     settings: {

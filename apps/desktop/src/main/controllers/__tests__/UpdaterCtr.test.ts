@@ -4,14 +4,6 @@ import type { App } from '@/core/App';
 
 import UpdaterCtr from '../UpdaterCtr';
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('@/modules/updater/configs', () => ({
   UPDATE_CHANNEL: 'stable',
 }));
@@ -32,11 +24,15 @@ const mockDownloadUpdate = vi.fn();
 const mockInstallNow = vi.fn();
 const mockInstallLater = vi.fn();
 const mockGetUpdaterState = vi.fn();
+const mockRendererSwitchChannel = vi.fn();
 const mockSwitchChannel = vi.fn();
 const mockStoreGet = vi.fn();
 const mockStoreSet = vi.fn();
 
 const mockApp = {
+  coreUpdateManager: {
+    switchChannel: mockRendererSwitchChannel,
+  },
   storeManager: {
     get: mockStoreGet,
     set: mockStoreSet,
@@ -77,15 +73,15 @@ describe('UpdaterCtr', () => {
   });
 
   describe('quitAndInstallUpdate', () => {
-    it('should call updaterManager.installNow', () => {
-      updaterCtr.quitAndInstallUpdate();
+    it('should call updaterManager.installNow', async () => {
+      await updaterCtr.quitAndInstallUpdate();
       expect(mockInstallNow).toHaveBeenCalled();
     });
   });
 
   describe('installLater', () => {
-    it('should call updaterManager.installLater', () => {
-      updaterCtr.installLater();
+    it('should call updaterManager.installLater', async () => {
+      await updaterCtr.installLater();
       expect(mockInstallLater).toHaveBeenCalled();
     });
   });
@@ -107,6 +103,7 @@ describe('UpdaterCtr', () => {
       await updaterCtr.setUpdateChannel('canary');
 
       expect(mockStoreSet).toHaveBeenCalledWith('updateChannel', 'canary');
+      expect(mockRendererSwitchChannel).toHaveBeenCalledWith('canary');
       expect(mockSwitchChannel).toHaveBeenCalledWith('canary');
     });
 
@@ -116,6 +113,7 @@ describe('UpdaterCtr', () => {
       );
 
       expect(mockStoreSet).not.toHaveBeenCalled();
+      expect(mockRendererSwitchChannel).not.toHaveBeenCalled();
       expect(mockSwitchChannel).not.toHaveBeenCalled();
     });
   });

@@ -5,10 +5,13 @@
  * Market API 401 errors across the application.
  */
 
+import type { MarketAuthScene } from './scenes';
+
 export type MarketAuthEventType = 'market-unauthorized';
 
 export interface MarketUnauthorizedEvent {
   path: string;
+  scene: MarketAuthScene;
   timestamp: number;
 }
 

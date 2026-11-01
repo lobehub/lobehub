@@ -685,14 +685,14 @@ describe('UsageCounter', () => {
 
       const result1 = UsageCounter.accumulateLLM({
         cost: state.cost,
-        model: 'gpt-4o-audio-preview',
+        model: 'gpt-audio',
         modelUsage: usage1,
         provider: 'openai',
         usage: state.usage,
       });
       const result2 = UsageCounter.accumulateLLM({
         cost: result1.cost,
-        model: 'gpt-4o-audio-preview',
+        model: 'gpt-audio',
         modelUsage: usage2,
         provider: 'openai',
         usage: result1.usage,
@@ -874,6 +874,50 @@ describe('UsageCounter', () => {
         totalOutputTokens: 120,
         totalTokens: 420,
       });
+    });
+
+    it('should count the supplied attempt delta', () => {
+      const state = AgentRuntime.createInitialState();
+      const modelUsage: ModelUsage = { totalTokens: 10 };
+
+      const { usage } = UsageCounter.accumulateLLM({
+        apiCallsDelta: 3,
+        model: 'gpt-4',
+        modelUsage,
+        provider: 'openai',
+        usage: state.usage,
+      });
+
+      expect(usage.llm.apiCalls).toBe(3);
+      expect(usage.llm.tokens.total).toBe(10);
+    });
+  });
+
+  describe('UsageCounter.accumulateAttempts', () => {
+    it('should count attempts without adding tokens or cost', () => {
+      const state = AgentRuntime.createInitialState();
+
+      const usage = UsageCounter.accumulateAttempts(state.usage, 3);
+
+      expect(usage.llm.apiCalls).toBe(3);
+      expect(usage.llm.tokens.total).toBe(0);
+      expect(usage.llm.tokens.input).toBe(0);
+      expect(usage.llm.tokens.output).toBe(0);
+    });
+
+    it('should accumulate on top of existing usage', () => {
+      const state = AgentRuntime.createInitialState();
+      const withOne = UsageCounter.accumulateLLM({
+        model: 'gpt-4',
+        modelUsage: { totalTokens: 10 },
+        provider: 'openai',
+        usage: state.usage,
+      }).usage;
+
+      const usage = UsageCounter.accumulateAttempts(withOne, 2);
+
+      expect(usage.llm.apiCalls).toBe(3);
+      expect(usage.llm.tokens.total).toBe(10);
     });
   });
 });

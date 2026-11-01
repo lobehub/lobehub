@@ -10,6 +10,208 @@ const azureChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
+      deploymentName: 'gpt-6-astra',
+    },
+    contextWindowTokens: 1_050_000,
+    description:
+      'OpenAI’s most capable model for complex reasoning, coding, computer use, research, and document creation.',
+    displayName: 'GPT-6 Astra',
+    enabled: true,
+    id: 'gpt-6-astra',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 10, upTo: 272_000 },
+            { rate: 20, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 1, upTo: 272_000 },
+            { rate: 2, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheWrite',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 12.5, upTo: 272_000 },
+            { rate: 25, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 50, upTo: 272_000 },
+            { rate: 75, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-09-03',
+    settings: {
+      extendParams: ['gpt6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+    family: 'gpt',
+    generation: 'gpt-6',
+    knowledgeCutoff: '2026-04',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'gpt-6-sol',
+    },
+    contextWindowTokens: 1_050_000,
+    description: 'GPT-6 Sol is built for complex coding and agentic workflows.',
+    displayName: 'GPT-6 Sol',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-6',
+    id: 'gpt-6-sol',
+    knowledgeCutoff: '2026-04',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 272_000 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.2, upTo: 272_000 },
+            { rate: 0.4, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheWrite',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2.5, upTo: 272_000 },
+            { rate: 5, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 10, upTo: 272_000 },
+            { rate: 15, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-09-22',
+    settings: {
+      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    config: {
+      deploymentName: 'gpt-6-luna',
+    },
+    contextWindowTokens: 1_050_000,
+    description: 'GPT-6 Luna is OpenAI’s most efficient model for focused, high-volume tasks.',
+    displayName: 'GPT-6 Luna',
+    enabled: true,
+    family: 'gpt',
+    generation: 'gpt-6',
+    id: 'gpt-6-luna',
+    knowledgeCutoff: '2026-05',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.1, upTo: 272_000 },
+            { rate: 0.2, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.01, upTo: 272_000 },
+            { rate: 0.02, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput_cacheWrite',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.125, upTo: 272_000 },
+            { rate: 0.25, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.5, upTo: 272_000 },
+            { rate: 0.75, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-09-22',
+    settings: {
+      extendParams: ['gpt5_6ReasoningEffort', 'textVerbosity'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    config: {
       deploymentName: 'gpt-5.4',
     },
     contextWindowTokens: 1_050_000,
@@ -17,7 +219,10 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-5.4 is the frontier model for complex professional work with highest reasoning capability.',
     displayName: 'GPT-5.4',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -71,7 +276,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.4 Pro uses more compute to think harder and provide consistently better answers, available in the Responses API only.',
     displayName: 'GPT-5.4 Pro',
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -118,7 +326,10 @@ const azureChatModels: AIChatModelCard[] = [
       "GPT-5.4 mini is OpenAI's strongest mini model for coding, computer use, and subagents.",
     displayName: 'GPT-5.4 mini',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4-mini',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -150,7 +361,10 @@ const azureChatModels: AIChatModelCard[] = [
       "GPT-5.4 nano is OpenAI's cheapest GPT-5.4-class model for simple high-volume tasks.",
     displayName: 'GPT-5.4 nano',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5.4',
     id: 'gpt-5.4-nano',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -181,7 +395,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 is a flagship model for coding and agentic workflows with stronger reasoning and long-context performance.',
     displayName: 'GPT-5.2',
+    family: 'gpt',
+    generation: 'gpt-5.2',
     id: 'gpt-5.2',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -211,7 +428,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.1 is a flagship model optimized for coding and agent tasks with configurable reasoning effort and longer context.',
     displayName: 'GPT-5.1',
+    family: 'gpt',
+    generation: 'gpt-5.1',
     id: 'gpt-5.1',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -242,7 +462,10 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-5 Pro is the advanced version in the GPT-5 series with enhanced reasoning. It supports structured output, function calling, and text/image processing, making it ideal for complex professional tasks.',
     displayName: 'GPT-5 Pro',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-pro',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -266,7 +489,10 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-5 Codex is optimized for programming tasks, including Codex CLI and the VS Code extension. It supports structured output and function calling for code generation and analysis.',
     displayName: 'GPT-5 Codex',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -293,7 +519,10 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-5 is OpenAI’s latest flagship model with exceptional reasoning. It supports text and image input, structured output, and parallel tool calls, suitable for complex tasks requiring deep understanding and analysis.',
     displayName: 'GPT-5',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -320,7 +549,10 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-5 Mini offers capabilities similar to GPT-5 but is more efficient and cost-effective. It supports reasoning, function calling, and vision, making it suitable for large-scale deployment and cost-sensitive use cases.',
     displayName: 'GPT-5 Mini',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-mini',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -347,7 +579,10 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-5 Nano is the smallest and fastest GPT-5 variant. It retains core capabilities while delivering ultra-low latency and cost efficiency, ideal for edge computing and real-time applications.',
     displayName: 'GPT-5 Nano',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-nano',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -370,7 +605,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'GPT-5 Chat is a preview model optimized for conversational scenarios. It supports text and image input, outputs text only, and fits chatbots and conversational AI applications.',
     displayName: 'GPT-5 Chat',
+    family: 'gpt',
+    generation: 'gpt-5',
     id: 'gpt-5-chat',
+    knowledgeCutoff: '2024-09',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -396,7 +634,10 @@ const azureChatModels: AIChatModelCard[] = [
       'o3 is a versatile, powerful model that excels across domains, setting a new bar for math, science, coding, and visual reasoning. It is also strong in technical writing and instruction following, and can analyze text, code, and images to solve multi-step problems.',
     displayName: 'o3',
     enabled: true,
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -422,7 +663,10 @@ const azureChatModels: AIChatModelCard[] = [
       'o4-mini is our latest small o-series model, optimized for fast, efficient reasoning and high performance in coding and vision tasks.',
     displayName: 'o4-mini',
     enabled: true,
+    family: 'o-series',
+    generation: 'o4',
     id: 'o4-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -448,7 +692,10 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-4.1 is our flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -473,7 +720,10 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-4.1 mini balances intelligence, speed, and cost, making it an attractive model for many use cases.',
     displayName: 'GPT-4.1 mini',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -497,7 +747,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'GPT-4.1 mini balances intelligence, speed, and cost, making it an attractive model for many use cases.',
     displayName: 'GPT-4.1 nano',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -521,7 +774,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'o3-mini is our latest small reasoning model, delivering high intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -544,7 +800,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'o1-mini is a fast, cost-effective reasoning model designed for programming, math, and science use cases. It has a 128K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1-mini',
+    family: 'o-series',
+    generation: 'o1',
     id: 'o1-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -567,7 +826,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'o1 is OpenAI’s new reasoning model that supports text and image input and outputs text, suitable for complex tasks requiring broad general knowledge. It has a 200K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1',
+    family: 'o-series',
+    generation: 'o1',
     id: 'o1',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -590,7 +852,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'o1 is OpenAI’s new reasoning model for complex tasks requiring broad general knowledge. It has a 128K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1-preview',
+    family: 'o-series',
+    generation: 'o1',
     id: 'o1-preview',
+    knowledgeCutoff: '2023-10',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -614,7 +879,10 @@ const azureChatModels: AIChatModelCard[] = [
       'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
     displayName: 'GPT-4o',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     pricing: {
       units: [
@@ -638,7 +906,10 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'GPT-4 Turbo is a multimodal model with strong understanding and generation, supporting image input.',
     displayName: 'GPT 4 Turbo',
+    family: 'gpt',
+    generation: 'gpt-4',
     id: 'gpt-4',
+    knowledgeCutoff: '2021-09',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -653,7 +924,10 @@ const azureChatModels: AIChatModelCard[] = [
     contextWindowTokens: 128_000,
     description: 'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
     displayName: 'GPT 4o Mini',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     pricing: {
       units: [

@@ -1,10 +1,11 @@
 import type { SkillItem, SkillListItem } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
-import { and, desc, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 
-import type {NewAgentSkill } from '../schemas';
+import type { NewAgentSkill } from '../schemas';
 import { agentSkills } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 const skillItemColumns = {
   content: agentSkills.content,
@@ -18,6 +19,8 @@ const skillItemColumns = {
   resources: agentSkills.resources,
   source: agentSkills.source,
   updatedAt: agentSkills.updatedAt,
+  // Creator attribution — row-level ownership checks in workspace mode.
+  userId: agentSkills.userId,
   zipFileHash: agentSkills.zipFileHash,
 };
 
@@ -30,24 +33,31 @@ const skillListColumns = {
   name: agentSkills.name,
   source: agentSkills.source,
   updatedAt: agentSkills.updatedAt,
+  // Creator attribution — row-level ownership checks in workspace mode.
+  userId: agentSkills.userId,
   zipFileHash: agentSkills.zipFileHash,
 };
 
 export class AgentSkillModel {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private scopeWhere = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentSkills);
 
   // ========== Create ==========
 
-  create = async (data: Omit<NewAgentSkill, 'userId'>): Promise<SkillItem> => {
+  create = async (data: Omit<NewAgentSkill, 'userId' | 'workspaceId'>): Promise<SkillItem> => {
     const [result] = await this.db
       .insert(agentSkills)
-      .values({ ...data, userId: this.userId })
+      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, data))
       .returning(skillItemColumns);
     return result;
   };
@@ -58,7 +68,7 @@ export class AgentSkillModel {
     const [result] = await this.db
       .select(skillItemColumns)
       .from(agentSkills)
-      .where(and(eq(agentSkills.id, id), eq(agentSkills.userId, this.userId)))
+      .where(and(eq(agentSkills.id, id), this.scopeWhere()))
       .limit(1);
     return result;
   };
@@ -67,7 +77,7 @@ export class AgentSkillModel {
     const [result] = await this.db
       .select(skillItemColumns)
       .from(agentSkills)
-      .where(and(eq(agentSkills.identifier, identifier), eq(agentSkills.userId, this.userId)))
+      .where(and(eq(agentSkills.identifier, identifier), this.scopeWhere()))
       .limit(1);
     return result;
   };
@@ -76,7 +86,7 @@ export class AgentSkillModel {
     const [result] = await this.db
       .select(skillItemColumns)
       .from(agentSkills)
-      .where(and(eq(agentSkills.name, name), eq(agentSkills.userId, this.userId)))
+      .where(and(sql`lower(${agentSkills.name}) = ${name.toLowerCase()}`, this.scopeWhere()))
       .limit(1);
     return result;
   };
@@ -85,7 +95,7 @@ export class AgentSkillModel {
     const data = await this.db
       .select(skillListColumns)
       .from(agentSkills)
-      .where(eq(agentSkills.userId, this.userId))
+      .where(this.scopeWhere())
       .orderBy(desc(agentSkills.updatedAt));
 
     return { data, total: data.length };
@@ -96,7 +106,7 @@ export class AgentSkillModel {
     return this.db
       .select(skillItemColumns)
       .from(agentSkills)
-      .where(and(inArray(agentSkills.id, ids), eq(agentSkills.userId, this.userId)));
+      .where(and(inArray(agentSkills.id, ids), this.scopeWhere()));
   };
 
   listBySource = async (
@@ -105,7 +115,7 @@ export class AgentSkillModel {
     const data = await this.db
       .select(skillListColumns)
       .from(agentSkills)
-      .where(and(eq(agentSkills.source, source), eq(agentSkills.userId, this.userId)))
+      .where(and(eq(agentSkills.source, source), this.scopeWhere()))
       .orderBy(desc(agentSkills.updatedAt));
 
     return { data, total: data.length };
@@ -117,7 +127,7 @@ export class AgentSkillModel {
       .from(agentSkills)
       .where(
         and(
-          eq(agentSkills.userId, this.userId),
+          this.scopeWhere(),
           or(ilike(agentSkills.name, `%${query}%`), ilike(agentSkills.description, `%${query}%`)),
         ),
       )
@@ -136,7 +146,7 @@ export class AgentSkillModel {
     const [result] = await this.db
       .update(agentSkills)
       .set(updateData)
-      .where(and(eq(agentSkills.id, id), eq(agentSkills.userId, this.userId)))
+      .where(and(eq(agentSkills.id, id), this.scopeWhere()))
       .returning(skillItemColumns);
     return result;
   };
@@ -146,7 +156,7 @@ export class AgentSkillModel {
   delete = async (id: string): Promise<{ success: boolean }> => {
     const result = await this.db
       .delete(agentSkills)
-      .where(and(eq(agentSkills.id, id), eq(agentSkills.userId, this.userId)));
+      .where(and(eq(agentSkills.id, id), this.scopeWhere()));
 
     return { success: (result.rowCount ?? 0) > 0 };
   };

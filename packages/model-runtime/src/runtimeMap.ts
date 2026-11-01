@@ -3,6 +3,7 @@ import { Lobe302AI } from './providers/ai302';
 import { LobeAi360AI } from './providers/ai360';
 import { LobeAiHubMixAI } from './providers/aihubmix';
 import { LobeAkashChatAI } from './providers/akashchat';
+import { LobeAntGroupAI } from './providers/antgroup';
 import { LobeAnthropicAI } from './providers/anthropic';
 import { LobeAzureAI } from './providers/azureai';
 import { LobeAzureOpenAI } from './providers/azureOpenai';
@@ -11,6 +12,7 @@ import { LobeBailianCodingPlanAI } from './providers/bailianCodingPlan';
 import { LobeBedrockAI } from './providers/bedrock';
 import { LobeBflAI } from './providers/bfl';
 import { LobeCerebrasAI } from './providers/cerebras';
+import { LobeChatGPTAI } from './providers/chatGPT';
 import { LobeCloudflareAI } from './providers/cloudflare';
 import { LobeCohereAI } from './providers/cohere';
 import { LobeCometAPIAI } from './providers/cometapi';
@@ -34,6 +36,8 @@ import { LobeKimiCodingPlanAI } from './providers/kimiCodingPlan';
 import { LobeLMStudioAI } from './providers/lmstudio';
 import { LobeHubAI } from './providers/lobehub';
 import { LobeLongCatAI } from './providers/longcat';
+import { LobeMagpieAI } from './providers/magpie';
+import { LobeMetaAI } from './providers/meta';
 import { LobeMinimaxAI } from './providers/minimax';
 import { LobeMinimaxCodingPlanAI } from './providers/minimaxCodingPlan';
 import { LobeMistralAI } from './providers/mistral';
@@ -62,9 +66,12 @@ import { LobeSparkAI } from './providers/spark';
 import { LobeStepfunAI } from './providers/stepfun';
 import { LobeStraicoAI } from './providers/straico';
 import { LobeStreamLakeAI } from './providers/streamlake';
+import { LobeSuperGrokAI } from './providers/superGrok';
 import { LobeTaichuAI } from './providers/taichu';
 import { LobeTencentCloudAI } from './providers/tencentcloud';
 import { LobeTogetherAI } from './providers/togetherai';
+import { LobeTypeSafeAI } from './providers/typesafe';
+import { LobeUnslothAI } from './providers/unsloth';
 import { LobeUpstageAI } from './providers/upstage';
 import { LobeV0AI } from './providers/v0';
 import { LobeVercelAIGatewayAI } from './providers/vercelaigateway';
@@ -85,6 +92,7 @@ export const providerRuntimeMap = {
   ai360: LobeAi360AI,
   aihubmix: LobeAiHubMixAI,
   akashchat: LobeAkashChatAI,
+  antgroup: LobeAntGroupAI,
   anthropic: LobeAnthropicAI,
   bailiancodingplan: LobeBailianCodingPlanAI,
   azure: LobeAzureOpenAI,
@@ -93,6 +101,7 @@ export const providerRuntimeMap = {
   bedrock: LobeBedrockAI,
   bfl: LobeBflAI,
   cerebras: LobeCerebrasAI,
+  chatgpt: LobeChatGPTAI,
   cloudflare: LobeCloudflareAI,
   cohere: LobeCohereAI,
   cometapi: LobeCometAPIAI,
@@ -116,6 +125,8 @@ export const providerRuntimeMap = {
   lmstudio: LobeLMStudioAI,
   lobehub: LobeHubAI,
   longcat: LobeLongCatAI,
+  magpie: LobeMagpieAI,
+  meta: LobeMetaAI,
   minimax: LobeMinimaxAI,
   minimaxcodingplan: LobeMinimaxCodingPlanAI,
   mistral: LobeMistralAI,
@@ -145,9 +156,12 @@ export const providerRuntimeMap = {
   stepfun: LobeStepfunAI,
   straico: LobeStraicoAI,
   streamlake: LobeStreamLakeAI,
+  supergrok: LobeSuperGrokAI,
   taichu: LobeTaichuAI,
   tencentcloud: LobeTencentCloudAI,
   togetherai: LobeTogetherAI,
+  typesafe: LobeTypeSafeAI,
+  unsloth: LobeUnslothAI,
   upstage: LobeUpstageAI,
   v0: LobeV0AI,
   vercelaigateway: LobeVercelAIGatewayAI,

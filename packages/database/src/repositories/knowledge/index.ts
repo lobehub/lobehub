@@ -1,22 +1,233 @@
-import type { QueryFileListParams } from '@lobechat/types';
-import { FilesTabs, SortType } from '@lobechat/types';
-import { and, eq, sql } from 'drizzle-orm';
+import {
+  AGENT_ARTIFACT_SOURCE_TYPES,
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  HTML_DOCUMENT_FILE_TYPE,
+  MARKDOWN_MIME_TYPES,
+  RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
+} from '@lobechat/const';
+import type { FileUploader, QueryFileListParams } from '@lobechat/types';
+import {
+  AI_GENERATED_FILE_SOURCES,
+  FileSource,
+  FilesTabs,
+  LIBRARY_HIDDEN_FILE_SOURCES,
+  ResourceSourceFilter,
+  SortType,
+} from '@lobechat/types';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
+import { alias, type AnyPgColumn, unionAll } from 'drizzle-orm/pg-core';
 
 import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
-import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles } from '../../schemas';
+import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
+import { notAgentShareFile } from '../../utils/fileVisibility';
+import { buildWorkspaceWhere } from '../../utils/workspace';
+
+/**
+ * Both UNION arms reach the same two tables, and the file arm joins `documents`
+ * to pick up the derived page that backs a file — so the tables are aliased
+ * once here and every predicate below is an ordinary typed drizzle condition.
+ */
+const f = alias(files, 'f');
+const d = alias(documents, 'd');
+
+const fileNeedsContentPreview = or(
+  eq(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE),
+  eq(f.fileType, 'article'),
+  ilike(f.fileType, 'text/html%'),
+  inArray(f.fileType, MARKDOWN_MIME_TYPES),
+  ilike(f.name, '%.md'),
+  ilike(f.name, '%.markdown'),
+);
+
+const documentNeedsContentPreview = or(
+  eq(d.fileType, CUSTOM_DOCUMENT_FILE_TYPE),
+  eq(d.fileType, 'article'),
+  ilike(d.fileType, 'text/html%'),
+  inArray(d.fileType, MARKDOWN_MIME_TYPES),
+  ilike(d.filename, '%.md'),
+  ilike(d.filename, '%.markdown'),
+);
+
+/**
+ * The two arms of the resource UNION.
+ *
+ * A UNION matches columns by position, so the arms must expose the same keys in
+ * the same order and with compatible types. Keeping them as two literals side
+ * by side (rather than generating them) makes a mismatch visible in review; TS
+ * catches it at the `unionAll` call either way.
+ *
+ * Plain column references carry their own output name (`f.chunk_task_id` →
+ * `chunk_task_id`), which is what the sort keys reference — `ORDER BY` on a set
+ * operation can only name an output column. Only fields whose output name has
+ * to differ from the source column, or that are expressions, get an explicit
+ * `.as()`: `f.id` would otherwise collide with the `id` column, and every
+ * `users` column would land under its bare name.
+ */
+const fileArmColumns = {
+  chunkTaskId: f.chunkTaskId,
+  content: d.content,
+  contentPreviewSource: sql<string | null>`NULL::text`.as('content_preview_source'),
+  createdAt: f.createdAt,
+  documentId: sql<string | null>`${d.id}`.as('document_id'),
+  editorData: d.editorData,
+  embeddingTaskId: f.embeddingTaskId,
+  fileId: sql<string | null>`${f.id}`.as('file_id'),
+  fileType: f.fileType,
+  // A file that backs a derived page is addressed by the page id.
+  id: sql<string>`COALESCE(${d.id}, ${f.id})`.as('id'),
+  knowledgeBaseIds: sql<
+    string[]
+  >`ARRAY(SELECT ${knowledgeBaseFiles.knowledgeBaseId} FROM ${knowledgeBaseFiles} WHERE ${knowledgeBaseFiles.fileId} = ${f.id})`.as(
+    'knowledge_base_ids',
+  ),
+  metadata: sql<Record<string, any> | null>`COALESCE(${d.metadata}, ${f.metadata})`.as('metadata'),
+  name: f.name,
+  size: f.size,
+  slug: d.slug,
+  sourceType: sql<'file' | 'document'>`'file'`.as('source_type'),
+  updatedAt: f.updatedAt,
+  uploaderAvatar: sql<string | null>`${users.avatar}`.as('uploader_avatar'),
+  uploaderFullName: sql<string | null>`${users.fullName}`.as('uploader_full_name'),
+  uploaderId: sql<string | null>`${users.id}`.as('uploader_id'),
+  uploaderUsername: sql<string | null>`${users.username}`.as('uploader_username'),
+  url: f.url,
+  userId: f.userId,
+  visibility: f.visibility,
+};
+
+const fileArmSummaryColumns = (includeContentPreview: boolean) => ({
+  ...fileArmColumns,
+  content: sql<string | null>`NULL::text`.as('content'),
+  contentPreviewSource: includeContentPreview
+    ? sql<
+        string | null
+      >`CASE WHEN ${fileNeedsContentPreview} THEN LEFT(${d.content}, ${RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH}) ELSE NULL END`.as(
+        'content_preview_source',
+      )
+    : sql<string | null>`NULL::text`.as('content_preview_source'),
+  editorData: sql<Record<string, any> | null>`NULL::jsonb`.as('editor_data'),
+});
+
+const documentArmColumns = {
+  chunkTaskId: sql<string | null>`NULL::uuid`.as('chunk_task_id'),
+  content: d.content,
+  contentPreviewSource: sql<string | null>`NULL::text`.as('content_preview_source'),
+  createdAt: d.createdAt,
+  documentId: sql<string | null>`${d.id}`.as('document_id'),
+  editorData: d.editorData,
+  embeddingTaskId: sql<string | null>`NULL::uuid`.as('embedding_task_id'),
+  fileId: d.fileId,
+  fileType: d.fileType,
+  id: d.id,
+  knowledgeBaseIds: sql<
+    string[]
+  >`CASE WHEN ${d.knowledgeBaseId} IS NULL THEN ARRAY[]::text[] ELSE ARRAY[${d.knowledgeBaseId}] END`.as(
+    'knowledge_base_ids',
+  ),
+  metadata: d.metadata,
+  name: sql<string>`COALESCE(${d.title}, ${d.filename}, 'Untitled')`.as('name'),
+  size: sql<number>`${d.totalCharCount}`.as('size'),
+  slug: d.slug,
+  sourceType: sql<'file' | 'document'>`'document'`.as('source_type'),
+  updatedAt: d.updatedAt,
+  uploaderAvatar: sql<string | null>`${users.avatar}`.as('uploader_avatar'),
+  uploaderFullName: sql<string | null>`${users.fullName}`.as('uploader_full_name'),
+  uploaderId: sql<string | null>`${users.id}`.as('uploader_id'),
+  uploaderUsername: sql<string | null>`${users.username}`.as('uploader_username'),
+  url: sql<string>`${d.source}`.as('url'),
+  userId: d.userId,
+  visibility: d.visibility,
+};
+
+const documentArmSummaryColumns = (includeContentPreview: boolean) => ({
+  ...documentArmColumns,
+  content: sql<string | null>`NULL::text`.as('content'),
+  contentPreviewSource: includeContentPreview
+    ? sql<
+        string | null
+      >`CASE WHEN ${documentNeedsContentPreview} THEN LEFT(${d.content}, ${RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH}) ELSE NULL END`.as(
+        'content_preview_source',
+      )
+    : sql<string | null>`NULL::text`.as('content_preview_source'),
+  editorData: sql<Record<string, any> | null>`NULL::jsonb`.as('editor_data'),
+});
+
+/** One row as the UNION returns it, before it is shaped into a `KnowledgeItem`. */
+interface KnowledgeRow {
+  chunkTaskId: string | null;
+  content: string | null;
+  contentPreviewSource: string | null;
+  createdAt: Date;
+  documentId: string | null;
+  editorData: Record<string, any> | null;
+  embeddingTaskId: string | null;
+  fileId: string | null;
+  fileType: string;
+  hasChildren: boolean;
+  id: string;
+  knowledgeBaseIds: string[] | null;
+  metadata: Record<string, any> | null;
+  name: string;
+  size: number;
+  slug: string | null;
+  sourceType: 'file' | 'document';
+  updatedAt: Date;
+  uploaderAvatar: string | null;
+  uploaderFullName: string | null;
+  uploaderId: string | null;
+  uploaderUsername: string | null;
+  url: string | null;
+  userId: string | null;
+  visibility: 'private' | 'public' | null;
+}
+
+/** Sort keys the client may pass, mapped to the UNION's output column names. */
+const SORTABLE_COLUMNS: Record<string, string> = {
+  createdAt: 'created_at',
+  name: 'name',
+  size: 'size',
+  updatedAt: 'updated_at',
+};
 
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
   content?: string | null;
+  /** Bounded raw source used only to generate a list preview on the server. */
+  contentPreviewSource?: string | null;
   createdAt: Date;
   documentId?: string | null;
   editorData?: Record<string, any> | null;
   embeddingTaskId?: string | null;
   fileId?: string | null;
   fileType: string;
+  /**
+   * Whether any document or file row names this row as its parent. Folders are
+   * containers either way; this is what lets a document that holds other
+   * documents expand in the tree.
+   */
+  hasChildren?: boolean;
   id: string;
+  /** Knowledge bases the row is filed into (empty when it lives outside every base). */
+  knowledgeBaseIds?: string[];
   metadata?: Record<string, any> | null;
   name: string;
   size: number;
@@ -28,8 +239,92 @@ export interface KnowledgeItem {
    */
   sourceType: 'file' | 'document';
   updatedAt: Date;
+  uploader?: FileUploader | null;
   url?: string;
+  /** Workspace creator id (used by UI to decide if current user owns the row). */
+  userId?: string | null;
+  /**
+   * Workspace visibility. `null` when querying in personal mode (column is
+   * ignored). UI uses this together with `userId` to surface the lock icon
+   * and the publish-to-workspace affordance.
+   */
+  visibility?: 'private' | 'public' | null;
 }
+
+/**
+ * Kind of row a recent query is after:
+ * - `file` — uploaded files, excluding the file rows that back a derived page
+ * - `page` — derived pages / notes, excluding folders
+ */
+export type RecentItemKind = 'file' | 'page';
+
+interface KnowledgeQueryParams extends QueryFileListParams {
+  /** Restrict the result set to rows created by a specific workspace member. */
+  creatorUserId?: string;
+  /**
+   * Server-derived list of restricted knowledge bases the caller may not
+   * browse (resource-permission `use` level). Content linked to these KBs is
+   * dropped from cross-KB listings; never populated from client input.
+   */
+  excludeKnowledgeBaseIds?: string[];
+  /**
+   * Include full document bodies in the result. List and bulk-operation callers
+   * should disable this and load content through the document detail endpoint.
+   */
+  includeContent?: boolean;
+  /** Select a bounded content prefix for server-side preview generation. */
+  includeContentPreview?: boolean;
+}
+
+/**
+ * `metadata` is the one column still selected through an expression (the file
+ * arm coalesces the page's metadata over the file's), so it skips drizzle's
+ * jsonb decoder and the drivers disagree on what they hand back — neon returns
+ * a string, node-postgres a parsed object. Everything else is a plain column
+ * and arrives already decoded.
+ */
+const toJson = (value: unknown): Record<string, any> | null => {
+  if (typeof value !== 'string') return (value as Record<string, any> | null) ?? null;
+
+  try {
+    return JSON.parse(value);
+  } catch (e) {
+    console.error('[KnowledgeRepo] Failed to parse JSON column:', e);
+    return null;
+  }
+};
+
+const toKnowledgeItem = (row: KnowledgeRow): KnowledgeItem => ({
+  chunkTaskId: row.chunkTaskId,
+  content: row.content,
+  ...(row.contentPreviewSource ? { contentPreviewSource: row.contentPreviewSource } : {}),
+  createdAt: row.createdAt,
+  documentId: row.documentId,
+  editorData: row.editorData,
+  embeddingTaskId: row.embeddingTaskId,
+  fileId: row.fileId,
+  fileType: row.fileType,
+  hasChildren: Boolean(row.hasChildren),
+  id: row.id,
+  knowledgeBaseIds: row.knowledgeBaseIds ?? [],
+  metadata: toJson(row.metadata),
+  name: row.name,
+  size: Number(row.size),
+  slug: row.slug,
+  sourceType: row.sourceType,
+  updatedAt: row.updatedAt,
+  uploader: row.uploaderId
+    ? {
+        avatar: row.uploaderAvatar,
+        fullName: row.uploaderFullName,
+        id: row.uploaderId,
+        username: row.uploaderUsername,
+      }
+    : null,
+  url: row.url ?? undefined,
+  userId: row.userId,
+  visibility: row.visibility,
+});
 
 /**
  * Resources Repository - combines files and documents into a unified interface
@@ -39,28 +334,197 @@ export class KnowledgeRepo {
   private db: LobeChatDatabase;
   private fileModel: FileModel;
   private documentModel: DocumentModel;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
-    this.fileModel = new FileModel(db, userId);
-    this.documentModel = new DocumentModel(db, userId);
+    this.workspaceId = workspaceId;
+    this.fileModel = new FileModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
   }
+
+  private scope = () => ({ userId: this.userId, workspaceId: this.workspaceId });
+
+  /**
+   * Scope predicate every file listing shares: ownership plus the exclusion of
+   * acceptance evidence by source and visitor attachments by provenance.
+   *
+   * Asking for `acceptance` opts out of only that source filter. Agent-share
+   * provenance remains an access boundary for every ordinary resource read.
+   */
+  private fileScope = (sourceFilter?: ResourceSourceFilter) =>
+    and(
+      buildWorkspaceWhere(this.scope(), f),
+      sourceFilter === ResourceSourceFilter.Acceptance
+        ? undefined
+        : or(isNull(f.source), notInArray(f.source, LIBRARY_HIDDEN_FILE_SOURCES)),
+      notAgentShareFile(f.metadata),
+    );
+
+  private documentScope = () => buildWorkspaceWhere(this.scope(), d);
+
+  /**
+   * `has_children` for one arm. It depends on the caller's scope, so it can't
+   * live in the static column literals; both arms append it last, which keeps
+   * the UNION positions aligned. Children always point at a document id, so the
+   * file arm passes its joined page id (NULL when the file backs no page, and
+   * then nothing can be under it).
+   *
+   * The children are scoped like any read (ownership, visibility, trash) but
+   * not by the listing's other filters, so a child the listing itself would
+   * hide (another knowledge base, a hidden source) still counts.
+   */
+  private hasChildrenColumn = (parentDocumentId: AnyPgColumn) =>
+    sql<boolean>`${or(
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.parentId, parentDocumentId),
+              buildWorkspaceWhere(this.scope(), documents),
+            ),
+          ),
+      ),
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(files)
+          .where(
+            and(eq(files.parentId, parentDocumentId), buildWorkspaceWhere(this.scope(), files)),
+          ),
+      ),
+    )}`.as('has_children');
+
+  /**
+   * Narrow a workspace-scoped list to one Resources mode. Personal rows are
+   * already owner-scoped and deliberately ignore the mode filter.
+   */
+  private visibilityFilter = (
+    visibility: QueryFileListParams['visibility'],
+    column: AnyPgColumn,
+  ): SQL | undefined => {
+    if (!this.workspaceId || !visibility) return undefined;
+
+    return visibility === 'private'
+      ? eq(column, 'private')
+      : (or(eq(column, 'public'), isNull(column)) as SQL);
+  };
+
+  /**
+   * Filters shared by both arms. `visibility` narrows the ownership-scoped pool;
+   * rows predating the column count as public.
+   */
+  private commonFilters = (
+    { creatorUserId, parentId, q, visibility }: KnowledgeQueryParams,
+    cols: {
+      names: AnyPgColumn[];
+      parentId: AnyPgColumn;
+      userId: AnyPgColumn;
+      visibility: AnyPgColumn;
+    },
+  ): (SQL | undefined)[] => [
+    creatorUserId ? eq(cols.userId, creatorUserId) : undefined,
+    parentId === undefined
+      ? undefined
+      : parentId === null
+        ? isNull(cols.parentId)
+        : eq(cols.parentId, parentId),
+    q ? or(...cols.names.map((name) => ilike(name, `%${q}%`))) : undefined,
+    this.visibilityFilter(visibility, cols.visibility),
+  ];
+
+  private fileArm = (
+    where: (SQL | undefined)[],
+    knowledgeBaseId?: string,
+    sourceFilter?: ResourceSourceFilter,
+    includeContent: boolean = true,
+    includeContentPreview: boolean = false,
+  ) => {
+    const columns = {
+      ...(includeContent ? fileArmColumns : fileArmSummaryColumns(includeContentPreview)),
+      hasChildren: this.hasChildrenColumn(d.id),
+    };
+    let query = this.db.select(columns).from(f).$dynamic();
+
+    if (knowledgeBaseId) {
+      query = query.innerJoin(
+        knowledgeBaseFiles,
+        and(
+          eq(knowledgeBaseFiles.fileId, f.id),
+          eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
+        ),
+      );
+    }
+
+    return (
+      query
+        // Scope the joined document exactly as a direct read would. The file row
+        // itself is legitimately listed under `fileScope`, but its derived page
+        // can be scoped tighter (a creator-private document behind a
+        // workspace-public file); handing out that page's id makes the library
+        // list an entry that 404s the moment a member clicks it. Left join, so
+        // the file keeps its row and simply carries no page to open.
+        .leftJoin(d, and(eq(d.fileId, f.id), this.documentScope()))
+        .leftJoin(users, eq(users.id, f.userId))
+        .where(and(this.fileScope(sourceFilter), ...where))
+    );
+  };
+
+  /**
+   * `includeAgentArtifacts` is the only opt-out from hiding machine-generated
+   * rows (`agent` / `agent-signal`): a knowledge-base listing shows exactly the
+   * rows the user filed into that base, agent artifacts included. Every other
+   * listing keeps them out — they are working files of the agent runtime, not
+   * library content, and they arrive by the hundreds.
+   */
+  private documentArm = (
+    where: (SQL | undefined)[],
+    includeContent: boolean = true,
+    includeContentPreview: boolean = false,
+    includeAgentArtifacts: boolean = false,
+  ) =>
+    this.db
+      .select({
+        ...(includeContent ? documentArmColumns : documentArmSummaryColumns(includeContentPreview)),
+        hasChildren: this.hasChildrenColumn(d.id),
+      })
+      .from(d)
+      .leftJoin(users, eq(users.id, d.userId))
+      .where(
+        and(
+          this.documentScope(),
+          ne(d.sourceType, 'file'),
+          includeAgentArtifacts
+            ? undefined
+            : notInArray(d.sourceType, [...AGENT_ARTIFACT_SOURCE_TYPES]),
+          ...where,
+        ),
+      );
 
   /**
    * Query combined results from files and documents tables
    */
   async query({
     category,
+    creatorUserId,
     q,
     sortType,
     sorter,
+    excludeKnowledgeBaseIds,
+    includeContent = true,
+    includeContentPreview = false,
+    filesOnly,
     knowledgeBaseId,
     showFilesInKnowledgeBase,
     parentId,
     limit = 50,
     offset = 0,
-  }: QueryFileListParams = {}): Promise<KnowledgeItem[]> {
+    sourceFilter,
+    visibility,
+  }: KnowledgeQueryParams = {}): Promise<KnowledgeItem[]> {
     // If parentId is provided, check if it's a slug and resolve it to an ID
     let resolvedParentId = parentId;
     if (parentId) {
@@ -72,202 +536,176 @@ export class KnowledgeRepo {
       // Otherwise assume it's already an ID
     }
 
-    // Build file query
-    const fileQuery = this.buildFileQuery({
-      category,
-      knowledgeBaseId,
+    // Visibility filter is only meaningful in workspace mode. Personal-mode
+    // rows have `visibility` set to the schema default and are already fully
+    // scoped by `workspace_id IS NULL AND user_id = caller`.
+    const shared: KnowledgeQueryParams = {
+      creatorUserId,
       parentId: resolvedParentId,
       q,
-      showFilesInKnowledgeBase,
-      sortType,
-      sorter,
-    });
+      visibility: this.workspaceId ? visibility : undefined,
+    };
 
-    // Build document query (notes)
-    const documentQuery = this.buildDocumentQuery({
-      category,
+    const fileArm = this.fileArm(
+      [
+        ...this.commonFilters(shared, {
+          names: [f.name],
+          parentId: f.parentId,
+          userId: f.userId,
+          visibility: f.visibility,
+        }),
+        this.fileCategoryFilter(category),
+        this.fileSourceFilter(sourceFilter),
+        // Exclude files in knowledge base if needed
+        !knowledgeBaseId && !showFilesInKnowledgeBase ? this.notInAnyKnowledgeBase() : undefined,
+        !knowledgeBaseId && excludeKnowledgeBaseIds?.length
+          ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
+          : undefined,
+      ],
       knowledgeBaseId,
-      parentId: resolvedParentId,
-      q,
-      sortType,
-      sorter,
-    });
+      sourceFilter,
+      includeContent,
+      includeContentPreview,
+    );
 
-    // Combine both queries with UNION ALL
-    const combinedQuery = sql`
-      (${fileQuery})
-      UNION ALL
-      (${documentQuery})
-    `;
+    const documentArm = this.documentArm(
+      [
+        ...this.commonFilters(shared, {
+          names: [d.title, d.filename],
+          parentId: d.parentId,
+          userId: d.userId,
+          visibility: d.visibility,
+        }),
+        this.documentCategoryFilter(category),
+        this.documentSourceFilter(sourceFilter),
+        // Inside a knowledge base only standalone rows (folders and notes with no
+        // backing file) belong to the document arm — documents that do have a file
+        // already come back through the file arm.
+        knowledgeBaseId ? isNull(d.fileId) : undefined,
+        knowledgeBaseId ? eq(d.knowledgeBaseId, knowledgeBaseId) : undefined,
+        !knowledgeBaseId && excludeKnowledgeBaseIds?.length
+          ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+          : undefined,
+        // The drive lists uploaded files plus the folders that hold them: a folder
+        // row is the only way into its children, so dropping it strands every
+        // nested file. Pages still live in their own sidebar sections, and this
+        // filter is what keeps them out of the drive.
+        filesOnly ? eq(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
+      ],
+      includeContent,
+      includeContentPreview,
+      Boolean(knowledgeBaseId),
+    );
 
-    // Add final ordering and pagination
-    const orderClause = this.buildOrderClause(sortType, sorter);
-    const finalQuery = sql`
-      SELECT * FROM (${combinedQuery}) as combined
-      ORDER BY ${orderClause}
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `;
+    const rows = await unionAll(fileArm, documentArm)
+      .orderBy(this.orderBy(sortType, sorter))
+      .limit(limit)
+      .offset(offset);
 
-    const result = await this.db.execute(finalQuery);
-
-    const mappedResults = result.rows.map((row: any) => {
-      // Parse editor_data if it's a string (raw SQL returns JSONB as string)
-      let editorData = row.editor_data;
-      if (typeof editorData === 'string') {
-        try {
-          editorData = JSON.parse(editorData);
-        } catch (e) {
-          console.error('[KnowledgeRepo] Failed to parse editor_data:', e);
-          editorData = null;
-        }
-      }
-
-      // Parse metadata if it's a string (raw SQL returns JSONB as string)
-      let metadata = row.metadata;
-      if (typeof metadata === 'string') {
-        try {
-          metadata = JSON.parse(metadata);
-        } catch (e) {
-          console.error('[KnowledgeRepo] Failed to parse metadata:', e);
-          metadata = null;
-        }
-      }
-
-      return {
-        chunkTaskId: row.chunk_task_id,
-        content: row.content,
-        createdAt: new Date(row.created_at),
-        documentId: row.document_id,
-        editorData,
-        embeddingTaskId: row.embedding_task_id,
-        fileId: row.file_id,
-        fileType: row.file_type,
-        id: row.id,
-        metadata,
-        name: row.name,
-        size: Number(row.size),
-        slug: row.slug,
-        sourceType: row.source_type,
-        updatedAt: new Date(row.updated_at),
-        url: row.url,
-      };
-    });
-
-    return mappedResults;
+    return rows.map(toKnowledgeItem);
   }
 
   /**
    * Query recent items (files and documents)
    * Returns the most recently updated items
+   *
+   * `kind` narrows the result to uploaded files or derived pages. The narrowing
+   * has to happen inside SQL: filtering the combined list afterwards lets
+   * `LIMIT` truncate away every row of the wanted kind — a burst of uploads
+   * left the resource home with an empty "recent pages" section.
    */
-  async queryRecent(limit: number = 12): Promise<KnowledgeItem[]> {
-    const fileQuery = sql`
-      SELECT
-        COALESCE(d.id, f.id) as id,
-        f.id as file_id,
-        d.id as document_id,
-        f.name,
-        f.file_type,
-        f.size,
-        f.url,
-        f.created_at,
-        f.updated_at,
-        f.chunk_task_id,
-        f.embedding_task_id,
-        d.editor_data,
-        d.content,
-        d.slug,
-        COALESCE(d.metadata, f.metadata) as metadata,
-        'file' as source_type
-      FROM ${files} f
-      LEFT JOIN ${documents} d
-        ON f.id = d.file_id
-      WHERE f.user_id = ${this.userId}
-        AND NOT EXISTS (
-          SELECT 1 FROM ${knowledgeBaseFiles}
-          WHERE ${knowledgeBaseFiles.fileId} = f.id
-        )
-    `;
+  async queryRecent(
+    limit: number = 12,
+    kind?: RecentItemKind,
+    visibility?: QueryFileListParams['visibility'],
+  ): Promise<KnowledgeItem[]> {
+    const fileArm = this.fileArm(
+      [
+        this.notInAnyKnowledgeBase(),
+        this.visibilityFilter(visibility, f.visibility),
+        // Derived pages live in the documents table; their backing file row is not
+        // a file the user uploaded, so it never belongs to the file list.
+        kind === 'file' ? ne(f.fileType, CUSTOM_DOCUMENT_FILE_TYPE) : undefined,
+      ],
+      undefined,
+      undefined,
+      false,
+    );
 
-    const documentQuery = sql`
-      SELECT
-        id,
-        file_id,
-        id as document_id,
-        COALESCE(title, filename, 'Untitled') as name,
-        file_type,
-        total_char_count as size,
-        source as url,
-        created_at,
-        updated_at,
-        NULL as chunk_task_id,
-        NULL as embedding_task_id,
-        editor_data,
-        content,
-        slug,
-        metadata,
-        'document' as source_type
-      FROM ${documents}
-      WHERE user_id = ${this.userId}
-        AND source_type != ${'file'}
-        AND knowledge_base_id IS NULL
-    `;
+    const documentArm = this.documentArm(
+      [
+        isNull(d.knowledgeBaseId),
+        this.visibilityFilter(visibility, d.visibility),
+        // Folders are containers, not pages.
+        kind === 'page' ? ne(d.fileType, CUSTOM_FOLDER_FILE_TYPE) : undefined,
+      ],
+      false,
+    );
 
-    const combinedQuery = sql`
-      SELECT * FROM (
-        (${fileQuery})
-        UNION ALL
-        (${documentQuery})
-      ) as combined
-      ORDER BY updated_at DESC
-      LIMIT ${limit}
-    `;
+    const recent =
+      kind === 'file' ? fileArm : kind === 'page' ? documentArm : unionAll(fileArm, documentArm);
 
-    const result = await this.db.execute(combinedQuery);
+    const rows = await recent.orderBy(this.orderBy(SortType.Desc, 'updatedAt')).limit(limit);
 
-    const mappedResults = result.rows.map((row: any) => {
-      // Parse editor_data if it's a string
-      let editorData = row.editor_data;
-      if (typeof editorData === 'string') {
-        try {
-          editorData = JSON.parse(editorData);
-        } catch {
-          editorData = null;
-        }
-      }
+    return rows.map(toKnowledgeItem);
+  }
 
-      // Parse metadata if it's a string
-      let metadata = row.metadata;
-      if (typeof metadata === 'string') {
-        try {
-          metadata = JSON.parse(metadata);
-        } catch {
-          metadata = null;
-        }
-      }
+  /**
+   * The Docs home list: pages (rich text and HTML artifacts) and uploaded documents (pdf / office / text; no
+   * media, raw data or page-backing rows) together, newest update first,
+   * wherever they live (a knowledge base or not; rows carry `knowledgeBaseIds`
+   * for the location column). `creator` narrows to the caller's own rows
+   * (`self`) or to what other workspace members shared (`others`); private rows
+   * of other members never pass the ownership scope in the first place. All
+   * exclusions run in SQL, so `limit` is never eaten by rows filtered later.
+   */
+  async queryHomeItems({
+    creator,
+    excludeKnowledgeBaseIds,
+    limit = 50,
+  }: {
+    creator?: 'others' | 'self';
+    excludeKnowledgeBaseIds?: string[];
+    limit?: number;
+  } = {}): Promise<KnowledgeItem[]> {
+    const creatorFilter = (column: AnyPgColumn) =>
+      creator === 'self'
+        ? eq(column, this.userId)
+        : creator === 'others'
+          ? ne(column, this.userId)
+          : undefined;
 
-      return {
-        chunkTaskId: row.chunk_task_id,
-        content: row.content,
-        createdAt: new Date(row.created_at),
-        documentId: row.document_id,
-        editorData,
-        embeddingTaskId: row.embedding_task_id,
-        fileId: row.file_id,
-        fileType: row.file_type,
-        id: row.id,
-        metadata,
-        name: row.name,
-        size: Number(row.size),
-        slug: row.slug,
-        sourceType: row.source_type,
-        updatedAt: new Date(row.updated_at),
-        url: row.url,
-      };
-    });
+    const fileArm = this.fileArm(
+      [
+        creatorFilter(f.userId),
+        this.fileCategoryFilter(FilesTabs.Documents),
+        excludeKnowledgeBaseIds?.length
+          ? this.notInKnowledgeBases(excludeKnowledgeBaseIds)
+          : undefined,
+      ],
+      undefined,
+      undefined,
+      false,
+    );
 
-    return mappedResults;
+    const documentArm = this.documentArm(
+      [
+        creatorFilter(d.userId),
+        // HTML pages (artifacts) are pages too; leaving them out hid every
+        // agent-written report from the list.
+        inArray(d.fileType, [CUSTOM_DOCUMENT_FILE_TYPE, HTML_DOCUMENT_FILE_TYPE]),
+        excludeKnowledgeBaseIds?.length
+          ? or(isNull(d.knowledgeBaseId), notInArray(d.knowledgeBaseId, excludeKnowledgeBaseIds))
+          : undefined,
+      ],
+      false,
+    );
+
+    const rows = await unionAll(fileArm, documentArm)
+      .orderBy(this.orderBy(SortType.Desc, 'updatedAt'))
+      .limit(limit);
+
+    return rows.map(toKnowledgeItem);
   }
 
   /**
@@ -315,7 +753,7 @@ export class KnowledgeRepo {
 
     if (document.fileType === DOCUMENT_FOLDER_TYPE) {
       const children = await this.db.query.documents.findMany({
-        where: and(eq(documents.parentId, id), eq(documents.userId, this.userId)),
+        where: and(eq(documents.parentId, id), buildWorkspaceWhere(this.scope(), documents)),
       });
 
       for (const child of children) {
@@ -323,7 +761,7 @@ export class KnowledgeRepo {
       }
 
       const childFiles = await this.db.query.files.findMany({
-        where: and(eq(files.parentId, id), eq(files.userId, this.userId)),
+        where: and(eq(files.parentId, id), buildWorkspaceWhere(this.scope(), files)),
       });
 
       for (const file of childFiles) {
@@ -338,359 +776,95 @@ export class KnowledgeRepo {
     await this.documentModel.delete(id);
   };
 
-  private buildFileQuery({
-    category,
-    q,
-    knowledgeBaseId,
-    showFilesInKnowledgeBase,
-    parentId,
-  }: QueryFileListParams = {}): ReturnType<typeof sql> {
-    const whereConditions: any[] = [sql`f.user_id = ${this.userId}`];
+  private notInAnyKnowledgeBase = () =>
+    notExists(this.db.select().from(knowledgeBaseFiles).where(eq(knowledgeBaseFiles.fileId, f.id)));
 
-    // Parent ID filter
-    if (parentId !== undefined) {
-      if (parentId === null) {
-        whereConditions.push(sql`f.parent_id IS NULL`);
-      } else {
-        whereConditions.push(sql`f.parent_id = ${parentId}`);
+  /**
+   * Drop files linked to any of the given knowledge bases. A file that also
+   * belongs to an open KB is still dropped — hiding slightly more beats
+   * leaking a restricted KB's content through a shared membership.
+   */
+  private notInKnowledgeBases = (knowledgeBaseIds: string[]) =>
+    notExists(
+      this.db
+        .select()
+        .from(knowledgeBaseFiles)
+        .where(
+          and(
+            eq(knowledgeBaseFiles.fileId, f.id),
+            inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
+          ),
+        ),
+    );
+
+  private fileCategoryFilter = (category?: string): SQL | undefined => {
+    if (!category || category === FilesTabs.All) return undefined;
+
+    const filter = buildFileCategoryFilter(f.fileType, category as FilesTabs);
+    if (filter === 'all') return undefined;
+    // `false` drops the arm from the UNION — a category the table can't serve.
+    return filter === 'none' ? sql`false` : filter;
+  };
+
+  /**
+   * Origin narrowing on `files.source`. Uploads are defined by exclusion rather
+   * than by `IS NULL` alone: an image pasted into the page editor carries
+   * `page-editor` and is still something the user put there, so anything that
+   * isn't machine-generated or foreign-owned counts as an upload.
+   */
+  private fileSourceFilter = (sourceFilter?: ResourceSourceFilter): SQL | undefined => {
+    switch (sourceFilter) {
+      case ResourceSourceFilter.Acceptance: {
+        return eq(f.source, FileSource.Acceptance);
       }
-    }
-
-    // Search filter
-    if (q) {
-      whereConditions.push(sql`f.name ILIKE ${`%${q}%`}`);
-    }
-
-    // Category filter
-    if (category && category !== FilesTabs.All) {
-      const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
-      if (Array.isArray(fileTypePrefix)) {
-        // For multiple file types (e.g., Documents includes 'application' and 'custom')
-        const orConditions = fileTypePrefix.map((prefix) => sql`f.file_type ILIKE ${`${prefix}%`}`);
-        whereConditions.push(sql`(${sql.join(orConditions, sql` OR `)})`);
-      } else {
-        whereConditions.push(sql`f.file_type ILIKE ${`${fileTypePrefix}%`}`);
+      case ResourceSourceFilter.Generated: {
+        return inArray(f.source, AI_GENERATED_FILE_SOURCES);
       }
-    }
-
-    // Knowledge base filter
-    if (knowledgeBaseId) {
-      // Build where conditions using proper table references (f.column instead of files.column)
-      const kbWhereConditions: any[] = [sql`f.user_id = ${this.userId}`];
-
-      // Parent ID filter
-      if (parentId !== undefined) {
-        if (parentId === null) {
-          kbWhereConditions.push(sql`f.parent_id IS NULL`);
-        } else {
-          kbWhereConditions.push(sql`f.parent_id = ${parentId}`);
-        }
-      }
-
-      // Search filter
-      if (q) {
-        kbWhereConditions.push(sql`f.name ILIKE ${`%${q}%`}`);
-      }
-
-      // Category filter
-      if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
-        const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
-        if (Array.isArray(fileTypePrefix)) {
-          const orConditions = fileTypePrefix.map(
-            (prefix) => sql`f.file_type ILIKE ${`${prefix}%`}`,
-          );
-          kbWhereConditions.push(sql`(${sql.join(orConditions, sql` OR `)})`);
-        } else {
-          kbWhereConditions.push(sql`f.file_type ILIKE ${`${fileTypePrefix}%`}`);
-        }
-      }
-
-      return sql`
-        SELECT
-          COALESCE(d.id, f.id) as id,
-          f.id as file_id,
-          d.id as document_id,
-          f.name,
-          f.file_type,
-          f.size,
-          f.url,
-          f.created_at,
-          f.updated_at,
-          f.chunk_task_id,
-          f.embedding_task_id,
-          d.editor_data,
-          d.content,
-          d.slug,
-          COALESCE(d.metadata, f.metadata) as metadata,
-          'file' as source_type
-        FROM ${files} f
-        INNER JOIN ${knowledgeBaseFiles} kbf
-          ON f.id = kbf.file_id
-          AND kbf.knowledge_base_id = ${knowledgeBaseId}
-        LEFT JOIN ${documents} d
-          ON f.id = d.file_id
-        WHERE ${sql.join(kbWhereConditions, sql` AND `)}
-      `;
-    }
-
-    // Exclude files in knowledge base if needed
-    if (!showFilesInKnowledgeBase) {
-      whereConditions.push(
-        sql`
-          NOT EXISTS (
-                    SELECT 1 FROM ${knowledgeBaseFiles}
-                    WHERE ${knowledgeBaseFiles.fileId} = f.id
-                  )
-        `,
-      );
-    }
-
-    return sql`
-      SELECT
-        COALESCE(d.id, f.id) as id,
-        f.id as file_id,
-        d.id as document_id,
-        f.name,
-        f.file_type,
-        f.size,
-        f.url,
-        f.created_at,
-        f.updated_at,
-        f.chunk_task_id,
-        f.embedding_task_id,
-        d.editor_data,
-        d.content,
-        d.slug,
-        COALESCE(d.metadata, f.metadata) as metadata,
-        'file' as source_type
-      FROM ${files} f
-      LEFT JOIN ${documents} d
-        ON f.id = d.file_id
-      WHERE ${sql.join(whereConditions, sql` AND `)}
-    `;
-  }
-
-  private buildDocumentQuery({
-    category,
-    q,
-    knowledgeBaseId,
-    parentId,
-  }: QueryFileListParams = {}): ReturnType<typeof sql> {
-    const whereConditions: any[] = [
-      sql`${documents.userId} = ${this.userId}`,
-      sql`${documents.sourceType} != ${'file'}`,
-    ];
-
-    // Parent ID filter
-    if (parentId !== undefined) {
-      if (parentId === null) {
-        whereConditions.push(sql`${documents.parentId} IS NULL`);
-      } else {
-        whereConditions.push(sql`${documents.parentId} = ${parentId}`);
-      }
-    }
-
-    // Search filter
-    if (q) {
-      whereConditions.push(
-        sql`(${documents.title} ILIKE ${`%${q}%`} OR ${documents.filename} ILIKE ${`%${q}%`})`,
-      );
-    }
-
-    // Category filter - match documents by fileType prefix
-    if (category && category !== FilesTabs.All) {
-      const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
-      if (Array.isArray(fileTypePrefix)) {
-        // For multiple file types (e.g., Documents includes 'application' and 'custom')
-        const orConditions = fileTypePrefix.map(
-          (prefix) => sql`${documents.fileType} ILIKE ${`${prefix}%`}`,
+      case ResourceSourceFilter.Uploaded: {
+        return or(
+          isNull(f.source),
+          notInArray(f.source, [...AI_GENERATED_FILE_SOURCES, ...LIBRARY_HIDDEN_FILE_SOURCES]),
         );
-        whereConditions.push(sql`(${sql.join(orConditions, sql` OR `)})`);
-
-        // Exclude custom/document from Documents category
-        if (category === FilesTabs.Documents) {
-          whereConditions.push(sql`${documents.fileType} != ${'custom/document'}`);
-        }
-      } else if (fileTypePrefix) {
-        whereConditions.push(sql`${documents.fileType} ILIKE ${`${fileTypePrefix}%`}`);
-      } else {
-        // Exclude documents from other categories (Images, Videos, Audios, Websites)
-        return sql`
-          SELECT
-            NULL::varchar(30) as id,
-            NULL::varchar(30) as file_id,
-            NULL::varchar(30) as document_id,
-            NULL::text as name,
-            NULL::varchar(255) as file_type,
-            NULL::integer as size,
-            NULL::text as url,
-            NULL::timestamp with time zone as created_at,
-            NULL::timestamp with time zone as updated_at,
-            NULL::uuid as chunk_task_id,
-            NULL::uuid as embedding_task_id,
-            NULL::jsonb as editor_data,
-            NULL::text as content,
-            NULL::varchar(255) as slug,
-            NULL::jsonb as metadata,
-            NULL::text as source_type
-          WHERE false
-        `;
-      }
-    }
-
-    // Knowledge base filter for documents
-    // Documents are linked to knowledge bases through files table via fileId
-    if (knowledgeBaseId) {
-      // Build where conditions using proper table references (d.column instead of documents.column)
-      const kbWhereConditions: any[] = [sql`d.user_id = ${this.userId}`];
-
-      // Parent ID filter
-      if (parentId !== undefined) {
-        if (parentId === null) {
-          kbWhereConditions.push(sql`d.parent_id IS NULL`);
-        } else {
-          kbWhereConditions.push(sql`d.parent_id = ${parentId}`);
-        }
-      }
-
-      // Search filter
-      if (q) {
-        kbWhereConditions.push(sql`(d.title ILIKE ${`%${q}%`} OR d.filename ILIKE ${`%${q}%`})`);
-      }
-
-      // Category filter
-      if (category && category !== FilesTabs.All) {
-        const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
-        if (Array.isArray(fileTypePrefix)) {
-          const orConditions = fileTypePrefix.map(
-            (prefix) => sql`d.file_type ILIKE ${`${prefix}%`}`,
-          );
-          kbWhereConditions.push(sql`(${sql.join(orConditions, sql` OR `)})`);
-
-          // Exclude custom/document and source_type='file' from Documents category
-          if (category === FilesTabs.Documents) {
-            kbWhereConditions.push(
-              sql`d.file_type != ${'custom/document'}`,
-              sql`d.source_type != ${'file'}`,
-            );
-          }
-        } else if (fileTypePrefix) {
-          kbWhereConditions.push(sql`d.file_type ILIKE ${`${fileTypePrefix}%`}`);
-        } else {
-          // Exclude documents from other categories (Images, Videos, Audios, Websites)
-          return sql`
-            SELECT
-              NULL::varchar(30) as id,
-              NULL::varchar(30) as file_id,
-              NULL::varchar(30) as document_id,
-              NULL::text as name,
-              NULL::varchar(255) as file_type,
-              NULL::integer as size,
-              NULL::text as url,
-              NULL::timestamp with time zone as created_at,
-              NULL::timestamp with time zone as updated_at,
-              NULL::uuid as chunk_task_id,
-              NULL::uuid as embedding_task_id,
-              NULL::jsonb as editor_data,
-              NULL::text as content,
-              NULL::varchar(255) as slug,
-              NULL::jsonb as metadata,
-              NULL::text as source_type
-            WHERE false
-          `;
-        }
-      }
-
-      // When in a knowledge base, return standalone documents (folders and notes without fileId)
-      // that have the knowledgeBaseId column set. Documents with fileId are already
-      // returned by the file query via their linked file records.
-      kbWhereConditions.push(sql`d.file_id IS NULL`, sql`d.knowledge_base_id = ${knowledgeBaseId}`);
-
-      return sql`
-        SELECT
-          d.id,
-          d.file_id,
-          d.id as document_id,
-          COALESCE(d.title, d.filename, 'Untitled') as name,
-          d.file_type,
-          d.total_char_count as size,
-          d.source as url,
-          d.created_at,
-          d.updated_at,
-          NULL as chunk_task_id,
-          NULL as embedding_task_id,
-          d.editor_data,
-          d.content,
-          d.slug,
-          d.metadata,
-          'document' as source_type
-        FROM ${documents} d
-        WHERE ${sql.join(kbWhereConditions, sql` AND `)}
-      `;
-    }
-
-    return sql`
-      SELECT
-        id,
-        file_id,
-        id as document_id,
-        COALESCE(title, filename, 'Untitled') as name,
-        file_type,
-        total_char_count as size,
-        source as url,
-        created_at,
-        updated_at,
-        NULL as chunk_task_id,
-        NULL as embedding_task_id,
-        editor_data,
-        content,
-        slug,
-        metadata,
-        'document' as source_type
-      FROM ${documents}
-      WHERE ${sql.join(whereConditions, sql` AND `)}
-    `;
-  }
-
-  private buildOrderClause(
-    sortType?: string,
-    sorter?: string,
-  ): ReturnType<typeof sql.raw> | ReturnType<typeof sql> {
-    const sortableFields: Record<string, string> = {
-      createdAt: 'created_at',
-      name: 'name',
-      size: 'size',
-      updatedAt: 'updated_at',
-    };
-
-    if (sorter && sortType && sorter in sortableFields) {
-      const direction = sortType.toLowerCase() === SortType.Asc ? 'ASC' : 'DESC';
-      return sql.raw(`${sortableFields[sorter]} ${direction}`);
-    }
-
-    return sql.raw('created_at DESC');
-  }
-
-  private getFileTypePrefix(category: FilesTabs): string | string[] {
-    switch (category) {
-      case FilesTabs.Audios: {
-        return 'audio';
-      }
-      case FilesTabs.Documents: {
-        return ['application', 'custom'];
-      }
-      case FilesTabs.Images: {
-        return 'image';
-      }
-      case FilesTabs.Videos: {
-        return 'video';
-      }
-      case FilesTabs.Websites: {
-        return 'text/html';
       }
       default: {
-        return '';
+        return undefined;
       }
     }
-  }
+  };
+
+  /**
+   * Origin is a file-level notion — documents have no `source` of this kind — so
+   * any narrowing at all drops the document arm from the UNION. `all` leaves it
+   * untouched.
+   */
+  private documentSourceFilter = (sourceFilter?: ResourceSourceFilter): SQL | undefined =>
+    !sourceFilter || sourceFilter === ResourceSourceFilter.All ? undefined : sql`false`;
+
+  /**
+   * Document rows only surface under All and Pages; every file-oriented category
+   * (Documents included) excludes the table entirely.
+   */
+  private documentCategoryFilter = (category?: string): SQL | undefined => {
+    if (!category || category === FilesTabs.All) return undefined;
+
+    const filter = buildDocumentCategoryFilter(d.fileType, category as FilesTabs);
+    if (filter === 'all') return undefined;
+    return filter === 'none' ? sql`false` : filter;
+  };
+
+  /**
+   * Both halves of the sort have to be supplied to take effect — a `sorter`
+   * without a `sortType` falls back to newest-first, as it always has.
+   *
+   * `sql.raw` is required rather than a column reference: after a set operation
+   * `ORDER BY` may only name an output column, and `"f"."name"` is not one. The
+   * value is looked up in `SORTABLE_COLUMNS`, never taken from the caller.
+   */
+  private orderBy = (sortType?: string, sorter?: string): SQL => {
+    if (!sorter || !sortType || !(sorter in SORTABLE_COLUMNS)) return desc(sql.raw('created_at'));
+
+    const direction = sortType.toLowerCase() === SortType.Asc ? asc : desc;
+
+    return direction(sql.raw(SORTABLE_COLUMNS[sorter]));
+  };
 }

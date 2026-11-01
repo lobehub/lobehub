@@ -1,3 +1,5 @@
+import type * as FetchSSE from '@lobechat/fetch-sse';
+import { getMessageError } from '@lobechat/fetch-sse';
 import { type Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +11,15 @@ import { initializeWithClientStore } from '../chat/mecha';
 import { ModelsService } from '../models';
 
 vi.stubGlobal('fetch', vi.fn());
+
+vi.mock('@lobechat/fetch-sse', async () => {
+  const actual = (await vi.importActual('@lobechat/fetch-sse')) as typeof FetchSSE;
+
+  return {
+    ...actual,
+    getMessageError: vi.fn(actual.getMessageError),
+  };
+});
 
 vi.mock('@/const/version', () => ({
   isDesktop: false,
@@ -25,6 +36,22 @@ vi.mock('../chat/helper', () => ({
 vi.mock('../chat/mecha', () => ({
   initializeWithClientStore: vi.fn(),
 }));
+
+const oneShotRelay = vi.hoisted(() => ({
+  needsRelay: vi.fn((_provider?: string) => false),
+  run: vi.fn(async (_provider: string | undefined, request: (relay?: any) => Promise<any>) =>
+    request(),
+  ),
+}));
+vi.mock('../llmRelay', () => ({ oneShotRelay }));
+
+const getBusinessTrpcHeaders = vi.hoisted(() => vi.fn(async () => ({}) as Record<string, string>));
+vi.mock('@/business/client/trpc-headers', () => ({ getBusinessTrpcHeaders }));
+
+const RELAY = {
+  channel: 'llmcall:user-1:abcdefgh',
+  headers: { 'x-lobe-client-id': 'tab-1', 'x-lobe-llm-relay-channel': 'llmcall:user-1:abcdefgh' },
+};
 
 vi.mock('@/store/aiInfra', () => ({
   aiProviderSelectors: {
@@ -49,6 +76,7 @@ vi.mock('@/store/user/selectors', () => ({
 const modelsService = new ModelsService();
 
 const mockedCreateHeaderWithAuth = vi.mocked(createHeaderWithAuth);
+const mockedGetMessageError = vi.mocked(getMessageError);
 const mockedResolveRuntimeProvider = vi.mocked(resolveRuntimeProvider);
 const mockedInitializeWithClientStore = vi.mocked(initializeWithClientStore);
 
@@ -56,9 +84,86 @@ describe('ModelsService', () => {
   beforeEach(() => {
     (fetch as Mock).mockClear();
     mockedCreateHeaderWithAuth.mockClear();
+    mockedGetMessageError.mockClear();
     mockedResolveRuntimeProvider.mockReset();
     mockedResolveRuntimeProvider.mockImplementation((provider: string) => provider);
     mockedInitializeWithClientStore.mockClear();
+  });
+
+  describe('one-shot relay', () => {
+    const relayTo = () => {
+      const spyIsClient = vi
+        .spyOn(aiProviderSelectors, 'isProviderFetchOnClient')
+        .mockReturnValue(() => true);
+      oneShotRelay.needsRelay.mockReturnValue(true);
+      oneShotRelay.run.mockImplementationOnce(async (_provider, request) => request(RELAY));
+      return () => {
+        spyIsClient.mockRestore();
+        oneShotRelay.needsRelay.mockReturnValue(false);
+      };
+    };
+
+    // Within the LLM relay the browser never dials a device-only provider:
+    // the server lists / downloads through this tab.
+    it('lists a device-only provider through the server with the relay headers', async () => {
+      const restore = relayTo();
+      (fetch as Mock).mockResolvedValueOnce(new Response(JSON.stringify([{ id: 'qwen3:1.7b' }])));
+
+      const result = await modelsService.getModels('ollama');
+
+      expect(oneShotRelay.run).toHaveBeenCalledWith('ollama', expect.any(Function));
+      expect(fetch).toHaveBeenCalledWith('/webapi/models/ollama', { headers: RELAY.headers });
+      expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
+      expect(result).toEqual([{ id: 'qwen3:1.7b' }]);
+      restore();
+    });
+
+    // The server resolves the provider config (and so whether to relay) for
+    // the active workspace from `X-Workspace-Id`, which the cloud build adds.
+    it('sends the workspace headers with relayed model list and download requests', async () => {
+      getBusinessTrpcHeaders.mockResolvedValue({ 'X-Workspace-Id': 'ws-1' });
+      const restore = relayTo();
+      (fetch as Mock).mockResolvedValueOnce(new Response('[]'));
+      await modelsService.getModels('ollama');
+      expect(fetch).toHaveBeenLastCalledWith('/webapi/models/ollama', {
+        headers: { ...RELAY.headers, 'X-Workspace-Id': 'ws-1' },
+      });
+
+      oneShotRelay.run.mockImplementationOnce(async (_provider, request) => request(RELAY));
+      (fetch as Mock).mockResolvedValueOnce(new Response(''));
+      await modelsService.downloadModel({ model: 'qwen3:1.7b', provider: 'ollama' });
+      expect(fetch).toHaveBeenLastCalledWith(
+        '/webapi/models/ollama/pull',
+        expect.objectContaining({ headers: { ...RELAY.headers, 'X-Workspace-Id': 'ws-1' } }),
+      );
+      getBusinessTrpcHeaders.mockResolvedValue({});
+      restore();
+    });
+
+    it('downloads an Ollama model through the server, reading progress inside the relay', async () => {
+      const restore = relayTo();
+      (fetch as Mock).mockResolvedValueOnce(
+        new Response('{"status":"pulling","completed":1,"total":2}\n'),
+      );
+      const onProgress = vi.fn();
+
+      await modelsService.downloadModel(
+        { model: 'qwen3:1.7b', provider: 'ollama' },
+        { onProgress },
+      );
+
+      expect(fetch).toHaveBeenCalledWith(
+        '/webapi/models/ollama/pull',
+        expect.objectContaining({ headers: RELAY.headers, method: 'POST' }),
+      );
+      expect(onProgress).toHaveBeenCalledWith({ completed: 1, status: 'pulling', total: 2 });
+      // abortPull() must also end a wait for the relay channel.
+      expect(oneShotRelay.run).toHaveBeenCalledWith('ollama', expect.any(Function), {
+        signal: expect.any(AbortSignal),
+      });
+      expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
+      restore();
+    });
   });
 
   describe('getModels', () => {
@@ -106,6 +211,72 @@ describe('ModelsService', () => {
       });
       expect(mockModels).toHaveBeenCalled();
       expect(result).toEqual({ models: ['model1', 'model2'] });
+
+      spyIsClient.mockRestore();
+    });
+
+    it('should throw model fetch error details when server response is not ok', async () => {
+      (fetch as Mock).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            body: {
+              error: {
+                message: 'Cloudflare models API returned an invalid response',
+                name: 'Error',
+              },
+              message: 'Cloudflare models API returned an invalid response',
+              provider: 'cloudflare',
+            },
+            errorType: 'ProviderBizError',
+          }),
+          { status: 471 },
+        ),
+      );
+
+      await expect(modelsService.getModels('cloudflare')).rejects.toThrow(
+        'Cloudflare models API returned an invalid response',
+      );
+    });
+
+    it('should fall back to translated error message when server error body has no message', async () => {
+      mockedGetMessageError.mockResolvedValueOnce({
+        body: {
+          provider: 'cloudflare',
+        },
+        message: 'fallback model fetch failure',
+        type: 'ProviderBizError',
+      });
+      (fetch as Mock).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            body: {
+              provider: 'cloudflare',
+            },
+            errorType: 'ProviderBizError',
+          }),
+          { status: 471 },
+        ),
+      );
+
+      await expect(modelsService.getModels('cloudflare')).rejects.toThrow(
+        'fallback model fetch failure',
+      );
+    });
+
+    it('should propagate server fetch network errors', async () => {
+      (fetch as Mock).mockRejectedValueOnce(new Error('network down'));
+
+      await expect(modelsService.getModels('openai')).rejects.toThrow('network down');
+    });
+
+    it('should propagate client runtime model fetch errors', async () => {
+      const spyIsClient = vi
+        .spyOn(aiProviderSelectors, 'isProviderFetchOnClient')
+        .mockReturnValue(() => true);
+      const mockModels = vi.fn().mockRejectedValue(new Error('client runtime failed'));
+      mockedInitializeWithClientStore.mockResolvedValue({ models: mockModels } as any);
+
+      await expect(modelsService.getModels('openai')).rejects.toThrow('client runtime failed');
 
       spyIsClient.mockRestore();
     });

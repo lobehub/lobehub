@@ -1,59 +1,42 @@
 'use client';
 
-import { type PropsWithChildren, type ReactNode } from 'react';
-import { memo, useLayoutEffect, useSyncExternalStore } from 'react';
-
-import Sidebar from '@/routes/(main)/home/_layout/Sidebar';
+import { memo, useSyncExternalStore } from 'react';
 
 import { NavPanelDraggable } from './components/NavPanelDraggable';
+import {
+  DEFAULT_NAV_SKELETON_SHAPE,
+  NAV_SKELETON_SHAPES,
+  NavSideBarSkeleton,
+} from './components/SideBarSkeleton';
+import { NAV_PANEL_RIGHT_DRAWER_ID } from './constants';
+import { getNavPanelRegistrySnapshot, subscribeNavPanelRegistry } from './registry';
+import { useActiveNavKey } from './useActiveNavKey';
 
-export const NAV_PANEL_RIGHT_DRAWER_ID = 'nav-panel-drawer';
-
-type NavPanelSnapshot = {
-  key: string;
-  node: ReactNode;
-} | null;
-
-let currentSnapshot: NavPanelSnapshot = null;
-const listeners = new Set<() => void>();
-
-const subscribeNavPanel = (listener: () => void) => {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-};
-
-const getNavPanelSnapshot = () => currentSnapshot;
-const setNavPanelSnapshot = (snapshot: NavPanelSnapshot) => {
-  currentSnapshot = snapshot;
-  listeners.forEach((listener) => listener());
-};
-
-export const resetNavPanel = () => {
-  if (!currentSnapshot) return;
-
-  setNavPanelSnapshot(null);
-};
-
-const FALLBACK_NAV_KEY = 'home';
-
-const getActiveNavKey = () => currentSnapshot?.key ?? FALLBACK_NAV_KEY;
-
-export const useActiveNavKey = () =>
-  useSyncExternalStore(subscribeNavPanel, getActiveNavKey, getActiveNavKey);
+const NavPanelFallback = memo<{ navKey: string }>(({ navKey }) => (
+  <NavSideBarSkeleton {...(NAV_SKELETON_SHAPES[navKey] ?? DEFAULT_NAV_SKELETON_SHAPE)} />
+));
 
 const NavPanel = memo(() => {
-  const panelContent = useSyncExternalStore(
-    subscribeNavPanel,
-    getNavPanelSnapshot,
-    getNavPanelSnapshot,
+  const activeNavKey = useActiveNavKey();
+  const getActiveContent = () => getNavPanelRegistrySnapshot().get(activeNavKey);
+  const registeredContent = useSyncExternalStore(
+    subscribeNavPanelRegistry,
+    getActiveContent,
+    getActiveContent,
   );
-
-  // Use home Content as fallback when no portal content is provided
-  const activeContent = panelContent || { key: FALLBACK_NAV_KEY, node: <Sidebar /> };
+  const activeContent = registeredContent
+    ? { key: activeNavKey, node: registeredContent.node }
+    : { key: `pending:${activeNavKey}`, node: <NavPanelFallback navKey={activeNavKey} /> };
+  const getHomeContent = () => getNavPanelRegistrySnapshot().get('home')?.node;
+  const homeContent = useSyncExternalStore(
+    subscribeNavPanelRegistry,
+    getHomeContent,
+    getHomeContent,
+  );
 
   return (
     <>
-      <NavPanelDraggable activeContent={activeContent} />
+      <NavPanelDraggable activeContent={activeContent} homeContent={homeContent} />
       <div
         id={NAV_PANEL_RIGHT_DRAWER_ID}
         style={{
@@ -67,26 +50,8 @@ const NavPanel = memo(() => {
   );
 });
 
+NavPanel.displayName = 'NavPanel';
+
+export { NavPanelPortal } from './NavPanelPortal';
+export { useActiveNavKey } from './useActiveNavKey';
 export default NavPanel;
-
-interface NavPanelPortalProps extends PropsWithChildren {
-  /**
-   * Unique key to trigger transition animation when content changes
-   * @example <NavPanelPortal navKey="chat">...</NavPanelPortal>
-   */
-  navKey?: string;
-}
-
-export const NavPanelPortal = memo<NavPanelPortalProps>(({ children, navKey = 'default' }) => {
-  useLayoutEffect(() => {
-    if (!children) return;
-
-    setNavPanelSnapshot({
-      key: navKey,
-      node: children,
-    });
-    // Intentionally keep previous content until new one mounts.
-  }, [children, navKey]);
-
-  return null;
-});

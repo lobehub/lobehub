@@ -1,6 +1,5 @@
+import { normalizePathForScope, resolvePathWithScope } from '@lobechat/tool-runtime';
 import { type DynamicInterventionResolver } from '@lobechat/types';
-
-import { normalizePathForScope, resolvePathWithScope } from './utils/path';
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
 

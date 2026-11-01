@@ -3,13 +3,13 @@
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
 
 const Header = memo(() => {
   const { t } = useTranslation('setting');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   return (
     <ChatHeader

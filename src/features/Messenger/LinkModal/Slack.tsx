@@ -5,9 +5,15 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PlatformAvatar } from '../constants';
+import { useMessengerInstallHref } from '../installHref';
 
-const SlackLinkBody = memo(() => {
+interface SlackLinkBodyProps {
+  disabled?: boolean;
+}
+
+const SlackLinkBody = memo<SlackLinkBodyProps>(({ disabled }) => {
   const { t } = useTranslation('messenger');
+  const installHref = useMessengerInstallHref('slack');
 
   return (
     <>
@@ -22,7 +28,8 @@ const SlackLinkBody = memo(() => {
       </Flexbox>
       <Button
         block
-        href="/api/agent/messenger/slack/install"
+        disabled={disabled || !installHref}
+        href={disabled ? undefined : installHref}
         size="large"
         target="_blank"
         type="primary"

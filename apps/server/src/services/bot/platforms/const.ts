@@ -1,0 +1,1041 @@
+import { DEFAULT_LANG } from '@/const/locale';
+import { type Locales, normalizeLocale } from '@/locales/resources';
+
+import type { FieldSchema, ValidationResult } from './types';
+
+export const displayToolCallsField: FieldSchema = {
+  key: 'displayToolCalls',
+  default: false,
+  description: 'channel.displayToolCallsHint',
+  label: 'channel.displayToolCalls',
+  type: 'boolean',
+};
+
+/**
+ * Per-platform "how to find this ID" tooltip keys. Each platform paints a
+ * different path to the value the operator has to paste — Discord wants
+ * Developer Mode + right-click, Telegram wants @userinfobot, Slack uses
+ * profile menus, etc. The factory below picks the right key so the field's
+ * `?` tooltip renders concrete steps; the inline `description` stays
+ * platform-agnostic so it doesn't compete with the tooltip.
+ *
+ * Platforms not listed render no tooltip — only the generic description.
+ */
+const USER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
+  discord: 'channel.userIdHint.discord',
+  // Feishu and Lark share `sharedSchema`, which always passes 'feishu' — the
+  // tooltip copy mentions both products so it reads naturally for either.
+  feishu: 'channel.userIdHint.feishu',
+  imessage: 'channel.userIdHint.imessage',
+  line: 'channel.userIdHint.line',
+  qq: 'channel.userIdHint.qq',
+  slack: 'channel.userIdHint.slack',
+  telegram: 'channel.userIdHint.telegram',
+};
+
+const SERVER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
+  discord: 'channel.serverIdHint.discord',
+  slack: 'channel.serverIdHint.slack',
+};
+
+/**
+ * Build the operator's "Default Server ID" field for `platform`. The inline
+ * description stays generic; platform-specific "how to find" guidance lives
+ * in the `?` tooltip next to the label.
+ */
+export function makeServerIdField(platform?: string): FieldSchema {
+  return {
+    key: 'serverId',
+    description: 'channel.serverIdHint',
+    label: 'channel.serverId',
+    tooltip: platform ? SERVER_ID_TOOLTIP_BY_PLATFORM[platform] : undefined,
+    type: 'string',
+  };
+}
+
+/**
+ * Build the operator's "Your Platform User ID" field for `platform`. See
+ * {@link makeServerIdField} — same factory pattern, swapped vocabulary.
+ */
+export function makeUserIdField(platform?: string): FieldSchema {
+  return {
+    key: 'userId',
+    description: 'channel.userIdHint',
+    label: 'channel.userId',
+    tooltip: platform ? USER_ID_TOOLTIP_BY_PLATFORM[platform] : undefined,
+    type: 'string',
+  };
+}
+
+// ---------- Bot reply locale ----------
+
+/**
+ * Locale used for **system-generated** bot reply text (errors, stopped notices,
+ * DM rejection). Aliased to the project-wide `Locales` so adding a new IM
+ * platform language doesn't drift from the rest of the codebase. Agent
+ * conversation content is produced by the LLM and follows the user's language
+ * naturally — this only governs the small set of static strings the bot
+ * itself emits.
+ *
+ * Picked per-platform since each platform has a primary audience: Chinese
+ * platforms (Feishu / QQ / WeChat) ship Chinese strings, the rest ship
+ * English. Languages without an entry in the system-string dictionary
+ * gracefully fall back to `DEFAULT_LANG` ('en-US') at render time.
+ */
+export type BotReplyLocale = Locales;
+
+const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
+  discord: 'en-US',
+  feishu: 'zh-CN',
+  imessage: 'en-US',
+  lark: 'en-US',
+  linq: 'en-US',
+  qq: 'zh-CN',
+  slack: 'en-US',
+  telegram: 'en-US',
+  wechat: 'zh-CN',
+};
+
+export function getBotReplyLocale(platform: string | undefined): BotReplyLocale {
+  if (!platform) return DEFAULT_LANG;
+  return PLATFORM_REPLY_LOCALES[platform] ?? DEFAULT_LANG;
+}
+
+/**
+ * Coerce a platform-reported locale string to one of the project `Locales`.
+ *
+ * Different IM platforms emit different shapes for the same tag:
+ * - Telegram: lowercase BCP 47 (`pt-br`, `zh-hans`)
+ * - Discord / Slack: mixed case (`pt-BR`, `zh-CN`)
+ * - Feishu / Lark: underscored (`zh_CN`)
+ *
+ * We re-format to `lang-REGION` and then defer to the project's
+ * `normalizeLocale` so the resulting value sits inside `Locales`. Returns
+ * `undefined` for falsy input so the caller can fall back to a platform
+ * default; non-empty strings always produce a value (English when nothing
+ * else matches).
+ */
+export function normalizeBotReplyLocale(
+  raw: string | undefined | null,
+): BotReplyLocale | undefined {
+  if (!raw) return undefined;
+  const parts = raw.replaceAll('_', '-').split('-');
+  const lang = parts[0].toLowerCase();
+
+  // BCP 47 script subtags for Chinese (Telegram emits `zh-hans` / `zh-hant`,
+  // some web platforms emit `zh-Hans-CN` / `zh-Hant-TW`). `normalizeLocale`
+  // only knows region tags, so a `zh-HANS` shape silently falls back to
+  // en-US — map scripts to the closest regional locale before delegating.
+  if (lang === 'zh' && parts.length >= 2) {
+    const scriptOrRegion = parts[1].toLowerCase();
+    if (scriptOrRegion === 'hans') return 'zh-CN';
+    if (scriptOrRegion === 'hant') return 'zh-TW';
+  }
+
+  const formatted = parts.length === 1 ? lang : `${lang}-${parts[1].toUpperCase()}`;
+  return normalizeLocale(formatted);
+}
+
+// ---------- Access policies (DM + Group) ----------
+
+/**
+ * Two access policies share the runtime: `dmPolicy` gates 1:1 DMs, and
+ * `groupPolicy` gates group / channel / thread traffic. Both live as flat
+ * top-level fields on `settings` because the channel form auto-generated by
+ * `Body.tsx` flattens any `type: 'object'` field's children — nesting at the
+ * schema layer would not survive serialization, and an earlier attempt at
+ * `settings.dm.policy` silently fell through to the `'open'` fallback for
+ * every saved channel.
+ *
+ * Allowlists are split by what they hold:
+ * - `allowFrom` (top level, unprefixed) — **user IDs**. A *global* identity
+ *   gate: when populated, **only** these users can interact with the bot
+ *   anywhere — DMs, group @mentions, threads — regardless of `dmPolicy` /
+ *   `groupPolicy` mode. Empty means "no user-level filter". Setting
+ *   `dmPolicy='allowlist'` is an explicit "DMs require this list" signal
+ *   that fails closed when the list is empty; otherwise the global gate
+ *   already does the work.
+ * - `groupAllowFrom` — **channel / group / thread IDs**. Owned by
+ *   `groupPolicy` because the value type is unrelated to user IDs.
+ *
+ * The naming rule: a name without a scope prefix advertises that the value
+ * crosses scopes (`allowFrom` is consulted by every gate); a prefixed name
+ * advertises the field is the property of one specific scope.
+ */
+export type DmPolicy = 'open' | 'allowlist' | 'pairing' | 'disabled';
+
+/** User-ID allowlist shared across user-scope policies (DM today). */
+export interface UserAllowlist {
+  /** Parsed, deduplicated platform user IDs. */
+  ids: string[];
+}
+
+export interface DmSettings {
+  policy: DmPolicy;
+}
+
+export type GuestPolicy = 'open' | 'allowlist' | 'pairing' | 'disabled';
+
+export interface GuestSettings {
+  policy: GuestPolicy;
+}
+
+export type GroupPolicy = 'open' | 'allowlist' | 'disabled';
+
+export interface GroupSettings {
+  /** Parsed channel / group / thread IDs (matched against `thread.channelId`). */
+  allowFrom: string[];
+  policy: GroupPolicy;
+}
+
+const DM_POLICIES: ReadonlySet<DmPolicy> = new Set(['open', 'allowlist', 'pairing', 'disabled']);
+const GUEST_POLICIES: ReadonlySet<GuestPolicy> = new Set([
+  'open',
+  'allowlist',
+  'pairing',
+  'disabled',
+]);
+const GROUP_POLICIES: ReadonlySet<GroupPolicy> = new Set(['open', 'allowlist', 'disabled']);
+
+/**
+ * DM Policy: gate inbound 1:1 messages.
+ *
+ * - `open` (default): accept DMs from anyone (subject to the global
+ *   `allowFrom` gate when that is populated)
+ * - `allowlist`: DMs require the sender to be in the global `allowFrom`
+ *   list. Distinct from `open` only when `allowFrom` is empty: `allowlist`
+ *   then **fails closed** (no DMs), while `open` still lets anyone DM.
+ * - `pairing`: same gate as `allowlist`, but a non-listed sender receives a
+ *   one-time pairing code instead of a flat rejection. The owner approves
+ *   via `/approve <code>`, which appends the applicant to `allowFrom` so
+ *   subsequent DMs flow normally. Requires `settings.userId` (the owner's
+ *   platform user ID, used both as approver identity and as the implicit
+ *   "always allowed" sender for an empty allowFrom).
+ * - `disabled`: ignore all DMs (the sender gets a one-line system reply
+ *   pointing them at @mentioning the bot in a shared channel instead)
+ */
+export function makeDmPolicyField(defaults: { policy: DmPolicy }): FieldSchema {
+  return {
+    key: 'dmPolicy',
+    default: defaults.policy,
+    description: 'channel.dmPolicyHint',
+    enum: ['open', 'allowlist', 'pairing', 'disabled'],
+    enumDescriptions: [
+      'channel.dmPolicyOpenHint',
+      'channel.dmPolicyAllowlistHint',
+      'channel.dmPolicyPairingHint',
+      'channel.dmPolicyDisabledHint',
+    ],
+    enumLabels: [
+      'channel.dmPolicyOpen',
+      'channel.dmPolicyAllowlist',
+      'channel.dmPolicyPairing',
+      'channel.dmPolicyDisabled',
+    ],
+    label: 'channel.dmPolicy',
+    type: 'string',
+  };
+}
+
+/**
+ * Telegram Guest Policy: gate one-shot Guest Mode summons independently
+ * from DMs and groups the bot has joined.
+ *
+ * Guest Mode is a user-scoped surface, so `allowlist` and `pairing` reuse
+ * the global `allowFrom` user IDs rather than the channel-ID based
+ * `groupAllowFrom` list.
+ */
+export function makeGuestPolicyField(defaults: { policy: GuestPolicy }): FieldSchema {
+  return {
+    key: 'guestPolicy',
+    default: defaults.policy,
+    description: 'channel.guestPolicyHint',
+    enum: ['open', 'allowlist', 'pairing', 'disabled'],
+    enumDescriptions: [
+      'channel.guestPolicyOpenHint',
+      'channel.guestPolicyAllowlistHint',
+      'channel.guestPolicyPairingHint',
+      'channel.guestPolicyDisabledHint',
+    ],
+    enumLabels: [
+      'channel.guestPolicyOpen',
+      'channel.guestPolicyAllowlist',
+      'channel.guestPolicyPairing',
+      'channel.guestPolicyDisabled',
+    ],
+    label: 'channel.guestPolicy',
+    type: 'string',
+  };
+}
+
+/**
+ * Global user-ID allowlist. Always visible — when populated, the runtime
+ * applies it to **all** inbound traffic (DM, group, and Telegram Guest
+ * Mode), independently of the per-scope policy. Empty means "no user-level
+ * filter".
+ *
+ * Tying visibility to `dmPolicy='allowlist'` was tried earlier and rejected
+ * because it forced operators who only wanted to scope group @mentions to
+ * also flip DM mode, which is misleading. Always-visible matches the
+ * field's actual semantics.
+ *
+ * Stored as `Array<{ id, name? }>` so the operator can label each entry
+ * (e.g. `name: 'Product colleague Ada'`) and recognise IDs months later. The runtime
+ * only consults `id` — see {@link parseIdList} for the back-compat parser
+ * that still accepts the legacy comma-separated string and bare string[].
+ */
+export const allowFromField: FieldSchema = {
+  key: 'allowFrom',
+  default: [],
+  description: 'channel.allowFromHint',
+  label: 'channel.allowFrom',
+  type: 'array',
+  items: {
+    key: 'item',
+    label: '',
+    type: 'object',
+    properties: [
+      {
+        key: 'id',
+        label: 'channel.allowFromIdLabel',
+        placeholder: 'channel.allowFromIdPlaceholder',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'name',
+        label: 'channel.allowFromNameLabel',
+        placeholder: 'channel.allowFromNamePlaceholder',
+        type: 'string',
+      },
+    ],
+  },
+};
+
+/**
+ * Group Policy: gate inbound non-DM traffic.
+ *
+ * - `open` (default): respond to @mentions in any group / channel / thread
+ * - `allowlist`: respond only when `thread.channelId` is in
+ *   `groupAllowFrom` — what users copy via Discord "Copy Channel ID",
+ *   Telegram chat ID, Slack channel ID, etc.
+ * - `disabled`: ignore all non-DM traffic
+ */
+export function makeGroupPolicyFields(defaults: { policy: GroupPolicy }): FieldSchema[] {
+  return [
+    {
+      key: 'groupPolicy',
+      default: defaults.policy,
+      description: 'channel.groupPolicyHint',
+      enum: ['open', 'allowlist', 'disabled'],
+      enumDescriptions: [
+        'channel.groupPolicyOpenHint',
+        'channel.groupPolicyAllowlistHint',
+        'channel.groupPolicyDisabledHint',
+      ],
+      enumLabels: [
+        'channel.groupPolicyOpen',
+        'channel.groupPolicyAllowlist',
+        'channel.groupPolicyDisabled',
+      ],
+      label: 'channel.groupPolicy',
+      type: 'string',
+    },
+    {
+      key: 'groupAllowFrom',
+      default: [],
+      description: 'channel.groupAllowFromHint',
+      label: 'channel.groupAllowFrom',
+      type: 'array',
+      items: {
+        key: 'item',
+        label: '',
+        type: 'object',
+        properties: [
+          {
+            key: 'id',
+            label: 'channel.groupAllowFromIdLabel',
+            placeholder: 'channel.groupAllowFromIdPlaceholder',
+            required: true,
+            type: 'string',
+          },
+          {
+            key: 'name',
+            label: 'channel.groupAllowFromNameLabel',
+            placeholder: 'channel.groupAllowFromNamePlaceholder',
+            type: 'string',
+          },
+        ],
+      },
+      visibleWhen: { field: 'groupPolicy', value: 'allowlist' },
+    },
+  ];
+}
+
+/**
+ * Like {@link parseIdList} but preserves `name` so writers (e.g. the
+ * pairing approval flow) can round-trip the operator-facing labels rather
+ * than collapsing every entry to a bare ID. Same back-compat coverage:
+ * accepts the current `{ id, name? }[]`, the legacy `string[]`, and the
+ * original comma-separated string shape.
+ */
+export function normalizeAllowFromEntries(raw: unknown): Array<{ id: string; name?: string }> {
+  if (typeof raw === 'string') {
+    return raw
+      .split(/[\s,]+/)
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .map((id) => ({ id }));
+  }
+  if (Array.isArray(raw)) {
+    const out: Array<{ id: string; name?: string }> = [];
+    for (const entry of raw) {
+      if (typeof entry === 'string') {
+        const id = entry.trim();
+        if (id) out.push({ id });
+        continue;
+      }
+      if (entry && typeof entry === 'object' && 'id' in entry) {
+        const id = (entry as { id?: unknown }).id;
+        if (typeof id !== 'string' || !id.trim()) continue;
+        const name = (entry as { name?: unknown }).name;
+        out.push(
+          typeof name === 'string' && name.trim()
+            ? { id: id.trim(), name: name.trim() }
+            : { id: id.trim() },
+        );
+      }
+    }
+    return out;
+  }
+  return [];
+}
+
+// ---------- Watch keywords () ----------
+
+/**
+ * Entry shape persisted under `settings.watchKeywords`. `keyword` is what the
+ * runtime matches against the inbound message text; `instruction` is an
+ * operator-authored prompt that is prepended to the user's message and sent
+ * to the agent when the keyword wakes the bot (so a bare trigger word like
+ * "bug" can carry a directive like "Scan the recent thread and reply if you
+ * spot an actionable bug report"). When `instruction` is empty/absent the
+ * keyword just wakes the bot with the user's raw text — same as a mention.
+ *
+ * `asName` marks the keyword as one of the bot's names ("canis", "倏昱"): saying it calls the bot
+ * the way its display name does. It still wakes like any keyword (and still carries its
+ * `instruction`), and bot-wake reads it as `named-in-text`: answered at once rather than held in
+ * the scheduler's collect window, not silenced by the owner's presence, and listed among the bot's
+ * names for the classifier.
+ */
+export interface WatchKeywordEntry {
+  asName?: boolean;
+  instruction?: string;
+  keyword: string;
+}
+
+/**
+ * "Watch Keywords" schema field — when populated, the bot also reacts to
+ * non-@mention messages in subscribed channels whose text contains any of
+ * these keywords. Empty (default) preserves the today behaviour of only
+ * responding to mentions / DMs / subscribed-thread mentions.
+ *
+ * Stored as `Array<{ keyword, instruction?, asName? }>`. The optional `instruction`
+ * is appended as a user-side prompt prefix when the keyword wakes the bot —
+ * letting operators wire each trigger to an explicit directive ("scan the
+ * thread for a bug report", "summarise the last 20 messages", …) rather
+ * than only routing the raw message. `asName` makes the keyword one of the
+ * bot's names (see {@link WatchKeywordEntry}).
+ */
+export const watchKeywordsField: FieldSchema = {
+  key: 'watchKeywords',
+  default: [],
+  description: 'channel.watchKeywordsHint',
+  label: 'channel.watchKeywords',
+  paidFeature: 'messageMonitoring',
+  type: 'array',
+  items: {
+    key: 'item',
+    label: '',
+    type: 'object',
+    properties: [
+      {
+        key: 'keyword',
+        label: 'channel.watchKeywordLabel',
+        placeholder: 'channel.watchKeywordPlaceholder',
+        required: true,
+        type: 'string',
+      },
+      {
+        key: 'instruction',
+        label: 'channel.watchKeywordInstructionLabel',
+        placeholder: 'channel.watchKeywordInstructionPlaceholder',
+        type: 'string',
+      },
+      {
+        description: 'channel.watchKeywordAsNameHint',
+        key: 'asName',
+        label: 'channel.watchKeywordAsNameLabel',
+        type: 'boolean',
+      },
+    ],
+  },
+};
+
+/**
+ * Parse `settings.watchKeywords` into the canonical entry list. Accepts
+ * three shapes for forward-compat with any future schema migrations:
+ *
+ * 1. `Array<{ keyword, instruction?, asName? }>` — current form-produced shape
+ * 2. `string[]` — flat array fallback (no instructions attached)
+ * 3. `string` — comma / newline / whitespace-separated text (legacy / paste)
+ *
+ * Keywords are lowercased and deduplicated (matching is case-insensitive,
+ * so we normalise once at parse time rather than per-message). The first
+ * non-empty `instruction` wins on duplicates so the operator's authoring
+ * order is preserved; a keyword is a name when any of its duplicates says so.
+ * `asName` is kept only when `true`, so an entry without the flag reads
+ * exactly as it did before the flag existed.
+ */
+export function extractWatchKeywordEntries(
+  settings: Record<string, unknown> | null | undefined,
+): WatchKeywordEntry[] {
+  const raw = settings?.watchKeywords;
+  const byKeyword = new Map<string, WatchKeywordEntry>();
+  const push = (keyword: unknown, instruction?: unknown, asName?: unknown) => {
+    if (typeof keyword !== 'string') return;
+    const normalised = keyword.trim().toLowerCase();
+    if (!normalised) return;
+    const trimmedInstruction =
+      typeof instruction === 'string' && instruction.trim() ? instruction.trim() : undefined;
+    const existing = byKeyword.get(normalised);
+    if (!existing) {
+      byKeyword.set(normalised, {
+        keyword: normalised,
+        instruction: trimmedInstruction,
+        ...(asName === true && { asName: true }),
+      });
+      return;
+    }
+    // Keep the first non-empty instruction so the operator's authoring order
+    // is honoured when the form contains duplicate keywords.
+    if (!existing.instruction && trimmedInstruction) {
+      existing.instruction = trimmedInstruction;
+    }
+    if (asName === true) existing.asName = true;
+  };
+  if (typeof raw === 'string') {
+    for (const piece of raw.split(/[\s,]+/)) push(piece);
+  } else if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      if (typeof entry === 'string') {
+        push(entry);
+        continue;
+      }
+      if (entry && typeof entry === 'object' && 'keyword' in entry) {
+        const obj = entry as { asName?: unknown; instruction?: unknown; keyword?: unknown };
+        push(obj.keyword, obj.instruction, obj.asName);
+      }
+    }
+  }
+  return Array.from(byKeyword.values());
+}
+
+/**
+ * Convenience wrapper that returns only the lowercased keyword strings —
+ * sufficient for the mention-gate predicate in BotMessageRouter, which
+ * doesn't need the instructions.
+ */
+export function extractWatchKeywords(
+  settings: Record<string, unknown> | null | undefined,
+): string[] {
+  return extractWatchKeywordEntries(settings).map((entry) => entry.keyword);
+}
+
+/**
+ * Test whether the inbound message text contains any of the configured
+ * watch keywords. Case-insensitive, word-boundary aware so `bug` does NOT
+ * match `debug` / `bugfix` (operators expect "say the word `bug` and the
+ * bot replies", not "any substring") — but punctuation-flanked occurrences
+ * still match ("bug!", "(bug)", "bug,").
+ *
+ * Word-boundary only kicks in for ASCII word chars (`[A-Za-z0-9_]`) on the
+ * adjacent side. This keeps the "don't match `bug` inside `debug`" rule for
+ * Latin-script keywords, while letting CJK keywords behave like substring
+ * matches — Chinese / Japanese don't have a whitespace word boundary, so
+ * `\b`-style logic would silently break the feature for the audience this
+ * bot is built for (Feishu / Lark / QQ / WeChat).
+ *
+ * Empty `keywords` short-circuits to `false` so callers can compose with
+ * existing mention gates without re-checking emptiness everywhere.
+ */
+export function messageMatchesWatchKeyword(
+  text: string | undefined | null,
+  keywords: ReadonlyArray<string>,
+): boolean {
+  return findFirstMatchingKeyword(text, keywords) !== null;
+}
+
+/**
+ * Return every entry whose keyword appears in `text`, in the entries'
+ * authoring order. Used by the router to gather operator-authored
+ * instructions for matched keywords so they can be injected as a prompt
+ * prefix when the keyword (and not a mention) is what wakes the bot.
+ */
+export function findMatchingWatchKeywordEntries(
+  text: string | undefined | null,
+  entries: ReadonlyArray<WatchKeywordEntry>,
+): WatchKeywordEntry[] {
+  if (!text || entries.length === 0) return [];
+  const lowered = text.toLowerCase();
+  return entries.filter((entry) => keywordOccursIn(lowered, entry.keyword));
+}
+
+// Underscore is included in the word class so `_bug_` doesn't fire while
+// `bug.` / `(bug)` still do. ASCII-only on purpose — see the CJK note on
+// `messageMatchesWatchKeyword` above.
+const KEYWORD_WORD_CHAR = /\w/;
+
+const keywordOccursIn = (loweredText: string, keyword: string): boolean => {
+  if (!keyword) return false;
+  let idx = loweredText.indexOf(keyword);
+  while (idx !== -1) {
+    const before = idx === 0 ? '' : loweredText[idx - 1];
+    const after =
+      idx + keyword.length >= loweredText.length ? '' : loweredText[idx + keyword.length];
+    const leftBoundary = !before || !KEYWORD_WORD_CHAR.test(before);
+    const rightBoundary = !after || !KEYWORD_WORD_CHAR.test(after);
+    if (leftBoundary && rightBoundary) return true;
+    idx = loweredText.indexOf(keyword, idx + 1);
+  }
+  return false;
+};
+
+const findFirstMatchingKeyword = (
+  text: string | undefined | null,
+  keywords: ReadonlyArray<string>,
+): string | null => {
+  if (!text || keywords.length === 0) return null;
+  const lowered = text.toLowerCase();
+  for (const keyword of keywords) {
+    if (keywordOccursIn(lowered, keyword)) return keyword;
+  }
+  return null;
+};
+
+/**
+ * Pull the platform IDs out of an allowlist value, regardless of which
+ * historical shape it has on disk. Three shapes are all valid input:
+ *
+ * 1. `Array<{ id, name? }>` — current shape produced by the channel form,
+ *    where `name` is an operator-facing label and `id` is what the runtime
+ *    matches against. Only `id` is returned.
+ * 2. `string[]` — legacy shape used briefly during the dm/group policy
+ *    rollout, before names existed.
+ * 3. `string` — original shape: comma / newline / whitespace-separated IDs
+ *    pasted into a single text field.
+ *
+ * Empty / missing IDs are dropped. The caller (gating in `BotMessageRouter`)
+ * never sees the names — those exist purely so the operator can recognise
+ * each entry on the settings page.
+ */
+export function parseIdList(raw: unknown): string[] {
+  if (typeof raw === 'string') {
+    return raw
+      .split(/[\s,]+/)
+      .map((id) => id.trim())
+      .filter(Boolean);
+  }
+  if (Array.isArray(raw)) {
+    return raw
+      .map((entry) => {
+        if (typeof entry === 'string') return entry.trim();
+        if (entry && typeof entry === 'object' && 'id' in entry) {
+          const id = (entry as { id?: unknown }).id;
+          return typeof id === 'string' ? id.trim() : '';
+        }
+        return '';
+      })
+      .filter(Boolean);
+  }
+  return [];
+}
+
+/** Read `settings.dmPolicy`. `mergeWithDefaults` injects the schema default
+ *  in production; `'open'` is the safety net for malformed input. */
+export function extractDmSettings(
+  settings: Record<string, unknown> | null | undefined,
+): DmSettings {
+  const rawPolicy = settings?.dmPolicy as string | undefined;
+  const policy: DmPolicy = DM_POLICIES.has(rawPolicy as DmPolicy)
+    ? (rawPolicy as DmPolicy)
+    : 'open';
+  return { policy };
+}
+
+/** Read `settings.guestPolicy`. Missing or malformed input defaults to
+ *  `open` so existing Telegram channels keep their previous behaviour. */
+export function extractGuestSettings(
+  settings: Record<string, unknown> | null | undefined,
+): GuestSettings {
+  const rawPolicy = settings?.guestPolicy as string | undefined;
+  const policy: GuestPolicy = GUEST_POLICIES.has(rawPolicy as GuestPolicy)
+    ? (rawPolicy as GuestPolicy)
+    : 'open';
+  return { policy };
+}
+
+/**
+ * Read the global user-ID allowlist from `settings.allowFrom`.
+ *
+ * When `allowFrom` is non-empty and `settings.userId` (the operator's own
+ * platform ID, used by AI tools to push notifications back to them) is
+ * also set, that operator ID is implicitly merged in so the operator
+ * cannot accidentally lock themselves out by listing only their friends.
+ *
+ * Empty `allowFrom` short-circuits to "no filter" — populating only
+ * `userId` does **not** flip the bot into private mode, which preserves
+ * the original purpose of `userId` (AI-to-operator push) for everyone
+ * who set it before `allowFrom` existed.
+ */
+export function extractUserAllowlist(
+  settings: Record<string, unknown> | null | undefined,
+): UserAllowlist {
+  const explicit = parseIdList(settings?.allowFrom);
+  if (explicit.length === 0) return { ids: [] };
+  const operatorId = (settings?.userId as string | undefined)?.trim();
+  if (!operatorId || explicit.includes(operatorId)) return { ids: explicit };
+  return { ids: [...explicit, operatorId] };
+}
+
+/** Read `settings.groupPolicy` + `settings.groupAllowFrom`. */
+export function extractGroupSettings(
+  settings: Record<string, unknown> | null | undefined,
+): GroupSettings {
+  const rawPolicy = settings?.groupPolicy as string | undefined;
+  const policy: GroupPolicy = GROUP_POLICIES.has(rawPolicy as GroupPolicy)
+    ? (rawPolicy as GroupPolicy)
+    : 'open';
+  return { allowFrom: parseIdList(settings?.groupAllowFrom), policy };
+}
+
+/**
+ * Global user-level gate. The router applies this **before** every per-scope
+ * policy check, so a populated `allowFrom` restricts who can interact with
+ * the bot anywhere — DMs, group @mentions, threads.
+ *
+ * - Empty `allowFrom` → no filter, anyone passes.
+ * - Populated `allowFrom` → sender's user ID must be in the list. A missing
+ *   `authorUserId` fails closed.
+ */
+export function shouldAllowSender(params: {
+  authorUserId: string | undefined;
+  userAllowlist: UserAllowlist;
+}): boolean {
+  const { authorUserId, userAllowlist } = params;
+  if (userAllowlist.ids.length === 0) return true;
+  if (!authorUserId) return false;
+  return userAllowlist.ids.includes(authorUserId);
+}
+
+/**
+ * Three-state outcome of the DM gate. `pair` is distinct from `reject`
+ * because the router branches on it (issue a pairing code instead of
+ * dropping the sender). Existing pass / fail call-sites can keep treating
+ * `'pair'` as not-allow — the only thing that promotes pairing into a
+ * useful behaviour is the router's pairing branch.
+ */
+export type DmDecision = 'allow' | 'pair' | 'reject';
+
+export type GuestDecision = 'allow' | 'pair' | 'reject';
+
+/**
+ * Gate inbound DM handling. Non-DM threads pass through unconditionally —
+ * those are governed by `shouldHandleGroup` instead.
+ *
+ * Callers are expected to apply {@link shouldAllowSender} first, so this
+ * function only encodes the per-scope semantics:
+ *
+ * - `policy='disabled'` → `'reject'` for everyone.
+ * - `policy='open'` → `'allow'` (the global `allowFrom` filter, when
+ *   populated, is enforced earlier by the caller).
+ * - `policy='allowlist'` → `'allow'` for senders in `userAllowlist`,
+ *   `'reject'` otherwise. Fails closed when the list is empty (this is
+ *   the only behavioural difference from `open`).
+ * - `policy='pairing'` → same gate as `allowlist`, but a non-listed sender
+ *   gets `'pair'` instead of `'reject'` so the router can issue a pairing
+ *   code. The owner (`operatorUserId`) is implicitly always allowed —
+ *   without this, a fresh pairing bot with an empty allowFrom would refuse
+ *   its own owner's DMs and they'd be told to ask themselves to approve.
+ */
+export function shouldHandleDm(params: {
+  authorUserId: string | undefined;
+  dmSettings: DmSettings;
+  isDM: boolean;
+  /**
+   * The owning operator's platform user ID (`settings.userId`). Only
+   * consulted under `pairing` policy, where the owner bypasses the
+   * allowlist gate so they can DM their own bot before anyone is
+   * approved. Pass `undefined` for non-pairing policies — the validator
+   * already enforces presence at save time for pairing.
+   */
+  operatorUserId?: string;
+  userAllowlist: UserAllowlist;
+}): DmDecision {
+  const { authorUserId, dmSettings, isDM, operatorUserId, userAllowlist } = params;
+  if (!isDM) return 'allow';
+  if (dmSettings.policy === 'disabled') return 'reject';
+  if (dmSettings.policy === 'open') return 'allow';
+  // allowlist & pairing share the same gate; they differ only on miss.
+  if (!authorUserId) return 'reject';
+  if (dmSettings.policy === 'pairing' && operatorUserId && authorUserId === operatorUserId) {
+    return 'allow';
+  }
+  const inList = userAllowlist.ids.length > 0 && userAllowlist.ids.includes(authorUserId);
+  if (inList) return 'allow';
+  return dmSettings.policy === 'pairing' ? 'pair' : 'reject';
+}
+
+/**
+ * Gate Telegram Guest Mode handling. Non-Guest threads pass through
+ * unconditionally and continue to the normal DM / group gates.
+ *
+ * `allowlist` and `pairing` use the global user allowlist because Guest
+ * access belongs to the summoning user, not to a chat the bot joined.
+ * Pairing reuses the existing approval lifecycle and owner override.
+ */
+export function shouldHandleGuest(params: {
+  authorUserId: string | undefined;
+  guestSettings: GuestSettings;
+  isGuest: boolean;
+  operatorUserId?: string;
+  userAllowlist: UserAllowlist;
+}): GuestDecision {
+  const { authorUserId, guestSettings, isGuest, operatorUserId, userAllowlist } = params;
+  if (!isGuest) return 'allow';
+  if (guestSettings.policy === 'disabled') return 'reject';
+  if (guestSettings.policy === 'open') return 'allow';
+  if (!authorUserId) return 'reject';
+  if (guestSettings.policy === 'pairing' && operatorUserId && authorUserId === operatorUserId) {
+    return 'allow';
+  }
+  const inList = userAllowlist.ids.length > 0 && userAllowlist.ids.includes(authorUserId);
+  if (inList) return 'allow';
+  return guestSettings.policy === 'pairing' ? 'pair' : 'reject';
+}
+
+/**
+ * Gate inbound group/channel handling. DM threads pass through
+ * unconditionally — those are governed by `shouldHandleDm` instead.
+ *
+ * - `policy='disabled'` → ignore everything outside DMs.
+ * - `policy='open'` → respond as before (existing @mention rules apply).
+ * - `policy='allowlist'` → match if **any** candidate channel ID is in
+ *   the configured list. The list of candidates exists because some
+ *   platforms surface multiple IDs for one logical surface — Discord
+ *   auto-creates a reply thread for each @-mention, so the inbound
+ *   `thread.channelId` is the thread, but operators paste the *parent*
+ *   channel ID into the allowlist. The router asks the PlatformClient
+ *   to expand the candidate list (see `extraGroupAllowlistChannels`)
+ *   and we accept any match. An empty/all-falsy candidate set fails
+ *   closed.
+ */
+export function shouldHandleGroup(params: {
+  candidateChannelIds: ReadonlyArray<string | undefined>;
+  groupSettings: GroupSettings;
+  isDM: boolean;
+}): boolean {
+  const { candidateChannelIds, groupSettings, isDM } = params;
+  if (isDM) return true;
+  if (groupSettings.policy === 'disabled') return false;
+  if (groupSettings.policy === 'open') return true;
+  // allowlist
+  const candidates = candidateChannelIds.filter((id): id is string => Boolean(id));
+  if (candidates.length === 0) return false;
+  return candidates.some((id) => groupSettings.allowFrom.includes(id));
+}
+
+/**
+ * Validate cross-platform access-policy settings at save time.
+ *
+ * Catches misconfigurations that would silently break runtime gating
+ * before they hit the DB. Today this enforces one invariant:
+ *
+ * - Any pairing policy requires `settings.userId` (the owner's platform user
+ *   ID). Without it nobody can issue `/approve`, so inbound pairing requests
+ *   would land in a permanent limbo.
+ *
+ * Per-platform rules (e.g. Telegram bot tokens, Discord intents) belong
+ * in `ClientFactory.validateSettings`; this function only encodes shared
+ * invariants that apply regardless of platform.
+ */
+export function validateAccessSettings(
+  settings: Record<string, unknown> | null | undefined,
+): ValidationResult {
+  const errors: Array<{ field: string; message: string }> = [];
+  const dmSettings = extractDmSettings(settings);
+  const guestSettings = extractGuestSettings(settings);
+  if (dmSettings.policy === 'pairing' || guestSettings.policy === 'pairing') {
+    const operatorId = (settings?.userId as string | undefined)?.trim();
+    if (!operatorId) {
+      errors.push({
+        field: 'userId',
+        message:
+          "Pairing policies require the owner's Platform User ID. Fill in 'Your Platform User ID' or pick a different access policy.",
+      });
+    }
+  }
+  return errors.length > 0 ? { errors, valid: false } : { valid: true };
+}
+
+// ---------- Step-aware reactions ----------
+
+/**
+ * Emoji shown on the user's message the moment the bot acknowledges it —
+ * before the LLM has produced its first step. Cross-platform safe: accepted
+ * by the Telegram Bot API's strict reaction allowlist plus Discord/Slack.
+ */
+export const RECEIVED_REACTION_EMOJI = '👀';
+
+/**
+ * Emoji shown on the user's message while the agent is reasoning/generating
+ * (step_type=call_llm). Swapped in on the first step callback, replacing the
+ * "received" emoji.
+ */
+export const THINKING_REACTION_EMOJI = '🤔';
+
+/**
+ * Emoji shown on the user's message while a tool call is executing
+ * (step_type=call_tool with non-empty toolsCalling). `⚡` is used instead of
+ * the more literal `🛠️` because Telegram rejects `🛠️` from its reaction
+ * allowlist.
+ */
+export const WORKING_REACTION_EMOJI = '⚡';
+
+/**
+ * Given an `afterStep` event payload, predict the emoji to display while the
+ * NEXT step is running. `afterStep` fires post-completion, so `stepType`
+ * describes what just happened — we swap the reaction to match what's
+ * coming:
+ *
+ * - `call_llm` that returned pending `toolsCalling` → the runtime is about
+ *   to execute those tools → "working" emoji.
+ * - `call_tool` → the runtime will feed results back into the LLM →
+ *   "thinking" emoji.
+ * - `call_llm` without tools → the final response is ready; `onComplete`
+ *   clears immediately after, "thinking" is a sensible neutral for the
+ *   brief window.
+ *
+ * The "received" emoji is set separately by the bridge on webhook arrival
+ * and is not returned here.
+ */
+export function getStepReactionEmoji(stepType: string | undefined, toolsCalling: unknown): string {
+  const toolsAboutToRun =
+    stepType === 'call_llm' && Array.isArray(toolsCalling) && toolsCalling.length > 0;
+  return toolsAboutToRun ? WORKING_REACTION_EMOJI : THINKING_REACTION_EMOJI;
+}
+
+// ---------- Reaction mode ----------
+
+/**
+ * How much status-reaction churn the bot produces on the user's message while
+ * an execution is running. Every reaction swap is one or two platform API
+ * calls (`removeReaction` + `addReaction`), and on Feishu/Slack each of them
+ * pings users who have message notifications turned on — so a multi-tool run
+ * under the `full` mode can ring a phone a dozen times.
+ *
+ * - `none`    — never touch reactions.
+ * - `minimal` — ACK (👀) on receipt, 🤔 when the agent starts, removed on
+ *               completion. No per-step swaps.
+ * - `full`    — the legacy behaviour: also swap between 🤔 / ⚡ after every
+ *               step to mirror what the runtime is doing.
+ */
+export type BotReactionMode = 'full' | 'minimal' | 'none';
+
+export const BOT_REACTION_MODES: readonly BotReactionMode[] = ['minimal', 'full', 'none'];
+
+export const DEFAULT_BOT_REACTION_MODE: BotReactionMode = 'minimal';
+
+export const reactionModeField: FieldSchema = {
+  key: 'reactionMode',
+  default: DEFAULT_BOT_REACTION_MODE,
+  description: 'channel.reactionModeHint',
+  enum: [...BOT_REACTION_MODES],
+  enumDescriptions: [
+    'channel.reactionModeMinimalHint',
+    'channel.reactionModeFullHint',
+    'channel.reactionModeNoneHint',
+  ],
+  enumLabels: [
+    'channel.reactionModeMinimal',
+    'channel.reactionModeFull',
+    'channel.reactionModeNone',
+  ],
+  label: 'channel.reactionMode',
+  type: 'string',
+};
+
+/**
+ * Coerce a raw settings value into a known mode. Rows saved before the field
+ * existed carry `undefined`, and a hand-edited value could be anything — both
+ * fall back to the schema default rather than silently disabling reactions.
+ */
+export function normalizeBotReactionMode(value: unknown): BotReactionMode {
+  return BOT_REACTION_MODES.includes(value as BotReactionMode)
+    ? (value as BotReactionMode)
+    : DEFAULT_BOT_REACTION_MODE;
+}
+
+/**
+ * Where a bot answers a message addressed to it at the top level of a channel:
+ *
+ * - `agent`  — the bot decides before it starts: a quick answer stays in the channel, work that
+ *              runs long or invites follow-ups moves into a thread it names. It also posts a short
+ *              acknowledgement first when the work takes a while.
+ * - `thread` — the previous behaviour: every @-mention and keyword wake opens a reply thread.
+ */
+export type BotReplyPlacementMode = 'agent' | 'thread';
+
+export const BOT_REPLY_PLACEMENT_MODES: readonly BotReplyPlacementMode[] = ['agent', 'thread'];
+
+export const DEFAULT_BOT_REPLY_PLACEMENT_MODE: BotReplyPlacementMode = 'agent';
+
+export const replyPlacementField: FieldSchema = {
+  key: 'replyPlacement',
+  choices: true,
+  default: DEFAULT_BOT_REPLY_PLACEMENT_MODE,
+  description: 'channel.replyPlacementHint',
+  enum: [...BOT_REPLY_PLACEMENT_MODES],
+  enumDescriptions: ['channel.replyPlacementAgentHint', 'channel.replyPlacementThreadHint'],
+  enumLabels: ['channel.replyPlacementAgent', 'channel.replyPlacementThread'],
+  enumRecommended: DEFAULT_BOT_REPLY_PLACEMENT_MODE,
+  label: 'channel.replyPlacement',
+  type: 'string',
+};
+
+/** Rows saved before the field existed carry `undefined`; they get the schema default. */
+export function normalizeBotReplyPlacementMode(value: unknown): BotReplyPlacementMode {
+  return BOT_REPLY_PLACEMENT_MODES.includes(value as BotReplyPlacementMode)
+    ? (value as BotReplyPlacementMode)
+    : DEFAULT_BOT_REPLY_PLACEMENT_MODE;
+}
+
+/**
+ * The moments at which the bridge / callback service may touch the reaction:
+ * - `received` — webhook arrival ACK.
+ * - `thinking` — hand-off to the agent runtime.
+ * - `step`     — after each runtime step (🤔 / ⚡ swap).
+ * - `clear`    — completion / failure cleanup.
+ */
+export type BotReactionPhase = 'clear' | 'received' | 'step' | 'thinking';
+
+/**
+ * Whether a reaction API call is allowed for `phase` under `mode`. For `clear`
+ * this only gates the untracked legacy fallback: a reaction the run actually
+ * applied is always removed, even after a mid-run switch to `none`.
+ */
+export function shouldApplyReaction(mode: BotReactionMode, phase: BotReactionPhase): boolean {
+  if (mode === 'none') return false;
+  if (phase === 'step') return mode === 'full';
+  return true;
+}

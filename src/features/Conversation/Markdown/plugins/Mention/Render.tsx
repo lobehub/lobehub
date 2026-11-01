@@ -1,12 +1,11 @@
 'use client';
 
-import { Avatar, Flexbox, Popover, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Popover, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/index';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
@@ -44,7 +43,7 @@ interface MentionProps {
   name: string;
 }
 const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => {
-  const { id: mentionId } = node?.properties || {};
+  const { id: mentionId, name } = node?.properties || {};
   const { t } = useTranslation('chat');
 
   const currentGroupMembers = useSessionStore(sessionSelectors.currentGroupAgents, isEqual);
@@ -67,7 +66,7 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
     return (
       <span className={styles.mention}>
         {'@'}
-        {children || 'unknown'}
+        {name || children || 'unknown'}
       </span>
     );
   }
@@ -78,10 +77,12 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
       content={
         <Flexbox gap={12} style={{ overflow: 'hidden' }} width={320}>
           <Flexbox horizontal align="center" gap={8}>
-            <Avatar
-              avatar={member.avatar || DEFAULT_AVATAR}
+            <AgentAvatar
+              agentId={member.id}
+              avatar={member.avatar}
               background={member.backgroundColor ?? undefined}
-              shape={'square'}
+              name={member.title || name}
+              size={40}
               style={{ flex: 'none' }}
             />
             <Flexbox style={{ overflow: 'hidden' }}>
@@ -95,7 +96,7 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
     >
       <span className={styles.mention}>
         {'@'}
-        {member.title || children}
+        {member.title || name || children}
       </span>
     </Popover>
   );

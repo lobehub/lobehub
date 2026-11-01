@@ -5,6 +5,148 @@ const xaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 500_000,
+    description:
+      'Grok 4.7 is more reliable than Grok 4.6 on long-running coding and knowledge work, at the same price and speed, with a 500K context window.',
+    displayName: 'Grok 4.7',
+    enabled: true,
+    id: 'grok-4.7',
+    /** @see https://docs.x.ai/developers/models/grok-4.7 */
+    pricing: {
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.5, upTo: 199_999 },
+            { rate: 1, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 199_999 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 6, upTo: 199_999 },
+            { rate: 12, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-09-21',
+    settings: {
+      extendParams: ['grok4_7ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+    family: 'grok',
+    generation: 'grok-4.7',
+    knowledgeCutoff: '2026-05',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+      structuredOutput: true,
+    },
+    contextWindowTokens: 500_000,
+    description:
+      'Grok 4.6 is a frontier model for coding, long-running agents, and knowledge work with a 500K context window.',
+    displayName: 'Grok 4.6',
+    enabled: true,
+    id: 'grok-4.6',
+    /** @see https://docs.x.ai/developers/models/grok-4.6 */
+    pricing: {
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.5, upTo: 199_999 },
+            { rate: 1, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textInput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 2, upTo: 199_999 },
+            { rate: 4, upTo: 'infinity' },
+          ],
+        },
+        {
+          name: 'textOutput',
+          unit: 'millionTokens',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 6, upTo: 199_999 },
+            { rate: 12, upTo: 'infinity' },
+          ],
+        },
+      ],
+    },
+    releasedAt: '2026-08-12',
+    settings: {
+      extendParams: ['grok4_6ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+    family: 'grok',
+    generation: 'grok-4.6',
+    knowledgeCutoff: '2026-02',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 500_000,
+    description:
+      "SpaceXAI's flagship model for agentic tasks and knowledge work — remarkably fast, with coding ability on par with Claude Opus.",
+    displayName: 'Grok 4.5',
+    enabled: true,
+    family: 'grok',
+    generation: 'grok-4.5',
+    id: 'grok-4.5',
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-07-08',
+    settings: {
+      extendParams: ['grok4_5ReasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       search: true,
       structuredOutput: true,
       vision: true,
@@ -13,7 +155,10 @@ const xaiChatModels: AIChatModelCard[] = [
     description: 'The most truth-seeking large language model in the world',
     displayName: 'Grok 4.3',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4.3',
     id: 'grok-4.3',
+    knowledgeCutoff: '2025-12',
     pricing: {
       units: [
         {
@@ -59,10 +204,12 @@ const xaiChatModels: AIChatModelCard[] = [
       structuredOutput: true,
       vision: true,
     },
-    contextWindowTokens: 2_000_000,
+    contextWindowTokens: 1_000_000,
     description: 'A non-reasoning variant for simple use cases',
     displayName: 'Grok 4.20 (Non-Reasoning)',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4.20',
     id: 'grok-4.20-0309-non-reasoning',
     pricing: {
       units: [
@@ -79,8 +226,8 @@ const xaiChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
-            { rate: 4, upTo: 'infinity' },
+            { rate: 1.25, upTo: 200_000 },
+            { rate: 2.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -88,8 +235,8 @@ const xaiChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 6, upTo: 200_000 },
-            { rate: 12, upTo: 'infinity' },
+            { rate: 2.5, upTo: 200_000 },
+            { rate: 5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -109,10 +256,12 @@ const xaiChatModels: AIChatModelCard[] = [
       structuredOutput: true,
       vision: true,
     },
-    contextWindowTokens: 2_000_000,
+    contextWindowTokens: 1_000_000,
     description: 'Intelligent, blazing-fast model that reasons before responding',
     displayName: 'Grok 4.20',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4.20',
     id: 'grok-4.20-0309-reasoning',
     pricing: {
       units: [
@@ -129,8 +278,8 @@ const xaiChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
-            { rate: 4, upTo: 'infinity' },
+            { rate: 1.25, upTo: 200_000 },
+            { rate: 2.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -138,8 +287,8 @@ const xaiChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 6, upTo: 200_000 },
-            { rate: 12, upTo: 'infinity' },
+            { rate: 2.5, upTo: 200_000 },
+            { rate: 5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -163,6 +312,8 @@ const xaiChatModels: AIChatModelCard[] = [
       'A team of 4 or 16 agents, Excels at research use cases, Does not currently support client-side tools. Only supports xAI server side tools (eg X Search, Web Search tools) and remote MCP tools.',
     displayName: 'Grok 4.20 Multi-Agent',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4.20',
     id: 'grok-4.20-multi-agent-0309',
     pricing: {
       units: [
@@ -179,8 +330,8 @@ const xaiChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 200_000 },
-            { rate: 4, upTo: 'infinity' },
+            { rate: 1.25, upTo: 200_000 },
+            { rate: 2.5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -188,8 +339,8 @@ const xaiChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 6, upTo: 200_000 },
-            { rate: 12, upTo: 'infinity' },
+            { rate: 2.5, upTo: 200_000 },
+            { rate: 5, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
         },
@@ -205,6 +356,70 @@ const xaiChatModels: AIChatModelCard[] = [
 ];
 
 const xaiImageModels: AIImageModelCard[] = [
+  {
+    description:
+      'Generate images from text prompts, edit existing images with up to 5 reference images, or iteratively refine images through multi-turn conversations, with selectable quality.',
+    displayName: 'Grok Imagine Image 2.0',
+    enabled: true,
+    id: 'grok-imagine-image-2.0',
+    parameters: {
+      aspectRatio: {
+        default: 'auto',
+        enum: [
+          'auto',
+          '1:1',
+          '3:4',
+          '4:3',
+          '9:16',
+          '16:9',
+          '2:3',
+          '3:2',
+          '9:19.5',
+          '19.5:9',
+          '9:20',
+          '20:9',
+          '1:2',
+          '2:1',
+          '21:9',
+          '5:2',
+        ],
+      },
+      imageUrls: { default: [], maxCount: 5 },
+      prompt: {
+        default: '',
+      },
+      // The API also accepts `auto` (the default), which serves `low` for generation and `medium`
+      // for editing; the card pins `low` so the lookup key is always defined.
+      quality: {
+        default: 'low',
+        enum: ['low', 'medium'],
+      },
+      resolution: {
+        default: '1k',
+        enum: ['1k', '2k'],
+      },
+    },
+    pricing: {
+      units: [
+        {
+          // Output price per image by `${quality}_${resolution}`. xAI also lists 1.5K tiers
+          // ($0.05 low, $0.07 medium) but its resolution parameter only accepts 1k and 2k.
+          // https://docs.x.ai/developers/pricing
+          lookup: {
+            prices: { low_1k: 0.04, low_2k: 0.06, medium_1k: 0.06, medium_2k: 0.08 },
+            pricingParams: ['quality', 'resolution'],
+          },
+          name: 'imageGeneration',
+          strategy: 'lookup',
+          unit: 'image',
+        },
+        // Every reference image sent with a request is billed.
+        { name: 'imageInput', rate: 0.01, strategy: 'fixed', unit: 'image' },
+      ],
+    },
+    releasedAt: '2026-08-08',
+    type: 'image',
+  },
   {
     description:
       'Generate images from text prompts, edit existing images with natural language, or iteratively refine images through multi-turn conversations.',

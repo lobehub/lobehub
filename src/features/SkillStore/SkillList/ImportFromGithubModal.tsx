@@ -1,44 +1,49 @@
 'use client';
 
-import { Alert, Flexbox, Icon, Input } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  createModal,
+  Input,
+  type ModalInstance,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
-import { App, Button, Modal, Typography } from 'antd';
 import { ArrowLeftRight, Sparkles } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 
-interface ImportFromGithubModalProps {
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-}
-
-const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenChange }) => {
+const ImportFromGithubContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
-  const { message } = App.useApp();
+  const { close, setCanDismissByClickOutside } = useModalContext();
+
   const importAgentSkillFromGitHub = useToolStore((s) => s.importAgentSkillFromGitHub);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
+  const { allowed: canCreate } = usePermission('create_content');
 
-  const handleClose = () => {
-    onOpenChange(false);
-    setError(null);
-    setUrl('');
-  };
+  useEffect(() => {
+    setCanDismissByClickOutside(!loading);
+  }, [loading, setCanDismissByClickOutside]);
 
   const handleImport = async () => {
     const trimmed = url.trim();
-    if (!trimmed) return;
+    if (!canCreate || !trimmed) return;
 
     setLoading(true);
     setError(null);
 
     try {
       await importAgentSkillFromGitHub({ gitUrl: trimmed });
-      message.success(t('agentSkillModal.importSuccess'));
-      handleClose();
+      toast.success(t('agentSkillModal.importSuccess'));
+      close();
     } catch (err: any) {
       setError(err?.message || String(err));
     } finally {
@@ -47,54 +52,57 @@ const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenCh
   };
 
   return (
-    <Modal destroyOnClose footer={null} open={open} title={null} width={480} onCancel={handleClose}>
+    <Flexbox gap={16}>
       <Flexbox align="center" gap={16} padding={'16px 0'}>
         <Flexbox horizontal align="center" gap={8}>
           <Icon icon={GithubIcon} size={28} />
           <Icon
             icon={ArrowLeftRight}
             size={16}
-            style={{ color: 'var(--ant-color-text-tertiary)' }}
+            style={{ color: 'var(--lobe-color-text-tertiary)' }}
           />
           <Icon icon={Sparkles} size={28} />
         </Flexbox>
 
         <Flexbox align="center" gap={4}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+          <Text as={'h4'} style={{ margin: 0 }}>
             {t('agentSkillModal.github.title')}
-          </Typography.Title>
-          <Typography.Text style={{ textAlign: 'center' }} type="secondary">
+          </Text>
+          <Text align={'center'} type={'secondary'}>
             {t('agentSkillModal.github.desc')}
-          </Typography.Text>
+          </Text>
         </Flexbox>
       </Flexbox>
 
-      <Flexbox gap={16}>
-        {error && (
-          <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />
-        )}
+      {error && <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />}
 
-        <Flexbox gap={8}>
-          <Typography.Text strong>URL</Typography.Text>
-          <Input
-            placeholder={t('agentSkillModal.github.urlPlaceholder')}
-            value={url}
-            onPressEnter={handleImport}
-            onChange={(e) => {
-              setUrl(e.target.value);
-              if (error) setError(null);
-            }}
-          />
-        </Flexbox>
-
-        <Button block loading={loading} type="primary" onClick={handleImport}>
-          {t('common:import')}
-        </Button>
+      <Flexbox gap={8}>
+        <Text strong>URL</Text>
+        <Input
+          disabled={!canCreate}
+          placeholder={t('agentSkillModal.github.urlPlaceholder')}
+          value={url}
+          onPressEnter={handleImport}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            if (error) setError(null);
+          }}
+        />
       </Flexbox>
-    </Modal>
+
+      <Button block disabled={!canCreate} loading={loading} type="primary" onClick={handleImport}>
+        {t('common:import')}
+      </Button>
+    </Flexbox>
   );
 });
 
-ImportFromGithubModal.displayName = 'ImportFromGithubModal';
+ImportFromGithubContent.displayName = 'ImportFromGithubContent';
 
-export default ImportFromGithubModal;
+export const openImportFromGithubModal = (): ModalInstance =>
+  createModal({
+    content: <ImportFromGithubContent />,
+    footer: null,
+    maskClosable: true,
+    width: 480,
+  });

@@ -6,7 +6,7 @@
   - `--status`: pending, running, paused, completed, failed, canceled
   - `--root`: Only root tasks (no parent)
   - `--tree`: Display as tree structure
-- `lh task view <id>` - View task details (instruction, workspace, activities)
+- `lh task view <id>` - View task details (instruction, documents, activities)
 - `lh task create -i <instruction> [-n <name>] [--agent <id>] [--parent <id>] [--priority <0-4>]` - Create task
   - Priority: 0=none, 1=urgent, 2=high, 3=normal, 4=low
 - `lh task edit <id> [-n <name>] [-i <instruction>] [--status <status>] [--priority <0-4>] [--agent <id>]` - Update task
@@ -27,7 +27,7 @@
 - `lh task resume <id>` - Resume paused task
 - `lh task complete <id>` - Mark as completed
 - `lh task cancel <id>` - Cancel task
-- `lh task comment <id> -m <message>` - Add comment
+- `lh task comment <id> -m <message>` - Add comment. To notify a member who needs to act, mention them with `<mention name="Name" id="user_xxx" />`, taking the id from `lh workspace members` (never guess it); a plain "@Name" is only text. Each mention sends a notification, so do not @ people in routine progress notes.
 - `lh task sort <parentId> <id1> <id2> ...` - Reorder subtasks
 - `lh task heartbeat <id>` - Send manual heartbeat
 - `lh task watchdog` - Detect and fail stuck tasks
@@ -38,7 +38,7 @@
 - `lh task checkpoint set <id> [--on-agent-request <bool>] [--topic-before <bool>] [--topic-after <bool>] [--before <ids>] [--after <ids>]` - Configure checkpoints
   - `--on-agent-request`: Allow agent to request review
   - `--topic-before/after`: Pause before/after each topic
-  - `--before/after <ids>`: Pause before/after specific subtask identifiers
+  - `--before/after <ids>`: Pause before/after specific subtasks; accepts stable ids or display identifiers
 
 ## Review Commands (LLM-as-Judge)
 
@@ -64,7 +64,7 @@
 - `lh task topic cancel <topicId>` - Cancel running topic and pause task
 - `lh task topic delete <topicId> [--yes]` - Delete topic and messages
 
-## Document Commands (Workspace)
+## Document Commands
 
 - `lh task doc create <id> -t <title> [-b <content>] [--parent <docId>] [--folder]` - Create and pin document
 - `lh task doc pin <id> <documentId>` - Pin existing document
@@ -74,7 +74,7 @@
 ## Tips
 
 - All commands support `--json [fields]` for structured output
-- Task identifiers use format like TASK-1, TASK-2, etc.
+- Task identifiers use formats like T-1 or ABC-2. They are display labels and compatible input aliases; prefer stable task ids from previous results for subsequent calls. Use identifier short links such as `/task/T-1` in user-facing output.
 - Use `lh task tree` to visualize full task hierarchy before planning work
 - Use `lh task comment` to log progress — comments appear in task activities
-- Documents in workspace are accessible to the agent during execution
+- Documents pinned to the task are accessible to the agent during execution

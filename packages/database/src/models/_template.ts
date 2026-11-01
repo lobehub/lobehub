@@ -1,3 +1,7 @@
+// When you copy this template for a new model, also copy the matching test
+// template `./__tests__/_test_template.ts` into `./__tests__/<name>.test.ts`.
+// Every model ships with a sibling test — see the `testing` skill
+// (.agents/skills/testing/references/db-model-test.md).
 import { and, desc, eq } from 'drizzle-orm';
 
 import type { NewSessionGroup, SessionGroupItem } from '../schemas';

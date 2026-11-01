@@ -11,7 +11,6 @@ vi.mock('@/services/plugin', () => ({
   pluginService: {
     getInstalledPlugins: vi.fn().mockResolvedValue([]),
     updatePluginSettings: vi.fn(),
-    removeAllPlugins: vi.fn(),
   },
 }));
 
@@ -38,6 +37,9 @@ describe('useToolStore:plugin', () => {
     it('should update settings for a given plugin', async () => {
       const pluginId = 'test-plugin';
       const newSettings = { setting1: 'new-value' };
+      vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([
+        { identifier: pluginId, type: 'plugin' } as LobeTool,
+      ]);
 
       const { result } = renderHook(() => useToolStore());
 
@@ -57,9 +59,10 @@ describe('useToolStore:plugin', () => {
       const existingSettings = { setting1: 'old-value', setting2: 'old-value' };
       const newSettings = { setting1: 'new-value' };
       const mergedSettings = merge(existingSettings, newSettings);
-      useToolStore.setState({
-        installedPlugins: [{ identifier: pluginId, settings: existingSettings }] as LobeTool[],
-      });
+      // The merge base is the server's record, loaded before the write.
+      vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([
+        { identifier: pluginId, settings: existingSettings, type: 'plugin' } as LobeTool,
+      ]);
 
       const { result } = renderHook(() => useToolStore());
 
@@ -72,18 +75,6 @@ describe('useToolStore:plugin', () => {
         mergedSettings,
         expect.any(AbortSignal),
       );
-    });
-  });
-
-  describe('removeAllPlugins', () => {
-    it('should reset all plugin settings', () => {
-      const { result } = renderHook(() => useToolStore());
-
-      act(() => {
-        result.current.removeAllPlugins();
-      });
-
-      expect(pluginService.removeAllPlugins).toBeCalled();
     });
   });
 

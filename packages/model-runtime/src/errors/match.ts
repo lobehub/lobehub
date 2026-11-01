@@ -63,14 +63,18 @@ export const matchErrorPattern = (input: MatchInput): MatchResult | undefined =>
  * ExceededContextWindow, network drops as 500), so the message-pattern step
  * is the gating mechanism — a substring hit overrides the upstream label.
  */
-export const isUserSideError = (errorType?: string, message?: string): boolean => {
+export const isUserSideError = (
+  errorType?: string,
+  message?: string,
+  provider?: string,
+): boolean => {
   if (errorType) {
     const spec = getErrorCodeSpec(errorType);
     if (spec && !spec.countAsFailure) return true;
   }
 
   if (message) {
-    const match = matchErrorPattern({ errorType, message });
+    const match = matchErrorPattern({ errorType, message, provider });
     if (match) {
       const spec = getErrorCodeSpec(match.code);
       if (spec && !spec.countAsFailure) return true;

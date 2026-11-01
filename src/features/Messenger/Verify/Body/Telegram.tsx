@@ -21,10 +21,11 @@ interface TelegramBodyProps {
   randomId: string;
   signInUrl: string;
   tokenData?: PeekedToken | null;
+  userAvatar?: string | null;
 }
 
 const TelegramBody = memo<TelegramBodyProps>(
-  ({ existingLink, lobeAccount, platformMeta, randomId, signInUrl, tokenData }) => {
+  ({ existingLink, lobeAccount, platformMeta, randomId, signInUrl, tokenData, userAvatar }) => {
     const { t } = useTranslation('messenger');
     const [done, setDone] = useState(false);
 
@@ -36,6 +37,7 @@ const TelegramBody = memo<TelegramBodyProps>(
       return (
         <SuccessCard
           openBotUrl={botUsername ? buildTelegramBotUrl(botUsername) : null}
+          platform="telegram"
           platformLabel={platformLabel}
         />
       );
@@ -58,6 +60,7 @@ const TelegramBody = memo<TelegramBodyProps>(
         infoRows={infoRows}
         platform="telegram"
         randomId={randomId}
+        userAvatar={userAvatar}
         blockingNotice={
           rebindBlocked
             ? {

@@ -1,11 +1,12 @@
 'use client';
 
-import { SESSION_CHAT_URL } from '@lobechat/const';
-import { Avatar, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { AGENT_CHAT_URL } from '@lobechat/const';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { ArrowRight } from 'lucide-react';
 import { memo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+
+import AgentAvatar from '@/components/AgentAvatar';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import { type MarkdownElementProps } from '../../type';
 
@@ -62,21 +63,22 @@ interface LobeAgentsProps extends MarkdownElementProps {
 
 const Render = memo<LobeAgentsProps>(
   ({ identifier, title, description, avatar, backgroundColor }) => {
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
 
     const handleClick = useCallback(() => {
       if (!identifier) return;
-      navigate(SESSION_CHAT_URL(identifier));
+      navigate(AGENT_CHAT_URL(identifier));
     }, [navigate, identifier]);
 
     if (!identifier) return null;
 
     return (
       <Flexbox horizontal align={'center'} className={styles.card} gap={12} onClick={handleClick}>
-        <Avatar
-          avatar={avatar || '🤖'}
+        <AgentAvatar
+          agentId={identifier}
+          avatar={avatar}
           background={backgroundColor}
-          shape={'square'}
+          name={title || undefined}
           size={40}
           title={title || undefined}
         />

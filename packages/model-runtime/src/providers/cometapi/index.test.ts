@@ -2,20 +2,13 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeCometAPIAI, params } from './index';
 
-// Basic provider tests
-testProvider({
-  Runtime: LobeCometAPIAI,
-  chatDebugEnv: 'DEBUG_COMETAPI_COMPLETION',
-  chatModel: 'gpt-3.5-turbo',
-  defaultBaseURL: 'https://api.cometapi.com/v1',
-  provider: ModelProvider.CometAPI,
-  test: {
-    skipAPICall: true,
-  },
-});
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
 
 // Custom feature tests
 describe('LobeCometAPIAI - custom features', () => {
@@ -295,16 +288,7 @@ describe('LobeCometAPIAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch CometAPI models. Please ensure your CometAPI API key is valid:',
-        expect.any(Error),
-      );
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models!({ client: mockClient as any })).rejects.toThrow('API Error');
     });
 
     it('should handle network error', async () => {
@@ -316,12 +300,7 @@ describe('LobeCometAPIAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toEqual([]);
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models!({ client: mockClient as any })).rejects.toThrow('Network Error');
     });
 
     it('should handle unauthorized error', async () => {
@@ -333,12 +312,7 @@ describe('LobeCometAPIAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toEqual([]);
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models!({ client: mockClient as any })).rejects.toThrow('Unauthorized');
     });
 
     it('should process multi-provider model list', async () => {

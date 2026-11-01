@@ -1,13 +1,13 @@
 'use client';
 
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { Drawer } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, Drawer, Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MenuIcon } from 'lucide-react';
 import { memo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import Menu from '@/components/Menu';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { DiscoverTab } from '@/types/discover';
 
 import { useNav } from '../../../../(main)/community/features/useNav';
@@ -21,33 +21,22 @@ const scrollToTop = () => {
   scrollableElement.scrollTo({ behavior: 'smooth', top: 0 });
 };
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  activeNavItem: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  container: css`
-    height: auto;
-    padding-block: 4px;
-    background: ${cssVar.colorBgLayout};
-  `,
-  navItem: css`
-    font-weight: 500;
-  `,
-  title: css`
-    font-size: 18px;
-    font-weight: 700;
-    line-height: 1.2;
-  `,
-}));
+const styles = stylex.create({
+  title: {
+    fontSize: '18px',
+    fontWeight: 700,
+    lineHeight: 1.2,
+  },
+});
 
 const Nav = memo(() => {
   const [open, setOpen] = useState(false);
   const { items, activeKey, activeItem } = useNav();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   return (
     <>
-      <Flexbox horizontal align={'center'} className={styles.title} gap={4}>
+      <Flexbox horizontal align={'center'} className={stylex.props(styles.title).className} gap={4}>
         <ActionIcon
           color={cssVar.colorText}
           icon={MenuIcon}
@@ -60,32 +49,27 @@ const Nav = memo(() => {
       </Flexbox>
 
       <Drawer
-        headerStyle={{ display: 'none' }}
+        noHeader
+        closable={false}
         open={open}
         placement={'left'}
-        rootStyle={{ position: 'absolute' }}
         width={260}
         zIndex={10}
-        bodyStyle={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 20,
-          justifyContent: 'space-between',
-          padding: 16,
-        }}
         style={{
           background: cssVar.colorBgLayout,
           borderRight: `1px solid ${cssVar.colorSplit}`,
           paddingTop: 44,
         }}
-        onClick={() => setOpen(false)}
+        styles={{
+          bodyContent: { gap: 20, justifyContent: 'space-between', padding: 16 },
+        }}
         onClose={() => setOpen(false)}
       >
         <Menu
           compact
           selectable
+          activeKey={activeKey}
           items={items}
-          selectedKeys={[activeKey]}
           onClick={({ key }) => {
             scrollToTop();
             if (key === DiscoverTab.Home) {
@@ -93,6 +77,7 @@ const Nav = memo(() => {
             } else {
               navigate(`/community/${key}`);
             }
+            setOpen(false);
           }}
         />
       </Drawer>

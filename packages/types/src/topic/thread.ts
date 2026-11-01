@@ -1,5 +1,10 @@
 import { z } from 'zod';
 
+import {
+  type OnboardingUnderstandingThreadMarker,
+  OnboardingUnderstandingThreadMarkerSchema,
+} from '../understanding';
+
 export const ThreadType = {
   Continuation: 'continuation',
   Eval: 'eval',
@@ -38,6 +43,15 @@ export interface ThreadMetadata {
   duration?: number;
   /** Error details when task failed */
   error?: any;
+  /**
+   * Model the subagent ran on (e.g. CC's per-turn `message.model`). Pinned
+   * once for the run and rolled up here on finalize so historical / cold-load
+   * viewers can surface it (e.g. the subagent inspector chip tooltip) without
+   * the child messages being loaded.
+   */
+  model?: string;
+  /** Marks hidden onboarding Understanding writing isolation threads. */
+  onboardingUnderstanding?: OnboardingUnderstandingThreadMarker;
   /** Operation ID for tracking */
   operationId?: string;
   /**
@@ -54,8 +68,18 @@ export interface ThreadMetadata {
   subagentType?: string;
   /** Total cost in dollars */
   totalCost?: number;
+  /**
+   * Total LLM calls made (user-facing step metric).
+   *
+   * Versioned baseline for continuation runs: legacy threads only have
+   * `totalSteps` in execution-step units, so that value must not be reused to
+   * accumulate LLM calls.
+   */
+  totalLlmCalls?: number;
   /** Total messages created during execution */
   totalMessages?: number;
+  /** Total LLM calls made (user-facing step metric) */
+  totalSteps?: number;
   /** Total tokens consumed */
   totalTokens?: number;
   /** Total tool calls made */
@@ -111,13 +135,17 @@ export const threadMetadataSchema = z.object({
   completedAt: z.string().optional(),
   duration: z.number().optional(),
   error: z.any().optional(),
+  model: z.string().optional(),
+  onboardingUnderstanding: OnboardingUnderstandingThreadMarkerSchema.optional(),
   operationId: z.string().optional(),
   sourceToolCallId: z.string().optional(),
   startedAt: z.string().optional(),
   subagentType: z.string().optional(),
   totalCost: z.number().optional(),
+  totalLlmCalls: z.number().optional(),
   totalMessages: z.number().optional(),
   totalTokens: z.number().optional(),
+  totalSteps: z.number().optional(),
   totalToolCalls: z.number().optional(),
 });
 

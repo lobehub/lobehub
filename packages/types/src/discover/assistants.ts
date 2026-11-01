@@ -58,6 +58,10 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   installCount?: number;
   isValidated?: boolean;
   knowledgeCount: number;
+  /**
+   * Owner account type, used to resolve the author profile link
+   */
+  ownerType?: 'user' | 'organization';
   pluginCount: number;
   status?: AgentStatus;
   tokenUsage: number;
@@ -72,6 +76,7 @@ export interface AssistantQueryParams {
   category?: string;
   haveSkills?: boolean;
   includeAgentGroup?: boolean;
+  includeCategoryCounts?: boolean;
   locale?: string;
   order?: 'asc' | 'desc';
   ownerId?: string;
@@ -83,6 +88,7 @@ export interface AssistantQueryParams {
 }
 
 export interface AssistantListResponse {
+  categoryCounts?: { category: string; count: number }[];
   currentPage: number;
   items: DiscoverAssistantItem[];
   pageSize: number;

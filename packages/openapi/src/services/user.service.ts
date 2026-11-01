@@ -1,13 +1,16 @@
-import { and, count, desc, eq, ilike, inArray, ne, or } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, ne, or } from 'drizzle-orm';
 
 import { ALL_SCOPE } from '@/const/rbac';
+import { AGENT_TRANSFER_PENDING_OWNER_DELETE } from '@/database/models/agentTransferJob';
 import { RbacModel } from '@/database/models/rbac';
+import { UserModel } from '@/database/models/user';
 import { messages, roles, userRoles, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
+import { projectPublicRole, projectPublicUser } from '../helpers/public-fields';
 import type { ServiceResult } from '../types';
 import type {
   CreateUserRequest,
@@ -24,8 +27,14 @@ import type {
  * User service implementation class
  */
 export class UserService extends BaseService {
-  constructor(db: LobeChatDatabase, userId: string | null) {
-    super(db, userId);
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+    super(db, userId, workspaceId);
+  }
+
+  private getRoleScopeWhere() {
+    return this.workspaceId
+      ? or(eq(roles.workspaceId, this.workspaceId), isNull(roles.workspaceId))
+      : isNull(roles.workspaceId);
   }
 
   /**
@@ -48,11 +57,11 @@ export class UserService extends BaseService {
         .select({ roles })
         .from(userRoles)
         .innerJoin(roles, eq(userRoles.roleId, roles.id))
-        .where(eq(userRoles.userId, userId));
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
 
       return {
-        ...user,
-        roles: userRoleResults.map((r) => r.roles),
+        ...projectPublicUser(user),
+        roles: userRoleResults.map((r) => projectPublicRole(r.roles)),
       };
     }
 
@@ -62,15 +71,18 @@ export class UserService extends BaseService {
         .select({ roles })
         .from(userRoles)
         .innerJoin(roles, eq(userRoles.roleId, roles.id))
-        .where(eq(userRoles.userId, userId)),
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId }))),
 
-      this.db.select({ count: count() }).from(messages).where(eq(messages.userId, userId)),
+      this.db
+        .select({ count: count() })
+        .from(messages)
+        .where(this.buildPermissionWhere(messages, { userId })),
     ]);
 
     return {
-      ...user,
+      ...projectPublicUser(user),
       messageCount: messageCountResult[0]?.count || 0,
-      roles: userRoleResults.map((r) => r.roles),
+      roles: userRoleResults.map((r) => projectPublicRole(r.roles)),
     };
   }
 
@@ -136,9 +148,9 @@ export class UserService extends BaseService {
             .where(eq(messages.userId, userRow.id));
 
           return {
-            ...userRow,
+            ...projectPublicUser(userRow),
             messageCount: messageCountResult[0]?.count || 0,
-            roles: userRoleResults.map((r) => r.roles),
+            roles: userRoleResults.map((r) => projectPublicRole(r.roles)),
           };
         }),
       );
@@ -323,8 +335,18 @@ export class UserService extends BaseService {
         throw this.createAuthorizationError(permissionResult.message || '没有权限删除该用户');
       }
 
-      // Check if the user exists
-      const result = await this.db.delete(users).where(eq(users.id, userId));
+      // Route through UserModel.deleteUser so its pending agent-transfer guard
+      // applies to admin/OpenAPI deletes too — a raw `delete from users` here
+      // would cascade away message rows a pending backfill still has to move.
+      let result: Awaited<ReturnType<typeof UserModel.deleteUser>>;
+      try {
+        result = await UserModel.deleteUser(this.db, userId);
+      } catch (error) {
+        if (error instanceof Error && error.message === AGENT_TRANSFER_PENDING_OWNER_DELETE) {
+          throw this.createBusinessError('该用户仍有进行中的智能体迁移任务，请等待迁移完成后重试');
+        }
+        throw error;
+      }
 
       if (!result.rowCount) {
         throw this.createNotFoundError('用户不存在');
@@ -407,7 +429,11 @@ export class UserService extends BaseService {
         // 3. Validate that all roles exist and are active
         if (allRoleIds.size > 0) {
           const existingRoles = await tx.query.roles.findMany({
-            where: and(inArray(roles.id, Array.from(allRoleIds)), eq(roles.isActive, true)),
+            where: and(
+              inArray(roles.id, Array.from(allRoleIds)),
+              eq(roles.isActive, true),
+              this.getRoleScopeWhere(),
+            ),
           });
 
           const existingRoleIds = new Set(existingRoles.map((r) => r.id));
@@ -429,7 +455,11 @@ export class UserService extends BaseService {
           await tx
             .delete(userRoles)
             .where(
-              and(eq(userRoles.userId, userId), inArray(userRoles.roleId, request.removeRoles)),
+              and(
+                eq(userRoles.userId, userId),
+                inArray(userRoles.roleId, request.removeRoles),
+                this.buildPermissionWhere(userRoles, { userId }),
+              ),
             );
 
           this.log('info', '移除用户角色成功');
@@ -443,6 +473,7 @@ export class UserService extends BaseService {
               expiresAt: role.expiresAt ? new Date(role.expiresAt) : null,
               roleId: role.roleId,
               userId,
+              workspaceId: this.workspaceId ?? null,
             };
             return data;
           });
@@ -456,7 +487,9 @@ export class UserService extends BaseService {
           .from(userRoles)
           .innerJoin(roles, eq(userRoles.roleId, roles.id))
           .innerJoin(users, eq(userRoles.userId, users.id))
-          .where(eq(userRoles.userId, userId));
+          .where(
+            and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })),
+          );
 
         this.log('info', '用户角色更新完成', {
           result,
@@ -508,7 +541,7 @@ export class UserService extends BaseService {
         .select({ role: roles, userRole: userRoles })
         .from(userRoles)
         .innerJoin(roles, eq(userRoles.roleId, roles.id))
-        .where(eq(userRoles.userId, userId));
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
 
       return results.map((r) => ({
         expiresAt: r.userRole.expiresAt,
@@ -547,9 +580,11 @@ export class UserService extends BaseService {
       const beforeCount = await this.db
         .select({ count: count() })
         .from(userRoles)
-        .where(eq(userRoles.userId, userId));
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
 
-      await this.db.delete(userRoles).where(eq(userRoles.userId, userId));
+      await this.db
+        .delete(userRoles)
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
 
       return { removed: beforeCount[0]?.count || 0, userId };
     } catch (error) {

@@ -1,0 +1,123 @@
+/**
+ * @vitest-environment happy-dom
+ */
+import type * as BaseUI from '@lobehub/ui';
+import { render } from '@testing-library/react';
+import type { ComponentProps, ComponentType, ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import ShareButton from './index';
+
+const mocks = vi.hoisted(() => ({
+  activeTopicId: 'topic-1' as string | undefined,
+  enableBusinessFeatures: true,
+  permission: {
+    allowed: true,
+    reason: 'requires member',
+  },
+  workspaceId: null as string | null,
+}));
+
+const actionIconPropsSpy = vi.hoisted(() => vi.fn());
+
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof BaseUI>();
+  return {
+    ...actual,
+    ActionIcon: (props: ComponentProps<typeof actual.ActionIcon>) => {
+      actionIconPropsSpy(props);
+      return <actual.ActionIcon {...props} />;
+    },
+  };
+});
+
+vi.mock('@/features/SharePopover/lazy', () => ({
+  LazySharePopover: ({ children }: { children?: ReactNode }) => (
+    <div data-testid="share-popover">{children}</div>
+  ),
+}));
+
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  useActiveWorkspaceId: () => mocks.workspaceId,
+}));
+
+vi.mock('@/components/withSuspense', () => ({
+  withSuspense: (Component: ComponentType) => Component,
+}));
+
+vi.mock('@/features/ShareModal', () => ({
+  useShareModal: () => ({
+    openShareModal: vi.fn(),
+  }),
+}));
+
+vi.mock('@/features/Conversation/useAgentContext', () => ({
+  useAgentContext: () => ({ topicId: mocks.activeTopicId }),
+}));
+
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ allowed: mocks.permission.allowed, reason: mocks.permission.reason }),
+}));
+
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (
+    selector: (state: { serverConfig: { enableBusinessFeatures: boolean } }) => unknown,
+  ) => selector({ serverConfig: { enableBusinessFeatures: mocks.enableBusinessFeatures } }),
+}));
+
+vi.mock('@/store/serverConfig/selectors', () => ({
+  serverConfigSelectors: {
+    enableBusinessFeatures: (s: { serverConfig: { enableBusinessFeatures: boolean } }) =>
+      s.serverConfig.enableBusinessFeatures,
+  },
+}));
+
+describe('Conversation ShareButton', () => {
+  beforeEach(() => {
+    mocks.activeTopicId = 'topic-1';
+    mocks.enableBusinessFeatures = true;
+    mocks.permission.allowed = true;
+    mocks.workspaceId = null;
+    actionIconPropsSpy.mockClear();
+  });
+
+  it('renders the share entry in personal scope', () => {
+    const { getByTestId } = render(<ShareButton />);
+
+    expect(getByTestId('share-popover')).toBeInTheDocument();
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ disabled: false }));
+  });
+
+  it('keeps the mobile share entry inside a workspace, where no header menu hosts it', () => {
+    mocks.workspaceId = 'ws-1';
+
+    const { getByTestId } = render(<ShareButton mobile />);
+
+    expect(getByTestId('share-popover')).toBeInTheDocument();
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ disabled: false }));
+  });
+
+  it('hides the share entry inside a workspace, where comments take the slot', () => {
+    mocks.workspaceId = 'ws-1';
+
+    const { container } = render(<ShareButton />);
+
+    expect(actionIconPropsSpy).not.toHaveBeenCalled();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('does not open share popover for workspace viewers', () => {
+    mocks.permission.allowed = false;
+
+    const { queryByTestId } = render(<ShareButton />);
+
+    expect(actionIconPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        disabled: true,
+        onClick: undefined,
+        title: 'requires member',
+      }),
+    );
+    expect(queryByTestId('share-popover')).toBeNull();
+  });
+});

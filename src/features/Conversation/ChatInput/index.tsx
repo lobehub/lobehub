@@ -1,42 +1,65 @@
 'use client';
 
+import { type VoiceMessageRecording } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { type MenuProps } from '@lobehub/ui';
-import { Alert, Flexbox } from '@lobehub/ui';
+import { Alert, type DropdownItem, Flexbox, toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useBusinessChatInputSendAreaPrefix } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
+import {
+  getBusinessChatInputSendAreaPrefix,
+  useBusinessChatInputAlerts,
+} from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import {
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
+import { checkProjectExecution } from '@/features/Projects/WorkingDirectories/checkExecution';
+import { useAgentStore } from '@/store/agent';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { operationSelectors } from '@/store/chat/selectors';
+import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
+import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
+import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
+import { usePendingInterventions } from '../hooks/usePendingInterventions';
 import InterventionBar from '../InterventionBar';
-import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
+import {
+  dataSelectors,
+  messageStateSelectors,
+  useConversationStore,
+  useConversationStoreApi,
+} from '../store';
 import TodoProgress from '../TodoProgress';
+import InputCompletionErrorAlert from './InputCompletionErrorAlert';
+import LinkedGoalTray from './LinkedGoalTray';
+import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
-import { getConversationChatInputUiState } from './utils';
+import { sendVoiceMessage } from './sendVoiceMessage';
+import { transcribeVoiceMessage } from './transcribeVoiceMessage';
+import { useConversationChatInputUiState } from './useConversationChatInputUiState';
+import { useRestoreServerQueue } from './useRestoreServerQueue';
+import {
+  getContextWindowMessages,
+  getConversationSendButtonProps,
+  toChatInputMessages,
+  toDisplayableSendErrorMessage,
+} from './utils';
+import {
+  canSendVoiceMessage,
+  isVoiceMessageTranscribed,
+  useCanSendVoiceMessage,
+} from './voiceMessageCapability';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
-
-const toChatInputMessages = (messages: ReturnType<typeof dataSelectors.dbMessages>) =>
-  messages
-    .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')
-    .map((m) => ({
-      content: typeof m.content === 'string' ? m.content : '',
-      role: m.role as 'user' | 'assistant' | 'system',
-    }));
 
 export interface ChatInputProps {
   /**
@@ -53,6 +76,17 @@ export interface ChatInputProps {
    */
   children?: ReactNode;
   /**
+   * Render the editor as a single-row strip by dropping the action bar footer.
+   * Send still works through Enter; pair with `showControlBar={false}` to also
+   * drop the control bar. Defaults to false — other chat surfaces stay untouched.
+   */
+  compact?: boolean;
+  /**
+   * Custom node to render in place of the default ControlBar
+   * (Local/Cloud/Approval). When provided, replaces the default bar.
+   */
+  controlBarSlot?: ReactNode;
+  /**
    * Suppress the followUp placeholder variant (e.g. onboarding has no
    * follow-up design). When true, placeholder stays in default variant.
    */
@@ -62,6 +96,13 @@ export interface ChatInputProps {
    * Hides the QueueTray and gates handleSend so Enter does not enqueue.
    */
   disableQueue?: boolean;
+  /**
+   * Externally force the send action off, regardless of input content. Grays
+   * out the send button and gates handleSend so Enter can't send either. Used
+   * by host surfaces that are temporarily read-only (e.g. the Page Agent when
+   * another member holds the page edit lock).
+   */
+  disableSend?: boolean;
   /**
    * Extra action items to append to the ActionBar
    */
@@ -89,6 +130,15 @@ export interface ChatInputProps {
    */
   mentionItems?: SlashOptions['items'];
   /**
+   * Blocking notices (device offline, cloud not configured, …). They ride at the
+   * top of the composer's floating stack — above the run-status / queue / todo
+   * trays, which stay next to the input they annotate, and on the same inline
+   * edges as those trays so the stack reads as one column. Rendered as a sibling
+   * above `ChatInput` instead, a notice would be covered by those trays, since
+   * the stack floats upward from the top of this column.
+   */
+  notices?: ReactNode;
+  /**
    * Callback when editor instance is ready
    */
   onEditorReady?: (editor: any) => void;
@@ -96,11 +146,6 @@ export interface ChatInputProps {
    * Right action buttons configuration
    */
   rightActions?: ActionKeys[];
-  /**
-   * Custom node to render in place of the default RuntimeConfig bar
-   * (Local/Cloud/Approval). When provided, replaces the default bar.
-   */
-  runtimeConfigSlot?: ReactNode;
   /**
    * Custom content to render before the SendArea (right side of action bar)
    */
@@ -112,11 +157,11 @@ export interface ChatInputProps {
   /**
    * Send menu configuration (for send options like Enter/Cmd+Enter, Add AI/User message)
    */
-  sendMenu?: MenuProps;
+  sendMenu?: { items: DropdownItem[] };
   /**
-   * Whether to show the runtime config bar (Local/Cloud/Auto Approve)
+   * Whether to show the control bar (Local/Cloud/Auto Approve)
    */
-  showRuntimeConfig?: boolean;
+  showControlBar?: boolean;
   /**
    * Remove a small margin when placed adjacent to the ChatList
    */
@@ -133,8 +178,10 @@ const ChatInput = memo<ChatInputProps>(
   ({
     actionBarStyle,
     allowExpand,
+    compact = false,
     disableFollowUpVariant,
     disableQueue,
+    disableSend,
     feature,
     leftActions = [],
     leftContent,
@@ -143,32 +190,55 @@ const ChatInput = memo<ChatInputProps>(
     extraActionItems,
     isConfigLoading = false,
     mentionItems,
-    runtimeConfigSlot,
+    notices,
+    controlBarSlot,
     sendMenu,
     sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
-    showRuntimeConfig = true,
+    showControlBar = true,
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
     const { t } = useTranslation('chat');
 
-    const dbMessages = useConversationStore(dataSelectors.dbMessages);
-    const contextWindowMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
-    const getMessages = useCallback(
-      () => contextWindowMessages.slice(-MAX_CONTEXT_MESSAGES),
-      [contextWindowMessages],
-    );
-
     // ConversationStore state
+    const storeApi = useConversationStoreApi();
+    const dbMessages = useConversationStore(dataSelectors.dbMessages);
     const context = useConversationStore((s) => s.context);
-    const draftKey = useMemo(() => messageMapKey(context), [context]);
-    const [agentId, inputMessage, sendMessage, stopGenerating] = useConversationStore((s) => [
-      s.context.agentId,
-      s.inputMessage,
-      s.sendMessage,
-      s.stopGenerating,
+    const contextKey = useMemo(() => messageMapKey(context), [context]);
+    useRestoreServerQueue(context, !disableQueue);
+    const canRecordVoiceMessage = useCanSendVoiceMessage(context);
+    // The composer's controls must resolve their topic from THIS conversation,
+    // not the global `activeTopicId`: a page copilot embedded next to another
+    // chat runs with `topicId: null` while the outer chat's topic is still the
+    // global one (see PageAgentProvider). `null` is meaningful — it means "this
+    // conversation has no topic" — so it is passed through as-is.
+    const [agentId, topicId, inputMessage, sendMessage, stopGenerating] = useConversationStore(
+      (s) => [
+        s.context.agentId,
+        s.context.topicId ?? null,
+        s.inputMessage,
+        s.sendMessage,
+        s.stopGenerating,
+      ],
+    );
+    const [enableHistoryCount, historyCount] = useAgentStore((s) => [
+      chatConfigByIdSelectors.getEnableHistoryCountById(agentId || '')(s),
+      chatConfigByIdSelectors.getHistoryCountById(agentId || '')(s),
     ]);
+    const chatInputMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
+    const contextWindowMessages = useMemo(
+      () =>
+        getContextWindowMessages(dbMessages, {
+          enableHistoryCount,
+          historyCount,
+        }),
+      [dbMessages, enableHistoryCount, historyCount],
+    );
+    const getMessages = useCallback(
+      () => chatInputMessages.slice(-MAX_CONTEXT_MESSAGES),
+      [chatInputMessages],
+    );
     const updateInputMessage = useConversationStore((s) => s.updateInputMessage);
     const setEditor = useConversationStore((s) => s.setEditor);
     const setChatInputOverlayHeight = useConversationStore((s) => s.setChatInputOverlayHeight);
@@ -191,29 +261,36 @@ const ChatInput = memo<ChatInputProps>(
     }, [setChatInputOverlayHeight]);
 
     // Loading state from ConversationStore (bridged from ChatStore)
-    const isInputLoading = useConversationStore(messageStateSelectors.isInputLoading);
-
-    // Pending interventions — use custom equality to prevent infinite re-render loop.
-    // The selector creates new array/object refs each call; without equality check,
-    // any store update → new ref → re-render → Intervention's store writes → loop.
-    const pendingInterventions = useConversationStore(
-      dataSelectors.pendingInterventions,
-      (a, b) => {
-        if (a.length !== b.length) return false;
-        return a.every(
-          (item, i) => item.toolCallId === b[i].toolCallId && item.requestArgs === b[i].requestArgs,
-        );
-      },
+    const isInputQueueBlocked = useChatStore((s) =>
+      operationSelectors.isInputLoadingByContext(context)(s),
     );
+
+    const pendingInterventions = usePendingInterventions();
     const hasPendingInterventions = pendingInterventions.length > 0;
 
     // Send message error from ConversationStore
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
 
+    // `inputSendErrorMsg` is the failed call's `error.message` verbatim, so it
+    // can still be a raw database dump on servers predating the databaseError
+    // middleware. That text is SQL plus every bound parameter — including the
+    // user's own input — so it is never echoed; generic copy stands in for it.
+    const sendMessageErrorTitle = useMemo(
+      () =>
+        sendMessageErrorMsg
+          ? t('input.errorMsg', {
+              errorMsg:
+                toDisplayableSendErrorMessage(sendMessageErrorMsg) ??
+                t('unknownError', { ns: 'common' }),
+            })
+          : undefined,
+      [sendMessageErrorMsg, t],
+    );
+
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
-    const contextList = useFileStore(fileChatSelectors.chatContextSelections);
+    const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
     const isUploadingFiles = useFileStore(fileChatSelectors.isUploadingFiles);
 
     // Queue state
@@ -221,70 +298,185 @@ const ChatInput = memo<ChatInputProps>(
       (s) => operationSelectors.queuedMessageCount(context)(s) > 0,
     );
 
+    // Detect whether TodoProgress will render (mirrors its own gating) so we
+    // can square the top corners of OpStatusTray when it sits flush below.
+    const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
+
+    // Detect whether OpStatusTray will render (mirrors its own `!startTime`
+    // gate) so LinkedGoalTray — which sits flush below it — can square its top corners
+    // and merge with the status strip instead of showing a seam.
+    const hasOpStatus = useChatStore(
+      (s) => operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(s) !== undefined,
+    );
+
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
-    const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
-      disableFollowUpVariant,
-      isInputEmpty,
-      isInputLoading,
-    });
+    const { placeholderVariant, showSendMenu, showSendWhileGenerating, showStopButton } =
+      useConversationChatInputUiState({ disableFollowUpVariant, disableQueue, isInputEmpty });
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
-    const disabled = isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading);
+    // disableSend hard-blocks regardless of content (host surface is read-only).
+    const disabled =
+      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputQueueBlocked) || !!disableSend;
+
+    // `disabled` above lags the editor: `inputMessage` mirrors content through
+    // the editor's debounced onChange, so a fast type→Enter arrives while the
+    // mirror still reads empty and the send would be silently dropped. Gate
+    // Enter/click on live state instead — handleSend re-validates all of these
+    // at trigger time, so this only mirrors the visual disabled semantics.
+    const customDisabled = customSendButtonProps?.disabled;
+    const resolveSendBlocked = useCallback(() => {
+      if (disableSend) return true;
+
+      const fileStore = useFileStore.getState();
+      if (fileChatSelectors.isUploadingFiles(fileStore)) return true;
+      if (customDisabled !== undefined) return customDisabled;
+
+      const { context: liveContext, editor } = storeApi.getState();
+      if (
+        disableQueue &&
+        operationSelectors.isInputLoadingByContext(liveContext)(useChatStore.getState())
+      )
+        return true;
+
+      const hasText = String(editor?.getMarkdownContent?.() || '').trim().length > 0;
+      const hasFiles = fileChatSelectors.chatUploadFileList(fileStore).length > 0;
+      const hasContextSelections =
+        fileChatSelectors.chatContextSelections(messageMapKey(liveContext))(fileStore).length > 0;
+      return !hasText && !hasFiles && !hasContextSelections;
+    }, [customDisabled, disableQueue, disableSend, storeApi]);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
-    const businessSendAreaPrefix = useBusinessChatInputSendAreaPrefix(sendAreaPrefix);
+    const businessAlerts = useBusinessChatInputAlerts();
+    const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
       async ({ clearContent, getMarkdownContent, getEditorData }) => {
+        // Host surface is read-only (e.g. page locked) — block Enter too, not
+        // just the grayed-out button.
+        if (disableSend) return;
+
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
         const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
         const currentIsUploading = fileChatSelectors.isUploadingFiles(fileStore);
-        const currentContextList = fileChatSelectors.chatContextSelections(fileStore);
+        const currentContextList = fileChatSelectors.chatContextSelections(contextKey)(fileStore);
 
         if (currentIsUploading) return;
 
         // Onboarding-style surfaces opt out of message queuing — pressing Enter
         // while the agent is streaming should be a no-op rather than enqueue.
-        if (disableQueue && isInputLoading) return;
+        if (disableQueue && isInputQueueBlocked) return;
 
         // Get content before clearing
         const message = getMarkdownContent();
         if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
           return;
 
+        // A rejected preflight has no persisted message to recover from. Keep
+        // the composer and attachments intact until the target is usable.
+        const chatState = useChatStore.getState();
+        const sendContext = storeApi.getState().context;
+        const topic = sendContext.topicId
+          ? topicSelectors.getTopicById(sendContext.topicId)(chatState)
+          : undefined;
+        try {
+          await checkProjectExecution(topic, chatState.isGatewayModeEnabled(sendContext.agentId));
+        } catch (error) {
+          console.error('Project execution preflight failed', error);
+          toast.error(error instanceof Error ? error.message : String(error));
+          return;
+        }
+
         // Capture editor JSON state before clearing for rich text rendering
         const editorData = getEditorData();
 
-        // Clear content immediately for responsive UX
-        clearContent();
-        fileStore.clearChatUploadFileList();
-        fileStore.clearChatContextSelections();
+        const clearComposer = () => {
+          clearContent();
+          fileStore.clearChatUploadFileList();
+          fileStore.clearChatContextSelections(contextKey);
+        };
 
-        // Convert ChatContextContent to PageSelection for persistence
-        const pageSelections = currentContextList.map((ctx) => ({
-          content: ctx.preview || '',
-          id: ctx.id,
-          pageId: ctx.pageId || '',
-          xml: ctx.content,
-        }));
+        // A deferred send was armed from the composer (see `scheduledSendAt`):
+        // park the turn as a `scheduled` topic instead of running it. Send stays
+        // the single commit action — picking a time never dispatches by itself.
+        //
+        // The composer is cleared only once the schedule is persisted, unlike the
+        // normal path below: a rejected schedule (the picked time just went past,
+        // the request failed) leaves no message row to recover the text from, so
+        // an up-front clear would simply lose it.
+        if (storeApi.getState().scheduledSendAt) {
+          const scheduled = await storeApi.getState().commitScheduledSend(message, currentFileList);
+          if (scheduled) clearComposer();
+          return;
+        }
+
+        // Clear content immediately for responsive UX
+        clearComposer();
+
+        const { contextSelections, pageSelections } =
+          buildMessageContextSelections(currentContextList);
 
         // Fire and forget - send with captured message
-        await sendMessage({ editorData, files: currentFileList, message, pageSelections });
+        await sendMessage({
+          contextSelections,
+          editorData,
+          files: currentFileList,
+          message,
+          onPreflightFailure: () => {
+            const store = useFileStore.getState();
+            // The composer was cleared up front; a send rejected before any
+            // message owned the content must hand every part of it back —
+            // uploads and context selections, not just the editor text the
+            // lifecycle restores on its own.
+            store.restoreChatUploadFileList(currentFileList);
+            store.restoreChatContextSelections(contextKey, currentContextList);
+          },
+          pageSelections,
+        });
       },
-      [sendMessage, disableQueue, isInputLoading],
+      [contextKey, sendMessage, storeApi, disableQueue, disableSend, isInputQueueBlocked],
     );
 
     const sendButtonProps: SendButtonProps = {
-      disabled,
-      generating: showStopButton,
-      onStop: stopGenerating,
-      ...customSendButtonProps,
+      ...getConversationSendButtonProps(
+        { disabled, generating: showStopButton, onStop: stopGenerating, showSendWhileGenerating },
+        customSendButtonProps,
+        isUploadingFiles,
+      ),
       ...(shouldUsePlainSendButton
         ? { shape: customSendButtonProps?.shape ?? 'round' }
         : undefined),
     };
+
+    const handleVoiceMessageSend = useCallback(
+      (recording: VoiceMessageRecording) => {
+        if (operationSelectors.isInputVisiblyLoadingByContext(context)(useChatStore.getState())) {
+          return false;
+        }
+
+        return Boolean(
+          useChatStore.getState().sendVoiceMessage({
+            canSend: canSendVoiceMessage,
+            context,
+            recording,
+            send: (file, { context: targetContext, messageId, signal }) =>
+              sendVoiceMessage(sendMessage, file, {
+                context: targetContext,
+                optimisticUserMessageId: messageId,
+                signal,
+                ...(isVoiceMessageTranscribed(targetContext)
+                  ? {
+                      transcribe: (uploaded, transcribeSignal) =>
+                        transcribeVoiceMessage(uploaded.id, transcribeSignal),
+                    }
+                  : {}),
+              }),
+          }),
+        );
+      },
+      [context, sendMessage],
+    );
 
     const defaultContent = (
       <WideScreenContainer
@@ -294,16 +486,17 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
-          {sendMessageErrorMsg && (
+          {sendMessageErrorTitle && (
             <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
               <Alert
                 closable
-                title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
+                title={sendMessageErrorTitle}
                 type={'secondary'}
                 onClose={clearSendMessageError}
               />
             </Flexbox>
           )}
+          {businessAlerts}
           <Flexbox
             paddingInline={12}
             ref={overlayRef}
@@ -315,20 +508,31 @@ const ChatInput = memo<ChatInputProps>(
               zIndex: 10,
             }}
           >
+            {/* A blocking notice outranks the run it is blocking, so it heads the
+                stack. It takes the overlay's own inset like every tray below it,
+                so the whole floating column shares one pair of edges. */}
+            {notices}
+            <InputCompletionErrorAlert />
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
+            <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
+            {/* Goals this conversation planned; sits last so it rides flush on the input. */}
+            <LinkedGoalTray
+              topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
+            />
           </Flexbox>
           <DesktopChatInput
             actionBarStyle={actionBarStyle}
             borderRadius={12}
+            compact={compact}
+            controlBarSlot={controlBarSlot}
             extraActionItems={extraActionItems}
             hidden={hasPendingInterventions}
             isConfigLoading={isConfigLoading}
             leftContent={leftContent}
             placeholderVariant={placeholderVariant}
-            runtimeConfigSlot={runtimeConfigSlot}
             sendAreaPrefix={businessSendAreaPrefix}
-            showRuntimeConfig={showRuntimeConfig}
+            showControlBar={showControlBar}
           />
         </div>
       </WideScreenContainer>
@@ -338,16 +542,20 @@ const ChatInput = memo<ChatInputProps>(
       <ChatInputProvider
         agentId={agentId}
         allowExpand={allowExpand}
+        canRecordVoiceMessage={canRecordVoiceMessage}
+        contextSelectionKey={contextKey}
         contextWindowMessages={contextWindowMessages}
-        draftKey={draftKey}
+        draftKey={contextKey}
         feature={feature}
         getMessages={getMessages}
         leftActions={leftActions}
         mentionItems={mentionItems}
+        resolveSendBlocked={resolveSendBlocked}
         rightActions={rightActions}
         sendButtonProps={sendButtonProps}
         sendMenu={showSendMenu ? sendMenu : undefined}
         slashPlacement="top"
+        topicId={topicId}
         chatInputEditorRef={(instance) => {
           if (instance) {
             setEditor(instance);
@@ -356,6 +564,7 @@ const ChatInput = memo<ChatInputProps>(
         }}
         onMarkdownContentChange={updateInputMessage}
         onSend={handleSend}
+        onVoiceMessageSend={handleVoiceMessageSend}
       >
         {children ?? defaultContent}
       </ChatInputProvider>

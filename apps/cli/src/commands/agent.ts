@@ -1,21 +1,49 @@
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
-import type { Command } from 'commander';
+import { AgentGraphSchema } from '@lobechat/types/agent/graph';
+import { type Command, InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { getAgentStreamAuthInfo } from '../api/http';
-import { resolveAgentGatewayUrl } from '../settings';
-import {
-  replayAgentEvents,
-  streamAgentEvents,
-  streamAgentEventsViaWebSocket,
-} from '../utils/agentStream';
-import { resolveLocalDeviceId } from '../utils/device';
+import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
-import { log, setVerbose } from '../utils/logger';
+import { log } from '../utils/logger';
 import { resolveAgentId } from './agent/resolveAgentId';
+import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
+import { resolveAppUrlBuilder } from './task/url';
+
+const readGraphConfig = async (graphFile: string): Promise<unknown> => {
+  const content = await readFile(graphFile, 'utf8');
+  const graph = JSON.parse(content);
+  const result = AgentGraphSchema.safeParse(graph);
+
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    const path = issue?.path.length ? `${issue.path.join('.')}: ` : '';
+    throw new Error(`Invalid AgentGraph: ${path}${issue?.message ?? 'unknown error'}`);
+  }
+
+  return result.data;
+};
+
+const readJsonObjectFile = async (
+  filePath: string,
+  label: string,
+): Promise<Record<string, unknown>> => {
+  const content = await readFile(filePath, 'utf8');
+  const parsed = JSON.parse(content);
+
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`${label} JSON must be a plain object`);
+  }
+
+  return parsed as Record<string, unknown>;
+};
+
+const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unknown>> =>
+  readJsonObjectFile(agencyConfigFile, 'agencyConfig');
 
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
@@ -32,7 +60,16 @@ export function registerAgentCommand(program: Command) {
     .action(async (options: { json?: string | boolean; keyword?: string; limit?: string }) => {
       const client = await getTrpcClient();
 
-      const input: { keyword?: string; limit?: number; offset?: number } = {};
+      // The inbox (Lobe AI) is a real assistant the user can open, and this is
+      // exactly where they look for it — so opt in. `queryAgents` omits the
+      // product-owned inbox for callers that do not explicitly ask for it, so
+      // that older clients and CRUD/group surfaces keep their old behavior.
+      const input: {
+        includeInbox: boolean;
+        keyword?: string;
+        limit?: number;
+        offset?: number;
+      } = { includeInbox: true };
       if (options.keyword) input.keyword = options.keyword;
       if (options.limit) input.limit = Number.parseInt(options.limit, 10);
 
@@ -41,7 +78,12 @@ export function registerAgentCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.agent(item.id),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -50,14 +92,19 @@ export function registerAgentCommand(program: Command) {
         return;
       }
 
+      // `name` (user-facing display name) and `title` (role/identity) are separate
+      // fields and both are returned — collapsing them into one column hides the
+      // only handle the user knows an agent by, e.g. the inbox shows up as
+      // `Sienna` / `Lobe`. `model` is not part of the queryAgents payload, so the
+      // column that used to sit here was always empty.
       const rows = items.map((a: any) => [
         a.id || a.agentId || '',
-        truncate(a.title || a.name || a.meta?.title || 'Untitled', 40),
+        truncate(a.name || a.meta?.name || '', 24),
+        truncate(a.title || a.meta?.title || '', 36),
         truncate(a.description || a.meta?.description || '', 50),
-        a.model || '',
       ]);
 
-      printTable(rows, ['ID', 'TITLE', 'DESCRIPTION', 'MODEL']);
+      printTable(rows, ['ID', 'NAME', 'TITLE', 'DESCRIPTION']);
     });
 
   // ── view ──────────────────────────────────────────────
@@ -84,13 +131,23 @@ export function registerAgentCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result, fields);
+          outputJson(
+            withUrl(result, await resolveUrlBuilder(client), resourcePath.agent(agentId)),
+            fields,
+          );
           return;
         }
 
         const r = result as any;
-        console.log(pc.bold(r.title || r.meta?.title || 'Untitled'));
+        // Same rule as the web UI (`agentDisplayName`): the personal `name` is the
+        // primary label and a real (non-blank) title is the supporting line — so
+        // the inbox reads `Sienna · Lobe`, while a named agent without a title
+        // reads `Alice`, not `Alice · Untitled`.
+        const name = (r.name || r.meta?.name)?.trim();
+        const title = (r.title || r.meta?.title)?.trim();
+        console.log(pc.bold(name || title || 'Untitled'));
         const meta: string[] = [];
+        if (name && title && title !== name) meta.push(title);
         if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
         if (r.model) meta.push(`Model: ${r.model}`);
         if (r.provider) meta.push(`Provider: ${r.provider}`);
@@ -125,6 +182,7 @@ export function registerAgentCommand(program: Command) {
         title?: string;
       }) => {
         const client = await getTrpcClient();
+        const buildUrl = await resolveAppUrlBuilder(client);
 
         const config: Record<string, any> = {};
         if (options.title) config.title = options.title;
@@ -138,8 +196,11 @@ export function registerAgentCommand(program: Command) {
 
         const result = await client.agent.createAgent.mutate(input as any);
         const r = result as any;
-        console.log(`${pc.green('✓')} Created agent ${pc.bold(r.agentId || r.id)}`);
+        const agentId = r.agentId || r.id;
+        const url = buildUrl(`/agent/${encodeURIComponent(agentId)}`);
+        console.log(`${pc.green('✓')} Created agent ${pc.bold(agentId)}`);
         if (r.sessionId) console.log(`  Session: ${r.sessionId}`);
+        console.log(`${pc.bold('agent')}: ${url}`);
       },
     );
 
@@ -147,6 +208,7 @@ export function registerAgentCommand(program: Command) {
 
   agent
     .command('edit [agentId]')
+    .alias('update')
     .description('Update agent configuration')
     .option('--slug <slug>', 'Agent slug (e.g. inbox)')
     .option('-t, --title <title>', 'New title')
@@ -154,11 +216,29 @@ export function registerAgentCommand(program: Command) {
     .option('-m, --model <model>', 'New model ID')
     .option('-p, --provider <provider>', 'New provider ID')
     .option('-s, --system-role <role>', 'New system role prompt')
+    .option('--graph-file <path>', 'AgentGraph JSON file')
+    .option('--enable-graph', 'Enable graph runtime')
+    .option('--disable-graph', 'Disable graph runtime')
+    .option(
+      '--agency-config-file <path>',
+      'agencyConfig JSON file, deep-merged into the agent (send `null` to clear a nested key)',
+    )
+    .option(
+      '--config-file <path>',
+      'Agent config JSON file for fields without a dedicated flag (openingMessage, openingQuestions, tags, avatar, params, chatConfig, …). Deep-merged server-side; identity fields (id/slug/userId/workspaceId/visibility) are rejected. Explicit flags win over this file.',
+    )
+    .option('--json [fields]', 'Output the updated agent as JSON, optionally selecting fields')
     .action(
       async (
         agentIdArg: string | undefined,
         options: {
+          agencyConfigFile?: string;
+          configFile?: string;
           description?: string;
+          disableGraph?: boolean;
+          enableGraph?: boolean;
+          graphFile?: string;
+          json?: string | boolean;
           model?: string;
           provider?: string;
           slug?: string;
@@ -167,22 +247,91 @@ export function registerAgentCommand(program: Command) {
         },
       ) => {
         const value: Record<string, any> = {};
+
+        // Read first so the explicit flags below overwrite it — the file is the
+        // broad brush, the flags are the precise correction.
+        if (options.configFile) {
+          try {
+            Object.assign(value, await readJsonObjectFile(options.configFile, 'agent config'));
+          } catch (error) {
+            log.error(`Failed to read agent config JSON: ${(error as Error).message}`);
+            process.exit(1);
+            return;
+          }
+        }
+
         if (options.title) value.title = options.title;
         if (options.description) value.description = options.description;
         if (options.model) value.model = options.model;
         if (options.provider) value.provider = options.provider;
         if (options.systemRole) value.systemRole = options.systemRole;
 
+        if (options.enableGraph && options.disableGraph) {
+          log.error('Use either --enable-graph or --disable-graph, not both.');
+          process.exit(1);
+          return;
+        }
+
+        // agencyConfig is deep-merged server-side, so a nested key is removed by
+        // sending it as `null` (e.g. `{ "heterogeneousProvider": null }`); omitted keys are kept.
+        if (options.agencyConfigFile) {
+          try {
+            value.agencyConfig = await readAgencyConfig(options.agencyConfigFile);
+          } catch (error) {
+            log.error(`Failed to read agencyConfig JSON: ${(error as Error).message}`);
+            process.exit(1);
+            return;
+          }
+        }
+
+        // Graph Agent flags live on the agency config (the agent's behavior
+        // body), not the chat config. Merged, not replaced: `--config-file` /
+        // `--agency-config-file` may carry other agencyConfig keys and the
+        // graph flags should only override the ones they own.
+        const graphAgencyConfig: Record<string, any> = {};
+        if (options.enableGraph) graphAgencyConfig.enableGraphMode = true;
+        if (options.disableGraph) graphAgencyConfig.enableGraphMode = false;
+        if (options.graphFile) {
+          try {
+            graphAgencyConfig.graph = await readGraphConfig(options.graphFile);
+          } catch (error) {
+            log.error(`Failed to read graph JSON: ${(error as Error).message}`);
+            process.exit(1);
+            return;
+          }
+        }
+        if (Object.keys(graphAgencyConfig).length > 0) {
+          value.agencyConfig = {
+            ...(value.agencyConfig as object | undefined),
+            ...graphAgencyConfig,
+          };
+        }
+
         if (Object.keys(value).length === 0) {
           log.error(
-            'No changes specified. Use --title, --description, --model, --provider, or --system-role.',
+            'No changes specified. Use --title, --description, --model, --provider, --system-role, --graph-file, --enable-graph, --disable-graph, --agency-config-file, or --config-file.',
           );
           process.exit(1);
+          return;
         }
 
         const client = await getTrpcClient();
         const agentId = await resolveAgentId(client, { agentId: agentIdArg, slug: options.slug });
-        await client.agent.updateAgentConfig.mutate({ agentId, value });
+        const result: any = await client.agent.updateAgentConfig.mutate({ agentId, value });
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(
+            withUrl(
+              result?.agent ?? result,
+              await resolveUrlBuilder(client),
+              resourcePath.agent(agentId),
+            ),
+            fields,
+          );
+          return;
+        }
+
         console.log(`${pc.green('✓')} Updated agent ${pc.bold(agentId)}`);
       },
     );
@@ -225,147 +374,7 @@ export function registerAgentCommand(program: Command) {
 
   // ── run ──────────────────────────────────────────────
 
-  agent
-    .command('run')
-    .description('Run an agent with a prompt')
-    .option('-a, --agent-id <id>', 'Agent ID')
-    .option('-s, --slug <slug>', 'Agent slug')
-    .option('-p, --prompt <text>', 'User prompt')
-    .option('-t, --topic-id <id>', 'Reuse an existing topic')
-    .option('--no-auto-start', 'Do not auto-start the agent')
-    .option(
-      '--device <target>',
-      'Target device ID, or use "local" for the current connected device',
-    )
-    .option(
-      '--no-headless',
-      "Disable headless mode and wait for human approval on tool calls (default: headless — tools auto-run, matching the CLI's non-interactive nature)",
-    )
-    .option('--json', 'Output full JSON event stream')
-    .option('-v, --verbose', 'Show detailed tool call info')
-    .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
-    .option('--sse', 'Force SSE stream instead of WebSocket gateway')
-    .action(
-      async (options: {
-        agentId?: string;
-        autoStart?: boolean;
-        device?: string;
-        headless?: boolean;
-        json?: boolean;
-        prompt?: string;
-        replay?: string;
-        slug?: string;
-        sse?: boolean;
-        topicId?: string;
-        verbose?: boolean;
-      }) => {
-        if (options.verbose) setVerbose(true);
-
-        // Replay mode: render from saved JSON file, no network needed
-        if (options.replay) {
-          const data = readFileSync(options.replay, 'utf8');
-          const events = JSON.parse(data);
-          replayAgentEvents(events, { json: options.json, verbose: options.verbose });
-          return;
-        }
-
-        if (!options.agentId && !options.slug) {
-          log.error('Either --agent-id or --slug is required.');
-          process.exit(1);
-          return;
-        }
-        if (!options.prompt) {
-          log.error('--prompt is required.');
-          process.exit(1);
-          return;
-        }
-
-        const client = await getTrpcClient();
-
-        let deviceId: string | undefined;
-        if (options.device !== undefined) {
-          if (options.device === 'local') {
-            deviceId = resolveLocalDeviceId();
-            if (!deviceId) {
-              log.error(
-                "No local device found. Run 'lh connect' first, then retry with --device local.",
-              );
-              process.exit(1);
-              return;
-            }
-          } else {
-            deviceId = options.device;
-          }
-
-          const devices = await client.device.listDevices.query();
-          const matchedDevice = devices.find(
-            (device: { deviceId?: string; online?: boolean }) => device.deviceId === deviceId,
-          );
-          if (!matchedDevice) {
-            log.error(`Device "${deviceId}" was not found. Check 'lh device list' and try again.`);
-            process.exit(1);
-            return;
-          }
-          if (!matchedDevice.online) {
-            log.error(
-              options.device === 'local'
-                ? `Local device "${deviceId}" is not online. Reconnect with 'lh connect' and try again.`
-                : `Device "${deviceId}" is not online. Bring it online and try again.`,
-            );
-            process.exit(1);
-            return;
-          }
-        }
-
-        // 1. Exec agent to get operationId
-        const input: Record<string, any> = { prompt: options.prompt, trigger: 'cli' };
-        if (options.agentId) input.agentId = options.agentId;
-        if (deviceId) input.deviceId = deviceId;
-        if (options.slug) input.slug = options.slug;
-        if (options.topicId) input.appContext = { topicId: options.topicId };
-        if (options.autoStart === false) input.autoStart = false;
-        // commander's --no-headless sets `headless` to false. Anything else
-        // (undefined, true) → headless mode is on and tool calls auto-execute.
-        if (options.headless !== false) {
-          input.userInterventionConfig = { approvalMode: 'headless' };
-        }
-
-        const result = await client.aiAgent.execAgent.mutate(input as any);
-        const r = result as any;
-
-        if (!r.success) {
-          log.error(`Failed to start agent: ${r.error || r.message || 'Unknown error'}`);
-          process.exit(1);
-        }
-
-        const operationId = r.operationId;
-        if (!options.json) {
-          log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
-        }
-
-        // 2. Connect to stream (WebSocket via Gateway, or fallback to SSE)
-        const { serverUrl, headers, token, tokenType } = await getAgentStreamAuthInfo();
-        const agentGatewayUrl = options.sse ? undefined : resolveAgentGatewayUrl();
-
-        if (agentGatewayUrl) {
-          await streamAgentEventsViaWebSocket({
-            gatewayUrl: agentGatewayUrl,
-            json: options.json,
-            operationId,
-            serverUrl,
-            token,
-            tokenType,
-            verbose: options.verbose,
-          });
-        } else {
-          const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
-          await streamAgentEvents(streamUrl, headers, {
-            json: options.json,
-            verbose: options.verbose,
-          });
-        }
-      },
-    );
+  registerAgentRunCommand(agent);
 
   // ── pin / unpin ─────────────────────────────────────
 
@@ -593,36 +602,72 @@ export function registerAgentCommand(program: Command) {
           return;
         }
 
+        if (!r) {
+          log.error(
+            `No status for operation ${operationId} (unknown id, not visible to this account, or its run state already expired).`,
+          );
+          process.exit(1);
+          return;
+        }
+
+        const read = readOperationStatus(r);
         console.log(pc.bold('Operation Status'));
         console.log(`  ID:     ${operationId}`);
-        console.log(`  Status: ${colorStatus(r.status || r.state || 'unknown')}`);
+        console.log(`  Status: ${colorStatus(read.status || 'unknown')}`);
 
-        if (r.stepCount !== undefined) console.log(`  Steps:  ${r.stepCount}`);
-        if (r.usage?.total_tokens) console.log(`  Tokens: ${r.usage.total_tokens}`);
-        if (r.cost?.total !== undefined) console.log(`  Cost:   $${r.cost.total.toFixed(4)}`);
-        if (r.error) console.log(`  Error:  ${pc.red(r.error)}`);
+        if (read.stepCount !== undefined) console.log(`  Steps:  ${read.stepCount}`);
+        if (read.usage?.total_tokens) console.log(`  Tokens: ${read.usage.total_tokens}`);
+        if (read.cost?.total !== undefined) console.log(`  Cost:   $${read.cost.total.toFixed(4)}`);
+        if (read.error) console.log(`  Error:  ${pc.red(read.error)}`);
         if (r.createdAt) console.log(`  Started: ${r.createdAt}`);
         if (r.completedAt) console.log(`  Ended:   ${r.completedAt}`);
       },
     );
-}
 
-function colorStatus(status: string): string {
-  switch (status) {
-    case 'completed':
-    case 'success': {
-      return pc.green(status);
-    }
-    case 'failed':
-    case 'error': {
-      return pc.red(status);
-    }
-    case 'processing':
-    case 'running': {
-      return pc.yellow(status);
-    }
-    default: {
-      return pc.dim(status);
-    }
-  }
+  // ── interrupt ──────────────────────────────────────────
+
+  // Mirrors the server's InterruptTaskSchema: all three ids are optional, but
+  // at least one of operationId / threadId must be provided.
+  agent
+    .command('interrupt')
+    .description('Interrupt a running agent operation')
+    .option('--operation-id <id>', 'Operation ID to interrupt')
+    .option('--thread-id <id>', 'Thread ID (resolves the operation from thread metadata)')
+    .option('--topic-id <id>', 'Topic ID (enables remote device cancellation when applicable)')
+    .option('--json', 'Output JSON envelope')
+    .action(
+      async (options: {
+        json?: boolean;
+        operationId?: string;
+        threadId?: string;
+        topicId?: string;
+      }) => {
+        if (!options.operationId && !options.threadId) {
+          throw new InvalidArgumentError('Either --thread-id or --operation-id must be provided');
+        }
+
+        const client = await getTrpcClient();
+        const input: Record<string, any> = {};
+        if (options.operationId) input.operationId = options.operationId;
+        if (options.threadId) input.threadId = options.threadId;
+        if (options.topicId) input.topicId = options.topicId;
+
+        const result = await client.aiAgent.interruptTask.mutate(input as any);
+
+        if (options.json) {
+          outputJson(result);
+          return;
+        }
+
+        const r = result as any;
+        const label = r?.operationId ?? options.operationId ?? options.threadId;
+        if (r?.success) {
+          console.log(`${pc.green('OK')} Interrupted operation ${pc.bold(label)}`);
+        } else {
+          console.log(
+            `${pc.yellow('!')} Interrupt not acknowledged for ${pc.bold(label)} (already finished?)`,
+          );
+        }
+      },
+    );
 }

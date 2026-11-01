@@ -2,6 +2,7 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { type NextRequest } from 'next/server';
 
 import { createLambdaContext } from '@/libs/trpc/lambda/context';
+import { createTRPCErrorLogger } from '@/libs/trpc/utils/errorLogger';
 import { prepareRequestForTRPC } from '@/libs/trpc/utils/request-adapter';
 import { createResponseMeta } from '@/libs/trpc/utils/responseMeta';
 import { lambdaRouter } from '@/server/routers/lambda';
@@ -12,6 +13,10 @@ const handler = (req: NextRequest) => {
   const preparedReq = prepareRequestForTRPC(req);
 
   return fetchRequestHandler({
+    // Large-input queries (see the client's LARGE_INPUT_QUERY_PROCEDURES) are
+    // sent as POST to dodge the GET URL length budget — let tRPC accept them.
+    allowMethodOverride: true,
+
     /**
      * @link https://trpc.io/docs/v11/context
      */
@@ -19,14 +24,7 @@ const handler = (req: NextRequest) => {
 
     endpoint: '/trpc/lambda',
 
-    onError: ({ error, path, type }) => {
-      // Filter out the error of UNAUTHORIZED, because this is normal behavior
-      // And it has been displayed at the front end to let the user login
-      if (error.code === 'UNAUTHORIZED') return;
-
-      console.info(`Error in tRPC handler (lambda) on path: ${path}, type: ${type}`);
-      console.error(error);
-    },
+    onError: createTRPCErrorLogger('lambda'),
 
     req: preparedReq,
     responseMeta: createResponseMeta,

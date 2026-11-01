@@ -1,0 +1,715 @@
+import type { Chat, Message } from 'chat';
+
+import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
+
+// ============================================================================
+// Bot Platform Core Types
+// ============================================================================
+
+/**
+ * Extended return type for `extractFiles` that carries optional warnings
+ * (e.g. "file too large") alongside extracted files. Warnings are appended
+ * to the agent prompt so the AI can inform the user naturally.
+ */
+export interface ExtractFilesResult {
+  files?: AttachmentSource[];
+  warnings?: string[];
+}
+
+// --------------- Connection Mode ---------------
+
+/**
+ * How the platform communicates with the server.
+ * - 'webhook': stateless HTTP callbacks (can run in serverless)
+ * - 'websocket': persistent WebSocket connection (e.g. Discord, QQ)
+ * - 'polling': persistent long-polling connection (e.g. WeChat)
+ */
+export type ConnectionMode = 'polling' | 'webhook' | 'websocket';
+
+export interface PlatformAccessMeta {
+  allowed?: boolean;
+  blockedMessage?: string;
+  /**
+   * Per-feature access flags keyed by feature id (see `FieldSchema.paidFeature`).
+   * Platform-level `allowed` stays authoritative for the channel itself.
+   */
+  features?: Record<string, { allowed: boolean }>;
+  requiredPlan?: 'paid';
+  rolloutMode?: 'enforce' | 'notice';
+}
+
+// --------------- Field Schema ---------------
+
+/**
+ * Unified field schema for both credentials and settings.
+ *
+ * Drives:
+ * - Server: validation + default value extraction
+ * - Frontend: auto-generated form (type → component mapping)
+ */
+/** One condition of {@link FieldSchema.visibleWhen}. */
+export interface FieldVisibleWhen {
+  field: string;
+  value: unknown;
+}
+
+export interface FieldSchema {
+  /**
+   * Render an `enum` as a list of choices, each with its description under it, instead of a
+   * dropdown. For a few options whose consequences need a sentence each (who may DM the bot, where
+   * it may join).
+   */
+  choices?: boolean;
+  /** Default value */
+  default?: unknown;
+  description?: string;
+  /** Only show in development environment */
+  devOnly?: boolean;
+  /** Enum options for select fields */
+  enum?: string[];
+  /** Per-option help text rendered alongside each enum option (1:1 with `enum`). */
+  enumDescriptions?: string[];
+  /** Display labels for enum options */
+  enumLabels?: string[];
+  /** The `enum` value the product suggests; a `choices` list tags it. */
+  enumRecommended?: string;
+  /**
+   * Rollout gate for the field: the key of a boolean in the user's feature flags (for example
+   * `enableChannels`). The form hides the field unless that flag is on for the signed-in user.
+   * The server stays authoritative; this only keeps unreleased options out of sight.
+   */
+  featureFlag?: string;
+  /**
+   * For a `boolean`: the switch shows on while the stored value is not `true`. For an off switch
+   * (`...Disabled`) whose absence means on, labelled as what it turns on.
+   */
+  inverted?: boolean;
+  /** Array item schema */
+  items?: FieldSchema;
+  /** Unique field identifier */
+  key: string;
+  /** Display label */
+  label: string;
+  maximum?: number;
+  minimum?: number;
+  /**
+   * Marks the field as belonging to a gated feature (by feature id). The
+   * frontend renders a paid badge next to the label and disables editing
+   * when the platform access meta reports the feature as not allowed.
+   */
+  paidFeature?: string;
+  /**
+   * Format constraint for `string` / `password` fields, as a regex **source
+   * string** — the schema is serialized over TRPC to drive the frontend form,
+   * so it cannot carry a `RegExp` instance. Enforced on both sides: the form
+   * turns it into an antd rule, and the save mutation re-checks it so callers
+   * bypassing the UI can't persist a malformed credential.
+   *
+   * Empty values are exempt — `required` owns that check.
+   */
+  pattern?: string;
+  /** i18n key for the message shown when the value fails `pattern`. */
+  patternMessage?: string;
+  placeholder?: string;
+  /** Nested fields (for type: 'object') */
+  properties?: FieldSchema[];
+  required?: boolean;
+  /**
+   * Visible lines for a multi-line `string` field. Setting it renders a text area instead of a
+   * one-line input; `maximum` is then its character limit.
+   */
+  rows?: number;
+  /**
+   * i18n key for an extra `?` tooltip rendered next to the field label. Use
+   * for "how to find this value" guidance that's too long for the inline
+   * `description` (e.g. platform-specific UI paths for fetching User IDs).
+   */
+  tooltip?: string;
+  /**
+   * Field type, maps to UI component:
+   * - 'string' → Input (a text area when `rows` is set)
+   * - 'password' → Password input
+   * - 'number' / 'integer' → NumberInput
+   * - 'boolean' → Switch
+   * - 'object' → nested group
+   * - 'array' → list
+   */
+  type: 'array' | 'boolean' | 'integer' | 'number' | 'object' | 'password' | 'string';
+  /**
+   * Conditional visibility: show only when another field matches a value. Pass
+   * an array as `value` to match any of several values, e.g. a window size that
+   * applies to both the `burst` and `debounce` concurrency strategies. Pass a
+   * list of conditions to require all of them.
+   */
+  visibleWhen?: FieldVisibleWhen | FieldVisibleWhen[];
+}
+
+// --------------- Bot Message Attachment ---------------
+
+/**
+ * JSON-safe attachment carried through the bot callback path
+ * (agent runtime → webhook body → BotCallbackService → PlatformMessenger).
+ *
+ * Either `data` (base64-encoded bytes) or `fetchUrl` (remote URL the
+ * messenger can fetch) must be set. Prefer `fetchUrl` when possible to keep
+ * webhook payload sizes manageable.
+ */
+export interface BotMessageAttachment {
+  /** Base64-encoded bytes. Used when no fetchable URL exists. */
+  data?: string;
+  /** Remote URL the messenger can GET to retrieve the bytes. */
+  fetchUrl?: string;
+  mimeType?: string;
+  name?: string;
+  /**
+   * Size of the underlying bytes, when the caller knows it (e.g. from the
+   * files table). Lets the send path apply platform size budgets without
+   * downloading URL-sourced attachments first.
+   */
+  size?: number;
+  /**
+   * Set ONLY when the server itself produced `fetchUrl` from a record the
+   * caller was checked to own (see `sendMessengerPush`). It relaxes the
+   * outbound SSRF guard to accept our own configured origins even when they
+   * resolve privately, which self-hosted storage and local dev need.
+   *
+   * Never set it from request input: a caller-supplied URL that merely lands
+   * on a configured origin is not owned, and trusting it would turn the
+   * relaxation into the bypass it exists to avoid.
+   */
+  trustedUrl?: boolean;
+  type: 'image' | 'file' | 'video' | 'audio';
+}
+
+/**
+ * Input accepted by `PlatformMessenger.createMessage` / `editMessage`.
+ *
+ * Plain string is the legacy form; object form carries optional attachments.
+ * Platforms that don't support attachments treat the object form as
+ * `{ content }` and silently drop attachments.
+ */
+export type MessengerContent = string | { attachments?: BotMessageAttachment[]; content?: string };
+
+/**
+ * Helper for messenger implementations that don't (yet) support attachments:
+ * coerces `MessengerContent` to its text payload.
+ */
+export const messengerContentText = (input: MessengerContent): string =>
+  typeof input === 'string' ? input : (input.content ?? '');
+
+// --------------- Platform Messenger ---------------
+
+/**
+ * LobeHub-specific outbound capabilities used by callback and bridge services.
+ */
+export interface PlatformMessenger {
+  /**
+   * Add a reaction to a message (optional — platforms without reaction APIs
+   * can omit this). Callers must no-op on platforms that don't implement it.
+   */
+  addReaction?: (messageId: string, emoji: string) => Promise<void>;
+  createMessage: (content: MessengerContent) => Promise<void>;
+  editMessage: (messageId: string, content: MessengerContent) => Promise<void>;
+  removeReaction: (messageId: string, emoji: string) => Promise<void>;
+  /**
+   * Transition the bot's reaction on a message from `prevEmoji` to
+   * `nextEmoji`. Either can be `null`: `prev=null` means "nothing was there,
+   * just add", `next=null` means "clear it". Each platform implements this
+   * with the fewest API calls it can:
+   *
+   * - Telegram: single `setMessageReaction` (atomic replace).
+   * - Discord / Slack / Feishu: `addReaction(next)` then `removeReaction(prev)`
+   *   in that order so the user always sees at least one bot reaction during
+   *   the transition.
+   *
+   * Optional — platforms with no reaction API (QQ, WeChat) omit it, and
+   * callers must guard with optional chaining.
+   */
+  replaceReaction?: (
+    messageId: string,
+    prevEmoji: string | null,
+    nextEmoji: string | null,
+  ) => Promise<void>;
+  triggerTyping?: () => Promise<void>;
+  updateThreadName?: (name: string) => Promise<void>;
+}
+
+// --------------- Usage Stats ---------------
+
+/**
+ * Raw usage statistics for a bot response.
+ * Passed to `PlatformClient.formatReply` so each platform can decide
+ * whether and how to render usage information.
+ */
+export interface UsageStats {
+  elapsedMs?: number;
+  llmCalls?: number;
+  toolCalls?: number;
+  totalCost: number;
+  totalTokens: number;
+}
+
+// --------------- Reply Targets ---------------
+
+/**
+ * Where the reply to a message at the top level of a channel can go: the channel itself, or a
+ * thread under the message. Each target is a `platformThreadId` the handler swaps in before the
+ * run, so everything downstream (posting, reactions, subscription) follows the choice.
+ *
+ * - Discord: the message arrives keyed by the channel; a thread is created off it on demand and
+ *   can be named.
+ * - Slack: the message arrives keyed by the thread under it (`slack:<channel>:<ts>`); the channel
+ *   is `slack:<channel>`, and the thread exists as soon as someone replies in it, without a name.
+ */
+export interface ReplyTargets {
+  /** Posts at the top level of the channel the message was sent in. */
+  channel: string;
+  /** Whether `openThread` uses its `name`. A thread without a name takes the platform's own. */
+  namesThread: boolean;
+  /**
+   * Opens the thread under the message and returns its `platformThreadId`. Best-effort: resolves
+   * `undefined` instead of throwing when the platform refuses, so the reply falls back to the
+   * channel rather than being lost.
+   */
+  openThread: (name?: string) => Promise<string | undefined>;
+}
+
+// --------------- Platform Client ---------------
+
+/** Behaviour the router asks a platform's Chat SDK patches to adopt. */
+export interface ChatPatchOptions {
+  /**
+   * Asked before the adapter opens a reply thread for an @-mention on its own. `true` keeps the
+   * message in the channel, so the router decides where the reply goes.
+   */
+  deferMentionThread?: () => Promise<boolean>;
+}
+
+/**
+ * A client to a specific platform instance, holding credentials and runtime context.
+ *
+ * Server services interact with the platform through this interface only.
+ * All platform-specific operations are encapsulated here.
+ */
+export interface PlatformClient {
+  readonly applicationId: string;
+  /**
+   * Apply platform-specific Chat SDK compatibility patches after bot initialization.
+   * Useful for adapter quirks that should stay encapsulated within the platform client.
+   */
+  applyChatPatches?: (chatBot: Chat<any>, options?: ChatPatchOptions) => void;
+
+  /** Create a Chat SDK adapter config for inbound message handling. */
+  createAdapter: () => Record<string, any>;
+
+  /**
+   * Ensure the triggering user is a member of the platform thread the bot
+   * replies in, so the platform pushes them a notification and surfaces the
+   * thread in their client.
+   *
+   * Discord: the auto-created per-mention reply thread never adds the
+   * mentioning user as a member — the reply lands in a thread the user is
+   * not notified about, and thread-pill rendering on the origin message has
+   * proven unreliable (two separate clients showed no pill for
+   * hours while the API said `HAS_THREAD`). Explicit membership bypasses
+   * both gaps. Best-effort — implementations must swallow failures.
+   *
+   * Platforms whose replies land directly in the conversation (Telegram,
+   * Slack channel replies, DMs) can omit this method.
+   */
+  ensureThreadMember?: (platformThreadId: string, platformUserId: string) => Promise<void>;
+
+  /**
+   * Read the inbound message author's preferred language from the platform
+   * payload (e.g. Telegram's `from.language_code`, Discord's `user.locale`).
+   * Returns the raw platform string — caller is responsible for normalizing
+   * it against the project `Locales` set. Return `undefined` when the
+   * platform doesn't expose locale or the field is empty so the caller can
+   * fall back to the platform default.
+   *
+   * Optional — platforms that don't expose user locale (QQ / WeChat) omit
+   * this method.
+   */
+  extractAuthorLocale?: (message: Message) => string | undefined;
+
+  /** Extract the chat/channel ID from a composite platformThreadId. */
+  extractChatId: (platformThreadId: string) => string;
+
+  /**
+   * The `channelId` that `readMessages` needs to read THIS conversation's
+   * history, injected into the model's prompt as the current conversation.
+   *
+   * Omit it when `extractChatId` already identifies the conversation exactly
+   * (Feishu `oc_…`, Discord channel-or-thread id, Telegram chat id). Implement
+   * it — returning `undefined` — when the platform's history read cannot be
+   * scoped to what `platformThreadId` denotes: a Slack reply thread decodes to
+   * its parent channel, and `conversations.history` on that channel would read
+   * unrelated channel traffic while claiming to be the current conversation.
+   */
+  extractConversationId?: (platformThreadId: string) => string | undefined;
+
+  /**
+   * Resolve attachments on an inbound `Message` into `AttachmentSource[]` for
+   * ingestion by the bridge. Each platform owns its own attachment quirks
+   * here: data-source priority, type-only metadata inference, quoted-message
+   * handling, and re-download paths for data lost during chat-sdk Redis
+   * serialization (functions and buffers don't survive `Message.toJSON`).
+   *
+   * Optional — when omitted, the bridge falls back to its legacy
+   * `extractFiles` implementation. Eventually all platforms will implement
+   * this and the bridge fallback will be deleted.
+   */
+  extractFiles?: (message: Message) => Promise<AttachmentSource[] | ExtractFilesResult | undefined>;
+
+  /**
+   * Surface additional channel IDs the group allowlist (`groupAllowFrom`)
+   * should match against, beyond the inbound `thread.channelId` the router
+   * already supplies.
+   *
+   * Discord auto-creates a per-mention reply thread when the bot is
+   * @-mentioned in a parent channel; the thread's ID becomes
+   * `thread.channelId`, but operators copy the **parent** channel ID into
+   * the allowlist. Without this hook the allowlist would never match for
+   * @-mentions. The hook returns the parent so either ID lets the message
+   * through.
+   *
+   * Other platforms (Telegram chat IDs, Slack channel IDs, Feishu chat IDs)
+   * have a 1:1 mapping with what the user pastes and can omit this method.
+   */
+  extraGroupAllowlistChannels?: (platformThreadId: string) => string[];
+
+  /**
+   * Transform outbound Markdown content into a format the platform can render.
+   * Called before `formatReply` and `splitMessage`.
+   *
+   * Platforms that don't support Markdown (e.g. QQ) should strip formatting
+   * to plain text. Platforms with native Markdown support can omit this
+   * method — the content is passed through as-is.
+   */
+  formatMarkdown?: (markdown: string) => string;
+
+  /**
+   * Format the final outbound reply from body content and optional usage stats.
+   * Each platform decides whether to render the stats and how to format them
+   * (e.g. Discord uses `-# stats` when the user enables usage display).
+   * When not implemented, the caller returns body as-is (no stats).
+   */
+  formatReply?: (body: string, stats?: UsageStats) => string;
+
+  /**
+   * What people call the bot on this platform (display name, username), so a message that says the
+   * name is read as addressed to it. Optional: without it the bot is recognised by @mention only.
+   * Implementations cache; an error is treated as "no names yet" and retried on the next message.
+   * `platformThreadId`, when given, adds the names the bot goes by in that conversation's server
+   * (a Discord guild nickname).
+   */
+  getBotNames?: (platformThreadId?: string) => Promise<string[]>;
+
+  // --- Runtime Operations ---
+
+  /** Get a messenger for a specific thread (outbound messaging). */
+  getMessenger: (platformThreadId: string) => PlatformMessenger;
+
+  /**
+   * Where the reply to `message` can go, when it sits at the top level of a channel that has
+   * threads (see `ReplyTargets`). `undefined` when there is no choice: a DM, a message already
+   * inside a thread, or a threadless platform (Telegram, WeChat, QQ). Omit when the platform never
+   * offers one; the reply then stays in `platformThreadId`.
+   */
+  getReplyTargets?: (
+    platformThreadId: string,
+    message: { id?: string; raw?: unknown },
+  ) => ReplyTargets | undefined;
+
+  readonly id: string;
+
+  /**
+   * Whether this conversation contains only the operator and this bot, so every
+   * message in it is implicitly addressed to the bot and no @-mention is needed.
+   *
+   * The router otherwise infers that from how many distinct humans have SPOKEN
+   * in the thread, which misreads a quiet group as private — badly so on
+   * platforms where the subscribed "thread" is the entire group chat. A platform
+   * that can report real membership should implement this and settle it.
+   *
+   * Must fail CLOSED: resolve `false` whenever membership can't be established,
+   * so an unprovable chat stays mention-only rather than the bot talking over a
+   * group. Platforms that can't tell omit the method.
+   */
+  isSoloBotConversation?: (platformThreadId: string) => Promise<boolean>;
+
+  /** Parse a composite message ID into the platform-native format. */
+  parseMessageId: (compositeId: string) => string | number;
+
+  /**
+   * Re-register the platform webhook with the current credentials.
+   *
+   * `BotMessageRouter` calls this (rate-limited per bot) when the adapter
+   * rejects an inbound webhook as unverified (401) — the platform is still
+   * delivering to a registration made with missing or stale verification
+   * material. Implementations must be idempotent and safe to call while the
+   * bot keeps serving traffic. Webhook-mode platforms whose registration we
+   * own (Telegram) implement it; others omit it.
+   */
+  reconcileWebhook?: () => Promise<void>;
+
+  /**
+   * Register bot commands with the platform (e.g., Telegram setMyCommands).
+   * Called once during bot initialization with the list of available commands.
+   * Optional — platforms that don't support command menus can omit this.
+   */
+  registerBotCommands?: (
+    commands: Array<{
+      command: string;
+      description: string;
+      /**
+       * Argument schema for platforms with structured slash commands
+       * (Discord, Slack). Without this, Discord registers as zero-arg and
+       * users have no UI to pass a value — adapters that don't support
+       * options should silently ignore this field.
+       */
+      options?: Array<{
+        description: string;
+        name: string;
+        required?: boolean;
+      }>;
+    }>,
+  ) => Promise<void>;
+
+  /**
+   * Turn platform-native mention tokens (e.g. Discord `<@123>`) into readable
+   * `@Display Name` text using the payload on `message`, without removing
+   * anything. Used for quoted / referenced text where "who was tagged" is
+   * part of the meaning. `message` is the inbound Chat SDK message (or the
+   * merged message built from several), passed as `unknown` because each
+   * platform digs into its own `raw` shape.
+   */
+  resolveMentions?: (text: string, message?: unknown) => string;
+
+  /**
+   * Resolve the correct thread ID for reaction API calls.
+   *
+   * Some platforms (e.g. Discord) need to route reactions to a different channel
+   * than the thread itself — for instance, a thread-starter message lives in
+   * the parent channel, not in the thread.
+   *
+   * When not implemented, `threadId` is used as-is.
+   */
+  resolveReactionThreadId?: (threadId: string, messageId: string) => string;
+
+  /**
+   * Strip platform-specific bot mention artifacts from user input, e.g. the
+   * leading `<@bot>` that addressed the bot, and resolve any other mention
+   * tokens to readable names when `message` is supplied.
+   */
+  sanitizeUserInput?: (text: string, message?: unknown) => string;
+
+  /**
+   * Whether a subscribed thread's topic expires after the idle threshold
+   * (4h), so the next message starts a fresh topic. Default: true.
+   * Discord: returns false for guild threads — a thread is already a bounded
+   * conversation, so a late reply must continue the same topic.
+   */
+  shouldExpireIdleTopic?: (threadId: string) => boolean;
+
+  /**
+   * Whether the bot should subscribe to a thread. Default: true.
+   * Discord: returns false for top-level channels (not threads).
+   */
+  shouldSubscribe?: (threadId: string) => boolean;
+
+  // --- Lifecycle ---
+  start: (options?: any) => Promise<void>;
+
+  stop: () => Promise<void>;
+}
+
+// --------------- Provider Config ---------------
+
+/**
+ * Represents a concrete bot provider configuration.
+ * Corresponds to a row in the `agentBotProviders` table.
+ */
+export interface BotProviderConfig {
+  applicationId: string;
+  credentials: Record<string, string>;
+  platform: string;
+  settings: Record<string, unknown>;
+}
+
+// --------------- Runtime Context ---------------
+
+export interface BotPlatformRedisClient {
+  del: (key: string) => Promise<number>;
+  get: (key: string) => Promise<string | null>;
+  set: (key: string, value: string, options?: { ex?: number }) => Promise<string | null>;
+  subscribe?: (channel: string, callback: (message: string) => void) => Promise<void>;
+}
+
+export interface BotPlatformRuntimeContext {
+  appUrl?: string;
+  redisClient?: BotPlatformRedisClient;
+  registerByToken?: (token: string) => void;
+  userId?: string;
+}
+
+// --------------- Validation ---------------
+
+/**
+ * Machine-readable reason for a credential check failure. Each value has a
+ * user-facing explanation under `channel.connectionError.<code>` in the
+ * `agent` locale namespace, shared with the runtime-status error codes.
+ */
+export type BotCredentialErrorCode =
+  | 'application_not_found'
+  | 'invalid_credentials'
+  | 'missing_credentials'
+  | 'permission_denied'
+  | 'rate_limited'
+  | 'upstream_unavailable';
+
+export interface ValidationError {
+  /** Recognized failure reason; omitted when the platform error is unclassified. */
+  code?: BotCredentialErrorCode;
+  field: string;
+  message: string;
+}
+
+export interface ValidationResult {
+  errors?: ValidationError[];
+  valid: boolean;
+}
+
+// --------------- Platform Documentation ---------------
+
+export interface PlatformDocumentation {
+  /** URL to the platform's developer portal / open platform console */
+  portalUrl?: string;
+  /** URL to the usage documentation (e.g. LobeHub docs for this platform) */
+  setupGuideUrl?: string;
+}
+
+// --------------- Client Factory ---------------
+
+/**
+ * Abstract base class for creating PlatformClient instances.
+ *
+ * - `createClient` (abstract): instantiate a PlatformClient (e.g. based on connectionMode)
+ * - `validateCredentials`: verify credentials against the platform API — called from UI flow only
+ * - `validateSettings`: validate platform-specific settings — called from UI flow only
+ */
+export abstract class ClientFactory {
+  /** Create a PlatformClient instance. Fast and sync — no network calls. */
+  abstract createClient(
+    config: BotProviderConfig,
+    context: BotPlatformRuntimeContext,
+  ): PlatformClient;
+
+  /**
+   * Verify credentials against the platform API.
+   * Called explicitly from the UI/API layer when the user saves credentials.
+   */
+  async validateCredentials(
+    _credentials: Record<string, string>,
+    _settings?: Record<string, unknown>,
+    _applicationId?: string,
+    _platform?: string,
+  ): Promise<ValidationResult> {
+    return { valid: true };
+  }
+
+  /**
+   * Validate platform-specific settings.
+   * Called explicitly from the UI/API layer when the user saves settings.
+   */
+  async validateSettings(_settings: Record<string, unknown>): Promise<ValidationResult> {
+    return { valid: true };
+  }
+}
+
+// --------------- Platform Definition ---------------
+
+/**
+ * A platform definition, uniquely identified by `id`.
+ *
+ * Contains metadata, factory, and validation. All runtime operations go through PlatformClient.
+ */
+export interface PlatformDefinition {
+  /** Optional access metadata resolved for the current user by business slots. */
+  access?: PlatformAccessMeta;
+
+  /** Factory for creating PlatformClient instances and validating credentials/settings. */
+  clientFactory: ClientFactory;
+
+  /**
+   * Connection mode: how the platform communicates with the server.
+   * - 'webhook': stateless HTTP callbacks (can run in serverless)
+   * - 'websocket': persistent WebSocket connection (e.g. Discord, QQ)
+   * - 'polling': persistent long-polling connection (e.g. WeChat)
+   *
+   * For single-mode platforms this is the runtime mode. For multi-mode
+   * platforms where users pick per-provider via `settings.connectionMode`,
+   * this is the runtime fallback when settings have no explicit value (after
+   * schema defaults have been merged in). See `getEffectiveConnectionMode`
+   * in `./utils.ts`.
+   */
+  connectionMode: ConnectionMode;
+
+  /** The description of the platform. */
+  description?: string;
+
+  /** Documentation links for the platform */
+  documentation?: PlatformDocumentation;
+
+  /** The unique identifier of the platform. */
+  id: string;
+
+  /** The name of the platform. */
+  name: string;
+
+  /**
+   * Credential keys that are identifiers rather than secrets, for platforms
+   * whose credentials never come from the form schema and so have no
+   * `type: 'password'` marking to read. WeChat's QR handshake writes `botId`
+   * and `userId` alongside the token; those two are safe to show, the token is
+   * not. Everything unlisted is treated as secret.
+   */
+  publicCredentialKeys?: string[];
+
+  /** Field schema — top-level objects `credentials` and `settings` map to DB columns. */
+  schema: FieldSchema[];
+
+  /** Whether to show webhook URL for manual configuration. When true, the UI displays the webhook endpoint for the user to copy. */
+  showWebhookUrl?: boolean;
+
+  /**
+   * Whether the platform supports rendering Markdown in messages.
+   * When false, outbound markdown is converted to plain text before sending,
+   * and the AI is instructed to avoid markdown formatting.
+   * Defaults to true.
+   */
+  supportsMarkdown?: boolean;
+
+  /**
+   * Whether the platform supports editing sent messages.
+   * When false, step progress updates are skipped and only the final reply is sent.
+   * Defaults to true.
+   */
+  supportsMessageEdit?: boolean;
+
+  /**
+   * `lobe-message` channel API names this platform does NOT support — either the
+   * service throws `PlatformUnsupportedError`, or the optional method is absent
+   * and the execution runtime rejects it generically (e.g. `sendDirectMessage`).
+   * Sourced from `PLATFORM_UNSUPPORTED_MESSAGE_APIS` and surfaced into the agent
+   * runtime's manifest resolve context so `resolveMessageManifest` removes them
+   * from the tool list — otherwise the model calls an operation that can only
+   * fail (the WeChat `readMessages` "刚刚聊了啥" case). A missing/empty value means
+   * "fully supported", so a limited platform MUST populate this. See
+   * `messageCapabilities.ts` (kept honest against the services by its test).
+   */
+  unsupportedMessageApis?: string[];
+}
+
+/** Serialized platform definition for frontend consumption (excludes runtime-only fields). */
+export type SerializedPlatformDefinition = Omit<PlatformDefinition, 'clientFactory'>;

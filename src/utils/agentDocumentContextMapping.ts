@@ -1,8 +1,9 @@
+import { CUSTOM_FOLDER_FILE_TYPE, WEB_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
   type AgentDocumentInjectionPosition,
-} from '@lobechat/context-engine';
+} from '@lobechat/context-engine/agent-document';
 
 import type { AgentDocumentContextPayload } from '@/database/models/agentDocuments';
 
@@ -34,6 +35,7 @@ export const normalizeAgentDocumentPosition = (
 export const toAgentContextDocument = (doc: AgentDocumentContextPayload): AgentContextDocument => ({
   content: doc.content,
   contentCharCount: doc.contentCharCount ?? doc.content.length,
+  createdAt: doc.createdAt ?? undefined,
   description: doc.description ?? undefined,
   filename: doc.filename,
   id: doc.id,
@@ -41,6 +43,7 @@ export const toAgentContextDocument = (doc: AgentDocumentContextPayload): AgentC
     doc.policy?.context?.position || doc.policyLoadPosition,
   ),
   loadRules: doc.loadRules,
+  parentId: doc.parentId ?? undefined,
   policyId: doc.templateId,
   policyLoad: doc.policyLoad,
   policyLoadFormat: doc.policy?.context?.policyLoadFormat || doc.policyLoadFormat || undefined,
@@ -60,8 +63,40 @@ export const toAgentContextDocument = (doc: AgentDocumentContextPayload): AgentC
  * blocks (). `AgentContextDocument` deliberately has no `fileType`
  * field, so the folder check has to happen here, at the DB→context boundary,
  * where the derived `isFolder` flag is still available.
+ *
+ * Before dropping them, we harvest the `custom/folder` rows into a
+ * `documentId → title` map and stamp each child's `folderTitle` (matched on
+ * `parentId`). This is the only layer that sees both id-spaces at once — a
+ * child's `parentId` points at the folder's `documentId` (`documents.id`),
+ * while the surviving context docs are keyed by their own `agentDocuments.id`
+ * — so folder-title resolution has to happen here, not in the injector. The
+ * progressive index folds same-folder siblings into one summary row without
+ * ever consuming the folder body's token budget.
  */
 export const toAgentContextDocuments = (
   docs: AgentDocumentContextPayload[],
-): AgentContextDocument[] =>
-  docs.filter((doc) => !doc.isFolder).map((doc) => toAgentContextDocument(doc));
+): AgentContextDocument[] => {
+  // Folders and ordinary documents can both hold children (a workflow document
+  // with its run records nested under it). Skill bundles keep their own layout.
+  const parentById = new Map<string, { kind: 'document' | 'folder'; title: string }>();
+  for (const doc of docs) {
+    if (doc.fileType === CUSTOM_FOLDER_FILE_TYPE) {
+      parentById.set(doc.documentId, { kind: 'folder', title: doc.title });
+    } else if (
+      !doc.isFolder &&
+      // Cached client payloads can predate `fileType`; treat a missing one as a document.
+      !(doc.fileType ?? '').startsWith('skills/') &&
+      doc.sourceType !== WEB_DOCUMENT_SOURCE_TYPE
+    ) {
+      parentById.set(doc.documentId, { kind: 'document', title: doc.title });
+    }
+  }
+
+  return docs
+    .filter((doc) => !doc.isFolder)
+    .map((doc) => {
+      const mapped = toAgentContextDocument(doc);
+      const parent = doc.parentId ? parentById.get(doc.parentId) : undefined;
+      return parent ? { ...mapped, folderTitle: parent.title, parentKind: parent.kind } : mapped;
+    });
+};

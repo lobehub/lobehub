@@ -1,12 +1,14 @@
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
-import { Avatar } from '@lobehub/ui';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
+import { agentDisplayName } from '@lobechat/types';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { Command } from 'cmdk';
 import { Bot, Image } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import AgentAvatar from '@/components/AgentAvatar';
+import Avatar from '@/components/Avatar';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
@@ -17,7 +19,7 @@ import { useCommandMenu } from './useCommandMenu';
 
 const AskAIMenu = memo(() => {
   const { t } = useTranslation(['common', 'chat', 'home']);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { handleAskLobeAI, handleAIPainting, closeCommandMenu } = useCommandMenu();
   const { search } = useCommandMenuContext();
 
@@ -62,7 +64,7 @@ const AskAIMenu = memo(() => {
       <Command.Item value="lobe-ai" onSelect={handleAskLobeAI}>
         <Avatar emojiScaleWithBackground avatar={DEFAULT_INBOX_AVATAR} shape="square" size={18} />
         <div className={styles.itemContent}>
-          <div className={styles.itemLabel}>Lobe AI</div>
+          <div className={styles.itemLabel}>{DEFAULT_INBOX_TITLE}</div>
         </div>
       </Command.Item>
       <Command.Item value="agent-builder" onSelect={handleAgentBuilder}>
@@ -87,14 +89,15 @@ const AskAIMenu = memo(() => {
       {agents.map((agent) => (
         <CommandItem
           key={agent.id}
-          title={agent.title || t('defaultAgent')}
+          title={agentDisplayName(agent, t('defaultAgent'))}
           trailingLabel={t('cmdk.search.agent')}
           value={`agent-${agent.id}`}
           variant="detailed"
           icon={
-            <Avatar
-              emojiScaleWithBackground
-              avatar={typeof agent.avatar === 'string' ? agent.avatar : DEFAULT_AVATAR}
+            <AgentAvatar
+              agentId={agent.id}
+              avatar={typeof agent.avatar === 'string' ? agent.avatar : undefined}
+              name={agentDisplayName(agent, t('defaultAgent'))}
               shape="square"
               size={18}
             />

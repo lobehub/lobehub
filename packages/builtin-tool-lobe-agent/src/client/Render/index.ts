@@ -1,6 +1,7 @@
+import { AskUserQuestionRender } from '@lobechat/builtin-tool-user-interaction/client';
+
 import { LobeAgentApiName } from '../../types';
 import CallSubAgentRender from './CallSubAgent';
-import CallSubAgentsRender from './CallSubAgents';
 import CreatePlan from './CreatePlan';
 import TodoListRender from './TodoList';
 
@@ -12,8 +13,8 @@ import TodoListRender from './TodoList';
  * share a single TodoList render.
  */
 export const LobeAgentRenders = {
+  [LobeAgentApiName.askUserQuestion]: AskUserQuestionRender,
   [LobeAgentApiName.callSubAgent]: CallSubAgentRender,
-  [LobeAgentApiName.callSubAgents]: CallSubAgentsRender,
 
   // Plan operations render the PlanCard UI
   [LobeAgentApiName.createPlan]: CreatePlan,
@@ -26,7 +27,6 @@ export const LobeAgentRenders = {
 };
 
 export { default as CallSubAgentRender } from './CallSubAgent';
-export { default as CallSubAgentsRender } from './CallSubAgents';
 export { default as CreatePlan, PlanCard } from './CreatePlan';
 export type { TodoListRenderState } from './TodoList';
 export { default as TodoListRender, TodoListUI } from './TodoList';

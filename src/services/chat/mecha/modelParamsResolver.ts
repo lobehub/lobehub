@@ -1,317 +1,125 @@
+import {
+  type ModelParamsProviders,
+  type ModelParamsRequest,
+  type ResolvedModelParams,
+  resolveModelParams,
+} from '@lobechat/mecha';
+import {
+  type ModelExtendParams,
+  resolveDefaultEnableAdaptiveThinkingForModel,
+  resolveDefaultThinkingLevelForModel,
+} from '@lobechat/model-runtime/utils/modelExtendParams';
 import type { LobeAgentChatConfig } from '@lobechat/types';
-import type { ExtendParamsType } from 'model-bank';
+import type { EnabledAiModel, LobeDefaultAiModelListItem } from 'model-bank';
 
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
+import { getChatStoreState } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
+
+export type { ModelExtendParams };
+export { resolveDefaultEnableAdaptiveThinkingForModel, resolveDefaultThinkingLevelForModel };
+
+const toModelCard = (item: EnabledAiModel | LobeDefaultAiModelListItem) => ({
+  abilities: item.abilities,
+  deploymentName: item.config?.deploymentName,
+  displayName: item.displayName,
+  extendParams: item.settings?.extendParams,
+  id: item.id,
+  knowledgeCutoff: item.knowledgeCutoff,
+  providerId: item.providerId,
+});
 
 /**
- * Context for resolving model parameters
+ * How the browser answers the model-parameter rules: the enabled model list
+ * (which already merges the user's own settings over the bundled card, so no
+ * separate user row exists here), the bundled bank as a fallback, the cached
+ * model-instance reasoning config and the topic's reasoning pin — all read
+ * from the stores, never the network.
  */
-export interface ModelParamsContext {
+export interface BrowserModelParamsSource {
+  /** The group the run belongs to; a topic listed under a group is a group topic. */
+  groupId?: string;
+}
+
+interface StoredTopicOwnership {
+  agentId?: string | null;
+  groupId?: string | null;
+}
+
+export const createBrowserModelParamsProviders = ({
+  groupId,
+}: BrowserModelParamsSource = {}): ModelParamsProviders => ({
+  findTopicReasoningPin: async (topicId) => {
+    const chatState = getChatStoreState();
+    const topic = topicSelectors.getTopicById(topicId)(chatState);
+    if (!topic?.model) return null;
+    // The group sidebar's slim list projection carries neither `agentId` nor
+    // `groupId`; the detail cache (a full row) does. Prefer it, then whatever
+    // the list row kept, and finally the run's own group — a group topic
+    // whose owning agent is unknown must not pass as a personal one, or the
+    // pin would apply to every member that answers.
+    const listed = topic as typeof topic & StoredTopicOwnership;
+    const detail = chatState.topicDetailMap?.[topicId] as
+      (typeof topic & StoredTopicOwnership) | undefined;
+    return {
+      agentId: detail?.agentId ?? listed.agentId,
+      groupId: detail?.groupId ?? listed.groupId ?? groupId,
+      model: topic.model,
+      provider: topic.provider || '',
+      reasoningConfig: topic.metadata?.reasoningConfig,
+    };
+  },
+  getModelReasoningConfig: async (model, provider) =>
+    aiModelSelectors.modelReasoningConfig(model, provider)(getAiInfraStoreState()),
+  // The enabled list already merges the user's settings over the card, so it
+  // doubles as the user row: an explicitly emptied extend-param list is an
+  // opt-out the shared rule must keep, not a miss to fall back from.
+  getUserModelRow: async (m, p) => {
+    const state = getAiInfraStoreState();
+    const own = aiModelSelectors.getEnabledModelById(m, p)(state);
+    const extendParams = aiModelSelectors.modelExtendParams(m, p)(state);
+    if (!own && extendParams === undefined) return null;
+    return { displayName: own?.displayName, extendParams };
+  },
+  listModelCards: () => {
+    const state = getAiInfraStoreState();
+    return [...(state.enabledAiModels ?? []), ...state.builtinAiModelList].map(toModelCard);
+  },
+});
+
+export interface BrowserModelParamsContext {
+  /** The answering agent; a group topic's pin only counts for it. */
+  agentId?: string;
   chatConfig: LobeAgentChatConfig;
+  /** The group the run belongs to, when any. */
+  groupId?: string;
   model: string;
   provider: string;
+  searchDecision?: ModelParamsRequest['searchDecision'];
+  /** Raw sub-agent chatConfig override; explicit reasoning fields here win. */
+  subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
+  topicId?: string;
 }
 
 /**
- * Extended parameters for model runtime
+ * The model parameters of one browser-side LLM call, decided by the shared
+ * rules in `@lobechat/mecha` (the same ones the server runtime applies) over
+ * the browser's stores.
  */
-export interface ModelExtendParams {
-  deepseekV4ReasoningEffort?: string;
-  effort?: string;
-  enabledContextCaching?: boolean;
-  imageAspectRatio?: string;
-  imageResolution?: string;
-  reasoning_effort?: string;
-  thinking?: {
-    budget_tokens?: number;
-    type?: string;
-  };
-  thinkingBudget?: number;
-  thinkingLevel?: string;
-  urlContext?: boolean;
-  verbosity?: string;
-}
-
-type ThinkingLevelExtendParam =
-  | 'thinkingLevel'
-  | 'thinkingLevel2'
-  | 'thinkingLevel3'
-  | 'thinkingLevel4';
-
-type ThinkingLevelValue = NonNullable<LobeAgentChatConfig['thinkingLevel']>;
-
-const DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM = {
-  thinkingLevel: 'high',
-  thinkingLevel2: 'high',
-  thinkingLevel3: 'high',
-  thinkingLevel4: 'minimal',
-} as const satisfies Record<ThinkingLevelExtendParam, ThinkingLevelValue>;
-
-const MODEL_THINKING_LEVEL_DEFAULTS: Partial<
-  Record<string, Partial<Record<ThinkingLevelExtendParam, ThinkingLevelValue>>>
-> = {
-  'gemini-3.5-flash': {
-    thinkingLevel: 'medium',
-  },
-  'gemini-3.1-flash-lite': {
-    thinkingLevel: 'minimal',
-  },
-  'gemini-3.1-flash-lite-preview': {
-    thinkingLevel: 'minimal',
-  },
-} as const;
-
-/**
- * Preserves legacy `thinking` preferences for users created before `enableReasoning`.
- * Without this fallback, an old `thinking: 'enabled'` or `thinking: 'disabled'`
- * setting would be treated as unset by models that now expose the `enableReasoning` switch.
- */
-const resolveEnableReasoningValue = (chatConfig: LobeAgentChatConfig): boolean | undefined => {
-  if (Object.hasOwn(chatConfig, 'enableReasoning')) return chatConfig.enableReasoning;
-
-  if (chatConfig.thinking === 'enabled') return true;
-  if (chatConfig.thinking === 'disabled') return false;
-
-  return undefined;
-};
-
-const resolveThinkingLevelDefault = (
-  model: string,
-  extendParam: ThinkingLevelExtendParam,
-): ThinkingLevelValue => {
-  return (
-    MODEL_THINKING_LEVEL_DEFAULTS[model]?.[extendParam] ??
-    DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM[extendParam]
+export const resolveBrowserModelParams = (
+  ctx: BrowserModelParamsContext,
+): Promise<ResolvedModelParams> =>
+  resolveModelParams(
+    {
+      agent: {
+        chatConfig: ctx.chatConfig,
+        id: ctx.agentId,
+        subAgentChatConfigOverride: ctx.subAgentChatConfigOverride,
+      },
+      model: ctx.model,
+      provider: ctx.provider,
+      searchDecision: ctx.searchDecision,
+      topicId: ctx.topicId,
+    },
+    createBrowserModelParamsProviders({ groupId: ctx.groupId }),
   );
-};
-
-const isThinkingLevelExtendParam = (
-  extendParam: ExtendParamsType,
-): extendParam is ThinkingLevelExtendParam => extendParam in DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM;
-
-export const resolveDefaultThinkingLevelForModel = (model?: string): ThinkingLevelValue => {
-  if (!model) return DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM.thinkingLevel;
-
-  return resolveThinkingLevelDefault(model, 'thinkingLevel');
-};
-
-/**
- * Resolves extended parameters for model runtime based on model capabilities and chat config
- *
- * This function checks what extended parameters the model supports and applies
- * the corresponding values from chat config.
- */
-export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendParams => {
-  const { model, provider, chatConfig } = ctx;
-  const extendParams: ModelExtendParams = {};
-
-  const aiInfraStoreState = getAiInfraStoreState();
-
-  const isModelHasExtendParams = aiModelSelectors.isModelHasExtendParams(
-    model,
-    provider,
-  )(aiInfraStoreState);
-
-  if (!isModelHasExtendParams) {
-    return extendParams;
-  }
-
-  const modelExtendParams = aiModelSelectors.modelExtendParams(model, provider)(aiInfraStoreState);
-
-  if (!modelExtendParams) {
-    return extendParams;
-  }
-
-  // Reasoning configuration
-  if (modelExtendParams.includes('enableReasoning')) {
-    const enableReasoning = resolveEnableReasoningValue(chatConfig);
-
-    if (enableReasoning) {
-      const thinking: NonNullable<ModelExtendParams['thinking']> = {
-        type: 'enabled',
-      };
-
-      // Determine which budget field to use based on model support
-      let budgetTokens: number | undefined;
-      if (modelExtendParams.includes('reasoningBudgetToken32k')) {
-        budgetTokens = chatConfig.reasoningBudgetToken32k || 1024;
-      } else if (modelExtendParams.includes('reasoningBudgetToken80k')) {
-        budgetTokens = chatConfig.reasoningBudgetToken80k || 1024;
-      } else {
-        budgetTokens = chatConfig.reasoningBudgetToken || 1024;
-      }
-
-      thinking.budget_tokens = budgetTokens;
-      extendParams.thinking = thinking;
-    } else {
-      extendParams.thinking = {
-        budget_tokens: 0,
-        type: 'disabled',
-      };
-    }
-  } else if (modelExtendParams.includes('reasoningBudgetToken32k')) {
-    // For models that only have reasoningBudgetToken32k without enableReasoning
-    extendParams.thinking = {
-      budget_tokens: chatConfig.reasoningBudgetToken32k || 1024,
-      type: 'enabled',
-    };
-  } else if (modelExtendParams.includes('reasoningBudgetToken80k')) {
-    // For models that only have reasoningBudgetToken80k without enableReasoning
-    extendParams.thinking = {
-      budget_tokens: chatConfig.reasoningBudgetToken80k || 1024,
-      type: 'enabled',
-    };
-  } else if (modelExtendParams.includes('reasoningBudgetToken')) {
-    // For models that only have reasoningBudgetToken without enableReasoning
-    extendParams.thinking = {
-      budget_tokens: chatConfig.reasoningBudgetToken || 1024,
-    };
-  }
-
-  // Adaptive thinking (Claude Opus/Sonnet 4.6)
-  if (modelExtendParams.includes('enableAdaptiveThinking')) {
-    if (chatConfig.enableAdaptiveThinking) {
-      extendParams.thinking = {
-        type: 'adaptive',
-      };
-    } else if (!modelExtendParams.includes('enableReasoning')) {
-      // Only disable when the model has no enableReasoning fallback
-      extendParams.thinking = {
-        type: 'disabled',
-      };
-    }
-    // When adaptive is off and model also has enableReasoning, let enableReasoning result stand
-  }
-
-  // Context caching
-  if (modelExtendParams.includes('disableContextCaching') && chatConfig.disableContextCaching) {
-    extendParams.enabledContextCaching = false;
-  }
-
-  // Reasoning effort variants
-  if (modelExtendParams.includes('reasoningEffort') && chatConfig.reasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.reasoningEffort;
-  }
-
-  if (modelExtendParams.includes('gpt5ReasoningEffort') && chatConfig.gpt5ReasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.gpt5ReasoningEffort;
-  }
-
-  if (modelExtendParams.includes('gpt5_1ReasoningEffort') && chatConfig.gpt5_1ReasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.gpt5_1ReasoningEffort;
-  }
-
-  if (modelExtendParams.includes('gpt5_2ReasoningEffort') && chatConfig.gpt5_2ReasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.gpt5_2ReasoningEffort;
-  }
-
-  if (
-    modelExtendParams.includes('gpt5_2ProReasoningEffort') &&
-    chatConfig.gpt5_2ProReasoningEffort
-  ) {
-    extendParams.reasoning_effort = chatConfig.gpt5_2ProReasoningEffort;
-  }
-
-  if (modelExtendParams.includes('grok4_20ReasoningEffort') && chatConfig.grok4_20ReasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.grok4_20ReasoningEffort;
-  }
-
-  if (modelExtendParams.includes('grok4_3ReasoningEffort') && chatConfig.grok4_3ReasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.grok4_3ReasoningEffort;
-  }
-
-  if (modelExtendParams.includes('hy3ReasoningEffort') && chatConfig.hy3ReasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.hy3ReasoningEffort;
-  }
-
-  if (modelExtendParams.includes('codexMaxReasoningEffort') && chatConfig.codexMaxReasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.codexMaxReasoningEffort;
-  }
-
-  // DeepSeek reasoning effort is reconciled last to avoid invalid combinations.
-  if (modelExtendParams.includes('deepseekV4ReasoningEffort')) {
-    const deepseekV4ReasoningEffort = chatConfig.deepseekV4ReasoningEffort;
-
-    if (typeof deepseekV4ReasoningEffort === 'string') {
-      if (deepseekV4ReasoningEffort === 'none') {
-        delete extendParams.reasoning_effort;
-        extendParams.thinking = {
-          type: 'disabled',
-        };
-      } else {
-        extendParams.reasoning_effort = deepseekV4ReasoningEffort;
-        extendParams.thinking = {
-          type: 'enabled',
-        };
-      }
-    }
-  }
-
-  if (modelExtendParams.includes('effort') && chatConfig.effort) {
-    extendParams.effort = chatConfig.effort;
-  }
-
-  if (modelExtendParams.includes('opus47Effort') && chatConfig.opus47Effort) {
-    extendParams.effort = chatConfig.opus47Effort;
-  }
-
-  if (modelExtendParams.includes('step3_5ReasoningEffort') && chatConfig.step3_5ReasoningEffort) {
-    extendParams.reasoning_effort = chatConfig.step3_5ReasoningEffort;
-  }
-
-  // Text verbosity
-  if (modelExtendParams.includes('textVerbosity') && chatConfig.textVerbosity) {
-    extendParams.verbosity = chatConfig.textVerbosity;
-  }
-
-  // Thinking configuration
-  if (modelExtendParams.includes('thinking') && chatConfig.thinking) {
-    extendParams.thinking = { type: chatConfig.thinking };
-  }
-
-  if (modelExtendParams.includes('thinkingBudget') && chatConfig.thinkingBudget !== undefined) {
-    extendParams.thinkingBudget = chatConfig.thinkingBudget;
-  }
-
-  const supportedThinkingLevelParams = modelExtendParams.filter(isThinkingLevelExtendParam);
-
-  for (const supportedThinkingLevelParam of supportedThinkingLevelParams) {
-    const value = chatConfig[supportedThinkingLevelParam];
-
-    if (typeof value === 'string') {
-      extendParams.thinkingLevel = value;
-      break;
-    }
-  }
-
-  if (!extendParams.thinkingLevel && supportedThinkingLevelParams.length > 0) {
-    extendParams.thinkingLevel = resolveThinkingLevelDefault(
-      model,
-      supportedThinkingLevelParams[0],
-    );
-  }
-
-  // URL context
-  if (modelExtendParams.includes('urlContext') && chatConfig.urlContext) {
-    extendParams.urlContext = chatConfig.urlContext;
-  }
-
-  // Image generation params
-  if (modelExtendParams.includes('imageAspectRatio') && chatConfig.imageAspectRatio) {
-    extendParams.imageAspectRatio = chatConfig.imageAspectRatio;
-  }
-
-  if (modelExtendParams.includes('imageAspectRatio2') && chatConfig.imageAspectRatio2) {
-    extendParams.imageAspectRatio = chatConfig.imageAspectRatio2;
-  }
-
-  if (modelExtendParams.includes('imageResolution') && chatConfig.imageResolution) {
-    extendParams.imageResolution = chatConfig.imageResolution;
-  }
-
-  if (modelExtendParams.includes('imageResolution2') && chatConfig.imageResolution2) {
-    extendParams.imageResolution = chatConfig.imageResolution2;
-  }
-
-  return extendParams;
-};

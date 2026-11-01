@@ -18,6 +18,8 @@ const kimiCodingPlanChatModels: AIChatModelCard[] = [
       "Kimi K2.5 is Kimi's most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, 'thinking' and 'non-thinking' modes, and both conversational and agent tasks.",
     displayName: 'Kimi K2.5',
     enabled: true,
+    family: 'kimi',
+    generation: 'kimi-k2.5',
     id: 'kimi-k2.5',
     maxOutput: 32_768,
     organization: 'Moonshot',
@@ -36,6 +38,8 @@ const kimiCodingPlanChatModels: AIChatModelCard[] = [
     description:
       'Kimi K2 Thinking: Thinking model with general Agentic capabilities and reasoning abilities.',
     displayName: 'Kimi K2 Thinking',
+    family: 'kimi',
+    generation: 'kimi-k2',
     id: 'kimi-k2-thinking',
     maxOutput: 65_536,
     organization: 'Moonshot',

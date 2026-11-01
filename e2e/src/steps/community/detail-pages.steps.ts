@@ -1,14 +1,14 @@
 import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
-import { CustomWorld } from '../../support/world';
+import type { CustomWorld } from '../../support/world';
 
 // ============================================
 // Given Steps (Preconditions)
 // ============================================
 
 Given('I wait for the page to fully load', async function (this: CustomWorld) {
-  // Use domcontentloaded instead of networkidle to avoid hanging on persistent connections
+  // Use domcontentloaded to avoid hanging on persistent connections.
   await this.page.waitForLoadState('domcontentloaded', { timeout: 10_000 });
   // Short wait for React hydration
   await this.page.waitForTimeout(1000);
@@ -19,7 +19,7 @@ Given('I wait for the page to fully load', async function (this: CustomWorld) {
 // ============================================
 
 When('I click the back button', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   // Store current URL to verify navigation
   const currentUrl = this.page.url();
@@ -36,22 +36,36 @@ When('I click the back button', async function (this: CustomWorld) {
   const backButtonVisible = await backButton.isVisible().catch(() => false);
   console.log(`   📍 Back button visible: ${backButtonVisible}`);
 
+  // The click has its own short timeout: the default (30s) equals the step
+  // timeout, so a click Playwright keeps retrying (e.g. the target is briefly
+  // covered or re-rendered) used to fail the whole step instead of falling back.
+  let clicked = false;
   if (backButtonVisible) {
     // Click the parent element if it's an SVG icon
     const tagName = await backButton.evaluate((el) => el.tagName.toLowerCase());
-    if (tagName === 'svg') {
-      await backButton.locator('..').click();
-    } else {
-      await backButton.click();
-    }
-    console.log('   📍 Clicked back button');
-  } else {
-    // Use browser back as fallback
-    console.log('   📍 Using browser goBack()');
-    await this.page.goBack();
+    const target = tagName === 'svg' ? backButton.locator('..') : backButton;
+    clicked = await target
+      .click({ timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+    console.log(`   📍 Clicked back button: ${clicked}`);
   }
 
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  const leftDetail = () =>
+    this.page
+      .waitForURL((url) => url.href !== currentUrl, { timeout: 4000 })
+      .then(() => true)
+      .catch(() => false);
+
+  if (!clicked || !(await leftDetail())) {
+    // Use browser back as fallback
+    console.log('   📍 Using browser goBack()');
+    await this.page.goBack({ timeout: 8000 });
+  }
+
+  // Worst case stays inside the 30s step timeout: 4s click + 4s URL wait +
+  // 8s goBack + 5s load.
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 5000 });
   await this.page.waitForTimeout(500);
 
   const newUrl = this.page.url();
@@ -64,7 +78,7 @@ When('I click the back button', async function (this: CustomWorld) {
 
 // Assistant Detail Page Assertions
 Then('I should be on an assistant detail page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL matches assistant detail page pattern
@@ -76,7 +90,7 @@ Then('I should be on an assistant detail page', async function (this: CustomWorl
 });
 
 Then('I should see the assistant title', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   // Look for title element (h1, h2, or prominent text)
   const title = this.page
@@ -90,7 +104,7 @@ Then('I should see the assistant title', async function (this: CustomWorld) {
 });
 
 Then('I should see the assistant description', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   // Look for description element
   const description = this.page
@@ -102,7 +116,7 @@ Then('I should see the assistant description', async function (this: CustomWorld
 });
 
 Then('I should see the assistant author information', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   // Look for author information
   const author = this.page
@@ -116,7 +130,7 @@ Then('I should see the assistant author information', async function (this: Cust
 });
 
 Then('I should see the add to workspace button', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   // Look for add button (might be "Add", "Install", "Add to Workspace", etc.)
   const addButton = this.page
@@ -131,7 +145,7 @@ Then('I should see the add to workspace button', async function (this: CustomWor
 });
 
 Then('I should be on the assistant list page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL is assistant list (not detail page) or community home
@@ -148,7 +162,7 @@ Then('I should be on the assistant list page', async function (this: CustomWorld
 
 // Model Detail Page Assertions
 Then('I should be on a model detail page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL matches model detail page pattern
@@ -160,7 +174,7 @@ Then('I should be on a model detail page', async function (this: CustomWorld) {
 });
 
 Then('I should see the model title', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const title = this.page
     .locator('h1, h2, [data-testid="detail-title"], [data-testid="model-title"]')
@@ -172,7 +186,7 @@ Then('I should see the model title', async function (this: CustomWorld) {
 });
 
 Then('I should see the model description', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   // Model detail page shows description below the title, it might be a placeholder like "model.description"
   // or actual content. Just verify the page structure is correct.
@@ -187,7 +201,7 @@ Then('I should see the model description', async function (this: CustomWorld) {
 });
 
 Then('I should see the model parameters information', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   // Look for parameters or specs section
   const params = this.page
@@ -200,7 +214,7 @@ Then('I should see the model parameters information', async function (this: Cust
 });
 
 Then('I should be on the model list page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL is model list (not detail page) or community home
@@ -216,7 +230,7 @@ Then('I should be on the model list page', async function (this: CustomWorld) {
 
 // Provider Detail Page Assertions
 Then('I should be on a provider detail page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL matches provider detail page pattern
@@ -228,7 +242,7 @@ Then('I should be on a provider detail page', async function (this: CustomWorld)
 });
 
 Then('I should see the provider title', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const title = this.page
     .locator('h1, h2, [data-testid="detail-title"], [data-testid="provider-title"]')
@@ -240,7 +254,7 @@ Then('I should see the provider title', async function (this: CustomWorld) {
 });
 
 Then('I should see the provider description', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const description = this.page
     .locator(
@@ -251,7 +265,7 @@ Then('I should see the provider description', async function (this: CustomWorld)
 });
 
 Then('I should see the provider website link', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   // Look for website link
   const websiteLink = this.page
@@ -264,7 +278,7 @@ Then('I should see the provider website link', async function (this: CustomWorld
 });
 
 Then('I should be on the provider list page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL is provider list (not detail page) or community home
@@ -280,7 +294,7 @@ Then('I should be on the provider list page', async function (this: CustomWorld)
 
 // MCP Detail Page Assertions
 Then('I should be on an MCP detail page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL matches MCP detail page pattern
@@ -292,7 +306,7 @@ Then('I should be on an MCP detail page', async function (this: CustomWorld) {
 });
 
 Then('I should see the MCP title', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const title = this.page
     .locator('h1, h2, [data-testid="detail-title"], [data-testid="mcp-title"]')
@@ -304,7 +318,7 @@ Then('I should see the MCP title', async function (this: CustomWorld) {
 });
 
 Then('I should see the MCP description', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const description = this.page
     .locator('p, [data-testid="detail-description"], [data-testid="mcp-description"], .description')
@@ -313,7 +327,7 @@ Then('I should see the MCP description', async function (this: CustomWorld) {
 });
 
 Then('I should see the install button', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   // Look for install button
   const installButton = this.page
@@ -326,7 +340,7 @@ Then('I should see the install button', async function (this: CustomWorld) {
 });
 
 Then('I should be on the MCP list page', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
   // Check if URL is MCP list (not detail page) or community home

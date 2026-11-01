@@ -1,0 +1,324 @@
+import { type AgentState, getLlmCallCount, normalizeAgentState } from '@lobechat/agent-runtime';
+import debug from 'debug';
+
+import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
+import { type IAgentStateManager } from './types';
+
+const log = debug('lobe-server:agent-runtime:in-memory-state-manager');
+
+/**
+ * In-Memory Agent State Manager
+ * In-memory implementation for testing and local development environments
+ */
+export class InMemoryAgentStateManager implements IAgentStateManager {
+  private states: Map<string, AgentState> = new Map();
+  private steps: Map<string, any[]> = new Map();
+  private metadata: Map<string, AgentOperationMetadata> = new Map();
+  private stepLocks: Map<string, { expiresAt: number; ownerId: string }> = new Map();
+  private inlineResumes: Map<string, string> = new Map();
+  private interrupted: Set<string> = new Set();
+  private queuedMessages: Set<string> = new Set();
+
+  private executionLockKey(operationId: string): string {
+    return `agent_runtime_operation_lock:${operationId}`;
+  }
+
+  async saveAgentState(operationId: string, state: AgentState): Promise<void> {
+    // Deep clone to avoid reference issues
+    this.states.set(operationId, structuredClone(state));
+
+    // Update metadata
+    const existingMeta = this.metadata.get(operationId);
+    if (existingMeta) {
+      existingMeta.lastActiveAt = new Date().toISOString();
+      existingMeta.status = state.status;
+      existingMeta.totalCost = state.cost?.total || 0;
+      existingMeta.totalSteps = getLlmCallCount(state);
+    }
+
+    log('[%s] Saved state for step %d', operationId, state.stepCount);
+  }
+
+  async loadAgentState(operationId: string): Promise<AgentState | null> {
+    const state = this.states.get(operationId);
+    if (!state) {
+      return null;
+    }
+
+    log('[%s] Loaded state (step %d)', operationId, state.stepCount);
+    // Return deep clone to prevent external modifications from affecting internal state
+    return normalizeAgentState(structuredClone(state));
+  }
+
+  async saveStepResult(operationId: string, stepResult: StepResult): Promise<void> {
+    // Save latest state
+    // Use JSON round-trip instead of structuredClone to safely handle
+    // non-cloneable objects (e.g. DOM ErrorEvent from Neon DB errors)
+    this.states.set(operationId, JSON.parse(JSON.stringify(stepResult.newState)));
+
+    // Save step history
+    let stepHistory = this.steps.get(operationId);
+    if (!stepHistory) {
+      stepHistory = [];
+      this.steps.set(operationId, stepHistory);
+    }
+
+    const stepData = {
+      context: stepResult.nextContext,
+      cost: stepResult.newState.cost?.total || 0,
+      executionTime: stepResult.executionTime,
+      status: stepResult.newState.status,
+      stepIndex: stepResult.stepIndex,
+      timestamp: Date.now(),
+    };
+
+    // Insert at beginning (newest first)
+    stepHistory.unshift(stepData);
+    // Keep most recent 200 steps
+    if (stepHistory.length > 200) {
+      stepHistory.length = 200;
+    }
+
+    // Update operation metadata
+    const existingMeta = this.metadata.get(operationId);
+    if (existingMeta) {
+      existingMeta.lastActiveAt = new Date().toISOString();
+      existingMeta.status = stepResult.newState.status;
+      existingMeta.totalCost = stepResult.newState.cost?.total || 0;
+      existingMeta.totalSteps = getLlmCallCount(stepResult.newState);
+    }
+
+    log('[%s:%d] Saved step result', operationId, stepResult.stepIndex);
+  }
+
+  async getExecutionHistory(operationId: string, limit: number = 50): Promise<any[]> {
+    const history = this.steps.get(operationId);
+    if (!history) {
+      return [];
+    }
+
+    // Return reversed array (earliest first)
+    return history.slice(0, limit).reverse();
+  }
+
+  async getOperationMetadata(operationId: string): Promise<AgentOperationMetadata | null> {
+    return this.metadata.get(operationId) ?? null;
+  }
+
+  async createOperationMetadata(
+    operationId: string,
+    data: {
+      acceptsMemberRuntimeEnd?: boolean;
+      agentConfig?: any;
+      visitorRedaction?: { showErrorDetails?: boolean; showModelInfo?: boolean };
+      mirrorToOperationId?: string;
+      modelRuntimeConfig?: any;
+      streamOwnerUserId?: string;
+      userId?: string;
+      workspaceId?: string;
+    },
+  ): Promise<void> {
+    const metadata: AgentOperationMetadata = {
+      acceptsMemberRuntimeEnd: data.acceptsMemberRuntimeEnd,
+      agentConfig: data.agentConfig,
+      visitorRedaction: data.visitorRedaction,
+      createdAt: new Date().toISOString(),
+      lastActiveAt: new Date().toISOString(),
+      mirrorToOperationId: data.mirrorToOperationId,
+      modelRuntimeConfig: data.modelRuntimeConfig,
+      status: 'idle',
+      streamOwnerUserId: data.streamOwnerUserId,
+      totalCost: 0,
+      totalSteps: 0,
+      userId: data.userId,
+      workspaceId: data.workspaceId,
+    };
+
+    this.metadata.set(operationId, metadata);
+    log('[%s] Created operation metadata', operationId);
+  }
+
+  async markInterrupted(operationId: string): Promise<void> {
+    this.interrupted.add(operationId);
+  }
+
+  async isInterrupted(operationId: string): Promise<boolean> {
+    return this.interrupted.has(operationId);
+  }
+
+  async setQueuedMessages(operationId: string, pending: boolean): Promise<void> {
+    if (pending) this.queuedMessages.add(operationId);
+    else this.queuedMessages.delete(operationId);
+  }
+
+  async hasQueuedMessages(operationId: string): Promise<boolean> {
+    return this.queuedMessages.has(operationId);
+  }
+
+  async deleteAgentOperation(operationId: string): Promise<void> {
+    this.states.delete(operationId);
+    this.steps.delete(operationId);
+    this.metadata.delete(operationId);
+    this.interrupted.delete(operationId);
+    this.queuedMessages.delete(operationId);
+    this.inlineResumes.delete(operationId);
+    log('Deleted operation %s', operationId);
+  }
+
+  async getActiveOperations(): Promise<string[]> {
+    return Array.from(this.states.keys());
+  }
+
+  async cleanupExpiredOperations(): Promise<number> {
+    const activeOperations = await this.getActiveOperations();
+    let cleanedCount = 0;
+
+    for (const operationId of activeOperations) {
+      const metadata = this.metadata.get(operationId);
+
+      if (metadata) {
+        const lastActiveTime = new Date(metadata.lastActiveAt).getTime();
+        const now = Date.now();
+        const hoursSinceActive = (now - lastActiveTime) / (1000 * 60 * 60);
+
+        // Clean up operations inactive for more than 1 hour
+        if (hoursSinceActive > 1) {
+          await this.deleteAgentOperation(operationId);
+          cleanedCount++;
+        }
+      }
+    }
+
+    log('Cleaned up %d expired operations', cleanedCount);
+    return cleanedCount;
+  }
+
+  async getStats(): Promise<{
+    activeOperations: number;
+    completedOperations: number;
+    errorOperations: number;
+    totalOperations: number;
+  }> {
+    const operations = await this.getActiveOperations();
+    const stats = {
+      activeOperations: 0,
+      completedOperations: 0,
+      errorOperations: 0,
+      totalOperations: operations.length,
+    };
+
+    for (const operationId of operations) {
+      const metadata = this.metadata.get(operationId);
+
+      if (metadata) {
+        switch (metadata.status) {
+          case 'running':
+          case 'waiting_for_human': {
+            stats.activeOperations++;
+            break;
+          }
+          case 'done': {
+            stats.completedOperations++;
+            break;
+          }
+          case 'error':
+          case 'interrupted': {
+            stats.errorOperations++;
+            break;
+          }
+        }
+      }
+    }
+
+    return stats;
+  }
+
+  async saveInlineResume(operationId: string, serialized: string): Promise<boolean> {
+    this.inlineResumes.set(operationId, serialized);
+    return true;
+  }
+
+  async loadInlineResume(operationId: string): Promise<null | string> {
+    return this.inlineResumes.get(operationId) ?? null;
+  }
+
+  async clearInlineResume(operationId: string, ownerId: string): Promise<void> {
+    // Mirrors CLEAR_OWNED_INLINE_RESUME_SCRIPT: only the current lock owner may
+    // drop the envelope, so a worker that lost the race cannot delete a live
+    // worker's recovery pointer.
+    const lock = this.stepLocks.get(this.executionLockKey(operationId));
+    if (lock?.ownerId !== ownerId) return;
+
+    this.inlineResumes.delete(operationId);
+  }
+
+  async tryClaimStep(
+    operationId: string,
+    _stepIndex: number,
+    ttlSeconds: number = 35,
+    ownerId: string = Date.now().toString(),
+  ): Promise<boolean> {
+    const key = this.executionLockKey(operationId);
+    const now = Date.now();
+    const existing = this.stepLocks.get(key);
+
+    // Re-entrant for the owner that already holds it, so an inline step loop can
+    // run several steps without dropping the lock between them. Mirrors
+    // CLAIM_OR_REENTER_LOCK_SCRIPT in the Redis-backed manager.
+    if (existing && existing.expiresAt > now && existing.ownerId !== ownerId) {
+      return false;
+    }
+
+    this.stepLocks.set(key, { expiresAt: now + ttlSeconds * 1000, ownerId });
+    return true;
+  }
+
+  async refreshStepLock(
+    operationId: string,
+    _stepIndex: number,
+    ttlSeconds: number,
+    ownerId?: string,
+  ): Promise<boolean> {
+    const key = this.executionLockKey(operationId);
+    const existing = this.stepLocks.get(key);
+
+    if (!existing || (ownerId && existing.ownerId !== ownerId)) {
+      return false;
+    }
+
+    existing.expiresAt = Date.now() + ttlSeconds * 1000;
+    return true;
+  }
+
+  async releaseStepLock(operationId: string, _stepIndex: number, ownerId?: string): Promise<void> {
+    const key = this.executionLockKey(operationId);
+    const existing = this.stepLocks.get(key);
+
+    if (!existing || (ownerId && existing.ownerId !== ownerId)) {
+      return;
+    }
+
+    this.stepLocks.delete(key);
+  }
+
+  async disconnect(): Promise<void> {
+    // In-memory implementation doesn't need to disconnect
+    log('InMemoryAgentStateManager disconnected');
+  }
+
+  /**
+   * Clear all data (for testing)
+   */
+  clear(): void {
+    this.states.clear();
+    this.steps.clear();
+    this.metadata.clear();
+    this.stepLocks.clear();
+    log('All data cleared');
+  }
+}
+
+/**
+ * Singleton instance for testing and local development environments
+ */
+export const inMemoryAgentStateManager = new InMemoryAgentStateManager();

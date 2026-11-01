@@ -1,0 +1,321 @@
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
+import type {
+  AuthorizationServerMetadata,
+  FetchLike,
+  OAuthClientInformationFull,
+  OAuthClientInformationMixed,
+  OAuthTokens,
+} from '@modelcontextprotocol/client';
+import {
+  discoverAuthorizationServerMetadata,
+  discoverOAuthProtectedResourceMetadata,
+  exchangeAuthorization,
+  extractResourceMetadataUrl,
+  IssuerMismatchError,
+  OAuthError,
+  OAuthErrorCode,
+  refreshAuthorization,
+  registerClient,
+  startAuthorization,
+} from '@modelcontextprotocol/client';
+import debug from 'debug';
+
+import type { OIDCConfig } from '@/database/schemas';
+import { appEnv } from '@/envs/app';
+
+const log = debug('lobe-server:connector:oauth');
+
+export const CONNECTOR_OAUTH_CALLBACK_PATH = '/oauth/connector/callback';
+
+/**
+ * Fixed redirect URI for all custom-connector OAuth flows. Pre-registration
+ * users must register this exact URI with their OAuth app; DCR sends it as a
+ * redirect_uri at registration time.
+ */
+export const getConnectorRedirectUri = (): string => {
+  const base = appEnv.APP_URL;
+  if (!base) {
+    throw new Error('APP_URL is not configured; cannot build connector OAuth redirect URI');
+  }
+  return new URL(CONNECTOR_OAUTH_CALLBACK_PATH, base).toString();
+};
+
+/**
+ * The MCP server URL and every endpoint its metadata advertises (authorization
+ * server, registration and token endpoints) are chosen by whoever configured
+ * the connector, so all connector OAuth requests go through the SSRF-safe
+ * transport. The SDK helpers take it as `fetchFn`.
+ */
+const connectorFetch: FetchLike = (url, init) => ssrfSafeFetch(url.toString(), init);
+
+/** RFC 8414 / OIDC discovery for a connector's authorization server. */
+export const discoverConnectorAuthorizationServerMetadata = (
+  authorizationServerUrl: string,
+): Promise<AuthorizationServerMetadata | undefined> =>
+  discoverAuthorizationServerMetadata(authorizationServerUrl, { fetchFn: connectorFetch });
+
+export interface DiscoveredOAuth {
+  authorizationServerUrl: string;
+  metadata: AuthorizationServerMetadata;
+}
+
+/**
+ * Discover the OAuth authorization server backing a remote MCP resource.
+ *
+ * Standard MCP auth path:
+ *   1. Probe the MCP URL → expect 401 carrying `WWW-Authenticate` with the
+ *      protected-resource-metadata URL (RFC 9728).
+ *   2. Fetch the protected resource metadata → pick its authorization server.
+ *   3. Fetch the authorization server metadata (RFC 8414) for the endpoints.
+ *
+ * Falls back to the MCP server origin as the authorization server when the
+ * resource does not advertise PRM (some servers co-locate the AS).
+ */
+export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<DiscoveredOAuth> => {
+  let resourceMetadataUrl: URL | undefined;
+  try {
+    const res = await connectorFetch(mcpServerUrl, {
+      headers: { accept: 'application/json, text/event-stream' },
+      method: 'GET',
+    });
+    // Only the status and `WWW-Authenticate` header matter. Release the body: a server
+    // may answer this GET with an SSE stream that never ends.
+    await res.body?.cancel().catch(() => {});
+    if (res.status === 401) resourceMetadataUrl = extractResourceMetadataUrl(res);
+  } catch (err) {
+    log('probe request failed, falling back to well-known discovery: %O', err);
+  }
+
+  let authorizationServerUrl: string | undefined;
+  try {
+    const prm = await discoverOAuthProtectedResourceMetadata(
+      mcpServerUrl,
+      { resourceMetadataUrl },
+      connectorFetch,
+    );
+    authorizationServerUrl = prm?.authorization_servers?.[0]?.toString();
+  } catch (err) {
+    log('protected-resource-metadata discovery failed: %O', err);
+  }
+
+  // Fallback: assume the authorization server lives at the MCP server origin.
+  if (!authorizationServerUrl) authorizationServerUrl = new URL('/', mcpServerUrl).href;
+
+  let metadata: AuthorizationServerMetadata | undefined;
+  try {
+    metadata = await discoverConnectorAuthorizationServerMetadata(authorizationServerUrl);
+  } catch (error) {
+    if (IssuerMismatchError.isInstance(error)) {
+      throw new Error(
+        'OAuth authorization server issuer does not match its discovery URL. Check the connector authorization server configuration.',
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+  if (!metadata) {
+    throw new Error(`Failed to discover OAuth metadata for ${authorizationServerUrl}`);
+  }
+
+  return { authorizationServerUrl, metadata };
+};
+
+type RegistrationAuthMethod = 'client_secret_basic' | 'client_secret_post' | 'none';
+
+/**
+ * Pick the `token_endpoint_auth_method` to request at registration time from
+ * what the authorization server advertises. Many MCP servers only accept public
+ * PKCE clients (`none`) and reject a confidential registration outright, so we
+ * must not hardcode one. Metadata that omits the field keeps the confidential
+ * default. Token exchange/refresh later infers the method from whether a
+ * client_secret was issued.
+ */
+export const selectRegistrationAuthMethod = (
+  metadata: AuthorizationServerMetadata,
+): RegistrationAuthMethod => {
+  const supported = metadata.token_endpoint_auth_methods_supported;
+  if (!supported || supported.length === 0) return 'client_secret_post';
+
+  const preferred: RegistrationAuthMethod[] = ['client_secret_post', 'client_secret_basic', 'none'];
+  return preferred.find((method) => supported.includes(method)) ?? 'none';
+};
+
+/**
+ * RFC 7591 Dynamic Client Registration — used when the user did not provide a
+ * client_id. Returns the issued client_id (+ optional client_secret).
+ */
+export const registerDynamicClient = async (params: {
+  authorizationServerUrl: string;
+  clientName?: string;
+  metadata: AuthorizationServerMetadata;
+  redirectUri: string;
+  scopes?: string[];
+}): Promise<OAuthClientInformationFull> => {
+  return registerClient(params.authorizationServerUrl, {
+    clientMetadata: {
+      client_name: params.clientName ?? 'LobeHub',
+      grant_types: ['authorization_code', 'refresh_token'],
+      redirect_uris: [params.redirectUri],
+      response_types: ['code'],
+      scope: params.scopes?.join(' '),
+      token_endpoint_auth_method: selectRegistrationAuthMethod(params.metadata),
+    },
+    fetchFn: connectorFetch,
+    metadata: params.metadata,
+    scope: params.scopes?.join(' '),
+  });
+};
+
+const TOKEN_ENDPOINT_AUTH_METHODS = new Set<string>([
+  'client_secret_basic',
+  'client_secret_post',
+  'none',
+]);
+
+/**
+ * The token endpoint auth method a dynamic registration settled on: what the
+ * server echoed back (it may override the request), else what was requested.
+ */
+export const registeredAuthMethod = (
+  registration: OAuthClientInformationFull,
+  metadata: AuthorizationServerMetadata,
+): RegistrationAuthMethod => {
+  const echoed = registration.token_endpoint_auth_method;
+  return echoed && TOKEN_ENDPOINT_AUTH_METHODS.has(echoed)
+    ? (echoed as RegistrationAuthMethod)
+    : selectRegistrationAuthMethod(metadata);
+};
+
+/**
+ * Build the authorization-code redirect URL (with PKCE). Returns the URL to
+ * open in the popup plus the `codeVerifier` that must be stashed (server-side,
+ * single-use) until the callback exchanges the code.
+ */
+export const buildAuthorizationUrl = async (params: {
+  authorizationServerUrl: string;
+  clientInformation: OAuthClientInformationMixed;
+  metadata: AuthorizationServerMetadata;
+  redirectUri: string;
+  resource?: string;
+  scopes?: string[];
+  state: string;
+}): Promise<{ authorizationUrl: string; codeVerifier: string }> => {
+  const { authorizationUrl, codeVerifier } = await startAuthorization(
+    params.authorizationServerUrl,
+    {
+      clientInformation: params.clientInformation,
+      metadata: params.metadata,
+      redirectUrl: params.redirectUri,
+      resource: params.resource ? new URL(params.resource) : undefined,
+      scope: params.scopes?.join(' '),
+      state: params.state,
+    },
+  );
+  return { authorizationUrl: authorizationUrl.toString(), codeVerifier };
+};
+
+type TokenEndpointAuthMethod = NonNullable<OIDCConfig['tokenEndpointAuthMethod']>;
+
+/**
+ * Client information for token requests. The stored auth method is passed
+ * through so the SDK uses it instead of its own preference (it picks
+ * `client_secret_basic` whenever a secret exists), which servers that enforce
+ * the registered method reject with `invalid_client`.
+ */
+export const toClientInformation = (
+  oidc: Pick<OIDCConfig, 'clientId' | 'clientSecret' | 'tokenEndpointAuthMethod'>,
+): OAuthClientInformationMixed => ({
+  client_id: oidc.clientId!,
+  client_secret: oidc.clientSecret,
+  ...(oidc.tokenEndpointAuthMethod && {
+    token_endpoint_auth_method: oidc.tokenEndpointAuthMethod,
+  }),
+});
+
+const alternateSecretMethod = (
+  clientInformation: OAuthClientInformationMixed,
+  metadata: AuthorizationServerMetadata,
+): TokenEndpointAuthMethod | undefined => {
+  if (!clientInformation.client_secret) return;
+  if (
+    'token_endpoint_auth_method' in clientInformation &&
+    clientInformation.token_endpoint_auth_method
+  )
+    return;
+  // Without a recorded method the SDK tried basic when the server supports it,
+  // and post otherwise; the other one is the only remaining confidential option.
+  const supported = metadata.token_endpoint_auth_methods_supported ?? [];
+  const tried =
+    supported.length === 0 || supported.includes('client_secret_basic')
+      ? 'client_secret_basic'
+      : 'client_secret_post';
+  const other = tried === 'client_secret_basic' ? 'client_secret_post' : 'client_secret_basic';
+  return supported.length === 0 || supported.includes(other) ? other : undefined;
+};
+
+/**
+ * Run a token request, retrying once with the other confidential auth method
+ * when the server rejects the client and no method is on record — the case
+ * for pre-registered clients, whose registered method the user never told us.
+ * Returns the method that worked so callers can persist it.
+ */
+const withClientAuthFallback = async (
+  clientInformation: OAuthClientInformationMixed,
+  metadata: AuthorizationServerMetadata,
+  request: (clientInformation: OAuthClientInformationMixed) => Promise<OAuthTokens>,
+): Promise<{ authMethod?: TokenEndpointAuthMethod; tokens: OAuthTokens }> => {
+  try {
+    return { tokens: await request(clientInformation) };
+  } catch (error) {
+    const other =
+      OAuthError.isInstance(error) &&
+      error.code === OAuthErrorCode.InvalidClient &&
+      alternateSecretMethod(clientInformation, metadata);
+    if (!other) throw error;
+    log('token endpoint rejected client auth, retrying with %s', other);
+    const tokens = await request({ ...clientInformation, token_endpoint_auth_method: other });
+    return { authMethod: other, tokens };
+  }
+};
+
+/** Exchange the authorization code for tokens (callback step). */
+export const exchangeConnectorCode = async (params: {
+  authorizationCode: string;
+  authorizationServerUrl: string;
+  clientInformation: OAuthClientInformationMixed;
+  codeVerifier: string;
+  iss?: string;
+  metadata: AuthorizationServerMetadata;
+  redirectUri: string;
+  resource?: string;
+}): Promise<{ authMethod?: TokenEndpointAuthMethod; tokens: OAuthTokens }> =>
+  withClientAuthFallback(params.clientInformation, params.metadata, (clientInformation) =>
+    exchangeAuthorization(params.authorizationServerUrl, {
+      authorizationCode: params.authorizationCode,
+      clientInformation,
+      codeVerifier: params.codeVerifier,
+      fetchFn: connectorFetch,
+      iss: params.iss,
+      metadata: params.metadata,
+      redirectUri: params.redirectUri,
+      resource: params.resource ? new URL(params.resource) : undefined,
+    }),
+  );
+
+/** Refresh an expired access token using the stored refresh token. */
+export const refreshConnectorToken = async (params: {
+  authorizationServerUrl: string;
+  clientInformation: OAuthClientInformationMixed;
+  metadata: AuthorizationServerMetadata;
+  refreshToken: string;
+  resource?: string;
+}): Promise<{ authMethod?: TokenEndpointAuthMethod; tokens: OAuthTokens }> =>
+  withClientAuthFallback(params.clientInformation, params.metadata, (clientInformation) =>
+    refreshAuthorization(params.authorizationServerUrl, {
+      clientInformation,
+      fetchFn: connectorFetch,
+      metadata: params.metadata,
+      refreshToken: params.refreshToken,
+      resource: params.resource ? new URL(params.resource) : undefined,
+    }),
+  );

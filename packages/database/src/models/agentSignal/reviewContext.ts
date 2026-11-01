@@ -1,5 +1,6 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { and, count, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import {
   agentDocuments,
@@ -11,6 +12,11 @@ import {
   userMemories,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { visibleMemoryState } from '../../utils/memoryVisibility';
+import { notShareVisitorMessage } from '../../utils/shareVisitor';
+import { notTrashed } from '../../utils/softDelete';
+import { notChannelTopicRef } from '../../utils/topicVisibility';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 const parseAggregateTimestamp = (value: Date | string) =>
   value instanceof Date ? value : new Date(value);
@@ -99,13 +105,21 @@ export interface AgentSignalDocumentActivityRow {
 export class AgentSignalReviewContextModel {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
-  /** Checks agent ownership, virtual status, and self-iteration opt-in. */
+  private ws = (cols: { userId: AnyPgColumn; workspaceId: AnyPgColumn }) =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
+
+  /**
+   * Checks agent ownership and virtual status. There is no per-agent switch: every owned agent
+   * (plus the Lobe AI inbox) may self-iterate once the user's Labs → Self-evolving switch is on.
+   */
   canAgentRunSelfIteration = async (agentId: string) => {
     const [agent] = await this.db
       .select({ id: agents.id })
@@ -113,12 +127,8 @@ export class AgentSignalReviewContextModel {
       .where(
         and(
           eq(agents.id, agentId),
-          eq(agents.userId, this.userId),
+          this.ws(agents),
           or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID)),
-          or(
-            eq(agents.slug, INBOX_SESSION_ID),
-            sql`COALESCE((${agents.chatConfig}->'selfIteration'->>'enabled')::boolean, false) = true`,
-          ),
         ),
       )
       .limit(1);
@@ -135,7 +145,13 @@ export class AgentSignalReviewContextModel {
         updatedAt: userMemories.updatedAt,
       })
       .from(userMemories)
-      .where(eq(userMemories.userId, this.userId))
+      .where(
+        and(
+          eq(userMemories.userId, this.userId),
+          notTrashed(userMemories.isDeleted),
+          visibleMemoryState(userMemories.state),
+        ),
+      )
       .orderBy(desc(userMemories.updatedAt))
       .limit(options.limit);
   };
@@ -183,14 +199,11 @@ export class AgentSignalReviewContextModel {
         totalCount: count(messagePlugins.id),
       })
       .from(messagePlugins)
-      .innerJoin(
-        messages,
-        and(eq(messages.id, messagePlugins.id), eq(messages.userId, this.userId)),
-      )
-      .leftJoin(topics, and(eq(topics.id, messages.topicId), eq(topics.userId, this.userId)))
+      .innerJoin(messages, and(eq(messages.id, messagePlugins.id), this.ws(messages)))
+      .leftJoin(topics, and(eq(topics.id, messages.topicId), this.ws(topics)))
       .where(
         and(
-          eq(messagePlugins.userId, this.userId),
+          this.ws(messagePlugins),
           eq(effectiveAgentId, options.agentId),
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
@@ -220,13 +233,10 @@ export class AgentSignalReviewContextModel {
         updatedAt: agentDocuments.updatedAt,
       })
       .from(agentDocuments)
-      .innerJoin(
-        documents,
-        and(eq(documents.id, agentDocuments.documentId), eq(documents.userId, this.userId)),
-      )
+      .innerJoin(documents, and(eq(documents.id, agentDocuments.documentId), this.ws(documents)))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.ws(agentDocuments),
           eq(agentDocuments.agentId, options.agentId),
           isNull(agentDocuments.deletedAt),
           gte(agentDocuments.updatedAt, options.windowStart),
@@ -285,17 +295,20 @@ export class AgentSignalReviewContextModel {
         topicId: topics.id,
       })
       .from(messages)
-      .leftJoin(topics, and(eq(topics.id, messages.topicId), eq(topics.userId, this.userId)))
-      .leftJoin(
-        messagePlugins,
-        and(eq(messagePlugins.id, messages.id), eq(messagePlugins.userId, this.userId)),
-      )
+      .leftJoin(topics, and(eq(topics.id, messages.topicId), this.ws(topics)))
+      .leftJoin(messagePlugins, and(eq(messagePlugins.id, messages.id), this.ws(messagePlugins)))
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ws(messages),
           eq(effectiveAgentId, options.agentId),
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
+          // Share-visitor traffic bills to the creator but is not the
+          // creator's own activity — it must never feed self-learning/expertise
+          // context. See `notShareVisitorMessage` for the shared predicate rule.
+          notShareVisitorMessage(),
+          // Channel runs carry other members' Channel content; it stays in the Channel.
+          notChannelTopicRef(messages.topicId),
         ),
       )
       .groupBy(topics.id, topics.title, topics.historySummary, topics.description, topics.content)
@@ -349,18 +362,18 @@ export class AgentSignalReviewContextModel {
         topicId: topics.id,
       })
       .from(messages)
-      .leftJoin(topics, and(eq(topics.id, messages.topicId), eq(topics.userId, this.userId)))
-      .leftJoin(
-        messagePlugins,
-        and(eq(messagePlugins.id, messages.id), eq(messagePlugins.userId, this.userId)),
-      )
+      .leftJoin(topics, and(eq(topics.id, messages.topicId), this.ws(topics)))
+      .leftJoin(messagePlugins, and(eq(messagePlugins.id, messages.id), this.ws(messagePlugins)))
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ws(messages),
           eq(messages.agentId, options.agentId),
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
           eq(messages.topicId, options.topicId),
+          // See `listTopicActivity` above / `notShareVisitorMessage` for the rule.
+          notShareVisitorMessage(),
+          notChannelTopicRef(messages.topicId),
         ),
       )
       .groupBy(topics.id, topics.title, topics.historySummary, topics.description, topics.content)

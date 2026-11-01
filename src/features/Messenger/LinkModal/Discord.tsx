@@ -6,15 +6,18 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PlatformAvatar } from '../constants';
+import { useMessengerInstallHref } from '../installHref';
 
 interface DiscordLinkBodyProps {
   appId?: string;
+  disabled?: boolean;
   /** Brand-name label (e.g. `"Discord"`) sourced from the registry. */
   name: string;
 }
 
-const DiscordLinkBody = memo<DiscordLinkBodyProps>(({ appId, name }) => {
+const DiscordLinkBody = memo<DiscordLinkBodyProps>(({ appId, disabled, name }) => {
   const { t } = useTranslation('messenger');
+  const installHref = useMessengerInstallHref('discord');
 
   // Route Discord installs through the LobeHub install endpoint so the OAuth
   // redirect lands at our callback — we read `guild_id` straight off the
@@ -45,7 +48,8 @@ const DiscordLinkBody = memo<DiscordLinkBodyProps>(({ appId, name }) => {
       </Flexbox>
       <Button
         block
-        href="/api/agent/messenger/discord/install"
+        disabled={disabled || !installHref}
+        href={disabled ? undefined : installHref}
         size="large"
         target="_blank"
         type="primary"

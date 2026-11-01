@@ -227,6 +227,45 @@ describe('AgentEvalRunTopicModel', () => {
 
       expect(results).toHaveLength(0);
     });
+
+    it('should apply limit and offset pagination', async () => {
+      const firstPage = await runTopicModel.findByRunId(runId, { limit: 1, offset: 0 });
+      const secondPage = await runTopicModel.findByRunId(runId, { limit: 1, offset: 1 });
+
+      expect(firstPage).toHaveLength(1);
+      expect(secondPage).toHaveLength(1);
+      expect(firstPage[0].topicId).toBe(topicId1);
+      expect(secondPage[0].topicId).toBe(topicId2);
+    });
+  });
+
+  describe('countByRunId', () => {
+    beforeEach(async () => {
+      await serverDB.insert(agentEvalRunTopics).values([
+        {
+          userId,
+          runId,
+          topicId: topicId1,
+          testCaseId: testCaseId1,
+        },
+        {
+          userId,
+          runId,
+          topicId: topicId2,
+          testCaseId: testCaseId2,
+        },
+      ]);
+    });
+
+    it('should count topics of a run', async () => {
+      expect(await runTopicModel.countByRunId(runId)).toBe(2);
+    });
+
+    it('should not count rows owned by another user', async () => {
+      const otherModel = new AgentEvalRunTopicModel(serverDB, 'someone-else');
+
+      expect(await otherModel.countByRunId(runId)).toBe(0);
+    });
   });
 
   describe('deleteByRunId', () => {
@@ -603,6 +642,118 @@ describe('AgentEvalRunTopicModel', () => {
         where: eq(agentEvalRunTopics.topicId, otherTopic.id),
       });
       expect(otherRow.status).toBe('running');
+    });
+  });
+
+  describe('batchMarkAborted', () => {
+    it('should mark pending and running topics as error/Aborted', async () => {
+      const [topic3] = await serverDB
+        .insert(topics)
+        .values({ userId, title: 'Topic 3', trigger: 'eval', mode: 'test' })
+        .returning();
+
+      await serverDB.insert(agentEvalRunTopics).values([
+        { userId, runId, topicId: topicId1, testCaseId: testCaseId1, status: 'pending' },
+        { userId, runId, topicId: topicId2, testCaseId: testCaseId2, status: 'running' },
+        { userId, runId, topicId: topic3.id, testCaseId: testCaseId1, status: 'passed' },
+      ]);
+
+      const rows = await runTopicModel.batchMarkAborted(runId);
+
+      expect(rows).toHaveLength(2); // pending + running, not passed
+
+      const all = await serverDB.query.agentEvalRunTopics.findMany({
+        where: eq(agentEvalRunTopics.runId, runId),
+      });
+      const statusMap = Object.fromEntries(all.map((r) => [r.topicId, r.status]));
+      expect(statusMap[topicId1]).toBe('error');
+      expect(statusMap[topicId2]).toBe('error');
+      expect(statusMap[topic3.id]).toBe('passed'); // unchanged
+
+      const aborted = all.find((r) => r.topicId === topicId1);
+      expect(aborted?.evalResult).toMatchObject({ error: 'Aborted' });
+    });
+
+    it('should return empty array when no pending/running topics exist', async () => {
+      await serverDB.insert(agentEvalRunTopics).values([
+        { userId, runId, topicId: topicId1, testCaseId: testCaseId1, status: 'passed' },
+        { userId, runId, topicId: topicId2, testCaseId: testCaseId2, status: 'failed' },
+      ]);
+
+      const rows = await runTopicModel.batchMarkAborted(runId);
+
+      expect(rows).toHaveLength(0);
+    });
+
+    it('should not affect topics from other runs', async () => {
+      const [otherRun] = await serverDB
+        .insert(agentEvalRuns)
+        .values({ datasetId, userId, status: 'running' })
+        .returning();
+      const [otherTopic] = await serverDB
+        .insert(topics)
+        .values({ userId, title: 'Other', trigger: 'eval' })
+        .returning();
+
+      await serverDB.insert(agentEvalRunTopics).values([
+        { userId, runId, topicId: topicId1, testCaseId: testCaseId1, status: 'pending' },
+        {
+          userId,
+          runId: otherRun.id,
+          topicId: otherTopic.id,
+          testCaseId: testCaseId1,
+          status: 'pending',
+        },
+      ]);
+
+      const rows = await runTopicModel.batchMarkAborted(runId);
+
+      expect(rows).toHaveLength(1);
+
+      const [otherRow] = await serverDB.query.agentEvalRunTopics.findMany({
+        where: eq(agentEvalRunTopics.topicId, otherTopic.id),
+      });
+      expect(otherRow.status).toBe('pending'); // unchanged
+    });
+  });
+
+  describe('deleteByRunAndTestCase', () => {
+    beforeEach(async () => {
+      await serverDB.insert(agentEvalRunTopics).values([
+        { userId, runId, topicId: topicId1, testCaseId: testCaseId1 },
+        { userId, runId, topicId: topicId2, testCaseId: testCaseId2 },
+      ]);
+    });
+
+    it('should delete the matching run-testcase row and return it', async () => {
+      const deleted = await runTopicModel.deleteByRunAndTestCase(runId, testCaseId1);
+
+      expect(deleted).toHaveLength(1);
+      expect(deleted[0].testCaseId).toBe(testCaseId1);
+      expect(deleted[0].topicId).toBe(topicId1);
+
+      const remaining = await serverDB.query.agentEvalRunTopics.findMany({
+        where: eq(agentEvalRunTopics.runId, runId),
+      });
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].testCaseId).toBe(testCaseId2);
+    });
+
+    it('should return empty array when combination not found', async () => {
+      const [otherRun] = await serverDB
+        .insert(agentEvalRuns)
+        .values({ datasetId, userId, status: 'idle' })
+        .returning();
+
+      const deleted = await runTopicModel.deleteByRunAndTestCase(otherRun.id, testCaseId1);
+
+      expect(deleted).toHaveLength(0);
+
+      // original rows untouched
+      const remaining = await serverDB.query.agentEvalRunTopics.findMany({
+        where: eq(agentEvalRunTopics.runId, runId),
+      });
+      expect(remaining).toHaveLength(2);
     });
   });
 

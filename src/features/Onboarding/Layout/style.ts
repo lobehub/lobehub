@@ -1,0 +1,38 @@
+import { createStaticStyles } from '@lobehub/ui';
+
+export const styles = createStaticStyles(({ css, cssVar }) => ({
+  // Inner container - dark mode
+  innerContainerDark: css`
+    position: relative;
+
+    overflow: hidden auto;
+
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+
+  // Inner container - light mode
+  innerContainerLight: css`
+    position: relative;
+
+    overflow: hidden auto;
+
+    border: 1px solid ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadius};
+
+    background: ${cssVar.colorBgContainer};
+  `,
+
+  innerContainerMobile: css`
+    position: relative;
+    overflow: hidden auto;
+    background: ${cssVar.colorBgContainer};
+  `,
+
+  // Outer container
+  outerContainer: css`
+    position: relative;
+  `,
+}));

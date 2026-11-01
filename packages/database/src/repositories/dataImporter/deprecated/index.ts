@@ -1,6 +1,7 @@
 import type { ImporterEntryData } from '@lobechat/types';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, inArray, sql } from 'drizzle-orm';
 
+import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
 import { sanitizeUTF8 } from '@/utils/sanitizeUTF8';
 
 import {
@@ -14,6 +15,7 @@ import {
   topics,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
+import { buildWorkspaceWhere } from '../../../utils/workspace';
 
 interface ImportResult {
   added: number;
@@ -24,6 +26,7 @@ interface ImportResult {
 
 export class DeprecatedDataImporterRepos {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
 
   /**
@@ -31,9 +34,22 @@ export class DeprecatedDataImporterRepos {
    */
   supportVersion = 7;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.db = db;
+  }
+
+  /**
+   * Import identity/mapping probes must include trashed rows: clientId unique
+   * indexes still cover them, so hiding them would turn a retry into a
+   * conflicting insert. This repository exposes no ordinary product reads.
+   */
+  private workspaceWhere(table: { userId: any; workspaceId: any }) {
+    return buildWorkspaceWhere(
+      { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
+      table,
+    );
   }
 
   importData = async (data: ImporterEntryData) => {
@@ -53,7 +69,7 @@ export class DeprecatedDataImporterRepos {
       if (data.sessionGroups && data.sessionGroups.length > 0) {
         const query = await trx.query.sessionGroups.findMany({
           where: and(
-            eq(sessionGroups.userId, this.userId),
+            this.workspaceWhere(sessionGroups),
             inArray(
               sessionGroups.clientId,
               data.sessionGroups.map(({ id }) => id),
@@ -72,6 +88,7 @@ export class DeprecatedDataImporterRepos {
               createdAt: new Date(createdAt),
               updatedAt: new Date(updatedAt),
               userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
             })),
           )
           .onConflictDoUpdate({
@@ -89,7 +106,7 @@ export class DeprecatedDataImporterRepos {
       if (data.sessions && data.sessions.length > 0) {
         const query = await trx.query.sessions.findMany({
           where: and(
-            eq(sessions.userId, this.userId),
+            this.workspaceWhere(sessions),
             inArray(
               sessions.clientId,
               data.sessions.map(({ id }) => id),
@@ -109,6 +126,7 @@ export class DeprecatedDataImporterRepos {
               groupId: group ? sessionGroupIdMap[group] : null,
               updatedAt: new Date(updatedAt),
               userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
             })),
           )
           .onConflictDoUpdate({
@@ -134,8 +152,17 @@ export class DeprecatedDataImporterRepos {
             .values(
               shouldInsertSessionAgents.map(({ config, meta }) => ({
                 ...config,
+                // `config` is the `@lobechat/types` LobeAgentConfig shape
+                // (plugins: AgentPluginEntry[]); the `agents` table's
+                // `plugins` column is intentionally left typed `string[]`
+                // (only the domain types are widened for the tri-state
+                // rollout, not the JSONB column's compile-time annotation).
+                // Legacy import payloads only ever contain bare strings
+                // anyway.
+                plugins: config.plugins as unknown as string[] | undefined,
                 ...meta,
                 userId: this.userId,
+                workspaceId: this.workspaceId ?? null,
               })),
             )
             .returning({ id: agents.id });
@@ -145,6 +172,7 @@ export class DeprecatedDataImporterRepos {
               agentId: agentMapArray[index].id,
               sessionId: sessionIdMap[id],
               userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
             })),
           );
         }
@@ -154,7 +182,7 @@ export class DeprecatedDataImporterRepos {
       if (data.topics && data.topics.length > 0) {
         const skipQuery = await trx.query.topics.findMany({
           where: and(
-            eq(topics.userId, this.userId),
+            this.workspaceWhere(topics),
             inArray(
               topics.clientId,
               data.topics.map(({ id }) => id),
@@ -174,6 +202,7 @@ export class DeprecatedDataImporterRepos {
               sessionId: sessionId ? sessionIdMap[sessionId] : null,
               updatedAt: new Date(updatedAt),
               userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
             })),
           )
           .onConflictDoUpdate({
@@ -190,17 +219,15 @@ export class DeprecatedDataImporterRepos {
       // import messages
       if (data.messages && data.messages.length > 0) {
         // 1. find skip ones
-        console.time('find messages');
         const skipQuery = await trx.query.messages.findMany({
           where: and(
-            eq(messages.userId, this.userId),
+            this.workspaceWhere(messages),
             inArray(
               messages.clientId,
               data.messages.map(({ id }) => id),
             ),
           ),
         });
-        console.timeEnd('find messages');
 
         messageResult.skips = skipQuery.length;
 
@@ -224,10 +251,10 @@ export class DeprecatedDataImporterRepos {
               topicId: topicId ? topicIdMap[topicId] : null, // Temporarily set to NULL
               updatedAt: new Date(updatedAt),
               userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
             }),
           );
 
-          console.time('insert messages');
           const BATCH_SIZE = 100; // Number of records to insert per batch
 
           for (let i = 0; i < inertValues.length; i += BATCH_SIZE) {
@@ -235,14 +262,12 @@ export class DeprecatedDataImporterRepos {
             await trx.insert(messages).values(batch);
           }
 
-          console.timeEnd('insert messages');
-
           const messageIdArray = await trx
             .select({ clientId: messages.clientId, id: messages.id })
             .from(messages)
             .where(
               and(
-                eq(messages.userId, this.userId),
+                this.workspaceWhere(messages),
                 inArray(
                   messages.clientId,
                   data.messages.map(({ id }) => id),
@@ -255,7 +280,6 @@ export class DeprecatedDataImporterRepos {
           );
 
           // 3. update parentId for messages
-          console.time('execute updates parentId');
           const parentIdUpdates = shouldInsertMessages
             .filter((msg) => msg.parentId) // Only process messages with parentId
             .map((msg) => {
@@ -284,21 +308,21 @@ export class DeprecatedDataImporterRepos {
             // console.log('sql:', SQL.sql);
             // console.log('params:', SQL.params);
           }
-          console.timeEnd('execute updates parentId');
 
           // 4. insert message plugins
           const pluginInserts = shouldInsertMessages.filter((msg) => msg.plugin);
           if (pluginInserts.length > 0) {
             await trx.insert(messagePlugins).values(
               pluginInserts.map((msg) => ({
-                apiName: msg.plugin?.apiName,
+                apiName: clampToolIdentifier(msg.plugin?.apiName),
                 arguments: msg.plugin?.arguments,
                 id: messageIdMap[msg.id],
-                identifier: msg.plugin?.identifier,
+                identifier: clampToolIdentifier(msg.plugin?.identifier),
                 state: msg.pluginState,
                 toolCallId: msg.tool_call_id,
                 type: msg.plugin?.type,
                 userId: this.userId,
+                workspaceId: this.workspaceId ?? null,
               })),
             );
           }
@@ -311,6 +335,7 @@ export class DeprecatedDataImporterRepos {
                 id: messageIdMap[msg.id],
                 ...msg.extra?.translate,
                 userId: this.userId,
+                workspaceId: this.workspaceId ?? null,
               })),
             );
           }

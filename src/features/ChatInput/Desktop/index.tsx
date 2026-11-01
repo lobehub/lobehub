@@ -2,15 +2,16 @@
 
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
-import { Center, Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Center, createStaticStyles, cx, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { type ReactNode, use } from 'react';
 import { memo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
+import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
 import { useChatInputStore } from '@/features/ChatInput/store';
-import { LayoutContainerContext } from '@/routes/(main)/_layout/DesktopLayoutContainer/LayoutContainerContext';
+import { LayoutContainerContext } from '@/features/DesktopLayoutContainer/LayoutContainerContext';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -19,10 +20,12 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { type ActionToolbarProps } from '../ActionBar';
 import ActionBar from '../ActionBar';
+import ControlBar from '../ControlBar';
 import InputEditor from '../InputEditor';
 import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
-import RuntimeConfig from '../RuntimeConfig';
+import { useTopicDrop } from '../InputEditor/ReferTopic/useTopicDrop';
+import { useWorkspaceFileDrop } from '../InputEditor/useWorkspaceFileDrop';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
@@ -57,12 +60,38 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border: none;
     border-radius: 0 !important;
   `,
+  leftActions: css`
+    flex: none;
+    min-width: 0;
+
+    > * {
+      flex: none !important;
+    }
+  `,
+  leftSlot: css`
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+  `,
 }));
 
 interface DesktopChatInputProps extends ActionToolbarProps {
   actionBarStyle?: React.CSSProperties;
+  /**
+   * Collapse the editor to a single bordered row by dropping the action bar footer.
+   * Send still works through the Enter keybinding; the rest of the chrome
+   * (control bar / footnote) is independently gated by `showControlBar` /
+   * `showFootnote`. Defaults to false — other surfaces stay untouched.
+   */
+  compact?: boolean;
+  /**
+   * Custom node to render in place of the default ControlBar.
+   * When provided, used instead of `<ControlBar />` (ignores `showControlBar`).
+   */
+  controlBarSlot?: ReactNode;
   extentHeaderContent?: ReactNode;
   hidden?: boolean;
+  initialContent?: string;
   inputContainerProps?: ChatInputProps;
   /**
    * Swap the action bar and send area for skeleton placeholders while
@@ -74,21 +103,17 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
   rightContent?: ReactNode;
-  /**
-   * Custom node to render in place of the default RuntimeConfig bar.
-   * When provided, used instead of `<RuntimeConfig />` (ignores `showRuntimeConfig`).
-   */
-  runtimeConfigSlot?: ReactNode;
   sendAreaPrefix?: ReactNode;
+  showControlBar?: boolean;
   showFootnote?: boolean;
-  showRuntimeConfig?: boolean;
 }
 
 const DesktopChatInput = memo<DesktopChatInputProps>(
   ({
     showFootnote,
-    showRuntimeConfig = true,
-    runtimeConfigSlot,
+    showControlBar = true,
+    compact = false,
+    controlBarSlot,
     inputContainerProps,
     extentHeaderContent,
     actionBarStyle,
@@ -96,6 +121,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     extraActionItems,
     dropdownPlacement,
     hidden,
+    initialContent,
     isConfigLoading = false,
     leftContent,
     placeholder,
@@ -109,7 +135,10 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       systemStatusSelectors.chatInputHeight(s),
       s.updateSystemStatus,
     ]);
-    const hasContextSelections = useFileStore(fileChatSelectors.chatContextSelectionHasItem);
+    const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
+    const hasContextSelections = useFileStore(
+      fileChatSelectors.chatContextSelectionHasItem(contextSelectionKey),
+    );
     const hasFiles = useFileStore(fileChatSelectors.chatUploadFileListHasItem);
     const [slashMenuRef, expand, showTypoBar, editor, leftActions] = useChatInputStore((s) => [
       s.slashMenuRef,
@@ -121,8 +150,27 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const chatKey = useChatStore(chatSelectors.currentChatKey);
 
+    // The ControlBar (or the custom slot standing in for it) hosts the
+    // context-window token tag; without one, SendArea keeps it beside Send.
+    const hasControlBar = Boolean(controlBarSlot) || showControlBar;
+
     const setExpand = useChatInputStore((s) => s.setExpand);
     const skillDrop = useSkillDrop();
+    const topicDrop = useTopicDrop();
+    const workspaceFileDrop = useWorkspaceFileDrop();
+
+    // Fan a single drag event out to every custom-MIME drop handler. Each one
+    // no-ops unless its own MIME is present, so ordering is irrelevant.
+    const handleDragOver = (event: React.DragEvent) => {
+      skillDrop.onDragOver(event);
+      topicDrop.onDragOver(event);
+      workspaceFileDrop.onDragOver(event);
+    };
+    const handleDrop = (event: React.DragEvent) => {
+      skillDrop.onDrop(event);
+      topicDrop.onDrop(event);
+      workspaceFileDrop.onDrop(event);
+    };
 
     useEffect(() => {
       if (editor) editor.focus();
@@ -135,18 +183,44 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const loadingLeftSlot = isConfigLoading ? (
       <Flexbox horizontal align="center" gap={6} paddingInline={4}>
-        <Skeleton.Button active shape="circle" size="small" style={{ height: 28, width: 28 }} />
-        <Skeleton.Button active shape="circle" size="small" style={{ height: 28, width: 28 }} />
+        <Skeleton height={28} radius={'50%'} width={28} />
+        <Skeleton height={28} radius={'50%'} width={28} />
       </Flexbox>
     ) : null;
     const loadingRightSlot = isConfigLoading ? (
-      <Skeleton.Button
-        active
-        shape="round"
-        size="small"
-        style={{ height: 32, minWidth: 64, width: 64 }}
-      />
+      <Skeleton radius={999} style={{ height: 32, minWidth: 64, width: 64 }} />
     ) : null;
+    const noticeNode = !isConfigLoading && <ChatInputNotice />;
+    // The action bar is `width: 100%`, so a sibling placed *inside* its
+    // shrink-to-fit box is pushed past the bar's right edge and leaves a
+    // one-slot hole between the last action and the expand toggle. Keep the
+    // toggle in a row outside that box.
+    // NOTICE: The hover-only expand button stays in layout at zero opacity to
+    // prevent shifting. Keep the notice before it so the hidden 32px control
+    // does not create a false gap after the microphone action.
+    const leftSlotContent = (
+      <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
+        <Flexbox horizontal align={'center'} className={styles.leftActions}>
+          {leftContent ?? (
+            <ActionBar
+              disableCollapse
+              borderRadius={borderRadius}
+              dropdownPlacement={dropdownPlacement}
+              extraActionItems={extraActionItems}
+            />
+          )}
+        </Flexbox>
+        {noticeNode}
+        <ComposerExpandButton />
+      </Flexbox>
+    );
+    const leftSlot = noticeNode ? (
+      <Flexbox horizontal align={'center'} className={styles.leftSlot}>
+        {leftSlotContent}
+      </Flexbox>
+    ) : (
+      leftSlotContent
+    );
 
     const content = (
       <Flexbox
@@ -154,8 +228,8 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         gap={8}
         paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
         style={{ display: hidden ? 'none' : undefined }}
-        onDragOver={skillDrop.onDragOver}
-        onDrop={skillDrop.onDrop}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
       >
         <ChatInput
           data-testid="chat-input"
@@ -166,31 +240,24 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           resize={true}
           slashMenuRef={slashMenuRef}
           footer={
-            <ChatInputActionBar
-              style={actionBarStyle ?? { paddingRight: 8 }}
-              left={
-                loadingLeftSlot ??
-                leftContent ?? (
-                  <ActionBar
-                    borderRadius={borderRadius}
-                    dropdownPlacement={dropdownPlacement}
-                    extraActionItems={extraActionItems}
-                  />
-                )
-              }
-              right={
-                loadingRightSlot ??
-                rightContent ??
-                (sendAreaPrefix ? (
-                  <Flexbox horizontal align={'center'} gap={6}>
-                    {sendAreaPrefix}
-                    <SendArea />
-                  </Flexbox>
-                ) : (
-                  <SendArea />
-                ))
-              }
-            />
+            compact ? undefined : (
+              <ChatInputActionBar
+                left={loadingLeftSlot ?? leftSlot}
+                style={actionBarStyle ?? { paddingRight: 8 }}
+                right={
+                  loadingRightSlot ??
+                  rightContent ??
+                  (sendAreaPrefix ? (
+                    <Flexbox horizontal align={'center'} gap={6}>
+                      {sendAreaPrefix}
+                      <SendArea hideContextWindow={hasControlBar} />
+                    </Flexbox>
+                  ) : (
+                    <SendArea hideContextWindow={hasControlBar} />
+                  ))
+                }
+              />
+            )
           }
           header={
             <Flexbox gap={0}>
@@ -205,9 +272,13 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           {...inputContainerProps}
           className={cx(expand && styles.inputFullscreen, inputContainerProps?.className)}
         >
-          <InputEditor placeholder={placeholder} placeholderVariant={placeholderVariant} />
+          <InputEditor
+            initialContent={initialContent}
+            placeholder={placeholder}
+            placeholderVariant={placeholderVariant}
+          />
         </ChatInput>
-        {runtimeConfigSlot ?? (showRuntimeConfig && <RuntimeConfig />)}
+        {controlBarSlot ?? (showControlBar && <ControlBar />)}
         {showFootnote && !expand && (
           <Center style={{ pointerEvents: 'none', zIndex: 100 }}>
             <Text className={styles.footnote} type={'secondary'}>

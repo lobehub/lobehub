@@ -1,83 +1,17 @@
 import type { TaskStatus } from '@lobechat/types';
 import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import type { LucideIcon } from 'lucide-react';
-import {
-  CircleCheck,
-  CircleDashed,
-  CircleDot,
-  CircleSlash,
-  CircleX,
-  Clock,
-  HandIcon,
-  Loader2Icon,
-} from 'lucide-react';
+import { createStaticStyles, cssVar, Spin } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useTaskStore } from '@/store/task';
+import { usePermission } from '@/hooks/usePermission';
 
 import { renderMenuExtra } from './menuExtra';
+import { STATUS_META, USER_SELECTABLE_STATUSES } from './taskStatusMeta';
+import { useTaskStatusChange } from './useTaskStatusChange';
 
-interface StatusMeta {
-  color: string;
-  icon: LucideIcon;
-  label: string;
-  labelKey: string;
-}
-
-export const STATUS_META: Record<TaskStatus, StatusMeta> = {
-  backlog: {
-    color: cssVar.colorTextQuaternary,
-    icon: CircleDashed,
-    label: 'Backlog',
-    labelKey: 'status.backlog',
-  },
-  canceled: {
-    color: cssVar.colorTextSecondary,
-    icon: CircleSlash,
-    label: 'Canceled',
-    labelKey: 'status.canceled',
-  },
-  completed: {
-    color: cssVar.colorSuccess,
-    icon: CircleCheck,
-    label: 'Completed',
-    labelKey: 'status.completed',
-  },
-  failed: {
-    color: cssVar.colorError,
-    icon: CircleX,
-    label: 'Failed',
-    labelKey: 'status.failed',
-  },
-  paused: {
-    color: cssVar.colorInfo,
-    icon: HandIcon,
-    label: 'Pending review',
-    labelKey: 'status.paused',
-  },
-  running: {
-    color: cssVar.colorWarning,
-    icon: CircleDot,
-    label: 'Running',
-    labelKey: 'status.running',
-  },
-  scheduled: {
-    color: cssVar.colorWarning,
-    icon: Clock,
-    label: 'Scheduled',
-    labelKey: 'status.scheduled',
-  },
-};
-
-export const USER_SELECTABLE_STATUSES: TaskStatus[] = [
-  'backlog',
-  'paused',
-  'completed',
-  'canceled',
-];
+export { STATUS_META, USER_SELECTABLE_STATUSES } from './taskStatusMeta';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
@@ -88,6 +22,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     &:hover {
       filter: brightness(0.85);
+    }
+  `,
+  triggerDisabled: css`
+    cursor: not-allowed;
+    display: inline-flex;
+    opacity: 0.5;
+
+    &:hover {
+      filter: none;
     }
   `,
 }));
@@ -106,13 +49,15 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
     const { t } = useTranslation('chat');
-    const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
+    const { allowed: canEditTask, reason } = usePermission('create_content');
+    const changeTaskStatus = useTaskStatusChange();
 
     const displayStatus = status ?? 'backlog';
     const meta = STATUS_META[displayStatus];
 
     const handleStatusChange = useCallback(
       async (nextStatus: TaskStatus) => {
+        if (!canEditTask) return;
         if (nextStatus === displayStatus) return;
         if (onChange) {
           onChange(nextStatus);
@@ -122,12 +67,12 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
         setLoading(true);
 
         try {
-          await updateTaskStatus(taskIdentifier, nextStatus);
+          await changeTaskStatus(taskIdentifier, nextStatus);
         } finally {
           setLoading(false);
         }
       },
-      [displayStatus, onChange, taskIdentifier, updateTaskStatus],
+      [canEditTask, changeTaskStatus, displayStatus, onChange, taskIdentifier],
     );
 
     const handleStatusChangeRef = useRef(handleStatusChange);
@@ -171,7 +116,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
     const triggerNode =
       children ||
       (loading ? (
-        <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
+        <Spin size={size} style={{ color: cssVar.colorTextDescription }} />
       ) : (
         <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: meta.label })}>
           <span className={styles.trigger} onClick={(e) => e.stopPropagation()}>
@@ -181,6 +126,15 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
       ));
 
     if (disableDropdown) return <>{triggerNode}</>;
+
+    if (!canEditTask)
+      return (
+        <Tooltip title={reason}>
+          <span className={styles.triggerDisabled} onClick={(e) => e.stopPropagation()}>
+            {triggerNode}
+          </span>
+        </Tooltip>
+      );
 
     return (
       <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>

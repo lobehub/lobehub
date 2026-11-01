@@ -1,53 +1,41 @@
 'use client';
 
-import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 import { Block, Flexbox, Icon, Popover, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { ClockIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import { ModelIcon, ProviderIcon } from '@/components/LobeIcons';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import PublishedTime from '@/components/PublishedTime';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { type DiscoverModelItem } from '@/types/discover';
 
 import ModelTypeIcon from './ModelTypeIcon';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    author: css`
-      color: ${cssVar.colorTextDescription};
-    `,
-    code: css`
-      font-family: ${cssVar.fontFamilyCode};
-    `,
-    desc: css`
-      flex: 1;
-      margin: 0 !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    footer: css`
-      margin-block-start: 16px;
-      border-block-start: 1px dashed ${cssVar.colorBorder};
-      background: ${cssVar.colorBgContainer};
-    `,
-    secondaryDesc: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
-    `,
-    title: css`
-      margin: 0 !important;
-      font-size: 16px !important;
-      font-weight: 500 !important;
-
-      &:hover {
-        color: ${cssVar.colorLink};
-      }
-    `,
-  };
+const styles = stylex.create({
+  author: { color: cssVar.colorTextDescription },
+  desc: { flex: '1', margin: '0', color: cssVar.colorTextSecondary },
+  footer: {
+    marginBlockStart: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorder,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  secondaryDesc: { fontSize: '12px', color: cssVar.colorTextDescription },
+  title: {
+    margin: '0',
+    fontSize: '16px',
+    fontWeight: 500,
+    color: { 'default': null, ':hover': cssVar.colorLink },
+  },
 });
 
 const ModelItem = memo<DiscoverModelItem>(
@@ -62,7 +50,7 @@ const ModelItem = memo<DiscoverModelItem>(
     providers,
   }) => {
     const { t } = useTranslation(['models', 'discover']);
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const link = urlJoin('/community/model', identifier);
     return (
       <Block
@@ -112,13 +100,13 @@ const ModelItem = memo<DiscoverModelItem>(
                   overflow: 'hidden',
                 }}
               >
-                <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
-                  <Text ellipsis as={'h2'} className={styles.title}>
+                <WorkspaceLink style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
+                  <Text ellipsis as={'h2'} className={stylex.props(styles.title).className}>
                     {displayName}
                   </Text>
-                </Link>
+                </WorkspaceLink>
               </Flexbox>
-              <div className={styles.author}>{identifier}</div>
+              <div className={stylex.props(styles.author).className}>{identifier}</div>
             </Flexbox>
           </Flexbox>
           <Flexbox horizontal align={'center'} gap={4}>
@@ -133,7 +121,7 @@ const ModelItem = memo<DiscoverModelItem>(
           />
           <Text
             as={'p'}
-            className={styles.desc}
+            className={stylex.props(styles.desc).className}
             ellipsis={{
               rows: 3,
             }}
@@ -144,20 +132,20 @@ const ModelItem = memo<DiscoverModelItem>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.footer}
+          className={stylex.props(styles.footer).className}
           justify={'space-between'}
           padding={16}
         >
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.secondaryDesc}
+            className={stylex.props(styles.secondaryDesc).className}
             justify={'space-between'}
           >
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
               <PublishedTime
-                className={styles.secondaryDesc}
+                className={stylex.props(styles.secondaryDesc).className}
                 date={releasedAt || dayjs().toISOString()}
               />
             </Flexbox>

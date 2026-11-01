@@ -1,0 +1,67 @@
+import path from 'node:path';
+
+import { defineConfig, type UserConfig } from 'vite';
+
+import { viteOsPlatformResolve } from '../../plugins/vite/osPlatformResolve';
+import {
+  applyDesktopViteConfigExtension,
+  loadDesktopEnv,
+  MAIN_NODE_TARGET,
+  mainProcessAlias,
+  nodeExternals,
+  processEnvDefine,
+} from './vite.shared';
+
+export default defineConfig(async (env) => {
+  const { mode } = env;
+  loadDesktopEnv(mode);
+
+  const isDev = mode === 'development';
+
+  const config = {
+    build: {
+      assetsDir: 'chunks',
+      copyPublicDir: false,
+      emptyOutDir: true,
+      lib: {
+        entry: {
+          connectorOAuth: path.resolve(__dirname, 'src/preload/connectorOAuth.ts'),
+          index: path.resolve(__dirname, 'src/preload/index.ts'),
+        },
+        fileName: (_format, entryName) => `${entryName}.js`,
+        formats: ['cjs'],
+      },
+      minify: !isDev,
+      modulePreload: false,
+      outDir: 'dist/preload',
+      reportCompressedSize: false,
+      rolldownOptions: {
+        external: nodeExternals,
+        output: {
+          dynamicImportInCjs: false,
+        },
+      },
+      sourcemap: isDev ? 'inline' : false,
+      ssr: true,
+      ssrEmitAssets: true,
+      target: MAIN_NODE_TARGET,
+    },
+    define: { ...processEnvDefine },
+    plugins: [viteOsPlatformResolve()],
+    publicDir: false,
+    resolve: {
+      alias: mainProcessAlias,
+      dedupe: ['@sentry/electron'],
+    },
+    root: __dirname,
+    ssr: {
+      noExternal: true,
+      resolve: {
+        conditions: ['module', 'browser', 'development|production'],
+        mainFields: ['browser', 'module', 'jsnext:main', 'jsnext'],
+      },
+    },
+  } satisfies UserConfig;
+
+  return applyDesktopViteConfigExtension('preload', config, env);
+});

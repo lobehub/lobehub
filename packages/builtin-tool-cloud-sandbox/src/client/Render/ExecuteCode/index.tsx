@@ -2,7 +2,7 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Highlighter } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { ExecuteCodeState } from '../../../types';

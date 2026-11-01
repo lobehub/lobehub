@@ -2,24 +2,30 @@ import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { isDesktop } from './const';
 import { systemPrompt } from './systemRole';
-import { LobeAgentApiName, LobeAgentIdentifier } from './types';
+import {
+  LobeAgentApiName,
+  LobeAgentIdentifier,
+  VENT_CATEGORIES,
+  VENT_EVIDENCE_REF_TYPES,
+  VENT_SEVERITIES,
+} from './types';
 
 export const LobeAgentManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        "Analyze images or videos selected by visual file refs or direct media URLs and answer a visual question. Prefer the active model's native multimodal capability when it can inspect the visual media directly; use this tool only as a fallback when the active model cannot inspect the requested images or videos. Provide either refs or urls; at least one is required. Prefer refs when stable refs are available in <files_info>, such as msg_xxx.image_1 or msg_xxx.video_1, and use urls only for direct media URLs that are not available as message refs. After this tool returns, answer the user directly with the result.",
-      name: LobeAgentApiName.analyzeVisualMedia,
+        "Analyze audio, images, or videos selected by media file refs or direct media URLs and answer a question about them. Prefer the active model's native multimodal capability when it can inspect the media directly; use this tool only as a fallback when the active model lacks the required audio, image, or video capability. Provide either refs or urls; at least one is required. Prefer refs when stable refs are available in <files_info>, such as msg_xxx.audio_1, msg_xxx.image_1, or msg_xxx.video_1, and use urls only for direct media URLs that are not available as message refs. For media stored on a local filesystem, never pass an OS path or file:// URL through urls and never convert or copy the media as base64 text. If this fallback is needed, first use an available local file-reading tool to upload the media, then pass its stable ref through refs. After this tool returns, answer the user directly with the result.",
+      name: LobeAgentApiName.analyzeMedia,
       parameters: {
         additionalProperties: false,
         properties: {
           question: {
-            description: 'The visual question or task to answer.',
+            description: 'The question or task to answer about the selected media.',
             type: 'string',
           },
           refs: {
             description:
-              'Stable visual file ref strings to analyze, such as ["msg_xxx.image_1"] or ["msg_xxx.video_1"].',
+              'Stable media file ref strings from <files_info>, including refs created for media uploaded by local file-reading tools, such as ["msg_xxx.audio_1"], ["msg_xxx.image_1"], or ["msg_xxx.video_1"].',
             items: {
               type: 'string',
             },
@@ -27,7 +33,8 @@ export const LobeAgentManifest: BuiltinToolManifest = {
             type: 'array',
           },
           urls: {
-            description: 'Direct image or video URLs to analyze when no message file ref exists.',
+            description:
+              'Direct provider-readable HTTP(S) or data URLs to analyze when no stable media ref exists. Local filesystem paths and file:// URLs are unsupported; use an available local file-reading tool first, then pass its stable ref through refs.',
             items: {
               type: 'string',
             },
@@ -168,7 +175,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     {
       description: 'Clear todo items. Can clear only completed items or all items.',
       name: LobeAgentApiName.clearTodos,
-      humanIntervention: 'always',
+      humanIntervention: 'required',
       renderDisplayControl: 'expand',
       parameters: {
         properties: {
@@ -183,10 +190,51 @@ export const LobeAgentManifest: BuiltinToolManifest = {
       },
     },
 
+    // ==================== Ask User Question ====================
+    {
+      description: 'Ask the user one or more clarifying questions with multiple-choice options.',
+      humanIntervention: 'always',
+      name: LobeAgentApiName.askUserQuestion,
+      renderDisplayControl: 'collapsed',
+      parameters: {
+        properties: {
+          questions: {
+            items: {
+              properties: {
+                header: { type: 'string' },
+                multiSelect: { type: 'boolean' },
+                options: {
+                  items: {
+                    properties: {
+                      description: { type: 'string' },
+                      label: { type: 'string' },
+                    },
+                    required: ['label', 'description'],
+                    type: 'object',
+                  },
+                  maxItems: 4,
+                  minItems: 2,
+                  type: 'array',
+                },
+                question: { type: 'string' },
+              },
+              required: ['header', 'question', 'options'],
+              type: 'object',
+            },
+            maxItems: 4,
+            minItems: 1,
+            type: 'array',
+          },
+        },
+        required: ['questions'],
+        type: 'object',
+      },
+    },
+
     // ==================== Sub-Agent ====================
     {
       description:
-        'Dispatch a single sub-agent that runs in an isolated context to handle a long-running, multi-step request. Use this when the request requires extended processing (web research, multi-source synthesis, deep investigation) that benefits from running independently of the main conversation.',
+        'Dispatch a single sub-agent that runs in an isolated context to handle a long-running, multi-step request. Use this when the request requires extended processing (web research, multi-source synthesis, deep investigation) that benefits from running independently of the main conversation. Pass `subAgentId` to send a follow-up message to an earlier sub-agent instead of starting a new one.',
       name: LobeAgentApiName.callSubAgent,
       parameters: {
         properties: {
@@ -201,6 +249,16 @@ export const LobeAgentManifest: BuiltinToolManifest = {
           inheritMessages: {
             description:
               'Whether to inherit context messages from the parent conversation. Default is false.',
+            type: 'boolean',
+          },
+          subAgentId: {
+            description:
+              'Optional. The id from the `<sub_agent id="..." />` tag at the end of an earlier callSubAgent result. Sends `instruction` as a new message to that same sub-agent, which keeps all of its previous work and history — use it to continue a sub-agent that stopped or failed, ask it to hand over what it has found so far, or follow up on its answer. Leave empty (or omit) to start a new sub-agent; never invent an id.',
+            type: 'string',
+          },
+          runInBackground: {
+            description:
+              'Optional. Start the sub-agent and get control back immediately instead of waiting for it. Use it only when you have other independent work to do meanwhile, or when the user should not wait on this result. The result arrives later as a new message (waking you up if your turn has ended) — never poll or wait for it. Default is false: wait for the result in this turn.',
             type: 'boolean',
           },
           ...(isDesktop && {
@@ -221,46 +279,67 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Dispatch one or more sub-agents in parallel. Each sub-agent runs in an isolated context. Use this when several independent investigations / multi-step tasks should proceed concurrently.',
-      name: LobeAgentApiName.callSubAgents,
+        'Privately report friction in your own working conditions to the platform builders when you are genuinely blocked — a missing tool, a parameter/schema mismatch, conflicting or wrong docs, anomalous platform behavior, or an environment limit causing repeated failure. Not user-facing; it only records the report and does not fix anything. Use sparingly: at most one vent per run, only for the single worst blocker. It never stops a tool loop or ends your turn — to stop, just reply to the user; repeated or empty vents are rejected.',
+      name: LobeAgentApiName.vent,
       parameters: {
+        additionalProperties: false,
         properties: {
-          tasks: {
-            description: 'Array of sub-agents to dispatch.',
+          category: {
+            description:
+              'Friction category: missing_tool, schema_mismatch, doc_conflict, platform_bug, env_limitation, or other.',
+            enum: [...VENT_CATEGORIES],
+            type: 'string',
+          },
+          severity: {
+            description:
+              'How badly it blocked the task: high = could not complete, medium = forced a costly workaround, low = friction but recovered.',
+            enum: [...VENT_SEVERITIES],
+            type: 'string',
+          },
+          summary: {
+            description:
+              'One short sentence naming the specific friction. Name the tool/surface if one is at fault.',
+            type: 'string',
+          },
+          details: {
+            description:
+              'What you tried, what you expected, what actually happened, and why it blocked you. Specific enough for an engineer to reproduce or fix.',
+            type: 'string',
+          },
+          attempts: {
+            description: 'How many times you hit this wall before venting, when countable.',
+            minimum: 1,
+            type: 'integer',
+          },
+          toolName: {
+            description:
+              'Exact tool/API/surface involved, when one specific component is at fault.',
+            type: 'string',
+          },
+          evidenceRefs: {
+            description:
+              'Optional stable references that ground the report. Prefer tool_call, message, operation, topic, or task refs.',
             items: {
+              additionalProperties: false,
               properties: {
-                description: {
-                  description: 'Brief description of what this sub-agent does (shown in UI).',
+                id: { description: 'Stable evidence identifier.', type: 'string' },
+                summary: {
+                  description: 'Optional short note explaining why this evidence matters.',
                   type: 'string',
                 },
-                instruction: {
-                  description: 'Detailed instruction/prompt for the sub-agent execution.',
+                type: {
+                  description: 'Evidence object type.',
+                  enum: [...VENT_EVIDENCE_REF_TYPES],
                   type: 'string',
-                },
-                inheritMessages: {
-                  description:
-                    'Whether to inherit context messages from the parent conversation. Default is false.',
-                  type: 'boolean',
-                },
-                ...(isDesktop && {
-                  runInClient: {
-                    description:
-                      'Whether to run on the desktop client (for local file/shell access). MUST be true when the sub-agent requires local-system tools. Default is false (server execution).',
-                    type: 'boolean',
-                  },
-                }),
-                timeout: {
-                  description: 'Optional timeout in milliseconds. Default is 30 minutes.',
-                  type: 'number',
                 },
               },
-              required: ['description', 'instruction'],
+              required: ['id', 'type'],
               type: 'object',
             },
             type: 'array',
           },
         },
-        required: ['tasks'],
+        required: ['category', 'severity', 'summary', 'details'],
         type: 'object',
       },
     },
@@ -269,7 +348,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
   meta: {
     avatar: '🤖',
     description:
-      'Run built-in Lobe Agent capabilities: plan + todo management, sub-agent dispatch, and visual media analysis.',
+      'Run built-in Lobe Agent capabilities: plan + todo management, sub-agent dispatch, and multimodal media analysis.',
     readme: 'Lobe Agent provides built-in assistant capabilities that can be expanded over time.',
     title: 'Lobe Agent',
   },

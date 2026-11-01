@@ -1,6 +1,8 @@
 import {
   ActionIcon,
   Block,
+  cssVar,
+  cx,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -10,29 +12,31 @@ import {
   Icon,
   menuSharedStyles,
 } from '@lobehub/ui';
-import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
-import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
-import { useUserStore } from '@/store/user';
-import { userGeneralSettingsSelectors } from '@/store/user/selectors';
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { ProviderItemRender } from '@/components/ModelSelect';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 
 import { styles } from '../../styles';
 import { type ListItem } from '../../types';
 import { menuKey } from '../../utils';
 import ModelDetailPanel from '../ModelDetailPanel';
+import { ModelRowRender } from './ModelRowRender';
 import { MultipleProvidersModelItem } from './MultipleProvidersModelItem';
-import { SingleProviderModelItem } from './SingleProviderModelItem';
 
 interface ListItemRendererProps {
   activeKey: string;
+  /** Muted text shown after the active model's name, e.g. its reasoning effort */
+  activeSecondaryText?: string;
   isModelRestricted?: (modelId: string, providerId: string) => boolean;
   item: ListItem;
   newLabel: string;
+  onBeforeModelSelect?: (modelId: string, providerId: string) => boolean | Promise<boolean>;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => void;
   onRestrictedModelClick?: () => void;
@@ -43,9 +47,11 @@ interface ListItemRendererProps {
 export const ListItemRenderer = memo<ListItemRendererProps>(
   ({
     activeKey,
+    activeSecondaryText,
     isModelRestricted,
     item,
     newLabel,
+    onBeforeModelSelect,
     onModelChange,
     onClose,
     onRestrictedModelClick,
@@ -53,9 +59,16 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
     subscribeScroll,
   }) => {
     const { t } = useTranslation('components');
-    const navigate = useNavigate();
-    const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+    const navigate = useWorkspaceAwareNavigate();
+    const activeSlug = useActiveWorkspaceSlug();
     const [detailOpen, setDetailOpen] = useState(false);
+
+    const selectModel = async (modelId: string, providerId: string) => {
+      onClose();
+      if ((await onBeforeModelSelect?.(modelId, providerId)) === false) return;
+
+      onModelChange(modelId, providerId);
+    };
 
     useEffect(() => {
       return subscribeScroll?.(() => setDetailOpen(false));
@@ -109,7 +122,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                 e.stopPropagation();
                 const url = urlJoin('/settings/provider', item.provider.id || 'all');
                 if (e.ctrlKey || e.metaKey) {
-                  window.open(url, '_blank');
+                  window.open(buildWorkspaceAwarePath(url, activeSlug), '_blank');
                 } else {
                   navigate(url);
                 }
@@ -144,39 +157,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         const isActive = key === activeKey;
         const restricted = isModelRestricted?.(item.model.id, item.provider.id);
 
-        if (isDevMode) {
-          return (
-            <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
-              <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
-                <DropdownMenuSubmenuTrigger
-                  className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
-                  style={{ paddingBlock: 8, paddingInline: 8 }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDetailOpen(false);
-                    onClose();
-                    onModelChange(item.model.id, item.provider.id);
-                  }}
-                >
-                  <ModelItemRender
-                    {...item.model}
-                    {...item.model.abilities}
-                    showInfoTag
-                    newBadgeLabel={newLabel}
-                  />
-                </DropdownMenuSubmenuTrigger>
-                <DropdownMenuPortal>
-                  <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
-                    <DropdownMenuPopup className={styles.detailPopup}>
-                      <ModelDetailPanel model={item.model.id} provider={item.provider.id} />
-                    </DropdownMenuPopup>
-                  </DropdownMenuPositioner>
-                </DropdownMenuPortal>
-              </DropdownMenuSubmenuRoot>
-            </Flexbox>
-          );
-        }
-
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
@@ -191,15 +171,16 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                     onClose();
                     return;
                   }
-                  onClose();
-                  onModelChange(item.model.id, item.provider.id);
+                  void selectModel(item.model.id, item.provider.id);
                 }}
               >
-                <ModelItemRender
-                  {...item.model}
-                  {...item.model.abilities}
-                  newBadgeLabel={newLabel}
+                <ModelRowRender
+                  activeEffortLabel={activeSecondaryText}
+                  isActive={isActive}
+                  model={item.model}
+                  newLabel={newLabel}
                   proBadgeLabel={restricted ? proLabel : undefined}
+                  provider={item.provider.id}
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
@@ -234,15 +215,16 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                     onClose();
                     return;
                   }
-                  onClose();
-                  onModelChange(item.data.model.id, singleProvider.id);
+                  void selectModel(item.data.model.id, singleProvider.id);
                 }}
               >
-                <SingleProviderModelItem
-                  data={item.data}
+                <ModelRowRender
+                  activeEffortLabel={activeSecondaryText}
+                  isActive={isActive}
+                  model={item.data.model}
                   newLabel={newLabel}
                   proBadgeLabel={restricted ? proLabel : undefined}
-                  showInfoTag={isDevMode}
+                  provider={singleProvider.id}
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
@@ -262,11 +244,12 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
           <Flexbox key={item.data.displayName} style={{ marginBlock: 1, marginInline: 4 }}>
             <MultipleProvidersModelItem
               activeKey={activeKey}
+              activeSecondaryText={activeSecondaryText}
               data={item.data}
               isModelRestricted={isModelRestricted}
               newLabel={newLabel}
               proLabel={proLabel}
-              showInfoTag={isDevMode}
+              onBeforeModelSelect={onBeforeModelSelect}
               onClose={onClose}
               onModelChange={onModelChange}
               onRestrictedModelClick={onRestrictedModelClick}

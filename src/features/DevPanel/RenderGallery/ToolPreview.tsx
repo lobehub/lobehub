@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Segmented, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
 import { useMemo, useState } from 'react';
 
 import {
@@ -17,29 +16,18 @@ import { toApiAnchor } from './useDevtoolsEntries';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     scroll-margin-block-start: 16px;
-
     overflow: hidden;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 20px;
-
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     background: ${cssVar.colorBgContainer};
   `,
   cardBody: css`
-    padding: 20px;
+    gap: 0;
   `,
   cardHeader: css`
-    gap: 10px;
-
-    padding-block: 20px;
-    padding-inline: 24px;
+    gap: 6px;
+    padding: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: linear-gradient(
-      180deg,
-      ${cssVar.colorFillQuaternary} 0%,
-      ${cssVar.colorBgContainer} 100%
-    );
+    background: ${cssVar.colorFillQuaternary};
   `,
   code: css`
     overflow: auto;
@@ -47,13 +35,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     max-height: 320px;
     margin: 0;
     padding: 12px;
-    border-radius: 12px;
 
     font-size: 12px;
     line-height: 1.55;
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillQuaternary};
+  `,
+  fixture: css`
+    padding: 12px;
   `,
   fixtureSummary: css`
     cursor: pointer;
@@ -62,9 +52,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   previewShell: css`
-    padding: 16px;
-    border-radius: 16px;
+    padding: 12px;
     background: ${cssVar.colorFillQuaternary};
+  `,
+  previewSection: css`
+    gap: 8px;
+    padding: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   sectionLabel: css`
     gap: 8px;
@@ -97,14 +91,14 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
           </Text>
           <Tag>{api.identifier}</Tag>
           {variants.length > 1 && (
-            <Segmented
+            <Tabs
+              activeKey={activeVariant.id}
               size={'small'}
-              value={activeVariant.id}
-              options={variants.map((variant) => ({
+              items={variants.map((variant) => ({
+                key: variant.id,
                 label: variant.label,
-                value: variant.id,
               }))}
-              onChange={(value) => setActiveVariantId(value as string)}
+              onChange={(key) => setActiveVariantId(key)}
             />
           )}
         </Flexbox>
@@ -115,19 +109,24 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
         )}
       </Flexbox>
 
-      <Flexbox className={styles.cardBody} gap={16}>
-        <Flexbox gap={8}>
+      <Flexbox className={styles.cardBody}>
+        <Flexbox className={styles.previewSection}>
           <Flexbox horizontal className={styles.sectionLabel}>
             <Text fontSize={12} type={'secondary'} weight={600}>
               Inspector
             </Text>
           </Flexbox>
           <div className={styles.previewShell}>
-            <ToolInspectorSlot api={api} derived={derived} variant={activeVariant} />
+            <ToolInspectorSlot
+              api={api}
+              derived={derived}
+              toolCallId={toolCallId}
+              variant={activeVariant}
+            />
           </div>
         </Flexbox>
 
-        <Flexbox gap={8}>
+        <Flexbox className={styles.previewSection}>
           <Flexbox horizontal className={styles.sectionLabel}>
             <Text fontSize={12} type={'secondary'} weight={600}>
               Body
@@ -145,7 +144,7 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
           </div>
         </Flexbox>
 
-        <details>
+        <details className={styles.fixture}>
           <summary className={styles.fixtureSummary}>Fixture payload</summary>
           <pre className={styles.code}>
             {JSON.stringify(

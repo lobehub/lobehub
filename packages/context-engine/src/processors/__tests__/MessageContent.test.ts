@@ -1,4 +1,5 @@
-import type { ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
+import { createMediaFileRef } from '../../const/mediaRef';
+import type { ChatAudioItem, ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PipelineContext } from '../../types';
@@ -24,6 +25,7 @@ const createContext = (messages: UIChatMessage[]): PipelineContext => ({
 
 const mockIsCanUseVision = vi.fn();
 const mockIsCanUseVideo = vi.fn();
+const mockIsCanUseAudio = vi.fn();
 
 describe('MessageContentProcessor', () => {
   describe('Image processing functionality', () => {
@@ -317,6 +319,266 @@ describe('MessageContentProcessor', () => {
     });
   });
 
+  describe('Tool message with images', () => {
+    it('should convert tool message imageList to image_url parts when vision is supported', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          content: '1 result',
+          id: 'tool-1',
+          pluginState: {
+            images: [{ url: 'http://example.com/screenshot.png', mediaType: 'image/png' }],
+          },
+          role: 'tool',
+          tool_call_id: 'call_abc',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const message = result.messages[0];
+      // tool_call_id is preserved so the provider can pair the result with the call.
+      expect(message.tool_call_id).toBe('call_abc');
+      expect(message.content).toEqual([
+        { text: '1 result', type: 'text' },
+        {
+          image_url: { detail: 'auto', url: 'http://example.com/screenshot.png' },
+          type: 'image_url',
+        },
+      ]);
+    });
+
+    it('should downgrade tool message images to placeholder when vision is not supported', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'any-model',
+        provider: 'any-provider',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          content: '1 result',
+          id: 'tool-1',
+          pluginState: {
+            images: [{ url: 'http://example.com/screenshot.png', mediaType: 'image/png' }],
+          },
+          role: 'tool',
+          tool_call_id: 'call_abc',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const imageRef = createMediaFileRef({ index: 0, messageId: 'tool-1', type: 'image' });
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain(imageRef);
+      expect(content).toContain('visual-analysis tool');
+      expect(content).not.toContain('http://example.com/screenshot.png');
+      expect(result.messages[0].tool_call_id).toBe('call_abc');
+    });
+
+    it('should keep AVIF as a media ref while forwarding supported tool images', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const avifUrl = 'https://example.com/f/image-id.avif?signature=secret';
+      const pngUrl = 'https://example.com/f/image-id.png?signature=secret';
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Read image results',
+          id: 'tool-avif',
+          pluginState: {
+            images: [
+              { mediaType: 'image/avif', url: avifUrl },
+              { mediaType: 'image/png', url: pngUrl },
+            ],
+          },
+          role: 'tool',
+          tool_call_id: 'call_avif',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content;
+
+      expect(content).toBeInstanceOf(Array);
+      const contentParts = content as Array<{
+        image_url?: { detail: string; url: string };
+        text?: string;
+        type: string;
+      }>;
+      const textContent = contentParts.find((part) => part.type === 'text')?.text;
+
+      expect(textContent).toContain(
+        createMediaFileRef({ index: 0, messageId: 'tool-avif', type: 'image' }),
+      );
+      expect(textContent).toContain('visual-analysis tool');
+      expect(textContent).not.toContain(avifUrl);
+      expect(contentParts).toContainEqual({
+        image_url: { detail: 'auto', url: pngUrl },
+        type: 'image_url',
+      });
+      expect(result.messages[0].tool_call_id).toBe('call_avif');
+    });
+
+    it('should remove uploaded image markdown URLs before adding a media ref', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'any-model',
+        provider: 'any-provider',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const imageUrl = 'https://example.com/f/image-id?signature=secret';
+      const messages: UIChatMessage[] = [
+        {
+          content: `Read image result\n![image/png](${imageUrl})`,
+          id: 'tool-uploaded-image',
+          pluginState: { images: [{ mediaType: 'image/png', url: imageUrl }] },
+          role: 'tool',
+          tool_call_id: 'call_uploaded_image',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+      const content = result.messages[0].content as string;
+
+      expect(content).toContain('Read image result');
+      expect(content).toContain(
+        createMediaFileRef({ index: 0, messageId: 'tool-uploaded-image', type: 'image' }),
+      );
+      expect(content).not.toContain(imageUrl);
+      expect(content).not.toContain('![image/png]');
+    });
+
+    it('should keep inline tool images as structured input only for vision models', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+      const dataUrl = 'data:image/png;base64,AAAA';
+      const messages: UIChatMessage[] = [
+        {
+          content: 'inline image',
+          id: 'tool-inline',
+          pluginState: { images: [{ mediaType: 'image/png', url: dataUrl }] },
+          role: 'tool',
+          tool_call_id: 'call_inline',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(result.messages[0].content).toEqual([
+        { text: 'inline image', type: 'text' },
+        { image_url: { detail: 'auto', url: dataUrl }, type: 'image_url' },
+      ]);
+
+      mockIsCanUseVision.mockReturnValue(false);
+      const downgraded = await processor.process(createContext(messages));
+
+      expect(downgraded.messages[0].content).toBe(
+        `inline image\n\n${VISION_DOWNGRADE_PLACEHOLDER}`,
+      );
+      expect(downgraded.messages[0].content).not.toContain(dataUrl);
+    });
+
+    it('should pass through tool messages without images unchanged', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          content: 'plain text result',
+          id: 'tool-1',
+          role: 'tool',
+          tool_call_id: 'call_abc',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(result.messages[0].content).toBe('plain text result');
+      expect(result.messages[0].tool_call_id).toBe('call_abc');
+    });
+
+    it('should ignore image entries without a fetchable URL', async () => {
+      mockIsCanUseVision.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4-vision',
+        provider: 'openai',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          content: '[Image: cat.png]',
+          id: 'tool-1',
+          pluginState: {
+            images: [
+              // Malformed entry without a url — must never reach the payload.
+              { mediaType: 'image/png' },
+              // Legacy desktop-only preview URL — unfetchable by the send path.
+              { mediaType: 'image/png', url: 'localfile://file/tmp/cat.png?token=abc' },
+            ],
+          },
+          role: 'tool',
+          tool_call_id: 'call_abc',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any,
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      // No usable image: the tool message passes through as plain text.
+      expect(result.messages[0].content).toBe('[Image: cat.png]');
+      expect(result.messages[0].tool_call_id).toBe('call_abc');
+    });
+  });
+
   describe('File context processing', () => {
     it('should add file context when enabled', async () => {
       mockIsCanUseVision.mockReturnValue(false);
@@ -357,11 +619,84 @@ describe('MessageContentProcessor', () => {
       expect(content[0].type).toBe('text');
       expect(content[0].text).toContain('SYSTEM CONTEXT');
       expect(content[0].text).toContain('Hello');
-      expect(content[0].text).toContain('<image ref="msg_1cs5ql.image_1" name="test.png"></image>');
+      expect(content[0].text).toContain(
+        '<image ref="msg_1cs5ql.image_1" name="test.png" url="http://example.com/image.jpg"></image>',
+      );
+      expect(content[0].text).toContain(
+        '<file id="file1" name="test.txt" type="text/plain" size="100" url="http://example.com/test.txt"></file>',
+      );
+    });
+
+    it('sends files listed in previewFileIds as previews', async () => {
+      const content = 'row,value\n'.repeat(1000);
+      const processor = new MessageContentProcessor({
+        canReadAttachment: true,
+        fileContext: { enabled: true, includeFileUrl: false, previewFileIds: ['file-budget'] },
+        isCanUseVision: mockIsCanUseVision,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+      const fileItem = { fileType: 'text/csv', name: 'data.csv', size: content.length };
+
+      const result = await processor.process(
+        createContext([
+          {
+            content: 'Compare them',
+            createdAt: Date.now(),
+            fileList: [
+              { ...fileItem, content, id: 'file-budget' },
+              { ...fileItem, content, id: 'file-inline' },
+            ],
+            id: 'test',
+            role: 'user',
+            updatedAt: Date.now(),
+          },
+        ]),
+      );
+
+      const text = (result.messages[0].content as any[])[0].text as string;
+      expect(text).toContain('call readAttachment with fileId="file-budget"');
+      expect(text).not.toContain('fileId="file-inline"');
+      expect(text).toContain(
+        `<file id="file-inline" name="data.csv" type="text/csv" size="${content.length}">${content}</file>`,
+      );
+    });
+
+    it('should omit file URLs when includeFileUrl is disabled', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        fileContext: { enabled: true, includeFileUrl: false },
+        isCanUseVision: mockIsCanUseVision,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Hello',
+          createdAt: Date.now(),
+          fileList: [
+            {
+              fileType: 'text/plain',
+              id: 'file1',
+              name: 'test.txt',
+              size: 100,
+              url: 'http://example.com/test.txt',
+            },
+          ],
+          id: 'test',
+          role: 'user',
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
       expect(content[0].text).toContain(
         '<file id="file1" name="test.txt" type="text/plain" size="100"></file>',
       );
-      expect(content[0].text).not.toContain('http://example.com/image.jpg');
       expect(content[0].text).not.toContain('http://example.com/test.txt');
     });
 
@@ -487,6 +822,46 @@ describe('MessageContentProcessor', () => {
           type: 'text',
         },
       ]);
+    });
+
+    it('should serialize an explicit empty thinking string for signature-only reasoning', async () => {
+      const processor = new MessageContentProcessor({
+        model: 'claude-sonnet-5',
+        provider: 'anthropic',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'assistant',
+          content: 'The answer is 42.',
+          // Claude 5 `thinking.display: 'omitted'` returns a signature without
+          // any thinking text — the replayed part must still carry the
+          // `thinking` key, otherwise JSON serialization drops it and strict
+          // Anthropic-compatible endpoints (e.g. DeepSeek) reject the request
+          // with 400 `missing field 'thinking'`.
+          reasoning: {
+            signature: 'signature-only',
+          },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(content[0]).toEqual({
+        signature: 'signature-only',
+        thinking: '',
+        type: 'thinking',
+      });
+      // Intentional JSON round-trip (not a deep clone): asserts the `thinking`
+      // key survives serialization the way the HTTP client would send it.
+      // eslint-disable-next-line unicorn/prefer-structured-clone
+      expect(JSON.parse(JSON.stringify(content[0]))).toHaveProperty('thinking', '');
     });
   });
 
@@ -709,6 +1084,152 @@ describe('MessageContentProcessor', () => {
       expect(content[1].image_url.url).toBe('http://example.com/image.jpg');
       expect(content[2].type).toBe('video_url');
       expect(content[2].video_url.url).toBe('http://example.com/video.mp4');
+    });
+  });
+
+  describe('Audio processing functionality', () => {
+    it('should return plain text if model cannot use audio', async () => {
+      mockIsCanUseAudio.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'text-model',
+        provider: 'openai',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Transcribe this',
+          audioList: [{ url: 'audio_url', alt: 'test audio', id: 'test' } as ChatAudioItem],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      // Should return plain text when audio is not supported
+      expect(result.messages[0].content).toBe('Transcribe this');
+    });
+
+    it('should process audios as audio_url parts if model can use audio', async () => {
+      mockIsCanUseAudio.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gemini-3-flash',
+        provider: 'google',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Listen',
+          audioList: [
+            { url: 'http://example.com/a.mp3', alt: 'a1', durationMs: 2500, id: 'a1' },
+            { url: 'http://example.com/b.mp3', alt: 'a2', durationMs: -1, id: 'a2' },
+          ] as ChatAudioItem[],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(content).toHaveLength(3); // text + 2 audios
+      expect(content[0].type).toBe('text');
+      expect(content[0].text).toBe('Listen');
+      expect(content[1].type).toBe('audio_url');
+      expect(content[1].audio_url.url).toBe('http://example.com/a.mp3');
+      expect(content[1].audio_url.durationMs).toBe(2500);
+      expect(content[2].type).toBe('audio_url');
+      expect(content[2].audio_url.url).toBe('http://example.com/b.mp3');
+      expect(content[2].audio_url).not.toHaveProperty('durationMs');
+    });
+
+    it('should preserve audio metadata when converting audios to audio_url parts', async () => {
+      mockIsCanUseAudio.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-audio',
+        provider: 'openai',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: false },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Listen',
+          audioList: [
+            {
+              alt: 'voice message',
+              codec: 'pcm_s16le',
+              durationMs: 3210,
+              id: 'voice-1',
+              mimeType: 'audio/wav',
+              url: 'http://example.com/voice.wav',
+            },
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
+      expect(content[1]).toEqual({
+        audio_url: {
+          codec: 'pcm_s16le',
+          durationMs: 3210,
+          mimeType: 'audio/wav',
+          url: 'http://example.com/voice.wav',
+        },
+        type: 'audio_url',
+      });
+    });
+
+    it('should include audios in file context when enabled even if audio not supported', async () => {
+      mockIsCanUseAudio.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'gpt-4',
+        provider: 'openai',
+        isCanUseAudio: mockIsCanUseAudio,
+        fileContext: { enabled: true, includeFileUrl: true },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Hello',
+          audioList: [
+            { id: 'audio1', url: 'http://example.com/a.mp3', alt: 'Test audio' },
+          ] as ChatAudioItem[],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(Array.isArray(result.messages[0].content)).toBe(true);
+      const content = result.messages[0].content as any[];
+      expect(content).toHaveLength(1);
+      expect(content[0].type).toBe('text');
+      expect(content[0].text).toContain('SYSTEM CONTEXT');
+      expect(content[0].text).toContain('<audios>');
+      // No raw audio_url part when audio understanding is unsupported
+      expect(content.some((p) => p.type === 'audio_url')).toBe(false);
     });
   });
 

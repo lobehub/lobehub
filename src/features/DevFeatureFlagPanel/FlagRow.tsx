@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Segmented, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Segmented, Text } from '@lobehub/ui';
 import { snakeCase } from 'es-toolkit/compat';
 import { memo, useMemo } from 'react';
 
@@ -11,6 +10,9 @@ import { type FeatureFlagKey } from '@/store/serverConfig/slices/featureFlagOver
 type SegmentedValue = 'true' | 'false' | 'inherit';
 
 const styles = createStaticStyles(({ css }) => ({
+  control: css`
+    flex: none;
+  `,
   meta: css`
     font-family: ${cssVar.fontFamilyCode};
     font-size: 10px;
@@ -28,12 +30,10 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
     justify-content: space-between;
 
-    margin-block: 2px;
-    margin-inline: 4px;
     padding-block: 6px;
-    padding-inline: 8px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     border-inline-start: 2px solid transparent;
-    border-radius: 6px;
 
     transition: background 120ms ease;
 
@@ -85,7 +85,7 @@ const FlagRow = memo<FlagRowProps>(({ flagKey }) => {
   };
 
   return (
-    <div className={`${styles.row} ${isOverridden ? styles.rowOverridden : ''}`}>
+    <div className={cx(styles.row, isOverridden && styles.rowOverridden)}>
       <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
         <Text ellipsis className={styles.name}>
           {snakeCase(flagKey as string)}
@@ -93,10 +93,11 @@ const FlagRow = memo<FlagRowProps>(({ flagKey }) => {
         <span className={styles.meta}>server: {String(original)}</span>
       </Flexbox>
       <Segmented
+        className={styles.control}
         options={segmentOptions}
         size={'small'}
         value={value}
-        onChange={(v) => handleChange(v as SegmentedValue)}
+        onChange={handleChange}
       />
     </div>
   );

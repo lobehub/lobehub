@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  hasTemperatureTopPConflict,
-  shouldDropUnsupportedClaudeAssistantPrefill,
-  shouldOmitSamplingParams,
-} from '../const/models';
-import {
   createParameterResolver,
   resolveModelSamplingParameters,
   resolveParameters,
@@ -347,99 +342,5 @@ describe('createParameterResolver', () => {
 
     const result = resolver({ temperature: 0.02, top_p: 0.005 });
     expect(result).toEqual({ temperature: 0.01, top_p: 0.01 });
-  });
-});
-
-describe('hasTemperatureTopPConflict', () => {
-  describe('Anthropic Claude 4+ models', () => {
-    it('should return true for Claude 4+ models', () => {
-      expect(hasTemperatureTopPConflict('claude-opus-4-1-20250805')).toBe(true);
-      expect(hasTemperatureTopPConflict('claude-sonnet-4-5-20250929')).toBe(true);
-      expect(hasTemperatureTopPConflict('claude-haiku-4-5-20251001')).toBe(true);
-    });
-
-    it('should return false for Claude 3.x models', () => {
-      expect(hasTemperatureTopPConflict('claude-3-opus-20240229')).toBe(false);
-      expect(hasTemperatureTopPConflict('claude-3-5-sonnet-20240620')).toBe(false);
-    });
-  });
-
-  describe('OpenRouter Claude 4+ models', () => {
-    it('should return true for OpenRouter Claude 4+ models', () => {
-      expect(hasTemperatureTopPConflict('anthropic/claude-opus-4.5')).toBe(true);
-      expect(hasTemperatureTopPConflict('anthropic/claude-sonnet-4.1')).toBe(true);
-      expect(hasTemperatureTopPConflict('anthropic/claude-4.5-opus')).toBe(true);
-    });
-
-    it('should return false for OpenRouter Claude 3.x models', () => {
-      expect(hasTemperatureTopPConflict('anthropic/claude-3.5-sonnet')).toBe(false);
-      expect(hasTemperatureTopPConflict('anthropic/claude-3.7-sonnet')).toBe(false);
-    });
-  });
-
-  describe('Bedrock Claude 4+ models', () => {
-    it('should return true for Bedrock Claude 4+ models', () => {
-      expect(hasTemperatureTopPConflict('anthropic.claude-opus-4-1-20250805-v1:0')).toBe(true);
-      expect(hasTemperatureTopPConflict('us.anthropic.claude-sonnet-4-5-20250929-v1:0')).toBe(true);
-    });
-
-    it('should return false for Bedrock Claude 3.x models', () => {
-      expect(hasTemperatureTopPConflict('anthropic.claude-3-5-sonnet-20240620-v1:0')).toBe(false);
-    });
-  });
-});
-
-describe('shouldOmitSamplingParams', () => {
-  it('should return true for Claude Opus 4.7 (Anthropic API id)', () => {
-    expect(shouldOmitSamplingParams('claude-opus-4-7')).toBe(true);
-  });
-
-  it('should return true for Claude Opus 4.8 (Anthropic API id)', () => {
-    expect(shouldOmitSamplingParams('claude-opus-4-8')).toBe(true);
-  });
-
-  it('should return true for Claude Opus 4.7 on Bedrock (with and without region prefix)', () => {
-    expect(shouldOmitSamplingParams('anthropic.claude-opus-4-7')).toBe(true);
-    expect(shouldOmitSamplingParams('us.anthropic.claude-opus-4-7-v1')).toBe(true);
-  });
-
-  it('should return true for Claude Opus 4.8 on Bedrock (with and without region prefix)', () => {
-    expect(shouldOmitSamplingParams('anthropic.claude-opus-4-8')).toBe(true);
-    expect(shouldOmitSamplingParams('us.anthropic.claude-opus-4-8')).toBe(true);
-  });
-
-  it('should return true for Claude Opus 4.7 on OpenRouter (dot notation)', () => {
-    expect(shouldOmitSamplingParams('anthropic/claude-opus-4.7')).toBe(true);
-    expect(shouldOmitSamplingParams('anthropic/claude-4.7-opus')).toBe(true);
-  });
-
-  it('should return true for Claude Opus 4.8 on OpenRouter (dot notation)', () => {
-    expect(shouldOmitSamplingParams('anthropic/claude-opus-4.8')).toBe(true);
-    expect(shouldOmitSamplingParams('anthropic/claude-4.8-opus')).toBe(true);
-  });
-
-  it('should return false for hypothetical dash-form OpenRouter id', () => {
-    // OpenRouter uses dot notation; dash form is not a real id and must not match
-    // to avoid accidentally stripping params from unrelated future model ids.
-    expect(shouldOmitSamplingParams('anthropic/claude-opus-4-7')).toBe(false);
-  });
-
-  it('should return false for Claude Opus 4.6 and earlier', () => {
-    expect(shouldOmitSamplingParams('claude-opus-4-6')).toBe(false);
-    expect(shouldOmitSamplingParams('claude-sonnet-4-5-20250929')).toBe(false);
-    expect(shouldOmitSamplingParams('anthropic.claude-opus-4-6-v1')).toBe(false);
-  });
-
-  it('should return false for non-Claude models', () => {
-    expect(shouldOmitSamplingParams('gpt-4o')).toBe(false);
-    expect(shouldOmitSamplingParams('gemini-2.5-pro')).toBe(false);
-  });
-});
-
-describe('shouldDropUnsupportedClaudeAssistantPrefill', () => {
-  it('should return true for Claude Opus 4.8 API and Bedrock ids', () => {
-    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-opus-4-8')).toBe(true);
-    expect(shouldDropUnsupportedClaudeAssistantPrefill('anthropic.claude-opus-4-8')).toBe(true);
-    expect(shouldDropUnsupportedClaudeAssistantPrefill('us.anthropic.claude-opus-4-8')).toBe(true);
   });
 });
