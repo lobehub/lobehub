@@ -30,7 +30,17 @@ const result = (overrides: Partial<TopicAnalysisResult> = {}): TopicAnalysisResu
   ...overrides,
 });
 
-const snapshot = { lastMessageId: 'msg_1', lastMessageUpdatedAt: new Date('2026-10-30T10:00:00Z') };
+const T1 = new Date('2026-10-30T10:00:00Z');
+const T2 = new Date('2026-10-30T11:00:00Z');
+const snapshot = { lastMessageId: 'msg_1', lastMessageUpdatedAt: T1 };
+const newerSnapshot = { lastMessageId: 'msg_2', lastMessageUpdatedAt: T2 };
+
+/** The replace fence checks the analyzed snapshot against the topic's live messages. */
+const insertMessages = () =>
+  serverDB.insert(messages).values([
+    { content: 'first', id: 'msg_1', role: 'user', topicId, updatedAt: T1, userId },
+    { content: 'second', id: 'msg_2', role: 'assistant', topicId, updatedAt: T2, userId },
+  ]);
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -74,10 +84,10 @@ describe('TopicAnalysisModel', () => {
   });
 
   it('replaces the analysis for the same taxonomy version instead of duplicating it', async () => {
+    await insertMessages();
     await personalModel.save({ ...snapshot, result: result(), topicId });
     await personalModel.save({
-      lastMessageId: 'msg_2',
-      lastMessageUpdatedAt: new Date('2026-10-30T11:00:00Z'),
+      ...newerSnapshot,
       result: result({ category: 'research', intent: 'asking', outcome: null }),
       topicId,
     });
@@ -92,10 +102,10 @@ describe('TopicAnalysisModel', () => {
     });
   });
 
-  it('never lets an analysis of older messages replace a newer one', async () => {
+  it('rejects an overlapping run that analyzed an older snapshot', async () => {
+    await insertMessages();
     await personalModel.save({
-      lastMessageId: 'msg_2',
-      lastMessageUpdatedAt: new Date('2026-10-30T11:00:00Z'),
+      ...newerSnapshot,
       result: result({ category: 'research' }),
       topicId,
     });
@@ -106,6 +116,25 @@ describe('TopicAnalysisModel', () => {
     expect(await personalModel.findByTopic(topicId, 'v1')).toMatchObject({
       category: 'research',
       lastMessageId: 'msg_2',
+    });
+  });
+
+  it('accepts a fresh analysis after the newest message was removed', async () => {
+    await insertMessages();
+    await personalModel.save({
+      ...newerSnapshot,
+      result: result({ category: 'research' }),
+      topicId,
+    });
+    // The newest message goes to the recycle bin, so the latest remaining one is older.
+    await serverDB.update(messages).set({ isDeleted: true }).where(eq(messages.id, 'msg_2'));
+
+    const fresh = await personalModel.save({ ...snapshot, result: result(), topicId });
+
+    expect(fresh).toBeDefined();
+    expect(await personalModel.findByTopic(topicId, 'v1')).toMatchObject({
+      category: 'coding',
+      lastMessageId: 'msg_1',
     });
   });
 

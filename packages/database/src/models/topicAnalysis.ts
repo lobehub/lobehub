@@ -1,9 +1,10 @@
 import type { TopicAnalysisResult } from '@lobechat/types';
-import { and, count, eq, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, count, eq, exists, gt, isNull, notExists, or, sql } from 'drizzle-orm';
 
 import { messages, topicAnalyses, type TopicAnalysisItem, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { notTrashed } from '../utils/softDelete';
+import { topicSummaryEligibleMessage } from './topicSummary';
 
 /** The topic's own consumption at analysis time; `null` means not measured. */
 export interface TopicUsageSnapshot {
@@ -37,8 +38,11 @@ export class TopicAnalysisModel {
 
   /**
    * Insert the analysis, or replace the existing one for the same topic and
-   * taxonomy version. An analysis of older messages never replaces a newer one,
-   * so overlapping runs settle on the latest snapshot; returns `undefined` then.
+   * taxonomy version. A replacement is accepted only while the analyzed snapshot
+   * is still the topic's newest eligible message (the same fence the summary
+   * write uses), so an overlapping run that saw older messages is rejected, while
+   * a fresh analysis after the newest message was deleted is not. Returns
+   * `undefined` when rejected.
    */
   save = async ({
     lastMessageId,
@@ -71,9 +75,38 @@ export class TopicAnalysisModel {
       })
       .onConflictDoUpdate({
         set: { ...values, updatedAt: new Date() },
-        setWhere: or(
-          isNull(topicAnalyses.lastMessageUpdatedAt),
-          lte(topicAnalyses.lastMessageUpdatedAt, sql`excluded.last_message_updated_at`),
+        setWhere: and(
+          exists(
+            this.db
+              .select({ id: messages.id })
+              .from(messages)
+              .where(
+                and(
+                  eq(messages.topicId, topicId),
+                  topicSummaryEligibleMessage,
+                  eq(messages.id, lastMessageId),
+                  eq(messages.updatedAt, lastMessageUpdatedAt),
+                ),
+              ),
+          ),
+          notExists(
+            this.db
+              .select({ id: messages.id })
+              .from(messages)
+              .where(
+                and(
+                  eq(messages.topicId, topicId),
+                  topicSummaryEligibleMessage,
+                  or(
+                    gt(messages.updatedAt, lastMessageUpdatedAt),
+                    and(
+                      eq(messages.updatedAt, lastMessageUpdatedAt),
+                      gt(messages.id, lastMessageId),
+                    ),
+                  ),
+                ),
+              ),
+          ),
         ),
         target: [topicAnalyses.topicId, topicAnalyses.taxonomyVersion],
       })
