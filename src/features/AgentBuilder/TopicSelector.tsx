@@ -77,7 +77,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
           type: 'checkbox',
         };
       }),
-    [topics, switchTopic, styles, activeTopicId],
+    [topics, switchTopic, activeTopicId],
   );
   const isEmpty = !topics || topics.length === 0;
 

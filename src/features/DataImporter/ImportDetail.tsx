@@ -1,7 +1,14 @@
 'use client';
 
-import { createStaticStyles, Flexbox } from '@lobehub/ui';
-import { Button, ModalFooter, Table, type TableColumn, Text } from '@lobehub/ui';
+import {
+  Button,
+  createStaticStyles,
+  Flexbox,
+  ModalFooter,
+  Table,
+  type TableColumn,
+  Text,
+} from '@lobehub/ui';
 import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

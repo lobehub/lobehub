@@ -20,13 +20,18 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
   type ModalInstance,
   Text,
+  Tooltip,
   useModalContext,
 } from '@lobehub/ui';
 import { t } from 'i18next';

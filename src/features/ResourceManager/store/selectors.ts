@@ -1,6 +1,5 @@
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import { type FileListItem, FilesTabs, ResourceSourceFilter } from '@/types/files';
-import { SortType } from '@/types/files';
+import { type FileListItem, FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State } from './initialState';
 import { DEFAULT_SEARCH_PAGE_SIZE, type ExplorerSearchParams } from './projection';
