@@ -94,8 +94,12 @@ const secretCandidates = (text: string): string[] => {
   return [...new Set([...urls, ...tokens, ...splitTokenCandidates(text)])];
 };
 
-/** Shortest a regrouped token must be once joined; shorter joins are ordinary words and times. */
-const MIN_SPLIT_TOKEN_CHARS = 8;
+/**
+ * Shortest a regrouped token must be once joined — the same six characters the
+ * ordinary token extractor accepts, so a short OTP sent as `AB 12 CD` is checked
+ * just like `AB12CD`. Shorter joins are ordinary words and times.
+ */
+const MIN_SPLIT_TOKEN_CHARS = 6;
 const MAX_SPLIT_TOKEN_CHARS = 40;
 
 /**
