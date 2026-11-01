@@ -1,5 +1,4 @@
-import { List, type ListProps } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { cx, List, type ListProps } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { memo } from 'react';
 

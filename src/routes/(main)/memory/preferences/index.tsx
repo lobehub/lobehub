@@ -16,8 +16,8 @@ import { useUserMemoryStore } from '@/store/userMemory';
 import EditableModal from '../features/EditableModal';
 import FilterBar from '../features/FilterBar';
 import Loading from '../features/Loading';
-import { type ViewMode } from '../features/ViewModeSwitcher';
 import ViewModeSwitcher from '../features/ViewModeSwitcher';
+import { type ViewMode } from '../features/ViewModeSwitcher';
 import List from './features/List';
 import PreferenceRightPanel from './features/PreferenceRightPanel';
 
