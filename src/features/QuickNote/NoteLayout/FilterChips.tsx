@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, cx, Flexbox, Text } from '@lobehub/ui';
+import { Button, cssVar, Flexbox, Text } from '@lobehub/ui';
+import { cssVar as vars } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,48 +11,42 @@ import { quickNoteSelectors, UNCATEGORIZED_KEY, useQuickNoteStore } from '@/stor
 
 import { buildFilterChips, type FilterChip } from './buildFilterChips';
 
-const styles = createStaticStyles(({ css }) => ({
-  chip: css`
-    overflow: hidden;
-    flex: none;
-
-    max-width: 140px;
-    height: 24px;
-    padding-inline: 10px;
-    border-radius: 12px;
-
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  chipActive: css`
-    &&,
-    &&:hover {
-      color: ${cssVar.colorBgContainer};
-      background: ${cssVar.colorText};
-    }
-  `,
-  chipCollection: css`
-    background: ${cssVar.colorFillSecondary};
-  `,
-  chipRow: css`
-    scrollbar-width: none;
-    overflow-x: auto;
-    padding-inline: 12px;
-
-    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  `,
-  chipTag: css`
-    border: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  count: css`
-    margin-inline-start: 4px;
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    flex: 'none',
+    maxWidth: 140,
+    height: 24,
+    paddingInline: 10,
+    borderRadius: 12,
+    fontSize: 12,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  // Overrides the text Button's own hover colors, so both states set them.
+  chipActive: {
+    color: { 'default': vars.colorBgContainer, ':hover': vars.colorBgContainer },
+    backgroundColor: { 'default': vars.colorText, ':hover': vars.colorText },
+  },
+  chipCollection: {
+    backgroundColor: vars.colorFillSecondary,
+  },
+  chipRow: {
+    'scrollbarWidth': 'none',
+    'overflowX': 'auto',
+    'paddingInline': 12,
+    'maskImage': 'linear-gradient(90deg, #000 calc(100% - 28px), transparent)',
+    '::-webkit-scrollbar': { display: 'none' },
+  },
+  chipTag: {
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: vars.colorBorderSecondary,
+  },
+  count: {
+    marginInlineStart: 4,
+  },
+});
 
 const Chip = memo<{
   active: boolean;
@@ -64,7 +60,7 @@ const Chip = memo<{
     data-active={active}
     size={'small'}
     type={'text'}
-    className={cx(
+    {...stylex.props(
       styles.chip,
       variant === 'collection' ? styles.chipCollection : styles.chipTag,
       active && styles.chipActive,
@@ -74,7 +70,7 @@ const Chip = memo<{
     {label}
     {count !== undefined && (
       <Text
-        className={styles.count}
+        {...stylex.props(styles.count)}
         color={active ? cssVar.colorBgContainer : cssVar.colorTextTertiary}
         fontSize={12}
       >
@@ -117,7 +113,7 @@ const FilterChips = memo(() => {
 
   return (
     <Flexbox flex={'none'} gap={6} paddingBlock={8}>
-      <Flexbox horizontal className={styles.chipRow} gap={6}>
+      <Flexbox horizontal className={stylex.props(styles.chipRow).className} gap={6}>
         {collectionChips.map((chip) => (
           <Chip
             active={chip.active}
@@ -130,7 +126,7 @@ const FilterChips = memo(() => {
         ))}
       </Flexbox>
       {tagChips.length > 0 && (
-        <Flexbox horizontal className={styles.chipRow} gap={6}>
+        <Flexbox horizontal className={stylex.props(styles.chipRow).className} gap={6}>
           {tagChips.map((chip) => (
             <Chip
               active={chip.active}

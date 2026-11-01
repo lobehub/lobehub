@@ -1,0 +1,10 @@
+/* Same pattern as the PR sidebar body: wide tables and code scroll inside the card. */
+.markdownPreview table,
+.markdownPreview pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.markdownPreview table {
+  display: block;
+}

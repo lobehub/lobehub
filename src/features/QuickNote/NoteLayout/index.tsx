@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { type FC } from 'react';
 import { Navigate, Outlet } from 'react-router';
 
@@ -21,7 +22,7 @@ const NoteLayoutContent: FC = () => {
     <>
       <Sidebar />
       <Flexbox
-        className={styles.mainContainer}
+        className={stylex.props(styles.mainContainer).className}
         flex={1}
         height={'100%'}
         style={{ overflow: 'hidden' }}

@@ -1,6 +1,7 @@
 'use client';
 
 import { cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { FileText, ListTodo, MessagesSquare, Target } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
@@ -97,7 +98,7 @@ const ExecutedSection = ({
   if (items.length === 0) return null;
 
   return (
-    <Flexbox className={styles.section} gap={8}>
+    <Flexbox className={stylex.props(styles.section).className} gap={8}>
       <SectionLabel count={items.length} title={t('agentic.executed.title')} />
       {items.map((item) => (
         <ExecutedRow item={item} key={item.key} />

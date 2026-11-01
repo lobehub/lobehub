@@ -2,6 +2,7 @@
 
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { ActionIcon, Button, cssVar, Flexbox, Markdown, Tag, Text, Tooltip } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { PanelRightClose, Sparkles } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
@@ -92,7 +93,7 @@ const AiPanel = memo<{ noteId: string }>(({ noteId }) => {
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.columnHeader}
+        className={stylex.props(styles.columnHeader).className}
         height={44}
         justify={'space-between'}
         paddingInline={16}
@@ -114,7 +115,7 @@ const AiPanel = memo<{ noteId: string }>(({ noteId }) => {
       </Flexbox>
       <Flexbox flex={1} style={{ overflow: 'hidden' }}>
         <Flexbox flex={1} style={{ overflowY: 'auto' }}>
-          <Flexbox className={styles.section} gap={8}>
+          <Flexbox className={stylex.props(styles.section).className} gap={8}>
             {summaryContent ? (
               <Markdown fontSize={13} variant={'chat'}>
                 {summaryContent}
@@ -146,7 +147,7 @@ const AiPanel = memo<{ noteId: string }>(({ noteId }) => {
           </Flexbox>
           <AgenticSections noteId={noteId} />
           {run && (
-            <Flexbox className={styles.section} gap={8}>
+            <Flexbox className={stylex.props(styles.section).className} gap={8}>
               <Runs run={run} />
             </Flexbox>
           )}

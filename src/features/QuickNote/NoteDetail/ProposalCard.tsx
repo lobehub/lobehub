@@ -3,7 +3,6 @@
 import type { QuickNoteProposalKind } from '@lobechat/types';
 import {
   Button,
-  createStaticStyles,
   cssVar,
   type DropdownItem,
   DropdownMenu,
@@ -15,6 +14,8 @@ import {
   toast,
   Tooltip,
 } from '@lobehub/ui';
+import { cssVar as vars } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronDown, FileText, ListTodo, MessagesSquare, Target } from 'lucide-react';
 import { memo } from 'react';
@@ -33,9 +34,11 @@ import {
   quickNoteSelectors,
   useQuickNoteStore,
 } from '@/store/quickNote';
+import { sx } from '@/styles/sx';
 
 import { resolveQuickNoteProposalResultTarget } from './buildExecutedItems';
 import { resolveProposalApplyErrorKey } from './proposalApplyError';
+import moduleStyles from './ProposalCard.module.css';
 import { openProposalEditModal } from './ProposalEditModal';
 import { resolveProposalWriteTarget } from './resolveProposalWriteTarget';
 import { useOpenQuickNoteTarget } from './useOpenQuickNoteTarget';
@@ -49,43 +52,33 @@ const KIND_ICONS: Record<QuickNoteProposalKind, LucideIcon> = {
 
 const EMPTY_RESOURCES: QuickNoteResource[] = [];
 
-const styles = createStaticStyles(({ css, cssVar: token }) => ({
-  archived: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${token.borderRadiusLG};
-    background: ${token.colorFillQuaternary};
-  `,
-  card: css`
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG};
-
-    background: ${token.colorBgContainer};
-  `,
-  markdownPreview: css`
-    overflow: hidden;
-
-    min-width: 0;
-    max-height: 160px;
-
-    color: ${token.colorTextSecondary};
-
-    mask-image: linear-gradient(to bottom, black 70%, transparent);
-
-    /* Same pattern as the PR sidebar body: wide tables and code scroll inside the card. */
-    table,
-    pre {
-      overflow-x: auto;
-      max-width: 100%;
-    }
-
-    table {
-      display: block;
-    }
-  `,
-}));
+const styles = stylex.create({
+  archived: {
+    paddingBlock: 8,
+    paddingInline: 12,
+    borderRadius: vars.borderRadiusLG,
+    backgroundColor: vars.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  card: {
+    minWidth: 0,
+    padding: 12,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: vars.colorBorderSecondary,
+    borderRadius: vars.borderRadiusLG,
+    backgroundColor: vars.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  // Descendant table / pre rules live in ProposalCard.module.css.
+  markdownPreview: {
+    overflow: 'hidden',
+    minWidth: 0,
+    maxHeight: 160,
+    color: vars.colorTextSecondary,
+    maskImage: 'linear-gradient(to bottom, black 70%, transparent)',
+  },
+});
 
 /** Kind icon and label shared by the full and archived layouts. */
 const KindLabel = ({ kind }: { kind: QuickNoteProposalKind }) => {
@@ -115,7 +108,7 @@ const ArchivedProposal = ({ proposal }: { proposal: QuickNoteProposal }) => {
       : undefined;
 
   return (
-    <Flexbox className={styles.archived} gap={4}>
+    <Flexbox className={stylex.props(styles.archived).className} gap={4}>
       <Flexbox horizontal align={'center'} gap={6} justify={'space-between'}>
         <KindLabel kind={proposal.kind} />
         <Text color={cssVar.colorTextQuaternary} fontSize={12}>
@@ -189,7 +182,7 @@ const ActionableProposal = ({
   ];
 
   return (
-    <Flexbox className={styles.card} gap={8}>
+    <Flexbox className={stylex.props(styles.card).className} gap={8}>
       <Flexbox horizontal align={'center'} gap={6} justify={'space-between'}>
         <KindLabel kind={proposal.kind} />
         {proposal.validity === 'stale' && (
@@ -214,7 +207,7 @@ const ActionableProposal = ({
       {body &&
         (writeTarget ? (
           // A write-document draft is Markdown (often tables); clamp the rendered preview.
-          <div className={styles.markdownPreview}>
+          <div {...sx(styles.markdownPreview, moduleStyles.markdownPreview)}>
             <Markdown fontSize={13} variant={'chat'}>
               {body}
             </Markdown>

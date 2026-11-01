@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, cssVar, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -48,7 +49,7 @@ const AnalyzeAction = ({ noteId }: { noteId: string }) => {
             : t('editor.analyze');
 
   return (
-    <span className={styles.analyzeAction}>
+    <span className={stylex.props(styles.analyzeAction).className}>
       <ActionIcon
         aria-label={title}
         disabled={!hasContent || runActive}
@@ -72,7 +73,7 @@ const AnalyzeAction = ({ noteId }: { noteId: string }) => {
       {scheduled && (
         <svg
           aria-hidden
-          className={styles.analyzeProgress}
+          className={stylex.props(styles.analyzeProgress).className}
           height={28}
           viewBox={'0 0 28 28'}
           width={28}

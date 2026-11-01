@@ -1,41 +1,42 @@
-import { createStaticStyles } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css, cssVar }) => ({
-  analyzeAction: css`
-    position: relative;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-  `,
-  analyzeProgress: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-    transform: rotate(-90deg);
-  `,
-  columnHeader: css`
-    flex: none;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  editorColumn: css`
-    width: 100%;
-    max-width: 720px;
-    margin-inline: auto;
-  `,
-  section: css`
-    padding-block: 12px;
-    padding-inline: 16px;
-  `,
-  sidecarCard: css`
-    padding-block: 8px;
-    padding-inline: 10px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+export const styles = stylex.create({
+  analyzeAction: {
+    position: 'relative',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 28,
+  },
+  analyzeProgress: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 1,
+    inset: 0,
+    transform: 'rotate(-90deg)',
+  },
+  columnHeader: {
+    flex: 'none',
+    borderBlockEndWidth: 1,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  editorColumn: {
+    width: '100%',
+    maxWidth: 720,
+    marginInline: 'auto',
+  },
+  section: {
+    paddingBlock: 12,
+    paddingInline: 16,
+  },
+  sidecarCard: {
+    paddingBlock: 8,
+    paddingInline: 10,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});

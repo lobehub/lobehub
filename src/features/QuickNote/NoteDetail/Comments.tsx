@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, cssVar, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Pencil } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,7 +27,7 @@ const CommentItem = memo<{ comment: QuickNoteComment; noteId: string }>(({ comme
     });
 
   return (
-    <Flexbox className={styles.sidecarCard} gap={8}>
+    <Flexbox className={stylex.props(styles.sidecarCard).className} gap={8}>
       <Text fontSize={13}>{comment.content}</Text>
       <Flexbox horizontal align={'center'} gap={6} justify={'space-between'}>
         <Text color={cssVar.colorTextQuaternary} fontSize={11}>

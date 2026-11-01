@@ -3,6 +3,7 @@
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
 import { useEditor } from '@lobehub/editor/react';
 import { ActionIcon, confirmModal, cssVar, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { EllipsisIcon, PanelRightOpen, Trash } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -97,7 +98,7 @@ const EditorArea = memo<{ noteId: string }>(({ noteId }) => {
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.columnHeader}
+        className={stylex.props(styles.columnHeader).className}
         height={44}
         justify={'space-between'}
         paddingInline={16}
@@ -125,7 +126,11 @@ const EditorArea = memo<{ noteId: string }>(({ noteId }) => {
         </Flexbox>
       </Flexbox>
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
-        <Flexbox className={styles.editorColumn} paddingBlock={24} paddingInline={24}>
+        <Flexbox
+          className={stylex.props(styles.editorColumn).className}
+          paddingBlock={24}
+          paddingInline={24}
+        >
           <EditorCanvas
             editor={editor}
             editorData={editorData}
