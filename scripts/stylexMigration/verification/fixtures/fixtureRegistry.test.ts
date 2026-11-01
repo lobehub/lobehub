@@ -17,6 +17,28 @@ describe('explicit fixture contract', () => {
     ).toThrow();
     expect(() => getStyleFixture('Unknown')).toThrow('FIXTURE_ADAPTER_UNAVAILABLE');
   });
+
+  it('requires unique surfaces and explicitly scoped known portal variants', () => {
+    const fixture = getStyleFixture('GeneratingBorder');
+    const portal = {
+      id: 'popup',
+      kind: 'portal',
+      selector: '[data-popup]',
+      variants: ['generating'],
+    };
+    expect(
+      styleFixtureSchema
+        .parse({ ...fixture, surfaces: [...fixture.surfaces, portal] })
+        .surfaces.at(-1)?.variants,
+    ).toEqual(['generating']);
+    expect(() => styleFixtureSchema.parse({ ...fixture, surfaces: [portal, portal] })).toThrow(
+      'DUPLICATE_SURFACE_ID',
+    );
+    for (const variants of [['unknown'], ['generating', 'generating'], []])
+      expect(() =>
+        styleFixtureSchema.parse({ ...fixture, surfaces: [{ ...portal, variants }] }),
+      ).toThrow();
+  });
   it('plans explicit breakpoint boundaries, RTL, states and all variants within budget', () => {
     const probes = planFixtureProbes(getStyleFixture('LiteTable'));
     expect(probes).toHaveLength(176);

@@ -1,7 +1,7 @@
+import './PersonaDetail.css';
+
 import { Markdown } from '@lobehub/ui';
 import { memo } from 'react';
-
-import styles from './PersonaDetail.module.css';
 
 interface PersonaDetailProps {
   children: string;
@@ -9,7 +9,11 @@ interface PersonaDetailProps {
 
 const PersonaDetail = memo<PersonaDetailProps>(({ children }) => {
   return (
-    <Markdown className={styles.markdown} enableImageGallery={false} enableLatex={false}>
+    <Markdown
+      className={'lobe-persona-detail-426e0782-markdown'}
+      enableImageGallery={false}
+      enableLatex={false}
+    >
       {children}
     </Markdown>
   );

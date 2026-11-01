@@ -1,8 +1,8 @@
+import './player.css';
+
 import { cx } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
-import relational from './player.module.css';
 
 const definitions = stylex.create({
   screen: {
@@ -63,7 +63,7 @@ const definitions = stylex.create({
 });
 
 export const styles = {
-  screen: cx(stylex.props(definitions.screen).className ?? '', relational.screen),
+  screen: cx(stylex.props(definitions.screen).className ?? '', 'lobe-player-15569863-screen'),
   clock: stylex.props(definitions.clock).className ?? '',
   rate: stylex.props(definitions.rate).className ?? '',
   rateActive: stylex.props(definitions.rateActive).className ?? '',

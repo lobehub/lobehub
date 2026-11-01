@@ -1,17 +1,17 @@
 'use client';
 
+import '../resultStyles.css';
+
 import { FluentEmoji, Result, Text } from '@lobehub/ui';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import resultStyles from '../resultStyles.module.css';
 
 const DeviceSuccess = memo(() => {
   const { t } = useTranslation('oauth');
 
   return (
     <Result
-      className={resultStyles.fullWidthSubTitle}
+      className={'lobe-result-styles-cb01c08e-full-width-sub-title'}
       icon={<FluentEmoji emoji={'✅'} size={96} type={'anim'} />}
       status="success"
       subTitle={
