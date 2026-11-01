@@ -1,144 +1,60 @@
-import { type StatisticCardProps as AntdStatisticCardProps } from '@ant-design/pro-components';
-import { StatisticCard as AntdStatisticCard } from '@ant-design/pro-components';
 import { type BlockProps } from '@lobehub/ui';
-import { Block, Text } from '@lobehub/ui';
-import { Spin } from 'antd';
-import { createStaticStyles, cx, responsive, useResponsive } from 'antd-style';
+import { Block, Flexbox, Spin, Statistic, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import { media } from '@lobehub/ui/stylex/media.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
 
-const prefixCls = 'ant';
+const styles = stylex.create({
+  header: {
+    alignItems: 'center',
+    display: 'flex',
+    flexWrap: { default: null, [media.sm]: 'wrap' },
+    gap: 8,
+    justifyContent: 'space-between',
+    marginBlockEnd: { default: null, [media.sm]: 8 },
+  },
+  statistic: {
+    fontWeight: 'bold',
+    lineHeight: 1.2,
+  },
+  title: {
+    color: cssVar.colorText,
+    flex: '1',
+    fontSize: { default: 16, [media.sm]: 14 },
+    fontWeight: 500,
+    lineHeight: { default: '32px', [media.sm]: '16px' },
+    overflow: 'hidden',
+  },
+});
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    border-radius: ${cssVar.borderRadiusLG};
+export interface StatisticConfig {
+  description?: ReactNode;
+  precision?: number;
+  prefix?: ReactNode;
+  style?: CSSProperties;
+  suffix?: ReactNode;
+  value?: number | string;
+  valueStyle?: CSSProperties;
+}
 
-    ${responsive.sm} {
-      border: none;
-      border-radius: 0;
-      background: ${cssVar.colorBgContainer};
-    }
-  `,
-  cardDark: css`
-    border: 1px solid ${cssVar.colorFillTertiary};
-  `,
-  cardLight: css`
-    border: 1px solid ${cssVar.colorFillSecondary};
-  `,
-  container: css`
-    ${responsive.sm} {
-      border: none;
-      border-radius: 0;
-      background: ${cssVar.colorBgContainer};
-    }
-
-    .${prefixCls}-pro-card-title {
-      overflow: hidden;
-
-      ${responsive.sm} {
-        margin: 0;
-        font-size: 14px;
-        line-height: 16px !important;
-      }
-    }
-
-    .${prefixCls}-pro-card-body {
-      padding: 0;
-      .${prefixCls}-pro-statistic-card-content {
-        position: relative;
-        width: 100%;
-        padding-block-end: 16px;
-        padding-inline: 16px;
-        .${prefixCls}-pro-statistic-card-chart {
-          position: relative;
-          width: 100%;
-        }
-      }
-
-      .${prefixCls}-pro-statistic-card-footer {
-        overflow: hidden;
-
-        margin: 0;
-        padding: 0;
-        border-end-start-radius: ${cssVar.borderRadiusLG};
-        border-end-end-radius: ${cssVar.borderRadiusLG};
-      }
-    }
-
-    .${prefixCls}-pro-card-loading-content {
-      padding-block: 16px;
-      padding-inline: 16px;
-    }
-
-    .${prefixCls}-pro-card-header {
-      padding-block-start: 0;
-      padding-inline: 0;
-
-      .${prefixCls}-pro-card-title {
-        line-height: 32px;
-      }
-
-      + .${prefixCls}-pro-card-body {
-        padding-block-start: 0;
-      }
-
-      ${responsive.sm} {
-        flex-wrap: wrap;
-        gap: 8px;
-
-        margin-block-end: 8px;
-        padding-block-start: 0;
-        padding-inline: 0;
-      }
-    }
-
-    .${prefixCls}-statistic-content-value-int, .${prefixCls}-statistic-content-value-decimal {
-      font-size: 24px;
-      font-weight: bold;
-      line-height: 1.2;
-    }
-
-    .${prefixCls}-pro-statistic-card-chart {
-      margin: 0;
-    }
-
-    .${prefixCls}-pro-statistic-card-content {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-
-      padding-block-end: 0 !important;
-      padding-inline: 0 !important;
-    }
-
-    .${prefixCls}-pro-statistic-card-content-horizontal {
-      flex-direction: row;
-      align-items: center;
-
-      .${prefixCls}-pro-statistic-card-chart {
-        align-self: center;
-      }
-    }
-  `,
-  icon: css`
-    border-radius: ${cssVar.borderRadius};
-    background: ${cssVar.colorFillSecondary};
-  `,
-  raw: css`
-    border: none !important;
-    background: transparent !important;
-  `,
-}));
-
-interface StatisticCardProps
-  extends
-    AntdStatisticCardProps,
-    Pick<BlockProps, 'variant' | 'padding' | 'paddingBlock' | 'paddingInline'> {}
+export interface StatisticCardProps extends Pick<
+  BlockProps,
+  'variant' | 'padding' | 'paddingBlock' | 'paddingInline'
+> {
+  className?: string;
+  extra?: ReactNode;
+  loading?: boolean;
+  statistic?: StatisticConfig;
+  style?: CSSProperties;
+  title?: ReactNode;
+}
 
 const StatisticCard = memo<StatisticCardProps>(
   ({
     title,
     className,
-
     variant = 'borderless',
     loading,
     extra,
@@ -146,10 +62,8 @@ const StatisticCard = memo<StatisticCardProps>(
     padding,
     paddingBlock,
     paddingInline,
-    ...rest
+    statistic,
   }) => {
-    const { mobile } = useResponsive();
-
     return (
       <Block
         className={className}
@@ -160,12 +74,9 @@ const StatisticCard = memo<StatisticCardProps>(
         style={style}
         variant={variant}
       >
-        <AntdStatisticCard
-          bordered={!mobile}
-          className={cx(styles.container, styles.raw)}
-          extra={loading ? <Spin percent={'auto'} size={'small'} /> : extra}
-          title={
-            typeof title === 'string' ? (
+        <div {...stylex.props(styles.header)}>
+          <div {...stylex.props(styles.title)}>
+            {typeof title === 'string' ? (
               <Text
                 as={'h2'}
                 ellipsis={{ rows: 1, tooltip: true }}
@@ -181,10 +92,23 @@ const StatisticCard = memo<StatisticCardProps>(
               </Text>
             ) : (
               title
-            )
-          }
-          {...rest}
-        />
+            )}
+          </div>
+          {loading ? <Spin size={'small'} /> : extra}
+        </div>
+        {statistic && (
+          <Flexbox gap={16} style={statistic.style}>
+            <Statistic
+              classNames={{ value: stylex.props(styles.statistic).className }}
+              precision={statistic.precision}
+              prefix={statistic.prefix}
+              styles={statistic.valueStyle ? { value: statistic.valueStyle } : undefined}
+              suffix={statistic.suffix}
+              value={statistic.value}
+            />
+            {statistic.description}
+          </Flexbox>
+        )}
       </Block>
     );
   },

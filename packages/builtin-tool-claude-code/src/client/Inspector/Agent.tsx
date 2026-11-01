@@ -5,7 +5,7 @@ import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/s
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Tooltip } from '@lobehub/ui';
 import { GroupBotIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -190,8 +190,8 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
       ) : null;
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span className={styles.label}>Agent:</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(styles.label, isShiny && shinyTextStyles.shinyText)}>Agent:</span>
         <Icon className={styles.icon} size={14} />
         <span className={styles.label}>{labelText}</span>
         {description && (

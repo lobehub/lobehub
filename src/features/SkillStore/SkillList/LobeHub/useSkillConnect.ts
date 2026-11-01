@@ -231,10 +231,28 @@ export const useSkillConnect = ({ identifier, serverName, type }: UseSkillConnec
 
   const handleDisconnect = useCallback(async () => {
     if (type === 'lobehub' && lobehubServer) {
-      await revokeLobehubConnect(lobehubServer.identifier);
+      const provider = lobehubServer.identifier;
+      await revokeLobehubConnect(provider);
+
+      // The list is a replica view: `undefined` means "not loaded yet", which
+      // reads the same as an empty list here (no row ⇒ not connected).
+      const latestServer = (useToolStore.getState().lobehubSkillServers ?? []).find(
+        (server) => server.identifier === provider,
+      );
+
+      return latestServer?.status !== LobehubSkillStatus.CONNECTED;
     } else if (type === 'composio' && composioServer) {
-      await removeComposioConnection(composioServer.identifier);
+      const serverIdentifier = composioServer.identifier;
+      await removeComposioConnection(serverIdentifier);
+
+      const latestServer = useToolStore
+        .getState()
+        .composioServers.find((server) => server.identifier === serverIdentifier);
+
+      return latestServer?.status !== ComposioServerStatus.ACTIVE;
     }
+
+    return true;
   }, [type, lobehubServer, composioServer, revokeLobehubConnect, removeComposioConnection]);
 
   const isConnected =

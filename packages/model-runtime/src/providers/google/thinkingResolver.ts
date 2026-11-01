@@ -1,4 +1,4 @@
-import { isGemini3OrAbove, parseGoogleModelId } from './googleModelId';
+import { isGemini3OrAbove, normalizeGoogleModelId, parseGoogleModelId } from './modelId';
 
 /**
  * Google Gemini Thinking Resolver
@@ -59,6 +59,12 @@ const THINKING_BUDGET_CONSTRAINTS = {
   FLASH_LITE_MAX: 24_576,
 } as const;
 
+const GEMINI_THINKING_LEVEL_ALIASES = new Set([
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+  'gemini-pro-latest',
+]);
+
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -110,11 +116,19 @@ export const getGoogleThinkingModelCategory = (model?: string): GoogleThinkingMo
 export const isGemini3Model = (model?: string): boolean => {
   if (!model) return false;
 
+  const normalizedModelId = normalizeGoogleModelId(model);
+  if (normalizedModelId && GEMINI_THINKING_LEVEL_ALIASES.has(normalizedModelId)) return true;
+
   const parsed = parseGoogleModelId(model);
 
   return (
     isGemini3OrAbove(model) ||
-    (parsed?.family === 'gemma' && parsed.majorVersion !== undefined && parsed.majorVersion >= 4)
+    (parsed?.family === 'gemma' && parsed.majorVersion !== undefined && parsed.majorVersion >= 4) ||
+    // Versioned Nano Banana ids (`gemini-nano-banana-2.1`) are Gemini 3 image models that accept
+    // `thinkingLevel`, like their `gemini-3.1-flash-image` predecessor.
+    (parsed?.family === 'nanoBanana' &&
+      parsed.majorVersion !== undefined &&
+      parsed.majorVersion >= 2)
   );
 };
 

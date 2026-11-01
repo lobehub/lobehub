@@ -1,0 +1,114 @@
+import type { AskUserDraft, AskUserQuestionItem } from './types';
+
+/**
+ * The one sentinel key, and it lives in the *submit payload* — never in the
+ * draft. When the payload sent back is exactly `{ __freeform__: <text> }`, the
+ * bridge formatter forwards the text verbatim — no `User answers:` framing.
+ * The in-progress draft keeps this same text in a named `escapeText` field
+ * instead, so no sentinel leaks into form state.
+ */
+export const FREEFORM_PAYLOAD_KEY = '__freeform__';
+
+/** Optional notes appended to otherwise structured question answers. */
+export const SUPPLEMENT_PAYLOAD_KEY = '__supplement__';
+
+/**
+ * Fallback on-screen countdown, mirroring the server-side bridge timeout
+ * (`DEFAULT_ASK_USER_TIMEOUT_MS`). Only used when the producer did not tell us
+ * its own deadline — a mount-relative countdown restarts on every remount, so
+ * `deadlineAt` is always preferred. Hosts that have no bridge timeout (the
+ * builtin surfaces) pass `undefined` to disable the countdown entirely.
+ */
+export const DEFAULT_COUNTDOWN_MS = 10 * 60 * 1000;
+
+/**
+ * How far ahead of the producer's deadline the timeout fallback submits.
+ *
+ * The producer's bridge stops waiting exactly at the deadline and its
+ * long-poll stops listening with it, so an answer published after that point
+ * can never be acknowledged. The lead only has to cover publishing the answer
+ * and the producer picking it off the stream — every millisecond beyond that
+ * is answering time taken from the user, who is still looking at a question
+ * the countdown says they may answer.
+ */
+export const AUTO_SUBMIT_LEAD_MS = 5 * 1000;
+
+/**
+ * How long a card stays in the waiting-for-ACK state before the host settles
+ * it. A remote submit is only transport acceptance; the card stays disabled
+ * until the blocked producer echoes, and when the producer is already gone that
+ * echo never comes. The answer was accepted for delivery either way, so the
+ * card settles as answered and leaves the surface — re-offering a question the
+ * user has already answered only invites a duplicate answer.
+ */
+export const SUBMIT_ACK_TIMEOUT_MS = 30 * 1000;
+
+/**
+ * Last-resort release of the form's own `submitting` latch, for the case where
+ * the host never settled the card at all (a submit that never reached a
+ * transport). Deliberately longer than the host's settle budget so the normal
+ * path is always "the card settles and disappears", never "the buttons come
+ * back on a question that is already answered".
+ */
+export const SUBMIT_SETTLE_FALLBACK_MS = 45 * 1000;
+
+/** Key under tool message `pluginState` where the in-progress draft lives. */
+export const DRAFT_PLUGIN_STATE_KEY = 'askUserDraft';
+
+/** Coerce a persisted (possibly partial / legacy) blob into a full draft. */
+export const readDraft = (raw: unknown): AskUserDraft => {
+  const d = (raw ?? {}) as Partial<AskUserDraft>;
+  return {
+    custom: d.custom ?? {},
+    escapeActive: !!d.escapeActive,
+    escapeText: typeof d.escapeText === 'string' ? d.escapeText : '',
+    picks: d.picks ?? {},
+    supplementActive: !!d.supplementActive,
+    supplementText: typeof d.supplementText === 'string' ? d.supplementText : '',
+  };
+};
+
+/** A question counts as answered when it has a pick or non-empty custom text. */
+export const isQuestionAnswered = (
+  q: AskUserQuestionItem,
+  picks: Record<string, string | string[]>,
+  custom: Record<string, string>,
+): boolean => {
+  if (custom[q.question]?.trim()) return true;
+  const a = picks[q.question];
+  return q.multiSelect ? Array.isArray(a) && a.length > 0 : !!a;
+};
+
+/**
+ * Merge picks + custom text into the structured payload: each question maps to
+ * its picks, its custom text, or both (multi-select appends custom as an extra
+ * entry). Shared by the Submit button and the timeout fallback so the two never
+ * diverge.
+ */
+export const buildSubmitPayload = (
+  questions: AskUserQuestionItem[],
+  picks: Record<string, string | string[]>,
+  custom: Record<string, string>,
+): Record<string, string | string[]> => {
+  const payload: Record<string, string | string[]> = {};
+  for (const q of questions) {
+    const text = custom[q.question]?.trim();
+    if (q.multiSelect) {
+      const chosen = Array.isArray(picks[q.question]) ? (picks[q.question] as string[]) : [];
+      const merged = text ? [...chosen, text] : chosen;
+      if (merged.length > 0) payload[q.question] = merged;
+    } else if (text) {
+      payload[q.question] = text;
+    } else if (picks[q.question]) {
+      payload[q.question] = picks[q.question];
+    }
+  }
+  return payload;
+};
+
+export const formatRemaining = (msLeft: number): string => {
+  const totalSec = Math.max(0, Math.floor(msLeft / 1000));
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+};

@@ -14,9 +14,50 @@ export interface OperationUsageMetrics {
 
 interface OperationUsageMessage {
   id: string;
+  /** Owning assistant message — how a tool row is attributed to an operation. */
+  parentId?: string | null;
+  plugin?: { identifier?: string } | null;
+  pluginState?: SubAgentSpend | null;
   role?: string;
   usage?: OperationUsageLike | null;
 }
+
+/**
+ * A finished sub-agent's spend, as the completion bridge writes it onto the
+ * `callSubAgent` tool message — plus the live totals streamed while it runs.
+ */
+interface SubAgentSpend {
+  progress?: SubAgentSpend | null;
+  totalCost?: number | null;
+  totalInputTokens?: number | null;
+  totalOutputTokens?: number | null;
+  totalTokens?: number | null;
+}
+
+/**
+ * The builtin whose tool messages anchor a forked child run.
+ *
+ * A sub-agent's own assistant messages live in an isolation thread the parent
+ * never loads, so they can never reach this sum. Its `callSubAgent` tool message
+ * — which DOES sit in the parent's list — is where the child's spend enters the
+ * parent's ledger.
+ */
+const SUB_AGENT_TOOL_IDENTIFIER = 'lobe-agent';
+
+const subAgentSpendToMetrics = (state?: SubAgentSpend | null): OperationUsageMetrics => {
+  // The flat fields are the authoritative totals the bridge backfills when the
+  // child finishes; `progress` holds the live ones streamed while it runs. Prefer
+  // the former so the tray can't regress to a stale sample once the run ends.
+  const spend =
+    state?.totalTokens === undefined && state?.totalCost === undefined ? state?.progress : state;
+
+  return {
+    totalCost: normalizeNumber(spend?.totalCost),
+    totalInputTokens: normalizeNumber(spend?.totalInputTokens),
+    totalOutputTokens: normalizeNumber(spend?.totalOutputTokens),
+    totalTokens: normalizeNumber(spend?.totalTokens),
+  };
+};
 
 const normalizeNumber = (value: unknown): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
@@ -73,13 +114,28 @@ export const calculateOperationUsageMetrics = (
 
   let metrics: OperationUsageMetrics = EMPTY_OPERATION_USAGE_METRICS;
 
+  const belongsToOperation = (messageId?: string | null): boolean =>
+    !!messageId && !!operationsByMessage[messageId]?.some((id) => operationIds.has(id));
+
   for (const message of messages) {
-    if (message.role !== 'assistant') continue;
+    if (message.role === 'assistant') {
+      if (!belongsToOperation(message.id)) continue;
 
-    const messageOperationIds = operationsByMessage[message.id];
-    if (!messageOperationIds?.some((id) => operationIds.has(id))) continue;
+      metrics = addUsageToOperationMetrics(metrics, message.usage);
+      continue;
+    }
 
-    metrics = addUsageToOperationMetrics(metrics, message.usage);
+    // A sub-agent's spend, folded in via its `callSubAgent` tool row. Attributed
+    // through `parentId` — the assistant turn that made the call — because only
+    // assistant messages are registered in `operationsByMessage`; a tool row is
+    // never a key there.
+    if (
+      message.role === 'tool' &&
+      message.plugin?.identifier === SUB_AGENT_TOOL_IDENTIFIER &&
+      belongsToOperation(message.parentId)
+    ) {
+      metrics = mergeOperationUsageMetrics(metrics, subAgentSpendToMetrics(message.pluginState));
+    }
   }
 
   return metrics;

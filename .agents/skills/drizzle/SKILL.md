@@ -1,6 +1,6 @@
 ---
 name: drizzle
-description: 'LobeHub Drizzle ORM schema and query style. Use for pgTable schemas, indexes, joins, inferred types, db.select/db.query, schema fields, foreign keys, junction tables, or postgres query patterns.'
+description: 'Use for Drizzle schemas and queries: tables, indexes, relations, joins and inferred types. Rollout belongs to db-migrations.'
 user-invocable: false
 ---
 
@@ -31,20 +31,21 @@ Location: `packages/database/src/schemas/_helpers.ts`
 
 ## Naming Conventions
 
-- **Tables**: Plural snake_case (`users`, `session_groups`)
-- **Columns**: snake_case (`user_id`, `created_at`)
+- **Tables**: Plural snake\_case (`users`, `session_groups`)
+- **Columns**: snake\_case (`user_id`, `created_at`)
 - **New tables**: Check nearby existing tables before naming a new one. Preserve
   the established noun family and suffix. For example, if the user-scoped table
   is `user_xxx_logs`, the workspace-scoped counterpart should be
   `workspace_xxx_logs`, not `workspace_xxx_records` or another new synonym.
 
 ```typescript
-// ✅ Good: follows the existing user/workspace table family.
-export const userSignupLogs = pgTable('user_signup_logs', { ... });
-export const workspaceSignupLogs = pgTable('workspace_signup_logs', { ... });
+// ✅ Good: follows the existing user/workspace table family (names are
+// illustrative — swap `widget` for the real noun).
+export const userWidgetLogs = pgTable('user_widget_logs', { ... });
+export const workspaceWidgetLogs = pgTable('workspace_widget_logs', { ... });
 
 // ❌ Bad: introduces a new suffix for the same concept.
-export const workspaceSignupRecords = pgTable('workspace_signup_records', { ... });
+export const workspaceWidgetRecords = pgTable('workspace_widget_records', { ... });
 ```
 
 ## Column Definitions
@@ -73,6 +74,35 @@ id: serial('id').primaryKey(),
 
 ID prefixes make entity types distinguishable. For internal tables, use `uuid`.
 
+Do not use composite primary keys on new tables. Give every table a single-column
+surrogate PK and carry business uniqueness in a `uniqueIndex` instead. PK columns
+cannot be nullable, so when the uniqueness scope later grows by a nullable
+dimension the composite PK must be torn down and rebuilt — exactly what happened
+when `ai_providers` / `ai_models` were workspace-scoped (migrations 0110–0111 replaced
+their composite PKs with a surrogate `_id` plus partial unique indexes). A unique
+index still works as the arbiter for `onConflictDoUpdate` upserts.
+
+```typescript
+// ✅ Good: surrogate PK; uniqueness scope can evolve without a PK rebuild.
+export const workspaceUserSettings = pgTable(
+  'workspace_user_settings',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }).notNull(),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('workspace_user_settings_workspace_id_user_id_unique').on(t.workspaceId, t.userId)],
+);
+
+// ❌ Bad: locked to exactly these columns; adding a nullable scope column
+// (workspaceId, deviceId, …) later forces a full PK rebuild migration.
+(t) => [primaryKey({ columns: [t.workspaceId, t.userId] })],
+```
+
+Existing composite PKs are legacy — leave them alone unless they block a scope
+change, then migrate them the 0110–0111 way.
+
 ### Foreign Keys
 
 ```typescript
@@ -95,19 +125,37 @@ uses it consistently. Prefer nullable columns, optional TypeScript fields, or a
 separate concrete status enum when the value is genuinely absent.
 
 ```typescript
-// ✅ Good: absent until the final stage writes a real decision.
-export type UserSignupLogFinalDecision = 'allow' | 'block' | 'error';
+// ✅ Good: absent until a custom-execution attempt actually runs
+// (packages/database/src/schemas/agentIntervention.ts).
+export const AGENT_INTERVENTION_CUSTOM_EXECUTION_STATES = ['pending', 'executing', 'completed'] as const;
+export type AgentInterventionCustomExecutionState =
+  (typeof AGENT_INTERVENTION_CUSTOM_EXECUTION_STATES)[number];
 
-finalDecision: varchar('final_decision', { length: 32 }).$type<UserSignupLogFinalDecision>(),
+customExecutionState: text('custom_execution_state').$type<AgentInterventionCustomExecutionState>(),
 
 // ❌ Bad: invents a new state that callers now need to handle everywhere.
-export type UserSignupLogFinalDecision = 'allow' | 'block' | 'error' | 'unknown';
+export type AgentInterventionCustomExecutionState = 'pending' | 'executing' | 'completed' | 'unknown';
 
-finalDecision: varchar('final_decision', { length: 32 })
-  .$type<UserSignupLogFinalDecision>()
+customExecutionState: text('custom_execution_state')
+  .$type<AgentInterventionCustomExecutionState>()
   .notNull()
   .default('unknown');
 ```
+
+### Database Enums
+
+Default to **not** using PostgreSQL/Drizzle `pgEnum`. Database enums are
+expensive to evolve safely: adding members needs migrations, removing or
+renaming members is awkward, and deployment order becomes more fragile.
+
+For product/business states, use `text()` or `varchar()` with a TypeScript value
+type via `$type<...>()`. Keep those TS-only value types in the domain/shared type
+module, then import them into the schema. For cloud DB schemas, that usually
+means `cloudDB/types.ts`.
+
+Do not copy existing DB enums as a pattern. Treat them as legacy or explicitly
+reviewed exceptions. If a new `pgEnum` seems necessary, stop and justify why the
+value set is effectively immutable and why the migration cost is acceptable.
 
 ### Field Descriptions
 
@@ -119,20 +167,22 @@ name could mean either a request ID or a persisted row ID.
 
 ```typescript
 // ✅ Good: explain the table's business object first, then only document
-// non-obvious lifecycle or risk-control fields.
+// non-obvious lifecycle fields
+// (packages/database/src/schemas/agentIntervention.ts).
 /**
- * User signup logs - one row per signup flow, collecting stage-level
- * risk-control decisions before and after the auth provider creates a user.
+ * Private resolution/outbox records. Unlike `agent_interventions`, this table
+ * may retain user-edited arguments so a claimed decision can be delivered
+ * reliably after the app disconnects. It is never a notification payload.
  */
-export const userSignupLogs = pgTable('user_signup_logs', {
-  /** Final signup outcome reason, for example user_created, llm_block, or guard_error */
-  finalReason: text('final_reason'),
+export const agentInterventionResolutions = pgTable('agent_intervention_resolutions', {
+  /** Owner of the durable operation, distinct from the resolving actor. */
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
 
-  /** Aggregated risk level derived from stage decisions, for example block -> high */
-  riskLevel: varchar('risk_level', { length: 16 }).$type<UserSignupLogRiskLevel>(),
+  /** Private executor result; never selected into Review or notification DTOs. */
+  customExecutionResult: jsonb('custom_execution_result').$type<AgentInterventionCustomExecutionResult>(),
 
-  /** Ordered stage-level decisions and metadata grouped by signup review stage */
-  stageResults: jsonb('stage_results').$type<UserSignupLogStageResults>(),
+  /** Monotonic lease attempt, starting at zero while pending. */
+  customExecutionAttempt: integer('custom_execution_attempt'),
 });
 
 // ❌ Bad: comments restate obvious column names without adding domain meaning.
@@ -148,18 +198,28 @@ when most properties are optional. This keeps callers, migrations, and review
 queries aligned on the same data contract.
 
 ```typescript
-interface UserSignupLogMetadata {
-  payloadPath?: string;
-  requestPath?: string;
+// packages/types/src/agent/agentIntervention.ts +
+// packages/database/src/schemas/agentIntervention.ts
+interface AgentInterventionCustomExecutionResult {
+  content: string;
+  pluginState: Record<string, unknown>;
 }
 
-metadata: jsonb('metadata').$type<UserSignupLogMetadata>(),
+customExecutionResult: jsonb('custom_execution_result').$type<AgentInterventionCustomExecutionResult>(),
 ```
 
 ```typescript
 // ❌ Bad: hides the contract and makes downstream access untyped.
-metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+customExecutionResult: jsonb('custom_execution_result').$type<Record<string, unknown>>(),
 ```
+
+A loosely-typed JSONB column is often a symptom of a deeper problem: the column
+was reserved speculatively ("for future extension") and nothing actually writes
+it. Don't add `metadata` / `extra` JSONB columns for hypothetical future needs —
+a column earns its place only when a concrete writer ships alongside it. When
+review finds such a column, the fix is to **delete the column**, not to invent
+an interface for data that doesn't exist; add a properly-typed column once the
+real requirement arrives.
 
 ### Indexes
 
@@ -204,10 +264,15 @@ export const agents = pgTable(
 
 ### Junction Tables (Many-to-Many)
 
+The surrogate-PK rule above applies to junction tables too — pair uniqueness
+goes in a `uniqueIndex`, not a composite PK (many existing junction tables
+still use composite PKs; that is legacy, not the template):
+
 ```typescript
 export const agentsKnowledgeBases = pgTable(
   'agents_knowledge_bases',
   {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
     agentId: text('agent_id')
       .references(() => agents.id, { onDelete: 'cascade' })
       .notNull(),
@@ -220,7 +285,12 @@ export const agentsKnowledgeBases = pgTable(
     enabled: boolean('enabled').default(true),
     ...timestamps,
   },
-  (t) => [primaryKey({ columns: [t.agentId, t.knowledgeBaseId] })],
+  (t) => [
+    uniqueIndex('agents_knowledge_bases_agent_id_knowledge_base_id_unique').on(
+      t.agentId,
+      t.knowledgeBaseId,
+    ),
+  ],
 );
 ```
 
@@ -300,19 +370,20 @@ so the method reads as business intent, not SQL plumbing.
 
 ```typescript
 // ✅ Scalars included only when present; SQL hidden behind a named helper.
+// (`userWidgetLogs` is illustrative — swap for the real table.)
 const updateValues = compactUndefined({
   email: record.email ?? undefined,
   ip: record.ip ?? undefined,
 });
-await db.insert(userSignupLogs).values(values).onConflictDoUpdate({
-  set: { ...updateValues, stageResults: appendStageResult(stage, result), updatedAt: now },
-  target: userSignupLogs.id,
+await db.insert(userWidgetLogs).values(values).onConflictDoUpdate({
+  set: { ...updateValues, events: appendJsonbArray(userWidgetLogs.events, event), updatedAt: now },
+  target: userWidgetLogs.id,
 });
 
 // ❌ Every scalar becomes SQL plumbing.
 set: {
-  email: sql`COALESCE(excluded.email, ${userSignupLogs.email})`,
-  ip: sql`COALESCE(excluded.ip, ${userSignupLogs.ip})`,
+  email: sql`COALESCE(excluded.email, ${userWidgetLogs.email})`,
+  ip: sql`COALESCE(excluded.ip, ${userWidgetLogs.ip})`,
 }
 ```
 

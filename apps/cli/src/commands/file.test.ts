@@ -32,11 +32,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
-
 describe('file command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let consoleSpy: ReturnType<typeof vi.spyOn>;
@@ -55,6 +50,7 @@ describe('file command', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -86,13 +82,22 @@ describe('file command', () => {
     });
 
     it('should output JSON when --json flag is used', async () => {
-      const items = [{ id: 'f1', name: 'doc.pdf' }];
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
+      // A file's own `url` is its storage address, so the page link lands in `appUrl`.
+      const items = [{ id: 'f1', name: 'doc.pdf', url: 'https://s3.example.com/doc.pdf' }];
       mockTrpcClient.file.getFiles.query.mockResolvedValue(items);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'file', 'list', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(items, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...items[0], appUrl: 'https://app.lobehub.com/resource/file/f1' }],
+          null,
+          2,
+        ),
+      );
     });
 
     it('should show message when no files found', async () => {
@@ -236,11 +241,14 @@ describe('file command', () => {
         expect(mockTrpcClient.upload.createS3PreSignedUrl.mutate).toHaveBeenCalled();
         expect(fetchSpy).toHaveBeenCalledWith(
           'https://s3/presigned',
-          expect.objectContaining({ method: 'PUT' }),
+          expect.objectContaining({
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            method: 'PUT',
+          }),
         );
         expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
           expect.objectContaining({
-            fileType: 'text/plain',
+            fileType: 'text/plain; charset=utf-8',
             name: path.basename(tmpFile),
             url: expect.stringContaining('.txt'),
           }),
@@ -268,7 +276,14 @@ describe('file command', () => {
         await program.parseAsync(['node', 'test', 'file', 'upload', '--file', tmpFile]);
 
         expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
-          expect.objectContaining({ fileType: 'application/json' }),
+          expect.objectContaining({ fileType: 'application/json; charset=utf-8' }),
+        );
+        expect(fetchSpy).toHaveBeenCalledWith(
+          'https://s3/presigned',
+          expect.objectContaining({
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            method: 'PUT',
+          }),
         );
       } finally {
         fetchSpy.mockRestore();

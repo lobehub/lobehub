@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  hasReadingPositionSnapshot,
   isDraftPromotionKey,
   loadScrollSnapshot,
   migrateScrollSnapshot,
@@ -248,5 +249,46 @@ describe('scrollSnapshotStore', () => {
       spy.mockRestore();
       expect(loadScrollSnapshot('next')?.offset).toBe(9);
     });
+  });
+
+  describe('hasReadingPositionSnapshot', () => {
+    it('is true for an anchored snapshot away from the bottom', () => {
+      saveScrollSnapshot('k', {
+        anchorId: 'msg_1',
+        anchorOffset: 12,
+        atBottom: false,
+        offset: 300,
+        savedAt: Date.now(),
+      });
+      expect(hasReadingPositionSnapshot('k')).toBe(true);
+    });
+
+    it('is false at the bottom', () => {
+      saveScrollSnapshot('k', {
+        anchorId: 'msg_1',
+        anchorOffset: 12,
+        atBottom: true,
+        offset: 300,
+        savedAt: Date.now(),
+      });
+      expect(hasReadingPositionSnapshot('k')).toBe(false);
+    });
+
+    it('is false for a snapshot without an anchor, which restores to the bottom', () => {
+      saveScrollSnapshot('k', { atBottom: false, offset: 300, savedAt: Date.now() });
+      expect(hasReadingPositionSnapshot('k')).toBe(false);
+    });
+
+    it('is false with no snapshot', () => {
+      expect(hasReadingPositionSnapshot('k')).toBe(false);
+    });
+  });
+
+  it('drops a snapshot whose anchor id is not a string', () => {
+    localStorage.setItem(
+      `${SCROLL_SNAPSHOT_KEY_PREFIX}:k`,
+      JSON.stringify({ anchorId: 7, atBottom: false, offset: 1, savedAt: Date.now() }),
+    );
+    expect(loadScrollSnapshot('k')).toBeNull();
   });
 });

@@ -3,6 +3,38 @@ import type { EvalRunInputConfig, RubricType } from '@lobechat/types';
 import { lambdaClient } from '@/libs/trpc/client';
 
 class AgentEvalService {
+  // ============ Experiment ============
+  async listExperiments() {
+    return lambdaClient.agentEval.listExperiments.query();
+  }
+
+  async getExperiment(id: string) {
+    return lambdaClient.agentEval.getExperiment.query({ id });
+  }
+
+  async createExperiment(params: {
+    benchmarkIds: string[];
+    description?: string;
+    metadata?: Record<string, unknown>;
+    name: string;
+  }) {
+    return lambdaClient.agentEval.createExperiment.mutate(params);
+  }
+
+  async updateExperiment(params: {
+    benchmarkIds?: string[];
+    description?: string;
+    id: string;
+    metadata?: Record<string, unknown>;
+    name?: string;
+  }) {
+    return lambdaClient.agentEval.updateExperiment.mutate(params);
+  }
+
+  async deleteExperiment(id: string) {
+    return lambdaClient.agentEval.deleteExperiment.mutate({ id });
+  }
+
   // ============ Benchmark ============
   async listBenchmarks() {
     return lambdaClient.agentEval.listBenchmarks.query();
@@ -43,6 +75,11 @@ class AgentEvalService {
     return lambdaClient.agentEval.listDatasets.query({ benchmarkId });
   }
 
+  /** Every dataset, whether or not it belongs to a benchmark. */
+  async listAllDatasets() {
+    return lambdaClient.agentEval.listDatasets.query({});
+  }
+
   async getDataset(id: string) {
     return lambdaClient.agentEval.getDataset.query({ id });
   }
@@ -55,6 +92,7 @@ class AgentEvalService {
     identifier: string;
     metadata?: Record<string, unknown>;
     name: string;
+    sourceExperimentId?: string;
   }) {
     return lambdaClient.agentEval.createDataset.mutate(params);
   }
@@ -97,6 +135,10 @@ class AgentEvalService {
   }
 
   // ============ Test Case ============
+  async getTestCase(id: string) {
+    return lambdaClient.agentEval.getTestCase.query({ id });
+  }
+
   async listTestCases(params: { datasetId: string; limit?: number; offset?: number }) {
     return lambdaClient.agentEval.listTestCases.query(params);
   }
@@ -107,14 +149,21 @@ class AgentEvalService {
       choices?: string[];
       expected?: string;
       input: string;
+      /**
+       * Conversation replayed into the eval topic before `input` is sent. The
+       * router has always accepted it; this client had not exposed it.
+       */
+      messages?: Array<{
+        content: string;
+        id?: string;
+        parentId?: string;
+        role: 'assistant' | 'system' | 'user';
+      }>;
     };
     datasetId: string;
-    evalConfig?: { judgePrompt?: string };
+    evalConfig?: { criteria?: string; judgePrompt?: string };
     evalMode?: RubricType;
-    metadata?: {
-      difficulty?: 'easy' | 'medium' | 'hard';
-      tags?: string[];
-    };
+    metadata?: Record<string, unknown>;
   }) {
     return lambdaClient.agentEval.createTestCase.mutate(params);
   }
@@ -124,9 +173,9 @@ class AgentEvalService {
     content?: {
       category?: string;
       expected?: string;
-      input: string;
+      input?: string;
     };
-    evalConfig?: { judgePrompt?: string } | null;
+    evalConfig?: { criteria?: string; judgePrompt?: string } | null;
     evalMode?: RubricType | null;
     metadata?: Record<string, unknown>;
     sortOrder?: number;
@@ -139,7 +188,7 @@ class AgentEvalService {
   }
 
   // ============ Run ============
-  async listRuns(params: { benchmarkId?: string; datasetId?: string }) {
+  async listRuns(params: { benchmarkId?: string; datasetId?: string; experimentId?: string }) {
     return lambdaClient.agentEval.listRuns.query(params);
   }
 
@@ -154,7 +203,9 @@ class AgentEvalService {
   async createRun(params: {
     config?: EvalRunInputConfig;
     datasetId: string;
+    experimentId?: string;
     name?: string;
+    parentRunId?: string;
     targetAgentId?: string;
   }) {
     return lambdaClient.agentEval.createRun.mutate(params);

@@ -18,7 +18,7 @@ import {
 } from '../branches';
 import { getGitAheadBehind, getGitBranch } from '../info';
 import { getGitBranchDiff, getGitWorkingTreeFiles, getGitWorkingTreePatches } from '../workingTree';
-import { listGitWorktrees, parseGitWorktreeList } from '../worktrees';
+import { listGitWorktrees, parseGitWorktreeList, removeGitWorktree } from '../worktrees';
 
 const git = (cwd: string, ...args: string[]): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
@@ -126,6 +126,50 @@ describe('branch read operations', () => {
   });
 });
 
+describe('removeGitWorktree', () => {
+  it('removes a detached non-current worktree', async () => {
+    const worktreeParent = await mkdtemp(path.join(tmpdir(), 'lfs-worktree-remove-'));
+    cleanup.push(worktreeParent);
+    const linked = path.join(worktreeParent, 'detached');
+    git(repo, 'worktree', 'add', '--detach', linked, 'HEAD');
+    const linkedRealPath = await realpath(linked);
+
+    expect(await removeGitWorktree({ path: repo, worktreePath: linked })).toEqual({
+      success: true,
+    });
+
+    expect(existsSync(linkedRealPath)).toBe(false);
+    expect((await listGitWorktrees(repo)).map((worktree) => worktree.path)).not.toContain(
+      linkedRealPath,
+    );
+  });
+
+  it('removes a branch worktree', async () => {
+    git(repo, 'branch', 'feature');
+    const worktreeParent = await mkdtemp(path.join(tmpdir(), 'lfs-worktree-branch-'));
+    cleanup.push(worktreeParent);
+    const linked = path.join(worktreeParent, 'linked');
+    git(repo, 'worktree', 'add', linked, 'feature');
+    const linkedRealPath = await realpath(linked);
+
+    expect(await removeGitWorktree({ path: repo, worktreePath: linked })).toEqual({
+      success: true,
+    });
+
+    expect(existsSync(linkedRealPath)).toBe(false);
+    expect((await listGitWorktrees(repo)).map((worktree) => worktree.path)).not.toContain(
+      linkedRealPath,
+    );
+  });
+
+  it('refuses to remove the current worktree', async () => {
+    expect(await removeGitWorktree({ path: repo, worktreePath: repo })).toEqual({
+      error: 'Cannot remove the current worktree',
+      success: false,
+    });
+  });
+});
+
 describe('checkoutGitBranch', () => {
   it('creates and switches to a new branch', async () => {
     const result = await checkoutGitBranch({ branch: 'feature', create: true, path: repo });
@@ -204,6 +248,20 @@ describe('working tree status / files / patches', () => {
     expect(files.modified).toContain('a.txt');
     expect(files.added).toContain('new.txt');
     expect(files.deleted).toEqual([]);
+  });
+
+  it('distinguishes a failed git status from a clean tree when asked', async () => {
+    const notRepo = await mkdtemp(path.join(tmpdir(), 'lfs-not-git-'));
+    cleanup.push(notRepo);
+
+    // Default callers keep the tolerant fallback.
+    await expect(getGitWorkingTreeFiles(notRepo)).resolves.toEqual({
+      added: [],
+      deleted: [],
+      modified: [],
+    });
+    // Persisting callers must see the failure instead of a false-clean tree.
+    await expect(getGitWorkingTreeFiles(notRepo, { throwOnError: true })).rejects.toThrow();
   });
 
   it('getGitWorkingTreePatches returns per-file patches ordered added → modified', async () => {

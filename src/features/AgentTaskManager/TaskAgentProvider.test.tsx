@@ -38,11 +38,12 @@ const mocks = vi.hoisted(() => {
     operationState: undefined,
     providerContexts: [] as any[],
     routeMatch: undefined as { params: { taskId?: string } } | undefined,
+    search: '',
   };
 });
 
-vi.mock('@/components/Loading/BrandTextLoading', () => ({
-  default: ({ debugId }: { debugId: string }) => <div data-testid="loading">{debugId}</div>,
+vi.mock('@/components/Skeleton/Conversation/Segment', () => ({
+  default: () => <div data-testid="loading" />,
 }));
 
 vi.mock('@/features/Conversation', () => ({
@@ -58,6 +59,11 @@ vi.mock('@/hooks/useInitBuiltinAgent', () => ({
 
 vi.mock('@/hooks/useOperationState', () => ({
   useOperationState: () => mocks.operationState,
+}));
+
+vi.mock('@/store/task', () => ({
+  useTaskStore: (selector: (state: unknown) => unknown) =>
+    selector({ taskRefIndex: { 'T-1': 'task_1', 'task_1': 'task_1' } }),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -87,6 +93,7 @@ vi.mock('@/store/chat', () => ({
 
 vi.mock('react-router', () => ({
   useMatch: () => mocks.routeMatch,
+  useSearchParams: () => [new URLSearchParams(mocks.search)],
 }));
 
 const SelectAgentButton = ({ agentId }: { agentId: string }) => {
@@ -106,6 +113,7 @@ describe('TaskAgentProvider', () => {
     mocks.initBuiltinAgent.mockClear();
     mocks.providerContexts = [];
     mocks.routeMatch = undefined;
+    mocks.search = '';
   });
 
   afterEach(() => {
@@ -139,7 +147,78 @@ describe('TaskAgentProvider', () => {
       </TaskAgentProvider>,
     );
 
-    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'T-1', type: 'detail' });
+    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'task_1', type: 'detail' });
+  });
+
+  it('uses the route agent as the default in an agent-scoped task detail', async () => {
+    render(
+      <TaskAgentProvider preferredAgentId="agt_current" viewedTaskId="task_1">
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)).toMatchObject({
+        agentId: 'agt_current',
+        viewedTask: { taskId: 'task_1', type: 'detail' },
+      });
+    });
+    expect(mocks.agentState.setActiveAgentId).toHaveBeenCalledWith('agt_current');
+    expect(mocks.chatState.activeAgentId).toBe('agt_current');
+  });
+
+  it('resets a scoped selection when the preferred route agent changes', async () => {
+    const { rerender } = render(
+      <TaskAgentProvider preferredAgentId="agt_route_a">
+        <SelectAgentButton agentId="agt_custom" />
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_route_a');
+    });
+
+    fireEvent.click(screen.getByText('select agent'));
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_custom');
+    });
+
+    rerender(
+      <TaskAgentProvider preferredAgentId="agt_route_b">
+        <SelectAgentButton agentId="agt_custom" />
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)?.agentId).toBe('agt_route_b');
+    });
+    expect(mocks.agentState.setActiveAgentId).toHaveBeenLastCalledWith('agt_route_b');
+  });
+
+  it('restores and refreshes the Inbox task topic handed off by the home composer', async () => {
+    mocks.search = 'agentId=agt_inbox&topicId=tpc_home_task';
+    mocks.agentState.activeAgentId = 'agt_inbox';
+    mocks.chatState.activeAgentId = 'agt_inbox';
+    mocks.chatState.activeTopicId = 'tpc_home_task';
+
+    render(
+      <TaskAgentProvider>
+        <div>content</div>
+      </TaskAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.providerContexts.at(-1)).toMatchObject({
+        agentId: 'agt_inbox',
+        scope: 'task',
+        topicId: 'tpc_home_task',
+      });
+    });
+    expect(mocks.chatState.switchTopic).toHaveBeenCalledWith('tpc_home_task', {
+      scope: 'task',
+      skipRefreshMessage: false,
+    });
   });
 
   it('defaults to the task agent when the global active agent comes from another page', async () => {
@@ -219,7 +298,7 @@ describe('TaskAgentProvider', () => {
     await waitFor(() => {
       expect(mocks.providerContexts.at(-1)?.topicId).toBe('tpc_created');
     });
-    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'T-1', type: 'detail' });
+    expect(mocks.providerContexts.at(-1)?.viewedTask).toEqual({ taskId: 'task_1', type: 'detail' });
     expect(mocks.chatState.switchTopic).not.toHaveBeenCalled();
   });
 

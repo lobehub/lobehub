@@ -36,4 +36,58 @@ describe('configReducer', () => {
       });
     });
   });
+
+  describe('togglePlugin', () => {
+    it('pins a new identifier when absent', () => {
+      const state = { ...DEFAULT_AGENT_CONFIG, plugins: ['plugin-a'] };
+
+      const nextState = configReducer(state, {
+        pluginId: 'plugin-b',
+        type: 'togglePlugin',
+      });
+
+      expect(nextState.plugins).toEqual(['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }]);
+    });
+
+    it('unpins (removes) an already-pinned legacy string entry', () => {
+      const state = { ...DEFAULT_AGENT_CONFIG, plugins: ['plugin-a', 'plugin-b'] };
+
+      const nextState = configReducer(state, {
+        pluginId: 'plugin-b',
+        type: 'togglePlugin',
+      });
+
+      expect(nextState.plugins).toEqual(['plugin-a']);
+    });
+
+    it('flips an existing disabled object entry back to pinned, without duplicating it', () => {
+      const state = {
+        ...DEFAULT_AGENT_CONFIG,
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'disabled' }] as any,
+      };
+
+      const nextState = configReducer(state, {
+        pluginId: 'plugin-b',
+        state: true,
+        type: 'togglePlugin',
+      });
+
+      expect(nextState.plugins).toEqual(['plugin-a', { identifier: 'plugin-b', mode: 'pinned' }]);
+    });
+
+    it('explicit state=false reverts the entry to auto, removing it from the array', () => {
+      const state = {
+        ...DEFAULT_AGENT_CONFIG,
+        plugins: ['plugin-a', { identifier: 'plugin-b', mode: 'disabled' }] as any,
+      };
+
+      const nextState = configReducer(state, {
+        pluginId: 'plugin-b',
+        state: false,
+        type: 'togglePlugin',
+      });
+
+      expect(nextState.plugins).toEqual(['plugin-a']);
+    });
+  });
 });

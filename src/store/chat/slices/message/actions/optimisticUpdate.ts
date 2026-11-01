@@ -1,7 +1,6 @@
 import {
   type ChatImageItem,
   type ChatMessageError,
-  type ChatMessagePluginError,
   type ChatToolPayload,
   type CreateMessageParams,
   type GroundingSearch,
@@ -16,6 +15,7 @@ import { nanoid } from '@lobechat/utils';
 
 import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
+import type { MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
 
 import { dbMessageSelectors } from '../selectors';
@@ -24,6 +24,8 @@ import { dbMessageSelectors } from '../selectors';
  * Context for optimistic updates to specify session/topic isolation
  */
 export interface OptimisticUpdateContext {
+  /** Explicit message bucket for writes that cross operation scopes. */
+  context?: MessageMapKeyInput;
   operationId?: string;
   /** Pre-generated temp message ID (used when ID needs to be known before creation) */
   tempMessageId?: string;
@@ -97,7 +99,9 @@ export class MessageOptimisticUpdateActionImpl {
     // use optimistic update to avoid the slow waiting
     // use pre-generated tempMessageId if provided, otherwise generate a new one
     const tempId = context?.tempMessageId || 'tmp_' + nanoid();
-    internal_dispatchMessage({ id: tempId, type: 'createMessage', value: message }, context);
+    internal_dispatchMessage({ id: tempId, type: 'createMessage', value: message }, context, {
+      creationOrigin: 'client',
+    });
 
     return tempId;
   };
@@ -250,18 +254,6 @@ export class MessageOptimisticUpdateActionImpl {
 
     if (result?.success && result.messages) {
       replaceMessages(result.messages, { context: ctx });
-    }
-  };
-
-  optimisticUpdateMessagePluginError = async (
-    id: string,
-    error: ChatMessagePluginError | null,
-    context?: OptimisticUpdateContext,
-  ): Promise<void> => {
-    const ctx = this.#get().internal_getConversationContext(context);
-    const result = await messageService.updateMessagePluginError(id, error, ctx);
-    if (result?.success && result.messages) {
-      this.#get().replaceMessages(result.messages, { context: ctx });
     }
   };
 

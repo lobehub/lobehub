@@ -234,7 +234,7 @@ Before updating documentation, create a summary of what was accomplished:
 **Example Summary:**
 
 ```
-Store: chat/slices/aiChat
+Store: chat/slices/agentRun
 Coverage: 65% → 82% (+17%)
 Tests Added: 52 new tests
 Features Tested:
@@ -318,8 +318,8 @@ Task({
   prompt: `Write comprehensive tests for src/store/discover/slices/plugin/action.ts following .agents/skills/testing/references/zustand-store-action-test.md.
 
 Requirements:
-1. Write tests covering all actions (usePluginCategories, usePluginDetail, usePluginList, usePluginIdentifiers)
-2. Follow SWR hooks testing pattern
+1. Write tests covering all actions (useFetchPluginCategories, useFetchPluginDetail, useFetchPluginList, useFetchPluginIdentifiers)
+2. Follow the replica-backed fetch hook testing pattern
 3. run type-check and lint to verify
 4. Run tests to ensure they pass
 5. Report back with number of tests written and coverage areas
@@ -507,7 +507,7 @@ bunx eslint src/store/[domain]/
   - `file/slices/fileManager/action.test.ts` - 35 tests (692 LOC) covering file management operations
 - **Actions Tested**:
   - **mcpStore** (7 main actions): updateMCPInstallProgress, cancelInstallMCPPlugin, cancelMcpConnectionTest, testMcpConnection, uninstallMCPPlugin, loadMoreMCPPlugins, resetMCPPluginList, useFetchMCPPluginList, installMCPPlugin
-  - **fileManager** (15 actions): dispatchDockFileList, embeddingChunks, parseFilesToChunks, pushDockFileList, reEmbeddingChunks, reParseFile, refreshFileList, removeAllFiles, removeFileItem, removeFiles, toggleEmbeddingIds, toggleParsingIds, useFetchFileItem, useFetchFileManage
+  - **fileManager** (14 actions): dispatchDockFileList, embeddingChunks, parseFilesToChunks, pushDockFileList, reEmbeddingChunks, reParseFile, refreshFileList, removeFileItem, removeFiles, toggleEmbeddingIds, toggleParsingIds, useFetchFileItem, useFetchFileManage
 - **Features Tested**:
   - MCP plugin installation flow (normal, resume, with dependencies, with config)
   - MCP connection testing (HTTP and STDIO)
@@ -532,7 +532,7 @@ bunx eslint src/store/[domain]/
 
 - **Coverage**: 74.24% overall (+26 tests, 2 new test files)
 - **New Test Files**:
-  - `discover/slices/plugin/action.test.ts` - 15 tests covering plugin discovery (SWR hooks)
+  - `discover/slices/plugin/action.test.ts` - tests covering plugin discovery (replica fetch hooks)
   - `discover/slices/mcp/action.test.ts` - 11 tests covering MCP discovery (SWR hooks)
 - **Features Tested**:
   - Plugin categories, detail, identifiers, and list fetching
@@ -577,7 +577,7 @@ bunx eslint src/store/[domain]/
 
 ### Store-Specific Notes
 
-- **chat/aiChat**: Complex streaming logic, requires careful mocking of chatService
+- **chat/agentRun**: Complex streaming logic, requires careful mocking of chatService
 - **chat/thread**: ✅ Comprehensive tests complete (39 tests, \~80 LOC)
 - **tool/mcpStore**: ✅ Comprehensive tests complete (41 tests, 624 LOC)
 - **file/fileManager**: ✅ Comprehensive tests complete (35 tests, 205 LOC)

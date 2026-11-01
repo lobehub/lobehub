@@ -7,15 +7,34 @@ import {
   type GetAgentDetailParams,
   type InstallPluginParams,
   type SearchAgentParams,
+  type SearchMarketToolsParams,
   type UpdateAgentParams,
   type UpdatePromptParams,
 } from '@lobechat/builtin-tool-agent-management';
+import { buildBackgroundSubAgentReceipt } from '@lobechat/builtin-tool-lobe-agent';
+import { searchAgentsResultsPrompt } from '@lobechat/prompts';
+import {
+  getPluginMode,
+  type HeterogeneousProviderConfig,
+  parsePluginEntry,
+  upsertPluginMode,
+} from '@lobechat/types';
+import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
+import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
+import { AgentService } from '@/server/services/agent';
 import { DiscoverService } from '@/server/services/discover';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import { startBackgroundSubAgent } from './backgroundSubAgent';
+import { searchMarketTools } from './marketToolSearch';
+import {
+  NEXT_RUN_NOTE,
+  resolveOrInstallMarketPlugin,
+  unresolvablePluginResult,
+} from './pluginResolution';
 import { type ServerRuntimeRegistration } from './types';
 
 const handleError = (error: unknown, message: string): ToolExecutionResult => {
@@ -26,6 +45,8 @@ const handleError = (error: unknown, message: string): ToolExecutionResult => {
 /** Max results per searchAgent call (mirrored in the tool manifest: "max: 20") */
 const MAX_SEARCH_AGENT_LIMIT = 20;
 
+const log = debug('lobe-server:agent-management-runtime');
+
 export const agentManagementRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     if (!context.userId || !context.serverDB) {
@@ -33,15 +54,26 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     }
 
     const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
+    const agentService = new AgentService(context.serverDB, context.userId, context.workspaceId);
     const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
-    const discoverService = new DiscoverService();
+    const connectorModel = new ConnectorModel(
+      context.serverDB,
+      context.userId,
+      context.workspaceId,
+    );
+    // Same identity requirement as the Agent Builder runtime: built without an
+    // identity, DiscoverService sends no credentials and every market read fails
+    // as `unauthorized`.
+    const discoverService = new DiscoverService({
+      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+    });
 
     return {
       callAgent: async (
         params: CallAgentParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const { agentId, instruction, taskTitle, timeout } = params;
+        const { agentId, instruction } = params;
 
         if (ctx.isSubAgent) {
           return {
@@ -70,23 +102,62 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           };
         }
 
-        const description = taskTitle || `Call agent ${agentId}`;
-        const { started, subOperationId, threadId } = await ctx.subAgent.run({
-          agentId,
-          description,
-          instruction,
-          timeout: timeout || 1_800_000,
-        });
+        const background = params.runInBackground === true;
+
+        // The target's name titles its thread and, for a background call, is who
+        // the reply is delivered as.
+        const targetTitle = (await agentModel.getAgentConfigById(agentId))?.title;
+
+        const runner = ctx.subAgent;
+        const startRun = () =>
+          runner.run({
+            agentId,
+            background,
+            description: targetTitle || `Call agent ${agentId}`,
+            instruction,
+            timeout: 1_800_000,
+          });
+
+        let runResult: Awaited<ReturnType<typeof startRun>>;
+        if (background) {
+          const outcome = await startBackgroundSubAgent({
+            db: context.serverDB!,
+            groupId: ctx.groupId,
+            retryHint: 'Call callAgent again without runInBackground to wait for the reply.',
+            start: startRun,
+            threadId: ctx.threadId,
+            topicId: ctx.topicId,
+            userId: context.userId!,
+            workspaceId: context.workspaceId,
+          });
+          if ('refusal' in outcome) {
+            return {
+              content: outcome.refusal.message,
+              error: { code: outcome.refusal.code, message: outcome.refusal.message },
+              success: false,
+            };
+          }
+          runResult = outcome.result;
+        } else {
+          runResult = await startRun();
+        }
+        const { started, error, subOperationId, threadId, toolMessageId } = runResult;
 
         if (!started) {
+          const detail = error ? `: ${error}` : '.';
+          const message = `Agent "${agentId}" failed to start${detail}`;
           return {
-            content: `Agent "${agentId}" failed to start.`,
-            error: {
-              code: 'AGENT_CALL_START_FAILED',
-              message: `Agent "${agentId}" failed to start.`,
-            },
+            content: message,
+            error: { code: 'AGENT_CALL_START_FAILED', message },
             success: false,
           };
+        }
+
+        // Detached: the receipt is the whole tool result; the reply arrives later
+        // as a message from the target. It goes into the runner's placeholder,
+        // which anchors the thread.
+        if (background) {
+          return { content: buildBackgroundSubAgentReceipt(), success: true, toolMessageId };
         }
 
         return {
@@ -172,16 +243,35 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       getAgentDetail: async (params: GetAgentDetailParams): Promise<ToolExecutionResult> => {
         try {
           const agent = await agentModel.getAgentConfigById(params.agentId);
+
           if (!agent) {
+            // searchAgent can surface marketplace agents (short-code ids) that
+            // have no local agents row; read their detail through the market
+            // fallback instead of reporting a false "not found" (same behavior
+            // as the client AgentManagerRuntime).
+            const marketDetail = await getMarketAgentDetail(discoverService, params.agentId);
+            if (marketDetail) return marketDetail;
+
             return { content: `Agent "${params.agentId}" not found.`, success: false };
           }
+
+          // Normalize to identifier strings (annotated with mode when not
+          // pinned) — `agent.plugins` is the raw AgentPluginEntry[] (string |
+          // {identifier, mode}), but both the LLM-facing summary and the
+          // GetAgentDetailState.config.plugins contract expect string[].
+          // Passing object-shaped entries through to the client would break
+          // GetAgentDetailRender's <Tag key={plugin}>{plugin}</Tag>.
+          const pluginSummaries = agent.plugins?.map((entry) => {
+            const { identifier, mode } = parsePluginEntry(entry);
+            return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+          });
 
           const detail = {
             config: {
               model: agent.model,
               openingMessage: agent.openingMessage,
               openingQuestions: agent.openingQuestions,
-              plugins: agent.plugins,
+              plugins: pluginSummaries,
               provider: agent.provider,
               systemRole: agent.systemRole,
             },
@@ -199,8 +289,9 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           if (detail.meta.description) parts.push(detail.meta.description);
           if (detail.config.model)
             parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
-          if (detail.config.plugins?.length)
+          if (detail.config.plugins?.length) {
             parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+          }
           if (detail.config.systemRole) parts.push(`System Prompt: ${detail.config.systemRole}`);
 
           return {
@@ -215,28 +306,39 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
 
       installPlugin: async (params: InstallPluginParams): Promise<ToolExecutionResult> => {
         try {
-          const { agentId, identifier } = params;
+          const { agentId, identifier, source } = params;
           const agent = await agentModel.getAgentConfigById(agentId);
           if (!agent) {
             return { content: `Agent "${agentId}" not found.`, success: false };
           }
 
-          // Ensure the plugin is registered in user_installed_plugins so that
-          // PluginModel.query() can resolve its manifest during agent execution.
-          const existing = await pluginModel.findById(identifier);
-          if (!existing) {
-            await pluginModel.create({ identifier, type: 'plugin' });
-          }
+          // Pin only an id the runtime can load: a builtin, a connector, or a
+          // plugin whose manifest lists its APIs (fetched from the marketplace
+          // when not installed yet). Registering a bare row here used to report
+          // success for ids that never produced a tool.
+          const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
+            identifier,
+            { connectorModel, discoverService, pluginModel },
+            { agentId, source },
+          );
+          if (resolution.status !== 'loadable')
+            return unresolvablePluginResult(identifier, resolution);
 
-          const currentPlugins = (agent.plugins as string[] | null) || [];
-          if (!currentPlugins.includes(identifier)) {
+          // upsertPluginMode preserves an already-pinned entry (string or
+          // object) as-is and flips a disabled entry back to pinned in place,
+          // instead of blindly pushing a duplicate bare-string identifier.
+          if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
             await agentModel.updateConfig(agentId, {
-              plugins: [...currentPlugins, identifier],
+              plugins: upsertPluginMode(
+                agent.plugins ?? undefined,
+                identifier,
+                'pinned',
+              ) as unknown as string[],
             });
           }
 
           return {
-            content: `Successfully enabled plugin "${identifier}" for agent "${agentId}"`,
+            content: `Successfully enabled plugin "${identifier}" for agent "${agentId}".${installedNow ? NEXT_RUN_NOTE : ''}`,
             state: { installed: true, pluginId: identifier, success: true },
             success: true,
           };
@@ -254,6 +356,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             avatar?: string | null;
             backgroundColor?: string | null;
             description?: string | null;
+            heteroType?: HeterogeneousProviderConfig['type'];
             id: string;
             isMarket?: boolean;
             title?: string | null;
@@ -263,9 +366,18 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           let marketTotal = 0;
 
           if (source === 'user' || source === 'all') {
+            // This is the CRUD surface: every id it returns can be forwarded to
+            // `deleteAgent` / `updateAgent`. The inbox is product-owned and must
+            // not be deletable (see `AgentModel.delete`), so keep it out of the
+            // management search instead of letting a delete proposal reach it.
             const [userAgents, total] = await Promise.all([
-              agentModel.queryAgents({ keyword: params.keyword, limit, offset }),
-              agentModel.countAgents({ keyword: params.keyword }),
+              agentModel.queryAgents({
+                includeInbox: false,
+                keyword: params.keyword,
+                limit,
+                offset,
+              }),
+              agentModel.countAgents({ includeInbox: false, keyword: params.keyword }),
             ]);
             userTotal = total;
             results.push(...userAgents.map((a) => ({ ...a, isMarket: false })));
@@ -298,37 +410,22 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const shownUserCount = sliced.filter((a) => !a.isMarket).length;
           const hasMore = offset + shownUserCount < userTotal;
 
-          const headerBySource: Record<typeof source, string> = {
-            all: `Found ${userTotal} agents in your workspace and ${marketTotal} in the marketplace, showing ${sliced.length}:`,
-            market: `Found ${marketTotal} agents in the marketplace, showing the first ${sliced.length}:`,
-            user: `Found ${userTotal} agents in your workspace, showing ${offset + 1}-${offset + sliced.length}:`,
-          };
-
-          const notes: string[] = [];
-          if (params.limit && params.limit > MAX_SEARCH_AGENT_LIMIT) {
-            notes.push(
-              `Note: requested limit ${params.limit} exceeds the maximum of ${MAX_SEARCH_AGENT_LIMIT}, so results were capped at ${MAX_SEARCH_AGENT_LIMIT} per call.`,
-            );
-          }
-          if (hasMore) {
-            notes.push(
-              `More workspace agents available: call searchAgent with offset=${offset + shownUserCount}${source === 'all' ? ` and source="user"` : ''} to get the next page.`,
-            );
-          }
-
-          let content: string;
-          if (sliced.length === 0) {
-            content =
-              totalCount === 0
-                ? 'No agents found matching your search criteria.'
-                : `No agents at offset ${offset}; only ${totalCount} agents match. Retry with a smaller offset.`;
-          } else {
-            const list = sliced
-              .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
-              .join('\n');
-            content = `${headerBySource[source]}\n${list}`;
-          }
-          if (notes.length > 0) content += `\n\n${notes.join('\n')}`;
+          const content = searchAgentsResultsPrompt({
+            agents: sliced.map((a) => ({
+              description: a.description ?? undefined,
+              heteroType: a.heteroType,
+              id: a.id,
+              isMarket: a.isMarket,
+              title: a.title ?? undefined,
+            })),
+            hasMore,
+            marketTotal,
+            maxLimit: MAX_SEARCH_AGENT_LIMIT,
+            offset,
+            requestedLimit: params.limit,
+            source,
+            userTotal,
+          });
 
           return {
             content,
@@ -347,10 +444,24 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
         }
       },
 
+      searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
+        searchMarketTools({ discoverService, pluginModel }, params),
+
       updateAgent: async (params: UpdateAgentParams): Promise<ToolExecutionResult> => {
         try {
           const { agentId } = params;
           let { config, meta } = params;
+
+          // Existence guard: a Drizzle UPDATE on a missing/foreign agent row is a
+          // silent 0-row no-op, so writes would "succeed" without persisting
+          // anything. Fail loudly like the config path already does. Uses the
+          // lightweight existsById probe instead of getAgentConfigById, which
+          // needlessly enriches the row with knowledge associations just to
+          // test existence.
+          const exists = await agentModel.existsById(agentId);
+          if (!exists) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
 
           // Guard against LLM double-encoding: parse strings if needed
           if (typeof config === 'string') {
@@ -371,7 +482,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const updatedParts: string[] = [];
 
           if (config && Object.keys(config).length > 0) {
-            await agentModel.updateConfig(agentId, config as Record<string, unknown>);
+            await agentService.updateAgentConfig(agentId, config);
             updatedParts.push(`config: ${Object.keys(config).join(', ')}`);
           }
 
@@ -397,6 +508,14 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       updatePrompt: async (params: UpdatePromptParams): Promise<ToolExecutionResult> => {
         try {
           const { agentId, prompt } = params;
+
+          // Existence guard: same 0-row silent no-op hazard as updateAgent.
+          // Lightweight existsById probe (see updateAgent note).
+          const exists = await agentModel.existsById(agentId);
+          if (!exists) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
           await agentModel.update(agentId, { editorData: null, systemRole: prompt } as Record<
             string,
             unknown
@@ -416,4 +535,92 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
     };
   },
   identifier: AgentManagementIdentifier,
+};
+
+/**
+ * Best-effort marketplace detail lookup for ids that have no local agents row.
+ * Mirrors the client `AgentManagerRuntime.getMarketAgentDetail`; market config
+ * almost never carries `agencyConfig`, so the hetero runtime descriptor is
+ * intentionally not mirrored here (apps/server does not depend on
+ * `@lobechat/agent-manager-runtime`).
+ */
+const getMarketAgentDetail = async (
+  discoverService: DiscoverService,
+  agentId: string,
+): Promise<ToolExecutionResult | null> => {
+  let detail: Awaited<ReturnType<DiscoverService['getAssistantDetail']>>;
+  try {
+    detail = await discoverService.getAssistantDetail({
+      identifier: agentId,
+      source: 'new',
+    });
+  } catch (error) {
+    // Market lookup is best-effort: fall through to the local "not found",
+    // but keep the failure observable instead of silent.
+    log(
+      'getAgentDetail: market fallback lookup failed for identifier=%s: %s',
+      agentId,
+      error instanceof Error ? error.message : error,
+    );
+    return null;
+  }
+
+  const config = detail?.config as Record<string, any> | undefined;
+  if (!detail || !config) return null;
+
+  const plugins = config.plugins?.map((entry: any) => {
+    const { identifier, mode } = parsePluginEntry(entry);
+    return mode === 'pinned' ? identifier : `${identifier} (${mode})`;
+  }) as string[] | undefined;
+
+  // Marketplace configs can carry the model as an object
+  // ({ model, provider, parameters }) — extract the nested model/provider so
+  // the LLM-facing summary and GetAgentDetailRender never see "[object
+  // Object]" (same normalization as src/services/agent.ts).
+  let provider = config.provider as string | undefined;
+  let model = config.model as string | undefined;
+  if (model !== null && typeof model === 'object') {
+    const { model: modelName, provider: modelProvider } = model as {
+      model?: string;
+      provider?: string;
+    };
+    model = modelName;
+    provider = provider ?? modelProvider;
+  }
+  const systemRole = config.systemRole as string | undefined;
+
+  const parts: string[] = [];
+  if (detail.title) parts.push(`**${detail.title}**`);
+  if (detail.description) parts.push(detail.description);
+  if (model) parts.push(`Model: ${provider ? `${provider}/` : ''}${model}`);
+  if (plugins?.length) parts.push(`Plugins: ${plugins.join(', ')}`);
+  if (systemRole) parts.push(`System Prompt: ${systemRole}`);
+  parts.push(
+    'ℹ️ This is a marketplace agent (read-only). Install it into a workspace before editing.',
+  );
+
+  return {
+    content: parts.join('\n'),
+    state: {
+      agentId,
+      config: {
+        model,
+        openingMessage: config.openingMessage as string | undefined,
+        openingQuestions: config.openingQuestions as string[] | undefined,
+        plugins,
+        provider,
+        systemRole,
+      },
+      isMarket: true,
+      meta: {
+        avatar: detail.avatar,
+        backgroundColor: detail.backgroundColor,
+        description: detail.description,
+        tags: detail.tags,
+        title: detail.title,
+      },
+      success: true,
+    },
+    success: true,
+  };
 };

@@ -6,12 +6,18 @@ import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFact
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { isDeepSeekV4FamilyModel } from '../../utils/modelParse';
+import { assertContextWithinWindow, resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
+import { deepseekRuntimeModels } from './runtimeModels';
 import { sanitizeDeepSeekJsonPayload } from './sanitizePayload';
 
 export const isDeepSeekV4Model = (model: string | undefined) => isDeepSeekV4FamilyModel(model);
 const isEmptyContent = (content: unknown) =>
   content === '' || content === null || content === undefined;
-const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
+// Require non-empty text: an empty-string `thinking` has never been validated
+// against DeepSeek — empty reasoning falls back to the proven `' '` placeholder.
+const hasReasoningContent = (reasoning: any) =>
+  typeof reasoning?.content === 'string' && reasoning.content !== '';
 
 const buildThinkingBlock = (reasoning: any) =>
   hasReasoningContent(reasoning)
@@ -77,9 +83,31 @@ const normalizeMessagesForAnthropic = (
     if (message.role !== 'assistant') return message;
 
     const { reasoning, ...rest } = message;
-    const thinkingBlock = buildThinkingBlock(reasoning);
+    // Array content may already carry thinking parts built by the context
+    // engine (possibly Claude-signed or signature-only) — sanitize them for
+    // DeepSeek's thinking contract instead of stacking another block on top.
+    const existingParts = Array.isArray(message.content)
+      ? sanitizeAnthropicThinkingParts(message.content)
+      : undefined;
+    const hasThinkingPart = existingParts?.some((part: any) => part.type === 'thinking');
+
+    const thinkingBlock = hasThinkingPart ? undefined : buildThinkingBlock(reasoning);
     const effectiveThinkingBlock =
-      thinkingBlock || (forceThinking ? { thinking: ' ', type: 'thinking' as const } : undefined);
+      thinkingBlock ||
+      (!hasThinkingPart && forceThinking
+        ? { thinking: ' ', type: 'thinking' as const }
+        : undefined);
+
+    if (existingParts) {
+      const contentParts = effectiveThinkingBlock
+        ? [effectiveThinkingBlock, ...existingParts]
+        : existingParts;
+
+      return {
+        ...rest,
+        content: contentParts.length > 0 ? contentParts : [{ text: ' ', type: 'text' as const }],
+      };
+    }
 
     if (!effectiveThinkingBlock) return rest;
 
@@ -94,8 +122,32 @@ export const buildDeepSeekAnthropicPayload = async (
 ): Promise<Anthropic.MessageCreateParams> => {
   const resolvedThinking = resolveDeepSeekThinking(payload);
   const isThinkingDisabled = resolvedThinking?.type === 'disabled';
+
+  const anthropicMessages = normalizeMessagesForAnthropic(
+    payload.messages,
+    shouldEnableDeepSeekThinking(payload),
+  );
+
+  // resolveSafeMaxTokens skips explicit completion budgets, but the input must
+  // still fit the model's context window before the upstream request is sent.
+  if (payload.max_tokens !== undefined) {
+    assertContextWithinWindow({ ...payload, messages: anthropicMessages }, deepseekRuntimeModels);
+  }
+
   const resolvedMaxTokens =
     payload.max_tokens ??
+    // Cap the completion budget against the actual input size instead of always
+    // reserving the model's full `maxOutput`. DeepSeek-v4-pro reserves 384k for
+    // completion; with a prompt that on its own fits the 1M window, that fixed
+    // reservation tipped the total over the limit and produced a "phantom"
+    // ExceededContextWindow. resolveSafeMaxTokens shrinks the reservation to the
+    // remaining room, and fails fast with a structured ContextExceededPreFlight
+    // error when the prompt leaves less than ~1k tokens for completion (below
+    // deepseek-v4's default thinking budget → effectively context-full) — which
+    // is more actionable (fork_topic / larger-ctx suggestions) than either a
+    // doomed upstream 400 or a truncated stub completion. Estimate against the
+    // messages we actually send (anthropic-normalized).
+    resolveSafeMaxTokens({ ...payload, messages: anthropicMessages }, deepseekRuntimeModels) ??
     (await getModelPropertyWithFallback<number | undefined>(
       payload.model,
       'maxOutput',
@@ -107,10 +159,7 @@ export const buildDeepSeekAnthropicPayload = async (
     ...payload,
     effort: !isThinkingDisabled ? ((payload.effort ?? payload.reasoning_effort) as any) : undefined,
     max_tokens: resolvedMaxTokens,
-    messages: normalizeMessagesForAnthropic(
-      payload.messages,
-      shouldEnableDeepSeekThinking(payload),
-    ),
+    messages: anthropicMessages,
     thinking: isThinkingDisabled ? undefined : resolvedThinking,
   });
 

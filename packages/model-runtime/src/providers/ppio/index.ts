@@ -28,6 +28,9 @@ export const LobePPIOAI = createOpenAICompatibleRuntime({
           (m) => model.id.toLowerCase() === m.id.toLowerCase(),
         );
 
+        // PPIO declares capabilities on the model card itself (`features`,
+        // `input_modalities`); prefer them over known-model / keyword fallbacks so
+        // models outside the curated list keep their native abilities
         return {
           contextWindowTokens: model.context_size,
           description: model.description,
@@ -38,13 +41,20 @@ export const LobePPIOAI = createOpenAICompatibleRuntime({
             model.title ||
             model.id,
           enabled: knownModel?.enabled || false,
-          functionCall: knownModel?.abilities?.functionCall || false,
+          functionCall:
+            model.features?.includes('function-calling') ||
+            knownModel?.abilities?.functionCall ||
+            false,
           id: model.id,
+          ...(model.max_output_tokens ? { maxOutput: model.max_output_tokens } : {}),
           reasoning:
+            model.features?.includes('reasoning') ||
             reasoningKeywords.some((keyword) => model.id.toLowerCase().includes(keyword)) ||
             knownModel?.abilities?.reasoning ||
             false,
+          video: model.input_modalities?.includes('video') || knownModel?.abilities?.video || false,
           vision:
+            model.input_modalities?.includes('image') ||
             model.description.toLowerCase().includes('视觉') ||
             knownModel?.abilities?.vision ||
             false,

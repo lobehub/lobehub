@@ -1,6 +1,13 @@
-import { Button, Flexbox, Markdown, Snippet, Text } from '@lobehub/ui';
-import { Card, Space } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Markdown,
+  Snippet,
+  Text,
+} from '@lobehub/ui';
 import { AlertTriangle, CheckCircle, ExternalLink, Terminal } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { memo } from 'react';
@@ -124,7 +131,12 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
         >
           <Flexbox gap={8}>
             {systemDependencies.map((dep) => (
-              <Card className={styles.dependencyCard} key={dep.name} size="small">
+              <Block
+                className={styles.dependencyCard}
+                key={dep.name}
+                padding={12}
+                variant={'outlined'}
+              >
                 <Flexbox gap={12}>
                   <Flexbox horizontal align="center" justify="space-between">
                     <Flexbox horizontal align="center" gap={8}>
@@ -182,7 +194,7 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
                     </Flexbox>
                   )}
                 </Flexbox>
-              </Card>
+              </Block>
             ))}
           </Flexbox>
         </m.div>
@@ -197,14 +209,14 @@ const MCPDependenciesGuide = memo<MCPDependenciesGuideProps>(
             <Button size="small" onClick={handleCancel}>
               {t('common:cancel')}
             </Button>
-            <Space>
+            <Flexbox horizontal align={'center'} gap={8}>
               <Button size="small" onClick={handleSkipCheck}>
                 {t('mcpInstall.skipDependencies')}
               </Button>
               <Button size="small" type="primary" onClick={handleRetryCheck}>
                 {t('mcpInstall.recheckDependencies')}
               </Button>
-            </Space>
+            </Flexbox>
           </Flexbox>
         </m.div>
       </m.div>

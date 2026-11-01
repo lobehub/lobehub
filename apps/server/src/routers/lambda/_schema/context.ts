@@ -9,10 +9,10 @@ import { z } from 'zod';
  */
 export const conversationContextSchema = z.object({
   agentId: z.string().optional(),
-  groupId: z.string().nullable().optional(),
-  sessionId: z.string().nullable().optional(),
-  threadId: z.string().nullable().optional(),
-  topicId: z.string().nullable().optional(),
+  groupId: z.string().nullish(),
+  sessionId: z.string().nullish(),
+  threadId: z.string().nullish(),
+  topicId: z.string().nullish(),
 });
 
 /**
@@ -21,10 +21,10 @@ export const conversationContextSchema = z.object({
  */
 export const basicContextSchema = z.object({
   agentId: z.string().optional(),
-  groupId: z.string().nullable().optional(),
-  sessionId: z.string().nullable().optional(),
-  threadId: z.string().nullable().optional(),
-  topicId: z.string().nullable().optional(),
+  groupId: z.string().nullish(),
+  sessionId: z.string().nullish(),
+  threadId: z.string().nullish(),
+  topicId: z.string().nullish(),
 });
 
 export type ConversationContextInput = z.infer<typeof conversationContextSchema>;

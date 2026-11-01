@@ -1,8 +1,14 @@
-import { and, asc, count, desc, eq, isNull, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { agentEvalDatasets, agentEvalTestCases, type NewAgentEvalDataset } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+
+interface QueryDatasetsFilters {
+  benchmarkId?: string;
+  benchmarkIds?: string[];
+  sourceExperimentId?: string;
+}
 
 export class AgentEvalDatasetModel {
   private userId: string;
@@ -51,13 +57,24 @@ export class AgentEvalDatasetModel {
 
   /**
    * Query datasets (system + user/workspace-owned) with test case counts
-   * @param benchmarkId - Optional benchmark filter
+   * @param filters - Optional benchmark / experiment filters
    */
-  query = async (benchmarkId?: string) => {
+  query = async (filters?: QueryDatasetsFilters) => {
+    const { benchmarkId, benchmarkIds, sourceExperimentId } = filters || {};
     const conditions = [this.ownership()];
 
     if (benchmarkId) {
       conditions.push(eq(agentEvalDatasets.benchmarkId, benchmarkId));
+    }
+
+    if (benchmarkIds && benchmarkIds.length > 0) {
+      conditions.push(inArray(agentEvalDatasets.benchmarkId, benchmarkIds));
+    }
+
+    if (sourceExperimentId) {
+      conditions.push(eq(agentEvalDatasets.sourceExperimentId, sourceExperimentId));
+      // Scoped subsets are experiment-owned; exclude system rows from this scope.
+      conditions.push(this.mutableOwnership());
     }
 
     return this.db
@@ -71,6 +88,7 @@ export class AgentEvalDatasetModel {
         identifier: agentEvalDatasets.identifier,
         metadata: agentEvalDatasets.metadata,
         name: agentEvalDatasets.name,
+        sourceExperimentId: agentEvalDatasets.sourceExperimentId,
         testCaseCount: count(agentEvalTestCases.id).as('testCaseCount'),
         updatedAt: agentEvalDatasets.updatedAt,
         userId: agentEvalDatasets.userId,
@@ -80,6 +98,52 @@ export class AgentEvalDatasetModel {
       .where(and(...conditions))
       .groupBy(agentEvalDatasets.id)
       .orderBy(desc(agentEvalDatasets.createdAt));
+  };
+
+  /**
+   * Read-only paginated list (system + user/workspace-owned), without the
+   * test-case join used by `query`
+   */
+  queryList = async (filter?: { benchmarkId?: string; limit?: number; offset?: number }) => {
+    const conditions = [this.ownership()];
+
+    if (filter?.benchmarkId) {
+      conditions.push(eq(agentEvalDatasets.benchmarkId, filter.benchmarkId));
+    }
+
+    const query = this.db
+      .select()
+      .from(agentEvalDatasets)
+      .where(and(...conditions))
+      .orderBy(desc(agentEvalDatasets.createdAt))
+      .$dynamic();
+
+    if (filter?.limit !== undefined) {
+      query.limit(filter.limit);
+    }
+
+    if (filter?.offset !== undefined) {
+      query.offset(filter.offset);
+    }
+
+    return query;
+  };
+
+  /**
+   * Count datasets (system + user/workspace-owned) with the same predicates as `queryList`
+   */
+  count = async (filter?: { benchmarkId?: string }) => {
+    const conditions = [this.ownership()];
+
+    if (filter?.benchmarkId) {
+      conditions.push(eq(agentEvalDatasets.benchmarkId, filter.benchmarkId));
+    }
+
+    const result = await this.db
+      .select({ value: count() })
+      .from(agentEvalDatasets)
+      .where(and(...conditions));
+    return Number(result[0]?.value) || 0;
   };
 
   /**

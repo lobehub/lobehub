@@ -29,8 +29,12 @@ export const formatGrepResults = ({
       return `  ${parts.join('')}`;
     })
     .join('\n');
+  // Say how to reach the hidden matches instead of only counting them; the grep tool has no
+  // offset, so the way forward is a narrower search.
   const moreInfo =
-    matches.length > maxDisplay ? `\n  ... and ${matches.length - maxDisplay} more` : '';
+    matches.length > maxDisplay
+      ? `\n[Showing ${maxDisplay} of ${matches.length} locations. To see the rest, narrow the search with a more specific pattern, path or glob.]`
+      : '';
 
   return `${message}:\n${matchList}${moreInfo}`;
 };

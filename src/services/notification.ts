@@ -5,11 +5,16 @@ class NotificationService {
     params: {
       category?: string;
       cursor?: string;
+      isRead?: boolean;
       limit?: number;
       unreadOnly?: boolean;
     } = {},
   ) => {
     return lambdaClient.notification.list.query(params);
+  };
+
+  getNavigationCounts = () => {
+    return lambdaClient.notification.navigationCounts.query();
   };
 
   getUnreadCount = (): Promise<number> => {

@@ -1,3 +1,4 @@
+import { trace } from '@lobechat/observability-otel/api';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -11,6 +12,8 @@ import { FileService } from '@/server/services/file';
 import { type AsyncTaskError } from '@/types/asyncTask';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type Generation } from '@/types/generation';
+
+import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
 
 const generationProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -36,6 +39,11 @@ export const generationRouter = router({
     .use(withScopedPermission('file:delete'))
     .input(z.object({ generationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const generation = await ctx.generationModel.findById(input.generationId);
+      // Missing row → keep the delete idempotent, nothing to authorize.
+      if (!generation) return;
+      assertWorkspaceRowManageable(ctx, generation.userId, 'generation');
+
       // Delete the generation record from database and get the deleted data
       const deletedGeneration = await ctx.generationModel.delete(input.generationId);
 
@@ -65,6 +73,15 @@ export const generationRouter = router({
       if (!asyncTask) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Async task not found' });
       }
+
+      /**
+       * Image and video clients (including the chat video tool, every 3s) poll this shared
+       * endpoint, so tag the request span with the task type to split polling volume by kind.
+       */
+      trace.getActiveSpan()?.setAttributes({
+        'generation.task.status': asyncTask.status ?? undefined,
+        'generation.task.type': asyncTask.type ?? undefined,
+      });
 
       const { status, error } = asyncTask;
       const result: GetGenerationStatusResult = {

@@ -7,6 +7,35 @@ const stepfunChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'StepFun’s new-generation flagship base model for real-world tasks, focused on coding and professional knowledge work. It natively supports text, image, and video input with a 1M-token context window, and is built for tasks that need to process large amounts of information, call tools, and keep pushing through to a delivered result.',
+    displayName: 'Step 5 Preview',
+    enabled: true,
+    family: 'step',
+    generation: 'step-5',
+    id: 'step-5-preview',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.35, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 7, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['reasoningEffort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       search: true,
       vision: true,
       video: true,

@@ -1,96 +1,96 @@
 'use client';
 
-import { Center, Checkbox, Flexbox } from '@lobehub/ui';
+import { Center, cssVar, Flexbox, Spin } from '@lobehub/ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
-import { cssVar } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, type UIEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Virtuoso } from 'react-virtuoso';
+import type { VirtuosoHandle } from 'react-virtuoso';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { useClientDataSWR } from '@/libs/swr';
-import { resourceKeys } from '@/libs/swr/keys';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { resourceService } from '@/services/resource';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import AsyncError from '@/components/AsyncError';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useGlobalStore } from '@/store/global';
-import { INITIAL_STATUS } from '@/store/global/initialState';
-import type { AsyncTaskStatus } from '@/types/asyncTask';
-import type { FileListItem } from '@/types/files';
+import {
+  DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+  INITIAL_STATUS,
+} from '@/store/global/initialState';
 
-import FileListItemComponent from './ListView/ListItem';
+import { useExplorerSearchResults } from './hooks/useExplorerSearchResults';
+import { useExplorerSelectionActions } from './hooks/useExplorerSelection';
+import ListViewHeader from './ListView/ListViewHeader';
+import VirtualizedFileList from './ListView/VirtualizedFileList';
 import MasonryItemWrapper from './MasonryView/MasonryItem/MasonryItemWrapper';
-import { useMasonryColumnCount } from './useMasonryColumnCount';
+import SelectionToolbar from './MasonryView/SelectionToolbar';
+import { useContainerMasonryColumnCount } from './useMasonryColumnCount';
 
 const SearchResultsOverlay = memo(() => {
   const { t } = useTranslation('components');
-  const [searchQuery, libraryId, category, viewMode] = useResourceManagerStore((s) => [
-    s.searchQuery,
+  const [libraryId, viewMode, listVisibility] = useResourceManagerStore((s) => [
     s.libraryId,
-    s.category,
     s.viewMode,
+    s.listVisibility,
   ]);
+  const {
+    data,
+    error,
+    hasMore,
+    isLoading,
+    isLoadingMore,
+    loadMore,
+    loadMoreError,
+    revalidate,
+    searchParams,
+    total,
+  } = useExplorerSearchResults();
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-  const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const columnWidths = useGlobalStore((s) => ({
+    ...DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
+    ...(s.status.resourceManagerColumnWidths || INITIAL_STATUS.resourceManagerColumnWidths),
+  }));
+  const [masonryContainer, setMasonryContainer] = useState<HTMLDivElement | null>(null);
+  const columnCount = useContainerMasonryColumnCount(masonryContainer);
 
-  const columnWidths = useGlobalStore(
-    (s) => s.status.resourceManagerColumnWidths || INITIAL_STATUS.resourceManagerColumnWidths,
-  );
-  const columnCount = useMasonryColumnCount();
+  // Personal account has only one uploader (the user themselves), so hide the
+  // column entirely there — it only makes sense in a workspace with multiple members.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const showUploader = !!activeWorkspaceId && (!!libraryId || listVisibility !== 'private');
 
-  const isActive = !!searchQuery && searchQuery.length > 0;
-
-  const { data: rawData, isLoading } = useClientDataSWR(
-    isActive
-      ? resourceKeys.search({
-          category: libraryId ? undefined : category,
-          libraryId,
-          q: searchQuery,
-        })
-      : null,
-    async ([, params]: [string, { category?: string; libraryId?: string; q: string }]) => {
-      const response = await resourceService.queryResources({
-        ...params,
-        limit: 50,
-        offset: 0,
-        showFilesInKnowledgeBase: false,
-      } as any);
-      return response.items;
-    },
-  );
-
-  const data: FileListItem[] | undefined = useMemo(
-    () =>
-      rawData?.map((item) => ({
-        ...item,
-        chunkCount: item.chunkCount ?? null,
-        chunkingError: item.chunkingError ?? null,
-        chunkingStatus: (item.chunkingStatus ?? null) as AsyncTaskStatus | null,
-        embeddingError: item.embeddingError ?? null,
-        embeddingStatus: (item.embeddingStatus ?? null) as AsyncTaskStatus | null,
-        finishEmbedding: item.finishEmbedding ?? false,
-        url: item.url ?? '',
-      })),
-    [rawData],
-  );
+  // Selection lives in the ResourceManager store, like the folder list's, so the
+  // header's batch actions (delete, chunking, add to library) act on the hits
+  // checked here.
+  const { isItemSelectable, selectAllState, selectedFileIds, toggleItemSelection } =
+    useExplorerSelectionActions(data);
 
   const masonryContext = useMemo(
     () => ({
+      isItemSelectable,
       knowledgeBaseId: libraryId ?? undefined,
-      onSelectedChange: (id: string, checked: boolean) => {
-        if (checked) {
-          setSelectedFileIds((prev) => [...prev, id]);
-        } else {
-          setSelectedFileIds((prev) => prev.filter((fid) => fid !== id));
-        }
-      },
-      selectAllState: 'loaded' as const,
+      onSelectedChange: toggleItemSelection,
+      selectAllState,
       selectFileIds: selectedFileIds,
     }),
-    [libraryId, selectedFileIds],
+    [isItemSelectable, libraryId, selectAllState, selectedFileIds, toggleItemSelection],
   );
 
-  if (!isActive) return null;
+  const handleMasonryScroll = useCallback(
+    (e: UIEvent<HTMLDivElement>) => {
+      const { clientHeight, scrollHeight, scrollTop } = e.currentTarget;
+      // While a page failed, stop auto-fetching: the tail shows a retry and
+      // scrolling must not re-issue the failing request on every frame.
+      if (
+        hasMore &&
+        !isLoadingMore &&
+        !loadMoreError &&
+        scrollHeight - scrollTop - clientHeight < 300
+      )
+        void loadMore();
+    },
+    [hasMore, isLoadingMore, loadMore, loadMoreError],
+  );
+
+  if (!searchParams) return null;
 
   return (
     <div
@@ -108,9 +108,17 @@ const SearchResultsOverlay = memo(() => {
     >
       {isLoading ? (
         <Center height="100%">
-          <NeuralNetworkLoading size={48} />
+          <Spin size="large" />
         </Center>
-      ) : !data || data.length === 0 ? (
+      ) : error && data.length === 0 ? (
+        // A failed search fetch used to fall through to the "no results" state, telling
+        // the user their query matched nothing when the request actually errored
+        // (Read §1.1). Branch the failure before the no-match state; the no-match
+        // variant below is untouched and still handles a genuine zero-result search.
+        <Center height="100%">
+          <AsyncError error={error} variant={'block'} onRetry={() => revalidate()} />
+        </Center>
+      ) : data.length === 0 ? (
         <Center height="100%">
           <Flexbox align="center" gap={8}>
             <SearchIcon size={32} style={{ color: cssVar.colorTextQuaternary as string }} />
@@ -120,100 +128,42 @@ const SearchResultsOverlay = memo(() => {
           </Flexbox>
         </Center>
       ) : viewMode === 'list' ? (
-        <Flexbox height={'100%'}>
-          <div style={{ flex: 1, overflow: 'auto hidden' }}>
-            <Flexbox
-              horizontal
-              align="center"
-              paddingInline={8}
-              style={{
-                borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
-                color: cssVar.colorTextDescription as string,
-                fontSize: 12,
-                height: 40,
-                minHeight: 40,
-                minWidth: 800,
-              }}
-            >
-              <Center height={40} style={{ paddingInline: 4 }}>
-                <Checkbox disabled checked={false} />
-              </Center>
-              <Flexbox
-                justify="center"
-                style={{
-                  flexShrink: 0,
-                  height: '100%',
-                  maxWidth: columnWidths.name,
-                  minWidth: columnWidths.name,
-                  paddingBlock: 6,
-                  paddingInline: '20px 16px',
-                  width: columnWidths.name,
-                }}
-              >
-                {t('FileManager.title.title')}
-              </Flexbox>
-              <Flexbox
-                justify="center"
-                style={{
-                  flexShrink: 0,
-                  height: '100%',
-                  paddingBlock: 6,
-                  paddingInlineEnd: 16,
-                  width: columnWidths.date,
-                }}
-              >
-                {t('FileManager.title.createdAt')}
-              </Flexbox>
-              <Flexbox
-                justify="center"
-                style={{
-                  flexShrink: 0,
-                  height: '100%',
-                  paddingBlock: 6,
-                  paddingInlineEnd: 16,
-                  width: columnWidths.size,
-                }}
-              >
-                {t('FileManager.title.size')}
-              </Flexbox>
-            </Flexbox>
-            <div style={{ height: 'calc(100% - 40px)', overflow: 'hidden', position: 'relative' }}>
-              <Virtuoso
-                data={data}
-                defaultItemHeight={48}
-                style={{ height: '100%' }}
-                itemContent={(index, item) => {
-                  if (!item) return null;
-                  return (
-                    <FileListItemComponent
-                      columnWidths={columnWidths}
-                      index={index}
-                      key={item.id}
-                      selected={selectedFileIds.includes(item.id)}
-                      onSelectedChange={(id, checked) => {
-                        if (checked) {
-                          setSelectedFileIds((prev) => [...prev, id]);
-                        } else {
-                          setSelectedFileIds((prev) => prev.filter((fid) => fid !== id));
-                        }
-                      }}
-                      {...item}
-                    />
-                  );
-                }}
-              />
-            </div>
+        // Size the list to the overlay's remaining height (below the header and
+        // select-all hint): a library hero sits above the overlay, so a
+        // viewport-derived height would push the last rows below the clip.
+        <Flexbox height={'100%'} style={{ overflow: 'auto hidden' }}>
+          <ListViewHeader
+            columnWidths={columnWidths}
+            data={data}
+            hasMore={hasMore}
+            showUploader={showUploader}
+            total={total}
+          />
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <VirtualizedFileList
+              columnWidths={columnWidths}
+              data={data}
+              hasMore={hasMore}
+              height={'100%'}
+              loadMore={loadMore}
+              loadMoreError={loadMoreError}
+              showUploader={showUploader}
+              virtuosoRef={virtuosoRef}
+            />
           </div>
         </Flexbox>
       ) : (
-        <div
-          style={{
-            flex: 1,
-            height: '100%',
-            overflowY: 'auto',
-          }}
-        >
-          <div style={{ paddingBlockEnd: 24, paddingBlockStart: 12, paddingInline: 24 }}>
+        <div style={{ flex: 1, height: '100%', overflowY: 'auto' }} onScroll={handleMasonryScroll}>
+          <div
+            ref={setMasonryContainer}
+            style={{ paddingBlockEnd: 24, paddingBlockStart: 12, paddingInline: 24 }}
+          >
+            <SelectionToolbar
+              data={data}
+              hasMore={hasMore}
+              itemCount={total ?? data.length}
+              total={total}
+            />
             <VirtuosoMasonry
               ItemContent={MasonryItemWrapper}
               columnCount={columnCount}
@@ -224,6 +174,16 @@ const SearchResultsOverlay = memo(() => {
                 overflow: 'hidden',
               }}
             />
+            {loadMoreError ? (
+              <div style={{ paddingBlockStart: 8 }}>
+                <AsyncError
+                  error={loadMoreError}
+                  retrying={isLoadingMore}
+                  variant={'inline'}
+                  onRetry={() => void loadMore()}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       )}

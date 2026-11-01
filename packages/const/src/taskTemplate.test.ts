@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { RECOMMENDED_SKILLS, RecommendedSkillType } from './recommendedSkill';
 import {
   TASK_TEMPLATE_ICONS,
   TASK_TEMPLATE_RECOMMEND_COUNT,
@@ -17,5 +18,26 @@ describe('taskTemplate constants', () => {
 
   it('keeps icon identifiers stable for renderers', () => {
     expect(TASK_TEMPLATE_ICONS).toEqual(['github']);
+  });
+
+  it('keeps PostHog visible in recommended LobeHub skills', () => {
+    expect(RECOMMENDED_SKILLS).toContainEqual({
+      id: 'posthog',
+      type: RecommendedSkillType.Lobehub,
+    });
+  });
+
+  it('keeps image generation default-installed as a recommended builtin', () => {
+    expect(RECOMMENDED_SKILLS).toContainEqual({
+      id: 'lobe-image-generation',
+      type: RecommendedSkillType.Builtin,
+    });
+  });
+
+  it('keeps video generation default-installed as a recommended builtin', () => {
+    expect(RECOMMENDED_SKILLS).toContainEqual({
+      id: 'lobe-video-generation',
+      type: RecommendedSkillType.Builtin,
+    });
   });
 });

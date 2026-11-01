@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   associate: vi.fn(),
   createTopic: vi.fn(),
   findByAgentAndDocumentTrigger: vi.fn(),
+  getReaderDocument: vi.fn(),
   findRowByDocumentId: vi.fn(),
   getServerDB: vi.fn(),
 }));
@@ -30,16 +31,20 @@ vi.mock('@/database/models/agentDocuments', async (importOriginal) => {
 });
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    create: mocks.createTopic,
-    findByAgentAndDocumentTrigger: mocks.findByAgentAndDocumentTrigger,
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mocks.createTopic,
+      findByAgentAndDocumentTrigger: mocks.findByAgentAndDocumentTrigger,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topicDocument', () => ({
-  TopicDocumentModel: vi.fn().mockImplementation(() => ({
-    associate: mocks.associate,
-  })),
+  TopicDocumentModel: vi.fn().mockImplementation(function () {
+    return {
+      associate: mocks.associate,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentDocuments', () => ({
@@ -61,10 +66,9 @@ describe('agentDocumentRouter.getOrCreateChatTopic', () => {
     vi.clearAllMocks();
     mocks.getServerDB.mockResolvedValue({ kind: 'server-db' });
 
-    vi.mocked(AgentDocumentsService).mockImplementation(
-      () =>
-        ({ findRowByDocumentId: mocks.findRowByDocumentId }) as unknown as AgentDocumentsService,
-    );
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return { findRowByDocumentId: mocks.findRowByDocumentId } as unknown as AgentDocumentsService;
+    });
   });
 
   it('returns the existing topic when a doc-anchored row is already linked', async () => {
@@ -142,5 +146,62 @@ describe('agentDocumentRouter.getOrCreateChatTopic', () => {
     ).rejects.toThrow(/Document not found/);
     expect(mocks.createTopic).not.toHaveBeenCalled();
     expect(mocks.associate).not.toHaveBeenCalled();
+  });
+});
+
+describe('agentDocumentRouter.getReaderDocument', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getServerDB.mockResolvedValue({ kind: 'server-db' });
+    vi.mocked(AgentDocumentsService).mockImplementation(function () {
+      return { getReaderDocument: mocks.getReaderDocument } as unknown as AgentDocumentsService;
+    });
+  });
+
+  it('returns only the read-only page fields for an agent-bound document', async () => {
+    mocks.getReaderDocument.mockResolvedValue({
+      accessPublic: 0,
+      accessSelf: 3,
+      accessShared: 0,
+      agentId: 'agent-1',
+      content: '# Projected Markdown',
+      documentId: 'docs_abc',
+      editorData: { root: {} },
+      filename: 'spec.md',
+      fileType: 'text/markdown',
+      sourceType: 'file',
+      title: 'Spec',
+      updatedAt: new Date('2026-07-31T00:00:00.000Z'),
+      userId: 'user-1',
+    });
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+    const result = await caller.getReaderDocument({
+      agentId: 'agent-1',
+      documentId: 'docs_abc',
+    });
+
+    expect(mocks.getReaderDocument).toHaveBeenCalledWith('agent-1', 'docs_abc');
+    expect(result).toEqual({
+      content: '# Projected Markdown',
+      documentId: 'docs_abc',
+      filename: 'spec.md',
+      fileType: 'text/markdown',
+      sourceType: 'file',
+      title: 'Spec',
+      updatedAt: new Date('2026-07-31T00:00:00.000Z'),
+    });
+    expect(result).not.toHaveProperty('editorData');
+    expect(result).not.toHaveProperty('userId');
+  });
+
+  it('returns NOT_FOUND when the document is not bound to the requested agent', async () => {
+    mocks.getReaderDocument.mockResolvedValue(undefined);
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.getReaderDocument({ agentId: 'agent-1', documentId: 'docs_missing' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

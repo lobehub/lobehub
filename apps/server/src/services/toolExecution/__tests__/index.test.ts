@@ -1,9 +1,340 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import { executeToolWithRetry } from '@lobechat/agent-runtime';
+import { CloudSandboxExecutionRuntime } from '@lobechat/builtin-tool-cloud-sandbox/executionRuntime';
+import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
+import { TRPCError } from '@trpc/server';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createMCPError } from '@/libs/mcp/types';
+import { deviceGateway } from '@/server/services/deviceGateway';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 import { ToolExecutionService } from '../index';
+import { localSystemRuntime } from '../serverRuntimes/localSystem';
+
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: {
+    executeMcpCall: vi.fn(),
+    executeToolCall: vi.fn(),
+    isConfigured: false,
+    queryDeviceList: vi.fn().mockResolvedValue([]),
+  },
+}));
+vi.mock('@/server/services/deviceGateway/dispatchAuthorization', () => ({
+  resolveDeviceDispatchAuthorizationFailure: vi.fn().mockResolvedValue(undefined),
+}));
+// The tunnel fallback must use the visibility-aware scoped helper, never the
+// raw (visibility-blind) gateway pool — see resolveMcpTunnelTarget.
+vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
+  getScopedOnlineDevices: vi.fn().mockResolvedValue([]),
+}));
 
 describe('ToolExecutionService', () => {
+  it('keeps a readable content when a runtime throws a plain budget error object', async () => {
+    // The lobehub provider rejects with a plain object (not an Error) whose
+    // message is nested under `error.message`.
+    const budgetError = {
+      budget: { availableCredits: 0, requiredCredits: 1219, shortfallCredits: 1219 },
+      error: { message: 'Budget exceeded' },
+      errorType: 'InsufficientBudgetForModel',
+      provider: 'lobehub',
+    };
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: { execute: vi.fn().mockRejectedValue(budgetError) } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'analyzeMedia',
+        arguments: '{}',
+        id: 'call_budget',
+        identifier: 'lobe-agent',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Budget exceeded');
+    expect(result.content).toContain('InsufficientBudgetForModel');
+    expect(result.error).toMatchObject({ errorType: 'InsufficientBudgetForModel' });
+  });
+
+  it('keeps a failed command HTTP status as command output', async () => {
+    const output = 'curl: (22) The requested URL returned error: 403';
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockResolvedValue({ content: output, success: false }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'runCommand',
+        arguments: '{}',
+        id: 'http-command',
+        identifier: 'lobe-cloud-sandbox',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.content).toBe(output);
+    expect(result.error).not.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it.each(['returned', 'thrown'])(
+    'retries a read-only sandbox %s network failure',
+    async (mode) => {
+      const error = { code: 'SERVICE_UNAVAILABLE', message: 'Network error', status: 503 };
+      const call =
+        mode === 'returned'
+          ? vi
+              .fn()
+              .mockResolvedValueOnce({ error, result: null, success: false })
+              .mockResolvedValue({ result: { content: 'ok' }, success: true })
+          : vi
+              .fn()
+              .mockRejectedValueOnce(Object.assign(new Error(error.message), error))
+              .mockResolvedValue({ result: { content: 'ok' }, success: true });
+      const runtime = new CloudSandboxExecutionRuntime({
+        callTool: call,
+        exportAndUploadFile: vi.fn(),
+      });
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute: () => runtime.readFile({ path: '/page.html' }) } as any,
+        mcpService: {} as any,
+      });
+      const { attempts, result } = await executeToolWithRetry(
+        () =>
+          service.executeTool(
+            {
+              apiName: 'readFile',
+              arguments: '{}',
+              id: 'read-retry',
+              identifier: 'lobe-cloud-sandbox',
+              type: 'builtin',
+            },
+            { toolManifestMap: {} },
+          ),
+        { maxRetries: 2 },
+      );
+
+      expect(result.success).toBe(true);
+      expect(attempts).toBe(2);
+      expect(call).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each([
+    {
+      case: 'the device never answered',
+      failure: {
+        content:
+          'This tool call timed out before the device answered. The work may still be running on the device, so do NOT blindly repeat anything that writes or has side effects.',
+        error: 'DEVICE_RESPONSE_TIMEOUT: The operation was aborted due to timeout',
+        success: false,
+      },
+    },
+    {
+      // The executor classifies `errorData ?? error`, so a structured payload
+      // bypasses the string path entirely. Its 503 status alone would classify
+      // as `retry` and replay the call.
+      case: 'the device is offline with structured errorData',
+      failure: {
+        content:
+          'The device is not reachable right now, so this tool call never ran on it (gateway responded HTTP 503). Nothing was executed, so retrying the same call is safe.',
+        error: 'DEVICE_OFFLINE',
+        errorData: {
+          code: 'DEVICE_OFFLINE',
+          message: 'Device is offline',
+          retryable: true,
+          status: 503,
+        },
+        success: false,
+      },
+    },
+  ])('does not replay a device command when $case', async ({ failure }) => {
+    // The device may already be running the first copy: a woken laptop ran a
+    // single `echo >> file` three times after the transport replayed it.
+    vi.mocked(deviceGateway.executeToolCall).mockClear();
+    vi.mocked(deviceGateway.executeToolCall).mockResolvedValue(failure as any);
+    const runtime = localSystemRuntime.factory({
+      activeDeviceId: 'device-1',
+      operationId: 'op-1',
+      toolManifestMap: {},
+      userId: 'user-1',
+    }) as Record<string, (args: unknown) => Promise<any>>;
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: () => runtime.runCommand({ command: 'echo once >> /tmp/count.txt' }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const { attempts, result } = await executeToolWithRetry(
+      () =>
+        service.executeTool(
+          {
+            apiName: 'runCommand',
+            arguments: '{}',
+            id: 'device-call',
+            identifier: 'lobe-local-system',
+            type: 'builtin',
+          },
+          { toolManifestMap: {} },
+        ),
+      { maxRetries: 2 },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toBe(failure.content);
+    expect(result.error).toMatchObject({ kind: 'stop' });
+    expect(result.errorData).toEqual(
+      'errorData' in failure ? { ...failure.errorData, kind: 'stop' } : undefined,
+    );
+    expect(attempts).toBe(1);
+    expect(deviceGateway.executeToolCall).toHaveBeenCalledTimes(1);
+  });
+
+  describe.each(['writeFile', 'runCommand', 'executeCode', 'exportFile'] as const)(
+    'non-retryable sandbox %s failures',
+    (api) => {
+      it.each(['returned', 'thrown'])(
+        'does not repeat side effects after a %s network error',
+        async (mode) => {
+          const error = {
+            code: 'SERVICE_UNAVAILABLE',
+            message: 'Network error after execution',
+            status: 503,
+          };
+          const call =
+            mode === 'returned'
+              ? vi
+                  .fn()
+                  .mockResolvedValue({ error, result: null, filename: 'page.html', success: false })
+              : vi.fn().mockRejectedValue(Object.assign(new Error(error.message), error));
+          const runtime = new CloudSandboxExecutionRuntime({
+            callTool: call,
+            exportAndUploadFile: call,
+          });
+          const execute = () =>
+            api === 'writeFile'
+              ? runtime.writeFile({ content: 'content', path: '/page.html' })
+              : api === 'runCommand'
+                ? runtime.runCommand({ command: 'echo effect' })
+                : api === 'executeCode'
+                  ? runtime.executeCode({ code: 'print("effect")' })
+                  : runtime.exportFile({ path: '/page.html' });
+          const service = new ToolExecutionService({
+            builtinToolsExecutor: { execute } as any,
+            mcpService: {} as any,
+          });
+          const { attempts, result } = await executeToolWithRetry(
+            () =>
+              service.executeTool(
+                {
+                  apiName: api,
+                  arguments: '{}',
+                  id: 'side-effect',
+                  identifier: 'lobe-cloud-sandbox',
+                  type: 'builtin',
+                },
+                { toolManifestMap: {} },
+              ),
+            { maxRetries: 2 },
+          );
+
+          expect(result.success).toBe(false);
+          expect(result.error).toMatchObject({ kind: 'stop', message: error.message });
+          expect(attempts).toBe(1);
+          expect(call).toHaveBeenCalledTimes(1);
+        },
+      );
+    },
+  );
+
+  it.each([
+    { identifier: 'lobe-cloud-sandbox', error: { message: 'Forbidden' } },
+    { identifier: 'linear', error: { code: 'LOBEHUB_SKILL_ERROR', message: 'Forbidden' } },
+  ])('makes a bare denial actionable for $identifier', async ({ identifier, error }) => {
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockResolvedValue({ content: 'Forbidden', error, success: false }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      { apiName: 'writeFile', arguments: '{}', id: 'denied-call', identifier, type: 'builtin' },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(result.content).error).toMatchObject({
+      code: 'FORBIDDEN',
+      hint: expect.stringContaining('Do not retry'),
+      kind: 'stop',
+      message: 'Forbidden',
+    });
+    expect(result.error).toMatchObject({ code: 'FORBIDDEN', kind: 'stop' });
+    expect(result.content).not.toContain('matched_pattern');
+  });
+
+  it('preserves upstream refusal details in the model-visible content', async () => {
+    const error = {
+      code: 'PERMISSION_DENIED',
+      hint: 'Ask the workspace administrator to grant access.',
+      message: 'Access denied',
+      status: 403,
+    };
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockRejectedValue(Object.assign(new Error(error.message), error)),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'writeFile',
+        arguments: '{}',
+        id: 'denied-call',
+        identifier: 'tool',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(JSON.parse(result.content).error).toMatchObject({ ...error, kind: 'stop' });
+    expect(result.error).toMatchObject(error);
+  });
+
+  it('does not reinterpret successful content containing Forbidden as a denial', async () => {
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: vi.fn().mockResolvedValue({ content: 'Forbidden', success: true }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'readFile',
+        arguments: '{}',
+        id: 'read-call',
+        identifier: 'tool',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.content).toBe('Forbidden');
+    expect(result.success).toBe(true);
+  });
+
   it('can skip low-level result truncation for AgentRuntime archival', async () => {
     const builtinToolsExecutor = {
       execute: vi.fn().mockResolvedValue({
@@ -61,6 +392,575 @@ describe('ToolExecutionService', () => {
     );
 
     expect(result.content).toContain('01234');
-    expect(result.content).toContain('Content truncated');
+    expect(result.content).toContain('[Showing lines 1-');
+  });
+
+  /**
+   * @example A sandbox `rm -rf` against a read-only FS fails with one line per
+   * file — ~29 MB of stderr. The error envelope must not carry it: it rides the
+   * step's nextContext into the QStash publish body, whose 10 MB message quota
+   * would fail the publish and kill the whole operation.
+   */
+  it('clamps the error message of a tool that failed with a huge output', async () => {
+    const runawayOutput = `Command failed with exit code 1\n\nStderr:\n${'rm: cannot remove\n'.repeat(200_000)}`;
+    const builtinToolsExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        content: runawayOutput,
+        success: false,
+      }),
+    };
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: builtinToolsExecutor as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'runCommand',
+        arguments: '{}',
+        id: 'tool-call-1',
+        identifier: 'lobe-skills',
+        type: 'builtin',
+      },
+      { skipResultTruncation: true, toolManifestMap: {} },
+    );
+
+    const message = (result.error as { message: string }).message;
+    expect(message.length).toBeLessThan(5000);
+    expect(message).toContain('Command failed with exit code 1');
+    expect(message).toContain('[Showing lines 1-');
+    // The archival opt-out covers the LLM-facing content, never the error.
+    expect(result.content).toBe(runawayOutput);
+  });
+
+  /** @example A missing remote device remains machine-readable to the calling agent runtime. */
+  it('preserves structured unavailable-device data in the normalized error envelope', async () => {
+    const builtinToolsExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        content: 'The requested device is not connected.',
+        error: 'DEVICE_NOT_FOUND',
+        errorData: {
+          code: 'DEVICE_NOT_FOUND',
+          deviceId: 'device-1',
+          retryable: true,
+          scope: 'workspace',
+          workspaceId: 'workspace-1',
+        },
+        success: false,
+      }),
+    };
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: builtinToolsExecutor as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'readFile',
+        arguments: '{}',
+        id: 'tool-call-1',
+        identifier: 'lobe-local-system',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.error).toMatchObject({
+      code: 'DEVICE_NOT_FOUND',
+      deviceId: 'device-1',
+      retryable: true,
+      scope: 'workspace',
+      workspaceId: 'workspace-1',
+    });
+  });
+
+  // Stdio always runs on a desktop device. Private HTTP uses the device when
+  // a gateway is configured; public HTTP can run directly on the server.
+  describe('device-only MCP tunneling', () => {
+    const makeService = (mcpService: any = { callTool: vi.fn() }) =>
+      new ToolExecutionService({
+        builtinToolsExecutor: { execute: vi.fn() } as any,
+        mcpService,
+      });
+
+    const mcpPayload = {
+      apiName: 'do_thing',
+      arguments: '{}',
+      id: 'tool-call-1',
+      identifier: 'my-mcp',
+      type: 'mcp',
+    } as any;
+
+    const contextWith = (mcpParams: Record<string, unknown>, over: Record<string, unknown> = {}) =>
+      ({
+        serverDB: {},
+        toolManifestMap: { 'my-mcp': { mcpParams } },
+        userId: 'user-1',
+        ...over,
+      }) as any;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      (deviceGateway as any).isConfigured = true;
+      vi.mocked(deviceGateway.executeMcpCall).mockResolvedValue({
+        content: 'ok',
+        success: true,
+      } as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([]);
+    });
+
+    it('tunnels a stdio MCP call to the plan-routed device', async () => {
+      const service = makeService();
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: ['-y', 'mcp-server'], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'device-1' },
+        ),
+      );
+
+      expect(result.success).toBe(true);
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceId: 'device-1',
+          params: expect.objectContaining({ command: 'npx', type: 'stdio' }),
+        }),
+        undefined,
+      );
+    });
+
+    it('tunnels a local-network HTTP MCP call and narrows the auth payload', async () => {
+      const service = makeService();
+      await service.executeTool(
+        mcpPayload,
+        contextWith(
+          {
+            auth: {
+              accessToken: 'at',
+              clientSecret: 'SECRET',
+              refreshToken: 'REFRESH',
+              type: 'oauth2',
+            },
+            name: 'my-mcp',
+            type: 'http',
+            url: 'http://192.168.1.10:8080/mcp',
+          },
+          { activeDeviceId: 'device-1' },
+        ),
+      );
+
+      const call = vi.mocked(deviceGateway.executeMcpCall).mock.calls[0][0];
+      expect(call.params).toEqual({
+        auth: { accessToken: 'at', token: undefined, type: 'oauth2' },
+        headers: undefined,
+        name: 'my-mcp',
+        type: 'http',
+        url: 'http://192.168.1.10:8080/mcp',
+      });
+    });
+
+    it('falls back to the first online scoped personal device for chat-mode runs (no plan device)', async () => {
+      // getScopedOnlineDevices returns online-first / most-recently-active
+      // order and includes offline DB rows — the fallback must skip those.
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'desktop' }], deviceId: 'offline-row', online: false },
+        // A newer CLI-only connection must be skipped: the CLI's
+        // tool_call_request handler cannot execute `mcp` calls.
+        { channels: [{ channel: 'cli' }], deviceId: 'cli-only', online: true },
+        {
+          channels: [{ channel: 'cli' }, { channel: 'desktop' }],
+          deviceId: 'newest',
+          online: true,
+        },
+        { channels: [{ channel: 'desktop' }], deviceId: 'older', online: true },
+      ] as any);
+      const service = makeService();
+      const context = contextWith({ args: [], command: 'npx', name: 'my-mcp', type: 'stdio' });
+
+      await service.executeTool(mcpPayload, context);
+
+      expect(getScopedOnlineDevices).toHaveBeenCalledWith(context.serverDB, 'user-1', undefined);
+      expect(deviceGateway.queryDeviceList).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'newest' }),
+        undefined,
+      );
+    });
+
+    // `lh connect` answers `mcp` tool calls with `Unknown tool API: <tool>` — an
+    // active device that is CLI-only must not receive the tunnel (Honcho-Memory
+    // vents: calls worked until the agent activated a CLI-only Mac mini).
+    it('skips a CLI-only active device and tunnels to the newest desktop device', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli', online: true },
+        { channels: [{ channel: 'desktop' }], deviceId: 'macbook', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { name: 'Honcho-Memory', type: 'http', url: 'http://localhost:8787/' },
+          { activeDeviceId: 'mac-mini-cli' },
+        ),
+      );
+
+      expect(result.success).toBe(true);
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'macbook' }),
+        undefined,
+      );
+    });
+
+    it('fails with an actionable error when only CLI devices are online', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { name: 'Honcho-Memory', type: 'http', url: 'http://localhost:8787/' },
+          { activeDeviceId: 'mac-mini-cli' },
+        ),
+      );
+
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+      expect(result.content).toContain('lh connect');
+    });
+
+    it('fails closed for a workspace run whose active device is CLI-only', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'ws-cli' },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'ws-cli', workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(deviceGateway.queryDeviceList).toHaveBeenCalledWith('user-1', 'ws-1');
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+    });
+
+    it('addresses the workspace pool for a plan-routed device in a workspace run', async () => {
+      // Workspace devices live under the `workspace:<id>` principal in the
+      // gateway — the tunneled call must carry the scope or an online
+      // workspace device would be missed.
+      const service = makeService();
+
+      await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'ws-device', workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'ws-device', workspaceId: 'ws-1' }),
+        undefined,
+      );
+    });
+
+    it('fails closed for a workspace run with no plan-routed device', async () => {
+      // The connector may have been authorized by ANOTHER member — tunneling
+      // its credentials to the caller's own newest device would leak them to a
+      // machine the authorizer never approved. No implicit fallback in
+      // workspace scope.
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { deviceId: 'caller-device', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(getScopedOnlineDevices).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+    });
+
+    it('addresses the personal pool for a personal-scope active device in a workspace run', async () => {
+      // per-user agent device override in workspace: a workspace agent routed to the caller's own machine has no
+      // connection under the workspace principal — a workspace-addressed call
+      // would miss it.
+      const service = makeService();
+
+      await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'device-1', activeDeviceScope: 'personal', workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'device-1', workspaceId: undefined }),
+        undefined,
+      );
+    });
+
+    it.each([
+      [true, 'https://mcp.example.com'],
+      [false, 'http://192.168.1.10:8080/mcp'],
+    ])('keeps HTTP MCP calls on the server (gateway: %s, URL: %s)', async (configured, url) => {
+      (deviceGateway as any).isConfigured = configured;
+      const callTool = vi.fn().mockResolvedValue({ ok: true });
+      const service = makeService({ callTool });
+
+      await service.executeTool(
+        mcpPayload,
+        contextWith({ name: 'my-mcp', type: 'http', url }, { activeDeviceId: 'device-1' }),
+      );
+
+      expect(callTool).toHaveBeenCalledTimes(1);
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { name: 'my-mcp', type: 'http', url: 'http://localhost:8080/mcp' },
+      { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+    ])('fails fast when no device is reachable for $type MCP', async (mcpParams) => {
+      // With a gateway configured (cloud), a device-only endpoint must never
+      // run in-process — that would spawn the command / fetch the private URL
+      // on the cloud server, bypassing the classic-path device-only guard.
+      const callTool = vi.fn().mockResolvedValue({ ok: true });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(mcpPayload, contextWith(mcpParams));
+
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(callTool).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+      expect(result.content).toContain('open the LobeHub desktop app');
+    });
+
+    it('fails closed when no serverDB is available to apply device visibility', async () => {
+      // Without a DB the scoped helper cannot apply device visibility — never
+      // fall back to a raw gateway lookup.
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { serverDB: undefined },
+        ),
+      );
+
+      expect(getScopedOnlineDevices).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+    });
+
+    describe('Agent Share visitor runs', () => {
+      const visitor = { agentShareVisitor: { shareId: 'share-1' } };
+
+      it.each([
+        ['stdio', { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' }],
+        ['local-network HTTP', { name: 'my-mcp', type: 'http', url: 'http://10.0.0.5:8000/mcp' }],
+      ])(
+        'refuses a %s MCP call instead of tunneling to the creator device',
+        async (_, mcpParams) => {
+          vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+            { channels: [{ channel: 'desktop' }], deviceId: 'creator-desktop', online: true },
+          ] as any);
+          const callTool = vi.fn();
+          const service = makeService({ callTool });
+
+          const result = await service.executeTool(mcpPayload, contextWith(mcpParams, visitor));
+
+          expect(result.success).toBe(false);
+          expect((result.error as any)?.code).toBe('SHARE_GATE_BLOCKED');
+          expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+          expect(callTool).not.toHaveBeenCalled();
+        },
+      );
+
+      it('refuses a stdio MCP call when no gateway is configured', async () => {
+        (deviceGateway as any).isConfigured = false;
+        const callTool = vi.fn();
+        const service = makeService({ callTool });
+
+        const result = await service.executeTool(
+          mcpPayload,
+          contextWith({ args: [], command: 'npx', name: 'my-mcp', type: 'stdio' }, visitor),
+        );
+
+        expect((result.error as any)?.code).toBe('SHARE_GATE_BLOCKED');
+        expect(callTool).not.toHaveBeenCalled();
+      });
+
+      it('still calls a public HTTP MCP server', async () => {
+        const callTool = vi.fn().mockResolvedValue({ ok: true });
+        const service = makeService({ callTool });
+
+        await service.executeTool(
+          mcpPayload,
+          contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }, visitor),
+        );
+
+        expect(callTool).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('rejects stdio when no gateway is configured instead of executing on the server', async () => {
+      (deviceGateway as any).isConfigured = false;
+      const callTool = vi.fn().mockResolvedValue({ ok: true });
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'device-1' },
+        ),
+      );
+
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: 'MCP_GATEWAY_NOT_CONFIGURED' });
+      expect(result.content).toContain('device gateway is not configured');
+      expect(result.content).toContain('Configure a device gateway');
+      expect(callTool).not.toHaveBeenCalled();
+    });
+  });
+
+  // The SDK puts the 401 status only in `.code` and MCPService
+  // wraps it in a TRPCError, so the model used to see a bare "Invalid or
+  // expired token" and told Share visitors to reauthorize a connection that
+  // belongs to the creator.
+  describe('MCP authorization failures', () => {
+    const mcpPayload = {
+      apiName: 'xmind_whoami',
+      arguments: '{}',
+      id: 'tool-call-auth',
+      identifier: 'xmind-mcp',
+      type: 'mcp',
+    } as any;
+
+    const unauthorized = () =>
+      new TRPCError({
+        cause: new SdkHttpError(
+          SdkErrorCode.ClientHttpNotImplemented,
+          'Error POSTing to endpoint: {"error":"Unauthorized: Invalid or expired token"}',
+          { status: 401 },
+        ),
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Error POSTing to endpoint: {"error":"Unauthorized: Invalid or expired token"}',
+      });
+
+    const run = (over: Record<string, unknown> = {}, error: unknown = unauthorized()) => {
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute: vi.fn() } as any,
+        mcpService: { callTool: vi.fn().mockRejectedValue(error) } as any,
+      });
+      return service.executeTool(mcpPayload, {
+        toolManifestMap: {
+          'xmind-mcp': {
+            mcpParams: { name: 'xmind-mcp', type: 'http', url: 'https://app.xmind.com/api/mcp' },
+          },
+        },
+        userId: 'creator-1',
+        ...over,
+      } as any);
+    };
+
+    it('tells the model a Share visitor cannot repair the creator connection', async () => {
+      const result = await run({ agentShareVisitor: { shareId: 'share-1' } });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain("set up on this agent creator's side");
+      expect(result.content).toContain('do not ask them to sign in, authorize, or reconnect');
+      expect(result.error).toMatchObject({ code: 'UNAUTHORIZED', kind: 'stop' });
+    });
+
+    it('asks the owner to reconnect outside Share', async () => {
+      const result = await run();
+
+      expect(result.content).toContain('reconnect');
+      expect(result.content).not.toContain("agent's creator");
+      expect(result.error).toMatchObject({ code: 'UNAUTHORIZED', kind: 'stop' });
+    });
+
+    it('keeps reconnect guidance when normalized upstream auth is returned as 403', async () => {
+      const result = await run(
+        {},
+        new TRPCError({
+          code: 'FORBIDDEN',
+          cause: createMCPError('AUTHORIZATION_ERROR', 'MCP authorization failed'),
+        }),
+      );
+      expect(result.success).toBe(false);
+      expect(result.content).toContain("reconnect 'xmind-mcp'");
+      expect(result.error).toMatchObject({ code: 'UNAUTHORIZED', kind: 'stop' });
+    });
+
+    it('preserves a failed MCP result for the card and the parent reply', async () => {
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute: vi.fn() } as any,
+        mcpService: {
+          callTool: vi.fn().mockResolvedValue({
+            content: 'Additional input is unsupported',
+            state: {
+              isError: true,
+              content: [{ type: 'text', text: 'Additional input is unsupported' }],
+            },
+            success: false,
+          }),
+        } as any,
+      });
+      const result = await service.executeTool(mcpPayload, {
+        toolManifestMap: {
+          'xmind-mcp': {
+            mcpParams: { name: 'xmind-mcp', type: 'http', url: 'https://example.com/mcp' },
+          },
+        },
+        userId: 'creator-1',
+      } as any);
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Additional input is unsupported');
+      expect(result.error).toMatchObject({
+        code: 'MCP_TOOL_ERROR',
+        message: 'Additional input is unsupported',
+      });
+    });
+
+    it('keeps other MCP failures as raw replannable errors', async () => {
+      const result = await run(
+        { agentShareVisitor: { shareId: 'share-1' } },
+        new TRPCError({
+          cause: new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'boom', { status: 500 }),
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'boom',
+        }),
+      );
+
+      expect(result.content).toBe('boom');
+      expect(result.error).toMatchObject({ code: 'MCP_EXECUTION_ERROR', kind: 'replan' });
+    });
   });
 });

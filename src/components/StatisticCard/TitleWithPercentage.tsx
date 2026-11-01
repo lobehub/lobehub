@@ -1,5 +1,4 @@
-import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 

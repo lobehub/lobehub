@@ -8,7 +8,7 @@ import {
   TypesEnum,
   UserMemoryContextObjectType,
 } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -215,6 +215,7 @@ async function createActivityPair(opts?: {
 async function createContextPair(opts?: {
   associatedObjectName?: string;
   associatedSubjectName?: string;
+  currentStatus?: string;
   description?: string;
   tags?: string[];
   title?: string;
@@ -245,6 +246,7 @@ async function createContextPair(opts?: {
       associatedSubjects: opts?.associatedSubjectName
         ? [{ name: opts.associatedSubjectName, type: 'person' }]
         : [],
+      currentStatus: opts?.currentStatus,
       description: opts?.description ?? 'A context description',
       tags: opts?.tags,
       title: opts?.title ?? 'A context',
@@ -540,6 +542,63 @@ describe('UserMemoryModel', () => {
         const result = await memoryModel.queryMemories({ layer: LayersEnum.Context });
         expect(result.total).toBe(1);
       });
+
+      it('applies exact context status filters without an external candidate provider', async () => {
+        const { context: active } = await createContextPair({ currentStatus: 'active' });
+        await createContextPair({ currentStatus: 'archived' });
+
+        const result = await memoryModel.queryMemories({
+          layer: LayersEnum.Context,
+          status: ['active'],
+        });
+
+        expect(result.items).toEqual([
+          expect.objectContaining({ context: expect.objectContaining({ id: active.id }) }),
+        ]);
+        expect(result.total).toBe(1);
+      });
+
+      it('hydrates external candidates through current user and context status filters', async () => {
+        const { context: matching } = await createContextPair({ currentStatus: 'active' });
+        const { context: wrongStatus } = await createContextPair({ currentStatus: 'archived' });
+        const { context: otherUser } = await createContextPair({
+          currentStatus: 'active',
+          user: otherUserId,
+        });
+        const ftsSearchCandidates = vi.fn().mockResolvedValue({
+          candidates: [
+            { id: otherUser.id, score: 12 },
+            { id: 'deleted-context', score: 10 },
+            { id: wrongStatus.id, score: 8 },
+            { id: matching.id, score: 6 },
+          ],
+          total: 4,
+        });
+        const model = new UserMemoryModel(serverDB, userId, {
+          ftsSearchCandidateEnabled: true,
+          ftsSearchCandidates,
+        });
+
+        const result = await model.queryMemories({
+          layer: LayersEnum.Context,
+          q: 'candidate',
+          status: ['active'],
+        });
+
+        expect(result.items).toEqual([
+          expect.objectContaining({ context: expect.objectContaining({ id: matching.id }) }),
+        ]);
+        expect(result.total).toBe(1);
+        expect(ftsSearchCandidates).toHaveBeenCalledWith({
+          entity: 'memoryContexts',
+          filters: { memoryStatus: ['active'] },
+          pagination: {},
+          query: {
+            fields: ['parent_text', 'title', 'description', 'current_status'],
+            text: 'candidate',
+          },
+        });
+      });
     });
 
     describe('activity layer', () => {
@@ -550,6 +609,40 @@ describe('UserMemoryModel', () => {
 
         expect(result.items.length).toBe(1);
         expect(result.total).toBe(1);
+      });
+
+      it('preserves parent memory fields and any-tag semantics for external candidates', async () => {
+        const ftsSearchCandidates = vi.fn().mockResolvedValue({ candidates: [], total: 0 });
+        const model = new UserMemoryModel(serverDB, userId, {
+          ftsSearchCandidateEnabled: true,
+          ftsSearchCandidates,
+        });
+
+        await model.queryMemories({
+          layer: LayersEnum.Activity,
+          q: 'candidate',
+          tags: ['typescript', 'search'],
+        });
+
+        expect(ftsSearchCandidates).toHaveBeenCalledWith({
+          entity: 'memoryActivities',
+          filters: {
+            memoryTagMatch: 'any',
+            memoryTags: ['typescript', 'search'],
+          },
+          pagination: {},
+          query: {
+            fields: [
+              'parent_title',
+              'parent_summary',
+              'parent_details',
+              'narrative',
+              'notes',
+              'feedback',
+            ],
+            text: 'candidate',
+          },
+        });
       });
     });
 
@@ -619,6 +712,56 @@ describe('UserMemoryModel', () => {
   });
 
   describe('searchMemory', () => {
+    it('routes each hybrid lexical layer through external candidates', async () => {
+      const { activity } = await createActivityPair({ title: 'Candidate activity' });
+      const { context } = await createContextPair({ title: 'Candidate context' });
+      const { experience } = await createExperiencePair({});
+      const { identity } = await createIdentityPair({});
+      const { preference } = await createPreferencePair({});
+      const candidateIds = {
+        memoryActivities: activity.id,
+        memoryContexts: context.id,
+        memoryExperiences: experience.id,
+        memoryIdentities: identity.id,
+        memoryPreferences: preference.id,
+      };
+      const ftsSearchCandidates = vi
+        .fn()
+        .mockImplementation((request: { entity: keyof typeof candidateIds }) =>
+          Promise.resolve({
+            candidates: [{ id: candidateIds[request.entity], score: 8 }],
+            total: 1,
+          }),
+        );
+      const model = new UserMemoryModel(serverDB, userId, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates,
+      });
+
+      const result = await model.searchMemory({
+        layers: [
+          LayersEnum.Activity,
+          LayersEnum.Context,
+          LayersEnum.Experience,
+          LayersEnum.Identity,
+          LayersEnum.Preference,
+        ],
+        queries: ['candidate'],
+        topK: { activities: 1, contexts: 1, experiences: 1, identities: 1, preferences: 1 },
+      });
+
+      expect(result.activities.map(({ id }) => id)).toEqual([activity.id]);
+      expect(result.contexts.map(({ id }) => id)).toEqual([context.id]);
+      // Experience memory is retired: the layer is never searched, even when asked for.
+      expect(result.experiences).toEqual([]);
+      expect(result.identities.map(({ id }) => id)).toEqual([identity.id]);
+      expect(result.preferences.map(({ id }) => id)).toEqual([preference.id]);
+      expect(ftsSearchCandidates).toHaveBeenCalledTimes(4);
+      expect(ftsSearchCandidates).not.toHaveBeenCalledWith(
+        expect.objectContaining({ entity: 'memoryExperiences' }),
+      );
+    });
+
     it('boosts short-term related memories with matching tags and category during hybrid ranking', async () => {
       const seedTime = new Date('2024-01-10T10:00:00.000Z');
       const boostedTime = new Date('2024-01-10T16:00:00.000Z');
@@ -722,7 +865,7 @@ describe('UserMemoryModel', () => {
         tags: [tag],
         title: 'Atlas context',
       });
-      const { experience } = await createExperiencePair({
+      await createExperiencePair({
         action: 'Investigated incident',
         possibleOutcome: 'Resolved faster next time',
         reasoning: 'Compared multiple logs',
@@ -756,10 +899,8 @@ describe('UserMemoryModel', () => {
       ]);
       expect(result.contexts[0].associatedSubjects).toEqual([{ name: 'Alice', type: 'person' }]);
 
-      expect(result.experiences).toHaveLength(1);
-      expect(result.experiences[0].id).toBe(experience.id);
-      expect(result.experiences[0].reasoning).toBe('Compared multiple logs');
-      expect(result.experiences[0].possibleOutcome).toBe('Resolved faster next time');
+      // Experience memory is retired: the row exists but the search never returns it.
+      expect(result.experiences).toEqual([]);
 
       expect(result.preferences).toHaveLength(1);
       expect(result.preferences[0].id).toBe(preference.id);
@@ -821,6 +962,16 @@ describe('UserMemoryModel', () => {
       const result = await memoryModel.listMemories({ layer: LayersEnum.Experience });
 
       expect(result).toHaveLength(1);
+    });
+
+    it('should not return memories in the recycle bin', async () => {
+      const { memory } = await createExperiencePair({});
+      await serverDB
+        .update(userMemories)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(userMemories.id, memory.id));
+
+      expect(await memoryModel.listMemories({ layer: LayersEnum.Experience })).toEqual([]);
     });
   });
 
@@ -1331,6 +1482,144 @@ describe('UserMemoryModel', () => {
       expect(updated?.role).toBeNull();
     });
 
+    // Tool calls send only the fields they change, so replace must not null the rest.
+    it('keeps omitted identity fields on replace when preserveOmittedFields is set', async () => {
+      const { identityId } = await memoryModel.addIdentityEntry({
+        base: {},
+        identity: {
+          description: 'original desc',
+          relationship: RelationshipEnum.Self,
+          role: 'original role',
+          tags: ['maintainer', 'editor'],
+          type: IdentityTypeEnum.Professional,
+        },
+      });
+
+      const success = await memoryModel.updateIdentityEntry({
+        identity: { role: 'lead maintainer', tags: ['lead'] },
+        identityId,
+        mergeStrategy: MergeStrategyEnum.Replace,
+        preserveOmittedFields: true,
+      });
+
+      expect(success).toBe(true);
+      const updated = await serverDB.query.userMemoriesIdentities.findFirst({
+        where: eq(userMemoriesIdentities.id, identityId),
+      });
+      expect(updated?.role).toBe('lead maintainer');
+      // Replaced wholesale, not merged index by index.
+      expect(updated?.tags).toEqual(['lead']);
+      expect(updated?.description).toBe('original desc');
+      expect(updated?.relationship).toBe(RelationshipEnum.Self);
+      expect(updated?.type).toBe(IdentityTypeEnum.Professional);
+    });
+
+    // A tool update that names one metadata key must not drop the others.
+    it.each([MergeStrategyEnum.Replace, MergeStrategyEnum.Merge])(
+      'keeps unmentioned metadata keys on a partial tool update (%s)',
+      async (mergeStrategy) => {
+        const { identityId, userMemoryId } = await memoryModel.addIdentityEntry({
+          base: { metadata: { scoreConfidence: 0.4, sourceEvidence: 'said so in chat' } },
+          identity: {
+            description: 'original desc',
+            metadata: { scoreConfidence: 0.4, sourceEvidence: 'said so in chat' },
+            role: 'original role',
+          },
+        });
+
+        const success = await memoryModel.updateIdentityEntry({
+          base: { metadata: { scoreConfidence: 0.9 } },
+          identity: { metadata: { scoreConfidence: 0.9 } },
+          identityId,
+          mergeStrategy,
+          preserveOmittedFields: true,
+        });
+
+        expect(success).toBe(true);
+        const identityRow = await serverDB.query.userMemoriesIdentities.findFirst({
+          where: eq(userMemoriesIdentities.id, identityId),
+        });
+        const baseRow = await serverDB.query.userMemories.findFirst({
+          where: eq(userMemories.id, userMemoryId),
+        });
+        expect(identityRow?.metadata).toEqual({
+          scoreConfidence: 0.9,
+          sourceEvidence: 'said so in chat',
+        });
+        expect(baseRow?.metadata).toEqual({
+          scoreConfidence: 0.9,
+          sourceEvidence: 'said so in chat',
+        });
+        expect(identityRow?.description).toBe('original desc');
+      },
+    );
+
+    // Another writer can change a different metadata key after this update loaded the row;
+    // merging in SQL must keep that key instead of writing back a stale snapshot.
+    it('keeps metadata keys written concurrently during a partial tool update', async () => {
+      const { identityId, userMemoryId } = await memoryModel.addIdentityEntry({
+        base: { metadata: { scoreConfidence: 0.4 } },
+        identity: { description: 'original desc', metadata: { scoreConfidence: 0.4 } },
+      });
+
+      const concurrentPatch = sql`'{"sourceEvidence":"written concurrently"}'::jsonb`;
+      const originalTransaction = serverDB.transaction.bind(serverDB);
+      const transactionSpy = vi.spyOn(serverDB, 'transaction').mockImplementationOnce(((
+        callback: (tx: unknown) => Promise<unknown>,
+      ) =>
+        originalTransaction(async (tx) => {
+          const interfered = new Set<unknown>();
+          // Land a competing write right before each of this update's own writes.
+          const wrappedTx = new Proxy(tx, {
+            get(target, prop) {
+              if (prop !== 'update') {
+                const value = Reflect.get(target, prop, target);
+                return typeof value === 'function' ? value.bind(target) : value;
+              }
+              return (table: typeof userMemories | typeof userMemoriesIdentities) => {
+                const builder = target.update(table);
+                if (interfered.has(table)) return builder;
+                interfered.add(table);
+                const rowId = table === userMemories ? userMemoryId : identityId;
+                return {
+                  set: (values: never) => ({
+                    where: (condition: never) =>
+                      target
+                        .update(table)
+                        .set({
+                          metadata: sql`coalesce(${table.metadata}, '{}'::jsonb) || ${concurrentPatch}`,
+                        })
+                        .where(eq(table.id, rowId))
+                        .then(() => builder.set(values).where(condition)),
+                  }),
+                };
+              };
+            },
+          });
+          return callback(wrappedTx);
+        })) as typeof serverDB.transaction);
+
+      const success = await memoryModel.updateIdentityEntry({
+        base: { metadata: { scoreConfidence: 0.9 } },
+        identity: { metadata: { scoreConfidence: 0.9 } },
+        identityId,
+        mergeStrategy: MergeStrategyEnum.Replace,
+        preserveOmittedFields: true,
+      });
+      transactionSpy.mockRestore();
+
+      expect(success).toBe(true);
+      const identityRow = await serverDB.query.userMemoriesIdentities.findFirst({
+        where: eq(userMemoriesIdentities.id, identityId),
+      });
+      const baseRow = await serverDB.query.userMemories.findFirst({
+        where: eq(userMemories.id, userMemoryId),
+      });
+      const expected = { scoreConfidence: 0.9, sourceEvidence: 'written concurrently' };
+      expect(identityRow?.metadata).toEqual(expected);
+      expect(baseRow?.metadata).toEqual(expected);
+    });
+
     it('should not update other user identity', async () => {
       const otherModel = new UserMemoryModel(serverDB, otherUserId);
       const { identityId } = await otherModel.addIdentityEntry({
@@ -1416,6 +1705,16 @@ describe('UserMemoryModel', () => {
       const result = await memoryModel.getAllIdentities();
       expect(result).toEqual([]);
     });
+
+    it('should not return an identity whose base memory is in the recycle bin', async () => {
+      const { memory } = await createIdentityPair({});
+      await serverDB
+        .update(userMemories)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(userMemories.id, memory.id));
+
+      expect(await memoryModel.getAllIdentities()).toEqual([]);
+    });
   });
 
   // ========== getAllIdentitiesWithMemory ==========
@@ -1438,6 +1737,16 @@ describe('UserMemoryModel', () => {
       const result = await memoryModel.getAllIdentitiesWithMemory();
 
       expect(result).toHaveLength(1);
+    });
+
+    it('should not join an identity whose base memory is in the recycle bin', async () => {
+      const { memory } = await createIdentityPair({});
+      await serverDB
+        .update(userMemories)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(userMemories.id, memory.id));
+
+      expect(await memoryModel.getAllIdentitiesWithMemory()).toEqual([]);
     });
   });
 
@@ -1501,7 +1810,7 @@ describe('UserMemoryModel', () => {
   // ========== removeExperienceEntry ==========
   describe('removeExperienceEntry', () => {
     it('should delete experience and associated base memory', async () => {
-      const { experience, memory } = await createExperiencePair({});
+      const { experience, memory: _memory } = await createExperiencePair({});
 
       const success = await memoryModel.removeExperienceEntry(experience.id);
 
@@ -1759,7 +2068,7 @@ describe('UserMemoryModel', () => {
         preferenceTypes: ['ui'],
       };
       const params = {
-        include: ['categories'],
+        include: ['categories' as const],
         q: 'productivity',
       };
       const querySpy = vi
@@ -2038,7 +2347,7 @@ describe('UserMemoryModel', () => {
   // ========== updateIdentityEntry with capturedAt ==========
   describe('updateIdentityEntry - capturedAt', () => {
     it('should update capturedAt on identity', async () => {
-      const { identity, memory } = await createIdentityPair({});
+      const { identity, memory: _memory } = await createIdentityPair({});
       const capturedDate = new Date('2025-06-15T12:00:00Z');
 
       const result = await memoryModel.updateIdentityEntry({

@@ -1,3 +1,5 @@
+import type { SpendOrigin } from '@lobechat/types';
+
 import type { NewGeneration, NewGenerationBatch } from '@/database/schemas';
 import type { CreateVideoServicePayload } from '@/server/routers/lambda/video';
 
@@ -6,6 +8,10 @@ interface ChargeParams {
   model: string;
   params: CreateVideoServicePayload['params'];
   provider: string;
+  /** Params as sent to the provider, whose image URLs are the ones it fetches */
+  providerParams?: CreateVideoServicePayload['params'];
+  /** Origin of the request, preserved for deferred video spend attribution. */
+  spendOrigin?: SpendOrigin;
   userId: string;
   workspaceId?: string;
 }
@@ -23,9 +29,6 @@ interface ChargeBeforeResult {
   prechargeResult?: Record<string, unknown>;
 }
 
-export async function chargeBeforeGenerate(
-  // eslint-disable-next-line unused-imports/no-unused-vars
-  params: ChargeParams,
-): Promise<ChargeBeforeResult> {
+export async function chargeBeforeGenerate(_params: ChargeParams): Promise<ChargeBeforeResult> {
   return {};
 }

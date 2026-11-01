@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import type { SignalFeedbackSatisfaction } from '../../policies/types';
 import { createRuntimeProcessorContext } from '../../runtime/context';
-import { classifyDomain, classifySatisfaction } from '../classifiers';
+import { classifyDomain, classifySatisfaction, NO_PRIOR_REPLY_STOP_REASON } from '../classifiers';
 
 const context = createRuntimeProcessorContext({
   backend: {
@@ -22,8 +22,10 @@ const context = createRuntimeProcessorContext({
 
 const createUserMessageSource = (
   input: Partial<{
+    anchorMessageId: string;
     message: string;
     sourceId: string;
+    triggerMessageId: string;
   }> = {},
 ): SourceAgentUserMessage => ({
   chain: {
@@ -32,6 +34,7 @@ const createUserMessageSource = (
   },
   payload: {
     agentId: 'agent_1',
+    anchorMessageId: input.anchorMessageId,
     documentPayload: { section: 'style' },
     intents: ['document', 'memory'],
     memoryPayload: { shouldRemember: true },
@@ -39,6 +42,7 @@ const createUserMessageSource = (
     messageId: `msg:${input.sourceId ?? 'source_1'}`,
     serializedContext: 'topic=repo-review',
     topicId: 'topic_1',
+    triggerMessageId: input.triggerMessageId,
   },
   scopeKey: 'topic:thread_1',
   sourceId: input.sourceId ?? 'source_1',
@@ -97,7 +101,10 @@ describe('classifier processors', () => {
       reason: 'explicit style feedback',
       result: 'not_satisfied',
     });
-    const source = createUserMessageSource();
+    const source = createUserMessageSource({
+      anchorMessageId: 'msg_assistant_1',
+      triggerMessageId: 'msg_trigger_1',
+    });
 
     const result = await classifySatisfaction(source, context, {
       satisfactionClassifier: { classify },
@@ -118,6 +125,7 @@ describe('classifier processors', () => {
         },
         payload: expect.objectContaining({
           agentId: 'agent_1',
+          anchorMessageId: 'msg_assistant_1',
           message: 'Please keep replies tighter.',
           messageId: 'msg:source_1',
           serializedContext: 'topic=repo-review',
@@ -127,6 +135,7 @@ describe('classifier processors', () => {
             memoryPayload: { shouldRemember: true },
           },
           topicId: 'topic_1',
+          triggerMessageId: 'msg_trigger_1',
         }),
         signalId: 'source_1:signal:feedback-satisfaction',
         signalType: 'signal.feedback.satisfaction',
@@ -158,7 +167,10 @@ describe('classifier processors', () => {
         target: 'skill',
       },
     ]);
-    const signal = createSatisfactionSignal();
+    const signal = createSatisfactionSignal({
+      anchorMessageId: 'msg_assistant_1',
+      triggerMessageId: 'msg_trigger_1',
+    });
 
     const result = await classifyDomain(signal, context, {
       domainClassifier: { classify },
@@ -171,10 +183,12 @@ describe('classifier processors', () => {
       value: [
         expect.objectContaining({
           payload: expect.objectContaining({
+            anchorMessageId: 'msg_assistant_1',
             conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 100 },
             evidence: signal.payload.evidence,
             satisfactionResult: 'not_satisfied',
             target: 'memory',
+            triggerMessageId: 'msg_trigger_1',
           }),
           signalId: 'source_1:signal:feedback-satisfaction:domain:memory',
           signalType: 'signal.feedback.domain.memory',
@@ -182,10 +196,12 @@ describe('classifier processors', () => {
         }),
         expect.objectContaining({
           payload: expect.objectContaining({
+            anchorMessageId: 'msg_assistant_1',
             conflictPolicy: { forbiddenWith: ['none'], mode: 'fanout', priority: 80 },
             evidence: [{ cue: 'template', excerpt: 'reusable template' }],
             satisfactionResult: 'not_satisfied',
             target: 'skill',
+            triggerMessageId: 'msg_trigger_1',
           }),
           signalId: 'source_1:signal:feedback-satisfaction:domain:skill',
           signalType: 'signal.feedback.domain.skill',
@@ -377,5 +393,103 @@ describe('classifier processors', () => {
         },
       }),
     ).rejects.toThrow(error);
+  });
+
+  describe('satisfaction pre-filters', () => {
+    const createPlainSource = (
+      payload: Partial<SourceAgentUserMessage['payload']> = {},
+    ): SourceAgentUserMessage => {
+      const source = createUserMessageSource();
+
+      return {
+        ...source,
+        payload: {
+          agentId: 'agent_1',
+          message: 'remember that I prefer pnpm',
+          messageId: 'msg:source_1',
+          topicId: 'topic_1',
+          ...payload,
+        },
+      };
+    };
+    const classifierOutput = {
+      confidence: 0.9,
+      evidence: [],
+      reason: 'explicit preference',
+      result: 'satisfied' as const,
+    };
+
+    /**
+     * @example
+     * The first message of a conversation has no earlier reply, so the classifier is not called.
+     */
+    it('skips the classifier for a conversation-root message', async () => {
+      const classify = vi.fn().mockResolvedValue(classifierOutput);
+      const satisfactionBudget = vi.fn();
+
+      const result = await classifySatisfaction(
+        createPlainSource({ isConversationRoot: true }),
+        context,
+        { satisfactionBudget, satisfactionClassifier: { classify } },
+      );
+
+      expect(result).toMatchObject({ reason: NO_PRIOR_REPLY_STOP_REASON, type: 'stop' });
+      expect(classify).not.toHaveBeenCalled();
+      expect(satisfactionBudget).not.toHaveBeenCalled();
+    });
+
+    /**
+     * @example
+     * "remember that I..." after an assistant reply still reaches the classifier.
+     */
+    it('classifies explicit memory requests that follow an earlier reply', async () => {
+      const classify = vi.fn().mockResolvedValue(classifierOutput);
+
+      const result = await classifySatisfaction(createPlainSource(), context, {
+        satisfactionClassifier: { classify },
+      });
+
+      expect(classify).toHaveBeenCalledTimes(1);
+      expect(result.type).toBe('continue');
+    });
+
+    it('classifies a conversation-root message that carries explicit client intents', async () => {
+      const classify = vi.fn().mockResolvedValue(classifierOutput);
+
+      await classifySatisfaction(
+        createPlainSource({ intents: ['memory'], isConversationRoot: true }),
+        context,
+        { satisfactionClassifier: { classify } },
+      );
+
+      expect(classify).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * @example
+     * Once the daily feedback-classifier budget is spent, the classifier is not called.
+     */
+    it('skips the classifier when the daily budget denies the call', async () => {
+      const classify = vi.fn().mockResolvedValue(classifierOutput);
+      const satisfactionBudget = vi.fn().mockResolvedValue({
+        allowed: false,
+        count: 201,
+        kind: 'feedback-classifier',
+        limit: 200,
+        reason: 'exceeded',
+      });
+
+      const result = await classifySatisfaction(createPlainSource(), context, {
+        satisfactionBudget,
+        satisfactionClassifier: { classify },
+      });
+
+      expect(result).toMatchObject({
+        reason: 'Daily Agent Signal feedback-classifier budget exceeded (200/day).',
+        type: 'stop',
+      });
+      expect(satisfactionBudget).toHaveBeenCalledTimes(1);
+      expect(classify).not.toHaveBeenCalled();
+    });
   });
 });

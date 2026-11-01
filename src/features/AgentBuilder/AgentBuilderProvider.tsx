@@ -5,7 +5,6 @@ import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 interface AgentBuilderProviderProps {
   agentId: string;
@@ -51,28 +50,11 @@ const AgentBuilderProvider = memo<AgentBuilderProviderProps>(
       [agentId, activeTopicId],
     );
 
-    // Get messages from ChatStore based on context
-    const chatKey = useMemo(
-      () => (context ? messageMapKey(context) : null),
-      [context?.agentId, context?.topicId],
-    );
-
-    const replaceMessages = useChatStore((s) => s.replaceMessages);
-    const messages = useChatStore((s) => (chatKey ? s.dbMessagesMap[chatKey] : undefined));
-
     // Get operation state for reactive updates
     const operationState = useOperationState(context);
 
     return (
-      <ConversationProvider
-        context={context}
-        hasInitMessages={!!messages}
-        messages={messages}
-        operationState={operationState}
-        onMessagesChange={(msgs, ctx) => {
-          replaceMessages(msgs, { context: ctx });
-        }}
-      >
+      <ConversationProvider context={context} operationState={operationState}>
         {children}
       </ConversationProvider>
     );

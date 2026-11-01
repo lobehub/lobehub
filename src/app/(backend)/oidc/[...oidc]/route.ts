@@ -85,7 +85,10 @@ const handler = async (req: NextRequest) => {
       status: finalStatus,
     });
   } catch (error) {
-    log(`Error handling OIDC ${req.method} request: %O`, error); // Log method in error
+    // Surface the real stack to production logs. A debug `log()` only writes to the
+    // `lobe-oidc:route` namespace, which is disabled in production, so 500s otherwise
+    // land with no application-layer error signature (monitoring blind spot).
+    console.error(`[OIDC Route] Error handling ${req.method} ${requestUrl.pathname}:`, error);
     return new NextResponse(`Internal Server Error: ${(error as Error).message}`, { status: 500 });
   }
 };

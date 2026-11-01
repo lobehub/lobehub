@@ -2,8 +2,9 @@
 
 import type { ReplaceTextArgs } from '@lobechat/editor-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { ArrowRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,8 +38,10 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
     // During streaming without searchText yet, show init message
     if (isArgumentsStreaming && !from) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-page-agent.apiName.replaceText.init')}</span>
+        <div className={inspectorTextStyles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-page-agent.apiName.replaceText.init')}
+          </span>
         </div>
       );
     }
@@ -47,10 +50,10 @@ export const ReplaceTextInspector = memo<BuiltinInspectorProps<ReplaceTextArgs, 
     const hasResult = from && to !== undefined;
 
     return (
-      <div
-        className={cx(inspectorTextStyles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-      >
-        <span className={styles.title}>{t('builtins.lobe-page-agent.apiName.replaceText')}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-page-agent.apiName.replaceText')}
+        </span>
         {hasResult && (
           <>
             <span className={styles.from}>{from}</span>

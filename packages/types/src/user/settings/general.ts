@@ -1,4 +1,4 @@
-import type { HighlighterProps, MermaidProps, NeutralColors, PrimaryColors } from '@lobehub/ui';
+import type { HighlighterProps, LobePrimaryColor, MermaidProps, NeutralColors } from '@lobehub/ui';
 
 import type { ResponseAnimationStyle } from '../../aiProvider';
 
@@ -15,13 +15,30 @@ export interface UserGeneralConfig {
    * @default true
    */
   enableAutoScrollOnStreaming?: boolean;
+  /**
+   * Whether to show the website/favicon icon before links in chat messages.
+   * Turning it off renders plain links, which copy cleanly into email and other apps.
+   * @default true
+   */
+  enableMessageLinkIcon?: boolean;
+  /**
+   * Whether a turn's tool workflow starts expanded while the agent is still
+   * running. Off keeps the running turn to a single live headline row.
+   * @default false
+   */
+  expandWorkflowWhileStreaming?: boolean;
+  /**
+   * Grayscale font antialiasing on macOS. Off falls back to the system default rendering.
+   * @default true
+   */
+  fontAntialiasing?: boolean;
   fontSize: number;
   highlighterTheme?: HighlighterProps['theme'];
   isDevMode: boolean;
   isLiteMode: boolean;
   mermaidTheme?: MermaidProps['theme'];
   neutralColor?: NeutralColors;
-  primaryColor?: PrimaryColors;
+  primaryColor?: LobePrimaryColor;
   responseLanguage?: string;
   telemetry: boolean;
   timezone?: string;

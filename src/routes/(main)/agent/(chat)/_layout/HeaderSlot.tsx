@@ -21,12 +21,10 @@ const Provider = memo<{ children: ReactNode }>(({ children }) => {
 
 Provider.displayName = 'HeaderSlotProvider';
 
-const Outlet = memo(() => {
+const Outlet = () => {
   const { setEl } = use(HeaderSlotContext);
   return <span ref={setEl} />;
-});
-
-Outlet.displayName = 'HeaderSlotOutlet';
+};
 
 const HeaderSlot = memo<{ children: ReactNode }>(({ children }) => {
   const { el } = use(HeaderSlotContext);

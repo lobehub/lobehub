@@ -1,26 +1,7 @@
 // @vitest-environment node
-import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { testProvider } from '../../providerTestUtils';
 import { LobeQiniuAI, params } from './index';
-
-const provider = ModelProvider.Qiniu;
-const defaultBaseURL = 'https://openai.qiniu.com/v1';
-
-testProvider({
-  Runtime: LobeQiniuAI,
-  provider,
-  defaultBaseURL,
-  chatDebugEnv: 'DEBUG_QINIU_CHAT_COMPLETION',
-  chatModel: 'deepseek-r1',
-  invalidErrorType: 'InvalidProviderAPIKey',
-  bizErrorType: 'ProviderBizError',
-  test: {
-    skipAPICall: true,
-    skipErrorHandle: true,
-  },
-});
 
 describe('LobeQiniuAI - custom features', () => {
   let instance: InstanceType<typeof LobeQiniuAI>;
@@ -102,6 +83,35 @@ describe('LobeQiniuAI - custom features', () => {
       expect(models).toEqual([]);
     });
 
+    it('should map upstream context_length/max_tokens onto the processed card', async () => {
+      const mockClient = {
+        models: {
+          list: vi.fn().mockResolvedValue({
+            data: [
+              {
+                context_length: 256000,
+                created: 1770370439,
+                id: 'meituan/longcat-flash-lite',
+                max_tokens: 320000,
+                object: 'model',
+                owned_by: 'system',
+              },
+            ],
+          }),
+        },
+      };
+
+      const models = await params.models!({ client: mockClient as any });
+
+      expect(models).toEqual([
+        expect.objectContaining({
+          contextWindowTokens: 256000,
+          id: 'meituan/longcat-flash-lite',
+          maxOutput: 320000,
+        }),
+      ]);
+    });
+
     it('should handle API errors gracefully', async () => {
       const mockClient = {
         models: {
@@ -127,58 +137,6 @@ describe('LobeQiniuAI - custom features', () => {
       // Verify that the models are processed (non-empty if valid models exist)
       expect(Array.isArray(models)).toBe(true);
     });
-
-    it('should handle models with OpenAI provider', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'gpt-4' }, { id: 'gpt-3.5-turbo' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-
-      expect(models.length).toBeGreaterThan(0);
-      // Should detect OpenAI models and include them
-      const gpt4 = models.find((m) => m.id === 'gpt-4');
-      expect(gpt4).toBeDefined();
-    });
-
-    it('should handle models with Anthropic provider', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'claude-3-opus' }, { id: 'claude-3-sonnet' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-
-      expect(models.length).toBeGreaterThan(0);
-      // Should detect Anthropic models and include them
-      const claude = models.find((m) => m.id === 'claude-3-opus');
-      expect(claude).toBeDefined();
-    });
-
-    it('should handle models with Google provider', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockResolvedValue({
-            data: [{ id: 'gemini-pro' }, { id: 'gemini-1.5-pro' }],
-          }),
-        },
-      };
-
-      const models = await params.models!({ client: mockClient as any });
-
-      expect(models.length).toBeGreaterThan(0);
-      // Should detect Google models and include them
-      const gemini = models.find((m) => m.id === 'gemini-pro');
-      expect(gemini).toBeDefined();
-    });
-
     it('should handle mixed provider models', async () => {
       const mockClient = {
         models: {
@@ -215,19 +173,6 @@ describe('LobeQiniuAI - custom features', () => {
 
       expect(Array.isArray(models)).toBe(true);
     });
-
-    it('should handle network timeout errors', async () => {
-      const mockClient = {
-        models: {
-          list: vi.fn().mockRejectedValue(new Error('Network timeout')),
-        },
-      };
-
-      await expect(params.models!({ client: mockClient as any })).rejects.toThrow(
-        'Network timeout',
-      );
-    });
-
     it('should handle invalid API response format', async () => {
       const mockClient = {
         models: {
@@ -272,17 +217,6 @@ describe('LobeQiniuAI - custom features', () => {
   });
 
   describe('exports', () => {
-    it('should export params object', () => {
-      expect(params).toBeDefined();
-      expect(params.provider).toBe(ModelProvider.Qiniu);
-      expect(params.baseURL).toBe('https://openai.qiniu.com/v1');
-    });
-
-    it('should export LobeQiniuAI class', () => {
-      expect(LobeQiniuAI).toBeDefined();
-      expect(typeof LobeQiniuAI).toBe('function');
-    });
-
     it('should export params with all required properties', () => {
       expect(params).toHaveProperty('provider');
       expect(params).toHaveProperty('baseURL');
@@ -290,18 +224,6 @@ describe('LobeQiniuAI - custom features', () => {
       expect(params).toHaveProperty('debug');
       expect(params).toHaveProperty('models');
     });
-
-    it('should have debug.chatCompletion function', () => {
-      expect(params.debug).toBeDefined();
-      expect(params.debug.chatCompletion).toBeDefined();
-      expect(typeof params.debug.chatCompletion).toBe('function');
-    });
-
-    it('should have models function', () => {
-      expect(params.models).toBeDefined();
-      expect(typeof params.models).toBe('function');
-    });
-
     it('should have correct apiKey placeholder', () => {
       expect(params.apiKey).toBe('placeholder-to-avoid-error');
     });

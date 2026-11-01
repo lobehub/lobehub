@@ -1,12 +1,11 @@
 'use client';
 
-import { Accordion, AccordionItem, Avatar, Flexbox, Tag, Text } from '@lobehub/ui';
-import { Steps } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Flexbox } from '@lobehub/ui';
+import { Accordion, Avatar, Spin, Steps, Tag, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import StreamingMarkdown from '@/components/StreamingMarkdown';
 import { highlightTextStyles } from '@/styles';
 
@@ -51,15 +50,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
     white-space: pre-wrap;
   `,
-  stepsContainer: css`
-    .ant-steps-item-content {
-      min-height: auto;
-    }
-
-    .ant-steps-item-description {
-      padding-block-end: 12px !important;
-    }
-  `,
   summary: css`
     font-size: 14px;
     font-weight: 500;
@@ -89,9 +79,14 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
   const { summary, details, tags, title, withExperience } = data || {};
   const { situation, reasoning, action, possibleOutcome, keyLearning } = withExperience || {};
 
+  // `tags` comes from raw model tool-call args without zod coercion, so a model may
+  // emit a scalar where `string[]` is expected. Normalize to an array to keep this
+  // card from crashing on dirty input (`.map` on a non-array).
+  const safeTags = Array.isArray(tags) ? tags : [];
+
   const hasStarContent = situation || reasoning || action || possibleOutcome;
 
-  if (!summary && !details && !tags?.length && !title && !hasStarContent && !keyLearning)
+  if (!summary && !details && !safeTags.length && !title && !hasStarContent && !keyLearning)
     return null;
 
   const starItems = [
@@ -108,85 +103,88 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
         <Flexbox flex={1}>
           <div className={styles.title}>{title || 'Experience Memory'}</div>
         </Flexbox>
-        {loading && <NeuralNetworkLoading size={20} />}
+        {loading && <Spin size="middle" variant="network" />}
       </Flexbox>
 
       {/* When has STAR content: collapse summary */}
       {hasStarContent ? (
         <>
           {/* Collapsed Summary */}
-          {(summary || tags?.length) && (
-            <Accordion gap={0}>
-              <AccordionItem
-                itemKey="summary"
-                paddingBlock={8}
-                paddingInline={8}
-                styles={{
-                  base: { marginBlock: 4, marginInline: 4 },
-                }}
-                title={
-                  <Text fontSize={12} type={'secondary'} weight={500}>
-                    Summary
-                  </Text>
-                }
-              >
-                <Flexbox gap={8} paddingBlock={'8px 12px'} paddingInline={8}>
-                  {summary && <div className={styles.summary}>{summary}</div>}
-                  {details && <div className={styles.detail}>{details}</div>}
-                  {tags && tags.length > 0 && (
-                    <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
-                      {tags.map((tag, index) => (
-                        <Tag key={index}>{tag}</Tag>
-                      ))}
+          {(summary || safeTags.length > 0) && (
+            <Accordion
+              gap={0}
+              items={[
+                {
+                  children: (
+                    <Flexbox gap={8} paddingBlock={'8px 12px'} paddingInline={8}>
+                      {summary && <div className={styles.summary}>{summary}</div>}
+                      {details && <div className={styles.detail}>{details}</div>}
+                      {safeTags.length > 0 && (
+                        <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
+                          {safeTags.map((tag, index) => (
+                            <Tag key={index}>{tag}</Tag>
+                          ))}
+                        </Flexbox>
+                      )}
                     </Flexbox>
-                  )}
-                </Flexbox>
-              </AccordionItem>
-            </Accordion>
+                  ),
+                  key: 'summary',
+                  title: (
+                    <Text fontSize={12} type={'secondary'} weight={500}>
+                      Summary
+                    </Text>
+                  ),
+                },
+              ]}
+              styles={{
+                item: { marginBlock: 4, marginInline: 4 },
+              }}
+            />
           )}
 
           {/* STAR Steps */}
-          <Accordion className={styles.section} defaultExpandedKeys={['star']} gap={0}>
-            <AccordionItem
-              itemKey="star"
-              paddingBlock={8}
-              paddingInline={8}
-              title={
-                <Text fontSize={12} type={'secondary'} weight={500}>
-                  STAR
-                </Text>
-              }
-            >
-              <Flexbox paddingBlock={'8px 12px'} paddingInline={8}>
-                <Steps
-                  className={styles.stepsContainer}
-                  current={null as any}
-                  direction="vertical"
-                  size="small"
-                  items={starItems.map((item) => ({
-                    description: <div className={styles.stepContent}>{item.content}</div>,
-                    icon: (
-                      <Avatar
-                        shadow
-                        avatar={item.avatar}
-                        shape={'square'}
-                        size={20}
-                        style={{
-                          border: `1px solid ${cssVar.colorBorderSecondary}`,
-                          fontSize: 11,
-                        }}
-                      />
-                    ),
-                    title: (
-                      <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
-                        {item.title}
-                      </Text>
-                    ),
-                  }))}
-                />
-              </Flexbox>
-            </AccordionItem>
-          </Accordion>
+          <Accordion
+            className={styles.section}
+            defaultValue={['star']}
+            gap={0}
+            items={[
+              {
+                children: (
+                  <Flexbox paddingBlock={'8px 12px'} paddingInline={8}>
+                    <Steps
+                      orientation="vertical"
+                      items={starItems.map((item) => ({
+                        description: <div className={styles.stepContent}>{item.content}</div>,
+                        icon: (
+                          <Avatar
+                            shadow
+                            avatar={item.avatar}
+                            shape={'square'}
+                            size={20}
+                            style={{
+                              border: `1px solid ${cssVar.colorBorderSecondary}`,
+                              fontSize: 11,
+                            }}
+                          />
+                        ),
+                        title: (
+                          <Text as={'span'} fontSize={12} type={'secondary'} weight={500}>
+                            {item.title}
+                          </Text>
+                        ),
+                      }))}
+                    />
+                  </Flexbox>
+                ),
+                key: 'star',
+                title: (
+                  <Text fontSize={12} type={'secondary'} weight={500}>
+                    STAR
+                  </Text>
+                ),
+              },
+            ]}
+          />
 
           {/* Key Learning */}
           {keyLearning && (
@@ -211,9 +209,9 @@ export const ExperienceMemoryCard = memo<ExperienceMemoryCardProps>(({ data, loa
             <>
               {summary && <div className={styles.summary}>{summary}</div>}
               {details && <StreamingMarkdown>{details}</StreamingMarkdown>}
-              {tags && tags.length > 0 && (
+              {safeTags.length > 0 && (
                 <Flexbox horizontal className={styles.tags} gap={8} wrap={'wrap'}>
-                  {tags.map((tag, index) => (
+                  {safeTags.map((tag, index) => (
                     <Tag key={index}>{tag}</Tag>
                   ))}
                 </Flexbox>

@@ -1,5 +1,4 @@
 import type { ModelPerformance, ModelUsage, TracePayload } from '@lobechat/types';
-import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 import type { ClientOptions } from 'openai';
 
 import type { LobeBedrockAIParams } from '../providers/bedrock';
@@ -12,6 +11,10 @@ import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamPayload,
+  DecisionOptions,
+  DecisionPayload,
+  DecisionQuestions,
+  DecisionResponse,
   EmbeddingsOptions,
   EmbeddingsPayload,
   GenerateObjectOptions,
@@ -19,6 +22,7 @@ import type {
   ModelRequestOptions,
   OnFinishData,
   PullModelParams,
+  TextToSpeechOptions,
   TextToSpeechPayload,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
@@ -30,17 +34,53 @@ import type {
 import type {
   CreateVideoMethodOptions,
   CreateVideoPayload,
+  CreateVideoResponse,
   HandleCreateVideoWebhookPayload,
+  VideoPollingRoute,
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
+import { createTimingHelpers, getDurationMs } from '../utils/timing';
+import { createVideoWithCompletionMode } from '../utils/videoCompletionMode';
 import type { LobeRuntimeAI } from './BaseAI';
 
 const { logger: timing } = createTimingHelpers('lobe-server:chat:lobehub:timing');
+
+/** Keeps one provider body out of the tracing row's way while staying diagnosable. */
+const MAX_TRACED_ERROR_DETAIL = 4000;
+
+/**
+ * Describes a failed generation for the tracing row.
+ *
+ * A provider either rethrows its own error (`.message` carries the body) or throws the
+ * normalized `ChatCompletionErrorPayload`, which has no `.message` at all — the body sits under
+ * `.error`. Reading only `.message` therefore drops exactly the cases the error refinement
+ * normalized, leaving a tracing row that names a bucket (`UpstreamHttpError`) and nothing else.
+ */
+export const describeGenerateObjectError = (error: {
+  error?: unknown;
+  message?: string;
+}): string | undefined => {
+  if (typeof error?.message === 'string' && error.message.length > 0) return error.message;
+
+  const body = error?.error;
+  if (body === undefined || body === null) return undefined;
+  if (typeof body === 'string') return body.slice(0, MAX_TRACED_ERROR_DETAIL) || undefined;
+
+  try {
+    return JSON.stringify(body).slice(0, MAX_TRACED_ERROR_DETAIL);
+  } catch {
+    // Circular or otherwise unserializable payloads still beat recording nothing.
+    return String(body).slice(0, MAX_TRACED_ERROR_DETAIL);
+  }
+};
 
 const getLobeHubTimingMetadata = (options?: {
   metadata?: Record<string, unknown>;
 }): Record<string, unknown> | undefined =>
   options?.metadata?.provider === 'lobehub' ? options.metadata : undefined;
+
+const getRuntimeProviderId = (runtime: LobeRuntimeAI) =>
+  'id' in runtime && typeof runtime.id === 'string' ? runtime.id : 'unknown';
 
 const buildGenerateObjectSpeed = (startedAt: number, usage: ModelUsage): ModelPerformance => {
   const latency = Math.max(Date.now() - startedAt, 0);
@@ -67,11 +107,25 @@ export interface ModelRuntimeHooks {
    * Runs before the LLM call. Throw to abort (e.g., budget exceeded).
    */
   beforeChat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<void>;
+  beforeCreateImage?: (
+    payload: CreateImagePayload,
+    options?: CreateImageMethodOptions,
+  ) => Promise<void>;
+  beforeCreateVideo?: (
+    payload: CreateVideoPayload,
+    options?: CreateVideoMethodOptions,
+  ) => Promise<void>;
+  beforeDecide?: (payload: DecisionPayload, options?: DecisionOptions) => Promise<void>;
   beforeEmbeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<void>;
   beforeGenerateObject?: (
     payload: GenerateObjectPayload,
     options?: GenerateObjectOptions,
   ) => Promise<void>;
+  beforeTextToSpeech?: (
+    payload: TextToSpeechPayload,
+    options?: TextToSpeechOptions,
+  ) => Promise<void>;
+  beforeTranscribe?: (payload: ASRPayload, options?: ASROptions) => Promise<void>;
   /**
    * Called when chat() throws. Handle side effects (sanitize, log, DB record).
    * The error is re-thrown after the hook completes — callers still handle response formatting.
@@ -88,6 +142,43 @@ export interface ModelRuntimeHooks {
   onChatFinal?: (
     data: OnFinishData,
     context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
+
+  /**
+   * Called when a chat stream fails after `chat()` has already returned its response: an
+   * in-band provider `error` event, or a body read failure such as every routed fallback
+   * failing mid-stream. `onChatError` never sees these. Same side-effect contract (sanitize,
+   * log, record, release held reservations).
+   *
+   * `onChatFinal` may or may not have run first: a committed attempt delivers it before the
+   * error surfaces, but a routed fallback whose earlier attempts were discarded and whose last
+   * attempt failed to start delivers none. Releases here must therefore be no-ops once
+   * `onChatFinal` has charged the request.
+   */
+  onChatStreamError?: (
+    error: unknown,
+    context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) => void | Promise<void>;
+
+  onDecideError?: (
+    error: ChatCompletionErrorPayload,
+    context: { options?: DecisionOptions; payload: DecisionPayload },
+  ) => void | Promise<void>;
+
+  /**
+   * Fires once after a successful decision, including when some answers are refusals.
+   * `usage` is undefined when the provider reports none, so consumers can still settle or
+   * release anything taken in `beforeDecide`.
+   */
+  onDecideFinal?: (
+    data: {
+      latencyMs: number;
+      /** USD charge reported by the upstream provider. Server-side only, like chat's. */
+      providerReportedCost?: number;
+      response: DecisionResponse;
+      usage?: ModelUsage;
+    },
+    context: { options?: DecisionOptions; payload: DecisionPayload },
   ) => void | Promise<void>;
 
   onEmbeddingsError?: (
@@ -127,6 +218,36 @@ export interface ModelRuntimeHooks {
   onGenerateObjectFinal?: (
     data: { speed?: ModelPerformance; usage?: ModelUsage },
     context: { options?: GenerateObjectOptions; payload: GenerateObjectPayload },
+  ) => void | Promise<void>;
+
+  onTextToSpeechError?: (
+    error: ChatCompletionErrorPayload,
+    context: { options?: TextToSpeechOptions; payload: TextToSpeechPayload },
+  ) => void | Promise<void>;
+
+  /**
+   * Fires once after a successful synthesis. `usage` is undefined when the provider
+   * reports none, so consumers can still settle or release anything taken in
+   * `beforeTextToSpeech`.
+   */
+  onTextToSpeechFinal?: (
+    data: { latencyMs: number; usage?: ModelUsage },
+    context: { options?: TextToSpeechOptions; payload: TextToSpeechPayload },
+  ) => void | Promise<void>;
+
+  onTranscribeError?: (
+    error: ChatCompletionErrorPayload,
+    context: { options?: ASROptions; payload: ASRPayload },
+  ) => void | Promise<void>;
+
+  /**
+   * Fires once after a successful transcription. `usage` is undefined when the
+   * provider reports none (e.g. duration-billed models), so consumers can still
+   * settle or release anything taken in `beforeTranscribe`.
+   */
+  onTranscribeFinal?: (
+    data: { latencyMs: number; usage?: ModelUsage },
+    context: { options?: ASROptions; payload: ASRPayload },
   ) => void | Promise<void>;
 }
 
@@ -237,12 +358,28 @@ export class ModelRuntime {
   }
 
   /**
+   * Report a chat stream failure that surfaced after `chat()` returned, for callers that consume
+   * the response. Hook failures are logged so they never replace the stream error itself.
+   */
+  async handleChatStreamError(
+    error: unknown,
+    context: { options?: ChatMethodOptions; payload: ChatStreamPayload },
+  ) {
+    try {
+      await this._hooks?.onChatStreamError?.(error, context);
+    } catch (hookError) {
+      console.error('[ModelRuntime] onChatStreamError hook failed:', hookError);
+    }
+  }
+
+  /**
    * Apply lifecycle hooks: beforeChat (budget check) + onChatFinal (cost tracking callback injection).
    */
   private async applyHooks(
     payload: ChatStreamPayload,
     options?: ChatMethodOptions,
   ): Promise<ChatMethodOptions | undefined> {
+    const hookOptions = this._hooks?.beforeChat && !options ? {} : options;
     const metadata = getLobeHubTimingMetadata(options);
     const beforeChatStartedAt = Date.now();
     if (metadata) {
@@ -254,7 +391,7 @@ export class ModelRuntime {
       );
     }
     try {
-      await this._hooks?.beforeChat?.(payload, options);
+      await this._hooks?.beforeChat?.(payload, hookOptions);
     } catch (error) {
       if (metadata) {
         timing(
@@ -275,14 +412,14 @@ export class ModelRuntime {
       );
     }
 
-    if (!this._hooks?.onChatFinal) return options;
+    if (!this._hooks?.onChatFinal) return hookOptions;
 
     const hookFn = this._hooks.onChatFinal;
-    const existingOnFinal = options?.callback?.onFinal;
+    const existingOnFinal = hookOptions?.callback?.onFinal;
     return {
-      ...options,
+      ...hookOptions,
       callback: {
-        ...options?.callback,
+        ...hookOptions?.callback,
         async onFinal(data) {
           const finalStartedAt = Date.now();
           if (metadata) {
@@ -348,7 +485,8 @@ export class ModelRuntime {
     };
 
     try {
-      await this._hooks?.beforeGenerateObject?.(payload, options);
+      const hookOptions = this._hooks?.beforeGenerateObject && !options ? {} : options;
+      await this._hooks?.beforeGenerateObject?.(payload, hookOptions);
       const runtimeStartedAt = Date.now();
 
       const needsUsageCapture =
@@ -356,11 +494,11 @@ export class ModelRuntime {
 
       const finalOptions = needsUsageCapture
         ? {
-            ...options,
+            ...hookOptions,
             onUsage: async (usage: ModelUsage) => {
               usageCapture = usage;
               const speed = buildGenerateObjectSpeed(runtimeStartedAt, usage);
-              await options?.onUsage?.(usage);
+              await hookOptions?.onUsage?.(usage);
               try {
                 await this._hooks?.onGenerateObjectFinal?.({ speed, usage }, { options, payload });
               } catch (e) {
@@ -369,7 +507,7 @@ export class ModelRuntime {
               }
             },
           }
-        : options;
+        : hookOptions;
 
       const output = await this._runtime.generateObject!(payload, finalOptions);
       await fireComplete({ output, success: true });
@@ -386,10 +524,10 @@ export class ModelRuntime {
       // `AI_*Error` subclasses, Node Errors with `.code`, etc. Try the most
       // descriptive identifier first so the tracing row gets a usable code
       // instead of falling through to `unknown`.
-      const err = error as Error & { code?: string; errorType?: string };
+      const err = error as Error & { code?: string; error?: unknown; errorType?: string };
       const code = err?.errorType ?? err?.code ?? err?.name ?? err?.constructor?.name;
       await fireComplete({
-        error: { code, message: err?.message, stack: err?.stack },
+        error: { code, message: describeGenerateObjectError(err), stack: err?.stack },
         success: false,
       });
       throw error;
@@ -397,19 +535,30 @@ export class ModelRuntime {
   }
 
   async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
-    return this._runtime.createImage?.(payload, options);
+    const finalOptions = this._hooks?.beforeCreateImage && !options ? {} : options;
+    await this._hooks?.beforeCreateImage?.(payload, finalOptions);
+
+    return this._runtime.createImage?.(payload, finalOptions);
   }
 
-  async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
-    return this._runtime.createVideo?.(payload, options);
+  async createVideo(
+    payload: CreateVideoPayload,
+    options?: CreateVideoMethodOptions,
+  ): Promise<CreateVideoResponse | undefined> {
+    const finalOptions = this._hooks?.beforeCreateVideo && !options ? {} : options;
+    await this._hooks?.beforeCreateVideo?.(payload, finalOptions);
+
+    if (!this._runtime.createVideo) return;
+
+    return createVideoWithCompletionMode(this._runtime, payload, finalOptions);
   }
 
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
     return this._runtime.handleCreateVideoWebhook?.(payload);
   }
 
-  async handlePollVideoStatus(inferenceId: string) {
-    return this._runtime.handlePollVideoStatus?.(inferenceId);
+  async handlePollVideoStatus(inferenceId: string, model?: string, route?: VideoPollingRoute) {
+    return this._runtime.handlePollVideoStatus?.(inferenceId, model, route);
   }
 
   async models() {
@@ -418,15 +567,16 @@ export class ModelRuntime {
 
   async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
     try {
-      await this._hooks?.beforeEmbeddings?.(payload, options);
+      const hookOptions = this._hooks?.beforeEmbeddings && !options ? {} : options;
+      await this._hooks?.beforeEmbeddings?.(payload, hookOptions);
 
       const startTime = Date.now();
 
       const finalOptions = this._hooks?.onEmbeddingsFinal
         ? {
-            ...options,
+            ...hookOptions,
             onUsage: async (usage: ModelUsage) => {
-              await options?.onUsage?.(usage);
+              await hookOptions?.onUsage?.(usage);
               try {
                 const latencyMs = Date.now() - startTime;
                 await this._hooks!.onEmbeddingsFinal!({ latencyMs, usage }, { options, payload });
@@ -435,7 +585,7 @@ export class ModelRuntime {
               }
             },
           }
-        : options;
+        : hookOptions;
 
       return await this._runtime.embeddings?.(payload, finalOptions);
     } catch (error) {
@@ -448,12 +598,150 @@ export class ModelRuntime {
       throw error;
     }
   }
-  async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
-    return this._runtime.textToSpeech?.(payload, options);
+  async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
+    try {
+      const hookOptions = this._hooks?.beforeTextToSpeech && !options ? {} : options;
+      await this._hooks?.beforeTextToSpeech?.(payload, hookOptions);
+
+      const startTime = Date.now();
+      let usage: ModelUsage | undefined;
+      const finalOptions = this._hooks?.onTextToSpeechFinal
+        ? {
+            ...hookOptions,
+            onUsage: async (reported: ModelUsage) => {
+              usage = reported;
+              await hookOptions?.onUsage?.(reported);
+            },
+          }
+        : hookOptions;
+
+      const result = await this._runtime.textToSpeech?.(payload, finalOptions);
+
+      if (this._hooks?.onTextToSpeechFinal) {
+        try {
+          await this._hooks.onTextToSpeechFinal(
+            { latencyMs: Date.now() - startTime, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onTextToSpeechFinal hook error:', e);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      if (this._hooks?.onTextToSpeechError) {
+        await this._hooks.onTextToSpeechError(error as ChatCompletionErrorPayload, {
+          options,
+          payload,
+        });
+      }
+      throw error;
+    }
   }
 
   async transcribe(payload: ASRPayload, options?: ASROptions) {
-    return this._runtime.transcribe?.(payload, options);
+    try {
+      const hookOptions = this._hooks?.beforeTranscribe && !options ? {} : options;
+      await this._hooks?.beforeTranscribe?.(payload, hookOptions);
+
+      const startTime = Date.now();
+      let usage: ModelUsage | undefined;
+      const finalOptions = this._hooks?.onTranscribeFinal
+        ? {
+            ...hookOptions,
+            onUsage: async (reported: ModelUsage) => {
+              usage = reported;
+              await hookOptions?.onUsage?.(reported);
+            },
+          }
+        : hookOptions;
+
+      const result = await this._runtime.transcribe?.(payload, finalOptions);
+
+      if (this._hooks?.onTranscribeFinal) {
+        try {
+          await this._hooks.onTranscribeFinal(
+            { latencyMs: Date.now() - startTime, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onTranscribeFinal hook error:', e);
+        }
+      }
+
+      return result;
+    } catch (error) {
+      if (this._hooks?.onTranscribeError) {
+        await this._hooks.onTranscribeError(error as ChatCompletionErrorPayload, {
+          options,
+          payload,
+        });
+      }
+      throw error;
+    }
+  }
+
+  async decide<Q extends DecisionQuestions>(
+    payload: DecisionPayload<Q>,
+    options?: DecisionOptions,
+  ): Promise<DecisionResponse<Q>> {
+    // Unlike the optional-chained passthroughs above, an unsupported provider must not
+    // resolve to `undefined`: callers branch on the answers and would read it as a result.
+    // Thrown before the hooks run, so there is nothing for `onDecideError` to release.
+    const decide = this._runtime.decide?.bind(this._runtime);
+    if (!decide) {
+      throw AgentRuntimeError.chat({
+        error: new Error('Decision models are not supported by this provider'),
+        errorType: AgentRuntimeErrorType.CapabilityNotSupported,
+        provider: getRuntimeProviderId(this._runtime),
+      });
+    }
+
+    try {
+      const hookOptions = this._hooks?.beforeDecide && !options ? {} : options;
+      await this._hooks?.beforeDecide?.(payload, hookOptions);
+
+      const startTime = Date.now();
+      let usage: ModelUsage | undefined;
+      let providerReportedCost: number | undefined;
+      const finalOptions = this._hooks?.onDecideFinal
+        ? {
+            ...hookOptions,
+            onProviderReportedCost: async (cost: number) => {
+              providerReportedCost = cost;
+              await hookOptions?.onProviderReportedCost?.(cost);
+            },
+            onUsage: async (reported: ModelUsage) => {
+              usage = reported;
+              await hookOptions?.onUsage?.(reported);
+            },
+          }
+        : hookOptions;
+
+      const response = await decide(payload, finalOptions);
+
+      if (this._hooks?.onDecideFinal) {
+        try {
+          await this._hooks.onDecideFinal(
+            { latencyMs: Date.now() - startTime, providerReportedCost, response, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onDecideFinal hook error:', e);
+        }
+      }
+
+      return response as DecisionResponse<Q>;
+    } catch (error) {
+      if (this._hooks?.onDecideError) {
+        await this._hooks.onDecideError(error as ChatCompletionErrorPayload, {
+          options,
+          payload,
+        });
+      }
+      throw error;
+    }
   }
 
   async pullModel(params: PullModelParams, options?: ModelRequestOptions) {
@@ -492,12 +780,15 @@ export class ModelRuntime {
           apiKey?: string;
           baseURL?: string;
           userId?: string;
+          workspaceId?: string;
         }
     >,
     hooks?: ModelRuntimeHooks,
   ) {
-    // @ts-expect-error runtime map not include vertex so it will be undefined
-    const providerAI = providerRuntimeMap[provider] ?? LobeOpenAI;
+    // runtime map does not include every provider id (e.g. vertex), so index loosely
+    const runtimeMap: Partial<Record<string, new (params: any) => LobeRuntimeAI>> =
+      providerRuntimeMap;
+    const providerAI = runtimeMap[provider] ?? LobeOpenAI;
 
     const runtimeModel: LobeRuntimeAI = new providerAI(params);
 

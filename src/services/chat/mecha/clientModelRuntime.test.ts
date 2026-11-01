@@ -40,6 +40,14 @@ vi.mock('@lobechat/fetch-sse', async (importOriginal) => {
   return { ...(module as any), getMessageError: vi.fn() };
 });
 
+vi.mock('@/libs/model-runtime/zhipu/authToken', () => ({
+  generateApiToken: vi
+    .fn()
+    .mockResolvedValue(
+      'eyJhbGciOiJIUzI1NiIsInNpZ25fdHlwZSI6IlNJR04iLCJ0eXAiOiJKV1QifQ.eyJhcGlfa2V5IjoiemhpcHUiLCJleHAiOjE3MTU5MTc2NzMsImlhdCI6MTcxMzMyNTY3M30.gt8o-hUDvJFPJLYcH4EhrT1LAmTXI8YnybHeQjpD9oM',
+    ),
+}));
+
 // Mock image processing utilities
 vi.mock('@/utils/url', () => ({
   isDesktopLocalStaticServerUrl: vi.fn(),
@@ -74,6 +82,7 @@ const mockProviderKeyVaults = async (provider: string, keyVaults: any) => {
       ...state.aiProviderRuntimeConfig,
       [provider]: {
         keyVaults,
+        settings: {},
       },
     },
   }));
@@ -119,6 +128,28 @@ describe('ModelRuntimeOnClient', () => {
         expect(runtime).toBeInstanceOf(ModelRuntime);
         expect(runtime['_runtime']).toBeInstanceOf(LobeOpenAI);
         expect(runtime['_runtime'].baseURL).toBe('user-openai-endpoint');
+      });
+
+      it('custom router provider: passes actual provider id to runtime options', async () => {
+        await mockProviderKeyVaults('custom-router', {
+          apiKey: 'custom-router-key',
+          baseURL: 'https://custom-router.test.com/v1',
+        });
+
+        const initializeSpy = vi.spyOn(ModelRuntime, 'initializeWithProvider');
+
+        await initializeWithClientStore({
+          payload: {},
+          provider: 'custom-router',
+          runtimeProvider: 'router',
+        });
+
+        expect(initializeSpy).toHaveBeenCalledWith(
+          'router',
+          expect.objectContaining({
+            providerId: 'custom-router',
+          }),
+        );
       });
 
       it('Azure provider: with apiKey and endpoint', async () => {
@@ -347,15 +378,6 @@ describe('ModelRuntimeOnClient', () => {
        */
 
       it('ZhiPu AI provider: with apiKey', async () => {
-        // Mock the generateApiToken function
-        vi.mock('@/libs/model-runtime/zhipu/authToken', () => ({
-          generateApiToken: vi
-            .fn()
-            .mockResolvedValue(
-              'eyJhbGciOiJIUzI1NiIsInNpZ25fdHlwZSI6IlNJR04iLCJ0eXAiOiJKV1QifQ.eyJhcGlfa2V5IjoiemhpcHUiLCJleHAiOjE3MTU5MTc2NzMsImlhdCI6MTcxMzMyNTY3M30.gt8o-hUDvJFPJLYcH4EhrT1LAmTXI8YnybHeQjpD9oM',
-            ),
-        }));
-
         await mockProviderKeyVaults(ModelProvider.ZhiPu, {
           apiKey: 'zhipu.user-key',
         });

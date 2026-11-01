@@ -53,30 +53,32 @@ async create(data) {
 ## Running Integration Tests
 
 ```bash
-# Run all integration tests
-pnpm test:integration
+# Run all integration tests (server package)
+bunx vitest run --dir apps/server
 
 # Run a specific test file
-pnpm vitest tests/integration/routers/message.integration.test.ts
+bunx vitest run apps/server/src/routers/lambda/__tests__/integration/message.integration.test.ts
 
 # Watch mode
-pnpm vitest tests/integration --watch
+bunx vitest --dir apps/server --watch
 
 # Generate coverage report
-pnpm test:integration --coverage
+bunx vitest run --dir apps/server --coverage
 ```
 
 ## Directory Structure
 
 ```
-tests/integration/
+apps/server/src/routers/lambda/__tests__/integration/
 ├── README.md                              # Integration test documentation
 ├── setup.ts                               # Common setup and utility functions
-└── routers/                               # Router layer integration tests
-    ├── message.integration.test.ts        # Message Router tests
-    ├── session.integration.test.ts        # Session Router tests
-    ├── topic.integration.test.ts          # Topic Router tests
-    └── chat-flow.integration.test.ts      # Full chat flow tests
+├── message.integration.test.ts            # Message Router tests
+├── topic.integration.test.ts              # Topic Router tests
+├── task.integration.test.ts               # Task Router tests
+└── aiAgent/                               # Agent Runtime integration tests
+    ├── execAgent.integration.test.ts
+    ├── execAgents.integration.test.ts
+    └── execGroupAgent.integration.test.ts
 ```
 
 ## Writing Integration Tests
@@ -85,18 +87,17 @@ tests/integration/
 
 ```typescript
 // @vitest-environment node
+import { type LobeChatDatabase } from '@lobechat/database';
+import { messages, sessions, users } from '@lobechat/database/schemas';
+import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '@/database/models/__tests__/_util';
-import { messages, sessions, users } from '@/database/schemas';
-import { LobeHubDatabase } from '@/database/type';
-import { messageRouter } from '@/server/routers/lambda/message';
-
-import { cleanupTestUser, createTestContext, createTestUser } from '../setup';
+import { messageRouter } from '../../message';
+import { cleanupTestUser, createTestContext, createTestUser } from './setup';
 
 describe('Your Feature Integration Tests', () => {
-  let serverDB: LobeHubDatabase;
+  let serverDB: LobeChatDatabase;
   let userId: string;
 
   beforeEach(async () => {
@@ -163,27 +164,38 @@ it('should create message with correct associations', async () => {
 
 #### 2. Test Cascading Operations
 
+Agent deletion moves the Agent and related content to the recycle bin. Verify the soft-delete state
+instead of expecting database rows to disappear; physical cascading deletion happens during purge.
+This example uses a message without a Topic, which receives its own soft-delete stamp.
+
+Use the shared database/user setup above and mock `getServerDB` to return that database, as in
+[the Message Router integration suite](https://github.com/lobehub/lobehub/blob/canary/apps/server/src/routers/lambda/__tests__/integration/message.integration.test.ts).
+
 ```typescript
-it('should cascade delete messages when session is deleted', async () => {
-  const sessionCaller = sessionRouter.createCaller(createTestContext(userId));
+import { agents } from '@lobechat/database/schemas';
+
+import { agentRouter } from '../../agent';
+
+it('should trash an agent with its topicless messages', async () => {
+  const agentCaller = agentRouter.createCaller(createTestContext(userId));
   const messageCaller = messageRouter.createCaller(createTestContext(userId));
 
-  // Create session and messages
-  const sessionId = await sessionCaller.createSession({
-    /* ... */
+  // Create an Agent and a message without a Topic
+  const { agentId } = await agentCaller.createAgent({ config: { title: 'Cascade test' } });
+  const { id: messageId } = await messageCaller.createMessage({
+    agentId,
+    content: 'Test message',
+    role: 'user',
   });
-  await messageCaller.createMessage({ sessionId /* ... */ });
 
-  // Delete session
-  await sessionCaller.removeSession({ id: sessionId });
+  await agentCaller.removeAgent({ agentId });
 
-  // ✅ Verify related messages are also deleted
-  const remainingMessages = await serverDB
-    .select()
-    .from(messages)
-    .where(eq(messages.sessionId, sessionId));
+  // Verify both rows remain in the database with soft-delete stamps
+  const [agent] = await serverDB.select().from(agents).where(eq(agents.id, agentId));
+  const [message] = await serverDB.select().from(messages).where(eq(messages.id, messageId));
 
-  expect(remainingMessages).toHaveLength(0);
+  expect(agent).toMatchObject({ id: agentId, isDeleted: true });
+  expect(message).toMatchObject({ agentId, isDeleted: true, topicId: null });
 });
 ```
 
@@ -286,7 +298,7 @@ Use clear names to describe the test's intent:
 ```typescript
 // ✅ Good naming
 it('should create message with correct sessionId and topicId');
-it('should cascade delete messages when session is deleted');
+it('should trash an agent with its topicless messages');
 it('should prevent cross-user access to messages');
 
 // ❌ Poor naming
@@ -323,7 +335,7 @@ it('test delete');
 
 - ✅ Cross-layer ID propagation (sessionId, topicId, containerId, threadId)
 - ✅ Permission checks (users can only access their own resources)
-- ✅ Cascading deletes (deleting a session also deletes related data)
+- ✅ Cascading operations (trashing an Agent also hides related content; purge deletes it)
 - ✅ Foreign key constraints (cannot create associations to non-existent records)
 
 ### Priority P1 (Should Cover)

@@ -27,6 +27,7 @@ export const MessageApiName = {
   listPins: 'listPins',
   pinMessage: 'pinMessage',
   reactToMessage: 'reactToMessage',
+  readDocument: 'readDocument',
   readMessages: 'readMessages',
   searchMessages: 'searchMessages',
   sendMessage: 'sendMessage',
@@ -67,7 +68,7 @@ export const MessageApiName = {
   // be created via tool calls (OAuth requires browser flow).
   /** List the current user's System Bot installations across workspaces. */
   listMessengers: 'listMessengers',
-  /** Get one install's detail by installationId. */
+  /** Get one System Bot connection's detail by installationId. */
   getMessengerDetail: 'getMessengerDetail',
   /** Revoke a workspace install (cascades to all users in that workspace). */
   uninstallMessenger: 'uninstallMessenger',
@@ -79,6 +80,8 @@ export const MessageApiName = {
   setMessengerActiveAgent: 'setMessengerActiveAgent',
   /** Remove the user's account link for a platform (does not uninstall). */
   unlinkMessenger: 'unlinkMessenger',
+  /** Proactively push a message to the current user's own linked messenger DM. */
+  sendMessengerPush: 'sendMessengerPush',
 } as const;
 
 export type MessageApiNameType = (typeof MessageApiName)[keyof typeof MessageApiName];
@@ -94,9 +97,66 @@ export interface MessageTarget {
 
 // ==================== Parameter Types ====================
 
+// --- Rich embeds (Discord cards) ---
+
+/** A single key/value block inside a Discord embed. */
+export interface SendMessageEmbedField {
+  /** Render side-by-side with neighbouring inline fields (up to 3 per row). */
+  inline?: boolean;
+  /** Field label (max 256 chars). */
+  name: string;
+  /** Field body, markdown allowed (max 1024 chars). */
+  value: string;
+}
+
+/**
+ * JSON-safe outbound "card" for platforms with native rich embeds. Modelled
+ * on the Discord embed object — every property is optional but at least one
+ * visible block (title / description / fields / footer / author / image) is
+ * required for the card to render. Platforms without an embed concept drop
+ * these silently so the text `content` still ships.
+ *
+ * @see https://discord.com/developers/docs/resources/message#embed-object
+ */
+export interface SendMessageEmbed {
+  /** Small header line above the title. */
+  author?: { icon_url?: string; name: string; url?: string };
+  /** Left accent colour — integer (0xRRGGBB) or `#RRGGBB` string. */
+  color?: number | string;
+  /** Body text, markdown allowed (max 4096 chars). */
+  description?: string;
+  /** Key/value blocks below the description (max 25). */
+  fields?: SendMessageEmbedField[];
+  /** Small footer line at the bottom of the card. */
+  footer?: { icon_url?: string; text: string };
+  /** Large image rendered below the fields. */
+  image?: { url: string };
+  /** Small image rendered top-right of the card. */
+  thumbnail?: { url: string };
+  /** ISO-8601 timestamp shown next to the footer. */
+  timestamp?: string;
+  /** Card heading (max 256 chars). */
+  title?: string;
+  /** Makes the title a hyperlink. */
+  url?: string;
+}
+
 // --- Direct Messaging ---
 
-export interface SendDirectMessageParams {
+/**
+ * Which connection a send goes out through. Both are optional: when neither is
+ * set and the call targets the IM conversation this run is replying in, the
+ * server runtime sends through the same connection the conversation arrived
+ * on (per-agent bot or System Bot messenger). Never set both.
+ */
+export interface MessageSendRoute {
+  /** Per-agent bot id from `listBots`. */
+  botId?: string;
+  /** System Bot connection id from `listMessengers`. */
+  messengerInstallationId?: string;
+}
+
+export interface SendDirectMessageParams extends MessageSendRoute {
   /**
    * Optional: outbound media attachments (images / files / video / audio).
    * Same shape as `SendMessageParams.attachments` — see `SendMessageAttachment`.
@@ -104,13 +164,41 @@ export interface SendDirectMessageParams {
   attachments?: SendMessageAttachment[];
   /** Message content */
   content: string;
+  /**
+   * Optional: rich embeds / cards. Same shape as `SendMessageParams.embeds`.
+   * Only Discord renders these today; other platforms ignore them.
+   */
+  embeds?: SendMessageEmbed[];
   /** Platform */
   platform: MessagePlatformType;
   /** Target user ID on the platform */
   userId: string;
 }
 
-export interface SendDirectMessageState {
+/**
+ * One outbound attachment that did NOT reach the user, and why. Mirrors the
+ * server's `AttachmentFailure` so the tool result can name the file and the
+ * cause instead of the model assuming every attachment landed.
+ */
+export interface SendAttachmentFailure {
+  /** Loader error or platform error text, when there is one. */
+  detail?: string;
+  name?: string;
+  reason: 'over-budget-no-link' | 'source-unavailable' | 'upload-failed';
+  type: SendMessageAttachment['type'];
+}
+
+/**
+ * Attachment outcome shared by every send state. Both fields are absent when
+ * the send carried no attachments; `attachmentFailures` is absent when every
+ * attachment landed.
+ */
+export interface SendAttachmentsOutcome {
+  attachmentFailures?: SendAttachmentFailure[];
+  attachmentsDelivered?: number;
+}
+
+export interface SendDirectMessageState extends SendAttachmentsOutcome {
   channelId?: string;
   messageId?: string;
   platform?: string;
@@ -136,7 +224,7 @@ export interface SendMessageAttachment {
   type: 'image' | 'file' | 'video' | 'audio';
 }
 
-export interface SendMessageParams {
+export interface SendMessageParams extends MessageSendRoute {
   /**
    * Optional: outbound media attachments (images / files / video / audio).
    * Platforms that don't support outbound media silently drop these so the
@@ -147,15 +235,19 @@ export interface SendMessageParams {
   channelId: string;
   /** Message content (text, markdown depending on platform support) */
   content: string;
-  /** Optional: embed / attachment metadata (platform-specific) */
-  embeds?: Record<string, unknown>[];
+  /**
+   * Optional: rich embeds / cards rendered natively by the platform. Only
+   * Discord renders these today (as Discord embeds); other platforms ignore
+   * them so the text `content` still ships. See `SendMessageEmbed`.
+   */
+  embeds?: SendMessageEmbed[];
   /** Platform to send on */
   platform: MessagePlatformType;
   /** Optional: reply to a specific message */
   replyTo?: string;
 }
 
-export interface SendMessageState {
+export interface SendMessageState extends SendAttachmentsOutcome {
   channelId?: string;
   messageId?: string;
   platform?: string;
@@ -191,13 +283,51 @@ export interface ReadMessagesState {
   totalFetched?: number;
 }
 
+export interface MessageItemAttachment {
+  /** MIME type when the platform reports it (Discord `content_type`). */
+  contentType?: string;
+  name: string;
+  /** Bytes, when the platform reports it. */
+  size?: number;
+  url: string;
+}
+
 export interface MessageItem {
-  attachments?: { name: string; url: string }[];
+  attachments?: MessageItemAttachment[];
   author: { id: string; name: string };
   content: string;
   id: string;
   replyTo?: string;
   timestamp: string;
+}
+
+// --- Documents ---
+
+export interface ReadDocumentParams {
+  /**
+   * Platform document ID, for callers that already hold one (e.g. a Feishu
+   * docx token). Either this or `url` is required; `url` wins when both given.
+   */
+  documentId?: string;
+  /** Platform to read from */
+  platform: MessagePlatformType;
+  /** Document URL as it appeared in the chat (e.g. `https://x.feishu.cn/docx/<token>`) */
+  url?: string;
+}
+
+export interface ReadDocumentState {
+  /** Plain-text body of the document */
+  content?: string;
+  /** Resolved document ID on the platform */
+  documentId?: string;
+  /** Document kind on the platform (e.g. `docx`, `wiki`) */
+  kind?: string;
+  platform?: string;
+  title?: string;
+  /** True when the body was cut to fit the tool result */
+  truncated?: boolean;
+  /** Canonical URL of the document, when known */
+  url?: string;
 }
 
 export interface EditMessageParams {
@@ -398,7 +528,7 @@ export interface ListThreadsState {
   threads?: { id: string; messageCount?: number; name: string }[];
 }
 
-export interface ReplyToThreadParams {
+export interface ReplyToThreadParams extends MessageSendRoute {
   /**
    * Optional: outbound media attachments (images / files / video / audio).
    * Same shape as `SendMessageParams.attachments` — see `SendMessageAttachment`.
@@ -406,13 +536,18 @@ export interface ReplyToThreadParams {
   attachments?: SendMessageAttachment[];
   /** Reply content */
   content: string;
+  /**
+   * Optional: rich embeds / cards. Same shape as `SendMessageParams.embeds`.
+   * Only Discord renders these today; other platforms ignore them.
+   */
+  embeds?: SendMessageEmbed[];
   /** Platform */
   platform: MessagePlatformType;
   /** Thread ID */
   threadId: string;
 }
 
-export interface ReplyToThreadState {
+export interface ReplyToThreadState extends SendAttachmentsOutcome {
   messageId?: string;
   threadId?: string;
 }
@@ -567,7 +702,7 @@ export interface MessengerInfo {
   platform: string;
   /** OAuth scope string granted at install time (Slack-only typically). */
   scope?: string;
-  /** Tenant identifier — Slack workspace, Discord guild, … (empty for Telegram). */
+  /** Tenant identifier — Slack workspace, Discord guild, WeChat user, … (empty for Telegram). */
   tenantId: string;
   /** Optional human-friendly tenant label (workspace / guild name). */
   tenantName?: string;
@@ -583,11 +718,11 @@ export interface MessengerLinkInfo {
   /** When the link was created. */
   createdAt?: string | Date;
   platform: string;
-  /** Platform-side user id (Slack user id, Discord user id, Telegram chat id). */
+  /** Platform-side user id (Slack/Discord user id, Telegram chat id, WeChat user id). */
   platformUserId?: string;
   /** Display name surfaced when verify-im completed. */
   platformUsername?: string;
-  /** Tenant scope for the link — empty for global-bot platforms (Telegram). */
+  /** Tenant scope for the link — empty for single-link platforms (Telegram / WeChat). */
   tenantId?: string;
 }
 
@@ -672,4 +807,64 @@ export interface UnlinkMessengerParams {
 
 export interface UnlinkMessengerState {
   success: boolean;
+}
+
+// --- Proactive Messenger Push ---
+
+/** Platforms the System Bot proactive push supports (mirrors `MESSENGER_PUSH_PLATFORMS`). */
+/**
+ * Upper bound on a proactive push body. Chosen to clear the tightest platform
+ * limit in the set (Discord's 2000-character message cap) so the cap fails the
+ * call up front instead of at delivery, where only one platform would reject.
+ *
+ * Single source for the tool schema, the server runtime guard and the TRPC
+ * route, so the advertised limit and the enforced one cannot drift.
+ */
+export const MESSENGER_PUSH_CONTENT_MAX_LENGTH = 2000;
+
+export const MessengerPushPlatform = {
+  discord: 'discord',
+  linq: 'linq',
+  slack: 'slack',
+  telegram: 'telegram',
+  wechat: 'wechat',
+} as const;
+
+export type MessengerPushPlatformType =
+  (typeof MessengerPushPlatform)[keyof typeof MessengerPushPlatform];
+
+export interface SendMessengerPushParams {
+  /** Message content to deliver into the user's DM with the LobeHub System Bot. */
+  content: string;
+  platform: MessengerPushPlatformType;
+  /**
+   * Slack-only: target workspace (team id) when the user linked several.
+   * Omit elsewhere — the runtime auto-resolves single-link platforms.
+   */
+  tenantId?: string;
+}
+
+/**
+ * Delivery outcome of a proactive push. Mirrors the server-side
+ * `MessengerPushResult` statuses, plus `needs_workspace_selection` which the
+ * runtime synthesizes when a Slack push is ambiguous across workspaces.
+ */
+export type MessengerPushStatus =
+  'sent' | 'queued' | 'unlinked' | 'unavailable' | 'needs_workspace_selection';
+
+/** Candidate workspace surfaced when a Slack push needs disambiguation. */
+export interface MessengerPushWorkspaceOption {
+  tenantId: string;
+  tenantName?: string;
+}
+
+export interface SendMessengerPushState {
+  platform: MessengerPushPlatformType;
+  /** WeChat-only: sends remaining in the current 24h window (present on `sent`). */
+  remaining?: number;
+  status: MessengerPushStatus;
+  /** The workspace the message was routed to, when one was resolved. */
+  tenantId?: string;
+  /** Present on `needs_workspace_selection` — options to relay to the user. */
+  workspaces?: MessengerPushWorkspaceOption[];
 }

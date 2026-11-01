@@ -1,3 +1,6 @@
+import { cacheScope } from '@/libs/replica';
+import { errorInScope } from '@/utils/connectorActionError';
+
 import { type ToolStore } from '../../store';
 import { type ComposioServer, ComposioServerStatus } from './types';
 
@@ -24,6 +27,9 @@ export const composioStoreSelectors = {
     (s.composioServers || []).filter(
       (server) => server.status === ComposioServerStatus.PENDING_AUTH,
     ),
+
+  getServerError: (identifier: string) => (s: ToolStore) =>
+    errorInScope(s.composioServerErrors?.[identifier], cacheScope.get()),
 
   getServerByIdentifier: (identifier: string) => (s: ToolStore) =>
     s.composioServers?.find((server) => server.identifier === identifier),

@@ -3,11 +3,8 @@ import {
   type EvalDatasetRecord,
   type RAGEvalDataSetItem,
 } from '@lobechat/types';
-import { insertEvalDatasetRecordSchema } from '@lobechat/types';
-import i18n from 'i18next';
 import { type SWRResponse } from 'swr';
 
-import { notification } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { ragEvalKeys } from '@/libs/swr/keys';
 import { ragEvalService } from '@/services/ragEval';
@@ -33,34 +30,6 @@ export class RAGEvalDatasetActionImpl {
 
   createNewDataset = async (params: CreateNewEvalDatasets): Promise<void> => {
     await ragEvalService.createDataset(params);
-    await this.#get().refreshDatasetList();
-  };
-
-  importDataset = async (file: File, datasetId: string): Promise<void> => {
-    if (!datasetId) return;
-    const fileType = file.name.split('.').pop();
-
-    if (fileType === 'jsonl') {
-      // jsonl file needs to be split into individual entries, then validated one by one
-      const jsonl = await file.text();
-      const { default: JSONL } = await import('jsonl-parse-stringify');
-
-      try {
-        const items = JSONL.parse(jsonl);
-
-        // check if the items are valid
-        insertEvalDatasetRecordSchema.array().parse(items);
-
-        // if valid, send to backend
-        await ragEvalService.importDatasetRecords(datasetId, file);
-      } catch (e) {
-        notification.error({
-          description: (e as Error).message,
-          message: i18n.t('errors.invalidFileFormat', { ns: 'common' }),
-        });
-      }
-    }
-
     await this.#get().refreshDatasetList();
   };
 

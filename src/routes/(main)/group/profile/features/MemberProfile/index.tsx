@@ -1,11 +1,11 @@
 'use client';
 
-import { Alert, Button, Flexbox, Icon } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Alert, Button, Divider, Flexbox, Icon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { InfoIcon, PlayIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import { EditorCanvas } from '@/features/EditorCanvas';
@@ -37,9 +37,16 @@ const MemberProfile = memo(() => {
   const config = useAgentStore(agentByIdSelectors.getAgentConfigById(agentId), isEqual);
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
+  const { gid } = useParams<{ gid: string }>();
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup, isEqual);
-  const currentGroupAgents = useAgentGroupStore(agentGroupSelectors.currentGroupAgents, isEqual);
+  const currentGroup = useAgentGroupStore(
+    (s) => agentGroupSelectors.getGroupById(gid ?? '')(s),
+    isEqual,
+  );
+  const currentGroupAgents = useAgentGroupStore(
+    (s) => agentGroupSelectors.getGroupAgents(gid ?? '')(s),
+    isEqual,
+  );
   const router = useQueryRoute();
 
   // Check if the current agent is the supervisor
@@ -166,7 +173,7 @@ const MemberProfile = memo(() => {
           </Button>
         </Flexbox>
       </Flexbox>
-      <Divider />
+      <Divider style={{ marginBlock: 24 }} />
       {/* Main Content: Prompt Editor */}
       <EditorCanvas
         disabled={!canEdit}

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -43,6 +44,32 @@ afterEach(async () => {
 });
 
 describe('MessengerAccountLinkModel', () => {
+  describe('findByUserIds', () => {
+    it('returns only the identities active under the requested scope', async () => {
+      await serverDB.insert(messengerAccountLinks).values([
+        { platform: 'discord', platformUserId: 'd-a', userId: userA, workspaceId: workspaceA },
+        { platform: 'telegram', platformUserId: 't-a', userId: userA, workspaceId: null },
+        { platform: 'slack', platformUserId: 's-b', userId: userB, workspaceId: workspaceA },
+      ]);
+
+      const inWorkspace = await MessengerAccountLinkModel.findByUserIds(serverDB, [userA, userB], {
+        workspaceId: workspaceA,
+      });
+      expect(inWorkspace.map((l) => l.platformUserId).sort()).toEqual(['d-a', 's-b']);
+      // A workspace directory never sees a member's personal-scope identity.
+      expect(inWorkspace.some((l) => 'credentials' in l)).toBe(false);
+
+      const personal = await MessengerAccountLinkModel.findByUserIds(serverDB, [userA, userB], {
+        workspaceId: null,
+      });
+      expect(personal.map((l) => l.platformUserId)).toEqual(['t-a']);
+
+      expect(
+        await MessengerAccountLinkModel.findByUserIds(serverDB, [], { workspaceId: workspaceA }),
+      ).toEqual([]);
+    });
+  });
+
   describe('upsertForPlatform', () => {
     it('inserts a Telegram row with empty tenant_id (global-bot semantics)', async () => {
       const model = new MessengerAccountLinkModel(serverDB, userA);
@@ -125,6 +152,168 @@ describe('MessengerAccountLinkModel', () => {
       expect(second.platformUsername).toBe('@new');
       // activeAgentId stays since the second call didn't override it.
       expect(second.activeAgentId).toBe(agentA);
+    });
+
+    it('refreshes credentials and applicationId on re-verify, preserves them when omitted', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const first = await model.upsertForPlatform({
+        applicationId: 'wxbot-1',
+        credentials: { token: 'v1' },
+        platform: 'wechat',
+        platformUserId: 'wx-1',
+      });
+
+      // Row-returning methods never expose the ciphertext.
+      expect(first).not.toHaveProperty('credentials');
+
+      // Re-verify without credential fields → stored values stay intact.
+      await model.upsertForPlatform({ platform: 'wechat', platformUserId: 'wx-1' });
+      let [raw] = await serverDB
+        .select()
+        .from(messengerAccountLinks)
+        .where(eq(messengerAccountLinks.id, first.id));
+      expect(raw.applicationId).toBe('wxbot-1');
+      expect(raw.credentials).toBe(JSON.stringify({ token: 'v1' }));
+
+      // Re-verify with rotated credentials → stored values refresh.
+      await model.upsertForPlatform({
+        applicationId: 'wxbot-2',
+        credentials: { token: 'v2' },
+        platform: 'wechat',
+        platformUserId: 'wx-1',
+      });
+      [raw] = await serverDB
+        .select()
+        .from(messengerAccountLinks)
+        .where(eq(messengerAccountLinks.id, first.id));
+      expect(raw.applicationId).toBe('wxbot-2');
+      expect(raw.credentials).toBe(JSON.stringify({ token: 'v2' }));
+    });
+
+    it('surfaces a conflict when another user claims the same credential application id', async () => {
+      await new MessengerAccountLinkModel(serverDB, userA).upsertForPlatform({
+        applicationId: 'wxbot-claimed',
+        credentials: { token: 'a' },
+        platform: 'wechat',
+        platformUserId: 'wx-owner',
+      });
+
+      const promise = new MessengerAccountLinkModel(serverDB, userB).upsertForPlatform({
+        applicationId: 'wxbot-claimed',
+        credentials: { token: 'b' },
+        platform: 'wechat',
+        platformUserId: 'wx-intruder',
+      });
+
+      await expect(promise).rejects.toBeInstanceOf(MessengerAccountLinkConflictError);
+      await expect(promise).rejects.toMatchObject({ existingUserId: userA });
+    });
+
+    it('surfaces a conflict when a credential refresh rotates to an application id claimed by another user', async () => {
+      await new MessengerAccountLinkModel(serverDB, userA).upsertForPlatform({
+        applicationId: 'wxbot-owned-by-a',
+        credentials: { token: 'a' },
+        platform: 'wechat',
+        platformUserId: 'wx-user-a2',
+      });
+      const modelB = new MessengerAccountLinkModel(serverDB, userB);
+      await modelB.upsertForPlatform({
+        applicationId: 'wxbot-owned-by-b',
+        credentials: { token: 'b' },
+        platform: 'wechat',
+        platformUserId: 'wx-user-b2',
+      });
+
+      // Re-verify (update path) rotating to a bot id already claimed by userA.
+      const promise = modelB.upsertForPlatform({
+        applicationId: 'wxbot-owned-by-a',
+        credentials: { token: 'b2' },
+        platform: 'wechat',
+        platformUserId: 'wx-user-b2',
+      });
+
+      await expect(promise).rejects.toBeInstanceOf(MessengerAccountLinkConflictError);
+      await expect(promise).rejects.toMatchObject({ existingUserId: userA });
+    });
+
+    it('stores WeChat credentials encrypted while keeping ordinary reads secret-free', async () => {
+      const ciphertext = new Map<string, string>();
+      let sequence = 0;
+      const gateKeeper = {
+        decrypt: async (value: string) => ({ plaintext: ciphertext.get(value) ?? '' }),
+        encrypt: async (plaintext: string) => {
+          const value = `encrypted-${++sequence}`;
+          ciphertext.set(value, plaintext);
+          return value;
+        },
+      };
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const first = await model.upsertForPlatform(
+        {
+          activeAgentId: agentA,
+          applicationId: 'wechat-bot',
+          credentials: {
+            baseUrl: 'https://ilink.example.com',
+            botId: 'wechat-bot',
+            botToken: 'token-v1',
+          },
+          platform: 'wechat',
+          platformUserId: 'wechat-user',
+          tenantId: 'wechat-user',
+        },
+        gateKeeper,
+      );
+
+      expect(first).not.toHaveProperty('credentials');
+      expect(await model.list()).toEqual([
+        expect.not.objectContaining({ credentials: expect.anything() }),
+      ]);
+
+      const [stored] = await serverDB
+        .select({ credentials: messengerAccountLinks.credentials })
+        .from(messengerAccountLinks)
+        .where(eq(messengerAccountLinks.id, first.id));
+      expect(stored.credentials).toBe('encrypted-1');
+
+      const resolved = await MessengerAccountLinkModel.findByPlatformUserWithCredentials(
+        serverDB,
+        {
+          applicationId: 'wechat-bot',
+          platform: 'wechat',
+          platformUserId: 'wechat-user',
+          tenantId: 'wechat-user',
+        },
+        gateKeeper,
+      );
+      expect(resolved?.credentials).toEqual({
+        baseUrl: 'https://ilink.example.com',
+        botId: 'wechat-bot',
+        botToken: 'token-v1',
+      });
+
+      const refreshed = await model.upsertForPlatform(
+        {
+          applicationId: 'wechat-bot',
+          credentials: {
+            baseUrl: 'https://ilink.example.com/v2',
+            botId: 'wechat-bot',
+            botToken: 'token-v2',
+          },
+          platform: 'wechat',
+          platformUserId: 'wechat-user',
+          tenantId: 'wechat-user',
+        },
+        gateKeeper,
+      );
+      expect(refreshed.id).toBe(first.id);
+      expect(refreshed.activeAgentId).toBe(agentA);
+
+      const updated = await model.findByIdWithCredentials(first.id, 'wechat', gateKeeper);
+      expect(updated?.credentials).toEqual({
+        baseUrl: 'https://ilink.example.com/v2',
+        botId: 'wechat-bot',
+        botToken: 'token-v2',
+      });
     });
 
     it('throws MessengerAccountLinkRelinkRequiredError when re-linking a different account in the same scope', async () => {
@@ -232,6 +421,38 @@ describe('MessengerAccountLinkModel', () => {
       });
       const links = await model.list();
       expect(links.filter((l) => l.platform === 'slack')).toHaveLength(2);
+    });
+
+    it('rejects a second link claiming the same credential application id', async () => {
+      await serverDB.insert(messengerAccountLinks).values({
+        applicationId: 'wxbot-shared',
+        credentials: 'cipher-a',
+        platform: 'wechat',
+        platformUserId: 'wx-user-a',
+        userId: userA,
+      });
+
+      await expect(
+        serverDB.insert(messengerAccountLinks).values({
+          applicationId: 'wxbot-shared',
+          credentials: 'cipher-b',
+          platform: 'wechat',
+          platformUserId: 'wx-user-b',
+          userId: userB,
+        }),
+      ).rejects.toThrow();
+
+      // Shared-bot rows (NULL application_id) stay unconstrained.
+      await serverDB.insert(messengerAccountLinks).values({
+        platform: 'telegram',
+        platformUserId: 'tg-a',
+        userId: userA,
+      });
+      await serverDB.insert(messengerAccountLinks).values({
+        platform: 'telegram',
+        platformUserId: 'tg-b',
+        userId: userB,
+      });
     });
   });
 
@@ -494,6 +715,62 @@ describe('MessengerAccountLinkModel', () => {
         workspaceA,
       );
       expect(updated).toBeUndefined();
+    });
+  });
+
+  describe('findById', () => {
+    it('resolves by id inside the owner scope, optionally constrained by platform', async () => {
+      const model = new MessengerAccountLinkModel(serverDB, userA);
+      const link = await model.upsertForPlatform({
+        activeAgentId: agentA,
+        platform: 'discord',
+        platformUserId: 'd-find',
+      });
+
+      expect((await model.findById(link.id))?.id).toBe(link.id);
+      expect((await model.findById(link.id, 'discord'))?.id).toBe(link.id);
+      expect(await model.findById(link.id, 'telegram')).toBeUndefined();
+      expect(await model.findById('00000000-0000-0000-0000-000000000000')).toBeUndefined();
+    });
+  });
+
+  describe('findAllByPlatformWithCredentials', () => {
+    it('decrypts every stored link and tolerates missing or unreadable blobs', async () => {
+      await serverDB.insert(messengerAccountLinks).values([
+        {
+          platform: 'slack',
+          platformUserId: 's-missing',
+          tenantId: 't-missing',
+          userId: userA,
+          workspaceId: null,
+        },
+        {
+          credentials: 'not-json',
+          platform: 'slack',
+          platformUserId: 's-bad',
+          tenantId: 't-bad',
+          userId: userA,
+          workspaceId: null,
+        },
+        {
+          credentials: JSON.stringify({ botToken: 'ok' }),
+          platform: 'slack',
+          platformUserId: 's-ok',
+          tenantId: 't-ok',
+          userId: userA,
+          workspaceId: null,
+        },
+      ]);
+
+      const rows = await MessengerAccountLinkModel.findAllByPlatformWithCredentials(
+        serverDB,
+        'slack',
+      );
+      const byPlatformUser = Object.fromEntries(rows.map((r) => [r.platformUserId, r.credentials]));
+
+      expect(byPlatformUser['s-missing']).toEqual({});
+      expect(byPlatformUser['s-bad']).toEqual({});
+      expect(byPlatformUser['s-ok']).toEqual({ botToken: 'ok' });
     });
   });
 });

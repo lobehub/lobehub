@@ -1,7 +1,6 @@
 import { Plans } from '@lobechat/types';
-import { Center, Flexbox, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Atom, Box, CircleSlash, Sparkle, Zap } from 'lucide-react';
+import { Center, createStaticStyles, cssVar, Flexbox, Tag } from '@lobehub/ui';
+import { Atom, Box, CircleSlash, Crown, Gem, Rocket, Sparkle, Zap } from 'lucide-react';
 import { type CSSProperties, type MouseEvent } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -42,7 +41,28 @@ export const themes = {
       color: '#FCFA6E',
     },
   },
-};
+  [Plans.Plus]: {
+    icon: Rocket,
+    theme: {
+      background: 'linear-gradient(45deg, #8B5CF6, #5B21B6)',
+      color: '#EDE9FE',
+    },
+  },
+  [Plans.Pro]: {
+    icon: Crown,
+    theme: {
+      background: 'linear-gradient(45deg, #10B981, #047857)',
+      color: '#D1FAE5',
+    },
+  },
+  [Plans.Max]: {
+    icon: Gem,
+    theme: {
+      background: 'linear-gradient(45deg, #374151, #111827)',
+      color: '#FDE68A',
+    },
+  },
+} satisfies Record<Plans, unknown>;
 
 const styles = createStaticStyles(({ css }) => ({
   icon: css`

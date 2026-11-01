@@ -1,3 +1,7 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
+import { getEmailSupportHtml, getEmailSupportText } from '@/libs/email/support';
+
 export const getWorkspaceMemberRemovedEmailTemplate = (params: {
   reason: 'downgrade' | 'removed_by_owner';
   workspaceName: string;
@@ -7,8 +11,8 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
   const isDowngrade = reason === 'downgrade';
 
   const subject = isDowngrade
-    ? `You have been removed from ${workspaceName} on LobeHub`
-    : `You have been removed from ${workspaceName} on LobeHub`;
+    ? `You have been removed from ${workspaceName} on ${BRANDING_NAME}`
+    : `You have been removed from ${workspaceName} on ${BRANDING_NAME}`;
 
   const heading = isDowngrade
     ? `Removed from <strong>${workspaceName}</strong>`
@@ -34,7 +38,7 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
     <div style="text-align: center; margin-bottom: 32px;">
       <div style="display: inline-flex; align-items: center; justify-content: center; background-color: #ffffff; border-radius: 12px; padding: 8px 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
         <span style="font-size: 24px; line-height: 1; margin-right: 10px;">🤯</span>
-        <span style="font-size: 18px; font-weight: 700; color: #000000; letter-spacing: -0.5px;">LobeHub</span>
+        <span style="font-size: 18px; font-weight: 700; color: #000000; letter-spacing: -0.5px;">${BRANDING_NAME}</span>
       </div>
     </div>
 
@@ -68,15 +72,18 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
       <!-- Footer note -->
       <div style="text-align: center;">
         <p style="color: #9ca3af; font-size: 13px; margin: 0;">
-          You can continue using LobeHub with your personal workspace.
+          You can continue using ${BRANDING_NAME} with your personal workspace.
         </p>
       </div>
     </div>
 
     <!-- Footer -->
     <div style="text-align: center; margin-top: 32px;">
+      <p style="font-size: 13px; margin: 0 0 8px 0;">
+        ${getEmailSupportHtml()}
+      </p>
       <p style="color: #a1a1aa; font-size: 13px; margin: 0;">
-        This is an automated message from LobeHub.
+        This is an automated message from ${BRANDING_NAME}.
       </p>
     </div>
   </div>
@@ -85,7 +92,7 @@ export const getWorkspaceMemberRemovedEmailTemplate = (params: {
     `,
     subject,
     text: isDowngrade
-      ? `The workspace "${workspaceName}" has been downgraded, and all team members have been removed as a result. Your personal data and workspaces are not affected. If you believe this was a mistake, please contact the workspace owner.`
-      : `The owner of "${workspaceName}" has removed you from the workspace. Your personal data and workspaces are not affected. If you believe this was a mistake, please contact the workspace owner.`,
+      ? `The workspace "${workspaceName}" has been downgraded, and all team members have been removed as a result. Your personal data and workspaces are not affected. If you believe this was a mistake, please contact the workspace owner.\n\n${getEmailSupportText()}`
+      : `The owner of "${workspaceName}" has removed you from the workspace. Your personal data and workspaces are not affected. If you believe this was a mistake, please contact the workspace owner.\n\n${getEmailSupportText()}`,
   };
 };

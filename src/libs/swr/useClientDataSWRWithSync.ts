@@ -9,7 +9,7 @@
  * SWR key — consumers never need to opt in per call.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { type SWRConfiguration, type SWRResponse } from 'swr';
 
 import { useClientDataSWR } from './index';
@@ -31,15 +31,19 @@ interface UseClientDataSWRWithSyncOptions<T> extends SWRConfiguration<T> {
 /**
  * Enhanced version of useClientDataSWR with automatic cache data sync to Zustand store
  *
+ * Always build the key from its `*Keys` factory in `./keys`, never as a literal
+ * tuple — an imperative `mutate` that hand-writes the same shape drifts silently
+ * and warms an entry no subscriber ever reads.
+ *
  * @example
  * ```ts
  * useClientDataSWRWithSync(
- *   isLogin ? ['fetchAgentList', isLogin] : null,
- *   () => homeService.getSidebarAgentList(),
+ *   agentConfigKeys.search(keyword),
+ *   () => agentService.queryAgents({ keyword }),
  *   {
  *     onData: (data) => {
  *       // Auto sync to store, whether cached or fresh data
- *       set({ ...mapResponseToState(data), isInit: true });
+ *       set({ agents: data, isInit: true });
  *     },
  *     skipSync: state.isInit, // Optional: skip after initialized
  *   }
@@ -77,8 +81,11 @@ export function useClientDataSWRWithSync<T>(
     }
   }, [data, onData, skipSync]);
 
-  // Reset sync state when key changes
-  useEffect(() => {
+  // Reset sync state when the key changes. useLayoutEffect on purpose: this
+  // must run before the data-effect above, or a data arrival for the new key
+  // in the same commit is swallowed by the stale `hasSyncedRef` — e.g.
+  // switching agents would keep rendering the previous agent's data.
+  useLayoutEffect(() => {
     hasSyncedRef.current = false;
   }, [key?.toString()]);
 

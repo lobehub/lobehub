@@ -1,7 +1,10 @@
 // @vitest-environment node
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { type LobeChatDatabase } from '@lobechat/database';
+import { agentOperations, topics, workspaceMembers, workspaces } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { LOCAL_HETEROGENEOUS_AGENT_TYPES } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiAgentRouter } from '../aiAgent';
@@ -10,7 +13,9 @@ import { cleanupTestUser, createTestUser } from './integration/setup';
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 const mockHeteroIngest = vi.fn();
@@ -19,22 +24,37 @@ const mockHeteroFinish = vi.fn();
 // Stub the service so we can assert on procedure → service wiring without
 // pulling in the real Redis-backed StreamEventManager.
 vi.mock('@/server/services/heterogeneousAgent', () => ({
-  HeterogeneousAgentService: vi.fn().mockImplementation(() => ({
-    heteroFinish: mockHeteroFinish,
-    heteroIngest: mockHeteroIngest,
-  })),
+  HeterogeneousAgentService: vi.fn().mockImplementation(function () {
+    return {
+      heteroFinish: mockHeteroFinish,
+      heteroIngest: mockHeteroIngest,
+    };
+  }),
 }));
 
 // AgentRuntimeService and AiChatService are constructed by the procedure
 // middleware too — stub to keep the test isolated.
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({})),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 vi.mock('@/server/services/aiChat', () => ({
-  AiChatService: vi.fn().mockImplementation(() => ({})),
+  AiChatService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
-const buildEvent = (type: AgentStreamEvent['type'], stepIndex: number): AgentStreamEvent => ({
+// Server-only wire types a producer never emits: the v2 message delta and the
+// relayed terminal of a mirrored (group member) operation.
+type HeterogeneousAgentStreamEvent = Omit<AgentStreamEvent, 'type'> & {
+  type: Exclude<AgentStreamEvent['type'], 'member_runtime_end' | 'message_patch'>;
+};
+
+const buildEvent = (
+  type: HeterogeneousAgentStreamEvent['type'],
+  stepIndex: number,
+): HeterogeneousAgentStreamEvent => ({
   data: {},
   operationId: 'op-1',
   stepIndex,
@@ -50,6 +70,10 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
+    await serverDB.insert(topics).values([
+      { id: 'topic-1', title: 'Personal topic 1', userId },
+      { id: 'topic-2', title: 'Personal topic 2', userId },
+    ]);
     mockHeteroIngest.mockReset();
     mockHeteroFinish.mockReset();
     mockHeteroIngest.mockResolvedValue(undefined);
@@ -61,18 +85,28 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
     vi.clearAllMocks();
   });
 
-  const createCaller = () =>
-    aiAgentRouter.createCaller({
-      jwtPayload: { userId },
-      oidcAuth: { purpose: 'hetero-operation', sub: userId },
-      userId,
+  const createCaller = (
+    params: { authKind?: 'operation' | 'user'; authUserId?: string; workspaceId?: string } = {},
+  ) => {
+    const authUserId = params.authUserId ?? userId;
+    return aiAgentRouter.createCaller({
+      jwtPayload: { userId: authUserId },
+      oidcAuth: {
+        ...(params.authKind === 'operation' ? { purpose: 'hetero-operation' } : {}),
+        sub: authUserId,
+      },
+      userId: authUserId,
+      workspaceId: params.workspaceId,
     } as any);
+  };
 
   describe('heteroIngest', () => {
     it('delegates the batch to HeterogeneousAgentService and acks', async () => {
       const events = [
         buildEvent('stream_start', 0),
         buildEvent('stream_chunk', 1),
+        buildEvent('stream_end', 2),
+        buildEvent('visible_output_end', 2),
         buildEvent('agent_runtime_end', 2),
       ];
 
@@ -92,6 +126,27 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
         topicId: 'topic-1',
       });
     });
+
+    it.each(LOCAL_HETEROGENEOUS_AGENT_TYPES)(
+      'accepts %s event batches from a local CLI',
+      async (agentType) => {
+        const events = [buildEvent('stream_start', 0)];
+
+        await createCaller().heteroIngest({
+          agentType,
+          events,
+          operationId: `op-${agentType}`,
+          topicId: 'topic-1',
+        });
+
+        expect(mockHeteroIngest).toHaveBeenCalledWith({
+          agentType,
+          events,
+          operationId: `op-${agentType}`,
+          topicId: 'topic-1',
+        });
+      },
+    );
 
     it('wraps service errors into INTERNAL_SERVER_ERROR so the CLI ingester retries', async () => {
       mockHeteroIngest.mockRejectedValueOnce(new Error('redis down'));
@@ -128,6 +183,186 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
         }),
       ).rejects.toThrow();
     });
+
+    it("accepts a device user ingesting and finishing another member's workspace topic", async () => {
+      const creatorId = await createTestUser(serverDB);
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({
+          name: 'Hetero ingest workspace',
+          primaryOwnerId: creatorId,
+          slug: `hetero-ingest-${creatorId.slice(0, 8)}`,
+        })
+        .returning();
+
+      try {
+        await serverDB.insert(workspaceMembers).values([
+          { role: 'owner', userId: creatorId, workspaceId: workspace.id },
+          { role: 'member', userId, workspaceId: workspace.id },
+        ]);
+        await serverDB.insert(topics).values({
+          id: 'workspace-topic',
+          title: 'Created by another member',
+          userId: creatorId,
+          workspaceId: workspace.id,
+        });
+
+        const caller = createCaller({ authKind: 'user' });
+        const ingestResult = await caller.heteroIngest({
+          agentType: 'claude-code',
+          events: [buildEvent('stream_chunk', 0)],
+          operationId: 'op-workspace',
+          topicId: 'workspace-topic',
+        });
+        const finishResult = await caller.heteroFinish({
+          agentType: 'claude-code',
+          operationId: 'op-workspace',
+          result: 'success',
+          topicId: 'workspace-topic',
+        });
+
+        expect(ingestResult).toEqual({ ack: true });
+        expect(finishResult).toEqual({ ack: true });
+        expect(mockHeteroIngest).toHaveBeenCalledWith(
+          expect.objectContaining({ topicId: 'workspace-topic' }),
+        );
+        expect(mockHeteroFinish).toHaveBeenCalledWith(
+          expect.objectContaining({ topicId: 'workspace-topic' }),
+        );
+      } finally {
+        await serverDB.delete(workspaces).where(eq(workspaces.id, workspace.id));
+        await cleanupTestUser(serverDB, creatorId);
+      }
+    });
+
+    it('rejects a user who is not a member of the topic workspace', async () => {
+      const creatorId = await createTestUser(serverDB);
+      const [workspace] = await serverDB
+        .insert(workspaces)
+        .values({
+          name: 'Foreign hetero workspace',
+          primaryOwnerId: creatorId,
+          slug: `foreign-hetero-${creatorId.slice(0, 8)}`,
+        })
+        .returning();
+
+      try {
+        await serverDB.insert(workspaceMembers).values({
+          role: 'owner',
+          userId: creatorId,
+          workspaceId: workspace.id,
+        });
+        await serverDB.insert(topics).values({
+          id: 'foreign-workspace-topic',
+          title: 'Foreign workspace topic',
+          userId: creatorId,
+          workspaceId: workspace.id,
+        });
+
+        await expect(
+          createCaller().heteroIngest({
+            agentType: 'claude-code',
+            events: [buildEvent('stream_chunk', 0)],
+            operationId: 'op-foreign',
+            topicId: 'foreign-workspace-topic',
+          }),
+        ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      } finally {
+        await serverDB.delete(workspaces).where(eq(workspaces.id, workspace.id));
+        await cleanupTestUser(serverDB, creatorId);
+      }
+    });
+  });
+
+  /**
+   * Regression: an operation-token producer whose run had already been settled
+   * was turned away at the auth guard with CONFLICT. The ingester then burned
+   * its whole retry budget on a refusal that can never succeed, nothing recorded
+   * that the output had been dropped, and `heteroFinish` was rejected by the
+   * same guard — so the turn kept its unresolved assistant placeholder.
+   */
+  describe('callbacks on a terminal operation', () => {
+    const terminalOperationId = 'op-terminal';
+
+    const operationTokenCaller = (capabilities: string[]) =>
+      aiAgentRouter.createCaller({
+        jwtPayload: { userId },
+        oidcAuth: {
+          aud: 'urn:lobehub:hetero-operation',
+          capabilities,
+          exp: 2_000_000_000,
+          iat: 1_700_000_000,
+          iss: 'urn:lobehub:internal',
+          jti: 'jti-terminal',
+          operation_id: terminalOperationId,
+          purpose: 'hetero-operation',
+          sub: userId,
+        },
+        userId,
+      } as any);
+
+    beforeEach(async () => {
+      await serverDB.insert(agentOperations).values({
+        completionReason: 'done',
+        id: terminalOperationId,
+        status: 'done',
+        topicId: 'topic-1',
+        userId,
+      });
+    });
+
+    afterEach(async () => {
+      await serverDB.delete(agentOperations).where(eq(agentOperations.id, terminalOperationId));
+    });
+
+    it('reaches the service so the refusal and the outcome are reported', async () => {
+      mockHeteroIngest.mockResolvedValue({
+        accepted: false,
+        reason: 'operation-not-running',
+      });
+      const caller = operationTokenCaller(['hetero:ingest', 'hetero:finish']);
+
+      await expect(
+        caller.heteroIngest({
+          agentType: 'claude-code',
+          events: [buildEvent('stream_chunk', 0)],
+          operationId: terminalOperationId,
+          topicId: 'topic-1',
+        }),
+      ).resolves.toEqual({ accepted: false, ack: true, reason: 'operation-not-running' });
+
+      await expect(
+        caller.heteroFinish({
+          agentType: 'claude-code',
+          operationId: terminalOperationId,
+          result: 'success',
+          topicId: 'topic-1',
+        }),
+      ).resolves.toEqual({ ack: true });
+
+      expect(mockHeteroIngest).toHaveBeenCalledOnce();
+      expect(mockHeteroFinish).toHaveBeenCalledOnce();
+    });
+
+    it('does not extend the allowance to token renewal', async () => {
+      await expect(
+        operationTokenCaller(['hetero:ingest']).refreshHeteroOperationToken({
+          operationId: terminalOperationId,
+        }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    it('still rejects a token scoped to a different operation', async () => {
+      await expect(
+        operationTokenCaller(['hetero:ingest']).heteroIngest({
+          agentType: 'claude-code',
+          events: [buildEvent('stream_chunk', 0)],
+          operationId: 'op-1',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(mockHeteroIngest).not.toHaveBeenCalled();
+    });
   });
 
   describe('heteroFinish', () => {
@@ -150,6 +385,26 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
         topicId: 'topic-1',
       });
     });
+
+    it.each(LOCAL_HETEROGENEOUS_AGENT_TYPES)(
+      'accepts a %s session id for subsequent local CLI resume',
+      async (agentType) => {
+        await createCaller().heteroFinish({
+          agentType,
+          operationId: `op-${agentType}`,
+          result: 'success',
+          sessionId: `${agentType}-session-1`,
+          topicId: 'topic-1',
+        });
+
+        expect(mockHeteroFinish).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentType,
+            sessionId: `${agentType}-session-1`,
+          }),
+        );
+      },
+    );
 
     it('passes through error classification', async () => {
       await createCaller().heteroFinish({

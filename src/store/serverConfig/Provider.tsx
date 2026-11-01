@@ -18,18 +18,23 @@ interface GlobalStoreProviderProps {
 }
 
 export const ServerConfigStoreProvider = memo<GlobalStoreProviderProps>(
-  ({ children, featureFlags, serverConfig, isMobile, segmentVariants }) => (
-    <Provider
-      createStore={() =>
-        createServerConfigStore({
-          featureFlags: featureFlags ? mapFeatureFlagsEnvToState(featureFlags) : undefined,
-          isMobile,
-          segmentVariants,
-          serverConfig,
-        })
-      }
-    >
-      {children}
-    </Provider>
-  ),
+  ({ children, featureFlags, serverConfig, isMobile, segmentVariants }) => {
+    const mappedFeatureFlags = featureFlags ? mapFeatureFlagsEnvToState(featureFlags) : undefined;
+
+    return (
+      <Provider
+        createStore={() =>
+          createServerConfigStore({
+            canAccessDevDock: mappedFeatureFlags?.enableDevDock === true,
+            featureFlags: mappedFeatureFlags,
+            isMobile,
+            segmentVariants,
+            serverConfig,
+          })
+        }
+      >
+        {children}
+      </Provider>
+    );
+  },
 );

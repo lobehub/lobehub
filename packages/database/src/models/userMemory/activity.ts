@@ -1,26 +1,39 @@
-import type { ActivityListParams, ActivityListResult } from '@lobechat/types';
+import type {
+  ActivityListParams,
+  ActivityListResult,
+  UserMemoryActivity,
+  UserMemoryActivityInsert,
+} from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 
-import type { NewUserMemoryActivity, UserMemoryActivity } from '../../schemas';
+import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
 import { userMemories, userMemoriesActivities } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { buildUserMemoryWhere } from './where';
 
 export class UserMemoryActivityModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.db = db;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
-  private memoryWhere(table: { userId: any }) {
-    return eq(table.userId, this.userId);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
-  create = async (params: Omit<NewUserMemoryActivity, 'userId'>) => {
+  create = async (params: Omit<UserMemoryActivityInsert, 'userId'>) => {
     const [result] = await this.db
       .insert(userMemoriesActivities)
       .values({ ...params, userId: this.userId })
@@ -69,10 +82,28 @@ export class UserMemoryActivityModel {
     const bm25MatchQuery = normalizedQuery
       ? normalizeBm25MatchQuery(normalizedQuery, SAFE_BM25_QUERY_OPTIONS)
       : '';
+    const candidateResult =
+      normalizedQuery && this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+        ? await this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'memoryActivities',
+            filters: {
+              ...(status?.length ? { memoryStatus: status } : {}),
+              ...(tags?.length ? { memoryTagMatch: 'any' as const, memoryTags: tags } : {}),
+              ...(types?.length ? { memoryTypes: types } : {}),
+            },
+            pagination: {},
+            query: {
+              fields: ['parent_title', 'narrative', 'notes', 'feedback'],
+              text: normalizedQuery,
+            },
+          })
+        : undefined;
+    const candidateIds = candidateResult?.candidates.map(({ id }) => id);
 
     const conditions: Array<SQL | undefined> = [
       this.memoryWhere(userMemoriesActivities),
-      normalizedQuery
+      candidateIds ? inJsonStringArray(userMemoriesActivities.id, candidateIds) : undefined,
+      normalizedQuery && !candidateIds
         ? sql`(${userMemories.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('title', ${bm25MatchQuery}, conjunction_mode => true)]) OR ${userMemoriesActivities.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('narrative', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('notes', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('feedback', ${bm25MatchQuery}, conjunction_mode => true)]))`
         : undefined,
       types && types.length > 0 ? inArray(userMemoriesActivities.type, types) : undefined,
@@ -111,6 +142,9 @@ export class UserMemoryActivityModel {
     const [rows, totalResult] = await Promise.all([
       this.db
         .select({
+          associatedLocations: userMemoriesActivities.associatedLocations,
+          associatedObjects: userMemoriesActivities.associatedObjects,
+          associatedSubjects: userMemoriesActivities.associatedSubjects,
           capturedAt: userMemoriesActivities.capturedAt,
           createdAt: userMemoriesActivities.createdAt,
           endsAt: userMemoriesActivities.endsAt,

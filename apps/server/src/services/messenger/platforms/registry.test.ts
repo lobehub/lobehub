@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+// Static import keeps the heavy platform module graph (chat adapters, discord
+// REST, installations…) in the collect phase instead of counting against the
+// 5s testTimeout of the singleton test below.
+import { messengerPlatformRegistry } from './index';
 import { MessengerPlatformRegistry } from './registry';
 
 const buildDefinition = (overrides: Partial<any> = {}) => ({
@@ -76,8 +80,7 @@ describe('MessengerPlatformRegistry', () => {
 });
 
 describe('messengerPlatformRegistry singleton', () => {
-  it('registers slack, telegram, and discord on import', async () => {
-    const { messengerPlatformRegistry } = await import('./index');
+  it('registers slack, telegram, and discord on import', () => {
     const ids = messengerPlatformRegistry.listPlatforms().map((d) => d.id);
     expect(ids).toEqual(expect.arrayContaining(['slack', 'telegram', 'discord']));
   });

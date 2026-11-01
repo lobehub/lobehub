@@ -54,8 +54,9 @@ export class InputTemplateProcessor extends BaseProcessor {
       for (let i = 0; i < clonedContext.messages.length; i++) {
         const message = clonedContext.messages[i];
 
-        // Only apply template to user messages
-        if (message.role === 'user') {
+        // Only apply template to what the human typed — not to a background
+        // sub-agent's report, which arrives as a user message from that sub-agent
+        if (message.role === 'user' && !message.metadata?.subAgentCallback) {
           try {
             const originalContent = message.content;
             const processedContent = compiler({ text: originalContent });

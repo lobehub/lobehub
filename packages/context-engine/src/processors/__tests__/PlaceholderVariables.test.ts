@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildContentPreview,
   formatPlaceholderValues,
   parsePlaceholderVariables,
   parsePlaceholderVariablesMessages,
@@ -16,6 +17,22 @@ describe('PlaceholderVariablesProcessor', () => {
     random: () => '12345',
     nested: () => 'Value with {{date}} inside',
   };
+
+  describe('buildContentPreview', () => {
+    it('does not split an emoji at the string preview boundary', () => {
+      const preview = buildContentPreview(`${'a'.repeat(199)}😀tail`);
+
+      expect(preview).toBe('a'.repeat(199));
+      expect(preview).not.toMatch(/[\uD800-\uDFFF]/);
+    });
+
+    it('does not split an emoji in a serialized content preview', () => {
+      const preview = buildContentPreview({ value: `${'a'.repeat(189)}😀tail` });
+
+      expect(preview).toBe(`{"value":"${'a'.repeat(189)}`);
+      expect(preview).not.toMatch(/[\uD800-\uDFFF]/);
+    });
+  });
 
   describe('parsePlaceholderVariables', () => {
     it('should replace simple placeholder variables', () => {
@@ -230,48 +247,6 @@ describe('PlaceholderVariablesProcessor', () => {
 
       expect(result.messages[0].content).toBe('Hello TestUser, today is 2023-12-25');
       expect(result.metadata.placeholderVariablesProcessed).toBe(1);
-    });
-
-    it('should handle processing errors gracefully', async () => {
-      const faultyGenerators = {
-        error: () => {
-          throw new Error('Generator error');
-        },
-        working: () => 'works',
-      };
-
-      const processor = new PlaceholderVariablesProcessor({
-        variableGenerators: faultyGenerators,
-      });
-
-      const context = {
-        initialState: {
-          messages: [],
-          model: 'gpt-4',
-          provider: 'openai',
-          systemRole: '',
-          tools: [],
-        },
-        messages: [
-          {
-            id: '1',
-            role: 'user',
-            content: 'This {{working}} but this {{error}} fails',
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          },
-        ],
-        metadata: {
-          model: 'gpt-4',
-          maxTokens: 4096,
-        },
-        isAborted: false,
-        executedProcessors: [],
-      };
-
-      // Should not throw, but continue processing
-      const result = await processor.process(context);
-      expect(result.messages).toHaveLength(1);
     });
 
     it('should isolate generator throws per message and not over-count', async () => {

@@ -10,7 +10,6 @@ exports[`settingsSelectors > currentSettings > should merge DEFAULT_SETTINGS and
       "systemRole": "",
       "tts": {
         "showAllLocaleVoice": false,
-        "sttLocale": "auto",
         "ttsService": "openai",
         "voice": {
           "openai": "alloy",
@@ -39,11 +38,8 @@ exports[`settingsSelectors > currentSettings > should merge DEFAULT_SETTINGS and
   "themeMode": "light",
   "tts": {
     "openAI": {
-      "sttModel": "whisper-1",
       "ttsModel": "tts-1",
     },
-    "sttAutoStop": true,
-    "sttServer": "openai",
   },
 }
 `;
@@ -51,48 +47,78 @@ exports[`settingsSelectors > currentSettings > should merge DEFAULT_SETTINGS and
 exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AGENT_CONFIG and s.settings.systemAgent correctly 1`] = `
 {
   "agentMeta": {
-    "model": "deepseek-v4-pro",
+    "model": "deepseek-v4-flash",
     "provider": "deepseek",
   },
+  "asr": {
+    "model": "gpt-4o-mini-transcribe",
+    "provider": "openai",
+  },
+  "channelRouting": {
+    "enabled": true,
+    "model": "jev-1.14.0",
+    "provider": "typesafe",
+  },
   "enableAutoReply": true,
+  "expertise": {
+    "model": "deepseek-v4-flash",
+    "provider": "deepseek",
+  },
   "followUpAction": {
     "enabled": false,
-    "model": "gpt-5.4-mini",
+    "model": "gpt-5.6-luna",
     "provider": "openai",
   },
   "generationTopic": {
-    "model": "gpt-5.4-mini",
+    "model": "gpt-5.6-luna",
     "provider": "openai",
   },
-  "historyCompress": {
-    "model": "deepseek-v4-pro",
+  "goal": {
+    "model": "deepseek-v4-flash",
     "provider": "deepseek",
+  },
+  "historyCompress": {
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
   },
   "inputCompletion": {
     "enabled": false,
-    "model": "gpt-5.4-mini",
+    "model": "gpt-5.6-luna",
     "provider": "openai",
   },
   "memoryAnalysisAgentConfig": {
-    "model": "gpt-5.4-mini",
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
+  },
+  "onboardingTaskRecommender": {
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
+  },
+  "onboardingUnderstanding": {
+    "model": "gpt-5.6-luna",
     "provider": "openai",
   },
   "promptRewrite": {
     "enabled": true,
-    "model": "gpt-5.4-mini",
+    "model": "gpt-5.6-luna",
     "provider": "openai",
   },
   "replyMessage": "Custom auto reply",
   "thread": {
-    "model": "deepseek-v4-pro",
-    "provider": "deepseek",
-  },
-  "topic": {
-    "model": "gpt-5.4-mini",
+    "model": "gpt-5.6-luna",
     "provider": "openai",
   },
+  "topic": {
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
+  },
+  "topicAutoSummary": {
+    "enabled": false,
+    "model": "deepseek-v4-flash",
+    "provider": "deepseek",
+  },
   "translation": {
-    "model": "gpt-5.4-mini",
+    "model": "gpt-5.6-luna",
     "provider": "openai",
   },
   "userMemoryEmbedding": {
@@ -100,8 +126,12 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "openai",
   },
   "userMemoryPersonaWriter": {
-    "model": "gpt-5.4-mini",
+    "model": "gpt-5.6-luna",
     "provider": "openai",
+  },
+  "verify": {
+    "model": "glm-5.3-flash",
+    "provider": "zhipu",
   },
 }
 `;
@@ -109,11 +139,8 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
 exports[`settingsSelectors > currentTTS > should merge DEFAULT_TTS_CONFIG and s.settings.tts correctly 1`] = `
 {
   "openAI": {
-    "sttModel": "whisper-2",
-    "ttsModel": "tts-1",
+    "ttsModel": "tts-1-hd",
   },
-  "sttAutoStop": false,
-  "sttServer": "openai",
 }
 `;
 
@@ -126,11 +153,12 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "enableContextCompression": true,
       "enableFollowUpChips": false,
       "enableHistoryCount": false,
+      "enableStaleToolResultTrim": true,
       "enableStreaming": true,
       "historyCount": 20,
       "reasoningBudgetToken": 1024,
       "searchFCModel": {
-        "model": "deepseek-v4-pro",
+        "model": "deepseek-v4-flash",
         "provider": "deepseek",
       },
       "searchMode": "auto",
@@ -151,7 +179,6 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
     "systemRole": "user",
     "tts": {
       "showAllLocaleVoice": false,
-      "sttLocale": "auto",
       "ttsService": "openai",
       "voice": {
         "openai": "alloy",
@@ -173,11 +200,12 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "enableContextCompression": true,
     "enableFollowUpChips": false,
     "enableHistoryCount": false,
+    "enableStaleToolResultTrim": true,
     "enableStreaming": true,
     "historyCount": 20,
     "reasoningBudgetToken": 1024,
     "searchFCModel": {
-      "model": "deepseek-v4-pro",
+      "model": "deepseek-v4-flash",
       "provider": "deepseek",
     },
     "searchMode": "auto",
@@ -198,7 +226,6 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
   "systemRole": "custom role",
   "tts": {
     "showAllLocaleVoice": false,
-    "sttLocale": "auto",
     "ttsService": "openai",
     "voice": {
       "openai": "alloy",

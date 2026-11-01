@@ -12,12 +12,14 @@ const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
 
 // Mock FileService only (no longer need FileModel)
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    createGlobalFile: mockCreateGlobalFile,
-    getFileByteArrayByHash: mockGetFileByteArrayByHash,
-    getFileContentByHash: mockGetFileContentByHash,
-    uploadBuffer: mockUploadBuffer,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      createGlobalFile: mockCreateGlobalFile,
+      getFileByteArrayByHash: mockGetFileByteArrayByHash,
+      getFileContentByHash: mockGetFileContentByHash,
+      uploadBuffer: mockUploadBuffer,
+    };
+  }),
 }));
 
 describe('SkillResourceService', () => {

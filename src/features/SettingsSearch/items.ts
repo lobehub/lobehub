@@ -1,0 +1,787 @@
+import { LAB_FEATURES } from '@/features/Settings/labs/features';
+import { SettingsTabs } from '@/store/global/initialState';
+import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
+
+/**
+ * Tab key the search indexes by. Personal tabs and the workspace-only tabs
+ * share one namespace: tabs whose page is the same on both surfaces use the
+ * personal key (the workspace sidebar maps e.g. `statistics` → `stats`).
+ */
+export type SettingsSearchTab = SettingsTabs | WorkspaceSettingsTabs;
+
+export interface SettingsSearchContext {
+  disableEmailPassword: boolean;
+  enableBusinessFeatures: boolean;
+  enableChannels: boolean;
+  enableComposio: boolean;
+  enableGatewayMode: boolean;
+  /** Workspaces are available to this user */
+  enableWorkspace: boolean;
+  /** Whether the signed-in user has an email on their profile */
+  hasEmail: boolean;
+  hideDocs: boolean;
+  isDesktop: boolean;
+  isLogin: boolean;
+  /** Whether the app is running on Windows (for Windows-only settings) */
+  isWindows: boolean;
+  showAiImage: boolean;
+}
+
+export interface SettingsSearchItem {
+  /**
+   * Unique anchor id, also used as the URL hash fragment. The target page must
+   * wrap the matching label with `<SettingsSearchAnchor id={anchor}>`.
+   */
+  anchor: string;
+  /** i18n key of the item description, in the same namespace as `labelKey` */
+  descKey?: string;
+  /** Extra untranslated match keywords (English) */
+  keywords?: string[];
+  /** i18n key of the item label */
+  labelKey: string;
+  /** i18n namespace of `labelKey` / `descKey`, defaults to `setting` */
+  ns?: 'auth' | 'electron' | 'labs' | 'setting' | 'spend' | 'subscription';
+  tab: SettingsSearchTab;
+  /**
+   * Extra visibility gate mirroring the target item's own render condition
+   * (tab visibility is already handled via useCategory). Defaults to visible.
+   */
+  visible?: (ctx: SettingsSearchContext) => boolean;
+}
+
+/**
+ * Canonical English keywords per tab, indexed in every locale. The localized
+ * strings from TAB_SEARCH_KEYWORDS_KEYS are translations that usually replace
+ * the English terms (zh-CN: `用量,消耗,配额…`), which made English queries like
+ * `usage` or `skill` miss on non-English UIs. English is the lingua franca for
+ * technical terms — it must always stay searchable; localized keywords enrich
+ * on top of this floor.
+ */
+// Keyed by `SettingsSearchTab` values. Typed as `string`: the two tab enums
+// share values ('about', 'skill', …), which TypeScript rejects as record keys.
+export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
+  [SettingsTabs.About]: ['about', 'version', 'changelog', 'feedback', 'help'],
+  [SettingsTabs.Advanced]: ['advanced', 'developer', 'diagnostics'],
+  [SettingsTabs.APIKey]: ['api', 'api key', 'apikey', 'token', 'secret', 'personal key'],
+  [SettingsTabs.Labels]: ['label', 'labels', 'tag', 'tags', 'group', 'grouping'],
+  [SettingsTabs.Appearance]: [
+    'appearance',
+    'theme',
+    'dark mode',
+    'light mode',
+    'font',
+    'language',
+    'color',
+    'background',
+  ],
+  [SettingsTabs.Billing]: ['billing', 'payment', 'invoice', 'card', 'transaction'],
+  [SettingsTabs.Connector]: ['connectors', 'integrations', 'mcp', 'oauth'],
+  [SettingsTabs.Credits]: ['credits', 'balance', 'top up', 'recharge', 'buy credits'],
+  [SettingsTabs.Creds]: ['credentials', 'secrets', 'oauth'],
+  [SettingsTabs.Devices]: ['devices', 'sessions', 'logged in devices'],
+  [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
+  [SettingsTabs.Labs]: ['labs', 'experiment', 'beta', 'preview', 'developer'],
+  [SettingsTabs.Memory]: ['memory', 'memories', 'personalization'],
+  [SettingsTabs.Drive]: ['storage', 'drive', 'network drive', 'files', 'quota'],
+  [SettingsTabs.Environments]: [
+    'sandbox',
+    'environments',
+    'instances',
+    'setup script',
+    'repository',
+  ],
+  [SettingsTabs.Messenger]: [
+    'messenger',
+    'chat platform',
+    'bot',
+    'telegram',
+    'slack',
+    'discord',
+    'wechat',
+  ],
+  [SettingsTabs.Integrations]: ['integrations', 'github', 'pull request', 'ci', 'review', 'merge'],
+  [SettingsTabs.Notification]: [
+    'notification',
+    'email',
+    'push',
+    'alerts',
+    'inbox',
+    'telegram',
+    'slack',
+    'discord',
+    'wechat',
+  ],
+  [SettingsTabs.OAuthApps]: ['oauth', 'oauth apps', 'developer apps'],
+  [SettingsTabs.Plans]: ['subscription', 'plan', 'upgrade', 'pricing', 'membership'],
+  [SettingsTabs.Profile]: [
+    'profile',
+    'account',
+    'avatar',
+    'username',
+    'password',
+    'email',
+    'sign out',
+    'logout',
+  ],
+  [SettingsTabs.Provider]: [
+    'provider',
+    'model',
+    'llm',
+    'api',
+    'api key',
+    'apikey',
+    'byok',
+    'bring your own key',
+    'endpoint',
+    'model provider',
+    'language model',
+    'custom provider',
+  ],
+  [SettingsTabs.Proxy]: ['proxy', 'network', 'connection', 'proxy settings'],
+  [SettingsTabs.Referral]: ['referral', 'invite', 'rewards', 'bonus'],
+  [SettingsTabs.ServiceModel]: [
+    'service model',
+    'model assignment',
+    'topic naming',
+    'translation',
+    'image',
+    'image generation',
+    'embedding',
+    'prompt rewrite',
+    'suggestion',
+    'search',
+    'search model',
+  ],
+  [SettingsTabs.Skill]: ['skill', 'skills', 'plugins', 'tools'],
+  [SettingsTabs.Stats]: ['analytics', 'statistics', 'stats'],
+  [SettingsTabs.Storage]: [
+    'storage',
+    'files',
+    'import',
+    'export',
+    'backup',
+    'reset',
+    'clear data',
+    'clear storage',
+    'knowledge base',
+    'account deletion',
+    'delete account',
+  ],
+  [SettingsTabs.Trash]: ['trash', 'recycle bin', 'deleted', 'restore', 'undelete', 'recover'],
+  [SettingsTabs.SystemTools]: [
+    'system tools',
+    'built-in tools',
+    'system',
+    'node',
+    'python',
+    'cli',
+    'environment',
+  ],
+  [SettingsTabs.Usage]: ['usage', 'consumption', 'quota', 'spend', 'statistics'],
+  [WorkspaceSettingsTabs.ChatPreference]: [
+    'chat preferences',
+    'follow up',
+    'follow-up suggestions',
+    'input suggestions',
+    'input completion',
+    'autocomplete',
+  ],
+};
+
+/**
+ * Localized synonym keywords for tab-level entries (i18n keys in the `setting`
+ * namespace, comma-separated values). Tab labels alone miss common synonyms —
+ * e.g. searching "充值" (top up) should hit the Credits tab whose label is just
+ * "积分", and "文件" (files) should hit Storage ("数据存储"). Each locale
+ * carries its own synonym set, layered on top of TAB_SEARCH_EN_KEYWORDS.
+ */
+export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
+  [SettingsTabs.About]: 'settingsSearch.tabKeywords.about',
+  [SettingsTabs.Advanced]: 'settingsSearch.tabKeywords.advanced',
+  [SettingsTabs.APIKey]: 'settingsSearch.tabKeywords.apikey',
+  [SettingsTabs.Appearance]: 'settingsSearch.tabKeywords.appearance',
+  [SettingsTabs.Billing]: 'settingsSearch.tabKeywords.billing',
+  [SettingsTabs.Connector]: 'settingsSearch.tabKeywords.connector',
+  [SettingsTabs.Credits]: 'settingsSearch.tabKeywords.credits',
+  [SettingsTabs.Creds]: 'settingsSearch.tabKeywords.creds',
+  [SettingsTabs.Devices]: 'settingsSearch.tabKeywords.devices',
+  [SettingsTabs.Labels]: 'settingsSearch.tabKeywords.labels',
+  [SettingsTabs.Hotkey]: 'settingsSearch.tabKeywords.hotkey',
+  [SettingsTabs.Labs]: 'settingsSearch.tabKeywords.labs',
+  [SettingsTabs.Memory]: 'settingsSearch.tabKeywords.memory',
+  [SettingsTabs.Messenger]: 'settingsSearch.tabKeywords.messenger',
+  [SettingsTabs.Integrations]: 'settingsSearch.tabKeywords.integrations',
+  [SettingsTabs.Notification]: 'settingsSearch.tabKeywords.notification',
+  [SettingsTabs.OAuthApps]: 'settingsSearch.tabKeywords.oauthApps',
+  [SettingsTabs.Plans]: 'settingsSearch.tabKeywords.plans',
+  [SettingsTabs.Profile]: 'settingsSearch.tabKeywords.profile',
+  [SettingsTabs.Provider]: 'settingsSearch.tabKeywords.provider',
+  [SettingsTabs.Proxy]: 'settingsSearch.tabKeywords.proxy',
+  [SettingsTabs.Referral]: 'settingsSearch.tabKeywords.referral',
+  [SettingsTabs.ServiceModel]: 'settingsSearch.tabKeywords.serviceModel',
+  [SettingsTabs.Skill]: 'settingsSearch.tabKeywords.skill',
+  [SettingsTabs.Stats]: 'settingsSearch.tabKeywords.stats',
+  [SettingsTabs.Storage]: 'settingsSearch.tabKeywords.storage',
+  [SettingsTabs.SystemTools]: 'settingsSearch.tabKeywords.systemTools',
+  [SettingsTabs.Trash]: 'settingsSearch.tabKeywords.trash',
+  [SettingsTabs.Usage]: 'settingsSearch.tabKeywords.usage',
+  [WorkspaceSettingsTabs.ChatPreference]: 'settingsSearch.tabKeywords.chatPreference',
+};
+
+/**
+ * Hand-curated searchable settings entries below the tab level. Tab-level
+ * entries are derived from `useCategory` at runtime and need no registration
+ * here. Keep this list in sync when moving or removing the referenced items —
+ * an entry whose tab is hidden for the current user is filtered out
+ * automatically, but a stale anchor silently degrades to a plain tab switch.
+ */
+export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
+  // Profile
+  {
+    anchor: 'profile-avatar',
+    keywords: ['avatar', 'photo', 'profile picture'],
+    labelKey: 'profile.avatar',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+  },
+  {
+    anchor: 'profile-full-name',
+    keywords: ['full name', 'fullname', 'display name', 'nickname'],
+    labelKey: 'profile.fullName',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+  },
+  {
+    anchor: 'profile-username',
+    keywords: ['username', 'handle', 'user name'],
+    labelKey: 'profile.username',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+  },
+  {
+    anchor: 'profile-interests',
+    keywords: ['interests', 'topics', 'personalization'],
+    labelKey: 'profile.interests',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+  },
+  {
+    anchor: 'profile-password',
+    keywords: ['password', 'change password', 'set password', 'reset password'],
+    labelKey: 'profile.password',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+    visible: (ctx) => ctx.isLogin && !ctx.isDesktop && !ctx.disableEmailPassword,
+  },
+  {
+    anchor: 'profile-email',
+    keywords: ['email', 'email address', 'update email', 'change email'],
+    labelKey: 'profile.email',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+    visible: (ctx) => ctx.isLogin && ctx.hasEmail,
+  },
+  {
+    anchor: 'profile-connected-accounts',
+    keywords: [
+      'connected accounts',
+      'linked accounts',
+      'sso',
+      'oauth',
+      'github',
+      'google',
+      'apple',
+    ],
+    labelKey: 'profile.sso.providers',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+    visible: (ctx) => ctx.isLogin && !ctx.isDesktop,
+  },
+  {
+    anchor: 'profile-authorizations',
+    keywords: ['authorizations', 'manage authorizations', 'composio', 'revoke access'],
+    labelKey: 'profile.authorizations.title',
+    ns: 'auth',
+    tab: SettingsTabs.Profile,
+    // The row additionally requires at least one connected Composio server —
+    // async user data intentionally not mirrored; a miss degrades to a plain
+    // tab switch.
+    visible: (ctx) => ctx.enableComposio,
+  },
+  // Appearance
+  {
+    anchor: 'appearance-theme-mode',
+    keywords: ['theme', 'dark', 'light', 'mode'],
+    labelKey: 'settingCommon.themeMode.title',
+    tab: SettingsTabs.Appearance,
+  },
+  {
+    anchor: 'appearance-language',
+    keywords: ['language', 'locale', 'i18n'],
+    labelKey: 'settingCommon.lang.title',
+    tab: SettingsTabs.Appearance,
+  },
+  {
+    anchor: 'appearance-animation',
+    descKey: 'settingAppearance.animationMode.desc',
+    keywords: ['animation', 'motion', 'transition'],
+    labelKey: 'settingAppearance.animationMode.title',
+    tab: SettingsTabs.Appearance,
+  },
+  {
+    anchor: 'appearance-context-menu',
+    descKey: 'settingAppearance.contextMenuMode.desc',
+    keywords: ['context menu', 'right click'],
+    labelKey: 'settingAppearance.contextMenuMode.title',
+    tab: SettingsTabs.Appearance,
+  },
+  {
+    anchor: 'appearance-response-language',
+    descKey: 'settingCommon.responseLanguage.desc',
+    keywords: ['response language', 'reply'],
+    labelKey: 'settingCommon.responseLanguage.title',
+    tab: SettingsTabs.Appearance,
+  },
+  {
+    anchor: 'appearance-primary-color',
+    keywords: ['color', 'accent'],
+    labelKey: 'settingAppearance.primaryColor.title',
+    tab: SettingsTabs.Appearance,
+  },
+  {
+    anchor: 'appearance-neutral-color',
+    keywords: ['color', 'gray', 'grey'],
+    labelKey: 'settingAppearance.neutralColor.title',
+    tab: SettingsTabs.Appearance,
+  },
+  {
+    anchor: 'appearance-app-tray',
+    keywords: ['tray', 'menu bar', 'menubar'],
+    labelKey: 'settingAppearance.appTray.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'appearance-font-family',
+    descKey: 'settingAppearance.font.fontFamily.desc',
+    keywords: ['font', 'font family', 'typeface', 'interface font'],
+    labelKey: 'settingAppearance.font.fontFamily.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'appearance-font-fallback',
+    descKey: 'settingAppearance.font.fallback.desc',
+    keywords: ['fallback font', 'font stack', 'cjk font', 'chinese font', 'font family'],
+    labelKey: 'settingAppearance.font.fallback.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'appearance-monospace-font',
+    descKey: 'settingAppearance.font.monospace.desc',
+    keywords: ['terminal font', 'monospace', 'code font', 'font family'],
+    labelKey: 'settingAppearance.font.monospace.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'appearance-monospace-font-fallback',
+    descKey: 'settingAppearance.font.monospaceFallback.desc',
+    keywords: ['fallback font', 'monospace', 'code font', 'terminal font'],
+    labelKey: 'settingAppearance.font.monospaceFallback.title',
+    tab: SettingsTabs.Appearance,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'appearance-font-size',
+    descKey: 'settingChatAppearance.fontSize.desc',
+    keywords: ['font', 'size', 'text'],
+    labelKey: 'settingChatAppearance.fontSize.title',
+    tab: SettingsTabs.Appearance,
+  },
+  {
+    anchor: 'appearance-font-antialiasing',
+    descKey: 'settingAppearance.font.antialiasing.desc',
+    keywords: ['font', 'antialiasing', 'smoothing', 'text', 'rendering'],
+    labelKey: 'settingAppearance.font.antialiasing.title',
+    tab: SettingsTabs.Appearance,
+  },
+  // System Tools
+  {
+    anchor: 'system-tools-shell',
+    descKey: 'settingSystemTools.shell.mode.desc',
+    keywords: [
+      'shell',
+      'bash',
+      'git bash',
+      'gitbash',
+      'powershell',
+      'pwsh',
+      'cmd',
+      'terminal',
+      'command line',
+      'windows shell',
+    ],
+    labelKey: 'settingSystemTools.shell.mode.title',
+    tab: SettingsTabs.SystemTools,
+    visible: (ctx) => ctx.isDesktop && ctx.isWindows,
+  },
+  // Advanced
+  {
+    anchor: 'advanced-dev-mode',
+    descKey: 'settingCommon.devMode.desc',
+    keywords: ['developer', 'debug', 'dev mode'],
+    labelKey: 'settingCommon.devMode.title',
+    tab: SettingsTabs.Advanced,
+  },
+  {
+    anchor: 'advanced-gateway-mode',
+    descKey: 'tab.advanced.gatewayMode.desc',
+    keywords: ['gateway', 'agent runtime'],
+    labelKey: 'tab.advanced.gatewayMode.title',
+    tab: SettingsTabs.Advanced,
+    visible: (ctx) => ctx.enableGatewayMode,
+  },
+  {
+    anchor: 'advanced-update-channel',
+    descKey: 'tab.advanced.updateChannel.desc',
+    keywords: ['update', 'version', 'canary', 'stable'],
+    labelKey: 'tab.advanced.updateChannel.title',
+    tab: SettingsTabs.Advanced,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  // Labs — derived from the LAB_FEATURES catalog the page renders, so a new
+  // lab flag becomes searchable without a second registration. Anchors use
+  // `labs-${flag}`, matching the SettingsSearchAnchor wrap on each toggle.
+  ...LAB_FEATURES.map(
+    ({ desktopOnly, flag, i18nKey, searchKeywords, workspaceOnly }): SettingsSearchItem => ({
+      anchor: `labs-${flag}`,
+      descKey: `features.${i18nKey}.desc`,
+      keywords: searchKeywords,
+      labelKey: `features.${i18nKey}.title`,
+      ns: 'labs',
+      tab: SettingsTabs.Labs,
+      ...(desktopOnly ? { visible: (ctx: SettingsSearchContext) => ctx.isDesktop } : {}),
+      ...(workspaceOnly ? { visible: (ctx: SettingsSearchContext) => ctx.enableWorkspace } : {}),
+    }),
+  ),
+  // Service Model
+  {
+    anchor: 'service-model-assignments',
+    descKey: 'serviceModel.desc',
+    keywords: ['main model', 'flash model', 'embedding', 'default model', 'system recommended'],
+    labelKey: 'serviceModel.tier.main.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    // Follow-up / input completion stay out of the keywords: inside a workspace
+    // they live on Chat Preferences, not here.
+    anchor: 'service-model-advanced',
+    keywords: [
+      'model assignment',
+      'topic naming',
+      'translation',
+      'memory',
+      'prompt rewrite',
+      'history compress',
+    ],
+    labelKey: 'serviceModel.advanced.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-verify',
+    descKey: 'serviceModel.tier.verify.desc',
+    keywords: ['acceptance', 'verify', 'verifier', 'vision', 'multimodal'],
+    labelKey: 'serviceModel.tier.verify.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-asr',
+    keywords: ['voice', 'transcription', 'speech to text'],
+    labelKey: 'systemAgent.asr.title',
+    tab: SettingsTabs.ServiceModel,
+  },
+  {
+    anchor: 'service-model-channelRouting',
+    descKey: 'systemAgent.channelRouting.modelDesc',
+    keywords: ['channel', 'decision', 'Jev', '频道', '决策', '回复'],
+    labelKey: 'systemAgent.channelRouting.title',
+    tab: SettingsTabs.ServiceModel,
+    visible: (ctx) => ctx.enableChannels,
+  },
+  // Chat Preferences (workspace only — the personal sidebar keeps these rows in
+  // Service Model › Advanced)
+  {
+    anchor: 'chat-preference-followUpAction',
+    descKey: 'systemAgent.followUpAction.modelDesc',
+    keywords: ['follow up', 'suggestion', 'chips'],
+    labelKey: 'systemAgent.followUpAction.title',
+    tab: WorkspaceSettingsTabs.ChatPreference,
+  },
+  {
+    anchor: 'chat-preference-inputCompletion',
+    descKey: 'systemAgent.inputCompletion.modelDesc',
+    keywords: ['input completion', 'autocomplete', 'suggestion'],
+    labelKey: 'systemAgent.inputCompletion.title',
+    tab: WorkspaceSettingsTabs.ChatPreference,
+  },
+  {
+    anchor: 'service-model-image',
+    descKey: 'settingImage.defaultCount.desc',
+    keywords: ['image', 'image generation', 'ai image'],
+    labelKey: 'settingImage.defaultCount.title',
+    tab: SettingsTabs.ServiceModel,
+    visible: (ctx) => ctx.showAiImage,
+  },
+  // Storage
+  {
+    anchor: 'storage-export',
+    keywords: ['export', 'backup'],
+    labelKey: 'storage.actions.export.title',
+    tab: SettingsTabs.Storage,
+    visible: (ctx) => ctx.enableBusinessFeatures,
+  },
+  {
+    anchor: 'storage-import',
+    keywords: ['import', 'restore'],
+    labelKey: 'storage.actions.import.title',
+    tab: SettingsTabs.Storage,
+  },
+  {
+    anchor: 'storage-reset',
+    keywords: ['reset', 'clear', 'delete', 'danger'],
+    labelKey: 'danger.reset.title',
+    tab: SettingsTabs.Storage,
+  },
+  {
+    anchor: 'storage-telemetry',
+    keywords: ['telemetry', 'analytics', 'privacy', 'tracking'],
+    labelKey: 'analytics.telemetry.title',
+    tab: SettingsTabs.Storage,
+    visible: (ctx) => ctx.hideDocs,
+  },
+  {
+    anchor: 'storage-account-deletion',
+    descKey: 'accountDeletion.desc',
+    keywords: ['delete account', 'deactivate', 'close account'],
+    labelKey: 'accountDeletion.title',
+    tab: SettingsTabs.Storage,
+    // Rendered by the business AccountDeletion slot; the OSS default slot
+    // renders nothing, so this gate matches the actual render condition only
+    // for implementations that provide the slot (e.g. cloud).
+    visible: (ctx) => ctx.enableBusinessFeatures,
+  },
+  // Proxy (the tab itself is desktop-only and filtered via useCategory)
+  {
+    anchor: 'proxy-enable',
+    descKey: 'proxy.enableDesc',
+    keywords: ['proxy', 'network'],
+    labelKey: 'proxy.enable',
+    ns: 'electron',
+    tab: SettingsTabs.Proxy,
+  },
+  {
+    anchor: 'proxy-auth',
+    descKey: 'proxy.authDesc',
+    keywords: ['authentication', 'username', 'password'],
+    labelKey: 'proxy.auth',
+    ns: 'electron',
+    tab: SettingsTabs.Proxy,
+  },
+  {
+    anchor: 'proxy-test',
+    descKey: 'proxy.testDescription',
+    keywords: ['test', 'connection', 'check'],
+    labelKey: 'proxy.testUrl',
+    ns: 'electron',
+    tab: SettingsTabs.Proxy,
+  },
+  // Hotkey
+  {
+    anchor: 'hotkey-essential',
+    keywords: ['shortcut', 'keyboard', 'hotkey'],
+    labelKey: 'hotkey.group.essential',
+    tab: SettingsTabs.Hotkey,
+  },
+  {
+    anchor: 'hotkey-conversation',
+    keywords: ['shortcut', 'keyboard', 'chat'],
+    labelKey: 'hotkey.group.conversation',
+    tab: SettingsTabs.Hotkey,
+  },
+  {
+    anchor: 'hotkey-desktop',
+    keywords: ['shortcut', 'keyboard', 'global'],
+    labelKey: 'hotkey.group.desktop',
+    tab: SettingsTabs.Hotkey,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  // Business pages below are rendered by business slots (cloud implementation);
+  // their tabs only appear when the business build provides them, so tab
+  // visibility via useCategory is the effective gate — no per-item gate needed.
+  // Billing
+  {
+    anchor: 'billing-summary',
+    keywords: ['payment method', 'next payment', 'card'],
+    labelKey: 'summary.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Billing,
+  },
+  {
+    anchor: 'billing-current-plan',
+    keywords: ['plan', 'subscription', 'cancel'],
+    labelKey: 'currentPlan.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Billing,
+  },
+  {
+    anchor: 'billing-history',
+    keywords: ['invoice', 'receipt', 'payment history'],
+    labelKey: 'billing.history',
+    ns: 'subscription',
+    tab: SettingsTabs.Billing,
+  },
+  // Credits
+  {
+    anchor: 'credits-balance',
+    keywords: ['balance', 'credits'],
+    labelKey: 'balance.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  {
+    anchor: 'credits-top-up',
+    keywords: ['top up', 'topup', 'buy credits', 'recharge'],
+    labelKey: 'credits.topUp.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  {
+    anchor: 'credits-cost-estimate-hint',
+    descKey: 'credits.costEstimateHint.desc',
+    keywords: ['cost estimate'],
+    labelKey: 'credits.costEstimateHint.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  {
+    anchor: 'credits-auto-top-up',
+    descKey: 'credits.autoTopUp.desc',
+    keywords: ['auto top up', 'automatic recharge'],
+    labelKey: 'credits.autoTopUp.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  {
+    anchor: 'credits-packages',
+    keywords: ['package', 'budget'],
+    labelKey: 'credits.packages.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Credits,
+  },
+  // Plans
+  {
+    anchor: 'plans-model-pricing',
+    keywords: ['model pricing', 'price'],
+    labelKey: 'modelPricing.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Plans,
+  },
+  {
+    anchor: 'plans-qa',
+    keywords: ['faq', 'question'],
+    labelKey: 'qa.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Plans,
+  },
+  // Referral
+  {
+    anchor: 'referral-invite-link',
+    keywords: ['invite link', 'share'],
+    labelKey: 'referral.inviteLink.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  {
+    anchor: 'referral-invite-code',
+    keywords: ['invite code', 'referral code'],
+    labelKey: 'referral.inviteCode.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  {
+    anchor: 'referral-stats',
+    keywords: ['rewards', 'invites'],
+    labelKey: 'referral.stats.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  {
+    anchor: 'referral-table',
+    keywords: ['referral history'],
+    labelKey: 'referral.table.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  {
+    anchor: 'referral-rules',
+    descKey: 'referral.rules.description',
+    keywords: ['rules'],
+    labelKey: 'referral.rules.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Referral,
+  },
+  // Usage
+  {
+    anchor: 'usage-spend',
+    descKey: 'table.desc',
+    keywords: ['spend', 'cost'],
+    labelKey: 'table.title',
+    ns: 'spend',
+    tab: SettingsTabs.Usage,
+  },
+  {
+    anchor: 'usage-overview',
+    descKey: 'usage.credit.desc',
+    keywords: ['usage', 'quota', 'credit'],
+    labelKey: 'usage.credit.title',
+    ns: 'subscription',
+    tab: SettingsTabs.Usage,
+  },
+  // Notification
+  {
+    anchor: 'notification-completion-sound',
+    descKey: 'completionSound.desc',
+    keywords: ['sound', 'audio', 'OpenPeon', 'completion'],
+    labelKey: 'completionSound.title',
+    tab: SettingsTabs.Notification,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'notification-banner-sound',
+    descKey: 'completionSound.banner.desc',
+    keywords: ['sound', 'notification', 'banner', 'background'],
+    labelKey: 'completionSound.banner.title',
+    tab: SettingsTabs.Notification,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'notification-inbox',
+    keywords: ['inbox', 'in-app notification'],
+    labelKey: 'notification.inbox.title',
+    tab: SettingsTabs.Notification,
+  },
+  {
+    anchor: 'notification-email',
+    keywords: ['email'],
+    labelKey: 'notification.email.title',
+    tab: SettingsTabs.Notification,
+  },
+  {
+    anchor: 'notification-push',
+    keywords: ['push'],
+    labelKey: 'notification.push.title',
+    tab: SettingsTabs.Notification,
+  },
+];

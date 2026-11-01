@@ -3,10 +3,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockCreateOperation, mockGetAgentConfig, mockMessageCreate } = vi.hoisted(() => ({
+const {
+  mockIsResourceAuthorOrAdmin,
+  mockCreateOperation,
+  mockGetAgentConfig,
+  mockGetPreference,
+  mockMessageCreate,
+  mockTopicCreate,
+  mockTopicFindById,
+} = vi.hoisted(() => ({
+  mockIsResourceAuthorOrAdmin: vi.fn(),
   mockCreateOperation: vi.fn(),
   mockGetAgentConfig: vi.fn(),
+  mockGetPreference: vi.fn(),
   mockMessageCreate: vi.fn(),
+  mockTopicCreate: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+  mockTopicFindById: vi.fn(),
+}));
+
+vi.mock('@/server/services/resourcePermission', () => ({
+  isResourceAuthorOrAdmin: mockIsResourceAuthorOrAdmin,
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
@@ -15,69 +31,131 @@ vi.mock('@/libs/trusted-client', () => ({
   isTrustedClientEnabled: vi.fn().mockReturnValue(false),
 }));
 
+vi.mock('@/database/models/chatGroup', () => ({
+  ChatGroupModel: class {
+    findById = vi.fn().mockResolvedValue(undefined);
+    getGroupAgentsWithMeta = vi.fn().mockResolvedValue([]);
+  },
+}));
+
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/workspaceUserSettings', () => ({
+  WorkspaceUserSettingsModel: vi.fn().mockImplementation(function () {
+    return {
+      getPreference: mockGetPreference,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn(),
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn(),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: mockGetAgentConfig,
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: mockGetAgentConfig,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+// Builtin agents inject their own tools, so a run under a builtin slug reaches
+// connector resolution that the plain-agent cases never do.
+vi.mock('@/database/models/connector', () => ({
+  ConnectorModel: vi.fn().mockImplementation(function () {
+    return {
+      queryByIdentifiers: vi.fn().mockResolvedValue([]),
+      resolveByIdentifiers: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/connectorTool', () => ({
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {
+      queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
+      queryByConnector: vi.fn().mockResolvedValue([]),
+      queryByConnectorIds: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: mockTopicCreate,
+      armScheduledRun: vi.fn().mockResolvedValue(undefined),
+      findById: mockTopicFindById,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: mockCreateOperation,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: mockCreateOperation,
+    };
+  }),
 }));
 
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    uploadFromUrl: vi.fn(),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/server/modules/Mecha', () => ({
@@ -138,6 +216,9 @@ describe('AiAgentService.execAgent - model/provider override', () => {
       operationId: 'op-123',
       success: true,
     });
+    mockGetPreference.mockResolvedValue({});
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(false);
+    mockTopicFindById.mockResolvedValue(null);
     service = new AiAgentService(mockDb, userId);
   });
 
@@ -154,6 +235,40 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     expect(callArgs.agentConfig.model).toBe('gpt-4');
     expect(callArgs.agentConfig.provider).toBe('openai');
   });
+
+  it.each(['group', 'scheduled'])(
+    'pins the member-selected model when precreating a %s topic',
+    async (kind) => {
+      mockGetAgentConfig.mockResolvedValue({
+        ...defaultAgentConfig,
+        agencyConfig: { modelSelectionPolicy: 'member' },
+        userId: 'agent-author',
+        visibility: 'public',
+        workspaceId: 'workspace-1',
+      });
+      mockGetPreference.mockResolvedValue({
+        agentModelOverrides: { 'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' } },
+      });
+      service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+      const runSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
+      if (kind === 'group') {
+        await service.execGroupAgent({ agentId: 'agent-1', groupId: 'group-1', message: 'Group' });
+      } else {
+        await service.scheduleAgentRun({
+          agentId: 'agent-1',
+          prompt: 'Scheduled',
+          runAt: new Date(Date.now() + 60_000).toISOString(),
+        });
+      }
+      expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({
+        model: 'claude-sonnet-4-6',
+        provider: 'anthropic',
+      });
+      runSpy.mockRestore();
+    },
+  );
 
   it('should override model when model param is provided', async () => {
     mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
@@ -199,5 +314,462 @@ describe('AiAgentService.execAgent - model/provider override', () => {
     const callArgs = mockCreateOperation.mock.calls[0][0];
     expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
     expect(callArgs.agentConfig.provider).toBe('anthropic');
+  });
+
+  it('keeps group members on their own model instead of the supervisor topic pin', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'supervisor',
+      groupId: 'group-1',
+      model: 'supervisor-model',
+      provider: 'anthropic',
+      metadata: { heteroEffort: 'high' },
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: {
+        topicId: 'topic-1',
+        groupId: 'group-1',
+        orchestrationRole: 'member',
+        scope: 'group',
+      },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].agentConfig).toMatchObject({
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+  });
+
+  // #19542: `callAgent` runs the callee in an isolation thread on the caller's
+  // topic, so the caller's topic pin must not replace the callee's own model.
+  it("runs a callAgent callee on its own model instead of the caller's topic pin", async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'caller-agent',
+      metadata: { heteroEffort: 'high' },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { isolationThread: true, threadId: 'thread-1', topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].modelRuntimeConfig).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+  });
+
+  it("falls back to the topic pin when the run belongs to the topic's own agent", async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({
+      agentId: 'agent-1',
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+    });
+
+    expect(mockCreateOperation.mock.calls[0][0].modelRuntimeConfig).toMatchObject({
+      model: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+    });
+  });
+
+  it('keeps an explicit model override over the topic model', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({ model: 'gpt-5.6-terra', provider: 'openai' });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      model: 'step-3.7-flash',
+      prompt: 'Hello',
+      provider: 'stepfun',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('step-3.7-flash');
+    expect(callArgs.agentConfig.provider).toBe('stepfun');
+    expect(callArgs.modelRuntimeConfig).toMatchObject({
+      mediaCapabilities: { video: true, vision: true },
+      model: 'step-3.7-flash',
+      provider: 'stepfun',
+    });
+    // The model facts frozen for the run follow the override too.
+    expect(callArgs.modelRuntimeConfig.modelFacts).toMatchObject({
+      model: 'step-3.7-flash',
+      provider: 'stepfun',
+    });
+  });
+
+  it('keeps the topic provider when only the model is overridden', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig });
+    mockTopicFindById.mockResolvedValue({ model: 'gpt-5.6-terra', provider: 'stepfun' });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      model: 'step-3.7-flash',
+      prompt: 'Hello',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.modelRuntimeConfig).toMatchObject({
+      mediaCapabilities: { video: true, vision: true },
+      model: 'step-3.7-flash',
+      provider: 'stepfun',
+    });
+    // The model facts frozen for the run follow the override too.
+    expect(callArgs.modelRuntimeConfig.modelFacts).toMatchObject({
+      model: 'step-3.7-flash',
+      provider: 'stepfun',
+    });
+  });
+
+  it('uses the caller model preference when the workspace Agent allows member selection', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: { modelSelectionPolicy: 'member' },
+      chatConfig: { enableAgentMode: true },
+      visibility: 'public',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+      agentModeOverrides: { 'agent-1': false },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
+    expect(callArgs.agentConfig.provider).toBe('anthropic');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(false);
+  });
+
+  // Model / mode overrides stay member-only, but the caller's own DEVICE
+  // override applies to the author too: a `local` pick binds their personal
+  // desktop, which the shared row must never reference (the server rejects
+  // it), so the author's pick lives in the same override slot members use.
+  it("ignores member model/mode overrides for the Agent author but applies the author's own device override", async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: {
+        executionTarget: 'sandbox',
+        executionTargetSelectionPolicy: 'member',
+        modelSelectionPolicy: 'member',
+      },
+      userId,
+      chatConfig: { enableAgentMode: true },
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentDeviceOverrides: {
+        'agent-1': { boundDeviceId: 'member-device', executionTarget: 'local' },
+      },
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+      agentModeOverrides: { 'agent-1': false },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig).toMatchObject({
+      agencyConfig: { boundDeviceId: 'member-device', executionTarget: 'local' },
+      chatConfig: { enableAgentMode: true },
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+    expect(mockIsResourceAuthorOrAdmin).not.toHaveBeenCalled();
+  });
+
+  it('ignores member model overrides for a Workspace admin', async () => {
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(true);
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: { modelSelectionPolicy: 'member' },
+      chatConfig: { enableAgentMode: true },
+      userId: 'agent-author',
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+      agentModeOverrides: { 'agent-1': false },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('gpt-4');
+    expect(callArgs.agentConfig.provider).toBe('openai');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+    expect(mockIsResourceAuthorOrAdmin).toHaveBeenCalledWith(
+      expect.objectContaining({ userId, workspaceId: 'workspace-1' }),
+    );
+  });
+
+  it('uses the caller model preference on a collaborative builtin the caller created', async () => {
+    // The Agent Builder row is provisioned by whichever member opened the panel
+    // first; being that member (or an admin) must not pin everyone to their
+    // model, so the run reads this caller's own override. Chat/Agent mode keeps
+    // the ordinary author rule and stays shared.
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(true);
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { enableAgentMode: true },
+      slug: 'group-agent-builder',
+      userId,
+      virtual: true,
+      visibility: 'public',
+      workspaceId: 'workspace-1',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+      agentModeOverrides: { 'agent-1': false },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
+    expect(callArgs.agentConfig.provider).toBe('anthropic');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+  });
+
+  it('ignores the caller model preference when the workspace Agent is private', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: { modelSelectionPolicy: 'member' },
+      visibility: 'private',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('gpt-4');
+    expect(callArgs.agentConfig.provider).toBe('openai');
+  });
+
+  it("applies the owner's own device override while the workspace Agent is private, stripping the policy", async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: {
+        boundDeviceId: 'shared-device',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+      },
+      visibility: 'private',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentDeviceOverrides: {
+        'agent-1': { boundDeviceId: 'owner-desktop', executionTarget: 'local' },
+      },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.agencyConfig).toEqual({
+      boundDeviceId: 'owner-desktop',
+      executionTarget: 'local',
+    });
+  });
+
+  it('uses a retained caller preference when a legacy workspace model policy is missing', async () => {
+    mockGetAgentConfig.mockResolvedValue({ ...defaultAgentConfig, visibility: 'public' });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
+    expect(callArgs.agentConfig.provider).toBe('anthropic');
+  });
+
+  it('ignores a retained caller preference when the workspace model policy is fixed', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: { modelSelectionPolicy: 'fixed' },
+      visibility: 'public',
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'claude-sonnet-4-6', provider: 'anthropic' },
+      },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('gpt-4');
+    expect(callArgs.agentConfig.provider).toBe('openai');
+  });
+
+  it('keeps an explicit per-run model/provider above the caller workspace preference', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      agencyConfig: { modelSelectionPolicy: 'member' },
+    });
+    mockGetPreference.mockResolvedValue({
+      agentModelOverrides: {
+        'agent-1': { model: 'gpt-4', provider: 'openai' },
+      },
+    });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      model: 'claude-sonnet-4-6',
+      prompt: 'Hello',
+      provider: 'anthropic',
+    });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.model).toBe('claude-sonnet-4-6');
+    expect(callArgs.agentConfig.provider).toBe('anthropic');
+  });
+});
+
+describe('AiAgentService.execAgent - toolModeOverride (/mode command)', () => {
+  let service: AiAgentService;
+  const mockDb = {} as any;
+  const userId = 'test-user-id';
+
+  const defaultAgentConfig = {
+    chatConfig: {},
+    id: 'agent-1',
+    model: 'gpt-4',
+    plugins: [],
+    provider: 'openai',
+    slug: 'my-agent',
+    systemRole: 'You are a helpful assistant.',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockCreateOperation.mockResolvedValue({
+      autoStarted: true,
+      messageId: 'queue-msg-1',
+      operationId: 'op-123',
+      success: true,
+    });
+    mockGetPreference.mockResolvedValue({});
+    mockIsResourceAuthorOrAdmin.mockResolvedValue(false);
+    mockTopicFindById.mockResolvedValue(null);
+    service = new AiAgentService(mockDb, userId);
+  });
+
+  it('/mode chat on an agent-mode agent also disables enableAgentMode for context injection', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { enableAgentMode: true },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'chat' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('chat');
+    // The context engine gates agentic-only injectors on enableAgentMode, so
+    // the override must flip it too — not just toolMode.
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(false);
+  });
+
+  it('/mode agent on a chat-default agent enables agent mode and its context', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { enableAgentMode: false },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'agent' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('agent');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+  });
+
+  it('/mode agent preserves a custom toolMode (hand-picked toolset stays)', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { toolMode: 'custom' },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'agent' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    // `custom` is agent-side; widening it to `agent` would silently grant
+    // tools the agent deliberately excluded.
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('custom');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
+  });
+
+  it('/mode chat still disables tools on a custom-toolMode agent', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { toolMode: 'custom' },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'chat' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('chat');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(false);
+  });
+
+  it('wins over the workspace member-mode override', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      ...defaultAgentConfig,
+      chatConfig: { enableAgentMode: true },
+      visibility: 'public',
+    });
+    mockGetPreference.mockResolvedValue({ agentModeOverrides: { 'agent-1': false } });
+    service = new AiAgentService(mockDb, userId, { workspaceId: 'workspace-1' });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello', toolModeOverride: 'agent' });
+
+    const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.chatConfig.toolMode).toBe('agent');
+    expect(callArgs.agentConfig.chatConfig.enableAgentMode).toBe(true);
   });
 });

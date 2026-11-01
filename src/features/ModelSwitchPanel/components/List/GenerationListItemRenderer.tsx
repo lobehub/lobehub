@@ -2,6 +2,8 @@
 
 import {
   ActionIcon,
+  cssVar,
+  cx,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
@@ -11,7 +13,6 @@ import {
   Icon,
   menuSharedStyles,
 } from '@lobehub/ui';
-import { cssVar, cx } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import type { ComponentType } from 'react';
 import { memo, useState } from 'react';
@@ -142,7 +143,6 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
                 <ModelItemComponent
                   {...item.model}
                   providerId={item.provider.id}
-                  showBadge={false}
                   showPopover={false}
                 />
               </DropdownMenuSubmenuTrigger>
@@ -185,7 +185,6 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
                 <ModelItemComponent
                   {...item.data.model}
                   providerId={singleProvider.id}
-                  showBadge={false}
                   showPopover={false}
                 />
               </DropdownMenuSubmenuTrigger>

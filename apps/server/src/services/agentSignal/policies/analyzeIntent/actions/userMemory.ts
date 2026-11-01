@@ -14,8 +14,10 @@ import {
 import { RequestTrigger, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
+import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
+import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 import {
   InMemoryAgentStateManager,
@@ -73,8 +75,11 @@ export interface UserMemoryActionHandlerOptions {
     sourceMessageId?: string;
     topicId?: string;
   }) => Promise<MemoryAgentActionResult>;
+  messageModel?: Pick<MessageModel, 'create'>;
   pluginModel?: Pick<PluginModel, 'query'>;
+  threadModel?: Pick<ThreadModel, 'create'>;
   userId: string;
+  userModel?: Pick<UserModel, 'getUserSettings'>;
   workspaceId?: string;
 }
 
@@ -105,9 +110,34 @@ const isUserMemoryAction = (action: BaseAction): action is ActionUserMemoryHandl
   return action.actionType === AGENT_SIGNAL_POLICY_ACTION_TYPES.userMemoryHandle;
 };
 
-const createInitialContext = (operationId: string): AgentRuntimeContext => {
+interface BuildUserMemoryActionAgentSignalMarkerInput {
+  assistantMessageId?: string;
+  sourceId: string;
+  topicId?: string;
+  triggerMessageId?: string;
+}
+
+export const buildUserMemoryActionAgentSignalMarker = ({
+  assistantMessageId,
+  sourceId,
+  topicId,
+  triggerMessageId,
+}: BuildUserMemoryActionAgentSignalMarkerInput): AgentSignalOperationMarker => ({
+  // Preserve the split: user feedback is the trigger; only a known assistant
+  // reply is a durable receipt anchor. UI fallback happens in the chat list.
+  ...(assistantMessageId ? { anchorMessageId: assistantMessageId } : {}),
+  kind: 'memory',
+  sourceId,
+  ...(topicId ? { topicId } : {}),
+  ...(triggerMessageId ? { triggerMessageId } : {}),
+});
+
+const createInitialContext = (
+  operationId: string,
+  parentMessageId?: string,
+): AgentRuntimeContext => {
   return {
-    payload: { message: [] },
+    payload: { message: [], ...(parentMessageId ? { parentMessageId } : {}) },
     phase: 'user_input',
     session: {
       messageCount: 1,
@@ -182,6 +212,25 @@ export const runMemoryActionAgent = async (
   const agentConfig = await agentService.getAgentConfig(input.agentId);
   const memoryLanguage = input.memoryLanguage ?? 'English';
 
+  // Same precedence as chat (`AiAgentService.execAgent`): the agent-level memory
+  // switch wins, otherwise the user-level setting. A user who turned memory off
+  // must not get memories written in the background either.
+  const agentMemoryEnabled = agentConfig?.chatConfig?.memory?.enabled;
+  let memoryEnabled = agentMemoryEnabled;
+  if (memoryEnabled === undefined) {
+    const userModel = options.userModel ?? new UserModel(options.db, options.userId);
+    const settings = await userModel.getUserSettings();
+    const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
+    memoryEnabled = memorySettings?.enabled !== false;
+  }
+
+  if (!memoryEnabled) {
+    return {
+      detail: 'Memory is disabled for this agent or user.',
+      status: 'skipped',
+    };
+  }
+
   if (!agentConfig?.model || !agentConfig?.provider) {
     return {
       detail: 'Missing runnable agent config for memory action.',
@@ -233,7 +282,10 @@ export const runMemoryActionAgent = async (
 
   const manifestMap = toolsEngine.getEnabledPluginManifests([MemoryIdentifier]);
   const operationId = `agent-signal-memory-${nanoid()}`;
-  const initialContext = createInitialContext(operationId);
+  // Lazy-loaded on purpose: `AgentRuntimeService` pulls the model-runtime core
+  // (eagerly touches server-only env at module init). This policy action sits on
+  // the light agentSignal request path imported by aiAgent, so a static import
+  // would couple that whole subsystem into every aiAgent import.
   const { AgentRuntimeService } =
     await import('@/server/services/agentRuntime/AgentRuntimeService');
 
@@ -243,7 +295,8 @@ export const runMemoryActionAgent = async (
   let threadId: string | undefined;
   if (input.topicId && input.sourceMessageId) {
     try {
-      const threadModel = new ThreadModel(options.db, options.userId, options.workspaceId);
+      const threadModel =
+        options.threadModel ?? new ThreadModel(options.db, options.userId, options.workspaceId);
       const thread = await threadModel.create({
         agentId: input.agentId,
         metadata: { operationId },
@@ -258,15 +311,34 @@ export const runMemoryActionAgent = async (
     }
   }
 
+  // Persist the writer prompt as the thread's user message. The runtime
+  // rebuilds `state.messages` from the DB after a tool step, so an in-memory-only
+  // seed would vanish and the next LLM call would start with an assistant
+  // message — which strict providers reject ("messages parameter is illegal")
+  // and every model would continue without its instructions or evidence.
+  const seedContent = createAgentSignalMemoryWriterPrompt({ ...input, memoryLanguage });
+  let seedMessage: { content: string; id?: string; role: 'user' } = {
+    content: seedContent,
+    role: 'user',
+  };
+  if (threadId && input.topicId) {
+    const messageModel =
+      options.messageModel ?? new MessageModel(options.db, options.userId, options.workspaceId);
+    const seedRow = await messageModel.create({
+      agentId: input.agentId,
+      content: seedContent,
+      role: 'user',
+      threadId,
+      topicId: input.topicId,
+    });
+    seedMessage = { ...seedMessage, id: seedRow.id };
+  }
+  const initialContext = createInitialContext(operationId, seedMessage.id);
+
   const createParams = {
     agentConfig: memoryRuntimeAgentConfig,
     initialContext,
-    initialMessages: [
-      {
-        content: createAgentSignalMemoryWriterPrompt({ ...input, memoryLanguage }),
-        role: 'user',
-      },
-    ],
+    initialMessages: [seedMessage],
     modelRuntimeConfig: {
       model: agentConfig.model,
       provider: agentConfig.provider,
@@ -291,7 +363,7 @@ export const runMemoryActionAgent = async (
   };
 
   // Async (queued execAgent) path: enqueue the run with the marker stamped onto
-  // appContext (it lands in state.metadata.agentSignal), then return immediately.
+  // appContext (it lands in state.origin.signal), then return immediately.
   // The durable receipt is projected on the completion path from the run's
   // finalState — no blocking executeSync.
   if (dispatch) {
@@ -380,6 +452,16 @@ export const handleUserMemoryAction = async (
       action.payload.feedbackHint === 'satisfied' || action.payload.feedbackHint === 'not_satisfied'
         ? action.payload.feedbackHint
         : undefined;
+    const assistantMessageId =
+      typeof action.payload.assistantMessageId === 'string'
+        ? action.payload.assistantMessageId
+        : undefined;
+    const messageId =
+      typeof action.payload.messageId === 'string' ? action.payload.messageId : undefined;
+    const triggerMessageId =
+      typeof action.payload.triggerMessageId === 'string'
+        ? action.payload.triggerMessageId
+        : messageId;
     const runnerInput = {
       agentId: typeof action.payload.agentId === 'string' ? action.payload.agentId : undefined,
       conflictPolicy:
@@ -398,31 +480,21 @@ export const handleUserMemoryAction = async (
         typeof action.payload.sourceHints === 'object' && action.payload.sourceHints
           ? action.payload.sourceHints
           : undefined,
-      // The message to anchor the memory-agent child thread under, so its
-      // messages stay isolated from the main topic instead of being flattened
-      // into it. Prefer the assistant message that completed the turn (set by
-      // planUserMemory via extractAssistantMessageIdFromSourceId — only present
-      // for clientRuntimeComplete sources whose id is
-      // `${assistantMessageId}:completion:${parentMessageId}`). Other sources
-      // carry no assistant boundary, so fall back to the triggering user
-      // message id; without this fallback no thread is created and the run
-      // leaks into the active conversation.
-      sourceMessageId:
-        typeof action.payload.assistantMessageId === 'string'
-          ? action.payload.assistantMessageId
-          : typeof action.payload.messageId === 'string'
-            ? action.payload.messageId
-            : undefined,
+      // Attach the memory-agent child thread to the completed assistant turn
+      // when the planner has one, either from the normalized payload anchor or
+      // the legacy `:completion:` source id. Fall back to the triggering
+      // message so the async run still stays out of the main topic.
+      sourceMessageId: assistantMessageId ?? triggerMessageId,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
     // Stamp the run so the completion path can project the memory receipt (the
     // memory write is now enqueued async, not resolved synchronously here).
-    const marker: AgentSignalOperationMarker = {
-      kind: 'memory',
-      ...(runnerInput.sourceMessageId ? { anchorMessageId: runnerInput.sourceMessageId } : {}),
+    const marker = buildUserMemoryActionAgentSignalMarker({
+      ...(assistantMessageId ? { assistantMessageId } : {}),
       sourceId: idempotencyKey ?? action.actionId,
       ...(runnerInput.topicId ? { topicId: runnerInput.topicId } : {}),
-    };
+      ...(triggerMessageId ? { triggerMessageId } : {}),
+    });
     const runner =
       options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options, { marker }));
     let memoryActionResult: MemoryAgentActionResult | undefined;

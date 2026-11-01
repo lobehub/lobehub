@@ -61,7 +61,19 @@ export interface BuiltinSkill {
    * the raw `agent-skills:lobe-annotation-cleanup`.
    */
   title?: string;
+  /**
+   * Declared in the skill's own `SKILL.md` frontmatter and parsed from it, so a
+   * copy materialized onto a builder's disk carries the version it was installed
+   * at. Lets an installer compare an existing copy against the latest bundle
+   * instead of blindly overwriting or blindly skipping.
+   */
+  version?: string;
 }
+
+export type BuiltinSkillManifest = Pick<
+  BuiltinSkill,
+  'avatar' | 'description' | 'identifier' | 'name' | 'source' | 'title'
+>;
 
 // ===== Skill Source =====
 
@@ -132,6 +144,8 @@ export interface SkillItem {
   resources?: Record<string, SkillResourceMeta> | null;
   source: SkillSource;
   updatedAt: Date;
+  /** Creator attribution — drives the workspace row-level manage gate. */
+  userId?: string | null;
   zipFileHash?: string | null;
 }
 
@@ -146,6 +160,8 @@ export interface SkillListItem {
   name: string;
   source: SkillSource;
   updatedAt: Date;
+  /** Creator attribution — drives the workspace row-level manage gate. */
+  userId?: string | null;
   zipFileHash?: string | null;
 }
 

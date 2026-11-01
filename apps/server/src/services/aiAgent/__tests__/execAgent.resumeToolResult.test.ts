@@ -1,0 +1,618 @@
+import type { LobeChatDatabase } from '@lobechat/database';
+import type * as ModelBankModule from 'model-bank';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AiAgentService } from '../index';
+
+const {
+  mockControlToolResult,
+  mockCreateOperation,
+  mockFindById,
+  mockFindMessagePlugin,
+  mockMessageCreate,
+  mockMessageQuery,
+  mockLoadInterventionContinuationState,
+  mockLoadGroupMemberBridge,
+  mockCompleteGroupActionMember,
+  mockThreadFindById,
+  mockThreadUpdate,
+  mockResolveHumanApproval,
+  mockRestoreHumanApproval,
+  mockUpdateMessagePlugin,
+  mockUpdatePluginState,
+  mockUpdateToolMessage,
+} = vi.hoisted(() => ({
+  mockControlToolResult: vi.fn(),
+  mockCreateOperation: vi.fn(),
+  mockFindById: vi.fn(),
+  mockFindMessagePlugin: vi.fn(),
+  mockMessageCreate: vi.fn(),
+  mockMessageQuery: vi.fn(),
+  mockLoadInterventionContinuationState: vi.fn(),
+  mockLoadGroupMemberBridge: vi.fn(),
+  mockCompleteGroupActionMember: vi.fn(),
+  mockThreadFindById: vi.fn(),
+  mockThreadUpdate: vi.fn(),
+  mockResolveHumanApproval: vi.fn(),
+  mockRestoreHumanApproval: vi.fn(),
+  mockUpdateMessagePlugin: vi.fn(),
+  mockUpdatePluginState: vi.fn(),
+  mockUpdateToolMessage: vi.fn(),
+}));
+
+vi.mock('@/libs/trusted-client', () => ({
+  generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
+  getTrustedClientTokenForSession: vi.fn().mockResolvedValue(undefined),
+  isTrustedClientEnabled: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock('@/database/models/message', () => ({
+  HumanApprovalAlreadyResolvedError: class HumanApprovalAlreadyResolvedError extends Error {},
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      findById: mockFindById,
+      findMessagePlugin: mockFindMessagePlugin,
+      query: mockMessageQuery,
+      resolveHumanApproval: mockResolveHumanApproval,
+      restoreHumanApproval: mockRestoreHumanApproval,
+      update: vi.fn().mockResolvedValue({}),
+      updateMessagePlugin: mockUpdateMessagePlugin,
+      updatePluginState: mockUpdatePluginState,
+      updateToolMessage: mockUpdateToolMessage,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn().mockImplementation(function () {
+    return { queryAgents: vi.fn().mockResolvedValue([]) };
+  }),
+}));
+
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/chatGroup', () => ({
+  ChatGroupModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: vi.fn().mockResolvedValue({ id: 'group-1', title: 'Team' }),
+      getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/plugin', () => ({
+  PluginModel: vi.fn().mockImplementation(function () {
+    return { query: vi.fn().mockResolvedValue([]) };
+  }),
+}));
+
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      appendRunningOperationChild: vi.fn().mockResolvedValue(true),
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(null),
+      updateMetadata: vi.fn(),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/thread', () => ({
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: mockThreadFindById,
+      update: mockThreadUpdate,
+    };
+  }),
+}));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: vi.fn().mockImplementation(function () {
+    return {
+      getUserSettings: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/userMemory/persona', () => ({
+  UserPersonaModel: vi.fn().mockImplementation(function () {
+    return {
+      getLatestPersonaDocument: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/agentRuntime', () => ({
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      acceptsFileWorks: vi.fn().mockResolvedValue(false),
+      acceptsMemberRuntimeEnd: vi.fn().mockResolvedValue(false),
+      getLlmExecutor: vi.fn().mockResolvedValue(undefined),
+      getOperationEditingGroupId: vi.fn().mockResolvedValue(undefined),
+      loadGroupMemberBridge: mockLoadGroupMemberBridge,
+      completeGroupActionMember: mockCompleteGroupActionMember,
+      controlCompletedToolResult: mockControlToolResult,
+      createOperation: mockCreateOperation,
+      ensureInterventionContinuationStarted: vi.fn().mockResolvedValue('scheduled'),
+      loadInterventionContinuationState: mockLoadInterventionContinuationState,
+    };
+  }),
+}));
+
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/composio', () => ({
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(function () {
+    return { uploadFromUrl: vi.fn() };
+  }),
+}));
+
+vi.mock('@/server/modules/Mecha', () => ({
+  createServerAgentToolsEngine: vi.fn().mockReturnValue({
+    generateToolsDetailed: vi.fn().mockReturnValue({ enabledToolIds: [], tools: [] }),
+    getEnabledPluginManifests: vi.fn().mockReturnValue(new Map()),
+  }),
+}));
+
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: { isConfigured: false, queryDeviceList: vi.fn().mockResolvedValue([]) },
+}));
+
+vi.mock('@/server/modules/ModelRuntime', () => ({
+  initModelRuntimeFromDB: vi.fn(),
+}));
+
+vi.mock('model-bank', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelBankModule>();
+  return {
+    ...actual,
+    LOBE_DEFAULT_MODEL_LIST: [
+      {
+        abilities: { functionCall: true, vision: true },
+        id: 'gpt-4',
+        providerId: 'openai',
+      },
+    ],
+  };
+});
+
+describe('AiAgentService.execAgent - resumeToolResult', () => {
+  let service: AiAgentService;
+
+  // `messages` row — `findById` returns this.
+  const pendingToolMessage = {
+    id: 'tool-msg-1',
+    role: 'tool',
+    sessionId: 'session-1',
+    threadId: 'thread-1',
+    topicId: 'topic-1',
+  };
+  // `message_plugins` row — fetched via findMessagePlugin.
+  const pendingToolPlugin = {
+    apiName: 'askUserQuestion',
+    arguments: '{"question":"favorite color?"}',
+    identifier: 'lobe-agent',
+    intervention: { status: 'pending' },
+    toolCallId: 'call_ask',
+    type: 'builtin',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadGroupMemberBridge.mockResolvedValue(undefined);
+    mockThreadFindById.mockResolvedValue(undefined);
+    mockThreadUpdate.mockResolvedValue(true);
+    mockControlToolResult.mockImplementation(async ({ result }) => ({
+      result,
+      blocked: false,
+      cancelled: false,
+    }));
+    mockCreateOperation.mockResolvedValue({
+      autoStarted: true,
+      messageId: 'queue-msg-1',
+      operationId: 'op-123',
+      success: true,
+    });
+    mockFindById.mockImplementation(async (id: string) =>
+      id === pendingToolMessage.id ? pendingToolMessage : undefined,
+    );
+    mockFindMessagePlugin.mockResolvedValue(pendingToolPlugin);
+    mockMessageQuery.mockResolvedValue([{ content: 'hi', id: 'history-1', role: 'user' }]);
+    mockMessageCreate.mockResolvedValue({ id: 'assistant-msg-new' });
+    mockResolveHumanApproval.mockResolvedValue('applied');
+    mockLoadInterventionContinuationState.mockResolvedValue(null);
+    mockRestoreHumanApproval.mockResolvedValue(undefined);
+    mockUpdateMessagePlugin.mockResolvedValue(undefined);
+    mockUpdatePluginState.mockResolvedValue(undefined);
+    mockUpdateToolMessage.mockResolvedValue({ success: true });
+    service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
+  });
+
+  const baseParams = {
+    agentId: 'agent-1',
+    appContext: { sessionId: 'session-1', threadId: 'thread-1', topicId: 'topic-1' },
+    parentMessageId: 'tool-msg-1',
+    prompt: '',
+  };
+
+  it('writes the human answer as tool content, marks approved, and resumes from tool_result (no re-execution)', async () => {
+    await service.execAgent({
+      ...baseParams,
+      resumeToolResult: {
+        content: 'My favorite color is blue',
+        parentMessageId: 'tool-msg-1',
+        toolCallId: 'call_ask',
+      },
+    });
+
+    // Content, intervention, and optional form state share one row-locking
+    // first-winner boundary.
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          content: 'My favorite color is blue',
+          id: 'tool-msg-1',
+          intervention: {
+            resolutionRequestId: expect.stringMatching(/^legacy_/),
+            status: 'approved',
+          },
+        }),
+      ],
+      { publishResult: true },
+    );
+
+    // Resumes from `tool_result` — NOT `human_approved_tool` (which would
+    // re-dispatch the tool and overwrite the answer).
+    expect(mockCreateOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialContext: expect.objectContaining({
+          payload: expect.objectContaining({
+            assistantMessageId: 'assistant-msg-new',
+            parentMessageId: 'tool-msg-1',
+          }),
+          phase: 'tool_result',
+        }),
+      }),
+    );
+    const call = mockCreateOperation.mock.calls[0][0];
+    expect(call.initialContext.phase).not.toBe('human_approved_tool');
+  });
+
+  it.each(['submitted', 'skipped'] as const)(
+    'restores the isolated member bridge after a Web %s answer without groupId',
+    async (outcome) => {
+      const bridge = {
+        anchorMessageId: 'member-anchor',
+        expectedMembers: 1,
+        groupToolMessageId: 'group-tool',
+        mode: 'isolated' as const,
+        onComplete: 'resume' as const,
+        parentOperationId: 'supervisor-op',
+        threadId: 'thread-1',
+      };
+      mockFindById.mockImplementation(async (id: string) =>
+        id === pendingToolMessage.id ? { ...pendingToolMessage, sessionId: null } : undefined,
+      );
+      mockFindMessagePlugin.mockResolvedValue({
+        ...pendingToolPlugin,
+        intervention: { operationId: 'parked-member-op', status: 'pending' },
+      });
+      mockLoadGroupMemberBridge.mockResolvedValue({
+        agentId: 'agent-1',
+        bridge,
+        groupId: 'group-1',
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      });
+      mockThreadFindById.mockResolvedValue({
+        id: 'thread-1',
+        sourceMessageId: 'member-anchor',
+        status: 'inReview',
+        metadata: { operationId: 'parked-member-op', startedAt: '2026-11-01T00:00:00Z' },
+      });
+      vi.spyOn(service, 'retirePendingApprovalOperation').mockResolvedValue(undefined);
+
+      const result = await service.execAgent({
+        ...baseParams,
+        appContext: { scope: 'thread', threadId: 'thread-1', topicId: 'topic-1' },
+        resumeToolResult: {
+          content: outcome === 'submitted' ? 'Yes' : 'User skipped',
+          outcome,
+          parentMessageId: 'tool-msg-1',
+          toolCallId: 'call_ask',
+        },
+      });
+
+      expect(result).toMatchObject({
+        success: true,
+        groupMemberContinuation: true,
+        supervisorOperationId: 'supervisor-op',
+      });
+      expect(mockLoadGroupMemberBridge).toHaveBeenCalledWith('parked-member-op');
+      expect(mockCreateOperation).toHaveBeenCalledTimes(1);
+      const operation = mockCreateOperation.mock.calls[0][0];
+      expect(operation).toMatchObject({
+        appContext: {
+          agentId: 'agent-1',
+          groupId: 'group-1',
+          threadId: 'thread-1',
+          orchestrationRole: 'member',
+        },
+        initialContext: { phase: 'tool_result' },
+        parentOperationId: 'supervisor-op',
+      });
+      expect(operation.hooks.map((hook: { id: string }) => hook.id)).toEqual([
+        'thread-metadata-update',
+        'thread-completion',
+        'group-member-bridge',
+      ]);
+      const completionHook = operation.hooks.find(
+        (hook: { id: string }) => hook.id === 'thread-completion',
+      );
+      // Execute the real restored bridge: completion must reach the parked supervisor.
+      const finalState = { messages: [{ content: 'Member finished', role: 'assistant' }] };
+      const completionEvent = { finalState, operationId: result.operationId, reason: 'done' };
+      await completionHook.handler(completionEvent);
+      expect(mockThreadUpdate).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ status: 'completed' }),
+      );
+      await operation.hooks.at(-1).handler(completionEvent);
+      expect(mockCompleteGroupActionMember).toHaveBeenCalledWith({
+        ...bridge,
+        finalState,
+        operationId: result.operationId,
+        reason: 'done',
+      });
+    },
+  );
+
+  it('withholds a human tool answer before loading continuation history', async () => {
+    const secret = 'synthetic-private-answer';
+    const blocked = {
+      content: 'Tool result withheld by afterToolCall hook.',
+      error: 'hook_denied',
+      state: {
+        phase: 'afterToolCall',
+        type: 'blocked',
+        reason: 'Tool result withheld by afterToolCall hook.',
+      },
+      success: false,
+    };
+    mockControlToolResult.mockResolvedValue({
+      result: blocked,
+      blocked: true,
+      cancelled: false,
+    });
+    mockUpdateToolMessage.mockResolvedValue({ success: true });
+    await service.execAgent({
+      ...baseParams,
+      resumeToolResult: {
+        content: secret,
+        pluginState: { answer: secret },
+        parentMessageId: 'tool-msg-1',
+        toolCallId: 'call_ask',
+      },
+    });
+    expect(mockControlToolResult).toHaveBeenCalledWith({
+      operationId: undefined,
+      toolMessageId: 'tool-msg-1',
+      result: { content: secret, state: { answer: secret }, success: true },
+    });
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          content: blocked.content,
+          pluginState: blocked.state,
+          replacePluginState: true,
+        }),
+      ],
+      { publishResult: true },
+    );
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          content: blocked.content,
+          pluginError: 'hook_denied',
+          replacePluginState: true,
+        }),
+      ],
+      { publishResult: true },
+    );
+    expect(mockResolveHumanApproval.mock.invocationCallOrder[0]).toBeLessThan(
+      mockMessageQuery.mock.invocationCallOrder[0],
+    );
+    expect(JSON.stringify(mockCreateOperation.mock.calls[0][0].initialContext)).not.toContain(
+      secret,
+    );
+  });
+
+  it('does not start a continuation when withholding the persisted answer fails', async () => {
+    mockControlToolResult.mockResolvedValue({
+      blocked: true,
+      cancelled: false,
+      result: {
+        content: 'withheld',
+        state: { phase: 'afterToolCall', type: 'blocked' },
+        success: false,
+      },
+    });
+    mockResolveHumanApproval.mockRejectedValueOnce(new Error('Failed to publish tool result'));
+    await expect(
+      service.execAgent({
+        ...baseParams,
+        resumeToolResult: {
+          content: 'private answer',
+          parentMessageId: 'tool-msg-1',
+          toolCallId: 'call_ask',
+        },
+      }),
+    ).rejects.toThrow('Failed to publish tool result');
+    expect(mockCreateOperation).not.toHaveBeenCalled();
+    expect(mockMessageQuery).not.toHaveBeenCalled();
+  });
+
+  it('restores the original error on startup failure and clears it on an allowed retry', async () => {
+    const originalError = { message: 'old tool error' };
+    mockFindMessagePlugin.mockResolvedValue({ ...pendingToolPlugin, error: originalError });
+    mockControlToolResult.mockResolvedValueOnce({
+      blocked: true,
+      cancelled: false,
+      result: {
+        content: 'withheld',
+        error: 'hook_denied',
+        state: { phase: 'afterToolCall', type: 'blocked' },
+        success: false,
+      },
+    });
+    mockCreateOperation.mockRejectedValueOnce(new Error('startup failed'));
+    const params = {
+      ...baseParams,
+      resumeToolResult: {
+        content: 'answer',
+        parentMessageId: 'tool-msg-1',
+        toolCallId: 'call_ask',
+      },
+    };
+    await expect(service.execAgent(params)).resolves.toMatchObject({
+      success: false,
+      error: 'startup failed',
+    });
+    expect(mockRestoreHumanApproval).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'tool-msg-1', pluginError: originalError }),
+    ]);
+    mockControlToolResult.mockResolvedValueOnce({
+      blocked: false,
+      cancelled: false,
+      result: { content: 'answer', success: true },
+    });
+    await service.execAgent(params);
+    expect(mockResolveHumanApproval).toHaveBeenLastCalledWith(
+      [
+        expect.objectContaining({
+          content: 'answer',
+          pluginError: null,
+        }),
+      ],
+      { publishResult: true },
+    );
+  });
+
+  it('persists pluginState when provided', async () => {
+    await service.execAgent({
+      ...baseParams,
+      resumeToolResult: {
+        content: 'blue',
+        parentMessageId: 'tool-msg-1',
+        pluginState: { askUserAnswers: { 'favorite color?': 'blue' } },
+        toolCallId: 'call_ask',
+      },
+    });
+
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          pluginState: { askUserAnswers: { 'favorite color?': 'blue' } },
+        }),
+      ],
+      { publishResult: true },
+    );
+  });
+
+  it('does not persist pluginState when omitted', async () => {
+    await service.execAgent({
+      ...baseParams,
+      resumeToolResult: {
+        content: 'blue',
+        parentMessageId: 'tool-msg-1',
+        toolCallId: 'call_ask',
+      },
+    });
+
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [expect.objectContaining({ pluginState: undefined })],
+      { publishResult: true },
+    );
+  });
+
+  describe('validation guards', () => {
+    it('throws when the parent message is not role=tool', async () => {
+      mockFindById.mockResolvedValue({ ...pendingToolMessage, role: 'user' });
+
+      await expect(
+        service.execAgent({
+          ...baseParams,
+          resumeToolResult: {
+            content: 'blue',
+            parentMessageId: 'tool-msg-1',
+            toolCallId: 'call_ask',
+          },
+        }),
+      ).rejects.toThrow(/role='tool'/);
+    });
+
+    it('throws when the stored tool_call_id does not match the resume request', async () => {
+      mockFindMessagePlugin.mockResolvedValue({ ...pendingToolPlugin, toolCallId: 'call_other' });
+
+      await expect(
+        service.execAgent({
+          ...baseParams,
+          resumeToolResult: {
+            content: 'blue',
+            parentMessageId: 'tool-msg-1',
+            toolCallId: 'call_ask',
+          },
+        }),
+      ).rejects.toThrow(/toolCallId mismatch/);
+    });
+
+    it('throws when no plugin row exists for the target message', async () => {
+      mockFindMessagePlugin.mockResolvedValue(undefined);
+
+      await expect(
+        service.execAgent({
+          ...baseParams,
+          resumeToolResult: {
+            content: 'blue',
+            parentMessageId: 'tool-msg-1',
+            toolCallId: 'call_ask',
+          },
+        }),
+      ).rejects.toThrow(/no plugin row/);
+    });
+  });
+});

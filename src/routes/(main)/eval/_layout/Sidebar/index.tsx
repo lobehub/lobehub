@@ -1,21 +1,13 @@
 'use client';
 
-import { memo } from 'react';
+import { NavPanelPortal } from '@/features/NavPanel/NavPanelPortal';
 
-import { NavPanelPortal } from '@/features/NavPanel';
-import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import EvalSidebarContent from './Content';
 
-import Body from './Body';
-import Header from './Header';
-
-const Sidebar = memo(() => {
-  return (
-    <NavPanelPortal navKey="eval">
-      <SideBarLayout body={<Body />} header={<Header />} />
-    </NavPanelPortal>
-  );
-});
-
-Sidebar.displayName = 'EvalSidebar';
+const Sidebar = () => (
+  <NavPanelPortal navKey="eval">
+    <EvalSidebarContent />
+  </NavPanelPortal>
+);
 
 export default Sidebar;

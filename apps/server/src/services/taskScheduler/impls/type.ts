@@ -1,6 +1,7 @@
 export interface ScheduleNextTopicParams {
   delay?: number; // delay in seconds, default 0
   taskId: string;
+  tickToken?: string;
   userId: string;
 }
 

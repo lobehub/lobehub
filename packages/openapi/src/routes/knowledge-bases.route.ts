@@ -1,8 +1,8 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
 import { getAllScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { KnowledgeBaseController } from '../controllers/knowledge-base.controller';
 import { requireAnyPermission } from '../middleware';
 import { requireAuth } from '../middleware/auth';
@@ -30,7 +30,10 @@ const app = new Hono();
 app.get(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('KNOWLEDGE_BASE_READ'), 'You do not have permission to view knowledge base list'),
+  requireAnyPermission(
+    getAllScopePermissions('KNOWLEDGE_BASE_READ'),
+    'You do not have permission to view knowledge base list',
+  ),
   zValidator('query', KnowledgeBaseListQuerySchema),
   async (c) => {
     const controller = new KnowledgeBaseController();
@@ -53,7 +56,10 @@ app.get(
 app.post(
   '/',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('KNOWLEDGE_BASE_CREATE'), 'You do not have permission to create a knowledge base'),
+  requireAnyPermission(
+    getAllScopePermissions('KNOWLEDGE_BASE_CREATE'),
+    'You do not have permission to create a knowledge base',
+  ),
   zValidator('json', CreateKnowledgeBaseSchema),
   async (c) => {
     const controller = new KnowledgeBaseController();
@@ -71,7 +77,10 @@ app.post(
 app.get(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('KNOWLEDGE_BASE_READ'), 'You do not have permission to view knowledge base details'),
+  requireAnyPermission(
+    getAllScopePermissions('KNOWLEDGE_BASE_READ'),
+    'You do not have permission to view knowledge base details',
+  ),
   zValidator('param', KnowledgeBaseIdParamSchema),
   async (c) => {
     const controller = new KnowledgeBaseController();
@@ -97,7 +106,10 @@ app.get(
 app.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'), 'You do not have permission to update a knowledge base'),
+  requireAnyPermission(
+    getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'),
+    'You do not have permission to update a knowledge base',
+  ),
   zValidator('param', KnowledgeBaseIdParamSchema),
   zValidator('json', UpdateKnowledgeBaseSchema),
   async (c) => {
@@ -116,7 +128,10 @@ app.patch(
 app.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('KNOWLEDGE_BASE_DELETE'), 'You do not have permission to delete a knowledge base'),
+  requireAnyPermission(
+    getAllScopePermissions('KNOWLEDGE_BASE_DELETE'),
+    'You do not have permission to delete a knowledge base',
+  ),
   zValidator('param', KnowledgeBaseIdParamSchema),
   async (c) => {
     const controller = new KnowledgeBaseController();
@@ -138,7 +153,7 @@ app.delete(
  * - keyword: string (optional) - Search keyword (matches file name)
  *
  * Notes:
- * - When neither page nor pageSize is provided, returns all data without pagination
+ * - When page/pageSize are omitted, defaults to page 1 with 20 items
  */
 app.get(
   '/:id/files',
@@ -162,7 +177,10 @@ app.get(
 app.post(
   '/:id/files/batch',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'), 'You do not have permission to update knowledge base files'),
+  requireAnyPermission(
+    getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'),
+    'You do not have permission to update knowledge base files',
+  ),
   zValidator('param', KnowledgeBaseIdParamSchema),
   zValidator('json', KnowledgeBaseFileBatchSchema),
   async (c) => {
@@ -178,7 +196,10 @@ app.post(
 app.delete(
   '/:id/files/batch',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'), 'You do not have permission to update knowledge base files'),
+  requireAnyPermission(
+    getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'),
+    'You do not have permission to update knowledge base files',
+  ),
   zValidator('param', KnowledgeBaseIdParamSchema),
   zValidator('json', KnowledgeBaseFileBatchSchema),
   async (c) => {
@@ -194,7 +215,10 @@ app.delete(
 app.post(
   '/:id/files/move',
   requireAuth,
-  requireAnyPermission(getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'), 'You do not have permission to update knowledge base files'),
+  requireAnyPermission(
+    getAllScopePermissions('KNOWLEDGE_BASE_UPDATE'),
+    'You do not have permission to update knowledge base files',
+  ),
   zValidator('param', KnowledgeBaseIdParamSchema),
   zValidator('json', MoveKnowledgeBaseFilesSchema),
   async (c) => {

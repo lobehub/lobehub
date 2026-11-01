@@ -19,13 +19,13 @@ tags:
 
 ### ESLint
 
-我们的项目使用 ESLint 来检查 JavaScript 代码中的问题。您可以在项目根目录下找到 `.eslintrc.js` 文件，其中包含了我们对 `@lobehub/lint` 的 ESLint 配置的扩展和自定义规则。
+我们的项目使用 ESLint 来检查 JavaScript 代码中的问题。您可以在项目根目录下找到 `eslint.config.mjs` flat config 文件，其中包含了我们对 `@lobehub/lint` 的 ESLint 配置的扩展和自定义规则。
 
 为了与 Next.js 框架兼容，我们在配置中添加了 `plugin:@next/next/recommended`。此外，我们禁用了一些规则，以适应我们项目的特定需求。
 
 ### Prettier
 
-Prettier 负责代码格式化，以保证代码的一致性。您可以在 `.prettierrc.js` 中找到我们的 Prettier 配置，它是从 `@lobehub/lint` 导入的。
+Prettier 负责代码格式化，以保证代码的一致性。您可以在 `prettier.config.mjs` 中找到我们的 Prettier 配置，它是从 `@lobehub/lint` 导入的。
 
 在保存文件时，建议您配置您的编辑器以自动运行 Prettier。
 
@@ -70,7 +70,7 @@ Gitmoji commit messages 使用特定的 emoji 来表示提交的类型或意图�
 
 ### Commitlint
 
-为了确保提交信息的一致性，我们使用 `commitlint` 来检查提交信息格式。您可以在 `.commitlintrc.js` 配置文件中找到相关规则。
+为了确保提交信息的一致性，我们使用 `commitlint` 来检查提交信息格式。您可以在 `commitlint.config.mjs` 配置文件中找到相关规则。
 
 在您提交代码之前，请确保您的提交信息遵循我们的规范。
 
@@ -146,29 +146,8 @@ git commit -m "📝 docs: 更新安装指南"
 
 请使用 `.github/PULL_REQUEST_TEMPLATE.md` 中的 PR 模板：
 
-```markdown
-## Description
-
-清晰描述此 PR 的改动内容。
-
-## Type of Change
-
-- [ ] ✨ 新功能
-- [ ] 🐛 Bug 修复
-- [ ] 📝 文档
-- [ ] ♻️ 重构
-
-## Checklist
-
-- [ ] 代码符合项目风格指南
-- [ ] 已添加/更新测试
-- [ ] 已更新文档
-- [ ] 所有测试通过
-
-## Related Issues
-
-Fixes #123
-```
+- **Human** — 改了什么、截图、如何测试、验收记录，以及关联 issue（`Fixes #123`、`Fixes LOBE-xxx`）
+- **AI** — 人写的改动删掉这一节。Agent 写的改动，如果作者是外部 collaborator 或其他外部贡献者，模板里的注释指令会要求这个 agent 填写 harness、模型、thinking level，以及这次会话里的全部 user prompt（按顺序保留）。发布前由作者审阅这段文字，敏感内容打码。lobehub organization 的正式成员删掉这一节。
 
 **PR 标题中带有 `✨ feat:` 或 `🐛 fix:` 前缀时将自动触发新版本发布。** 不需要发布新版本的改动请使用其他前缀。
 

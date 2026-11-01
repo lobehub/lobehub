@@ -1,6 +1,5 @@
 import { type ItemType } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { LibraryBig } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -24,7 +23,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
-    gap: 8px;
+    gap: 12px;
     align-items: center;
 
     /* width 320 + margin-inline -12 anchors the submenu to 320px (matching the skill
@@ -127,6 +126,9 @@ export const useControls = ({
     ...fileItems,
   ];
 
+  // The footer is the only entry into the full library / file picker, so it stays
+  // rendered when nothing is attached yet — otherwise the submenu shows "no related
+  // files or libraries" with no way to attach the first one.
   const footer = (
     <button
       className={cx(styles.viewMore)}
@@ -136,8 +138,10 @@ export const useControls = ({
         openAttachKnowledgeModal();
       }}
     >
-      <Icon icon={LibraryBig} size={16} />
-      <span className={cx(styles.viewMoreLabel)}>{t('knowledgeBase.viewMore')}</span>
+      <Icon color={cssVar.colorTextSecondary} icon={LibraryBig} size={14} />
+      <span className={cx(styles.viewMoreLabel)}>
+        {relatedGroups.length > 0 ? t('knowledgeBase.viewMore') : t('knowledgeBase.related.browse')}
+      </span>
     </button>
   );
 

@@ -6,10 +6,10 @@
  * It must be dynamically imported to prevent loading errors on Windows/Linux.
  */
 import { shell } from 'electron';
-import * as electronIs from 'electron-is';
 import type * as MacPermissions from 'node-mac-permissions';
 
 import { createLogger } from './logger';
+import * as electronIs from './platform';
 
 // Type definitions - use module types when available, fallback to local definition
 // Note: We don't import the module statically, so we need local type definitions
@@ -81,11 +81,7 @@ const logger = createLogger('utils:permissions');
  * Permission status mapping between node-mac-permissions and our internal representation
  */
 export type PermissionStatus =
-  | 'authorized'
-  | 'denied'
-  | 'not-determined'
-  | 'restricted'
-  | 'granted'; // alias for authorized
+  'authorized' | 'denied' | 'not-determined' | 'restricted' | 'granted'; // alias for authorized
 
 /**
  * Normalize permission status to a consistent format

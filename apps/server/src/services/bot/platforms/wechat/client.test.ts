@@ -1,5 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as PublicUrlFetchModule from '../publicUrlFetch';
+
+// These tests stub `fetch` directly; the SSRF guard in front of it resolves DNS
+// for real, which has nothing to do with what they assert. Its own behaviour is
+// covered in publicUrlFetch.test.ts.
+vi.mock('../publicUrlFetch', async () => ({
+  // Spread the real module: a full mock silently drops every export it
+  // does not name, so adding one to publicUrlFetch breaks suites that
+  // never cared about it.
+  ...(await vi.importActual<typeof PublicUrlFetchModule>('../publicUrlFetch')),
+  fetchPublicUrl: async (url: string, timeoutMs: number) => ({
+    dispose: async () => undefined,
+    response: await fetch(url, { signal: AbortSignal.timeout(timeoutMs) }),
+  }),
+}));
+
 const mockCreateWechatAdapter = vi.hoisted(() => vi.fn());
 const mockGetUpdates = vi.hoisted(() => vi.fn());
 const mockStartTyping = vi.hoisted(() => vi.fn());
@@ -32,16 +48,19 @@ const WechatUploadMediaType = vi.hoisted(() => ({
 vi.mock('@lobechat/chat-adapter-wechat', () => ({
   createWechatAdapter: mockCreateWechatAdapter,
   downloadMediaFromRawMessage: mockDownloadMediaFromRawMessage,
+  getWechatTextSendCount: (text: string) => Math.max(1, Math.ceil(text.length / 2000)),
   MessageItemType,
   MessageState,
   MessageType,
-  WechatApiClient: vi.fn().mockImplementation(() => ({
-    getUpdates: mockGetUpdates,
-    sendItem: mockSendItem,
-    sendMessage: mockSendMessage,
-    startTyping: mockStartTyping,
-    uploadCdnMedia: mockUploadCdnMedia,
-  })),
+  WechatApiClient: vi.fn().mockImplementation(function () {
+    return {
+      getUpdates: mockGetUpdates,
+      sendItem: mockSendItem,
+      sendMessage: mockSendMessage,
+      startTyping: mockStartTyping,
+      uploadCdnMedia: mockUploadCdnMedia,
+    };
+  }),
   WechatUploadMediaType,
 }));
 
@@ -50,7 +69,12 @@ const { WechatClientFactory } = await import('./client');
 describe('WechatGatewayClient', () => {
   const runtimeRedis = {
     del: vi.fn(),
+    expire: vi.fn(),
     get: vi.fn(),
+    hgetall: vi.fn(),
+    hincrby: vi.fn(),
+    hset: vi.fn(),
+    pttl: vi.fn(),
     set: vi.fn(),
   };
 
@@ -60,6 +84,11 @@ describe('WechatGatewayClient', () => {
     runtimeRedis.get.mockResolvedValue(null);
     runtimeRedis.set.mockResolvedValue('OK');
     runtimeRedis.del.mockResolvedValue(1);
+    runtimeRedis.expire.mockResolvedValue(1);
+    runtimeRedis.hgetall.mockResolvedValue({});
+    runtimeRedis.hincrby.mockResolvedValue(9);
+    runtimeRedis.hset.mockResolvedValue(1);
+    runtimeRedis.pttl.mockResolvedValue(-1);
   });
 
   it('waits for the initial readiness probe before resolving start', async () => {
@@ -67,19 +96,17 @@ describe('WechatGatewayClient', () => {
     let resolveLoop: ((value: any) => void) | undefined;
 
     mockGetUpdates
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveProbe = resolve;
-          }),
-      )
-      .mockImplementationOnce(
-        (_cursor?: string, signal?: AbortSignal) =>
-          new Promise((resolve, reject) => {
-            resolveLoop = resolve;
-            signal?.addEventListener('abort', () => reject(new Error('aborted')));
-          }),
-      );
+      .mockImplementationOnce(function () {
+        return new Promise((resolve) => {
+          resolveProbe = resolve;
+        });
+      })
+      .mockImplementationOnce(function (_cursor?: string, signal?: AbortSignal) {
+        return new Promise((resolve, reject) => {
+          resolveLoop = resolve;
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      });
 
     const client = new WechatClientFactory().createClient(
       {
@@ -143,19 +170,22 @@ describe('WechatGatewayClient', () => {
         ],
         ret: 0,
       })
-      .mockImplementationOnce(
-        (_cursor?: string, signal?: AbortSignal) =>
-          new Promise((resolve, reject) => {
-            resolveLoop = resolve;
-            signal?.addEventListener('abort', () => reject(new Error('aborted')));
-          }),
-      );
+      .mockImplementationOnce(function (_cursor?: string, signal?: AbortSignal) {
+        return new Promise((resolve, reject) => {
+          resolveLoop = resolve;
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      });
 
     const fetchMock = vi.mocked(fetch);
     const client = new WechatClientFactory().createClient(
       {
         applicationId: 'wechat-app',
-        credentials: { botId: 'bot-id', botToken: 'bot-token' },
+        credentials: {
+          botId: 'bot-id',
+          botToken: 'bot-token',
+          webhookToken: 'gateway-service-token',
+        },
         platform: 'wechat',
         settings: {},
       },
@@ -173,8 +203,15 @@ describe('WechatGatewayClient', () => {
       'https://example.com/api/agent/webhooks/wechat/wechat-app',
       expect.objectContaining({
         body: expect.stringContaining('"from_user_id":"user-1@im.wechat"'),
+        headers: {
+          'Authorization': 'Bearer gateway-service-token',
+          'Content-Type': 'application/json',
+        },
         method: 'POST',
       }),
+    );
+    expect(runtimeRedis.hset.mock.invocationCallOrder[0]).toBeLessThan(
+      fetchMock.mock.invocationCallOrder[0],
     );
 
     await client.stop();
@@ -194,6 +231,33 @@ describe('WechatGatewayClient', () => {
         { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
       ),
     ).toThrowError('Bot Token is required');
+  });
+
+  it('tracks messages sent directly by the Chat SDK adapter', async () => {
+    const client = new WechatClientFactory().createClient(
+      {
+        applicationId: 'wechat-app',
+        credentials: { botId: 'bot-id', botToken: 'bot-token' },
+        platform: 'wechat',
+        settings: {},
+      },
+      { appUrl: 'https://example.com', redisClient: runtimeRedis as any },
+    );
+
+    client.createAdapter();
+    const adapterConfig = mockCreateWechatAdapter.mock.calls[0][0];
+    runtimeRedis.hgetall.mockResolvedValueOnce({
+      refreshedAt: '1',
+      remaining: '10',
+      token: 'ctx-1',
+    });
+    await adapterConfig.onBeforeSendMessage({ count: 1, toUserId: 'user-1@im.wechat' });
+
+    expect(runtimeRedis.hincrby).toHaveBeenCalledWith(
+      'wechat:ctx-window:wechat-app:user-1@im.wechat',
+      'remaining',
+      -1,
+    );
   });
 
   describe('extractFiles', () => {
@@ -343,7 +407,14 @@ describe('WechatGatewayClient', () => {
       const voiceBuf = Buffer.from('voice');
       mockDownloadMediaFromRawMessage.mockResolvedValue([
         { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', type: 'image', url: '' },
-        { buffer: voiceBuf, mimeType: 'audio/silk', type: 'audio', url: '' },
+        {
+          buffer: voiceBuf,
+          mimeType: 'audio/wav',
+          name: 'voice.wav',
+          size: 5,
+          type: 'audio',
+          url: '',
+        },
       ]);
       const client = createClient();
       const result = await client.extractFiles!(
@@ -357,7 +428,7 @@ describe('WechatGatewayClient', () => {
       expect(result).toEqual({
         files: [
           { buffer: imageBuf, mimeType: 'image/jpeg', name: 'image.jpg', size: undefined },
-          { buffer: voiceBuf, mimeType: 'audio/silk', name: undefined, size: undefined },
+          { buffer: voiceBuf, mimeType: 'audio/wav', name: 'voice.wav', size: 5 },
         ],
         warnings: undefined,
       });
@@ -497,6 +568,32 @@ describe('WechatGatewayClient', () => {
       expect(mockSendMessage).toHaveBeenCalledWith('user-4@im.wechat', 'text only', 'ctx-4');
       expect(mockUploadCdnMedia).not.toHaveBeenCalled();
       expect(mockSendItem).not.toHaveBeenCalled();
+    });
+
+    it('tracks every long-text chunk against the send-window quota', async () => {
+      const client = createClient();
+      const messenger = client.getMessenger('wechat:p2p:user-5@im.wechat');
+
+      runtimeRedis.get.mockResolvedValueOnce('ctx-5');
+      runtimeRedis.hgetall.mockResolvedValueOnce({
+        refreshedAt: '1',
+        remaining: '10',
+        token: 'ctx-5',
+      });
+      runtimeRedis.hincrby.mockResolvedValueOnce(7);
+
+      await messenger.createMessage('a'.repeat(4500));
+
+      await vi.waitFor(() => {
+        expect(runtimeRedis.hincrby).toHaveBeenCalledWith(
+          'wechat:ctx-window:wechat-app:user-5@im.wechat',
+          'remaining',
+          -3,
+        );
+      });
+      expect(runtimeRedis.hincrby.mock.invocationCallOrder[0]).toBeLessThan(
+        mockSendMessage.mock.invocationCallOrder[0],
+      );
     });
   });
 });

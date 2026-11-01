@@ -6,7 +6,7 @@
  * InMemory implementations when Redis is not available (test environment).
  */
 import { type LobeChatDatabase } from '@lobechat/database';
-import { agents, messages, threads, topics } from '@lobechat/database/schemas';
+import { agents, chatGroups, messages, threads, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { and, eq } from 'drizzle-orm';
 import OpenAI from 'openai';
@@ -30,14 +30,20 @@ process.env.OPENAI_API_KEY = 'sk-test-fake-api-key-for-testing';
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 // Mock FileService to avoid S3 environment variable requirements
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockImplementation((path: string) => (path ? `/files${path}` : null)),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockImplementation(function (path: string) {
+        return path ? `/files${path}` : null;
+      }),
+    };
+  }),
 }));
 
 let mockResponsesCreate: any;
@@ -168,10 +174,34 @@ describe('execAgent', () => {
         .insert(topics)
         .values({ agentId: testAgentId, title: 'Existing Topic', userId })
         .returning();
+      const [seedUserMessage] = (await serverDB
+        .insert(messages)
+        .values({
+          agentId: testAgentId,
+          content: 'Initial question',
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          role: 'user',
+          topicId: existingTopic.id,
+          userId,
+        })
+        .returning()) as any[];
+      const [latestAssistantMessage] = (await serverDB
+        .insert(messages)
+        .values({
+          agentId: testAgentId,
+          content: 'Initial answer',
+          createdAt: new Date('2024-01-01T00:00:01Z'),
+          parentId: seedUserMessage.id,
+          role: 'assistant',
+          topicId: existingTopic.id,
+          userId,
+        })
+        .returning()) as any[];
 
       const result = await caller.execAgent({
         agentId: testAgentId,
         appContext: { topicId: existingTopic.id },
+        autoStart: false,
         prompt: 'Follow up question',
       });
 
@@ -180,6 +210,20 @@ describe('execAgent', () => {
       const allTopics = await serverDB.select().from(topics).where(eq(topics.agentId, testAgentId));
       expect(allTopics).toHaveLength(1);
       expect(allTopics[0].id).toBe(existingTopic.id);
+
+      const allMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.topicId, existingTopic.id));
+      const followUpUserMessage = allMessages.find(
+        (message) => message.role === 'user' && message.content === 'Follow up question',
+      );
+      expect(followUpUserMessage?.parentId).toBe(latestAssistantMessage.id);
+
+      const followUpAssistantMessage = allMessages.find(
+        (message) => message.role === 'assistant' && message.parentId === followUpUserMessage?.id,
+      );
+      expect(followUpAssistantMessage).toBeDefined();
     });
   });
 
@@ -255,6 +299,57 @@ describe('execAgent', () => {
 
       expect(result.success).toBe(true);
       expect(result.operationId).toBeDefined();
+    });
+
+    // Regression: group conversation that reaches
+    // execAgent without a pre-created topicId must persist groupId on BOTH the
+    // new topic AND the user/assistant messages. Otherwise:
+    //   - the topic is group-less and never appears in the group sidebar
+    //     (which queries `topics.groupId`), and
+    //   - the messages are group-less, so reopening the topic returns an empty
+    //     conversation (the group read filters on `messages.groupId`).
+    it('should persist groupId on the topic and messages when running in a group context', async () => {
+      mockResponsesCreate.mockResolvedValue(
+        createMockResponsesAPIStream('Hello from group context') as any,
+      );
+
+      const [group] = await serverDB
+        .insert(chatGroups)
+        .values({ title: 'Regression Group', userId })
+        .returning();
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      // autoStart:false — we only assert topic/message *creation* carries
+      // groupId; no need to run the full agent loop (keeps the test fast and
+      // deterministic). The user message + assistant placeholder are still
+      // created before the run gate.
+      const result = await caller.execAgent({
+        agentId: testAgentId,
+        appContext: { groupId: group.id },
+        autoStart: false,
+        prompt: 'Hello, group via execAgent',
+      });
+
+      expect(result.success).toBe(true);
+
+      const createdTopics = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.agentId, testAgentId));
+
+      expect(createdTopics).toHaveLength(1);
+      expect(createdTopics[0].groupId).toBe(group.id);
+
+      // The user + assistant turn must also carry groupId, or the group read
+      // path (messageModel.query filters messages.groupId) returns nothing.
+      const createdMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.topicId, createdTopics[0].id));
+
+      expect(createdMessages.length).toBeGreaterThanOrEqual(2);
+      expect(createdMessages.every((m) => m.groupId === group.id)).toBe(true);
     });
   });
 
@@ -559,7 +654,7 @@ describe('execAgent', () => {
 
     it('should execute tool call flow: LLM -> search tool -> LLM -> finish', async () => {
       let callCount = 0;
-      mockResponsesCreate.mockImplementation(() => {
+      mockResponsesCreate.mockImplementation(function () {
         callCount++;
         if (callCount === 1) {
           return Promise.resolve(createMockResponsesAPIStreamWithTools() as any);
@@ -640,7 +735,7 @@ describe('execAgent', () => {
 
     it('should create correct parentId chain: user -> assistant1 -> tool -> assistant2', async () => {
       let callCount = 0;
-      mockResponsesCreate.mockImplementation(() => {
+      mockResponsesCreate.mockImplementation(function () {
         callCount++;
         if (callCount === 1) {
           return Promise.resolve(createMockResponsesAPIStreamWithTools() as any);

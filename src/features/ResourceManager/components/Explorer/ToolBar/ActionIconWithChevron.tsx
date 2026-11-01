@@ -1,5 +1,4 @@
-import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Button, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { type LucideIcon } from 'lucide-react';
 import { ChevronDownIcon } from 'lucide-react';
 import { type ComponentProps } from 'react';

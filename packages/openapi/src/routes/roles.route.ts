@@ -1,8 +1,8 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
 import { getScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { RoleController } from '../controllers/role.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';
@@ -44,7 +44,10 @@ RolesRoutes.get(
 RolesRoutes.post(
   '/',
   requireAuth,
-  requireAnyPermission(getScopePermissions('RBAC_ROLE_CREATE', ['ALL']), 'You do not have permission to create a role'),
+  requireAnyPermission(
+    getScopePermissions('RBAC_ROLE_CREATE', ['ALL']),
+    'You do not have permission to create a role',
+  ),
   zValidator('json', CreateRoleRequestSchema),
   async (c) => {
     const roleController = new RoleController();
@@ -100,7 +103,10 @@ RolesRoutes.get(
 RolesRoutes.patch(
   '/:id/permissions',
   requireAuth,
-  requireAnyPermission(getScopePermissions('RBAC_ROLE_UPDATE', ['ALL']), 'You do not have permission to update role permissions'),
+  requireAnyPermission(
+    getScopePermissions('RBAC_ROLE_UPDATE', ['ALL']),
+    'You do not have permission to update role permissions',
+  ),
   zValidator('param', RoleIdParamSchema),
   zValidator('json', UpdateRolePermissionsRequestSchema),
   async (c) => {
@@ -137,7 +143,10 @@ RolesRoutes.delete(
 RolesRoutes.patch(
   '/:id',
   requireAuth,
-  requireAnyPermission(getScopePermissions('RBAC_ROLE_UPDATE', ['ALL']), 'You do not have permission to update role information'),
+  requireAnyPermission(
+    getScopePermissions('RBAC_ROLE_UPDATE', ['ALL']),
+    'You do not have permission to update role information',
+  ),
   zValidator('param', RoleIdParamSchema),
   zValidator('json', UpdateRoleRequestSchema),
   async (c) => {
@@ -154,7 +163,10 @@ RolesRoutes.patch(
 RolesRoutes.delete(
   '/:id',
   requireAuth,
-  requireAnyPermission(getScopePermissions('RBAC_ROLE_DELETE', ['ALL']), 'You do not have permission to delete a role'),
+  requireAnyPermission(
+    getScopePermissions('RBAC_ROLE_DELETE', ['ALL']),
+    'You do not have permission to delete a role',
+  ),
   zValidator('param', RoleIdParamSchema),
   async (c) => {
     const roleController = new RoleController();

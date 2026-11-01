@@ -1,2 +1,2 @@
-export { PythonInterpreter } from './interpreter';
+export { getPythonInterpreter } from './interpreter';
 export * from './types';

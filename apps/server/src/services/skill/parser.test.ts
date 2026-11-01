@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { unzip, zip } from 'fflate';
 import { sha256 } from 'js-sha256';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { SkillManifestError, SkillParseError } from './errors';
 import { SkillParser } from './parser';
@@ -31,6 +31,24 @@ describe('SkillParser', () => {
   const parser = new SkillParser();
 
   describe('parseSkillMd', () => {
+    it('rejects JavaScript frontmatter without executing it', () => {
+      const executed = vi.fn();
+      vi.stubGlobal('__skillFrontmatterExecuted', executed);
+      const content = `---js
+(() => { globalThis.__skillFrontmatterExecuted(); throw new Error('Executed frontmatter'); })()
+---
+# Skill
+
+Skill description.`;
+
+      try {
+        expect(() => parser.parseSkillMd(content)).toThrow(SkillParseError);
+        expect(executed).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it('should parse valid SKILL.md with frontmatter', () => {
       const content = `---
 name: test-skill
@@ -137,6 +155,276 @@ description: test
       const result = parser.parseSkillMd(content);
 
       expect(result.content).toBe('Content with whitespace');
+    });
+  });
+
+  describe('parseSkillMd without front-matter (market skills)', () => {
+    // Real shape of market package brainbytes-dev-everything-claude-finance-aml-kyc
+    const amlKycSkillMd = `# AML/KYC Compliance
+
+> Customer due diligence, suspicious activity reporting, PEP screening, sanctions — Anti-Money Laundering and Know Your Customer compliance.
+
+## When to Activate
+
+- Customer onboarding and KYC process design
+- Risk classification of customers (CDD, EDD, SDD)
+`;
+
+    // Real shape of market package openclaw-skills-a-stock-watcher
+    const stockWatcherSkillMd = `# A 股盯盘技能 - 多数据源增强版
+
+基于东方财富/腾讯财经/新浪财经的 A 股实时监控技能。
+
+## 功能
+
+### 基础功能
+- 📈 **实时查价** - 获取 A 股实时行情（延迟 5-15 秒）
+`;
+
+    it('should derive name from H1 and description from the blockquote', () => {
+      const result = parser.parseSkillMd(amlKycSkillMd);
+
+      expect(result.manifest.name).toBe('AML/KYC Compliance');
+      expect(result.manifest.description).toBe(
+        'Customer due diligence, suspicious activity reporting, PEP screening, sanctions — Anti-Money Laundering and Know Your Customer compliance.',
+      );
+      expect(result.content).toBe(amlKycSkillMd.trim());
+    });
+
+    it('should derive description from the first paragraph after the H1', () => {
+      const result = parser.parseSkillMd(stockWatcherSkillMd);
+
+      expect(result.manifest.name).toBe('A 股盯盘技能 - 多数据源增强版');
+      expect(result.manifest.description).toBe(
+        '基于东方财富/腾讯财经/新浪财经的 A 股实时监控技能。',
+      );
+    });
+
+    it('should use fallbackName when there is no H1', () => {
+      const result = parser.parseSkillMd(
+        'Plain instructions for the agent.\n\n## Usage\n\nDo it.',
+        {
+          fallbackName: 'my-market-skill',
+        },
+      );
+
+      expect(result.manifest.name).toBe('my-market-skill');
+      expect(result.manifest.description).toBe('Plain instructions for the agent.');
+    });
+
+    it('should prefer the H1 over fallbackName', () => {
+      const result = parser.parseSkillMd(amlKycSkillMd, { fallbackName: 'identifier' });
+
+      expect(result.manifest.name).toBe('AML/KYC Compliance');
+    });
+
+    it('should skip code fences and cap long derived descriptions', () => {
+      const long = 'word '.repeat(200).trim();
+      const result = parser.parseSkillMd(`# Title\n\n\`\`\`bash\nnpm i x\n\`\`\`\n\n${long}\n`);
+
+      expect(result.manifest.name).toBe('Title');
+      expect(result.manifest.description!.length).toBeLessThanOrEqual(300);
+      expect(result.manifest.description!.endsWith('…')).toBe(true);
+      expect(result.manifest.description).not.toContain('npm');
+    });
+
+    it('should still reject a genuinely empty SKILL.md', () => {
+      expect(() => parser.parseSkillMd('', { fallbackName: 'x' })).toThrow(SkillManifestError);
+      expect(() =>
+        parser.parseSkillMd('\n\n## Only a subheading\n', { fallbackName: 'x' }),
+      ).toThrow(SkillManifestError);
+    });
+
+    it('should still reject a heading-only SKILL.md (no description text)', () => {
+      expect(() => parser.parseSkillMd('# Just a title\n')).toThrow(SkillManifestError);
+    });
+
+    it('should not derive fields when front-matter is present but incomplete', () => {
+      const content = `---
+name: test-skill
+---
+# Title
+
+Some paragraph that must not become the description.`;
+
+      expect(() => parser.parseSkillMd(content)).toThrow(SkillManifestError);
+    });
+
+    it('should not derive fields when an empty or comment-only front-matter block is present', () => {
+      // gray-matter parses both to `{}`, same as an absent block — the block
+      // must still be authoritative.
+      const body = '# Title\n\nBody that must not become the description.';
+      expect(() => parser.parseSkillMd(`---\n---\n${body}`)).toThrow(SkillManifestError);
+      expect(() => parser.parseSkillMd(`---\n# just a yaml comment\n---\n${body}`)).toThrow(
+        SkillManifestError,
+      );
+    });
+
+    it('should still take the H1 and its summary when a preamble line precedes the title', () => {
+      const result = parser.parseSkillMd(
+        '[English](README.md) | [中文](README.zh.md)\n\n# Stock Watcher\n\nWatches A-share prices and alerts on moves.\n',
+        { fallbackName: 'openclaw-skills-a-stock-watcher' },
+      );
+
+      expect(result.manifest.name).toBe('Stock Watcher');
+      expect(result.manifest.description).toBe('Watches A-share prices and alerts on moves.');
+    });
+
+    it('should skip linked badge lines after the title', () => {
+      const result = parser.parseSkillMd(
+        '# Stock Watcher\n\n[![Build](https://img.shields.io/badge/ci-passing-green.svg)](https://ci.example.com) [![npm](https://img.shields.io/npm/v/x.svg)](https://npm.im/x)\n\nWatches A-share prices and alerts on moves.\n',
+      );
+
+      expect(result.manifest.name).toBe('Stock Watcher');
+      expect(result.manifest.description).toBe('Watches A-share prices and alerts on moves.');
+    });
+
+    it('should keep a nested fence inside its longer outer fence', () => {
+      const result = parser.parseSkillMd(
+        '# Title\n\n````md\n```js\ninternal code\n```\n````\n\nReal summary.\n',
+      );
+
+      expect(result.manifest.description).toBe('Real summary.');
+    });
+
+    it('should treat an unterminated HTML comment as hiding the rest of the file', () => {
+      expect(() =>
+        parser.parseSkillMd('# Title\n\n<!--\ninternal metadata\n', { fallbackName: 'x' }),
+      ).toThrow(SkillManifestError);
+    });
+
+    it('should ignore a literal comment opener inside a fenced example', () => {
+      const result = parser.parseSkillMd(
+        '# Title\n\n```html\n<!-- example opener\n```\n\nReal summary.\n',
+      );
+
+      expect(result.manifest.description).toBe('Real summary.');
+    });
+
+    it('should not open a fence from a marker inside a comment', () => {
+      const result = parser.parseSkillMd('# Title\n\n<!--\n```\n-->\n\nReal summary.\n');
+
+      expect(result.manifest.description).toBe('Real summary.');
+    });
+
+    it('should derive a plain-text description from inline Markdown', () => {
+      const result = parser.parseSkillMd(
+        '# Stock Watcher\n\nA **fast** [stock watcher](https://example.com) for `A-share` prices, _lightweight_ and ~~noisy~~ quiet.\n',
+      );
+
+      expect(result.manifest.description).toBe(
+        'A fast stock watcher for A-share prices, lightweight and noisy quiet.',
+      );
+    });
+
+    it('should derive a plain-text name from an H1 with inline Markdown', () => {
+      for (const heading of [
+        '**Stock Watcher**',
+        '`Stock Watcher`',
+        '[Stock Watcher](https://example.com)',
+      ]) {
+        const result = parser.parseSkillMd(`# ${heading}\n\nWatches prices.\n`);
+        expect(result.manifest.name).toBe('Stock Watcher');
+      }
+    });
+
+    it('should not split a surrogate pair when truncating the description', () => {
+      const result = parser.parseSkillMd(`# Title\n\n${'a'.repeat(298)}😀zz\n`);
+      const description = result.manifest.description;
+
+      expect(description.endsWith('😀…')).toBe(true);
+      expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(description)).toBe(false);
+    });
+
+    it('should skip an indented code block', () => {
+      for (const indent of ['    ', '\t']) {
+        const result = parser.parseSkillMd(
+          `# Installer\n\n${indent}npm install x\n\nActual summary.\n`,
+        );
+        expect(result.manifest.description).toBe('Actual summary.');
+      }
+    });
+
+    it('should decode HTML entities in the derived name and description', () => {
+      const result = parser.parseSkillMd(
+        '# Research &copy; Analysis\n\nFast &mdash; reliable & <b>not</b> "quoted" &#169; &#x263A; &amp; &hellip;\n',
+      );
+
+      expect(result.manifest.name).toBe('Research © Analysis');
+      expect(result.manifest.description).toBe('Fast — reliable & not "quoted" © ☺ & …');
+    });
+
+    it('should keep entity text literal inside code spans and backslash escapes', () => {
+      const result = parser.parseSkillMd(
+        '# Use `&copy;` safely\n\nWrite `a &amp; b` or \\&copy; literally; &copy; renders.\n',
+      );
+
+      expect(result.manifest.name).toBe('Use &copy; safely');
+      expect(result.manifest.description).toBe('Write a &amp; b or &copy; literally; © renders.');
+    });
+
+    it('should turn inline HTML line breaks into spaces', () => {
+      const result = parser.parseSkillMd(
+        '# Stock<br>Watcher\n\nFast<br />monitoring, <BR/>daily <span>alerts</span>.\n',
+      );
+
+      expect(result.manifest.name).toBe('Stock Watcher');
+      expect(result.manifest.description).toBe('Fast monitoring, daily alerts.');
+    });
+
+    it('should never take a multi-line HTML comment body as the description', () => {
+      expect(() =>
+        parser.parseSkillMd('# Title\n\n<!--\ninternal metadata\n-->\n', { fallbackName: 'x' }),
+      ).toThrow(SkillManifestError);
+
+      const result = parser.parseSkillMd(
+        '# Title\n\n<!--\ninternal metadata\n-->\n\nThe real summary.\n',
+      );
+      expect(result.manifest.description).toBe('The real summary.');
+    });
+
+    it('should read front-matter that is preceded by an HTML comment', () => {
+      // Real shape of market package frank-luongt-faos-skills-marketplace-nanogpt
+      const content = `<!-- AUTO-GENERATED by export-skills.py — DO NOT EDIT -->
+---
+name: nanogpt
+description: NanoGPT minimal GPT training implementation. Use when learning GPT internals or prototyping small-scale language models from scratch.
+tags: [nanogpt, model-architecture, training]
+---
+
+# nanoGPT - Minimalist GPT Training
+
+## Quick start
+`;
+
+      const result = parser.parseSkillMd(content);
+
+      expect(result.manifest.name).toBe('nanogpt');
+      expect(result.manifest.description).toMatch(/^NanoGPT minimal GPT training/);
+      expect((result.manifest as any).tags).toEqual(['nanogpt', 'model-architecture', 'training']);
+      expect(result.content).toBe('# nanoGPT - Minimalist GPT Training\n\n## Quick start');
+    });
+
+    it('should import a front-matter-less market ZIP package', async () => {
+      const zipped = await createZip({ 'SKILL.md': new TextEncoder().encode(amlKycSkillMd) });
+
+      const result = await parser.parseZipPackage(Buffer.from(zipped), {
+        fallbackName: 'brainbytes-dev-everything-claude-finance-aml-kyc',
+      });
+
+      expect(result.manifest.name).toBe('AML/KYC Compliance');
+      expect(result.manifest.description).toMatch(/^Customer due diligence/);
+    });
+
+    it('should fall back to the skill directory name inside a ZIP when there is no H1', async () => {
+      const zipped = await createZip({
+        'aml-kyc/SKILL.md': new TextEncoder().encode('Screening guidance for onboarding.\n'),
+      });
+
+      const result = await parser.parseZipPackage(Buffer.from(zipped));
+
+      expect(result.manifest.name).toBe('aml-kyc');
+      expect(result.manifest.description).toBe('Screening guidance for onboarding.');
     });
   });
 
@@ -469,6 +757,136 @@ Root content`;
       const result = await parser.parseZipPackage(Buffer.from(zipped));
 
       expect(result.manifest.name).toBe('root-skill');
+    });
+  });
+
+  // Regression tests for the ReDoS vulnerability reported in lobehub/lobehub#16494.
+  // `basePath` is derived from the fully user-controlled GitHub URL path segment
+  // (https://github.com/owner/repo/tree/branch/<path>) and used to be interpolated
+  // directly into `new RegExp('^[^/]+/<basePath>/SKILL\\.md$')` inside findSkillMd.
+  // That allowed catastrophic backtracking (event-loop DoS) and SyntaxError crashes.
+  describe('findSkillMd basePath security (ReDoS regression, #16494)', () => {
+    it('should not hang on a malicious ReDoS basePath', async () => {
+      // A long run of "a" followed by a non-matching char makes the old
+      // `^[^/]+/(a+)+/SKILL\.md$` regex backtrack exponentially (~2^40 steps).
+      const evilDecoy = 'a'.repeat(40);
+      const testFiles = {
+        [`repo-main/${evilDecoy}X/data.txt`]: new TextEncoder().encode('x'),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      const start = performance.now();
+      // No SKILL.md exists, so it should reject with "not found" — the point is that
+      // it does so quickly instead of blocking the event loop for tens of seconds.
+      await expect(parser.parseZipPackage(buffer, { basePath: '(a+)+' })).rejects.toThrow(
+        'SKILL.md not found',
+      );
+      const elapsed = performance.now() - start;
+
+      expect(elapsed).toBeLessThan(1000);
+    });
+
+    it('should not throw SyntaxError for a basePath with invalid regex syntax', async () => {
+      // `[invalid` is not a valid RegExp; the old code threw a SyntaxError (HTTP 500).
+      // It must now be treated as a literal string and fail gracefully as "not found".
+      const testFiles = {
+        'repo-main/skills/demo/SKILL.md': new TextEncoder().encode(
+          '---\nname: demo\ndescription: demo\n---\nDemo',
+        ),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      await expect(parser.parseZipPackage(buffer, { basePath: '[invalid' })).rejects.toThrow(
+        'SKILL.md not found',
+      );
+    });
+
+    it('should treat regex metacharacters in basePath as literals (no "any char" matching)', async () => {
+      // Path uses "aXb"; basePath "a.b" must NOT match it (the old regex treated "." as
+      // "any char" and would have matched). The literal directory "a.b" does not exist.
+      const testFiles = {
+        'repo-main/aXb/SKILL.md': new TextEncoder().encode(
+          '---\nname: axb\ndescription: axb\n---\naXb',
+        ),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      await expect(parser.parseZipPackage(buffer, { basePath: 'a.b' })).rejects.toThrow(
+        'SKILL.md not found',
+      );
+    });
+
+    it('should still match a directory whose literal name contains regex metacharacters', async () => {
+      // A real directory literally named "a.b" must be found (via exact-path lookup).
+      const skillMd = `---
+name: literal-dot-skill
+description: Skill in a dir literally named a.b
+---
+Literal dot content`;
+
+      const testFiles = {
+        'repo-main/a.b/SKILL.md': new TextEncoder().encode(skillMd),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      const result = await parser.parseZipPackage(buffer, { basePath: 'a.b' });
+      expect(result.manifest.name).toBe('literal-dot-skill');
+    });
+
+    it('should report "not found" (not silently import the root skill) when basePath misses', async () => {
+      // User explicitly requested a subdirectory via the GitHub URL path, but no SKILL.md
+      // exists there. Even though the repo has a root-level SKILL.md, we must NOT fall
+      // through and silently import that unrelated skill — it must be reported as missing.
+      const testFiles = {
+        'repo-main/SKILL.md': new TextEncoder().encode(
+          '---\nname: root\ndescription: root\n---\nRoot',
+        ),
+        'repo-main/README.md': new TextEncoder().encode('# Repo'),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      // Nonexistent subpath
+      await expect(
+        parser.parseZipPackage(buffer, { basePath: 'skills/does-not-exist' }),
+      ).rejects.toThrow('SKILL.md not found');
+
+      // Invalid-regex-looking subpath must behave the same (no silent root import)
+      await expect(parser.parseZipPackage(buffer, { basePath: '[invalid' })).rejects.toThrow(
+        'SKILL.md not found',
+      );
+    });
+
+    it('should still resolve the basePath via the fallback when the root prefix differs', async () => {
+      // When findGitHubRootPrefix picks a prefix that does not match the SKILL.md's
+      // top-level directory, the exact lookup misses and the fallback must still find
+      // `<single-segment>/<basePath>/SKILL.md`. Insert the decoy first so it becomes
+      // the detected root prefix.
+      const skillMd = `---
+name: fallback-skill
+description: Found via fallback
+---
+Fallback content`;
+
+      const testFiles = {
+        'decoy-dir/other.txt': new TextEncoder().encode('decoy'),
+        'repo-main/skills/demo/SKILL.md': new TextEncoder().encode(skillMd),
+      };
+
+      const zipped = await createZip(testFiles);
+      const buffer = Buffer.from(zipped);
+
+      const result = await parser.parseZipPackage(buffer, { basePath: 'skills/demo' });
+      expect(result.manifest.name).toBe('fallback-skill');
     });
   });
 

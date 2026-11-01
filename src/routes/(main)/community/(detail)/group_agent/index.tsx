@@ -4,8 +4,12 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useParams } from 'react-router';
 
+import AsyncError from '@/components/AsyncError';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { groupAgentSelectors } from '@/store/discover/selectors';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import NotFound from '../components/NotFound';
 import { TocProvider } from '../features/Toc/useToc';
@@ -13,7 +17,6 @@ import { DetailProvider } from './features/DetailProvider';
 import Details from './features/Details';
 import Header from './features/Header';
 import StatusPage from './features/StatusPage';
-import Loading from './loading';
 
 interface GroupAgentDetailPageProps {
   mobile?: boolean;
@@ -25,14 +28,18 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
   const { version } = useQuery() as { version?: string };
 
   // Fetch group agent detail
-  const useGroupAgentDetail = useDiscoverStore((s) => s.useGroupAgentDetail);
-  const { data, isLoading } = useGroupAgentDetail({ identifier, version });
+  const useGroupAgentDetail = useDiscoverStore((s) => s.useFetchGroupAgentDetail);
+  const { error, isLoading, mutate, queryKey } = useGroupAgentDetail({ identifier, version });
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(groupAgentSelectors.groupAgentDetail(queryKey));
 
-  if (isLoading) return <Loading />;
-
-  if (!data) return <NotFound />;
-
-  // Check status and show appropriate page
+  if (data === undefined) {
+    if (isLoading) return <RouteLoading />;
+    if (error && !isTrpcErrorCode(error, 'NOT_FOUND')) {
+      return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;
+    }
+    return <NotFound />;
+  }
   const status = (data as any)?.group?.status || (data as any)?.status;
   if (status === 'unpublished' || status === 'archived' || status === 'deprecated') {
     return <StatusPage status={status} />;
@@ -76,8 +83,7 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
     locale: (data as any)?.locale,
     memberAgents: (data as any)?.memberAgents || [],
     ownerType: ((data as any)?.author?.type === 'organization' ? 'organization' : 'user') as
-      | 'organization'
-      | 'user',
+      'organization' | 'user',
     status: (data as any)?.group?.status,
     summary: (data as any)?.summary,
     tags: (data as any)?.currentVersion?.tags,
@@ -102,5 +108,9 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
     </TocProvider>
   );
 });
+
+export const MobileGroupAgentDetailPage = (_props: { mobile?: boolean }) => {
+  return <GroupAgentDetailPage mobile={true} />;
+};
 
 export default GroupAgentDetailPage;

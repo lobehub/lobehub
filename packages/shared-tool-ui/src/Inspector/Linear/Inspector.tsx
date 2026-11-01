@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { CornerLeftUp } from 'lucide-react';
 import { memo } from 'react';
 
@@ -243,14 +243,16 @@ const LinearInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>>
     const { primary, parentId } = pickChip(parsed, effectiveArgs);
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={inspectorTextStyles.root}>
         <LinearLogomark />
-        <span className={styles.productPrefix}>Linear</span>
+        <span
+          className={cx(
+            styles.productPrefix,
+            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+          )}
+        >
+          Linear
+        </span>
         <span className={styles.chip}>
           <span className={styles.chipAction}>{label}</span>
           {primary && (

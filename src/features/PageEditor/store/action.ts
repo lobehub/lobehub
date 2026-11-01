@@ -1,5 +1,5 @@
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT, isDesktop } from '@lobechat/const';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import debug from 'debug';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
@@ -10,22 +10,25 @@ import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useFileStore } from '@/store/file';
 
-import { type RightPanelMode, type State } from './initialState';
+import { type PendingCommentAnchor, type RightPanelMode, type State } from './initialState';
 import { initialState } from './initialState';
 
 const log = debug('page:editor');
 
 export interface Action {
   flushMetaSave: () => void;
-  handleCopyLink: (t: (key: string) => string, message: any) => void;
-  handleDelete: (
-    t: (key: string) => string,
-    message: any,
-    onDeleteCallback?: () => void,
-  ) => Promise<void>;
+  handleCopyLink: (t: (key: string) => string) => void;
+  handleDelete: (t: (key: string) => string, onDeleteCallback?: () => void) => Promise<void>;
   handleTitleSubmit: () => Promise<void>;
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
+  setCommentsPanelOpen: (open: boolean) => void;
+  /**
+   * The store outlives a document switch (the resource manager swaps `pageId`
+   * on a mounted PageEditor), so a panel left open on the previous document
+   * would otherwise show the next one's gutter with nothing selected.
+   */
+  setDocumentId: (documentId: string | undefined) => void;
   setEmoji: (emoji: string | undefined) => void;
   /**
    * Mirror the lock health from {@link useEditLock} into the store so banners and
@@ -45,8 +48,18 @@ export interface Action {
     expiresAt?: Date | string | null,
     holderOwnerId?: string | null,
   ) => void;
+  /** Hand a captured body selection to the comment composer, or clear it (`undefined`). */
+  setPendingCommentAnchor: (pending: PendingCommentAnchor | undefined) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
+  /**
+   * Adopt title/emoji pushed from the outside (document list refresh, sidebar
+   * rename, realtime sync) — but only while the local meta is clean and idle.
+   * While the user is typing, or a save is in flight, the local value wins;
+   * otherwise a list refresh echoing the *previous* save would clobber the
+   * characters typed since the last save.
+   */
+  syncMeta: (title?: string, emoji?: string) => void;
   triggerDebouncedMetaSave: () => void;
 }
 
@@ -82,7 +95,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         debouncedMetaSave?.flush();
       },
 
-      handleCopyLink: (t, message) => {
+      handleCopyLink: (t) => {
         const { documentId } = get();
         if (documentId) {
           const appOrigin = isDesktop
@@ -90,11 +103,11 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
             : window.location.origin;
           const url = `${appOrigin}${window.location.pathname}`;
           navigator.clipboard.writeText(url);
-          message.success(t('pageEditor.linkCopied'));
+          toast.success(t('pageEditor.linkCopied'));
         }
       },
 
-      handleDelete: async (t, message, onDeleteCallback) => {
+      handleDelete: async (t, onDeleteCallback) => {
         const { documentId } = get();
         if (!documentId) return;
 
@@ -108,12 +121,12 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
               try {
                 const { removeDocument } = useFileStore.getState();
                 await removeDocument(documentId);
-                message.success(t('pageEditor.deleteSuccess'));
+                toast.success(t('pageEditor.deleteSuccess'));
                 onDeleteCallback?.();
                 resolve();
               } catch (error) {
                 log('Failed to delete page:', error);
-                message.error(t('pageEditor.deleteError'));
+                toast.error(t('pageEditor.deleteError'));
                 reject(error);
               }
             },
@@ -169,10 +182,11 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
               emoji,
               title,
             },
-            { saveSource: 'autosave' },
+            { metadataOnly: true, saveSource: 'autosave' },
           );
 
-          // Notify parent after successful save
+          // Notify parent after successful save. The callbacks were captured
+          // with the request, so they still address the document that was saved.
           if (title !== lastSavedTitle) {
             onTitleChange?.(title || '');
           }
@@ -180,16 +194,44 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
             onEmojiChange?.(emoji);
           }
 
+          // The store outlives a document switch (see `setDocumentId`). If the
+          // editor moved on to another document while this request was in
+          // flight, the meta below belongs to that document: comparing it with
+          // the saved values would mark it dirty, record the previous
+          // document's title as its last-saved one and queue a save of it.
+          const { title: currentTitle, emoji: currentEmoji, documentId: currentDocumentId } = get();
+          if (currentDocumentId !== documentId) return;
+
+          // The user may have kept typing while the request was in flight, so
+          // re-derive dirtiness from the *current* meta instead of clearing it
+          // blindly — otherwise those trailing edits would never be persisted.
+          const stillDirty = currentTitle !== title || currentEmoji !== emoji;
+
           set({
-            isMetaDirty: false,
+            isMetaDirty: stillDirty,
             lastSavedEmoji: emoji,
             lastSavedTitle: title,
             metaSaveStatus: 'saved',
           });
+
+          if (stillDirty) {
+            get().triggerDebouncedMetaSave();
+          }
         } catch (error) {
           console.error('[PageEditor] Failed to save meta:', error);
-          set({ metaSaveStatus: 'idle' });
+          if (get().documentId === documentId) set({ metaSaveStatus: 'idle' });
         }
+      },
+
+      setCommentsPanelOpen: (commentsPanelOpen) => {
+        if (get().commentsPanelOpen !== commentsPanelOpen) set({ commentsPanelOpen });
+      },
+
+      setDocumentId: (documentId) => {
+        if (get().documentId === documentId) return;
+        // A restored anchored draft or a fresh pick reopens it for the new
+        // document; nothing here to show it for should not carry over.
+        set({ commentsPanelOpen: false, documentId });
       },
 
       setEmoji: (emoji: string | undefined) => {
@@ -227,6 +269,17 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         set({ lockExpiresAt: expiresAt, lockHolderId: holderId, lockHolderOwnerId: holderOwnerId });
       },
 
+      setPendingCommentAnchor: (pendingCommentAnchor) => {
+        set((state) => ({
+          pendingCommentAnchor,
+          // `?? 0` guards a store instance hydrated before this counter existed
+          // (a hot reload keeps the old state), which would otherwise tick to NaN.
+          pendingCommentAnchorVersion: pendingCommentAnchor
+            ? (state.pendingCommentAnchorVersion ?? 0) + 1
+            : (state.pendingCommentAnchorVersion ?? 0),
+        }));
+      },
+
       setRightPanelMode: (rightPanelMode) => {
         set({ rightPanelMode });
       },
@@ -245,6 +298,21 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         if (isDirty) {
           triggerDebouncedMetaSave();
         }
+      },
+
+      syncMeta: (title, emoji) => {
+        const { isMetaDirty, metaSaveStatus, lastSavedTitle, lastSavedEmoji } = get();
+
+        if (isMetaDirty || metaSaveStatus === 'saving') return;
+        if (title === lastSavedTitle && emoji === lastSavedEmoji) return;
+
+        set({
+          emoji,
+          isMetaDirty: false,
+          lastSavedEmoji: emoji,
+          lastSavedTitle: title,
+          title,
+        });
       },
 
       triggerDebouncedMetaSave: () => {

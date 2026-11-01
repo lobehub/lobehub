@@ -1,13 +1,16 @@
+import { isDesktop } from '@lobechat/const';
 import {
   type CheckMcpInstallResult,
+  ConnectorErrorCode,
   type CustomPluginMetadata,
   type LobeChatPluginApi,
   type ToolManifest,
   type ToolManifestSettings,
 } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
+import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 import { type DeploymentOption } from '@lobehub/market-sdk';
-import { McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import retry from 'async-retry';
 import debug from 'debug';
@@ -20,12 +23,22 @@ import {
   type StdioMCPParams,
 } from '@/libs/mcp';
 import { MCPClient } from '@/libs/mcp';
+import {
+  getMCPConnectionErrorType,
+  getMCPErrorLogMetadata,
+  getMCPLogOrigin,
+} from '@/libs/mcp/utils';
 
 import { type ProcessContentBlocksFn } from './contentProcessor';
 import { contentBlocksToString } from './contentProcessor';
 import { mcpSystemDepsCheckService } from './deps';
 
 const log = debug('lobe-mcp:service');
+
+interface MCPConnectionLogMetadata {
+  origin?: string;
+  type: MCPClientParams['type'];
+}
 
 /**
  * MCP Tool call raw result type
@@ -49,6 +62,11 @@ export interface MCPToolCallProcessedResult {
 }
 
 // Removed MCPConnection interface as it's no longer needed
+
+const isMcpToolFailure = (error: unknown): error is ProtocolError | SdkError =>
+  ProtocolError.isInstance(error) ||
+  (SdkError.isInstance(error) &&
+    (error.code === SdkErrorCode.RequestTimeout || error.code === SdkErrorCode.ConnectionClosed));
 
 export class MCPService {
   // Store instances of the custom MCPClient, keyed by serialized MCPClientParams
@@ -74,139 +92,124 @@ export class MCPService {
 
     const state = { ...result, content: newContent };
 
-    if (result.isError) {
-      return { content, state, success: true };
-    }
-
-    return { content, state, success: true };
+    return {
+      content,
+      ...(result.isError ? { error: { message: content, name: 'MCPToolError' } } : {}),
+      state,
+      success: result.isError !== true,
+    };
   }
 
-  private sanitizeForLogging = <T extends Record<string, any>>(obj: T): Omit<T, 'env'> => {
-    if (!obj) return obj;
+  /**
+   * Keep MCP logs allowlist-only so future connection fields cannot silently expose credentials.
+   */
+  private getConnectionLogMetadata = (params: MCPClientParams): MCPConnectionLogMetadata => {
+    if (params.type === 'http') {
+      return { origin: getMCPLogOrigin(params.url), type: params.type };
+    }
 
-    const { env: _, ...rest } = obj;
-    return rest as Omit<T, 'env'>;
+    return { type: params.type };
   };
 
-  // --- MCP Interaction ---
-
-  // listTools now accepts MCPClientParams
-  async listTools(params: MCPClientParams): Promise<LobeChatPluginApi[]> {
-    const loggableParams = this.sanitizeForLogging(params);
+  /**
+   * Run an MCP operation with automatic session re-establishment.
+   *
+   * When the remote MCP server restarts, the cached client keeps sending the
+   * stale session id and the server rejects it (`-32000 / No valid session ID
+   * provided`), surfaced by MCPClient as a `NoValidSessionId` error. On that
+   * error we discard the cached client (`skipCache`) and retry, so the next
+   * attempt re-initializes a fresh session transparently. Any other error bails
+   * immediately as a TRPCError without retrying.
+   */
+  private async withSessionRetry<T>(
+    params: MCPClientParams,
+    operationName: string,
+    operation: (client: MCPClient) => Promise<T>,
+  ): Promise<T> {
+    const connection = this.getConnectionLogMetadata(params);
 
     return retry(
       async (bail, attemptNumber) => {
-        // Skip cache on retry attempts
+        // Skip cache on retry attempts to drop the stale (dead) session
         const skipCache = attemptNumber > 1;
-        const client = await this.getClient(params, skipCache);
-        log(`Listing tools using client for params: %O (attempt ${attemptNumber})`, loggableParams);
+        const operationLog = { attempt: attemptNumber, connection, operation: operationName };
+        log('MCP operation attempt: %O', operationLog);
 
         try {
-          const result = await client.listTools();
-          log(
-            `Tools listed successfully for params: %O, result count: %d`,
-            loggableParams,
-            result.length,
-          );
-          return result.map<LobeChatPluginApi>((item) => ({
-            // Assuming identifier is the unique name/id
-            description: item.description,
-            name: item.name,
-            parameters: item.inputSchema as ToolManifestSettings,
-          }));
+          // Keep getClient inside the guarded block: a client initialization
+          // failure (bad URL/token, stdio spawn error) is NOT a stale-session
+          // error, so it must bail immediately instead of retrying — otherwise
+          // we'd repeat auth attempts / respawn stdio commands needlessly.
+          const client = await this.getClient(params, skipCache);
+          return await operation(client);
         } catch (error) {
           // Only retry for NoValidSessionId errors
           if ((error as Error).message !== 'NoValidSessionId') {
-            console.error(`Error listing tools for params %O:`, loggableParams, error);
+            console.error('MCP operation failed:', {
+              ...operationLog,
+              error: getMCPErrorLogMetadata(error),
+            });
             bail(
-              new TRPCError({
-                cause: error,
-                code: 'INTERNAL_SERVER_ERROR',
-                message: `Error listing tools from MCP server: ${(error as Error).message}`,
-              }),
+              error instanceof TRPCError
+                ? error
+                : new TRPCError({
+                    cause: error,
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: `Error ${operationName} from MCP server: ${(error as Error).message}`,
+                  }),
             );
-            return []; // This line will never be reached due to bail, but needed for type safety
+            // After bail() the promise is already rejected; return (do NOT throw)
+            // so async-retry does not schedule another attempt.
+            return undefined as T;
           }
-          throw error; // Rethrow to trigger retry
+          throw error; // rethrow to trigger retry with a fresh session
         }
       },
       { maxRetryTime: 1000, minTimeout: 100, retries: 3 },
     );
   }
 
+  // --- MCP Interaction ---
+
+  // listTools now accepts MCPClientParams
+  async listTools(params: MCPClientParams): Promise<LobeChatPluginApi[]> {
+    return this.withSessionRetry(params, 'listing tools', async (client) => {
+      const result = await client.listTools();
+      log(`Tools listed successfully, result count: %d`, result.length);
+      return result.map<LobeChatPluginApi>((item) => ({
+        // Assuming identifier is the unique name/id
+        description: item.description,
+        name: item.name,
+        parameters: item.inputSchema as ToolManifestSettings,
+      }));
+    });
+  }
+
   // listTools now accepts MCPClientParams
   async listRawTools(params: MCPClientParams): Promise<McpTool[]> {
-    const client = await this.getClient(params); // Get client using params
-    const loggableParams = this.sanitizeForLogging(params);
-    log(`Listing tools using client for params: %O`, loggableParams);
-
-    try {
+    return this.withSessionRetry(params, 'listing tools', async (client) => {
       const result = await client.listTools();
-      log(
-        `Tools listed successfully for params: %O, result count: %d`,
-        loggableParams,
-        result.length,
-      );
+      log(`Tools listed successfully, result count: %d`, result.length);
       return result;
-    } catch (error) {
-      console.error(`Error listing tools for params %O:`, loggableParams, error);
-      // Propagate a TRPCError for better handling upstream
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Error listing tools from MCP server: ${(error as Error).message}`,
-      });
-    }
+    });
   }
 
   // listResources now accepts MCPClientParams
   async listResources(params: MCPClientParams): Promise<McpResource[]> {
-    const client = await this.getClient(params); // Get client using params
-    const loggableParams = this.sanitizeForLogging(params);
-    log(`Listing resources using client for params: %O`, loggableParams);
-
-    try {
+    return this.withSessionRetry(params, 'listing resources', async (client) => {
       const result = await client.listResources();
-      log(
-        `Resources listed successfully for params: %O, result count: %d`,
-        loggableParams,
-        result.length,
-      );
+      log(`Resources listed successfully, result count: %d`, result.length);
       return result;
-    } catch (error) {
-      console.error(`Error listing resources for params %O:`, loggableParams, error);
-      // Propagate a TRPCError for better handling upstream
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Error listing resources from MCP server: ${(error as Error).message}`,
-      });
-    }
+    });
   }
 
   // listPrompts now accepts MCPClientParams
   async listPrompts(params: MCPClientParams): Promise<McpPrompt[]> {
-    const client = await this.getClient(params); // Get client using params
-    const loggableParams = this.sanitizeForLogging(params);
-    log(`Listing prompts using client for params: %O`, loggableParams);
-
-    try {
+    return this.withSessionRetry(params, 'listing prompts', async (client) => {
       const result = await client.listPrompts();
-      log(
-        `Prompts listed successfully for params: %O, result count: %d`,
-        loggableParams,
-        result.length,
-      );
+      log(`Prompts listed successfully, result count: %d`, result.length);
       return result;
-    } catch (error) {
-      console.error(`Error listing prompts for params %O:`, loggableParams, error);
-      // Propagate a TRPCError for better handling upstream
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Error listing prompts from MCP server: ${(error as Error).message}`,
-      });
-    }
+    });
   }
 
   // callTool now accepts an object with clientParams, toolName, argsStr, and processContentBlocks
@@ -223,71 +226,72 @@ export class MCPService {
       processContentBlocks: processContentBlocksFn,
     } = options;
 
-    const client = await this.getClient(clientParams); // Get client using params
-
     const args = safeParseJSON(argsStr);
-    const loggableParams = this.sanitizeForLogging(clientParams);
 
-    log(
-      `Calling tool "${toolName}" using client for params: %O with args: %O`,
-      loggableParams,
-      args,
-    );
+    return this.withSessionRetry(clientParams, `calling tool "${toolName}"`, async (client) => {
+      log('Calling MCP tool: %s', toolName);
 
-    try {
-      // Delegate the call to the MCPClient instance
-      const result = await client.callTool(toolName, args); // Pass args directly
+      try {
+        // Delegate the call to the MCPClient instance
+        const result = await client.callTool(toolName, args); // Pass args directly
 
-      // Use the common processing method
-      const processedResult = await MCPService.processToolCallResult(
-        result,
-        processContentBlocksFn,
-      );
+        // Use the common processing method
+        const processedResult = await MCPService.processToolCallResult(
+          result,
+          processContentBlocksFn,
+        );
 
-      log(
-        `Tool "${toolName}" called successfully for params: %O, result: %O`,
-        loggableParams,
-        processedResult.state,
-      );
+        log('MCP tool call completed: %O', {
+          contentBlockCount: Array.isArray(processedResult.state.content)
+            ? processedResult.state.content.length
+            : 0,
+          isError: processedResult.state.isError === true,
+          toolName,
+        });
 
-      return processedResult;
-    } catch (error) {
-      if (error instanceof McpError) {
-        const mcpError = error as McpError;
+        return processedResult;
+      } catch (error) {
+        // Session errors must bubble up so withSessionRetry can reconnect & retry
+        if ((error as Error).message === 'NoValidSessionId') throw error;
 
-        return {
-          content: mcpError.message,
-          error,
-          state: {
-            content: [{ text: mcpError.message, type: 'text' }],
-            isError: true,
-          },
-          success: false,
-        };
+        // Tool-level MCP errors are returned as a failed tool result, not thrown
+        if (isMcpToolFailure(error)) {
+          return {
+            content: error.message,
+            error,
+            state: {
+              content: [{ text: error.message, type: 'text' }],
+              isError: true,
+            },
+            success: false,
+          };
+        }
+
+        // Other errors propagate; withSessionRetry wraps them as a TRPCError
+        throw error;
       }
-
-      console.error(
-        `Error calling tool "${toolName}" for params %O:`,
-        this.sanitizeForLogging(clientParams),
-        error,
-      );
-      // Propagate a TRPCError
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Error calling tool "${toolName}" on MCP server: ${(error as Error).message}`,
-      });
-    }
+    });
   }
 
   // Private method to get or initialize a client based on parameters
   private async getClient(params: MCPClientParams, skipCache = false): Promise<MCPClient> {
+    // Every server caller (including connector sync and agent tool execution)
+    // must enforce the same Desktop-only stdio boundary, even for cached clients.
+    if (params.type === 'stdio' && !isDesktop) {
+      throw new TRPCError({
+        cause: { data: { code: ConnectorErrorCode.StdioDesktopOnly } },
+        code: 'BAD_REQUEST',
+        message: 'Stdio MCP type is not supported in web environment.',
+      });
+    }
+
     const key = this.serializeParams(params); // Use custom serialization
 
     if (!skipCache && this.clients.has(key)) {
       return this.clients.get(key)!;
     }
 
+    const connection = this.getConnectionLogMetadata(params);
     log(`No cached client found, Initializing new client.`);
     try {
       const client = new MCPClient(params);
@@ -297,27 +301,35 @@ export class MCPService {
         },
       }); // Initialization logic should be within MCPClient
       this.clients.set(key, client);
-      log(`New client initialized and cached for key: ${key.slice(0, 20)}`);
+      log('New MCP client initialized and cached: %O', connection);
       return client;
     } catch (error) {
-      console.error(`Failed to initialize MCP client:`, error);
+      const errorLog = getMCPErrorLogMetadata(error);
+      console.error('Failed to initialize MCP client:', { connection, error: errorLog });
 
       // Preserve complete error information, especially detailed stderr output
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       if (typeof error === 'object' && !!error && 'data' in error) {
+        const type = getMCPConnectionErrorType(error);
         throw new TRPCError({
           cause: error,
-          code: 'SERVICE_UNAVAILABLE',
+          code:
+            type === 'AUTHORIZATION_ERROR'
+              ? // These credentials belong to the upstream MCP, not the signed-in
+                // LobeHub user. A 401 here would trigger the client's global logout.
+                'FORBIDDEN'
+              : type === 'INITIALIZATION_TIMEOUT'
+                ? 'TIMEOUT'
+                : 'SERVICE_UNAVAILABLE',
           message: errorMessage,
         });
       }
 
       // Log detailed error information for debugging
       log('Detailed initialization error: %O', {
-        error: errorMessage,
-        params: this.sanitizeForLogging(params),
-        stack: error instanceof Error ? error.stack : undefined,
+        connection,
+        error: errorLog,
       });
 
       throw new TRPCError({
@@ -380,7 +392,7 @@ export class MCPService {
         avatar: metadata?.avatar || 'MCP_AVATAR',
         description:
           metadata?.description ||
-          `${identifier} MCP server has ${tools.length} tools, like "${tools[0]?.name}"`,
+          getMcpServerDescription(identifier, { tools }, { includeToolExample: true }),
         title: identifier,
       },
       // TODO: temporary
@@ -411,13 +423,7 @@ export class MCPService {
       identifier,
       meta: {
         avatar: metadata?.avatar || 'MCP_AVATAR',
-        description:
-          metadata?.description ||
-          `${identifier} MCP server has ` +
-            Object.entries(manifest)
-              .filter(([key]) => ['tools', 'prompts', 'resources'].includes(key))
-              .map(([key, item]) => `${(item as Array<any>)?.length} ${key}`)
-              .join(','),
+        description: metadata?.description || getMcpServerDescription(identifier, manifest),
         title: metadata?.name || identifier,
       },
       ...manifest,
@@ -435,10 +441,10 @@ export class MCPService {
     deploymentOptions: DeploymentOption[];
   }): Promise<CheckMcpInstallResult> {
     try {
-      const loggableInput = {
-        deploymentOptions: input.deploymentOptions.map((o) => this.sanitizeForLogging(o)),
-      };
-      log('Checking MCP plugin installation status: %O', loggableInput);
+      log(
+        'Checking MCP plugin installation status for %d option(s)',
+        input.deploymentOptions.length,
+      );
       const results = [];
 
       // Check each deployment option
@@ -455,7 +461,12 @@ export class MCPService {
       // Return the recommended result, or the first installable result, or the first result
       const bestResult = recommendedResult || firstInstallableResult || results[0];
 
-      log('Check completed, best result: %O', bestResult);
+      log('MCP plugin installation check completed: %O', {
+        allDependenciesMet: bestResult?.allDependenciesMet === true,
+        hasResult: Boolean(bestResult),
+        isRecommended: bestResult?.isRecommended === true,
+        needsConfig: bestResult?.needsConfig === true,
+      });
 
       // Construct return result, ensure configuration check information is included
       const checkResult: CheckMcpInstallResult = {
@@ -469,12 +480,12 @@ export class MCPService {
       if (bestResult?.needsConfig) {
         checkResult.needsConfig = true;
         checkResult.configSchema = bestResult.configSchema;
-        log('Configuration required for best deployment option: %O', bestResult.configSchema);
+        log('Configuration is required for the selected MCP deployment option');
       }
 
       return checkResult;
     } catch (error) {
-      log('Check failed: %O', error);
+      log('MCP plugin installation check failed: %O', getMCPErrorLogMetadata(error));
       return {
         error:
           error instanceof Error

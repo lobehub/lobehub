@@ -12,9 +12,9 @@
     "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "@mozilla/readability": "^0.6.0",
-    "happy-dom": "^20.0.11",
+    "happy-dom": "^20.10.6",
     "node-html-markdown": "^1.3.0",
-    "query-string": "^9.3.1",
-    "url-join": "^5"
+    "query-string": "^9.4.1",
+    "url-join": "^5.0.0"
   }
 }

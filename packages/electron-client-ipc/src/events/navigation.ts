@@ -24,10 +24,10 @@ export interface NavigationBroadcastEvents {
   createNewPage: () => void;
 
   /**
-   * Ask renderer to open a new tab based on the currently active tab's context.
-   * Triggered by Cmd/Ctrl+T on the main window.
+   * Ask renderer to open a new tab, optionally at a specific path.
+   * Triggered by Cmd/Ctrl+T on the main window and menu actions that need a fresh tab.
    */
-  createNewTab: () => void;
+  createNewTab: (data?: { path: string }) => void;
 
   /**
    * Ask renderer to create a new topic (start a new conversation).
@@ -50,5 +50,17 @@ export interface NavigationBroadcastEvents {
   /**
    * Ask renderer to navigate within the SPA without reloading the whole page.
    */
-  navigate: (data: { path: string; replace?: boolean }) => void;
+  navigate: (data: { escape?: boolean; path: string; replace?: boolean }) => void;
+
+  /** Ask the renderer to open the all-agents surface. */
+  openAllAgents: () => void;
+
+  /**
+   * Ask renderer to open its current workspace (or personal home) in a new window.
+   * Triggered from the main process File menu.
+   */
+  openNewWindow: () => void;
+
+  /** Ask the renderer to open the Recently Viewed surface. */
+  openRecentlyViewed: () => void;
 }

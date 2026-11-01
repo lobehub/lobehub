@@ -3,6 +3,7 @@ import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as messageServiceModule from '@/services/message';
+import { useChatStore } from '@/store/chat';
 
 import { type ConversationContext } from '../../../../types';
 import { createStore } from '../../../index';
@@ -117,6 +118,25 @@ describe('Message CRUD Actions', () => {
       expect(state.displayMessages.length).toBe(1);
       expect(state.displayMessages[0].content).toBe('Temp message');
     });
+
+    it('marks the temp row as client-created when forwarding to the chat store', () => {
+      const store = createTestStore();
+      const dispatch = vi.spyOn(useChatStore.getState(), 'internal_dispatchMessage');
+
+      act(() => {
+        store.getState().createTempMessage({
+          content: 'Temp message',
+          role: 'user',
+          sessionId: 'test-session',
+        });
+      });
+
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'createMessage' }),
+        expect.any(Object),
+        { creationOrigin: 'client' },
+      );
+    });
   });
 
   describe('deleteMessage', () => {
@@ -201,6 +221,89 @@ describe('Message CRUD Actions', () => {
         ['group-1', 'child-1', 'tool-result-1'],
         expect.any(Object),
       );
+    });
+
+    it('deletes every turn folded into a steered host row', async () => {
+      const removeMessagesSpy = vi
+        .spyOn(messageServiceModule.messageService, 'removeMessages')
+        .mockResolvedValue({ success: true, messages: [] });
+
+      const store = createTestStore();
+      const base = { content: '', updatedAt: 0 };
+
+      act(() => {
+        store.getState().replaceMessages([
+          { ...base, createdAt: 1, id: 'u1', role: 'user' },
+          {
+            ...base,
+            children: [{ content: 'first', id: 'c1' }],
+            createdAt: 2,
+            id: 'g1',
+            role: 'assistantGroup',
+          },
+          { ...base, createdAt: 3, id: 's1', metadata: { steer: true }, role: 'user' },
+          {
+            ...base,
+            children: [
+              {
+                content: 'second',
+                id: 'c2',
+                tools: [
+                  {
+                    apiName: 'test',
+                    arguments: '',
+                    id: 'tool-2',
+                    identifier: 'test',
+                    result: { content: '', id: 'tool-result-2' },
+                    type: 'default',
+                  },
+                ],
+              },
+            ],
+            createdAt: 4,
+            id: 'g2',
+            role: 'assistantGroup',
+          },
+        ] as UIChatMessage[]);
+      });
+
+      await act(async () => {
+        await store.getState().deleteMessage('g1');
+      });
+
+      expect(removeMessagesSpy).toHaveBeenCalledWith(
+        ['g1', 'c1', 's1', 'g2', 'c2', 'tool-result-2'],
+        expect.any(Object),
+      );
+    });
+
+    it('deletes a plain assistant continuation together with its steered host', async () => {
+      const removeMessagesSpy = vi
+        .spyOn(messageServiceModule.messageService, 'removeMessages')
+        .mockResolvedValue({ success: true, messages: [] });
+
+      const store = createTestStore();
+      const base = { content: '', updatedAt: 0 };
+
+      act(() => {
+        store.getState().replaceMessages([
+          {
+            ...base,
+            children: [{ content: 'first', id: 'c1' }],
+            createdAt: 1,
+            id: 'g1',
+            role: 'assistantGroup',
+          },
+          { ...base, createdAt: 2, id: 's1', metadata: { steer: true }, role: 'user' },
+          { ...base, content: 'plain reply', createdAt: 3, id: 'a2', role: 'assistant' },
+        ] as UIChatMessage[]);
+      });
+
+      await act(async () => {
+        await store.getState().deleteMessage('g1');
+      });
+
+      expect(removeMessagesSpy).toHaveBeenCalledWith(['g1', 'c1', 's1', 'a2'], expect.any(Object));
     });
 
     it('should use removeMessage for single id and removeMessages for multiple ids', async () => {

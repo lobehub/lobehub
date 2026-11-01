@@ -10,14 +10,35 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentSignalSelfReviewBriefService } from '@/server/services/agentSignal/services/briefs/selfReview';
 import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/services/selfIteration/review/brief';
 import { BriefService } from '@/server/services/brief';
+import { resolveTaskOrThrow } from '@/server/services/task/utils';
+
+import { applyGoalBriefAction } from './_helpers/goalBriefAction';
 
 const briefProcedure = wsCompatProcedure.use(serverDatabase);
-const briefWriteProcedure = briefProcedure.use(withScopedPermission('task:update'));
+
+/**
+ * Every brief mutation, gated on the writable-role permission.
+ *
+ * `workspace_viewer` is read-only by product decision, and a brief write is not
+ * the inert per-user bookkeeping it looks like: `resolve`, `resolveManyAsRead`
+ * and `delete` all clear the `hasUnresolvedUrgentByTask` predicate that parks a
+ * task between automated runs (`taskLifecycle`, `heartbeatTick`,
+ * `scheduleTick`). Dismissing a brief therefore lets the agent resume and spend
+ * workspace budget — an action, not a read. `markRead` alone has no lifecycle
+ * effect, but a read-only role gets no brief writes at all; one rule beats a
+ * carve-out nobody will remember.
+ *
+ * `agent:update` is the permission every writable built-in role holds
+ * (`:all` for Owner, `:owner` for Admin/Member) and Viewer does not. It is NOT
+ * `task:update` — that is not an RBAC action at all and is rejected for every
+ * role including Owner, which is what broke this router before (lobehub#17507).
+ */
+const briefWriteProcedure = briefProcedure.use(withScopedPermission('agent:update'));
 
 const idInput = z.object({ id: z.string() });
 
 const createSchema = z.object({
-  actions: z.array(z.record(z.unknown())).optional(),
+  actions: z.array(z.record(z.string(), z.unknown())).optional(),
   agentId: z.string().optional(),
   artifacts: z.array(z.string()).optional(),
   cronJobId: z.string().optional(),
@@ -51,14 +72,15 @@ export const briefRouter = router({
       // Resolve taskId if it's an identifier
       if (createData.taskId) {
         const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const task = await taskModel.resolve(createData.taskId);
-        if (task) createData.taskId = task.id;
+        const task = await resolveTaskOrThrow(taskModel, createData.taskId);
+        createData.taskId = task.id;
       }
 
       const model = new BriefModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
       const brief = await model.create(createData);
       return { data: brief, message: 'Brief created', success: true };
     } catch (error) {
+      if (error instanceof TRPCError) throw error;
       console.error('[brief:create]', error);
       throw new TRPCError({
         cause: error,
@@ -107,9 +129,12 @@ export const briefRouter = router({
     .query(async ({ input, ctx }) => {
       try {
         const model = new BriefModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const items = await model.findByTaskId(input.taskId);
+        const taskModel = new TaskModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const task = await resolveTaskOrThrow(taskModel, input.taskId);
+        const items = await model.findByTaskId(task.id);
         return { data: items, success: true };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         console.error('[brief:findByTaskId]', error);
         throw new TRPCError({
           cause: error,
@@ -134,6 +159,26 @@ export const briefRouter = router({
       });
     }
   }),
+
+  // Day-scoped news digest for the home inbox. The client computes the local
+  // [startAt, endAt) day boundaries — the server has no per-user timezone on
+  // this path, and absolute instants keep the query timezone-agnostic.
+  listNewsByDay: briefProcedure
+    .input(z.object({ endAt: z.coerce.date(), startAt: z.coerce.date() }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const service = new BriefService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const { data, hasEarlier } = await service.listNewsByDay(input);
+        return { data, hasEarlier, success: true };
+      } catch (error) {
+        console.error('[brief:listNewsByDay]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to list news briefs',
+        });
+      }
+    }),
 
   listUnresolved: briefProcedure.query(async ({ ctx }) => {
     try {
@@ -182,6 +227,14 @@ export const briefRouter = router({
         const currentBrief = await model.findById(input.id);
         if (!currentBrief) throw new TRPCError({ code: 'NOT_FOUND', message: 'Brief not found' });
 
+        // A goal brief carries a question the goal owns: answering it here
+        // answers the goal, and that write settles the brief.
+        if (await applyGoalBriefAction(ctx, currentBrief, input.action, input.comment)) {
+          const settled = await model.findById(input.id);
+          if (!settled) throw new TRPCError({ code: 'NOT_FOUND', message: 'Brief not found' });
+          return { data: settled, message: 'Brief resolved', success: true };
+        }
+
         const resolveOptions = {
           action: input.action,
           comment: input.comment,
@@ -207,6 +260,26 @@ export const briefRouter = router({
           cause: error,
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to resolve brief',
+        });
+      }
+    }),
+
+  // Bulk "mark all read" from the home inbox news section. Always resolves
+  // with the neutral `read` action — never `approve` — so clearing a pile of
+  // reports can't complete their tasks as a side effect.
+  resolveManyAsRead: briefWriteProcedure
+    .input(z.object({ ids: z.array(z.string()).min(1).max(100) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const model = new BriefModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const resolvedIds = await model.resolveManyAsRead(input.ids);
+        return { data: resolvedIds, success: true };
+      } catch (error) {
+        console.error('[brief:resolveManyAsRead]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to resolve briefs',
         });
       }
     }),

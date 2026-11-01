@@ -75,7 +75,7 @@ const seedOperations = (messageId: string, ops: SeedOp[]) => {
 
 const armAndSettle = (
   rerender: (ui: React.ReactElement) => void,
-  hook: ReturnType<typeof vi.fn>,
+  hook: (...args: any[]) => any,
 ) => {
   mockState.hooks.onAssistantTurnSettled = hook;
   mockState.displayMessages = [

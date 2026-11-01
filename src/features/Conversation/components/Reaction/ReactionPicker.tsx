@@ -2,9 +2,7 @@
 
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
-import { ActionIcon, Flexbox, Tooltip } from '@lobehub/ui';
-import { Popover } from 'antd';
-import { createStaticStyles, useTheme } from 'antd-style';
+import { ActionIcon, createStaticStyles, Flexbox, Popover, Tooltip, useTheme } from '@lobehub/ui';
 import { PlusIcon, SmilePlus } from 'lucide-react';
 import { type FC, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +11,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
+import { useConversationResourceAccess } from '../../hooks/useConversationResourceAccess';
 import { useConversationStore } from '../../store';
 
 const QUICK_REACTIONS = ['👍', '👎', '❤️', '😄', '😂', '😅', '🎉', '😢', '🤔', '🚀'];
@@ -72,12 +71,15 @@ const ReactionPicker: FC<ReactionPickerProps> = memo(({ messageId, trigger }) =>
   const { t } = useTranslation('chat');
   const theme = useTheme();
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const { canUseResource } = useConversationResourceAccess();
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const addReaction = useConversationStore((s) => s.addReaction);
   const [open, setOpen] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
 
-  if (!canEdit) return null;
+  // Reactions write to the shared conversation — view-only members don't get
+  // the affordance (same absent-when-not-applicable rule as message actions).
+  if (!canEdit || !canUseResource) return null;
 
   const handleSelect = (emoji: string) => {
     addReaction(messageId, emoji);
@@ -117,8 +119,8 @@ const ReactionPicker: FC<ReactionPickerProps> = memo(({ messageId, trigger }) =>
       arrow={false}
       content={content}
       open={open}
-      overlayInnerStyle={{ padding: 0 }}
       placement="top"
+      styles={{ content: { padding: 0 } }}
       trigger="click"
       onOpenChange={handleOpenChange}
     >

@@ -1,18 +1,21 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { LOADING_FLAT } from '@lobechat/const';
-import { chainSummaryTitle } from '@lobechat/prompts';
+import { LOADING_FLAT, TRACING_SCENARIOS } from '@lobechat/const';
+import {
+  chainSummaryTitle,
+  TOPIC_TITLE_JSON_SCHEMA,
+  TOPIC_TITLE_PROMPT_VERSION,
+} from '@lobechat/prompts';
 import {
   type CreateMessageParams,
   type IThreadType,
+  RequestTrigger,
   type ThreadItem,
   type UIChatMessage,
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { threadKeys } from '@/libs/swr/keys';
-import { chatService } from '@/services/chat';
+import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
+import { aiChatService } from '@/services/aiChat';
 import { threadService } from '@/services/thread';
 import { threadSelectors } from '@/store/chat/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -20,10 +23,10 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
-import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { PortalViewType } from '../portal/initialState';
+import { threadListResource } from './projection';
 import { type ThreadDispatch } from './reducer';
 import { threadReducer } from './reducer';
 import { genParentMessages } from './selectors';
@@ -31,17 +34,30 @@ import { genParentMessages } from './selectors';
 const n = setNamespace('thd');
 
 type Setter = StoreSetter<ChatStore>;
+/** Window in which mounts syncing the same topic share one request. */
+export const THREAD_LIST_DEDUPING_INTERVAL = 10_000;
+
 export const chatThreadMessage = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new ChatThreadActionImpl(set, get, _api);
 
 export class ChatThreadActionImpl {
   readonly #get: () => ChatStore;
   readonly #set: Setter;
+  /** Sub-threads per topic, viewed as `threadMaps[topicId]`. */
+  readonly #threadList;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#threadList = createReplicaSlice(threadListResource, {
+      actionPrefix: n('threadList'),
+      fetcher: (topicId) => threadService.getThreads(topicId),
+      get,
+      set,
+      stateKey: 'threadListReplica',
+      view: recordLens<ChatStore, ThreadItem[]>('threadMaps'),
+    });
   }
 
   updateThreadInputMessage = (message: string): void => {
@@ -151,37 +167,62 @@ export class ChatThreadActionImpl {
     return data;
   };
 
-  useFetchThreads = (enable: boolean, topicId?: string): SWRResponse<ThreadItem[]> => {
-    return useClientDataSWR<ThreadItem[]>(
-      enable && !!topicId ? threadKeys.list(topicId) : null,
-      async ([, topicId]: [string, string]) => threadService.getThreads(topicId),
-      {
-        onSuccess: (threads) => {
-          const nextMap = { ...this.#get().threadMaps, [topicId!]: threads };
+  /**
+   * Fetch orchestration for a topic's sub-threads. Hydrates the persisted list,
+   * then revalidates; results land in `threadMaps` — read them through
+   * `threadSelectors`, never from this hook.
+   */
+  useFetchThreads = (enable: boolean, topicId?: string): ReplicaSyncResult =>
+    // The conversation's ThreadHydration and the sidebar list both sync the
+    // active topic; collapse their mounts into one request.
+    this.#threadList.useSync(topicId || null, {
+      dedupingInterval: THREAD_LIST_DEDUPING_INTERVAL,
+      enabled: enable,
+    });
 
-          // no need to update map if the threads have been init and the map is the same
-          if (this.#get().threadsInit && isEqual(nextMap, this.#get().threadMaps)) return;
+  /**
+   * Seed a topic's persisted thread list before its first paint (route loader).
+   * Best-effort: a miss is not an error, and the caller bounds the wait.
+   */
+  preHydrateThreads = async (topicId?: string): Promise<boolean> => {
+    if (!topicId) return false;
 
-          this.#set(
-            { threadMaps: nextMap, threadsInit: true },
-            false,
-            n('useFetchThreads(success)', { topicId }),
-          );
-        },
-      },
-    );
+    const scope = threadListResource.scope.get();
+    this.#threadList.ensureScope(scope);
+
+    return this.#threadList.hydrate(topicId, scope);
   };
 
-  refreshThreads = async (): Promise<void> => {
-    const topicId = this.#get().activeTopicId;
+  /**
+   * Refetch the active topic's threads after a write, whether or not a list is
+   * mounted. Fire-and-forget callers rely on it never rejecting.
+   */
+  refreshThreads = async (topicId = this.#get().activeTopicId): Promise<void> => {
     if (!topicId) return;
 
-    return mutate(threadKeys.list(topicId));
+    try {
+      await this.#threadList.fetch(topicId, { fresh: true });
+    } catch (error) {
+      console.error('[refreshThreads] failed to refresh threads:', error);
+    }
   };
 
   removeThread = async (id: string): Promise<void> => {
-    await threadService.removeThread(id);
-    await this.#get().refreshThreads();
+    const topicId = this.#topicIdOfThread(id);
+
+    if (topicId) {
+      // Drops the row from the view and the persisted copy at once, so a failed
+      // refetch (or a reload) cannot bring it back; rolls back if the server
+      // rejects the delete.
+      await this.#threadList.optimistic(
+        topicId,
+        (threads) => threads.filter((thread) => thread.id !== id),
+        () => threadService.removeThread(id),
+      );
+    } else {
+      await threadService.removeThread(id);
+    }
+    await this.#get().refreshThreads(topicId);
 
     if (this.#get().activeThreadId === id) {
       this.#set({ activeThreadId: undefined });
@@ -203,36 +244,44 @@ export class ChatThreadActionImpl {
 
     internal_updateThreadTitleInSummary(threadId, LOADING_FLAT);
 
-    let output = '';
-    const threadConfig = systemAgentSelectors.thread(useUserStore.getState());
+    const { model, provider } = systemAgentSelectors.thread(useUserStore.getState());
 
-    await chatService.fetchPresetTaskResult({
-      onError: () => {
-        internal_updateThreadTitleInSummary(threadId, portalThread.title);
-      },
-      onFinish: async (text) => {
-        await this.#get().internal_updateThread(threadId, { title: text });
-      },
-      onLoadingChange: (loading) => {
-        internal_updateThreadLoading(threadId, loading);
-      },
-      onMessageHandle: (chunk) => {
-        switch (chunk.type) {
-          case 'text': {
-            output += chunk.text;
-          }
-        }
+    const restorePreviousTitle = () => {
+      internal_updateThreadTitleInSummary(threadId, portalThread.title);
+    };
 
-        internal_updateThreadTitleInSummary(threadId, output);
-      },
-      params: merge(
-        threadConfig,
-        chainSummaryTitle(
-          messages,
-          userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
-        ),
-      ),
-    });
+    // Structured generation, same as `summaryTopicTitle` — see the note there.
+    internal_updateThreadLoading(threadId, true);
+    try {
+      const { data } = await aiChatService.generateJSON(
+        {
+          ...chainSummaryTitle(
+            messages,
+            userGeneralSettingsSelectors.currentResponseLanguage(useUserStore.getState()),
+          ),
+          metadata: { trigger: RequestTrigger.ThreadTitle },
+          model,
+          provider,
+          schema: TOPIC_TITLE_JSON_SCHEMA,
+          tracing: {
+            promptVersion: TOPIC_TITLE_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.TopicTitle,
+            schemaName: TOPIC_TITLE_JSON_SCHEMA.name,
+          },
+        },
+        new AbortController(),
+      );
+
+      const title = (data as { title?: string } | undefined)?.title?.trim();
+      if (!title) return restorePreviousTitle();
+
+      await this.#get().internal_updateThread(threadId, { title });
+    } catch (error) {
+      console.error('[summaryThreadTitle] failed to generate a title:', error);
+      restorePreviousTitle();
+    } finally {
+      internal_updateThreadLoading(threadId, false);
+    }
   };
 
   internal_updateThreadTitleInSummary = (id: string, title: string): void => {
@@ -255,22 +304,51 @@ export class ChatThreadActionImpl {
   };
 
   internal_updateThread = async (id: string, data: Partial<ThreadItem>): Promise<void> => {
-    this.#get().internal_dispatchThread({ type: 'updateThread', id, value: data });
+    const topicId = this.#topicIdOfThread(id);
+    if (!topicId) return;
 
     this.#get().internal_updateThreadLoading(id, true);
-    await threadService.updateThread(id, data);
-    await this.#get().refreshThreads();
-    this.#get().internal_updateThreadLoading(id, false);
+    try {
+      // Rolls back on its own when the server rejects the update.
+      await this.#threadList.optimistic(
+        topicId,
+        (threads) => threadReducer(threads, { type: 'updateThread', id, value: data }),
+        () => threadService.updateThread(id, data),
+      );
+      await this.#get().refreshThreads(topicId);
+    } finally {
+      this.#get().internal_updateThreadLoading(id, false);
+    }
   };
 
-  internal_dispatchThread = (payload: ThreadDispatch, action?: any): void => {
-    const nextThreads = threadReducer(threadSelectors.currentTopicThreads(this.#get()), payload);
-    const nextMap = { ...this.#get().threadMaps, [this.#get().activeTopicId!]: nextThreads };
+  /**
+   * The topic whose list holds the thread — the one the user is looking at,
+   * falling back to the active topic before any list has loaded.
+   */
+  #topicIdOfThread = (id: string): string | undefined => {
+    const { activeTopicId, threadMaps } = this.#get();
+    if (activeTopicId && threadMaps[activeTopicId]?.some((thread) => thread.id === id))
+      return activeTopicId;
 
-    // no need to update map if is the same
-    if (isEqual(nextMap, this.#get().threadMaps)) return;
+    const owner = Object.entries(threadMaps).find(([, threads]) =>
+      threads?.some((thread) => thread.id === id),
+    );
 
-    this.#set({ threadMaps: nextMap }, false, action ?? n(`dispatchThread/${payload.type}`));
+    return owner?.[0] ?? activeTopicId;
+  };
+
+  /**
+   * Transient, in-memory patch of the active topic's threads (e.g. the loading
+   * title while a summary generates). Never persisted: confirmed writes go
+   * through `internal_updateThread`.
+   */
+  internal_dispatchThread = (payload: ThreadDispatch, _action?: string): void => {
+    const topicId = this.#get().activeTopicId;
+    if (!topicId) return;
+
+    this.#threadList.update(topicId, (threads) => threads && threadReducer(threads, payload), {
+      persist: false,
+    });
   };
 }
 

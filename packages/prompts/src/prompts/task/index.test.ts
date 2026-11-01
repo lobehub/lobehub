@@ -1,11 +1,84 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildTaskRunPrompt } from './index';
+import {
+  buildTaskRunPrompt,
+  formatTaskCreated,
+  formatTaskDetail,
+  formatTasksCreated,
+  formatWorkspaceMembers,
+  taskDetailHref,
+  taskRef,
+} from './index';
 
 // Fixed reference time for stable timeAgo output
 const NOW = new Date('2026-03-22T12:00:00Z');
 
 const baseTask = { id: 'task_test', status: 'running' };
+
+describe('task deep-links', () => {
+  it('taskDetailHref returns a relative path without baseUrl', () => {
+    expect(taskDetailHref('T-198')).toBe('/task/T-198');
+  });
+
+  it('taskDetailHref returns an absolute url with baseUrl (and strips trailing slash)', () => {
+    expect(taskDetailHref('T-198', 'https://app.lobehub.com')).toBe(
+      'https://app.lobehub.com/task/T-198',
+    );
+    expect(taskDetailHref('T-198', 'https://app.lobehub.com/')).toBe(
+      'https://app.lobehub.com/task/T-198',
+    );
+  });
+
+  it('taskRef renders a markdown link', () => {
+    expect(taskRef('T-199')).toBe('[T-199](/task/T-199)');
+    expect(taskRef('T-199', 'https://app.lobehub.com')).toBe(
+      '[T-199](https://app.lobehub.com/task/T-199)',
+    );
+  });
+
+  it('formatTaskCreated links identifier + parent, absolute when baseUrl is given (IM/bot)', () => {
+    const out = formatTaskCreated({
+      baseUrl: 'https://app.lobehub.com',
+      identifier: 'T-198',
+      instruction: 'do it',
+      name: 'Parent task',
+      parentLabel: 'T-100',
+      priority: 2,
+      status: 'backlog',
+    });
+    expect(out).toContain(
+      'Task created: [T-198](https://app.lobehub.com/task/T-198) "Parent task"',
+    );
+    expect(out).toContain('Parent: [T-100](https://app.lobehub.com/task/T-100)');
+  });
+
+  it('formatTasksCreated renders a header + linked lines (relative without baseUrl)', () => {
+    const out = formatTasksCreated([
+      { identifier: 'T-1', name: 'A', success: true },
+      { identifier: 'T-2', name: 'B', success: true },
+    ]);
+    expect(out).toBe(
+      [
+        'Created 2 tasks:',
+        '1. [T-1](/task/T-1) "A" — created',
+        '2. [T-2](/task/T-2) "B" — created',
+      ].join('\n'),
+    );
+  });
+
+  it('formatTasksCreated uses absolute links with baseUrl and reports failures', () => {
+    const out = formatTasksCreated(
+      [
+        { identifier: 'T-1', name: 'A', success: true },
+        { error: 'boom', name: 'B', success: false },
+      ],
+      'https://app.lobehub.com',
+    );
+    expect(out).toContain('Created 1/2 tasks (1 failed):');
+    expect(out).toContain('1. [T-1](https://app.lobehub.com/task/T-1) "A" — created');
+    expect(out).toContain('2. "B" — failed: boom');
+  });
+});
 
 describe('buildTaskRunPrompt', () => {
   it('should build prompt with only task instruction', () => {
@@ -39,6 +112,64 @@ describe('buildTaskRunPrompt', () => {
     );
 
     expect(result).toMatchSnapshot();
+  });
+
+  it('should render a heartbeat automation line with the interval and a no-terminal warning', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          ...baseTask,
+          automationMode: 'heartbeat',
+          heartbeatInterval: 14_400,
+          identifier: 'TASK-1',
+          instruction: '每 4 小时监听 Discord 频道',
+          name: 'Discord 监听',
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Automation: heartbeat, every 4h');
+    expect(result).toContain('NEVER end the loop for that, and never set it to canceled or failed');
+    // A tick may retire the loop only when the instruction's own end condition is met.
+    expect(result).toContain('when the Instruction defines an end condition');
+    expect(result).toContain('Do not ask the user to stop it instead');
+  });
+
+  it('should render a schedule automation line with the cron pattern and timezone', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          ...baseTask,
+          automationMode: 'schedule',
+          identifier: 'TASK-1',
+          instruction: '每天早上汇总',
+          name: '每日汇总',
+          schedulePattern: '0 9 * * *',
+          scheduleTimezone: 'Asia/Shanghai',
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Automation: cron "0 9 * * *" (Asia/Shanghai)');
+    expect(result).toContain('NEVER end the loop for that, and never set it to canceled or failed');
+  });
+
+  it('should not render an automation line for non-automation tasks', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          ...baseTask,
+          identifier: 'TASK-1',
+          instruction: '一次性任务',
+          name: '一次性任务',
+        },
+      },
+      NOW,
+    );
+
+    expect(result).not.toContain('Automation:');
   });
 
   it('should prioritize user feedback at the top', () => {
@@ -296,6 +427,86 @@ describe('buildTaskRunPrompt', () => {
     expect(result).not.toContain('<activities>');
   });
 
+  it('should render the verify delivery-acceptance section with criteria and evidence', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          id: 'task_root',
+          identifier: 'TASK-1',
+          instruction: 'ship the feature',
+          status: 'running',
+          verify: {
+            criteria: [
+              {
+                required: true,
+                requiredEvidence: [{ hint: 'full page', type: 'screenshot' }],
+                title: 'login page renders',
+              },
+              { required: false, title: 'console is clean' },
+            ],
+            enabled: true,
+            maxIterations: 2,
+            requirement: 'the login flow works end to end',
+          },
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Verify — delivery acceptance (maxIterations: 2)');
+    expect(result).toContain('Requirement: the login flow works end to end');
+    expect(result).toContain('login page renders (required)');
+    expect(result).toContain('· evidence: screenshot — full page');
+    expect(result).toContain('console is clean');
+    expect(result).toContain('include artifact paths, commands, and observed results');
+    expect(result).toContain('an independent verifier decides whether this Task is complete');
+    expect(result).toContain('Run the Acceptance inside this Task, not after it');
+    expect(result).toMatch(/`lh acceptance install`.*plan path.*chapters on every recording/);
+    expect(result).not.toContain('lh acceptance run result submit'); // the skill owns publishing
+    expect(result).toContain('proved by a screenshot or recording');
+    // The portable skill is pulled to disk by CLI builders and is absent from
+    // `builtinSkills`, so it must never be named as an unconditional step.
+    expect(result).not.toContain('Use the `acceptance` skill to drive');
+    expect(result).toContain('must reference a real artifact by fileId');
+  });
+
+  it('should still instruct in-task acceptance when the policy has no criteria or requirement', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          id: 'task_root',
+          identifier: 'TASK-1',
+          instruction: 'ship the feature',
+          status: 'running',
+          verify: { criteria: [], enabled: true },
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Verify — delivery acceptance');
+    expect(result).toContain('Run the Acceptance inside this Task, not after it');
+    expect(result).toContain('Criterion ids are minted when this run starts');
+    expect(result).toContain('lh acceptance plan state');
+  });
+
+  it('should omit the verify section when verify is disabled', () => {
+    const result = buildTaskRunPrompt(
+      {
+        task: {
+          id: 'task_root',
+          identifier: 'TASK-1',
+          instruction: 'ship the feature',
+          status: 'running',
+          verify: { criteria: [{ title: 'x' }], enabled: false, requirement: 'r' },
+        },
+      },
+      NOW,
+    );
+
+    expect(result).not.toContain('Verify — delivery acceptance');
+  });
+
   it('should include subtasks in task section', () => {
     const result = buildTaskRunPrompt(
       {
@@ -461,5 +672,236 @@ describe('buildTaskRunPrompt', () => {
     const taskSection = result.match(/<task>[\s\S]*<\/task>/)?.[0] || '';
     expect(taskSection).toContain('👤 user');
     expect(taskSection).toContain('🤖 agent');
+  });
+
+  it('renders the goal loop section with reject comment, failed checks and CLI hint', () => {
+    const result = buildTaskRunPrompt(
+      {
+        goalLoop: {
+          failedChecks: [
+            { title: 'LCP < 2s', why: 'measured 2.8s — preload hero image' },
+            { title: 'Lighthouse ≥ 90' },
+          ],
+          maxRounds: 3,
+          rejectComment: '真机 LCP 还是 2.4s,按真机口径再优化',
+          round: 2,
+        },
+        task: {
+          ...baseTask,
+          identifier: 'TASK-1',
+          instruction: '官网首页改版并上线',
+          name: '首页改版',
+        },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Goal loop — round 2 of 3');
+    // Reject comment outranks the failed checks.
+    expect(result.indexOf('真机 LCP 还是 2.4s')).toBeLessThan(result.indexOf('LCP < 2s'));
+    expect(result).toContain('1. LCP < 2s — measured 2.8s — preload hero image');
+    expect(result).toContain('2. Lighthouse ≥ 90');
+    expect(result).toContain('`lh task topic view TASK-1 <seq>`');
+  });
+
+  it.each([undefined, 'Keep the existing table.'])(
+    'renders automatic review feedback alongside optional user feedback (%s)',
+    (rejectComment) => {
+      const result = buildTaskRunPrompt(
+        {
+          goalLoop: {
+            automaticReviewFeedback: 'Add the missing total row.',
+            rejectComment,
+            round: 2,
+          },
+          task: {
+            ...baseTask,
+            identifier: 'TASK-1',
+            name: 'Report',
+            instruction: 'Finish the report.',
+          },
+        },
+        NOW,
+      );
+
+      expect(result).toContain('Review feedback on the last delivery');
+      expect(result).toContain('Automatic Acceptance review:\nAdd the missing total row.');
+      expect(result).not.toContain('undefined');
+      if (rejectComment) {
+        expect(result).toContain(rejectComment);
+        expect(result.indexOf(rejectComment)).toBeLessThan(
+          result.indexOf('Automatic Acceptance review:'),
+        );
+      }
+    },
+  );
+
+  /**
+   * Regression: each round asked the owner the same questions, timed out,
+   * delivered "awaiting your confirmation", failed Acceptance and spawned the
+   * next round, which asked again. The round now sees what was already asked.
+   */
+  it('hands the next round the questions already asked and tells it not to re-ask', () => {
+    const result = buildTaskRunPrompt(
+      {
+        goalLoop: {
+          askedQuestions: [
+            {
+              answer: 'User answers:\n- 四项决策是否按推荐确认？: 是',
+              questions: ['四项决策是否按推荐确认？'],
+            },
+            {
+              answer: 'No answer received within the wait window; the user did not respond.',
+              questions: ['能不能在本机建虚拟屏？', '能不能装驱动？'],
+            },
+            { questions: ['ssh 被 1Password 挡住怎么办？'] },
+          ],
+          round: 3,
+        },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: '对比设计', name: '对比设计' },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Questions earlier rounds already asked the owner');
+    expect(result).toContain('1. 四项决策是否按推荐确认？');
+    expect(result).toContain('- 四项决策是否按推荐确认？: 是');
+    expect(result).toContain('2. 能不能在本机建虚拟屏？ / 能不能装驱动？');
+    expect(result).toContain('3. ssh 被 1Password 挡住怎么办？\n       → (nothing came back)');
+    expect(result).toContain('Do not ask the owner again');
+  });
+
+  it('tells every later round not to re-ask, even with no recorded questions', () => {
+    const result = buildTaskRunPrompt(
+      { goalLoop: { round: 2 }, task: { ...baseTask, identifier: 'TASK-1', instruction: 'x' } },
+      NOW,
+    );
+
+    expect(result).not.toContain('Questions earlier rounds already asked');
+    expect(result).toContain('Do not ask the owner again');
+  });
+
+  it('omits the round budget suffix for uncapped goals', () => {
+    const result = buildTaskRunPrompt(
+      {
+        goalLoop: { maxRounds: null, round: 5 },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: '写书', name: '写一本书' },
+      },
+      NOW,
+    );
+
+    expect(result).toContain('Goal loop — round 5:');
+    expect(result).not.toContain('round 5 of');
+  });
+
+  it('expands full handoff for the two most recent rounds and keeps older ones title-only', () => {
+    const mkTopic = (seq: number, summary: string) => ({
+      createdAt: `2026-03-2${seq}T10:00:00Z`,
+      handoff: {
+        keyFindings: [`finding-${seq}`],
+        nextAction: `next-${seq}`,
+        summary,
+        title: `round ${seq}`,
+      },
+      id: `t${seq}`,
+      seq,
+      status: 'completed',
+    });
+    const result = buildTaskRunPrompt(
+      {
+        activities: {
+          topics: [
+            mkTopic(1, 'summary-one'),
+            mkTopic(2, 'summary-two'),
+            mkTopic(3, 'summary-three'),
+          ],
+        },
+        task: { ...baseTask, identifier: 'TASK-1', instruction: '写书', name: '写一本书' },
+      },
+      NOW,
+    );
+
+    // Recent two rounds carry the full handoff…
+    expect(result).toContain('↳ summary: summary-two');
+    expect(result).toContain('↳ summary: summary-three');
+    expect(result).toContain('↳ findings: finding-3');
+    expect(result).toContain('↳ next: next-3');
+    // …the oldest stays title-only.
+    expect(result).not.toContain('summary-one');
+    expect(result).toContain('round 1');
+  });
+});
+
+describe('human assignee formatting', () => {
+  it('formatTaskCreated surfaces the member assignee when present', () => {
+    const base = { identifier: 'T-1', instruction: 'do it', name: 'Task', status: 'backlog' };
+    expect(formatTaskCreated({ ...base, assigneeLabel: 'Alice (usr_2)' })).toContain(
+      '  Assignee: Alice (usr_2)',
+    );
+    expect(formatTaskCreated(base)).not.toContain('Assignee:');
+  });
+
+  it('formatTaskDetail lists the member assignee (detail.userId) next to the agent', () => {
+    const out = formatTaskDetail({
+      agentId: null,
+      identifier: 'T-1',
+      instruction: 'do it',
+      status: 'backlog',
+      userId: 'usr_2',
+    });
+    expect(out).toContain('Assignee (member): usr_2');
+    expect(out).not.toContain('Agent:');
+  });
+
+  it('formatWorkspaceMembers renders one line per member with the id to pass back', () => {
+    const out = formatWorkspaceMembers([
+      { id: 'usr_1', isSelf: true, name: 'Me', role: 'owner', username: 'me' },
+      { id: 'usr_2', name: 'Alice Chen', role: 'member', username: 'alice' },
+      { id: 'usr_3', username: 'bob' },
+    ]);
+    expect(out).toContain('Workspace members that can be assigned tasks (3)');
+    expect(out).toContain('- Me  @me  role=owner  (you)  id=usr_1');
+    expect(out).toContain('- Alice Chen  @alice  role=member  id=usr_2');
+    // No display name → the username stands in, and is not repeated as @handle.
+    expect(out).toContain('- bob  id=usr_3');
+  });
+
+  it('formatWorkspaceMembers surfaces email and linked IM identities for exact matching', () => {
+    const out = formatWorkspaceMembers([
+      {
+        email: 'alice@lobehub.com',
+        id: 'usr_2',
+        imAccounts: ['discord:@Neko(4521)', 'slack:U123'],
+        name: 'Alice Chen',
+        role: 'member',
+        username: 'alice',
+      },
+    ]);
+    expect(out).toContain(
+      '- Alice Chen  @alice  alice@lobehub.com  role=member  im=discord:@Neko(4521),slack:U123  id=usr_2',
+    );
+  });
+
+  it('formatWorkspaceMembers announces a capped or filtered directory', () => {
+    const alice = { id: 'usr_2', name: 'Alice Chen', role: 'member', username: 'alice' };
+    expect(formatWorkspaceMembers([alice], { inWorkspace: true, total: 3 })).toContain(
+      'Workspace members that can be assigned tasks (1 of 3 — pass query to narrow).',
+    );
+    expect(
+      formatWorkspaceMembers([alice], { inWorkspace: true, query: 'ali', total: 1 }),
+    ).toContain('Workspace members that can be assigned tasks matching "ali" (1).');
+    expect(formatWorkspaceMembers([], { inWorkspace: true, query: 'zed', total: 0 })).toBe(
+      'No workspace members match "zed". Try a different name, @handle, email or platform id.',
+    );
+  });
+
+  it('formatWorkspaceMembers explains personal mode and empty results', () => {
+    expect(
+      formatWorkspaceMembers([{ id: 'usr_1', isSelf: true, name: 'Me' }], { inWorkspace: false }),
+    ).toContain('Not in a workspace — the only person a task can be assigned to is you:');
+    expect(formatWorkspaceMembers([], { inWorkspace: false })).toContain(
+      'tasks can only be assigned to agents here',
+    );
+    expect(formatWorkspaceMembers([])).toBe('No workspace members can be assigned tasks.');
   });
 });

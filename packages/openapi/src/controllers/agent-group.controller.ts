@@ -85,15 +85,7 @@ export class AgentGroupController extends BaseController {
       );
       const groupId = await agentGroupService.createAgentGroup(body);
 
-      return c.json(
-        {
-          data: { id: groupId },
-          message: 'Agent category created successfully',
-          success: true,
-          timestamp: new Date().toISOString(),
-        },
-        201,
-      );
+      return this.success(c, { id: groupId }, 'Agent category created successfully', 201);
     } catch (error) {
       return this.handleError(c, error);
     }

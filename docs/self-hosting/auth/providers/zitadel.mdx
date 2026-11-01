@@ -52,10 +52,8 @@ tags:
   | `AUTH_ZITADEL_SECRET` | Required | Client Secret from ZITADEL application                                        |
   | `AUTH_ZITADEL_ISSUER` | Required | ZITADEL issuer URL (e.g., `https://your-instance.zitadel.cloud`)              |
 
-  <Callout type={'info'}>
-    **Alternative Environment Variables**: For backward compatibility, the following aliases are also supported:
-
-    - `ZITADEL_CLIENT_ID` / `ZITADEL_CLIENT_SECRET` / `ZITADEL_ISSUER`
+  <Callout type={'warning'}>
+    **Deprecated Environment Variables**: `ZITADEL_CLIENT_ID` / `ZITADEL_CLIENT_SECRET` / `ZITADEL_ISSUER` are no longer supported. Setting any of them will cause the deployment to fail at build/startup — use `AUTH_ZITADEL_ID` / `AUTH_ZITADEL_SECRET` / `AUTH_ZITADEL_ISSUER` instead.
   </Callout>
 
   <Callout type={'tip'}>

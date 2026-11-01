@@ -13,6 +13,11 @@ export const AGENT_PLAN_FILE_TYPE = 'agent/plan';
 export const VERIFY_INSTRUCTION_FILE_TYPE = 'verify/instruction';
 export const CUSTOM_DOCUMENT_FILE_TYPE = 'custom/document';
 export const CUSTOM_FOLDER_FILE_TYPE = 'custom/folder';
+/**
+ * A page whose `content` is a self-contained HTML document, rendered in a
+ * sandboxed frame instead of the rich-text editor. It never carries editorData.
+ */
+export const HTML_DOCUMENT_FILE_TYPE = 'custom/html';
 
 export const MARKDOWN_MIME_TYPES = ['text/markdown', 'text/x-markdown'];
 
@@ -22,6 +27,26 @@ export const EDITOR_DOCUMENT_SOURCE_TYPES = [
   AGENT_DOCUMENT_SOURCE_TYPE,
   AGENT_SIGNAL_SOURCE_TYPE,
   DERIVED_DOCUMENT_SOURCE_TYPE,
+];
+
+/**
+ * `documents.source_type` values machine-generated rows carry. User-facing
+ * page/resource listings exclude these by default so agent working artifacts
+ * (tool outputs, skill bundles) don't flood the library.
+ */
+export const AGENT_ARTIFACT_SOURCE_TYPES = ['agent', 'agent-signal'] as const;
+
+/**
+ * `documents.source_type` values a user-authored Page row carries in the DB.
+ * `DocumentSourceType.EDITOR` ('editor') is stamped client-side on in-memory
+ * drafts only and never reaches the database — keep it out of SQL filters.
+ */
+export const PAGE_DOCUMENT_SOURCE_TYPES: string[] = ['file', 'api'];
+
+export const PAGE_DOCUMENT_FILE_TYPES: string[] = [
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  HTML_DOCUMENT_FILE_TYPE,
+  'application/pdf',
 ];
 
 export const hasFilenameExtension = (filename: string): boolean =>

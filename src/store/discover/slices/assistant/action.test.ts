@@ -1,228 +1,295 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { discoverService } from '@/services/discover';
+import { createReplicaState } from '@/libs/replica';
 import { globalHelpers } from '@/store/global/helpers';
+import type { AssistantListResponse } from '@/types/discover';
 
+import { assistantSelectors } from '../../selectors';
 import { useDiscoverStore as useStore } from '../../store';
+import {
+  assistantCategoriesQueryKey,
+  assistantDetailQueryKey,
+  assistantIdentifiersQueryKey,
+  assistantListQueryKey,
+} from './projection';
 
-vi.mock('zustand/traditional');
+vi.mock('@/services/discover', () => ({
+  discoverService: {
+    getAssistantCategories: vi.fn(),
+    getAssistantDetail: vi.fn(),
+    getAssistantIdentifiers: vi.fn(),
+    getAssistantList: vi.fn(),
+  },
+}));
+
+// The replica schedules its fetches through the app's SWR driver; the engine
+// itself is what these tests exercise, so the driver is a bare recorder.
+vi.mock('@/libs/swr', () => ({
+  mutate: vi.fn(),
+  useClientDataSWR: vi.fn(() => ({ isValidating: false, mutate: vi.fn() })),
+}));
+
+const makeList = (identifier = 'assistant-1'): AssistantListResponse => ({
+  currentPage: 1,
+  items: [{ identifier } as any],
+  pageSize: 21,
+  totalCount: 1,
+  totalPages: 1,
+});
+
+const emptyAssistantState = () => ({
+  assistantCategoriesMap: {},
+  assistantCategoriesReplica: createReplicaState(),
+  assistantDetailMap: {},
+  assistantDetailReplica: createReplicaState(),
+  assistantIdentifiersMap: {},
+  assistantIdentifiersReplica: createReplicaState(),
+  assistantListMap: {},
+  assistantListReplica: createReplicaState(),
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
+  useStore.setState(emptyAssistantState());
 });
 
-describe('AssistantAction', () => {
-  describe('useAssistantCategories', () => {
-    it('should fetch assistant categories with correct parameters', async () => {
-      const mockCategories = [
-        { id: 'cat-1', name: 'Category 1' },
-        { id: 'cat-2', name: 'Category 2' },
-      ];
+/** The replica network syncs registered with the SWR driver, per resource name. */
+const syncCalls = async (
+  name: 'assistantCategories' | 'assistantDetail' | 'assistantIdentifiers' | 'assistantList',
+) => {
+  const { useClientDataSWR } = await import('@/libs/swr');
+  return vi
+    .mocked(useClientDataSWR)
+    .mock.calls.filter(
+      ([key]) => Array.isArray(key) && key[0] === 'replica:sync' && key[1] === name,
+    )
+    .map(([key, fetcher, config]) => ({
+      config: config as { onSuccess?: (data: unknown) => void; revalidateOnFocus?: boolean },
+      fetcher: fetcher as () => Promise<any>,
+      key: key as unknown[],
+    }));
+};
 
-      vi.spyOn(discoverService, 'getAssistantCategories').mockResolvedValue(mockCategories as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
-
-      const params = {} as any;
-      const { result } = renderHook(() => useStore.getState().useAssistantCategories(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockCategories);
-      });
-
-      expect(discoverService.getAssistantCategories).toHaveBeenCalledWith(params);
+describe('AssistantSlice (replica)', () => {
+  it('does not revalidate any assistant read on window focus', async () => {
+    renderHook(() => {
+      const state = useStore.getState();
+      state.useFetchAssistantList();
+      state.useFetchAssistantDetail({ identifier: 'lobe-chat' });
+      state.useFetchAssistantCategories();
+      state.useFetchAssistantIdentifiers();
     });
 
-    it('should fetch assistant categories with custom parameters', async () => {
-      const mockCategories = [{ id: 'cat-1', name: 'Custom Category' }];
-
-      vi.spyOn(discoverService, 'getAssistantCategories').mockResolvedValue(mockCategories as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('zh-CN');
-
-      const params = { filter: 'popular' } as any;
-      const { result } = renderHook(() => useStore.getState().useAssistantCategories(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockCategories);
-      });
-
-      expect(discoverService.getAssistantCategories).toHaveBeenCalledWith(params);
-    });
+    for (const name of [
+      'assistantList',
+      'assistantDetail',
+      'assistantCategories',
+      'assistantIdentifiers',
+    ] as const) {
+      const calls = await syncCalls(name);
+      expect(calls.length).toBeGreaterThan(0);
+      for (const call of calls) expect(call.config.revalidateOnFocus).toBe(false);
+    }
   });
 
-  describe('useAssistantDetail', () => {
-    it('should fetch assistant detail when identifier is provided', async () => {
-      const mockDetail = {
-        identifier: 'test-assistant',
-        name: 'Test Assistant',
-        description: 'A test assistant',
-      };
+  describe('useFetchAssistantList', () => {
+    it('requests the list with normalized page / pageSize and the locale', async () => {
+      const { discoverService } = await import('@/services/discover');
 
-      vi.spyOn(discoverService, 'getAssistantDetail').mockResolvedValue(mockDetail as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
+      renderHook(() => useStore.getState().useFetchAssistantList({ q: 'coding' }));
 
-      const params = { identifier: 'test-assistant' };
-      const { result } = renderHook(() => useStore.getState().useAssistantDetail(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockDetail);
-      });
-
-      expect(discoverService.getAssistantDetail).toHaveBeenCalledWith(params);
-    });
-
-    it('should respect locale changes', async () => {
-      const mockDetail = {
-        identifier: 'test-assistant',
-        name: '测试助理',
-        description: '一个测试助理',
-      };
-
-      vi.spyOn(discoverService, 'getAssistantDetail').mockResolvedValue(mockDetail as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('zh-CN');
-
-      const params = { identifier: 'test-assistant' };
-      const { result } = renderHook(() => useStore.getState().useAssistantDetail(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockDetail);
-      });
-
-      expect(globalHelpers.getCurrentLanguage).toHaveBeenCalled();
-    });
-  });
-
-  describe('useAssistantIdentifiers', () => {
-    it('should fetch assistant identifiers', async () => {
-      const mockIdentifiers = [
-        { identifier: 'assistant-1', lastModified: '2024-01-01' },
-        { identifier: 'assistant-2', lastModified: '2024-01-02' },
-      ];
-
-      vi.spyOn(discoverService, 'getAssistantIdentifiers').mockResolvedValue(mockIdentifiers);
-
-      const { result } = renderHook(() => useStore.getState().useAssistantIdentifiers());
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockIdentifiers);
-      });
-
-      expect(discoverService.getAssistantIdentifiers).toHaveBeenCalled();
-    });
-  });
-
-  describe('useAssistantList', () => {
-    it('should fetch assistant list with default parameters', async () => {
-      const mockList = {
-        items: [{ identifier: 'assistant-1' }, { identifier: 'assistant-2' }],
-        total: 2,
-      };
-
-      vi.spyOn(discoverService, 'getAssistantList').mockResolvedValue(mockList as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
-
-      const { result } = renderHook(() => useStore.getState().useAssistantList());
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
+      const [call] = await syncCalls('assistantList');
+      await call.fetcher();
 
       expect(discoverService.getAssistantList).toHaveBeenCalledWith({
+        locale: 'en-US',
         page: 1,
         pageSize: 21,
+        q: 'coding',
       });
     });
 
-    it('should fetch assistant list with custom parameters', async () => {
-      const mockList = {
-        items: [{ identifier: 'assistant-1' }],
-        total: 1,
-      };
+    it('keys each page and filter set as its own replica entry', () => {
+      const { result } = renderHook(() => [
+        useStore.getState().useFetchAssistantList({ page: 1 }),
+        useStore.getState().useFetchAssistantList({ page: 2 }),
+        useStore.getState().useFetchAssistantList({ category: 'programming' }),
+      ]);
 
-      vi.spyOn(discoverService, 'getAssistantList').mockResolvedValue(mockList as any);
+      const [first, second, third] = result.current;
+      expect(new Set([first.queryKey, second.queryKey, third.queryKey]).size).toBe(3);
+    });
+
+    it('does not register a sync — and reports no loading — when disabled', async () => {
+      const { result } = renderHook(() =>
+        useStore.getState().useFetchAssistantList({ page: 1 }, { enabled: false }),
+      );
+
+      expect(result.current.queryKey).toBeUndefined();
+      expect(result.current.isLoading).toBe(false);
+      expect(await syncCalls('assistantList')).toHaveLength(0);
+    });
+
+    it('reports loading until the entry has a value to show', () => {
+      const { result } = renderHook(() => useStore.getState().useFetchAssistantList({ page: 1 }));
+
+      expect(result.current.isLoading).toBe(true);
+    });
+
+    it('does not report loading when the entry already has a (hydrated) value', () => {
+      const key = assistantListQueryKey({ locale: 'en-US', page: 1, pageSize: 21 });
+      useStore.setState({ assistantListMap: { [key]: makeList() } });
+
+      const { result } = renderHook(() => useStore.getState().useFetchAssistantList({ page: 1 }));
+
+      expect(result.current.queryKey).toBe(key);
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it('folds the response into the replica view the selectors read', async () => {
+      const response = makeList();
+
+      renderHook(() => useStore.getState().useFetchAssistantList({ page: 1 }));
+      const [call] = await syncCalls('assistantList');
+      act(() => call.config.onSuccess!(response));
+
+      const key = assistantListQueryKey({ locale: 'en-US', page: 1, pageSize: 21 });
+      expect(assistantSelectors.assistantList(key)(useStore.getState())).toEqual(response);
+    });
+  });
+
+  describe('useFetchAssistantDetail', () => {
+    it('requests the detail with identifier / source / version / locale', async () => {
+      const { discoverService } = await import('@/services/discover');
+
+      renderHook(() =>
+        useStore
+          .getState()
+          .useFetchAssistantDetail({ identifier: 'lobe-chat', source: 'new', version: '1.0.0' }),
+      );
+
+      const [call] = await syncCalls('assistantDetail');
+      await call.fetcher();
+
+      expect(discoverService.getAssistantDetail).toHaveBeenCalledWith({
+        identifier: 'lobe-chat',
+        locale: 'en-US',
+        source: 'new',
+        version: '1.0.0',
+      });
+    });
+
+    it('keys the detail by identifier, source and version', () => {
+      const { result } = renderHook(() => [
+        useStore.getState().useFetchAssistantDetail({ identifier: 'lobe-chat' }),
+        useStore.getState().useFetchAssistantDetail({ identifier: 'lobe-chat', source: 'new' }),
+        useStore.getState().useFetchAssistantDetail({ identifier: 'lobe-chat', version: '1.0.0' }),
+      ]);
+
+      expect(new Set(result.current.map((sync) => sync.queryKey)).size).toBe(3);
+    });
+
+    it('drops a cached detail once the market reports the assistant gone', async () => {
+      const { discoverService } = await import('@/services/discover');
+
+      const { result } = renderHook(() =>
+        useStore.getState().useFetchAssistantDetail({ identifier: 'lobe-chat' }),
+      );
+      const key = result.current.queryKey!;
+      const [call] = await syncCalls('assistantDetail');
+
+      vi.mocked(discoverService.getAssistantDetail).mockResolvedValueOnce({
+        identifier: 'lobe-chat',
+      } as any);
+      const cached = await call.fetcher();
+      act(() => call.config.onSuccess!(cached));
+      expect(assistantSelectors.assistantDetail(key)(useStore.getState())).toEqual({
+        identifier: 'lobe-chat',
+      });
+
+      // The market removed the assistant: the service answers `undefined`.
+      vi.mocked(discoverService.getAssistantDetail).mockResolvedValueOnce(undefined);
+      const missing = await call.fetcher();
+      act(() => call.config.onSuccess!(missing));
+
+      expect(assistantSelectors.assistantDetail(key)(useStore.getState())).toBeUndefined();
+      expect(useStore.getState().assistantDetailMap[key]).toBeUndefined();
+    });
+
+    it('keys the detail by the locale, so a language switch refetches', () => {
+      const { result, rerender } = renderHook(() =>
+        useStore.getState().useFetchAssistantDetail({ identifier: 'lobe-chat' }),
+      );
+      const first = result.current.queryKey;
+
       vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('zh-CN');
+      rerender();
 
-      const params = { page: 2, pageSize: 10, category: 'productivity' } as any;
-      const { result } = renderHook(() => useStore.getState().useAssistantList(params));
+      expect(result.current.queryKey).not.toBe(first);
+    });
+  });
 
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
+  describe('useFetchAssistantCategories', () => {
+    it('requests category counts with the search term and locale', async () => {
+      const { discoverService } = await import('@/services/discover');
 
-      expect(discoverService.getAssistantList).toHaveBeenCalledWith({
-        page: 2,
-        pageSize: 10,
-        category: 'productivity',
+      renderHook(() =>
+        useStore.getState().useFetchAssistantCategories({ q: 'coding', source: 'new' }),
+      );
+
+      const [call] = await syncCalls('assistantCategories');
+      await call.fetcher();
+
+      expect(discoverService.getAssistantCategories).toHaveBeenCalledWith({
+        locale: 'en-US',
+        q: 'coding',
+        source: 'new',
       });
     });
 
-    it('should convert page and pageSize to numbers', async () => {
-      vi.spyOn(discoverService, 'getAssistantList').mockResolvedValue({ items: [] } as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
+    it('skips the request when disabled (the list already carries the counts)', async () => {
+      const { result } = renderHook(() =>
+        useStore.getState().useFetchAssistantCategories({}, { enabled: false }),
+      );
 
-      const params = { page: 3, pageSize: 15 } as any;
-      const { result } = renderHook(() => useStore.getState().useAssistantList(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toBeDefined();
-      });
-
-      expect(discoverService.getAssistantList).toHaveBeenCalledWith({
-        page: 3,
-        pageSize: 15,
-      });
+      expect(result.current.queryKey).toBeUndefined();
+      expect(await syncCalls('assistantCategories')).toHaveLength(0);
     });
 
-    it('should work with search query parameter', async () => {
-      const mockList = {
-        items: [{ identifier: 'search-result-1' }],
-        total: 1,
-      };
-
-      vi.spyOn(discoverService, 'getAssistantList').mockResolvedValue(mockList as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
-
-      const params = { search: 'coding', page: 1, pageSize: 21 } as any;
-      const { result } = renderHook(() => useStore.getState().useAssistantList(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      expect(discoverService.getAssistantList).toHaveBeenCalledWith({
-        search: 'coding',
-        page: 1,
-        pageSize: 21,
-      });
+    it('falls back to an empty list when no category entry is loaded', () => {
+      expect(assistantSelectors.assistantCategories(undefined)(useStore.getState())).toEqual([]);
+      expect(assistantSelectors.assistantList(undefined)(useStore.getState())).toBeUndefined();
+      expect(assistantSelectors.assistantDetail(undefined)(useStore.getState())).toBeUndefined();
     });
+  });
 
-    it('should work with multiple filter parameters', async () => {
-      const mockList = {
-        items: [{ identifier: 'filtered-assistant' }],
-        total: 1,
-      };
+  describe('useFetchAssistantIdentifiers', () => {
+    it('requests the identifier index of a source', async () => {
+      const { discoverService } = await import('@/services/discover');
 
-      vi.spyOn(discoverService, 'getAssistantList').mockResolvedValue(mockList as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
+      renderHook(() => useStore.getState().useFetchAssistantIdentifiers({ source: 'new' }));
 
-      const params = {
-        category: 'development',
-        search: 'code',
-        page: 1,
-        pageSize: 10,
-      } as any;
-      const { result } = renderHook(() => useStore.getState().useAssistantList(params));
+      const [call] = await syncCalls('assistantIdentifiers');
+      await call.fetcher();
 
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
+      expect(discoverService.getAssistantIdentifiers).toHaveBeenCalledWith({ source: 'new' });
+    });
+  });
 
-      expect(discoverService.getAssistantList).toHaveBeenCalledWith({
-        category: 'development',
-        search: 'code',
-        page: 1,
-        pageSize: 10,
-      });
+  describe('replica key helpers', () => {
+    it('produces stable, distinct keys per query dimension', () => {
+      expect(assistantListQueryKey({ locale: 'en-US', page: 1, pageSize: 21 })).toBe(
+        assistantListQueryKey({ locale: 'en-US', page: 1, pageSize: 21 }),
+      );
+      expect(assistantDetailQueryKey({ identifier: 'a' })).not.toBe(
+        assistantDetailQueryKey({ identifier: 'b' }),
+      );
+      expect(assistantCategoriesQueryKey({ q: 'a' })).not.toBe(assistantCategoriesQueryKey({}));
+      expect(assistantIdentifiersQueryKey({ source: 'new' })).not.toBe(
+        assistantIdentifiersQueryKey({}),
+      );
     });
   });
 });
