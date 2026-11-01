@@ -22,6 +22,17 @@ import {
 } from '../protocol';
 import type { OpenAIStreamOptions } from './openai';
 
+const toResponsesError = (error: { code?: string | null; message?: string | null }) =>
+  ({
+    body: error,
+    message: error.message || error.code || 'The provider reported an error mid-stream.',
+    type: AgentRuntimeErrorType.ProviderBizError,
+  }) satisfies ChatMessageError;
+
+type ResponsesStreamContext = StreamContext & {
+  responseTools?: Map<number, { id: string; index: number; name: string; namespace?: string }>;
+};
+
 const transformOpenAIStream = (
   chunk:
     | OpenAI.Responses.ResponseStreamEvent
@@ -41,7 +52,7 @@ const transformOpenAIStream = (
         item_id: string;
         type: 'response.output_text.annotation.added';
       },
-  streamContext: StreamContext,
+  streamContext: ResponsesStreamContext,
   payload?: ChatPayloadForTransformStream,
 ): StreamProtocolChunk | StreamProtocolChunk[] => {
   // handle the first chunk error
@@ -79,6 +90,7 @@ const transformOpenAIStream = (
 
       case 'response.output_item.added': {
         switch (chunk.item.type) {
+          case 'custom_tool_call':
           case 'function_call': {
             streamContext.toolIndex =
               typeof streamContext.toolIndex === 'undefined' ? 0 : streamContext.toolIndex + 1;
@@ -87,14 +99,27 @@ const transformOpenAIStream = (
               index: streamContext.toolIndex,
               name: chunk.item.name,
             };
+            const namespace = chunk.item.namespace ? { namespace: chunk.item.namespace } : {};
+            streamContext.responseTools ??= new Map();
+            streamContext.responseTools.set(chunk.output_index, {
+              ...streamContext.tool,
+              ...namespace,
+            });
 
             return {
               data: [
                 {
-                  function: { arguments: chunk.item.arguments, name: chunk.item.name },
+                  function: {
+                    arguments:
+                      chunk.item.type === 'custom_tool_call'
+                        ? chunk.item.input
+                        : chunk.item.arguments,
+                    name: chunk.item.name,
+                  },
+                  ...namespace,
                   id: chunk.item.call_id,
                   index: streamContext.toolIndex!,
-                  type: 'function',
+                  type: chunk.item.type === 'custom_tool_call' ? 'custom' : 'function',
                 } satisfies StreamToolCallChunkData,
               ],
               id: streamContext.id,
@@ -106,14 +131,16 @@ const transformOpenAIStream = (
         return { data: chunk.item, id: streamContext.id, type: 'data' };
       }
 
+      case 'response.custom_tool_call_input.delta':
       case 'response.function_call_arguments.delta': {
+        const tool = streamContext.responseTools?.get(chunk.output_index) ?? streamContext.tool;
         return {
           data: [
             {
-              function: { arguments: chunk.delta, name: streamContext.tool?.name },
-              id: streamContext.tool?.id,
-              index: streamContext.toolIndex!,
-              type: 'function',
+              function: { arguments: chunk.delta, name: tool?.name },
+              id: tool?.id,
+              index: tool?.index ?? streamContext.toolIndex!,
+              type: chunk.type === 'response.custom_tool_call_input.delta' ? 'custom' : 'function',
             } satisfies StreamToolCallChunkData,
           ],
           id: streamContext.id,
@@ -228,6 +255,58 @@ const transformOpenAIStream = (
         };
 
         return { data: chunk, id: streamContext.id, type: 'data' };
+      }
+
+      /**
+       * Terminal failure events. Passing them through as plain `data` let the stream close
+       * normally with no content, no usage and no finish reason, so a failed or rate-limited
+       * response was reported as an empty completion — non-retryable, and without the
+       * upstream's own explanation.
+       */
+      case 'response.failed': {
+        const { error, usage } = chunk.response;
+        const failure = toResponsesError(
+          error ?? { message: 'The provider reported the response as failed.' },
+        );
+        const failureChunk = { data: failure, id: streamContext.id, type: 'error' } as const;
+        if (!usage) return failureChunk;
+
+        return [
+          {
+            data: convertOpenAIResponseUsage(usage, payload),
+            id: streamContext.id,
+            type: 'usage',
+          },
+          failureChunk,
+        ];
+      }
+
+      case 'error': {
+        return { data: toResponsesError(chunk), id: streamContext.id, type: 'error' };
+      }
+
+      /**
+       * An incomplete response is still billed. Surface its usage and reason so a turn that hit
+       * `max_output_tokens` during reasoning reads as a length stop rather than an unbilled drop.
+       */
+      case 'response.incomplete': {
+        const { incomplete_details, usage } = chunk.response;
+        const reason = incomplete_details?.reason;
+        const stopChunk = {
+          data: reason === 'max_output_tokens' ? 'length' : (reason ?? 'incomplete'),
+          id: streamContext.id,
+          type: 'stop',
+        } as const;
+        if (!usage) return stopChunk;
+
+        return [
+          {
+            data: convertOpenAIResponseUsage(usage, payload),
+            id: streamContext.id,
+            type: 'usage',
+          },
+          stopChunk,
+        ];
       }
 
       default: {

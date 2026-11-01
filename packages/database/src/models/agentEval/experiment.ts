@@ -351,7 +351,7 @@ export class AgentEvalExperimentModel {
         const list = recentRunsMap.get(row.experimentId) || [];
         list.push({
           ...(run as unknown as AgentEvalRunListItem),
-          benchmarkId: dataset?.benchmarkId,
+          benchmarkId: dataset?.benchmarkId ?? undefined,
           datasetName: dataset?.name,
         });
         recentRunsMap.set(row.experimentId, list);

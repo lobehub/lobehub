@@ -1,8 +1,10 @@
 import type { WorkType } from '@lobechat/types';
 
+import { canvasWorkAdapter } from './canvas';
 import { documentWorkAdapter } from './document';
 import { externalWorkAdapter } from './external';
 import { fileWorkAdapter } from './file';
+import { goalReportWorkAdapter } from './goalReport';
 import type { WorkTypeAdapter } from './internal';
 import { taskWorkAdapter } from './task';
 
@@ -13,16 +15,25 @@ import { taskWorkAdapter } from './task';
  * set) plus its type unions in `@lobechat/types`.
  */
 export const WORK_TYPE_ADAPTERS = {
+  canvas: canvasWorkAdapter,
   document: documentWorkAdapter,
   external: externalWorkAdapter,
   file: fileWorkAdapter,
+  goal_report: goalReportWorkAdapter,
   task: taskWorkAdapter,
 } satisfies Record<WorkType, WorkTypeAdapter>;
 
-export const WORK_TYPES = Object.keys(WORK_TYPE_ADAPTERS) as WorkType[];
+/** Work types read only through their owner (the goal graph), never through Work lists. */
+const UNLISTED_WORK_TYPES = new Set<WorkType>(['goal_report']);
+
+export const WORK_TYPES = (Object.keys(WORK_TYPE_ADAPTERS) as WorkType[]).filter(
+  (type) => !UNLISTED_WORK_TYPES.has(type),
+);
 
 /** Type-erased adapter list for uniform iteration in the aggregate queries. */
-export const workTypeAdapters = Object.values(WORK_TYPE_ADAPTERS) as WorkTypeAdapter[];
+export const workTypeAdapters = WORK_TYPES.map(
+  (type) => WORK_TYPE_ADAPTERS[type],
+) as WorkTypeAdapter[];
 
 /**
  * Work types gated behind an explicit client opt-in on the read path. `file` was
@@ -32,7 +43,7 @@ export const workTypeAdapters = Object.values(WORK_TYPE_ADAPTERS) as WorkTypeAda
  * request that does not opt in therefore receives the pre-`file` set, keeping
  * every already-deployed client byte-identically safe; new clients opt in.
  */
-const OPT_IN_WORK_TYPES = new Set<WorkType>(['file']);
+const OPT_IN_WORK_TYPES = new Set<WorkType>(['canvas', 'file']);
 
 /** The pre-`file` type set every already-deployed client is known to render. */
 export const LEGACY_WORK_TYPES = WORK_TYPES.filter((type) => !OPT_IN_WORK_TYPES.has(type));

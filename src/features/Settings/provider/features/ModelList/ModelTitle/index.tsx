@@ -1,6 +1,15 @@
-import { ActionIcon, DropdownMenu, Flexbox, Skeleton, Text, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  confirmModal,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Skeleton,
+  Text,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, use, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -93,7 +102,7 @@ const ModelTitle = memo<ModelFetcherProps>(
             )}
           </Flexbox>
           {isLoading ? (
-            <Skeleton.Button active size={'small'} style={{ width: 120 }} />
+            <Skeleton height={28} width={120} />
           ) : isEmpty ? null : (
             <Flexbox horizontal align={'center'} gap={8}>
               {!mobile && (
@@ -150,9 +159,9 @@ const ModelTitle = memo<ModelFetcherProps>(
                       onClick={() => {
                         if (!canManageProvider) return;
                         createCreateNewModelModal({
-                          existingModelIds: useAiInfraStore
-                            .getState()
-                            .aiProviderModelList.map((model) => model.id),
+                          existingModelIds: aiModelSelectors
+                            .getAiProviderModelList(provider)(useAiInfraStore.getState())
+                            .map((model) => model.id),
                           showDeployName,
                         });
                       }}

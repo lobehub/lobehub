@@ -2,9 +2,8 @@
 
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
-import { type DropdownItem, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { Button, confirmModal, createStaticStyles, cssVar, Text } from '@lobehub/ui';
 import {
   CircleDollarSign,
   Clock,
@@ -289,9 +288,7 @@ const BenchmarkHeader = memo<BenchmarkHeaderProps>(
                 <div className={styles.statIcon} style={{ background: cssVar.colorWarningBg }}>
                   <Trophy size={16} style={{ color: cssVar.colorWarning }} />
                 </div>
-                <span className={styles.statLabel} style={{ textTransform: 'uppercase' }}>
-                  {t('benchmark.detail.stats.topAgents')}
-                </span>
+                <span className={styles.statLabel}>{t('benchmark.detail.stats.topAgents')}</span>
               </Flexbox>
 
               {!hasDatasets && !hasCompletedRuns && (

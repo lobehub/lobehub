@@ -13,24 +13,59 @@ import { z } from 'zod';
 // Plan generation — AI proposes additional check criteria for a run
 // ============================================
 
+/**
+ * Models that do not enforce JSON-schema enums (DeepSeek via forced tool
+ * calling) put the evidence *modality* into `type` — `document`, `structured`,
+ * `image`. Map those back to the capture type they mean.
+ */
+const EVIDENCE_TYPE_BY_MODALITY: Record<string, (typeof VERIFY_EVIDENCE_TYPES)[number]> = {
+  document: 'markdown',
+  image: 'screenshot',
+  structured: 'text',
+};
+
 const requiredEvidenceSchema = z.object({
   hint: z.string().optional(),
-  modality: z.enum(VERIFY_EVIDENCE_MODALITIES).optional(),
-  scope: z.enum(VERIFY_EVIDENCE_SCOPES).optional(),
-  type: z.enum(VERIFY_EVIDENCE_TYPES),
+  modality: z.enum(VERIFY_EVIDENCE_MODALITIES).optional().catch(undefined),
+  scope: z.enum(VERIFY_EVIDENCE_SCOPES).optional().catch(undefined),
+  type: z.preprocess(
+    (value) => (typeof value === 'string' ? (EVIDENCE_TYPE_BY_MODALITY[value] ?? value) : value),
+    z.enum(VERIFY_EVIDENCE_TYPES),
+  ),
 });
 
-/** Lenient parse of the AI plan-gen output; the service filters/normalizes. */
+const generatedCriterionSchema = z.object({
+  description: z.string().optional(),
+  instruction: z.string().optional(),
+  onFail: z.enum(VERIFY_ON_FAIL_ACTIONS).optional().catch(undefined),
+  // One malformed evidence spec drops that spec, not the criterion.
+  requiredEvidence: z
+    .array(z.unknown())
+    .optional()
+    .catch(undefined)
+    .transform((items) =>
+      items?.flatMap((item) => {
+        const parsed = requiredEvidenceSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  required: z.boolean().optional().catch(undefined),
+  title: z.string(),
+  verifierType: z.enum(VERIFY_VERIFIER_TYPES),
+});
+
+/**
+ * Lenient parse of the AI plan-gen output; the service filters/normalizes.
+ *
+ * Each criterion is parsed on its own: a single off-schema field used to fail
+ * the whole object, the plan came back empty, and the checklist silently
+ * collapsed to the one holistic fallback row.
+ */
 export const RawGeneratedCriteriaSchema = z.object({
-  criteria: z.array(
-    z.object({
-      description: z.string().optional(),
-      instruction: z.string().optional(),
-      onFail: z.enum(VERIFY_ON_FAIL_ACTIONS).optional(),
-      requiredEvidence: z.array(requiredEvidenceSchema).optional(),
-      required: z.boolean().optional(),
-      title: z.string(),
-      verifierType: z.enum(VERIFY_VERIFIER_TYPES),
+  criteria: z.array(z.unknown()).transform((items) =>
+    items.flatMap((item) => {
+      const parsed = generatedCriterionSchema.safeParse(item);
+      return parsed.success ? [parsed.data] : [];
     }),
   ),
 });

@@ -23,6 +23,18 @@ describe('runCommand', () => {
     fs.rmSync(tmpDir, { force: true, recursive: true });
   });
 
+  const waitFor = async (predicate: () => boolean, timeoutMs = 5_000): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (predicate()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return predicate();
+  };
+
+  const fallbackDirsIn = (root: string): string[] =>
+    fs.readdirSync(root).filter((name) => name.startsWith('lobehub-cwd-fallback-'));
+
   describe('foreground observation mode', () => {
     it('should execute a simple command and finish immediately', async () => {
       const result = await runCommand({ command: 'echo hello' }, { processManager });
@@ -39,9 +51,34 @@ describe('runCommand', () => {
       const first = await runCommand({ command: 'echo first' }, { processManager: localManager });
       const second = await runCommand({ command: 'echo second' }, { processManager: localManager });
 
-      expect(first.shell_id).toBe('sh-1');
-      expect(second.shell_id).toBe('sh-2');
+      expect(first.shell_id).toMatch(/^sh-[\da-f]{6}-1$/);
+      expect(second.shell_id).toBe(first.shell_id!.replace(/-1$/, '-2'));
       localManager.cleanupAll();
+    });
+
+    // Regression: shell ids were a bare per-process counter (`sh-1`, `sh-2`…),
+    // so when getCommandOutput reached a different device process than the one
+    // that ran the command (app restart, two device processes on one machine),
+    // the same id named an unrelated command there and its output came back.
+    it('should not resolve a shell ID issued by another process to its own command', async () => {
+      const processA = new ShellProcessManager(tmpDir);
+      const processB = new ShellProcessManager(tmpDir);
+
+      try {
+        const fromA = await runCommand({ command: 'echo from-A' }, { processManager: processA });
+        const fromB = await runCommand({ command: 'echo from-B' }, { processManager: processB });
+
+        expect(fromA.shell_id).not.toBe(fromB.shell_id);
+
+        const crossed = await processB.getOutput({ shell_id: fromA.shell_id!, timeout: 0 });
+
+        expect(crossed.stdout).not.toContain('from-B');
+        expect(crossed.success).toBe(false);
+        expect(crossed.error).toContain(`Shell ID ${fromA.shell_id} not found`);
+      } finally {
+        processA.cleanupAll();
+        processB.cleanupAll();
+      }
     });
 
     it('should capture stderr output separately', async () => {
@@ -105,17 +142,153 @@ describe('runCommand', () => {
       expect(result.stdout).toContain('/tmp');
     });
 
-    it('should report the real spawn error when cwd does not exist', async () => {
+    it('[R4] falls back and runs when the requested cwd is missing, naming the fallback', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo reachable && pwd', cwd: missingCwd },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.exit_code).toBe(0);
+      // Node blames the executable (`spawn /bin/sh ENOENT`) when cwd is missing,
+      // which sends the model off debugging a healthy shell.
+      expect(result.error ?? '').not.toMatch(/spawn \S+ ENOENT/);
+      // The fallback is reported, never silent: the model must be able to tell
+      // the command ran somewhere else than the cwd it asked for.
+      expect(result.stdout).toContain('Working directory does not exist');
+      expect(result.stdout).toContain(missingCwd);
+      expect(result.stdout).toContain('Falling back to');
+      // The fallback is an isolated directory under the temp root — never the
+      // user's home — so project-relative commands cannot damage real files.
+      expect(result.stdout).toContain('lobehub-cwd-fallback-');
+      // The command actually ran from the fallback directory.
+      expect(result.stdout).toContain('reachable');
+    });
+
+    it('falls back to a fresh empty directory under the temp root when the cwd is missing', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo temp-fallback && pwd', cwd: missingCwd },
+        {
+          processManager,
+          tmpdirOverride: tmpDir,
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('Falling back to');
+      expect(result.stdout).toContain('temp-fallback');
+      // Exactly one isolated fallback directory was created under the temp
+      // root, it is empty, and the run reported it by path.
+      const created = fs
+        .readdirSync(tmpDir)
+        .filter((name) => name.startsWith('lobehub-cwd-fallback-'));
+      expect(created).toHaveLength(1);
+      const fallbackDir = path.join(tmpDir, created[0]);
+      expect(fs.readdirSync(fallbackDir)).toEqual([]);
+      expect(result.stdout).toContain(`Falling back to ${fallbackDir}`);
+    });
+
+    it('keeps the structured error when the fallback directory cannot be created', async () => {
       const missingCwd = path.join(tmpDir, 'missing-worktree');
       const result = await runCommand(
         { command: 'echo unreachable', cwd: missingCwd },
-        { processManager },
+        {
+          processManager,
+          tmpdirOverride: path.join(tmpDir, 'missing-tmp-root'),
+        },
       );
 
       expect(result.success).toBe(false);
       expect(result.exit_code).toBeUndefined();
-      expect(result.error).toContain(`working directory: ${missingCwd}`);
-      expect(result.error).toContain('ENOENT');
+      expect(result.error).not.toMatch(/spawn \S+ ENOENT/);
+      expect(result.error).toContain(`Working directory does not exist on ${os.hostname()}`);
+      expect(result.error).toContain(missingCwd);
+      expect(result.error).toContain('The shell is fine');
+    });
+
+    it('does not fall back for a sandboxed run: the fence is built on the requested cwd', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo unreachable', cwd: missingCwd },
+        {
+          processManager,
+          sandboxPolicy: {
+            allowNetwork: false,
+            onUnavailable: 'deny',
+            writableRoots: [tmpDir],
+          },
+        },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.exit_code).toBeUndefined();
+      expect(result.error).toContain(`Working directory does not exist on ${os.hostname()}`);
+      expect(result.error).toContain(missingCwd);
+      expect(result.error).toContain('sandboxed run must start in its requested directory');
+    });
+
+    it('falls back when the requested cwd is a file, naming the real problem', async () => {
+      const fileCwd = path.join(tmpDir, 'a-file');
+      fs.writeFileSync(fileCwd, '');
+      const result = await runCommand(
+        { command: 'echo via-file-cwd', cwd: fileCwd },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('Working directory is not a directory');
+      expect(result.stdout).toContain('Falling back to');
+      expect(result.stdout).toContain('via-file-cwd');
+    });
+
+    it('removes the fallback directory once the foreground command closes', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo cleanup-foreground && pwd', cwd: missingCwd },
+        { processManager, tmpdirOverride: tmpDir },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('cleanup-foreground');
+      expect(fallbackDirsIn(tmpDir)).toHaveLength(1);
+      const removed = await waitFor(() => fallbackDirsIn(tmpDir).length === 0);
+      expect(removed).toBe(true);
+    });
+
+    it('removes the fallback directory once a background command closes', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const bg = await runCommand(
+        { command: 'echo cleanup-background && pwd', cwd: missingCwd, run_in_background: true },
+        { processManager, tmpdirOverride: tmpDir },
+      );
+
+      expect(bg.success).toBe(true);
+      expect(bg.shell_id).toBeDefined();
+      // While the command runs, the fallback directory exists.
+      expect(fallbackDirsIn(tmpDir)).toHaveLength(1);
+      const observed = await processManager.getOutput({ shell_id: bg.shell_id! });
+      expect(observed.stdout).toContain('cleanup-background');
+      const removed = await waitFor(() => fallbackDirsIn(tmpDir).length === 0);
+      expect(removed).toBe(true);
+    });
+
+    it('never creates a fallback directory when the requested cwd is usable', async () => {
+      const usableCwd = path.join(tmpDir, 'usable-cwd');
+      fs.mkdirSync(usableCwd);
+      const result = await runCommand(
+        { command: 'echo usable && pwd', cwd: usableCwd },
+        {
+          processManager,
+          tmpdirOverride: tmpDir,
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).not.toContain('Falling back to');
+      const removed = await waitFor(() => fallbackDirsIn(tmpDir).length === 0);
+      expect(removed).toBe(true);
     });
 
     it('should merge env into child process environment', async () => {
@@ -228,7 +401,7 @@ describe('runCommand', () => {
       expect(result.success).toBe(true);
       expect(result.shell_id).toBeDefined();
       expect(result.exit_code).toBeUndefined();
-      expect(result.output_files?.stdout.path).toMatch(/sh-\d+\/stdout\.log$/);
+      expect(result.output_files?.stdout.path).toMatch(/sh-[\da-f]{6}-\d+\/stdout\.log$/);
       expect(result.stdout).toBeUndefined();
     });
 

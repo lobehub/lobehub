@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Card, Skeleton } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import {
   Activity,
   Award,
@@ -20,7 +18,9 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
-import { runSelectors, useEvalStore } from '@/store/eval';
+import AsyncError from '@/components/AsyncError';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { datasetSelectors, runSelectors, useEvalStore } from '@/store/eval';
 
 import BenchmarkHeader from './features/BenchmarkHeader';
 import DatasetsTab from './features/DatasetsTab';
@@ -83,13 +83,13 @@ const BenchmarkDetail = memo(() => {
     benchmarkId ? s.benchmarkDetailMap[benchmarkId] : undefined,
   );
   const useFetchDatasets = useEvalStore((s) => s.useFetchDatasets);
-  const datasets = useEvalStore((s) => s.datasetList);
-  const isLoadingDatasets = useEvalStore((s) => s.isLoadingDatasets);
+  const datasets = useEvalStore(datasetSelectors.datasetList(benchmarkId));
+  const isLoadingDatasets = useEvalStore(datasetSelectors.isLoadingDatasetList(benchmarkId));
   const refreshDatasets = useEvalStore((s) => s.refreshDatasets);
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
-  const runList = useEvalStore(runSelectors.runList);
+  const runList = useEvalStore(runSelectors.runList(benchmarkId));
 
-  useFetchBenchmarkDetail(benchmarkId);
+  const { error, isLoading, mutate } = useFetchBenchmarkDetail(benchmarkId);
   useFetchDatasets(benchmarkId);
 
   const handleRefreshDatasets = useCallback(async () => {
@@ -111,59 +111,10 @@ const BenchmarkDetail = memo(() => {
 
   const totalCases = datasets.reduce((sum, ds) => sum + (ds.testCaseCount || 0), 0);
 
-  if (!benchmark)
-    return (
-      <Flexbox className={styles.container} gap={24} height="100%" width="100%">
-        {/* Header skeleton */}
-        <Flexbox gap={16}>
-          <Flexbox horizontal align="start" gap={12}>
-            <Skeleton.Avatar active shape="square" size={40} style={{ borderRadius: cssVar.borderRadiusLG }} />
-            <Flexbox flex={1} gap={8}>
-              <Skeleton.Input active style={{ height: 24, width: 200 }} />
-              <Skeleton.Input active size="small" style={{ height: 14, width: 320 }} />
-            </Flexbox>
-          </Flexbox>
-        </Flexbox>
-
-        {/* Stats cards skeleton */}
-        <Flexbox horizontal gap={12}>
-          {[1, 2, 3, 4].map((i) => (
-            <Card
-              key={i}
-              styles={{ body: { padding: 16 } }}
-              style={{
-                border: `1px solid ${cssVar.colorBorderSecondary}`,
-                borderRadius: cssVar.borderRadius,
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
-              <Flexbox gap={12}>
-                <Flexbox horizontal align="center" gap={8}>
-                  <Skeleton.Avatar
-                    active
-                    shape="square"
-                    size={36}
-                    style={{ borderRadius: cssVar.borderRadius }}
-                  />
-                  <Skeleton.Input active size="small" style={{ height: 14, width: 80 }} />
-                </Flexbox>
-                <Flexbox gap={4}>
-                  <Skeleton.Input active style={{ height: 24, width: 60 }} />
-                  <Skeleton.Input active size="small" style={{ height: 12, width: 100 }} />
-                </Flexbox>
-              </Flexbox>
-            </Card>
-          ))}
-        </Flexbox>
-
-        {/* Section skeletons */}
-        <Skeleton.Input active style={{ height: 16, width: 80 }} />
-        <Skeleton.Input active style={{ height: 64, width: '100%' }} />
-        <Skeleton.Input active style={{ height: 16, width: 80 }} />
-        <Skeleton.Input active style={{ height: 64, width: '100%' }} />
-      </Flexbox>
-    );
+  if (!benchmark) {
+    if (isLoading || !error) return <RouteLoading />;
+    return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;
+  }
 
   return (
     <Flexbox className={styles.container} gap={24} height="100%" width="100%">

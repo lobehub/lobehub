@@ -2,7 +2,7 @@
 
 **App name:** `Slack` | **Process name:** `Slack`
 
-See [references/osascript.md](../../agent-testing/references/osascript.md) for shared patterns.
+See [references/osascript.md](../../../acceptance/references/osascript.md) for shared patterns.
 
 ## Activate & Navigate
 

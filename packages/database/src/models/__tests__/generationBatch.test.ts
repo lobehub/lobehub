@@ -15,17 +15,21 @@ const serverDB: LobeChatDatabase = await getTestDB();
 // Mock FileService
 const mockGetFullFileUrl = vi.fn();
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: mockGetFullFileUrl,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      getFullFileUrl: mockGetFullFileUrl,
+    };
+  }),
 }));
 
 // Mock GenerationModel
 const mockTransformGeneration = vi.fn();
 vi.mock('../generation', () => ({
-  GenerationModel: vi.fn().mockImplementation(() => ({
-    transformGeneration: mockTransformGeneration,
-  })),
+  GenerationModel: vi.fn(function () {
+    return {
+      transformGeneration: mockTransformGeneration,
+    };
+  }),
 }));
 
 const userId = 'generation-batch-test-user-id';
@@ -408,7 +412,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform config imageUrls through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -427,7 +431,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform single config imageUrl through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -447,7 +451,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform both imageUrl and imageUrls when both are present', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -472,7 +476,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform config endImageUrl through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -493,7 +497,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should transform config with both imageUrl and endImageUrl through FileService', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -520,7 +524,7 @@ describe('GenerationBatchModel', () => {
     });
 
     it('should handle config without imageUrls', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -779,7 +783,7 @@ describe('GenerationBatchModel', () => {
 
   describe('External service integration', () => {
     it('should call FileService with correct parameters', async () => {
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -814,7 +818,7 @@ describe('GenerationBatchModel', () => {
     it('should handle FileService errors gracefully', async () => {
       mockGetFullFileUrl.mockRejectedValue(new Error('FileService error'));
 
-      const [createdBatch] = await serverDB
+      await serverDB
         .insert(generationBatches)
         .values({
           ...testBatch,
@@ -827,5 +831,36 @@ describe('GenerationBatchModel', () => {
         generationBatchModel.queryGenerationBatchesByTopicIdWithGenerations(testTopic.id),
       ).rejects.toThrow('FileService error');
     });
+  });
+});
+
+describe('GenerationBatchModel guards', () => {
+  it('rejects a batch for a topic the caller cannot see', async () => {
+    await serverDB
+      .insert(generationTopics)
+      .values({ id: 'guard-foreign-topic', title: 'Not yours', userId: otherUserId });
+
+    await expect(
+      generationBatchModel.create({ ...testBatch, generationTopicId: 'guard-foreign-topic' }),
+    ).rejects.toThrow('Generation topic not found');
+
+    const rows = await serverDB
+      .select()
+      .from(generationBatches)
+      .where(eq(generationBatches.generationTopicId, 'guard-foreign-topic'));
+    expect(rows).toEqual([]);
+  });
+
+  it('collects only the urls an asset actually carries when deleting', async () => {
+    const batch = await generationBatchModel.create(testBatch);
+    await serverDB.insert(generations).values([
+      { asset: null, generationBatchId: batch.id, userId },
+      { asset: { coverUrl: 'cover-only.png', type: 'video' }, generationBatchId: batch.id, userId },
+    ]);
+
+    const result = await generationBatchModel.delete(batch.id);
+
+    expect(result?.deletedBatch.id).toBe(batch.id);
+    expect(result?.filesToDelete).toEqual(['cover-only.png']);
   });
 });

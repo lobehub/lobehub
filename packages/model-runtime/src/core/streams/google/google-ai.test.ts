@@ -1,5 +1,5 @@
 import type { GenerateContentResponse } from '@google/genai';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { serializeScopedSignature, type SignatureScope } from '../../../utils/signatureScope';
 import * as uuidModule from '../../../utils/uuid';
@@ -25,6 +25,10 @@ async function decodeStreamChunks(stream: ReadableStream): Promise<string[]> {
 }
 
 describe('GoogleGenerativeAIStream', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe('Basic functionality', () => {
     it('should transform Google Generative AI stream to protocol stream', async () => {
       vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1').mockReturnValueOnce('abcd1234');

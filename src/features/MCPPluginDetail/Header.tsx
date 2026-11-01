@@ -4,15 +4,18 @@ import { Github } from '@lobehub/icons';
 import {
   ActionIcon,
   Avatar,
+  Button,
+  createStaticStyles,
+  cssVar,
   Flexbox,
   Icon,
   stopPropagation,
   Tag,
   Text,
+  toast,
   Tooltip,
+  useResponsive,
 } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import {
   BookmarkIcon,
   BookmarkMinusIcon,

@@ -1,16 +1,19 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { Trash2Icon } from 'lucide-react';
+import { formatUsageValue } from '@lobechat/utils';
+import { Center, createStaticStyles, cx, Flexbox, Icon as LobeIcon, Text } from '@lobehub/ui';
+import { CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
+import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
+import CanvasWorkCard from './CanvasWorkCard';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from './descriptors';
+import { useResourceDeletedPrompt } from './useResourceDeletedPrompt';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -33,6 +36,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   cost: css`
     flex-shrink: 0;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
     color: ${cssVar.colorTextTertiary};
   `,
   description: css`
@@ -78,15 +83,28 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   inlineDescription: css`
+    flex: 1 1 0;
     min-width: 0;
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
   `,
-  inlineIdentifier: css`
+  inlineDot: css`
     flex-shrink: 0;
+    font-size: 11px;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  inlineIdentifier: css`
+    /* The short resource key keeps its width; the long description truncates first. */
+    flex: 0 0 auto;
+
+    max-width: 70%;
+
     font-family: ${cssVar.fontFamilyCode};
     font-size: 11px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  inlineMeta: css`
+    min-width: 0;
   `,
   inlineIcon: css`
     flex-shrink: 0;
@@ -99,7 +117,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   title: css`
     min-width: 0;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
   `,
 }));
@@ -111,8 +129,9 @@ interface WorkSummaryCardProps {
    * Override the click target. The default opens the chat portal (task detail /
    * document), which only renders inside the conversation UI; surfaces without
    * that portal (e.g. the resource page's 产物 gallery) pass their own
-   * navigation here. Only ever receives a clickable item — the card still gates
-   * clickability on external-url presence and task-deleted state.
+   * navigation here. Only ever receives a clickable, non-orphaned item — the
+   * card still gates clickability on external-url presence and routes
+   * resource-deleted items to the deleted notice before reaching this.
    */
   onOpen?: (item: WorkSummaryItem) => void;
   /**
@@ -127,10 +146,23 @@ interface WorkSummaryCardProps {
 const WorkSummaryCard = memo<WorkSummaryCardProps>(
   ({ className, item, onOpen, variant = 'card' }) => {
     const { t } = useTranslation('chat');
+    const openCanvas = useChatStore((s) => s.openCanvas);
     const openDocument = useChatStore((s) => s.openDocument);
     const openFilePreview = useChatStore((s) => s.openFilePreview);
     const openTaskDetail = useChatStore((s) => s.openTaskDetail);
+    const promptResourceDeleted = useResourceDeletedPrompt();
     const cost = formatWorkVersionCost(item.totalCost);
+    const totalTokens = getWorkVersionTotalTokens(item.event.cumulativeUsage);
+    const usage = cost
+      ? { icon: CircleDollarSignIcon, value: cost.slice(1) }
+      : totalTokens
+        ? { icon: CoinsIcon, value: formatUsageValue(totalTokens) }
+        : null;
+    const usageTitle = cost
+      ? t('workingPanel.works.totalCost', { cost })
+      : totalTokens
+        ? `${totalTokens.toLocaleString()} ${t('opStatusTray.tokens')}`
+        : undefined;
 
     const descriptor = getWorkTypeDescriptor(item);
     const Icon = descriptor.getIcon(item);
@@ -146,13 +178,18 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
     const showIdentifier = !!identifier && identifier !== title;
     const description = descriptor.getDescription(item);
     const openTarget = descriptor.getOpenTarget(item);
-    // The backing task was deleted outside the tool path: the Work lingers as an
-    // orphan rendered from its snapshot, and opening the gone task detail 404s, so
-    // strip the click affordance and surface a "task deleted" badge.
-    const taskDeleted = item.resourceType === 'task' && item.taskDeleted;
-    const clickable = !!openTarget && !taskDeleted;
+    // The backing resource (task / document) was deleted outside the tool path:
+    // the Work lingers as an orphan rendered from its snapshot, and opening the
+    // gone resource 404s. The card keeps its normal look and a click explains
+    // that the resource is gone and offers to remove the card.
+    const resourceDeleted = item.resourceDeleted;
+    const clickable = !!openTarget;
 
     const handleOpen = () => {
+      if (resourceDeleted) {
+        promptResourceDeleted(item);
+        return;
+      }
       if (onOpen) {
         onOpen(item);
         return;
@@ -160,6 +197,10 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
       if (!openTarget) return;
 
       switch (openTarget.kind) {
+        case 'canvas': {
+          openCanvas(openTarget.canvasId, openTarget.version);
+          return;
+        }
         case 'document': {
           openDocument(openTarget.documentId, openTarget.agentDocumentId);
           return;
@@ -175,10 +216,20 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           return;
         }
         case 'task': {
-          openTaskDetail(openTarget.identifier);
+          openTaskDetail(openTarget.taskId);
         }
       }
     };
+
+    if (item.type === 'canvas' && variant === 'card') {
+      return (
+        <CanvasWorkCard
+          className={className}
+          item={item}
+          onOpen={clickable ? handleOpen : undefined}
+        />
+      );
+    }
 
     if (variant === 'inline') {
       return (
@@ -190,29 +241,37 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
           onClick={clickable ? handleOpen : undefined}
         >
           <Icon className={styles.inlineIcon} size={17} />
+          {/* The sidebar is narrow: the title owns the first line (sharing it only
+              with the short usage badge), and the identifier drops to the meta line
+              with the description so a long `owner/repo#n` can't squeeze the title. */}
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-              <Text ellipsis className={styles.inlineTitle}>
+              <Text ellipsis className={styles.inlineTitle} style={{ flex: 1 }} title={title}>
                 {title}
               </Text>
-              {showIdentifier && <span className={styles.inlineIdentifier}>{identifier}</span>}
-              {taskDeleted && (
-                <Tag color={'warning'} icon={<Trash2Icon size={12} />} size={'small'}>
-                  {t('workingPanel.works.taskDeleted')}
-                </Tag>
+              {usage && (
+                <Center horizontal className={styles.inlineCost} gap={2} title={usageTitle}>
+                  <LobeIcon icon={usage.icon} />
+                  {usage.value}
+                </Center>
               )}
             </Flexbox>
-            {description && (
-              <Text ellipsis className={styles.inlineDescription}>
-                {description}
-              </Text>
+            {(showIdentifier || description) && (
+              <Flexbox horizontal align={'center'} className={styles.inlineMeta} gap={4}>
+                {showIdentifier && (
+                  <Text ellipsis className={styles.inlineIdentifier} title={identifier}>
+                    {identifier}
+                  </Text>
+                )}
+                {showIdentifier && description && <span className={styles.inlineDot}>·</span>}
+                {description && (
+                  <Text ellipsis className={styles.inlineDescription} title={description}>
+                    {description}
+                  </Text>
+                )}
+              </Flexbox>
             )}
           </Flexbox>
-          {cost && (
-            <span className={styles.inlineCost} title={t('workingPanel.works.totalCost', { cost })}>
-              {cost}
-            </span>
-          )}
         </Flexbox>
       );
     }
@@ -228,7 +287,7 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
         <Flexbox align={'center'} className={styles.icon} justify={'center'}>
           <Icon size={18} />
         </Flexbox>
-        <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
               <Text ellipsis className={styles.title}>
@@ -239,25 +298,16 @@ const WorkSummaryCard = memo<WorkSummaryCardProps>(
                   {identifier}
                 </Text>
               )}
-              {taskDeleted && (
-                <Tag color={'warning'} icon={<Trash2Icon size={12} />} size={'small'}>
-                  {t('workingPanel.works.taskDeleted')}
-                </Tag>
-              )}
             </Flexbox>
-            {cost && (
-              <Text
-                code
-                className={styles.cost}
-                fontSize={12}
-                title={t('workingPanel.works.totalCost', { cost })}
-              >
-                {cost}
-              </Text>
+            {usage && (
+              <Center horizontal className={styles.cost} gap={2} title={usageTitle}>
+                <LobeIcon icon={usage.icon} />
+                {usage.value}
+              </Center>
             )}
           </Flexbox>
           {description && (
-            <Text ellipsis className={styles.description} fontSize={13}>
+            <Text ellipsis className={styles.description} fontSize={12}>
               {description}
             </Text>
           )}

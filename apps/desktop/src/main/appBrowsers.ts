@@ -5,6 +5,7 @@ import type { BrowserWindowOpts } from './core/browser/Browser';
 export const BrowsersIdentifiers = {
   app: 'app',
   devtools: 'devtools',
+  processExplorer: 'processExplorer',
 };
 
 export const appBrowsers = {
@@ -31,6 +32,16 @@ export const appBrowsers = {
     path: '/desktop/devtools',
     titleBarStyle: 'hiddenInset',
     width: 1000,
+  },
+  processExplorer: {
+    autoHideMenuBar: true,
+    height: 560,
+    identifier: 'processExplorer',
+    minHeight: 320,
+    minWidth: 560,
+    path: '/popup/processes',
+    titleBarStyle: 'hidden',
+    width: 840,
   },
 } satisfies Record<string, BrowserWindowOpts>;
 

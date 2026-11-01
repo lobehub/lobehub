@@ -1,11 +1,8 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, type DropdownItem, DropdownMenu } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Button, confirmModal, type DropdownItem, DropdownMenu, Text, toast } from '@lobehub/ui';
 import { Ellipsis, Pencil, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -28,7 +25,6 @@ interface ExperimentHeaderProps {
 
 const ExperimentHeader = memo<ExperimentHeaderProps>(({ experiment }) => {
   const { t } = useTranslation('eval');
-  const { modal } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
   const deleteExperiment = useEvalStore((s) => s.deleteExperiment);
 
@@ -39,7 +35,7 @@ const ExperimentHeader = memo<ExperimentHeaderProps>(({ experiment }) => {
       key: 'delete',
       label: t('common.delete'),
       onClick: () =>
-        modal.confirm({
+        confirmModal({
           content: t('experiment.actions.delete.confirm'),
           okButtonProps: { danger: true },
           okText: t('experiment.actions.delete'),

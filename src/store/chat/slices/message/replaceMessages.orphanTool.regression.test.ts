@@ -17,7 +17,6 @@ vi.stubGlobal(
   'fetch',
   vi.fn(() => Promise.resolve(new Response('mock'))),
 );
-vi.mock('zustand/traditional');
 vi.mock('@/services/message', () => ({
   messageService: {
     createMessage: vi.fn(),

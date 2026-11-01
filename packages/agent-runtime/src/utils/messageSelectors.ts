@@ -1,5 +1,5 @@
 import type { StepActivatedSkill, StepContextTodos, UIChatMessage } from '@lobechat/types';
-import { isNonEmptyString, isPlainRecord } from '@lobechat/utils/object';
+import { isNonEmptyString, isPlainRecord } from './object';
 
 /**
  * Wire-format tool identifiers that carry skill activations in their

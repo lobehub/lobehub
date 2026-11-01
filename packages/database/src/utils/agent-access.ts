@@ -2,13 +2,17 @@ import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 
 import { agents } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspaceWhere } from './workspace';
 
 interface AgentAccessCtx {
   userId: string;
   workspaceId?: string;
 }
+
+/** The same use-time scope for validation and reads that also need current Agent settings. */
+export const agentUsableByWhere = (agentId: string, ctx: AgentAccessCtx) =>
+  and(eq(agents.id, agentId), buildWorkspaceWhere(ctx, agents));
 
 /**
  * Assert that `ctx.userId` in `ctx.workspaceId` is allowed to use the agent —
@@ -24,23 +28,14 @@ interface AgentAccessCtx {
  * surface in sync with `buildWorkspaceWhere` semantics.
  */
 export async function assertAgentUsableBy(
-  db: LobeChatDatabase,
+  db: LobeChatDatabase | Transaction,
   agentId: string,
   ctx: AgentAccessCtx,
 ): Promise<void> {
   const rows = await db
     .select({ id: agents.id })
     .from(agents)
-    .where(
-      and(
-        eq(agents.id, agentId),
-        buildWorkspaceWhere(ctx, {
-          userId: agents.userId,
-          workspaceId: agents.workspaceId,
-          visibility: agents.visibility,
-        }),
-      ),
-    )
+    .where(agentUsableByWhere(agentId, ctx))
     .limit(1);
 
   if (rows.length === 0) {

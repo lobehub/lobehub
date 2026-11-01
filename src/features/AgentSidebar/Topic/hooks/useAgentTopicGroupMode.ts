@@ -6,27 +6,34 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode } from '@/types/topic';
 
-import { resolveAgentTopicGroupMode } from '../utils/topicGroupMode';
+import { useTopicListScope } from '../TopicListScope';
+import { resolveAgentTopicGroupMode, resolveProjectTopicGroupMode } from '../utils/topicGroupMode';
 
 export const useAgentTopicGroupMode = () => {
+  const scope = useTopicListScope();
+  const updatePreference = useUserStore((s) => s.updatePreference);
   const agentType = useAgentStore(agentSelectors.currentAgentHeterogeneousProviderType);
   const agentTopicGroupMode = useAgentStore(
     (s) => agentSelectors.currentAgentConfig(s)?.chatConfig?.topicGroupMode,
   );
   const updateAgentChatConfig = useAgentStore((s) => s.updateAgentChatConfig);
   const globalMode = useUserStore(preferenceSelectors.topicGroupMode);
+  const projectMode = useUserStore(preferenceSelectors.projectTopicGroupMode);
 
-  const topicGroupMode = resolveAgentTopicGroupMode({
-    agentTopicGroupMode,
-    agentType,
-    globalMode,
-  });
+  const topicGroupMode = scope
+    ? resolveProjectTopicGroupMode(projectMode)
+    : resolveAgentTopicGroupMode({
+        agentTopicGroupMode,
+        agentType,
+        globalMode,
+      });
 
   const updateTopicGroupMode = useCallback(
     async (mode: TopicGroupMode) => {
-      await updateAgentChatConfig({ topicGroupMode: mode });
+      if (scope) await updatePreference({ projectTopicGroupMode: mode });
+      else await updateAgentChatConfig({ topicGroupMode: mode });
     },
-    [updateAgentChatConfig],
+    [scope, updateAgentChatConfig, updatePreference],
   );
 
   return useMemo(

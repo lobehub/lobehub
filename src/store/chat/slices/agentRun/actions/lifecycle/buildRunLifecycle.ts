@@ -2,23 +2,29 @@ import type { AgentState } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
+import { t } from 'i18next';
 
+import { LOADING_FLAT } from '@/const/message';
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
-import { notifyDesktopAgentCompleted } from '@/store/chat/utils/desktopNotification';
+import {
+  notifyDesktopAgentCompleted,
+  notifyDesktopAgentFailed,
+} from '@/store/chat/utils/desktopNotification';
+import {
+  hasCompletedAssistantText,
+  isAudioOnlyFirstUserMessage,
+} from '@/store/chat/utils/topicTitle';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
 import type { OperationStatus } from '../../../operation/types';
-import {
-  AI_RUNTIME_OPERATION_TYPES,
-  mergeQueuedMessages,
-  reconstructUploadFilesFromQueue,
-} from '../../../operation/types';
+import { AI_RUNTIME_OPERATION_TYPES, isClientHeldQueuedMessage } from '../../../operation/types';
 import { topicSelectors } from '../../../topic/selectors';
+import { scheduleQueuedFollowUp } from './queuedFollowUp';
 import type {
   AgentRunLifecycle,
   RunCompleteEvent,
@@ -144,6 +150,33 @@ export const buildRunLifecycle = (
   const { agentId, topicId, threadId, groupId, workspaceSlug } = context;
   const messageKey = messageMapKey(context);
   const contextKey = messageKey;
+  let voiceTopicTitleSummaryRequested = false;
+
+  const summarizeVoiceTopicTitleAfterCompletion = () => {
+    if (voiceTopicTitleSummaryRequested || adapter.runScope === 'sub_agent' || !topicId) return;
+
+    const topic = topicSelectors.getTopicById(topicId)(get());
+    const messages = displayMessageSelectors.getDisplayMessagesByKey(messageKey)(get());
+    const isUntitled =
+      !topic?.title ||
+      topic.title === LOADING_FLAT ||
+      topic.title === t('defaultTitle', { ns: 'topic' });
+
+    if (
+      topic &&
+      isUntitled &&
+      isAudioOnlyFirstUserMessage(messages) &&
+      hasCompletedAssistantText(messages)
+    ) {
+      voiceTopicTitleSummaryRequested = true;
+      void get()
+        .summaryTopicTitle(topicId, messages)
+        .catch((error) => {
+          voiceTopicTitleSummaryRequested = false;
+          log('Failed to summarize voice topic title: %O', error);
+        });
+    }
+  };
 
   const emitComplete = (operationId: string, runtimeStatus: AgentState['status'] | undefined) => {
     // `client.runtime.complete` is a CLIENT-only source event (browser → server
@@ -250,6 +283,26 @@ export const buildRunLifecycle = (
       }
     },
     afterRunComplete: async (event: RunCompleteEvent) => {
+      if (get().operations[event.operationId]?.metadata.terminalReconciled) return;
+      if (adapter.runScope === 'sub_agent') return;
+
+      const disposition = resolveTerminalDisposition(event);
+      if (disposition === 'failed' && event.notification) {
+        await notifyDesktopAgentFailed(get, {
+          context: { agentId, groupId, topicId, workspaceSlug },
+          error: event.notification.error,
+        });
+        return;
+      }
+      if (disposition !== 'success') return;
+
+      // A voice-only first message cannot be summarized at the post-persist seam:
+      // its content is empty and the assistant row is still a loading placeholder.
+      // Once the reply completes, use the now-textual conversation to generate a
+      // meaningful title. This also leaves the visible default title intact if the
+      // title request fails instead of turning the sidebar row blank.
+      summarizeVoiceTopicTitleAfterCompletion();
+
       // Desktop notification + dock badge. Single home for all runtimes'
       // completion notification — every transport funnels through the shared
       // `notifyDesktopAgentCompleted` helper, so title (topic/agent name), body
@@ -257,7 +310,6 @@ export const buildRunLifecycle = (
       // Top-level-only: a nested sub-agent finishing is not a user-facing run
       // completion — the parent run is still going, so it must not fire a
       // "generation finished" notification / badge. See RunScope.
-      if (adapter.runScope === 'sub_agent') return;
       if (!isDesktop) return;
 
       const notificationContext = { agentId, groupId, topicId, workspaceSlug };
@@ -310,10 +362,16 @@ export const buildRunLifecycle = (
     beforeRunComplete: NOOP,
     completeRun: async (event: RunCompleteEvent): Promise<RunCompleteResult> => {
       const { operationId, runtimeStatus } = event;
+      if (get().operations[operationId]?.metadata.terminalReconciled) return { requeued: false };
       // Effective terminal disposition, resolved from the client `runtimeStatus`
       // OR the normalized `status` gateway/hetero pass — so the same side effects
       // fire regardless of which transport reached this boundary.
       const disposition = resolveTerminalDisposition(event);
+
+      // Title recovery is a successful-completion side effect, not a notification
+      // side effect. Run it before the queued-message early return so a follow-up
+      // cannot strand an audio-first topic without a title.
+      if (disposition === 'success') summarizeVoiceTopicTitleAfterCompletion();
 
       const completeSuccess = () => {
         get().completeOperation(operationId);
@@ -386,50 +444,26 @@ export const buildRunLifecycle = (
         }
       }
 
+      // A server snapshot may have settled the run while a callback awaited IO.
+      if (get().operations[operationId]?.metadata.terminalReconciled) return { requeued: false };
+
       // 2. On success with queued messages: drain, complete, and re-trigger a new
       //    sendMessage. Only drain on success — on error the queue is preserved.
       //    Gated to TOP-LEVEL runs only: the input queue belongs to the parent
       //    run, so a nested sub-agent completion must never drain it (it would
       //    re-trigger the user's queued message mid-parent-run). See RunScope.
-      if (disposition === 'success' && adapter.runScope !== 'sub_agent') {
-        const remainingQueued = get().drainQueuedMessages(contextKey);
-        if (remainingQueued.length > 0) {
-          const merged = mergeQueuedMessages(remainingQueued);
+      if (
+        disposition === 'success' &&
+        adapter.runScope !== 'sub_agent' &&
+        // The server delivers the follow-ups it holds itself.
+        get().queuedMessages?.[contextKey]?.some(isClientHeldQueuedMessage)
+      ) {
+        completeSuccess();
+        emitComplete(operationId, runtimeStatus);
 
-          completeSuccess();
-          emitComplete(operationId, runtimeStatus);
+        scheduleQueuedFollowUp(get, context, operationId, resetActiveTopicRunningStatus);
 
-          const execContext = { ...context };
-          const mergedContent = merged.content;
-          const mergedFiles =
-            merged.filesPreview.length > 0
-              ? reconstructUploadFilesFromQueue(merged.filesPreview)
-              : merged.files.length > 0
-                ? (merged.files.map((id) => ({ id })) as any)
-                : undefined;
-
-          setTimeout(() => {
-            // Use the passed `get` (the live chat-store getter) rather than a
-            // direct `useChatStore` import: in prod they resolve to the same
-            // singleton sendMessage, and avoiding the value import keeps the chat
-            // store out of this module's graph — so gateway.ts can statically
-            // import buildRunLifecycle without re-entering the store mid-eval.
-            get()
-              .sendMessage({
-                context: execContext,
-                editorData: merged.editorData,
-                files: mergedFiles,
-                ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
-                message: mergedContent,
-                metadata: merged.metadata,
-              })
-              .catch((e: unknown) => {
-                console.error('[executeClientAgent] sendMessage for queued content failed:', e);
-              });
-          }, 100);
-
-          return { requeued: true };
-        }
+        return { requeued: true };
       }
 
       // 3. Complete the operation based on the terminal disposition.
@@ -451,7 +485,12 @@ export const buildRunLifecycle = (
           // must be moved to terminal here. The client is exempt: its cancel
           // path already set the op to `cancelled` out of band, and
           // `completeOperation` deliberately preserves a `cancelled` status.
-          if (adapter.runtimeType !== 'client') get().completeOperation(operationId);
+          if (adapter.runtimeType !== 'client') {
+            get().completeOperation(operationId);
+            // A stop from elsewhere settles as `completed`; nothing drains the
+            // queue now, so the input must not wait for that hand-off.
+            get().updateOperationMetadata(operationId, { endedWithoutCompletion: true });
+          }
           break;
         }
         // `undefined`: unrecognized terminal status — fall through untouched.

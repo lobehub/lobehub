@@ -63,7 +63,7 @@ export const selectActivatedSkills = (enabledSkills?: SkillMeta[]): SkillMeta[] 
 /**
  * Skill Context Provider
  * Injects lightweight skill metadata into the system prompt so the LLM knows
- * which skills are available and can invoke them via `runSkill`.
+ * which skills are available and can invoke them via `activateSkill`.
  */
 export class SkillContextProvider extends BaseSystemRoleProvider {
   readonly name = 'SkillContextProvider';

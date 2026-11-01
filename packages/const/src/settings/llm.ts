@@ -1,21 +1,9 @@
-import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import type { LobeAgentAgencyConfig, LobeAgentChatConfig } from '@lobechat/types';
 
 export { DEFAULT_MINI_MODEL, DEFAULT_MODEL } from '@lobechat/business-const';
 
 export const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
-
-/**
- * Last-resort model for sub-agents spawned via `lobe-agent.callSubAgent`, used
- * only when neither an explicit `agencyConfig.subagent` override nor the
- * parent's effective model is available at the spawn site.
- *
- * Paired with `DEFAULT_PROVIDER` rather than a dedicated sub-agent provider, so
- * a build that swaps `@lobechat/business-const` (the cloud one routes through
- * its own official provider) moves the sub-agent along with the main model
- * instead of leaving it pointed at a provider that build doesn't serve.
- */
-export const DEFAULT_SUB_AGENT_MODEL = 'deepseek-v4-flash';
 
 /**
  * Resolve the model a sub-agent runs on, in precedence order:
@@ -24,7 +12,10 @@ export const DEFAULT_SUB_AGENT_MODEL = 'deepseek-v4-flash';
  * 2. The parent run's effective model — same provider, same model. Multi-provider
  *    setups otherwise strand sub-agents on a provider the user has moved away
  *    from (Claude Code / Codex sub-agents inherit the parent model the same way).
- * 3. The global default, when the spawn site has no parent model at hand.
+ * 3. The global default, when the spawn site has no parent model at hand. Both
+ *    halves come from `@lobechat/business-const`, so a build that swaps it (the
+ *    cloud one routes through its own official provider) never pairs its
+ *    provider with a model id only the self-hosted catalog carries.
  *
  * Model and provider resolve as a pair: mixing one source's model id with
  * another source's provider would produce a `provider/model` combination the
@@ -40,7 +31,7 @@ export const resolveSubAgentModel = (
   if (parentModel?.model)
     return { model: parentModel.model, provider: parentModel.provider || DEFAULT_PROVIDER };
 
-  return { model: DEFAULT_SUB_AGENT_MODEL, provider: DEFAULT_PROVIDER };
+  return { model: DEFAULT_MODEL, provider: DEFAULT_PROVIDER };
 };
 
 /**

@@ -1,17 +1,26 @@
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { TOPIC_TITLE_JSON_SCHEMA } from '@lobechat/prompts';
 import type { LobeUser, UIChatMessage } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
+import { toast } from '@lobehub/ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
+import { cacheScope, REPLICA_INDEX_KEY, replicaKeys } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
+import { useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import type { TOPIC_VISIBLY_RUNNING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { SETTLEABLE_TOPIC_RUN_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -20,6 +29,18 @@ import { useUserStore } from '@/store/user';
 import { type ChatTopic } from '@/types/topic';
 
 import { useChatStore } from '../../store';
+import { topicListResource } from './projection';
+
+// Revalidation is narrowed to the active identity scope.
+const topicListSyncKey = (containerKey: string, scope = cacheScope.get()) =>
+  replicaKeys.sync(topicListResource.name, topicListResource.version, scope, containerKey, {
+    pageSize: 20,
+  });
+
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<{ toast: Record<string, unknown> }>();
+  return { ...actual, toast: { ...actual.toast, error: vi.fn() } };
+});
 
 // Mock @/libs/swr mutate
 vi.mock('@/libs/swr', async () => {
@@ -30,7 +51,14 @@ vi.mock('@/libs/swr', async () => {
   };
 });
 
-vi.mock('zustand/traditional');
+vi.mock('swr', async () => {
+  const actual = await vi.importActual('swr');
+  return {
+    ...(actual as any),
+    mutate: vi.fn(),
+  };
+});
+
 // Mock topicService 和 messageService
 vi.mock('@/services/topic', () => ({
   topicService: {
@@ -41,8 +69,10 @@ vi.mock('@/services/topic', () => ({
     removeTopic: vi.fn(),
     cloneTopic: vi.fn(),
     createTopic: vi.fn(),
+    forkTopic: vi.fn(),
     updateTopicFavorite: vi.fn(),
     updateTopicMetadata: vi.fn(),
+    updateTopicModel: vi.fn(),
     updateTopicTitle: vi.fn(),
     updateTopic: vi.fn(),
     batchRemoveTopics: vi.fn(),
@@ -61,14 +91,6 @@ vi.mock('@/services/message', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: {
-    error: vi.fn(),
-    loading: vi.fn(() => ({ close: vi.fn() })),
-    success: vi.fn(),
-  },
-}));
-
 vi.mock('i18next', () => ({
   t: vi.fn((key, params) => (params.title ? key + '_' + params.title : key)),
 }));
@@ -82,6 +104,7 @@ beforeEach(() => {
       activeGroupId: undefined,
       activeTopicId: undefined,
       agentTopicsViewMap: {},
+      queuedMessages: {},
       searchTopics: [],
       topicDataMap: {},
       topicDetailMap: {},
@@ -97,7 +120,6 @@ beforeEach(() => {
       defaultSessions: [],
       pinnedSessions: [],
       sessions: [],
-      isSessionsFirstFetchFinished: false,
     },
     false,
   );
@@ -241,17 +263,69 @@ describe('topic action', () => {
         await summaryPromise;
       });
     });
+
+    it('binds a deferred new topic to the staged project directory', async () => {
+      // ROOT CAUSE: "+" on a project group defers the row to the first message.
+      // Creating it with only the working-directory path left the topic outside
+      // its project — missing from the project list, mis-grouped in the sidebar
+      // and skipping the project-directory execution routing. The staged
+      // directory must ride along on the create call.
+      const { result } = renderHook(() => useChatStore());
+      const messages = [{ id: 'message1' }] as UIChatMessage[];
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'session-id',
+          messagesMap: {
+            [messageMapKey({ agentId: 'session-id' })]: messages,
+          },
+          pendingNewTopicDirectory: {
+            agentId: 'session-id',
+            projectWorkingDirectoryId: 'binding-1',
+          },
+        });
+      });
+
+      const createTopicSpy = vi
+        .spyOn(topicService, 'createTopic')
+        .mockResolvedValue('new-topic-id');
+
+      await result.current.saveToTopic();
+
+      expect(createTopicSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ projectWorkingDirectoryId: 'binding-1' }),
+      );
+      // Consumed, so it cannot leak onto a later, unrelated topic.
+      expect(useChatStore.getState().pendingNewTopicDirectory).toBeUndefined();
+    });
+
+    it('does not apply a staged directory that belongs to another agent', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const messages = [{ id: 'message1' }] as UIChatMessage[];
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'session-id',
+          messagesMap: {
+            [messageMapKey({ agentId: 'session-id' })]: messages,
+          },
+          pendingNewTopicDirectory: {
+            agentId: 'another-agent',
+            projectWorkingDirectoryId: 'binding-1',
+          },
+        });
+      });
+
+      const createTopicSpy = vi
+        .spyOn(topicService, 'createTopic')
+        .mockResolvedValue('new-topic-id');
+
+      await result.current.saveToTopic();
+
+      expect(createTopicSpy).toHaveBeenCalledWith(
+        expect.not.objectContaining({ projectWorkingDirectoryId: expect.anything() }),
+      );
+    });
   });
   describe('refreshTopic', () => {
-    beforeEach(() => {
-      vi.mock('swr', async () => {
-        const actual = await vi.importActual('swr');
-        return {
-          ...(actual as any),
-          mutate: vi.fn(),
-        };
-      });
-    });
     afterEach(() => {
       // 在每个测试用例开始前恢复到实际的 SWR 实现
       vi.resetAllMocks();
@@ -273,17 +347,18 @@ describe('topic action', () => {
       // Check if mutate has been called with a matcher function
       expect(mutate).toHaveBeenCalledWith(expect.any(Function));
 
-      // Verify the matcher function works correctly
-      // Key format: [SWR_USE_FETCH_TOPIC, containerKey, { isInbox, pageSize }]
+      // Verify the matcher function works correctly (local-first sync keys)
       const matcherFn = (mutate as Mock).mock.calls[0][0];
       const containerKey = `agent_${activeAgentId}`;
 
       // Should match key with correct containerKey
-      expect(matcherFn(['topic:list', containerKey, { isInbox: false, pageSize: 20 }])).toBe(true);
+      expect(matcherFn(topicListSyncKey(containerKey))).toBe(true);
       // Should not match key with different containerKey
-      expect(matcherFn(['topic:list', 'agent_other-id', { isInbox: false, pageSize: 20 }])).toBe(
-        false,
-      );
+      expect(matcherFn(topicListSyncKey('agent_other-id'))).toBe(false);
+      // Should not match another identity's sync key
+      expect(matcherFn(topicListSyncKey(containerKey, 'other-user:personal'))).toBe(false);
+      // The legacy SWR-persisted key is gone
+      expect(matcherFn(['topic:list', containerKey, { isInbox: false, pageSize: 20 }])).toBe(false);
       // Should not match non-array keys
       expect(matcherFn('some-string')).toBe(false);
       // Should not match keys with wrong prefix
@@ -346,7 +421,7 @@ describe('topic action', () => {
 
     it('applies the switch to the bucket that owns the topic', async () => {
       const { result } = renderHook(() => useChatStore());
-      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
       seedBuilderTopic();
 
       await act(async () => {
@@ -364,7 +439,7 @@ describe('topic action', () => {
 
     it('revalidates the owning bucket instead of the active agent bucket', async () => {
       const { result } = renderHook(() => useChatStore());
-      vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as any);
+      vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
       (mutate as Mock).mockClear();
       seedBuilderTopic();
 
@@ -376,8 +451,425 @@ describe('topic action', () => {
       });
 
       const matcherFn = (mutate as Mock).mock.calls[0][0];
-      expect(matcherFn(['topic:list', BUILDER_KEY, { pageSize: 20 }])).toBe(true);
-      expect(matcherFn(['topic:list', topicMapKey({ agentId: 'edited-agent' }), {}])).toBe(false);
+      expect(matcherFn(topicListSyncKey(BUILDER_KEY))).toBe(true);
+      expect(matcherFn(topicListSyncKey(topicMapKey({ agentId: 'edited-agent' })))).toBe(false);
+    });
+
+    it('writes model and the re-pinned reasoning config in one request', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
+      seedBuilderTopic();
+      act(() => {
+        useChatStore.setState({
+          internal_resolveTopicReasoningSnapshot: vi
+            .fn()
+            .mockResolvedValue({ deepseekV4GAReasoningEffort: 'high' }),
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'deepseek-v4-flash',
+          provider: 'lobehub',
+        });
+      });
+
+      expect(spy).toHaveBeenCalledWith('builder-topic', {
+        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
+        model: 'deepseek-v4-flash',
+        provider: 'lobehub',
+      });
+      expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0]).toMatchObject({
+        metadata: { reasoningConfig: { deepseekV4GAReasoningEffort: 'high' } },
+        model: 'deepseek-v4-flash',
+      });
+    });
+
+    it('drops the previous pin when the new model has no reasoning params', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
+      seedBuilderTopic();
+      act(() => {
+        const key = BUILDER_KEY;
+        const state = useChatStore.getState();
+        useChatStore.setState({
+          internal_resolveTopicReasoningSnapshot: vi.fn().mockResolvedValue(undefined),
+          topicDataMap: {
+            [key]: {
+              ...state.topicDataMap[key],
+              items: [
+                {
+                  ...state.topicDataMap[key].items[0],
+                  metadata: {
+                    reasoningConfig: { glm5_2ReasoningEffort: 'max' },
+                    workingDirectory: '/w',
+                  },
+                },
+              ],
+            },
+          },
+        });
+      });
+
+      await act(async () => {
+        await result.current.updateTopicModel('builder-topic', {
+          model: 'plain-model',
+          provider: 'lobehub',
+        });
+      });
+
+      expect(spy).toHaveBeenCalledWith('builder-topic', {
+        metadata: undefined,
+        model: 'plain-model',
+        provider: 'lobehub',
+      });
+      expect(useChatStore.getState().topicDataMap[BUILDER_KEY].items[0].metadata).toEqual({
+        workingDirectory: '/w',
+      });
+    });
+  });
+
+  describe('updateTopicHeteroPin', () => {
+    const KEY = topicMapKey({ agentId: 'hetero-agent' });
+    const seed = () => {
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'hetero-agent',
+          activeTopicId: 'hetero-topic',
+          topicDataMap: {
+            [KEY]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  id: 'hetero-topic',
+                  metadata: { heteroEffort: 'high' },
+                  model: 'old-model',
+                  provider: 'codex',
+                  title: 'Hetero',
+                } as ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+    };
+
+    it('writes model and effort reset in one request', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const spy = vi.spyOn(topicService, 'updateTopicModel').mockResolvedValue(undefined as any);
+      seed();
+
+      await act(async () => {
+        await result.current.updateTopicHeteroPin('hetero-topic', {
+          effort: 'default',
+          model: 'new-model',
+          provider: 'codex',
+        });
+      });
+
+      expect(spy).toHaveBeenCalledWith('hetero-topic', {
+        metadata: { heteroEffort: 'default' },
+        model: 'new-model',
+        provider: 'codex',
+      });
+    });
+
+    it('writes a speed-only selection to topic metadata without a model write', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const modelSpy = vi.spyOn(topicService, 'updateTopicModel');
+      const metadataSpy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as any);
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+      seed();
+
+      await act(async () => {
+        await result.current.updateTopicHeteroPin('hetero-topic', {
+          provider: 'codex',
+          speed: 'fast',
+        });
+      });
+
+      expect(modelSpy).not.toHaveBeenCalled();
+      expect(metadataSpy).toHaveBeenCalledWith('hetero-topic', { heteroSpeed: 'fast' });
+      expect(useChatStore.getState().topicDataMap[KEY]?.items[0].metadata).toEqual({
+        heteroEffort: 'high',
+        heteroSpeed: 'fast',
+      });
+    });
+
+    it.each(['heterogeneous', 'api'] as const)(
+      'preserves the latest effort when a %s model write finishes later',
+      async (kind) => {
+        seed();
+        let finishModel!: () => void;
+        const modelPending = new Promise<void>((resolve) => {
+          finishModel = resolve;
+        });
+        let persistedEffort = 'high';
+        const modelSpy = vi.spyOn(topicService, 'updateTopicModel').mockImplementation(async () => {
+          await modelPending;
+          persistedEffort = 'default';
+          return [];
+        });
+        vi.spyOn(topicService, 'updateTopicMetadata').mockImplementation(async () => {
+          persistedEffort = 'low';
+          return [];
+        });
+        vi.spyOn(
+          useChatStore.getState(),
+          'internal_resolveTopicReasoningSnapshot',
+        ).mockResolvedValue({ reasoningEffort: 'high' });
+        let modelWrite!: Promise<void>;
+        act(() => {
+          modelWrite =
+            kind === 'heterogeneous'
+              ? useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+                  model: 'new-model',
+                  provider: 'codex',
+                  effort: 'default',
+                })
+              : useChatStore
+                  .getState()
+                  .updateTopicModel('hetero-topic', { model: 'new-model', provider: 'openai' });
+        });
+        await waitFor(() => expect(modelSpy).toHaveBeenCalledTimes(1));
+        let effortWrite!: Promise<void>;
+        act(() => {
+          effortWrite =
+            kind === 'heterogeneous'
+              ? useChatStore.getState().updateTopicHeteroEffort('hetero-topic', 'low')
+              : useChatStore
+                  .getState()
+                  .updateTopicReasoningConfig('hetero-topic', { reasoningEffort: 'low' });
+        });
+        await act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+        await act(async () => {
+          finishModel();
+          await Promise.all([modelWrite, effortWrite]);
+        });
+        expect(persistedEffort).toBe('low');
+        expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('hetero-topic');
+      },
+    );
+
+    it('restores the persisted topic after a model pin fails', async () => {
+      seed();
+      const saved = useChatStore.getState().topicDataMap[KEY];
+      vi.spyOn(topicService, 'updateTopicModel').mockRejectedValue(new Error('offline'));
+      const refresh = vi
+        .spyOn(useChatStore.getState(), 'refreshTopic')
+        .mockImplementation(async () => {
+          useChatStore.setState({ topicDataMap: { [KEY]: saved } });
+        });
+      await act(async () => {
+        await expect(
+          useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+            model: 'new-model',
+            provider: 'codex',
+            effort: 'low',
+          }),
+        ).rejects.toThrow('offline');
+      });
+      expect(refresh).toHaveBeenCalledWith(KEY);
+      expect(useChatStore.getState().topicDataMap[KEY]?.items[0].model).toBe('old-model');
+      expect(toast.error).toHaveBeenCalled();
+    });
+
+    it.each(['model', 'effort'])(
+      'rolls back a failed %s pin even when revalidation fails',
+      async (kind) => {
+        seed();
+        const previous = useChatStore.getState().topicDataMap[KEY]?.items[0];
+        vi.spyOn(topicService, 'updateTopicModel').mockRejectedValue(new Error('write failed'));
+        vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('write failed'));
+        vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(
+          new Error('refresh failed'),
+        );
+        await act(async () => {
+          await expect(
+            useChatStore.getState().updateTopicHeteroPin('hetero-topic', {
+              ...(kind === 'model' ? { model: 'new-model' } : {}),
+              provider: 'codex',
+              effort: 'low',
+            }),
+          ).rejects.toThrow('write failed');
+        });
+        const restored = useChatStore.getState().topicDataMap[KEY]?.items[0];
+        expect(restored?.model).toEqual(previous?.model);
+        expect(restored?.metadata).toEqual(previous?.metadata);
+        expect(toast.error).toHaveBeenCalled();
+      },
+    );
+
+    it('writes only the effort when no model is selected', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const updateTopicSpy = vi
+        .spyOn(topicService, 'updateTopic')
+        .mockResolvedValue(undefined as any);
+      const metadataSpy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as any);
+      seed();
+
+      await act(async () => {
+        await result.current.updateTopicHeteroPin('hetero-topic', {
+          effort: 'low',
+          provider: 'codex',
+        });
+      });
+
+      expect(updateTopicSpy).not.toHaveBeenCalled();
+      expect(metadataSpy).toHaveBeenCalledWith('hetero-topic', { heteroEffort: 'low' });
+    });
+  });
+
+  describe('updateTopicReasoningConfig', () => {
+    const KEY = topicMapKey({ agentId: 'agent-1' });
+    const seedTopic = () => {
+      const timestamp = Date.now();
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'agent-1',
+          activeTopicId: 'topic-1',
+          topicDataMap: {
+            [KEY]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  id: 'topic-1',
+                  metadata: {
+                    reasoningConfig: { reasoningEffort: 'low', reasoningMode: 'standard' },
+                  },
+                  createdAt: timestamp,
+                  updatedAt: timestamp,
+                  title: 'Topic',
+                } satisfies ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+    };
+
+    it('keeps a persisted effort when only the follow-up refresh fails', async () => {
+      seedTopic();
+      vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue([]);
+      vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(
+        new Error('refresh failed'),
+      );
+      await act(async () => {
+        await expect(
+          useChatStore
+            .getState()
+            .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' }),
+        ).rejects.toThrow('refresh failed');
+      });
+      expect(useChatStore.getState().topicDataMap[KEY]?.items[0].metadata?.reasoningConfig).toEqual(
+        {
+          reasoningEffort: 'high',
+          reasoningMode: 'standard',
+        },
+      );
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('serializes consecutive selections through persistence and refresh', async () => {
+      seedTopic();
+      let finishFirst!: () => void;
+      const firstWrite = new Promise<void>((resolve) => {
+        finishFirst = resolve;
+      });
+      const spy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockImplementationOnce(async () => {
+          await firstWrite;
+          return [];
+        })
+        .mockResolvedValue([]);
+      let first!: Promise<void>;
+      let second!: Promise<void>;
+      act(() => {
+        first = useChatStore
+          .getState()
+          .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' });
+        second = useChatStore
+          .getState()
+          .updateTopicReasoningConfig('topic-1', { reasoningMode: 'pro' });
+      });
+      await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+      expect(useChatStore.getState().topicEffortUpdatingIds).toContain('topic-1');
+      await act(async () => {
+        finishFirst();
+        await Promise.all([first, second]);
+      });
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy).toHaveBeenLastCalledWith('topic-1', {
+        reasoningConfig: { reasoningEffort: 'high', reasoningMode: 'pro' },
+      });
+      expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('topic-1');
+    });
+
+    it('releases the updating state after failure and accepts another selection', async () => {
+      seedTopic();
+      const spy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockRejectedValueOnce(new Error('failed'))
+        .mockResolvedValue([]);
+      await act(async () => {
+        await expect(
+          useChatStore
+            .getState()
+            .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' }),
+        ).rejects.toThrow('failed');
+      });
+      expect(useChatStore.getState().topicEffortUpdatingIds).not.toContain('topic-1');
+      await act(async () => {
+        await useChatStore
+          .getState()
+          .updateTopicReasoningConfig('topic-1', { reasoningEffort: 'medium' });
+      });
+      expect(spy).toHaveBeenCalledTimes(2);
+    });
+
+    it('merges the patch over the current topic pin', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const spy = vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValue(undefined as any);
+      seedTopic();
+
+      await act(async () => {
+        await result.current.updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' });
+      });
+
+      expect(spy).toHaveBeenCalledWith('topic-1', {
+        reasoningConfig: { reasoningEffort: 'high', reasoningMode: 'standard' },
+      });
+    });
+
+    it('revalidates and toasts when the pin cannot be saved', async () => {
+      const { result } = renderHook(() => useChatStore());
+      vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValue(new Error('offline'));
+      seedTopic();
+      const refreshTopic = vi.fn();
+      act(() => {
+        useChatStore.setState({ refreshTopic });
+      });
+
+      await expect(
+        result.current.updateTopicReasoningConfig('topic-1', { reasoningEffort: 'high' }),
+      ).rejects.toThrow('offline');
+
+      expect(refreshTopic).toHaveBeenCalledWith(KEY);
+      expect(toast.error).toHaveBeenCalled();
     });
   });
 
@@ -636,12 +1128,11 @@ describe('topic action', () => {
       const archived = { id: 'archived-topic', status: 'completed', title: 'Archived Topic' };
       (topicService.getTopicDetail as Mock).mockResolvedValue(archived);
 
-      const { result } = renderHook(() => useChatStore().useFetchTopicDetail('archived-topic'));
+      renderHook(() => useChatStore().useFetchTopicDetail('archived-topic'));
 
       await waitFor(() => {
-        expect(result.current.data).toEqual(archived);
+        expect(useChatStore.getState().topicDetailMap['archived-topic']).toEqual(archived);
       });
-      expect(useChatStore.getState().topicDetailMap['archived-topic']).toEqual(archived);
     });
 
     it('does not fetch when no topic id is given', () => {
@@ -663,14 +1154,13 @@ describe('topic action', () => {
         useChatStore().useFetchTopics(true, { agentId: sessionId }),
       );
 
-      // Wait for the hook to resolve and update the state
+      // Data is read from the store, never from the fetch hook.
       await waitFor(() => {
-        expect(result.current.data).toEqual({ items: topics, total: topics.length });
+        expect(
+          useChatStore.getState().topicDataMap[topicMapKey({ agentId: sessionId })]?.items,
+        ).toEqual(topics);
       });
-      // Verify topics are stored in topicDataMap with correct key
-      expect(
-        useChatStore.getState().topicDataMap[topicMapKey({ agentId: sessionId })]?.items,
-      ).toEqual(topics);
+      expect(result.current).not.toHaveProperty('data');
     });
 
     describe('unread message prefetch', () => {
@@ -845,16 +1335,9 @@ describe('topic action', () => {
 
       const useFetchTopics = useChatStore.getState().useFetchTopics;
 
-      const swrResponse = renderHook(() =>
+      renderHook(() =>
         useFetchTopics(true, { agentId, excludeTriggers: ['cron', 'eval'], pageSize }),
       );
-
-      await waitFor(() => {
-        expect(swrResponse.result.current.data).toEqual({
-          items: refreshedFirstPage,
-          total: 59,
-        });
-      });
 
       await waitFor(() => {
         const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
@@ -912,16 +1395,9 @@ describe('topic action', () => {
       });
 
       const useFetchTopics = useChatStore.getState().useFetchTopics;
-      const swrResponse = renderHook(() =>
+      renderHook(() =>
         useFetchTopics(true, { agentId, excludeTriggers: ['cron', 'eval'], pageSize }),
       );
-
-      await waitFor(() => {
-        expect(swrResponse.result.current.data).toEqual({
-          items: refreshedFirstPage,
-          total: 60,
-        });
-      });
 
       await waitFor(() => {
         const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
@@ -972,13 +1448,7 @@ describe('topic action', () => {
       });
 
       const useFetchTopics = useChatStore.getState().useFetchTopics;
-      const swrResponse = renderHook(() =>
-        useFetchTopics(true, { agentId, excludeTriggers: ['cron'], pageSize }),
-      );
-
-      await waitFor(() => {
-        expect(swrResponse.result.current.data).toEqual({ items: refreshedTopics, total: 20 });
-      });
+      renderHook(() => useFetchTopics(true, { agentId, excludeTriggers: ['cron'], pageSize }));
 
       await waitFor(() => {
         const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
@@ -1028,13 +1498,7 @@ describe('topic action', () => {
       });
 
       const useFetchTopics = useChatStore.getState().useFetchTopics;
-      const swrResponse = renderHook(() =>
-        useFetchTopics(true, { agentId, excludeStatuses: ['completed'], pageSize }),
-      );
-
-      await waitFor(() => {
-        expect(swrResponse.result.current.data).toEqual({ items: refreshedTopics, total: 20 });
-      });
+      renderHook(() => useFetchTopics(true, { agentId, excludeStatuses: ['completed'], pageSize }));
 
       await waitFor(() => {
         const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
@@ -1366,6 +1830,231 @@ describe('topic action', () => {
       expect(revalidateSpy).toHaveBeenCalledTimes(1);
       expect(useChatStore.getState().activeTopicId).toBe('topic-b');
     });
+
+    describe('onlyIfActiveTopicIn guard', () => {
+      it('skips the switch when the user has navigated to another topic', async () => {
+        // Regression: a send's continuation calls switchTopic(newTopicId) after
+        // the persistence round-trip. If the user switched topics while that
+        // await was in flight, the unconditional switch yanked the UI (and the
+        // URL) back to the sent topic. The guard must drop the switch instead.
+        const { result } = renderHook(() => useChatStore());
+        const revalidateSpy = vi
+          .spyOn(result.current, 'revalidateMessages')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: 'topic-user-moved-to' });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-from-send', {
+            clearNewKey: true,
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        // The user's own topic stays active; the stale send continuation is a no-op.
+        expect(useChatStore.getState().activeTopicId).toBe('topic-user-moved-to');
+        expect(revalidateSpy).not.toHaveBeenCalled();
+      });
+
+      it('skips the switch when the user moved to the blank new-conversation view', async () => {
+        // Unset is the store's own "no topic" representation, so this also
+        // covers the guard's normalization of an unset field to `null`.
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-from-send', {
+            clearNewKey: true,
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBeUndefined();
+      });
+
+      it('applies the switch when the user is still on the expected topic', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const revalidateSpy = vi
+          .spyOn(result.current, 'revalidateMessages')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: 'topic-from-send' });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-from-send', {
+            clearNewKey: true,
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe('topic-from-send');
+        // clearNewKey still runs its side effects on an applied switch.
+        expect(useChatStore.getState().activeThreadId).toBeUndefined();
+        // skipRefreshMessage still suppresses the revalidation on an applied switch.
+        expect(revalidateSpy).not.toHaveBeenCalled();
+      });
+
+      it('applies the switch when the user sits on any accepted bucket', async () => {
+        // A send's topic can live under two ids: the client-minted one before
+        // the server confirms it, and the persisted one after the re-key. The
+        // guard must accept the conversation while it is on either, otherwise
+        // the send's own continuation would be dropped on the normal path.
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: 'topic-persisted' });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-persisted', {
+            clearNewKey: true,
+            onlyIfActiveTopicIn: ['topic-minted', 'topic-persisted'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe('topic-persisted');
+      });
+
+      it('does not consume the switch epoch when the guard skips', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const revalidateSpy = vi
+          .spyOn(result.current, 'revalidateMessages')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeTopicId: 'other-topic' });
+        });
+
+        // A guarded (skipped) call must not invalidate a concurrent normal
+        // switch's pending revalidation: the skipped call returns before the
+        // epoch bump, so the epoch only moves for real switches.
+        await act(async () => {
+          const guarded = result.current.switchTopic('topic-from-send', {
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+          const real = result.current.switchTopic('real-topic');
+          await Promise.all([guarded, real]);
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe('real-topic');
+        expect(revalidateSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('skips the switch when the active agent changed between two blank views', async () => {
+        // Regression (Codex P1): the topic guard alone cannot tell two blank
+        // views apart — both have `activeTopicId` unset. A send from agent A's
+        // blank view whose preflight outlasts the user's navigation to agent
+        // B's blank view must NOT adopt A's minted topic in B's UI.
+        const { result } = renderHook(() => useChatStore());
+        const revalidateSpy = vi
+          .spyOn(result.current, 'revalidateMessages')
+          .mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeAgentId: 'agent-b', activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-minted-by-send', {
+            onlyIfActiveAgentId: 'agent-a',
+            onlyIfActiveTopicIn: [null],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBeUndefined();
+        expect(revalidateSpy).not.toHaveBeenCalled();
+      });
+
+      it('applies the switch when the agent and topic both still match', async () => {
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeAgentId: 'agent-a', activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-minted-by-send', {
+            onlyIfActiveAgentId: 'agent-a',
+            onlyIfActiveTopicIn: [null],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBe('topic-minted-by-send');
+      });
+
+      it('skips the switch when the active group changed between two blank views', async () => {
+        const { result } = renderHook(() => useChatStore());
+        vi.spyOn(result.current, 'revalidateMessages').mockResolvedValue(undefined);
+
+        await act(async () => {
+          useChatStore.setState({ activeGroupId: 'group-b', activeTopicId: undefined });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-minted-by-send', {
+            onlyIfActiveGroupId: null,
+            onlyIfActiveTopicIn: [null],
+            skipRefreshMessage: true,
+          });
+        });
+
+        expect(useChatStore.getState().activeTopicId).toBeUndefined();
+      });
+
+      it('still clears the origin _new bucket when the guard drops the switch', async () => {
+        // Regression (Codex P1): a dropped switch used to suppress the
+        // clearNewKey cleanup too, leaving the send's origin blank bucket
+        // stale — and cleaning by the current view would wipe the WRONG
+        // conversation's bucket. The cleanup must target the origin.
+        const { result } = renderHook(() => useChatStore());
+        const replaceSpy = vi.spyOn(result.current, 'replaceMessages');
+        const clearPortalSpy = vi.spyOn(result.current, 'clearPortalStack');
+
+        await act(async () => {
+          useChatStore.setState({
+            activeAgentId: 'agent-b',
+            activeGroupId: undefined,
+            activeTopicId: 'topic-user-moved-to',
+          });
+        });
+
+        await act(async () => {
+          await result.current.switchTopic('topic-from-send', {
+            clearNewKey: true,
+            clearNewKeyContext: { agentId: 'agent-a', groupId: null },
+            onlyIfActiveTopicIn: ['topic-from-send'],
+            skipRefreshMessage: true,
+          });
+        });
+
+        // Navigation dropped…
+        expect(useChatStore.getState().activeTopicId).toBe('topic-user-moved-to');
+        // …but the origin conversation's _new bucket was still cleared.
+        expect(clearPortalSpy).toHaveBeenCalled();
+        expect(replaceSpy).toHaveBeenCalledWith(
+          [],
+          expect.objectContaining({
+            context: expect.objectContaining({ agentId: 'agent-a', topicId: null }),
+          }),
+        );
+      });
+    });
   });
   describe('removeSessionTopics', () => {
     it('should remove all topics from the current session and refresh the topic list', async () => {
@@ -1627,6 +2316,183 @@ describe('topic action', () => {
       expect(topicData.hasMore).toBe(false);
     });
   });
+  describe('persisted topic-list projection', () => {
+    const setupBucket = (agentId: string) => {
+      const containerKey = topicMapKey({ agentId });
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [containerKey]: {
+              currentPage: 0,
+              hasMore: false,
+              isLoadingMore: false,
+              items: [{ id: 'topic-1', status: 'running', title: 'Topic 1' }] as ChatTopic[],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      const set = vi.spyOn(topicListResource.storage!, 'set').mockResolvedValue();
+      // Data rows only: the per-scope index of persisted rows is bookkeeping.
+      const persisted = () => set.mock.calls.filter(([key]) => key.queryKey !== REPLICA_INDEX_KEY);
+
+      return { containerKey, persisted, result };
+    };
+
+    it('persists a run-end status patch so a reload does not repaint the spinner', async () => {
+      const { containerKey, persisted, result } = setupBucket('agent-write-through');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          id: 'topic-1',
+          type: 'updateTopic',
+          value: { status: 'unread' },
+        });
+      });
+
+      await waitFor(() => expect(persisted()).toHaveLength(1));
+      const [key, projection] = persisted()[0];
+      expect(key.queryKey).toBe(containerKey);
+      expect(projection.data.items).toMatchObject([{ id: 'topic-1', status: 'unread' }]);
+      // Transient paging flags never reach storage.
+      expect(projection.data).not.toHaveProperty('isLoadingMore');
+    });
+
+    it('does not persist client-only optimistic rows', async () => {
+      const { persisted, result } = setupBucket('agent-write-through-add');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          optimistic: true,
+          type: 'addTopic',
+          value: { id: 'topic-optimistic', title: 'New' },
+        });
+      });
+      expect(persisted()).toHaveLength(0);
+
+      // A later confirmed patch persists the bucket without the placeholder.
+      act(() => {
+        result.current.internal_dispatchTopic({
+          id: 'topic-1',
+          type: 'updateTopic',
+          value: { status: 'unread' },
+        });
+      });
+      await waitFor(() => expect(persisted()).toHaveLength(1));
+      expect(persisted()[0][1].data.items.map((item: ChatTopic) => item.id)).toEqual(['topic-1']);
+    });
+
+    it('does not create a bucket when patching an unloaded container', () => {
+      const { result } = setupBucket('agent-loaded');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          agentId: 'agent-not-loaded',
+          id: 'topic-x',
+          type: 'updateTopic',
+          value: { status: 'unread' },
+        });
+      });
+
+      expect(
+        useChatStore.getState().topicDataMap[topicMapKey({ agentId: 'agent-not-loaded' })],
+      ).toBeUndefined();
+    });
+  });
+
+  describe('optimistic topic updates', () => {
+    const seed = (agentId: string) => {
+      const containerKey = topicMapKey({ agentId });
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [containerKey]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [{ favorite: false, id: 'topic-1', title: 'Old' }] as ChatTopic[],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+      return containerKey;
+    };
+
+    it('shows a rename immediately and keeps it after the server confirms', async () => {
+      const containerKey = seed('agent-rename');
+      let resolveUpdate!: () => void;
+      vi.mocked(topicService.updateTopic).mockImplementation(
+        () => new Promise((resolve) => (resolveUpdate = () => resolve(undefined as any))),
+      );
+
+      let pending!: Promise<void>;
+      act(() => {
+        pending = useChatStore.getState().updateTopicTitle('topic-1', 'New');
+      });
+      expect(useChatStore.getState().topicDataMap[containerKey].items[0].title).toBe('New');
+
+      await act(async () => {
+        resolveUpdate();
+        await pending;
+      });
+      expect(useChatStore.getState().topicDataMap[containerKey].items[0].title).toBe('New');
+      expect(useChatStore.getState().topicListReplica.entries[containerKey].pending).toEqual([]);
+    });
+
+    it('rolls a failed favorite back instead of leaving the optimistic value', async () => {
+      const containerKey = seed('agent-favorite-fail');
+      vi.mocked(topicService.updateTopic).mockRejectedValue(new Error('offline'));
+
+      await act(async () => {
+        await expect(useChatStore.getState().favoriteTopic('topic-1', true)).rejects.toThrow(
+          'offline',
+        );
+      });
+
+      expect(useChatStore.getState().topicDataMap[containerKey].items[0].favorite).toBe(false);
+    });
+
+    it('keeps an in-flight rename when a background revalidation lands', async () => {
+      const agentId = 'agent-rename-revalidate';
+      const containerKey = seed(agentId);
+      let resolveUpdate!: () => void;
+      vi.mocked(topicService.updateTopic).mockImplementation(
+        () => new Promise((resolve) => (resolveUpdate = () => resolve(undefined as any))),
+      );
+      (topicService.getTopics as Mock).mockResolvedValue({
+        items: [{ favorite: false, id: 'topic-1', title: 'Old' }],
+        total: 1,
+      });
+
+      let pending!: Promise<void>;
+      act(() => {
+        pending = useChatStore.getState().updateTopicTitle('topic-1', 'New');
+      });
+
+      renderHook(() => useChatStore().useFetchTopics(true, { agentId, pageSize: 20 }));
+      await waitFor(() => expect(topicService.getTopics).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(useChatStore.getState().topicListReplica.entries[containerKey].source).toBe(
+          'server',
+        ),
+      );
+      // The stale server row is rebased under the pending rename.
+      expect(useChatStore.getState().topicDataMap[containerKey].items[0].title).toBe('New');
+
+      await act(async () => {
+        resolveUpdate();
+        await pending;
+      });
+    });
+  });
+
   describe('loadMoreAgentTopicsView', () => {
     it('records a pagination error without clearing existing topics or hasMore', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -1817,6 +2683,56 @@ describe('topic action', () => {
           result.current.internal_updateTopic(topicId, { title: 'New' }),
         ).rejects.toThrow('rename failed');
       });
+    });
+
+    it('propagates a topic change to the sidebar, management page and detail resources', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-entity';
+      const key = topicMapKey({ agentId });
+      const topic = { favorite: false, id: 'topic-entity', title: 'Topic' } as ChatTopic;
+      const bucket = { currentPage: 0, hasMore: false, items: [topic], pageSize: 20, total: 1 };
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          agentTopicsViewMap: { [key]: { ...bucket, withDetails: true } },
+          topicDataMap: { [key]: bucket },
+          topicDetailMap: { [topic.id]: topic },
+        });
+      });
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+      const server = vi.spyOn(topicService, 'updateTopic');
+
+      // A failed write rolls back in every resource.
+      server.mockRejectedValueOnce(new Error('rename failed'));
+      await act(async () => {
+        await expect(
+          result.current.internal_updateTopic(topic.id, { title: 'Renamed' }),
+        ).rejects.toThrow('rename failed');
+      });
+      let state = useChatStore.getState();
+      expect(state.topicDataMap[key].items[0].title).toBe('Topic');
+      expect(state.agentTopicsViewMap[key].items[0].title).toBe('Topic');
+      expect(state.topicDetailMap[topic.id].title).toBe('Topic');
+
+      // A confirmed write lands in all three.
+      server.mockResolvedValueOnce(undefined as any);
+      await act(async () => {
+        await result.current.internal_updateTopic(topic.id, { favorite: true });
+      });
+      state = useChatStore.getState();
+      expect(state.topicDataMap[key].items[0].favorite).toBe(true);
+      expect(state.agentTopicsViewMap[key].items[0].favorite).toBe(true);
+      expect(state.topicDetailMap[topic.id].favorite).toBe(true);
+
+      // A delete reaches all three, with list totals adjusted.
+      act(() => {
+        result.current.internal_dispatchTopic({ id: topic.id, type: 'deleteTopic' });
+      });
+      state = useChatStore.getState();
+      expect(state.topicDataMap[key]).toMatchObject({ items: [], total: 0 });
+      expect(state.agentTopicsViewMap[key]).toMatchObject({ items: [], total: 0 });
+      expect(state.topicDetailMap[topic.id]).toBeUndefined();
     });
   });
   describe('cleanupStaleRunningTopics', () => {
@@ -2049,6 +2965,478 @@ describe('topic action', () => {
 
       expect(cleaned).toBe(0);
       expect(topicService.updateTopic).not.toHaveBeenCalledWith(topicId, { status: 'active' });
+    });
+  });
+
+  // A run whose terminal frame never landed (lost socket, hibernated DO buffer,
+  // or an intervention continuation dispatched on a new operation) leaves this
+  // tab holding a `running` op while the server has already retired the topic.
+  // The row reads that op for BOTH its spinner and its elapsed clock, so it spins
+  // and counts over a finished topic forever unless something retires the op.
+  describe('settleAllUnbackedTopicRuns', () => {
+    const agentId = 'leak-agent';
+    const topicId = 'leak-topic';
+    const serverOperationId = 'server-op-1';
+
+    /**
+     * The client's copy of the row as it looks after the leak: it still claims a
+     * live run (`running` + a `runningOperation` marker) long after the server
+     * has moved on. Returns the idle row the server would report for the same
+     * topic, which is what the sweep must trust.
+     */
+    const seedLeakedRow = (
+      localRow: Partial<{ metadata: unknown; status: string }> = {},
+      rowAgentId = agentId,
+    ) => {
+      const key = topicMapKey({ agentId: rowAgentId });
+      const localTopic = {
+        agentId: rowAgentId,
+        id: topicId,
+        metadata: {
+          runningOperation: { assistantMessageId: 'assistant-1', operationId: serverOperationId },
+        },
+        sessionId: rowAgentId,
+        status: 'running',
+        title: 'Leaked running topic',
+        updatedAt: Date.now(),
+        ...localRow,
+      } as ChatTopic & { agentId: string };
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: rowAgentId,
+          messageOperationMap: {},
+          operations: {},
+          operationsByContext: {},
+          operationsByMessage: {},
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [localTopic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      return {
+        key,
+        // The server's answer: no runningOperation, status outside running /
+        // waitingForHuman — i.e. the run is over.
+        serverRow: {
+          agentId: rowAgentId,
+          id: topicId,
+          metadata: {},
+          sessionId: rowAgentId,
+          status: 'active',
+          title: 'Leaked running topic',
+          updatedAt: Date.now(),
+        } as unknown as ChatTopic,
+      };
+    };
+
+    /** The leaked op itself: started, still `running`, old enough to settle. */
+    const seedLeakedOp = (
+      type: (typeof TOPIC_VISIBLY_RUNNING_OPERATION_TYPES)[number],
+      {
+        opAgentId = agentId,
+        serverOwned = true,
+      }: { opAgentId?: string; serverOwned?: boolean } = {},
+    ) => {
+      let operationId = '';
+      act(() => {
+        operationId = useChatStore.getState().startOperation({
+          context: { agentId: opAgentId, topicId },
+          metadata: serverOwned ? { serverOperationId } : {},
+          type,
+        }).operationId;
+      });
+
+      const operation = useChatStore.getState().operations[operationId];
+      useChatStore.setState({
+        operations: {
+          ...useChatStore.getState().operations,
+          [operationId]: {
+            ...operation,
+            // Past LOCAL_RUN_SETTLE_MIN_AGE_MS, so the dispatch window's guard
+            // does not mask the leak.
+            metadata: { ...operation.metadata, startTime: Date.now() - 60_000 },
+          },
+        },
+      });
+
+      return operationId;
+    };
+
+    // Parametrized over the exact set the sweep is allowed to retire, so a
+    // server-backed type that can pin the row while sitting outside the sweep's
+    // filter fails here instead of leaking a permanently-spinning row. The
+    // interim types are the ones an intervention continuation leaves behind.
+    it.each(SETTLEABLE_TOPIC_RUN_OPERATION_TYPES)(
+      'retires a leaked %s op once the server reports the run is over',
+      async (type) => {
+        const { key, serverRow } = seedLeakedRow();
+        const operationId = seedLeakedOp(type);
+        vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+        const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+        const state = useChatStore.getState();
+        expect(settled).toBe(1);
+        // The op no longer keeps the sidebar spinner and elapsed clock alive.
+        expect(state.operations[operationId].status).toBe('completed');
+        expect(operationSelectors.isTopicVisiblyRunning(topicId)(state)).toBe(false);
+        // …and the row's own copy is retired with it, marker included.
+        expect(state.topicDataMap[key].items[0]).toMatchObject({
+          metadata: { runningOperation: null },
+          status: 'active',
+        });
+      },
+    );
+
+    it('leaves a genuinely running op alone while the server reports a live run', async () => {
+      const { key } = seedLeakedRow();
+      const operationId = seedLeakedOp('submitToolInteraction');
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        ...useChatStore.getState().topicDataMap[key].items[0],
+      } as ChatTopic);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      const state = useChatStore.getState();
+      expect(settled).toBe(0);
+      expect(state.operations[operationId].status).toBe('running');
+      expect(operationSelectors.isTopicVisiblyRunning(topicId)(state)).toBe(true);
+      expect(state.topicDataMap[key].items[0].status).toBe('running');
+    });
+
+    it('reads no server row at all when there is no local candidate', async () => {
+      seedLeakedRow();
+      const detail = vi.spyOn(topicService, 'getTopicDetail');
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(0);
+      expect(detail).not.toHaveBeenCalled();
+    });
+
+    // Client mode deliberately writes the topic back to `active` BEFORE awaiting
+    // its optimistic plugin / content / user-message writes
+    // (`conversationControl.ts`), so during that pre-dispatch phase an `active`
+    // server row is the expected state while the interim op is still running —
+    // and nothing has been dispatched, so there is no server operation to own it.
+    // Retiring the op there makes `#wasInterimOpStopped` read it as a user Stop
+    // and return without ever starting the continuation.
+    it('leaves a live client-mode intervention alone while its own writes are pending', async () => {
+      // Exactly what the client-mode path leaves on the row: no marker, `active`.
+      seedLeakedRow({ metadata: {}, status: 'active' });
+      const operationId = seedLeakedOp('submitToolInteraction', { serverOwned: false });
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        agentId,
+        id: topicId,
+        metadata: {},
+        sessionId: agentId,
+        status: 'active',
+        updatedAt: Date.now(),
+      } as unknown as ChatTopic);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      const state = useChatStore.getState();
+      expect(settled).toBe(0);
+      expect(state.operations[operationId].status).toBe('running');
+      expect(operationSelectors.isTopicVisiblyRunning(topicId)(state)).toBe(true);
+    });
+
+    // The row a leaked run must be retired on lives in ITS agent/group bucket.
+    // Resolving that bucket from the currently active agent instead completed the
+    // op but left the real row spinning.
+    it('retires the row of the scope the op came from, not the active one', async () => {
+      const { key, serverRow } = seedLeakedRow();
+      // The user has since switched to a different agent.
+      act(() => {
+        useChatStore.setState({ activeAgentId: 'agent-b' });
+      });
+      const operationId = seedLeakedOp('execServerAgentRuntime');
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      // The row that was actually pinning itself must stop spinning.
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: null },
+        status: 'active',
+      });
+    });
+
+    // Group MAIN topic rows live in `group_${groupId}` even though the run's op
+    // also carries the supervisor's agentId. Deriving the bucket from that pair
+    // alone lands in `group_agent_${groupId}_${agentId}` and never finds the row.
+    it('retires a group-main row from its own bucket', async () => {
+      const groupId = 'group-1';
+      const key = topicMapKey({ groupId });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: undefined,
+          activeGroupId: undefined,
+          messageOperationMap: {},
+          operations: {},
+          operationsByContext: {},
+          operationsByMessage: {},
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  agentId: 'supervisor-agent',
+                  groupId,
+                  id: topicId,
+                  metadata: {
+                    runningOperation: {
+                      assistantMessageId: 'assistant-1',
+                      operationId: serverOperationId,
+                    },
+                  },
+                  status: 'running',
+                  title: 'Leaked group topic',
+                  updatedAt: Date.now(),
+                } as unknown as ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      let operationId = '';
+      act(() => {
+        operationId = useChatStore.getState().startOperation({
+          context: { agentId: 'supervisor-agent', groupId, scope: 'group', topicId },
+          metadata: { serverOperationId },
+          type: 'execServerAgentRuntime',
+        }).operationId;
+      });
+      const operation = useChatStore.getState().operations[operationId];
+      useChatStore.setState({
+        operations: {
+          ...useChatStore.getState().operations,
+          [operationId]: {
+            ...operation,
+            metadata: { ...operation.metadata, startTime: Date.now() - 60_000 },
+          },
+        },
+      });
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        agentId: 'supervisor-agent',
+        groupId,
+        id: topicId,
+        metadata: {},
+        status: 'active',
+        updatedAt: Date.now(),
+      } as unknown as ChatTopic);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: null },
+        status: 'active',
+      });
+    });
+
+    // A run that finished while the user was elsewhere settles the SERVER row to
+    // `unread`. The sweep has to mirror that terminal status — stamping `active`
+    // would hide the completion badge the user comes back for (and would clobber
+    // `completed` / `failed` the same way).
+    it("mirrors the server's terminal status instead of forcing active", async () => {
+      const { key, serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('execServerAgentRuntime');
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        ...serverRow,
+        status: 'unread',
+      } as ChatTopic);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: null },
+        status: 'unread',
+      });
+    });
+
+    // The counter-case: an op that pins the row ON PURPOSE without a server-side
+    // run. `autoRetryPending` is held across the heterogeneous overload countdown
+    // — longest window 30s ± 20% jitter, i.e. past the sweep's own 30s settle
+    // age. Retiring it would make `isHeteroOverloadWaitAborted` read a
+    // non-running op as "the user cancelled" and silently exhaust the retry
+    // sequence, so it has to stay outside the settleable set.
+    it('never retires an intentional local-only retry wait', async () => {
+      const { key, serverRow } = seedLeakedRow();
+      // Seeded as server-owned on purpose: the structural server-owned gate would
+      // otherwise mask a regression in the policy list, and the policy list is the
+      // thing this test pins.
+      const operationId = seedLeakedOp('autoRetryPending', { serverOwned: true });
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      const state = useChatStore.getState();
+      expect(settled).toBe(0);
+      expect(state.operations[operationId].status).toBe('running');
+      expect(operationSelectors.isTopicVisiblyRunning(topicId)(state)).toBe(true);
+      // Excluded from the candidate scan entirely, not merely spared by the
+      // server's answer.
+      expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      expect(state.topicDataMap[key].items[0].status).toBe('running');
+    });
+
+    // The transport is keyed by the SERVER operation id, not by this tab's local
+    // op id (`connectToGateway` stores under `result.operationId`). A teardown
+    // that looked the connection up by the local id silently tore nothing down
+    // and left a v1 reconnect timer / mux subscription alive for a finished run.
+    it("tears the transport down under the server's operation id", async () => {
+      const { serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('execServerAgentRuntime');
+      const disconnect = vi.fn();
+      useChatStore.setState({
+        gatewayConnections: {
+          ...useChatStore.getState().gatewayConnections,
+          [serverOperationId]: { client: { disconnect } as never, status: 'connecting' },
+        },
+      });
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      expect(disconnect).toHaveBeenCalledTimes(1);
+      expect(useChatStore.getState().gatewayConnections[serverOperationId]).toBeUndefined();
+    });
+
+    // A lost terminal frame skips BOTH halves of a run's completion: retiring the
+    // op AND draining the input queue (`buildRunLifecycle.completeRun` on success,
+    // `reconcileServerOperation` on a completed snapshot). The sweep now closes
+    // the second half too — but only for a run the server actually COMPLETED, on
+    // the same queue-aware path those two use.
+    it('drains a follow-up queued behind a leaked run the server completed', async () => {
+      const { serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('execServerAgentRuntime');
+      const contextKey = messageMapKey({ agentId, topicId });
+      const readOutcome = vi
+        .spyOn(aiAgentService, 'getOperationStatus')
+        .mockResolvedValue({ isCompleted: true } as never);
+      const sendMessage = vi
+        .spyOn(useChatStore.getState(), 'sendMessage')
+        .mockResolvedValue(undefined as never);
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+      act(() => {
+        useChatStore.setState({
+          queuedMessages: {
+            [contextKey]: [
+              { content: 'queued follow-up', createdAt: 1, id: 'q1', interruptMode: 'soft' },
+            ],
+          },
+        });
+      });
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      // The outcome is read by the SERVER operation id, and only because a
+      // follow-up actually needs rescuing.
+      expect(readOutcome).toHaveBeenCalledWith({ operationId: serverOperationId });
+      await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+      expect(sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'queued follow-up' }),
+      );
+      expect(useChatStore.getState().queuedMessages[contextKey] ?? []).toEqual([]);
+    });
+
+    // The counter-case: a failed / cancelled run PRESERVES its queued follow-up
+    // (every terminal path does), so the sweep must not auto-send it on an
+    // outcome that is not a completion.
+    it('keeps a follow-up queued behind a leaked run that did NOT complete', async () => {
+      const { serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('execServerAgentRuntime');
+      const contextKey = messageMapKey({ agentId, topicId });
+      vi.spyOn(aiAgentService, 'getOperationStatus').mockResolvedValue({
+        isCompleted: false,
+      } as never);
+      const sendMessage = vi
+        .spyOn(useChatStore.getState(), 'sendMessage')
+        .mockResolvedValue(undefined as never);
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+      act(() => {
+        useChatStore.setState({
+          queuedMessages: {
+            [contextKey]: [
+              { content: 'queued follow-up', createdAt: 1, id: 'q1', interruptMode: 'soft' },
+            ],
+          },
+        });
+      });
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(sendMessage).not.toHaveBeenCalled();
+      expect(useChatStore.getState().queuedMessages[contextKey]).toHaveLength(1);
+    });
+
+    // Retiring a leaked op with an empty queue must not pay for the outcome read:
+    // there is nothing to drain, so the sweep stays as cheap as it was.
+    it('never reads the run outcome when nothing is queued behind it', async () => {
+      const { serverRow } = seedLeakedRow();
+      seedLeakedOp('execServerAgentRuntime');
+      const readOutcome = vi.spyOn(aiAgentService, 'getOperationStatus');
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(readOutcome).not.toHaveBeenCalled();
+    });
+
+    // The user-visible contract: opening the sidebar runs the watchdog, and the
+    // watchdog must retire a leak the server cannot see. Before the mirror sweep
+    // existed this test hung on a `running` op forever — the spinner and elapsed
+    // clock the user reported.
+    it('retires a local-only leak through cleanupStaleRunningTopics', async () => {
+      const { key, serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('submitToolInteraction');
+      // Nothing is `running` on the SERVER: the topic was already retired, so it
+      // never appears in the watchdog's own `statuses: ['running']` query.
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([]);
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+      await act(async () => {
+        await useChatStore.getState().cleanupStaleRunningTopics();
+      });
+
+      await waitFor(() => {
+        expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      });
+      expect(operationSelectors.isTopicVisiblyRunning(topicId)(useChatStore.getState())).toBe(
+        false,
+      );
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: null },
+        status: 'active',
+      });
     });
   });
 
@@ -2565,6 +3953,224 @@ describe('topic action', () => {
     });
   });
   describe('summaryTopicTitle', () => {
+    it('summarizes an uncached Project topic using its own Agent messages', async () => {
+      const topicId = 'project-uncached-topic';
+      const messages = [
+        { id: 'project-message', content: 'Work in my project', role: 'user' },
+      ] as UIChatMessage[];
+      useChatStore.setState({
+        activeAgentId: 'unrelated-agent',
+        topicDataMap: {},
+        topicDetailMap: {},
+      });
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        id: topicId,
+        title: 'Old title',
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      vi.spyOn(messageService, 'getMessages').mockResolvedValue(messages);
+      vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'Project summary' },
+      } as never);
+      const update = vi
+        .spyOn(useChatStore.getState(), 'internal_updateTopic')
+        .mockResolvedValue(undefined);
+      await useChatStore.getState().autoRenameTopicTitle(topicId, 'project-agent');
+      expect(messageService.getMessages).toHaveBeenCalledWith({
+        agentId: 'project-agent',
+        topicId,
+      });
+      expect(update).toHaveBeenCalledWith(topicId, { title: 'Project summary' });
+      expect(useChatStore.getState().activeAgentId).toBe('unrelated-agent');
+    });
+
+    it('should wait for assistant text before summarizing an audio-only conversation', async () => {
+      const topicId = 'topic-1';
+      const messages = [
+        {
+          audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+          content: '',
+          id: 'message-1',
+          role: 'user',
+        },
+        { content: LOADING_FLAT, id: 'message-2', role: 'assistant' },
+      ] as UIChatMessage[];
+      const topics = [{ id: topicId, title: '' }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'test',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              currentPage: 0,
+              hasMore: false,
+              items: topics,
+              pageSize: 20,
+              total: topics.length,
+            },
+          },
+        });
+      });
+
+      const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
+      const generateSpy = vi.spyOn(aiChatService, 'generateJSON');
+
+      await act(async () => {
+        await result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      expect(updateTitleSpy).not.toHaveBeenCalled();
+      expect(generateSpy).not.toHaveBeenCalled();
+    });
+
+    it('should preserve the existing summary behavior for a non-audio attachment-only conversation', async () => {
+      const topicId = 'topic-1';
+      const messages = [
+        {
+          content: '',
+          id: 'message-1',
+          imageList: [{ alt: 'photo.png', id: 'image-1', url: 'https://example.com/photo.png' }],
+          role: 'user',
+        },
+        { content: LOADING_FLAT, id: 'message-2', role: 'assistant' },
+      ] as UIChatMessage[];
+      const topics = [{ id: topicId, title: '' }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'test',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              currentPage: 0,
+              hasMore: false,
+              items: topics,
+              pageSize: 20,
+              total: topics.length,
+            },
+          },
+        });
+      });
+
+      const updateTitleSpy = vi.spyOn(result.current, 'internal_updateTopicTitleInSummary');
+      const generateSpy = vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'Shared Image' },
+        tracingId: 'tracing-1',
+      } as any);
+
+      await act(async () => {
+        await result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      expect(updateTitleSpy).toHaveBeenCalledWith(topicId, LOADING_FLAT);
+      expect(generateSpy).toHaveBeenCalledOnce();
+      expect(generateSpy.mock.calls[0][0].metadata).toEqual({
+        topicId,
+        trigger: RequestTrigger.TopicTitle,
+      });
+    });
+
+    it('should summarize the final answer inside an assistant group for an audio-only conversation', async () => {
+      const topicId = 'topic-1';
+      const finalAnswer = 'The recording asks how to list files in the current directory.';
+      const messages = [
+        {
+          audioList: [{ alt: 'voice.webm', id: 'audio-1', url: 'https://example.com/voice.webm' }],
+          content: '',
+          id: 'message-1',
+          role: 'user',
+        },
+        {
+          children: [
+            {
+              content: 'Analyzing the recording.',
+              id: 'message-2-tool',
+              tools: [{ apiName: 'analyzeMedia', id: 'tool-1' }],
+            },
+            { content: finalAnswer, id: 'message-2-answer' },
+          ],
+          content: '',
+          id: 'message-2',
+          role: 'assistantGroup',
+        },
+      ] as UIChatMessage[];
+      const topics = [{ id: topicId, title: '' }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'test',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              currentPage: 0,
+              hasMore: false,
+              items: topics,
+              pageSize: 20,
+              total: topics.length,
+            },
+          },
+        });
+      });
+
+      const generateSpy = vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'List Current Directory Files' },
+        tracingId: 'tracing-1',
+      } as any);
+
+      await act(async () => {
+        await result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      const promptMessages = generateSpy.mock.calls[0][0].messages;
+      expect(promptMessages.at(-1)?.content).toContain(finalAnswer);
+    });
+
+    it('should deduplicate concurrent title requests for the same topic', async () => {
+      const topicId = 'topic-1';
+      const messages = [{ content: 'Hello', id: 'message-1', role: 'user' }] as UIChatMessage[];
+      const topics = [{ id: topicId, title: 'Default Topic' }] as ChatTopic[];
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'test',
+          topicDataMap: {
+            [topicMapKey({ agentId: 'test' })]: {
+              currentPage: 0,
+              hasMore: false,
+              items: topics,
+              pageSize: 20,
+              total: topics.length,
+            },
+          },
+        });
+      });
+
+      let resolveGeneration!: (value: unknown) => void;
+      const generation = new Promise((resolve) => {
+        resolveGeneration = resolve;
+      });
+      const generateSpy = vi
+        .spyOn(aiChatService, 'generateJSON')
+        .mockReturnValue(generation as any);
+
+      let firstRequest!: Promise<void>;
+      let secondRequest!: Promise<void>;
+      act(() => {
+        firstRequest = result.current.summaryTopicTitle(topicId, messages);
+        secondRequest = result.current.summaryTopicTitle(topicId, messages);
+      });
+
+      expect(generateSpy).toHaveBeenCalledOnce();
+
+      await act(async () => {
+        resolveGeneration({ data: { title: '  ' }, tracingId: 'tracing-1' });
+        await Promise.all([firstRequest, secondRequest]);
+      });
+    });
+
     it('should show a loading placeholder when auto-summarizing a topic without a title', async () => {
       const topicId = 'topic-1';
       const messages = [{ id: 'message-1', content: 'Hello' }] as UIChatMessage[];
@@ -2743,6 +4349,52 @@ describe('topic action', () => {
     });
   });
   describe('createTopic', () => {
+    it.each(['createTopic', 'saveToTopic'] as const)(
+      '%s waits for saved reasoning before persisting',
+      async (method) => {
+        const agentId = 'test-session-id';
+        useChatStore.setState({
+          activeAgentId: agentId,
+          messagesMap: { [messageMapKey({ agentId })]: [{ id: 'message-1' } as UIChatMessage] },
+          summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
+        });
+        let loaded = false;
+        let finishLoad!: () => void;
+        vi.spyOn(aiModelSelectors, 'isModelHasReasoningExtendParams').mockReturnValue(() => true);
+        vi.spyOn(aiModelSelectors, 'isModelReasoningConfigLoaded').mockReturnValue(() => loaded);
+        vi.spyOn(aiModelSelectors, 'modelReasoningConfig').mockReturnValue(() => ({
+          reasoningEffort: 'high',
+        }));
+        const ensure = vi
+          .spyOn(useAiInfraStore.getState(), 'ensureModelReasoningConfig')
+          .mockImplementation(
+            () =>
+              new Promise<void>((resolve) => {
+                finishLoad = () => {
+                  loaded = true;
+                  resolve();
+                };
+              }),
+          );
+        const persist = vi.spyOn(topicService, 'createTopic').mockResolvedValue('loaded-topic');
+        let pending!: Promise<string | undefined>;
+        act(() => {
+          pending = useChatStore.getState()[method]();
+        });
+        await waitFor(() => expect(ensure).toHaveBeenCalled());
+        expect(persist).not.toHaveBeenCalled();
+        await act(async () => {
+          finishLoad();
+          await pending;
+        });
+        expect(persist).toHaveBeenCalledWith(
+          expect.objectContaining({
+            metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+          }),
+        );
+      },
+    );
+
     it('should create a new topic and update the store', async () => {
       const { result } = renderHook(() => useChatStore());
       const activeAgentId = 'test-session-id';
@@ -2813,6 +4465,62 @@ describe('topic action', () => {
       expect(switchTopicSpy).toHaveBeenCalledWith(newTopicId);
     });
   });
+  describe('forkTopic', () => {
+    it('should fork the active topic up to a message and switch to the new topic', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'topic-1';
+      const newTopicId = 'forked-topic-id';
+      const topics = [{ id: topicId, title: 'Original Topic' }] as ChatTopic[];
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'abc',
+          activeTopicId: topicId,
+          topicDataMap: {
+            [topicMapKey({ agentId: 'abc' })]: {
+              items: topics,
+              total: topics.length,
+              currentPage: 0,
+              hasMore: false,
+              pageSize: 20,
+            },
+          },
+        });
+      });
+
+      const forkTopicSpy = vi.spyOn(topicService, 'forkTopic').mockResolvedValue(newTopicId);
+      const refreshTopicSpy = vi.spyOn(result.current, 'refreshTopic');
+      const switchTopicSpy = vi.spyOn(result.current, 'switchTopic');
+
+      await act(async () => {
+        await result.current.forkTopic('msg-2');
+      });
+
+      expect(forkTopicSpy).toHaveBeenCalledWith({
+        id: topicId,
+        messageId: 'msg-2',
+        newTitle: 'forkTitle_Original Topic',
+      });
+      expect(refreshTopicSpy).toHaveBeenCalled();
+      expect(switchTopicSpy).toHaveBeenCalledWith(newTopicId);
+    });
+
+    it('should not fork when there is no active topic', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({ activeTopicId: undefined });
+      });
+
+      const forkTopicSpy = vi.spyOn(topicService, 'forkTopic');
+
+      await act(async () => {
+        await result.current.forkTopic('msg-2');
+      });
+
+      expect(forkTopicSpy).not.toHaveBeenCalled();
+    });
+  });
   describe('autoRenameTopicTitle', () => {
     it('should auto-rename the topic title based on the messages', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -2874,5 +4582,51 @@ describe('topic action', () => {
       expect(next.excludeTriggers).toEqual(['cron', 'eval']);
       expect(next.items.map((i) => i.id)).toEqual(['topic-2']);
     });
+  });
+});
+
+describe('Topic metadata save failures', () => {
+  const key = topicMapKey({ agentId: 'agent-metadata' });
+  const previous = { heteroSessionId: 'session-a' };
+  const selected = { heteroSessionId: 'session-b' };
+  const setup = () => {
+    useChatStore.setState({
+      activeAgentId: 'agent-metadata',
+      topicDataMap: {
+        [key]: {
+          items: [
+            {
+              id: 'topic-metadata',
+              title: 'A',
+              createdAt: 1,
+              updatedAt: 1,
+              favorite: false,
+              metadata: previous,
+            },
+          ],
+          currentPage: 1,
+          hasMore: false,
+          pageSize: 20,
+          total: 1,
+        },
+      },
+    });
+    vi.spyOn(useChatStore.getState(), 'refreshTopic').mockRejectedValue(new Error('offline'));
+  };
+
+  it('restores the previous metadata if the mutation fails while offline', async () => {
+    setup();
+    vi.spyOn(topicService, 'updateTopicMetadata').mockRejectedValueOnce(new Error('offline'));
+    await expect(
+      useChatStore.getState().updateTopicMetadata('topic-metadata', selected),
+    ).rejects.toThrow('offline');
+    expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(previous);
+  });
+
+  it('keeps the saved metadata if only revalidation fails', async () => {
+    setup();
+    vi.spyOn(topicService, 'updateTopicMetadata').mockResolvedValueOnce([]);
+    await useChatStore.getState().updateTopicMetadata('topic-metadata', selected);
+    expect(useChatStore.getState().topicDataMap[key].items[0].metadata).toEqual(selected);
   });
 });

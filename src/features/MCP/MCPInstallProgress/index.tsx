@@ -1,6 +1,4 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { Progress } from 'antd';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Progress, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import * as m from 'motion/react-m';
 import { memo } from 'react';
@@ -13,6 +11,7 @@ import { MCPInstallStep } from '@/types/plugins';
 import InstallError from './InstallError';
 import MCPConfigForm from './MCPConfigForm';
 import MCPDependenciesGuide from './MCPDependenciesGuide';
+import { MCPOAuthAuthorization } from './MCPOAuthAuthorization';
 
 const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
   const { t } = useTranslation('plugin');
@@ -26,10 +25,14 @@ const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
   const needsDependencies = installProgress?.step === MCPInstallStep.DEPENDENCIES_REQUIRED;
   const hasError = installProgress?.step === MCPInstallStep.ERROR;
   const errorInfo = installProgress?.errorInfo;
+  const needsAuthorization = installProgress?.step === MCPInstallStep.AUTHORIZATION_REQUIRED;
 
   return (
     <>
-      {installProgress && !hasError && !needsDependencies && (
+      {needsAuthorization && (
+        <MCPOAuthAuthorization error={errorInfo?.message} identifier={identifier} />
+      )}
+      {installProgress && !hasError && !needsDependencies && !needsAuthorization && (
         <m.div
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
@@ -46,7 +49,7 @@ const MCPInstallProgress = memo<{ identifier: string }>(({ identifier }) => {
               showInfo={false}
               size="small"
               status="active"
-              strokeColor={{ '0%': cssVar.blue, '100%': cssVar.geekblue }}
+              strokeColor={cssVar.geekblue}
             />
             {stepText && (
               <Text fontSize={11} style={{ marginTop: 4 }} type={'secondary'}>

@@ -10,9 +10,11 @@ import {
   globalFiles,
   knowledgeBaseFiles,
   knowledgeBases,
+  messagePlugins,
   messages,
   sessionGroups,
   sessions,
+  threads,
   topics,
   users,
   userSettings,
@@ -327,6 +329,82 @@ describe('DataExporterRepos', () => {
 
       // Base tables should still export successfully
       expect(result.sessions).toHaveLength(1);
+    });
+
+    it('should exclude agent-share visitor rows from the creator export', async () => {
+      // Agent-share visitor conversations are persisted under the creator's
+      // userId with a non-null topics.senderId, so only the senderId marks them
+      // as third-party data.
+      const visitorUserId = 'share-visitor-user-id';
+
+      await db.transaction(async (trx) => {
+        await trx.insert(users).values({
+          email: 'visitor@example.com',
+          id: visitorUserId,
+          username: 'visitor',
+        });
+        await trx.insert(topics).values({
+          id: 'visitor-topic-id',
+          senderId: visitorUserId,
+          sessionId: testIds.sessionId,
+          title: 'Visitor Topic',
+          userId,
+        });
+        await trx.insert(messages).values({
+          content: 'Visitor message',
+          id: 'visitor-message-id',
+          role: 'user',
+          sessionId: testIds.sessionId,
+          topicId: 'visitor-topic-id',
+          userId,
+        });
+        await trx.insert(messagePlugins).values({
+          id: 'visitor-message-id',
+          identifier: 'visitor-plugin',
+          userId,
+        });
+        await trx.insert(threads).values({
+          id: 'visitor-thread-id',
+          title: 'Visitor Thread',
+          topicId: 'visitor-topic-id',
+          type: 'continuation',
+          userId,
+        });
+        await trx.insert(threads).values({
+          id: 'own-thread-id',
+          title: 'Own Thread',
+          topicId: testIds.topicId,
+          type: 'continuation',
+          userId,
+        });
+        await trx.insert(messagePlugins).values({
+          id: testIds.messageId,
+          identifier: 'own-plugin',
+          userId,
+        });
+      });
+
+      const result = await new DataExporterRepos(db, userId).export();
+
+      expect(result.topics.map((topic) => topic.id)).toEqual([testIds.topicId]);
+      expect(result.messages.map((message) => message.id)).toEqual([testIds.messageId]);
+      expect(result.threads.map((thread) => thread.id)).toEqual(['own-thread-id']);
+      expect(result.messagePlugins.map((plugin) => plugin.id)).toEqual([testIds.messageId]);
+    });
+
+    it('should correlate the message-ref visitor filter on the parent message id', () => {
+      // An uncorrelated `id IN (SELECT id FROM messages …)` under the OR runs as
+      // a hashed SubPlan over the whole messages table in production. The
+      // filter must look up each row's own parent message instead.
+      const repo = new DataExporterRepos(db, userId) as any;
+      const condition = repo.buildShareVisitorCondition(
+        { column: 'id', via: 'messageRef' },
+        messagePlugins,
+      );
+      const { sql } = db.select().from(messagePlugins).where(condition).toSQL();
+
+      expect(sql).toContain('"messages"."id" = "message_plugins"."id"');
+      expect(sql).not.toMatch(/"message_plugins"\."id" in \(select/i);
     });
 
     it('should export data for a different user', async () => {

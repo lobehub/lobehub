@@ -19,31 +19,52 @@
  * mounting this repo provides its own entry that adds its root pipelines and
  * mounts this repo's via `pipelines.ts`.
  */
+import { readdir } from 'node:fs/promises';
+import path from 'node:path';
+
 import { findNewComponentTestAdvisories } from './advisories';
+import { runAlint } from './alint';
 import { collectAutofixDiffs, snapshot, writeFullDiff } from './autofix';
 import { collectFromGit, normalizeArgs } from './collect';
+import { assertCheckRoot } from './delegate';
 import { run } from './exec';
+import { checkFileSizes } from './fileSize';
 import { lintGroup } from './lint';
-import { existsInRepo, setConfig } from './paths';
+import { existsInRepo, rootDir, setConfig } from './paths';
 import { printReport } from './report';
-import { pipelineFor, relatedTestCandidates, resolveMount } from './routing';
+import { pipelineFor, relatedTestCandidates, resolveMount, scenarioTestLookup } from './routing';
 import type { CheckConfig, FileDiff, LintProblem, RepoMount, TestOutcome } from './types';
 import { runTestGroups } from './vitest';
 
-const USAGE = `Usage: bun run check [files...] [--lint] [--test] [--type] [--staged]
+const USAGE = `Usage: bun run check [files...] [--lint] [--test] [--type] [--alint] [--staged]
   Selectors compose; no selector = --lint --test.
   files     explicit paths; default = all working-tree changes (staged + unstaged + untracked)
   --staged  collect staged files only (pre-commit scope); ignored with explicit files
   --lint    lint pipelines (with autofix)
   --test    related tests
-  --type    full type-check; alone, file collection is skipped`;
+  --type    full type-check; alone, file collection is skipped
+  --alint   model-backed rules (packages/alint); opt-in, needs \`bun run alint:setup\``;
 
-const KNOWN_FLAGS = new Set(['--lint', '--test', '--type', '--staged']);
+const KNOWN_FLAGS = new Set(['--lint', '--test', '--type', '--alint', '--staged']);
 
 /** Keep only candidates that exist on disk, preserving order. */
 const filterExisting = async (candidates: string[]): Promise<string[]> => {
   const present = await Promise.all(candidates.map((candidate) => existsInRepo(candidate)));
   return candidates.filter((_, index) => present[index]);
+};
+
+/** Scenario suites (`<base>.<scenario>.test.*`) beside a source file or in its `__tests__/`. */
+const findScenarioTests = async (file: string): Promise<string[]> => {
+  const lookup = scenarioTestLookup(file);
+  if (!lookup) return [];
+
+  const listed = await Promise.all(
+    lookup.dirs.map(async (dir) => {
+      const names = await readdir(path.join(rootDir(), dir)).catch(() => [] as string[]);
+      return names.filter((name) => lookup.matches(name)).map((name) => path.join(dir, name));
+    }),
+  );
+  return listed.flat();
 };
 
 export const runCli = async (config: CheckConfig) => {
@@ -60,17 +81,23 @@ export const runCli = async (config: CheckConfig) => {
     process.exit(2);
   }
 
+  await assertCheckRoot(
+    config.rootDir,
+    config.repos.map((repo) => repo.dir),
+  );
+
   const wantLint = rawArgs.includes('--lint');
   const wantTest = rawArgs.includes('--test');
   const runType = rawArgs.includes('--type');
-  const noSelector = !wantLint && !wantTest && !runType;
+  const wantAlint = rawArgs.includes('--alint');
+  const noSelector = !wantLint && !wantTest && !runType && !wantAlint;
   const runLint = wantLint || noSelector;
   const runTest = wantTest || noSelector;
 
   const fileArgs = rawArgs.filter((arg) => !arg.startsWith('--'));
 
   let files: string[] = [];
-  if (runLint || runTest) {
+  if (runLint || runTest || wantAlint) {
     files = await filterExisting(
       fileArgs.length > 0
         ? normalizeArgs(fileArgs)
@@ -117,17 +144,32 @@ export const runCli = async (config: CheckConfig) => {
     diffs = await collectAutofixDiffs(before);
   }
 
+  /* ---- Model-backed rules (opt-in) ---- */
+  if (wantAlint && files.length > 0) {
+    const outcome = await runAlint(files, { changedLinesOnly: fileArgs.length === 0 });
+    problems.push(...outcome.problems);
+    fatal.push(...outcome.fatal);
+  }
+
   /* ---- Related tests ---- */
   let tests: TestOutcome | null = null;
   let testFiles: string[] = [];
   if (runTest) {
+    const scenarioTests = await Promise.all(files.map((file) => findScenarioTests(file)));
     testFiles = await filterExisting([
-      ...new Set(files.flatMap((file) => relatedTestCandidates(file))),
+      ...new Set([
+        ...files.flatMap((file) => relatedTestCandidates(file)),
+        ...scenarioTests.flat(),
+      ]),
     ]);
     tests = await runTestGroups(testFiles);
   }
 
-  const advisories = await findNewComponentTestAdvisories([...new Set([...files, ...testFiles])]);
+  const sizeFindings = await checkFileSizes(files);
+  const advisories = [
+    ...(await findNewComponentTestAdvisories([...new Set([...files, ...testFiles])])),
+    ...sizeFindings.advisories,
+  ];
 
   /* ---- Type check ---- */
   let typeOutput: string | null = null;
@@ -143,8 +185,9 @@ export const runCli = async (config: CheckConfig) => {
     fatal,
     fileCount: files.length,
     fullDiffPath,
-    lintRan: runLint,
+    lintRan: runLint || wantAlint,
     problems,
+    sizeErrors: sizeFindings.errors,
     skipped,
     testFileCount: testFiles.length,
     tests,

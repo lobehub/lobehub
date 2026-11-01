@@ -5,10 +5,10 @@ import { useEffect, useMemo, useRef } from 'react';
 import { type EditLockClient, useEditLock } from '@/features/EditLock';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { usePermission } from '@/hooks/usePermission';
-import { mutate } from '@/libs/swr';
+import { revalidateReplica } from '@/libs/replica';
 import { documentService } from '@/services/document';
-import { documentSWRKeys } from '@/services/document/swrKeys';
 import { useDocumentStore } from '@/store/document';
+import { documentDetailResource } from '@/store/document/slices/document/projection';
 import { editorSelectors } from '@/store/document/slices/editor';
 
 import { usePageEditorStore } from './store';
@@ -54,6 +54,14 @@ export const useDocumentLock = () => {
   const isDirty = useDocumentStore((s) =>
     documentId ? editorSelectors.isDirty(documentId)(s) : false,
   );
+  // The lockOwnerId dispatch below is a plain `updateDocument`, which the
+  // reducer drops when the document row hasn't been fetched into the store yet
+  // — and on first mount this effect usually runs before the SWR fetch lands.
+  // Saves then go out with `lockOwnerId: undefined` while the lock driver holds
+  // the lease under a real ownerId, and the server rejects every content save
+  // as a CONFLICT against the user's own lock. Track document existence so the
+  // effect re-publishes the ownerId once the document is actually in the store.
+  const documentReady = useDocumentStore((s) => (documentId ? !!s.documents[documentId] : false));
   const saveBlockedByLock = useDocumentStore((s) =>
     documentId ? editorSelectors.saveBlockedByLock(documentId)(s) : false,
   );
@@ -64,7 +72,11 @@ export const useDocumentLock = () => {
     'document',
     isWorkspacePage && documentId ? documentId : undefined,
   );
-  const workspacePage = Boolean(documentId && canEdit && canEditResource && isWorkspacePage);
+  // A collaboration room merges concurrent edits, so it never takes the lock.
+  const inRoom = usePageEditorStore((s) => !!s.collab);
+  const workspacePage = Boolean(
+    documentId && canEdit && canEditResource && isWorkspacePage && !inRoom,
+  );
   const ownerId = useMemo(
     () => (documentId ? createLockOwnerId(documentId) : undefined),
     [documentId],
@@ -88,7 +100,7 @@ export const useDocumentLock = () => {
         value: { lockOwnerId: undefined },
       });
     };
-  }, [documentId, ownerId, setLockOwnerId, workspacePage]);
+  }, [documentId, documentReady, ownerId, setLockOwnerId, workspacePage]);
 
   // Shared lock lifecycle. Pages receive realtime lock pushes via SSE, so the
   // viewer poll is off — the single peek-on-open plus those pushes keep it live.
@@ -125,7 +137,7 @@ export const useDocumentLock = () => {
     const recovered = prevHealthRef.current === 'lost' && lock.health === 'healthy';
     prevHealthRef.current = lock.health;
     if (recovered && documentId) {
-      void mutate(documentSWRKeys.editor(documentId));
+      void revalidateReplica(documentDetailResource, documentId);
     }
   }, [lock.health, documentId]);
 
@@ -142,7 +154,7 @@ export const useDocumentLock = () => {
     const tookOver = wasLockedByOtherRef.current && !isLockedByOther;
     wasLockedByOtherRef.current = Boolean(isLockedByOther);
     if (isLockedByOther || tookOver || saveBlockedByLock) {
-      void mutate(documentSWRKeys.editor(documentId));
+      void revalidateReplica(documentDetailResource, documentId);
     }
   }, [workspacePage, documentId, isLockedByOther, saveBlockedByLock]);
 

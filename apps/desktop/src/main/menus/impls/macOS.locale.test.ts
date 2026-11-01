@@ -30,10 +30,6 @@ vi.mock('electron-is', () => ({ macOS: vi.fn(() => true) }));
 
 vi.mock('@/const/env', () => ({ isDev: false }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
-}));
-
 const createAppCore = () => {
   const appCore = {
     browserManager: {

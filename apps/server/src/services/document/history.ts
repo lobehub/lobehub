@@ -15,6 +15,7 @@ import type {
   CompareDocumentHistoryItemsResult,
   DatabaseLike,
   DocumentHistoryAccessOptions,
+  DocumentHistoryAttribution,
   DocumentHistoryItemResult,
   DocumentHistoryListItem,
   DocumentHistorySaveSource,
@@ -22,6 +23,11 @@ import type {
   ListDocumentHistoryParams,
   ListDocumentHistoryResult,
 } from './types';
+
+const mergeEditorIds = (...lists: (readonly string[] | null | undefined)[]) => {
+  const merged = [...new Set(lists.flatMap((list) => list ?? []))];
+  return merged.length > 0 ? merged : null;
+};
 
 const getDocumentEditorData = (document: DocumentItem | undefined): Record<string, any> | null => {
   const editorData = document?.editorData;
@@ -46,13 +52,15 @@ export class DocumentHistoryService {
   private historiesOwnership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documentHistories);
 
-  createHistory = async (params: {
-    breakAutosaveWindow?: boolean;
-    documentId: string;
-    editorData: Record<string, any>;
-    saveSource: DocumentHistorySaveSource;
-    savedAt: Date;
-  }) => {
+  createHistory = async (
+    params: DocumentHistoryAttribution & {
+      breakAutosaveWindow?: boolean;
+      documentId: string;
+      editorData: Record<string, any>;
+      saveSource: DocumentHistorySaveSource;
+      savedAt: Date;
+    },
+  ) => {
     const [document] = await this.db
       .select({ id: documents.id })
       .from(documents)
@@ -61,6 +69,30 @@ export class DocumentHistoryService {
 
     if (!document) {
       throw new Error('Document not found');
+    }
+
+    const editorIds = mergeEditorIds(params.editorIds);
+
+    // One agent run keeps one version: the state before its first edit. Later
+    // edits of the same run only join their editors to it.
+    if (params.saveSource === 'llm_call' && params.operationId) {
+      const existing = await this.db.query.documentHistories.findFirst({
+        where: and(
+          eq(documentHistories.documentId, params.documentId),
+          eq(documentHistories.operationId, params.operationId),
+          this.historiesOwnership(),
+        ),
+      });
+
+      if (existing) {
+        if (editorIds) {
+          await this.db
+            .update(documentHistories)
+            .set({ editorIds: mergeEditorIds(existing.editorIds, editorIds) })
+            .where(and(eq(documentHistories.id, existing.id), this.historiesOwnership()));
+        }
+        return { id: existing.id, savedAt: existing.savedAt };
+      }
     }
 
     // Autosave versions coalesce into fixed 10-min windows (Notion-like),
@@ -82,7 +114,13 @@ export class DocumentHistoryService {
       if (withinWindow) {
         await this.db
           .update(documentHistories)
-          .set({ editorData: params.editorData, savedAt: params.savedAt })
+          .set({
+            editorData: params.editorData,
+            editorIds: editorIds
+              ? mergeEditorIds(latest.editorIds ?? [latest.userId], editorIds)
+              : latest.editorIds,
+            savedAt: params.savedAt,
+          })
           .where(and(eq(documentHistories.id, latest.id), this.historiesOwnership()));
 
         return { id: latest.id, savedAt: params.savedAt };
@@ -92,11 +130,14 @@ export class DocumentHistoryService {
     const [history] = await this.db
       .insert(documentHistories)
       .values({
+        agentId: params.agentId ?? null,
         documentId: params.documentId,
         editorData: params.editorData,
+        editorIds,
+        operationId: params.operationId ?? null,
         saveSource: params.saveSource,
         savedAt: params.savedAt,
-        userId: this.userId,
+        userId: editorIds?.[0] ?? this.userId,
         workspaceId: this.workspaceId ?? null,
       })
       .returning({ id: documentHistories.id });
@@ -223,6 +264,8 @@ export class DocumentHistoryService {
     }
 
     const historyItems = historyRows.map((row) => ({
+      agentId: row.agentId,
+      editorIds: row.editorIds,
       id: row.id,
       isCurrent: false,
       saveSource: row.saveSource as DocumentHistorySaveSource,

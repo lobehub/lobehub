@@ -27,6 +27,7 @@ import {
 } from '../../models/userMemory/persona';
 import { messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import { getUnderstandingSourceFingerprint } from './fingerprint';
 
 export { getUnderstandingSourceFingerprint } from './fingerprint';
@@ -174,13 +175,18 @@ const assertProviderId = (providerId: string) => {
 };
 
 const topicOwnership = (topicId: string, userId: string) =>
-  and(eq(topics.id, topicId), eq(topics.userId, userId), isNull(topics.workspaceId));
+  and(
+    eq(topics.id, topicId),
+    eq(topics.userId, userId),
+    isNull(topics.workspaceId),
+    notTrashed(topics.isDeleted),
+  );
 
 const threadOwnership = (userId: string) =>
-  and(eq(threads.userId, userId), isNull(threads.workspaceId));
+  and(eq(threads.userId, userId), isNull(threads.workspaceId), notTrashed(threads.isDeleted));
 
 const messageOwnership = (userId: string) =>
-  and(eq(messages.userId, userId), isNull(messages.workspaceId));
+  and(eq(messages.userId, userId), isNull(messages.workspaceId), notTrashed(messages.isDeleted));
 
 const parseSession = (value: unknown): OnboardingUnderstandingSession => {
   let session: OnboardingUnderstandingSession;

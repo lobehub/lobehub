@@ -111,6 +111,7 @@ export default class NotificationCtr extends ControllerModule {
         body: params.body,
         sender: params.sender,
         silent: params.silent,
+        soundName: params.soundName,
         title: params.title,
       });
 

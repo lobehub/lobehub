@@ -1,13 +1,17 @@
 'use client';
 
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import {
   Activity,
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent,
+  type ReactNode,
+  useDeferredValue,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { UNSAFE_LocationContext } from 'react-router';
@@ -18,7 +22,10 @@ import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
-import { MAX_LIVE_TAB_ROUTERS, resolveLiveTabIds } from './resolveLiveTabIds';
+import { useDisplayedTabStore } from './displayedTab';
+import { flushHiddenTabRestores } from './hiddenTabRestore';
+import { useLiveTabRouterCap } from './liveTabRouterCap';
+import { resolveLiveTabIds } from './resolveLiveTabIds';
 import { TabIdContext } from './TabIdContext';
 import {
   getOrCreateTabRouter,
@@ -27,6 +34,8 @@ import {
   syncTabRouters,
   type TabRouter,
 } from './tabRouterManager';
+import { useDisplayedTabIds } from './useDisplayedTabIds';
+import { useTabPreviewCapture } from './useTabPreviewCapture';
 
 interface TabHostProps {
   createRouter?: (url: string) => TabRouter;
@@ -87,17 +96,61 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+interface TabPaneProps {
+  children: ReactNode;
+  isActive: boolean;
+  isVisible: boolean;
+  onFocusPane: () => void;
+  pane: 'primary' | 'secondary' | 'single';
+  style: CSSProperties;
+  tabId: string;
+}
+
+const TabPane = ({
+  children,
+  isActive,
+  isVisible,
+  onFocusPane,
+  pane,
+  style,
+  tabId,
+}: TabPaneProps) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useTabPreviewCapture(tabId, isVisible, ref);
+
+  return (
+    <div
+      className={styles.pane}
+      data-focused={isActive ? 'true' : undefined}
+      data-pane={pane}
+      ref={ref}
+      style={style}
+      onFocusCapture={onFocusPane}
+      onPointerDownCapture={onFocusPane}
+    >
+      {children}
+    </div>
+  );
+};
+
 const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   const { t } = useTranslation('electron');
-  const tabs = useElectronStore((s) => s.tabs);
-  const activeTabId = useElectronStore((s) => s.activeTabId);
-  const splitView = useElectronStore((s) => s.splitView);
+  // Deferred so the strip commits a tab switch before the pane does. Activating a cold
+  // tab mounts its whole router tree; on the urgent lane that mount lands in the same
+  // commit as the strip update, so closing a tab froze mid-spring until the neighbour
+  // finished rendering. As a transition it is time-sliced and, when the page suspends on
+  // a lazy chunk, the outgoing pane stays on screen instead of flashing a fallback.
+  const tabs = useDeferredValue(useElectronStore((s) => s.tabs));
+  const activeTabId = useDeferredValue(useElectronStore((s) => s.activeTabId));
+  const splitView = useDeferredValue(useElectronStore((s) => s.splitView));
   const isPreferenceInit = useUserStore(preferenceSelectors.isPreferenceInit);
   const splitViewEnabled = useUserStore(labPreferSelectors.enableDesktopSplitView);
   const closeSplitView = useElectronStore((s) => s.closeSplitView);
   const focusTabPane = useElectronStore((s) => s.focusTabPane);
   const setSplitRatio = useElectronStore((s) => s.setSplitRatio);
   const effectiveSplitView = isPreferenceInit && splitViewEnabled ? splitView : null;
+  const liveTabCap = useLiveTabRouterCap((s) => s.cap);
 
   const visibleTabIds = useMemo(
     () =>
@@ -109,14 +162,49 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
     [activeTabId, effectiveSplitView],
   );
 
+  const existingTabIds = useMemo(() => tabs.map((tab) => tab.id), [tabs]);
+  const requestedRouters = useMemo(
+    () =>
+      visibleTabIds.flatMap((id) => {
+        const tab = tabs.find((item) => item.id === id);
+        return tab ? [getOrCreateTabRouter(id, tab.url, createRouter)] : [];
+      }),
+    [createRouter, tabs, visibleTabIds],
+  );
+  const displayedTabIds = useDisplayedTabIds({
+    canHold: !effectiveSplitView,
+    existingTabIds,
+    requestedRouters,
+    requestedTabIds: visibleTabIds,
+  });
+
   useEffect(() => {
     if (isPreferenceInit && !splitViewEnabled && splitView) closeSplitView();
   }, [closeSplitView, isPreferenceInit, splitView, splitViewEnabled]);
 
-  const liveIds = useMemo(
-    () => resolveLiveTabIds(tabs, activeTabId, MAX_LIVE_TAB_ROUTERS, visibleTabIds),
-    [tabs, activeTabId, visibleTabIds],
-  );
+  const liveIds = useMemo(() => {
+    const retainedTabIds = [...visibleTabIds, ...displayedTabIds];
+    return resolveLiveTabIds(
+      // Persisted tabs are cold until first shown; only retain already-created routers.
+      tabs.filter((tab) => retainedTabIds.includes(tab.id) || getTabRouter(tab.id)),
+      activeTabId,
+      liveTabCap,
+      retainedTabIds,
+    );
+  }, [tabs, activeTabId, liveTabCap, visibleTabIds, displayedTabIds]);
+
+  const displayedActiveTabId =
+    activeTabId && displayedTabIds.includes(activeTabId)
+      ? activeTabId
+      : (displayedTabIds[0] ?? null);
+
+  useLayoutEffect(() => {
+    useDisplayedTabStore.setState({ tabId: displayedActiveTabId });
+  }, [displayedActiveTabId]);
+
+  useEffect(() => {
+    flushHiddenTabRestores(displayedTabIds);
+  }, [displayedTabIds]);
 
   useEffect(() => {
     const liveSet = new Set(liveIds);
@@ -131,7 +219,10 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   }, [liveIds]);
 
   const liveSet = new Set(liveIds);
-  const visibleSet = new Set(visibleTabIds);
+  const visibleSet = new Set(displayedTabIds);
+  // A held tab must not pre-mount: a hidden RouterProvider has no subscription,
+  // so it would reveal its pre-load (empty) state once the router initializes.
+  const heldSet = new Set(visibleTabIds.filter((id) => !visibleSet.has(id)));
 
   const handleDividerPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
@@ -150,7 +241,7 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   return (
     <div style={rootStyle}>
       {tabs
-        .filter((tab) => liveSet.has(tab.id))
+        .filter((tab) => liveSet.has(tab.id) && !heldSet.has(tab.id))
         .map((tab) => {
           const isVisible = visibleSet.has(tab.id);
           const isPrimary = effectiveSplitView?.primaryTabId === tab.id;
@@ -168,13 +259,13 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
             <Activity key={tab.id} mode={isVisible ? 'visible' : 'hidden'} name={`Tab:${tab.id}`}>
               {/* Activity preserves state but doesn't visually hide the DOM in this React
                 version, so force-hide the inactive slot (mirrors home/_layout). */}
-              <div
-                className={styles.pane}
-                data-focused={tab.id === activeTabId ? 'true' : undefined}
-                data-pane={effectiveSplitView ? (isPrimary ? 'primary' : 'secondary') : 'single'}
+              <TabPane
+                isActive={tab.id === activeTabId}
+                isVisible={isVisible}
+                pane={effectiveSplitView ? (isPrimary ? 'primary' : 'secondary') : 'single'}
                 style={isVisible ? paneStyle : hiddenSlotStyle}
-                onFocusCapture={() => focusTabPane(tab.id)}
-                onPointerDownCapture={() => focusTabPane(tab.id)}
+                tabId={tab.id}
+                onFocusPane={() => focusTabPane(tab.id)}
               >
                 <TabIdContext value={tab.id}>
                   {/* react-router forbids a data <RouterProvider> inside another Router
@@ -185,7 +276,7 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
                     <RouterProvider router={getOrCreateTabRouter(tab.id, tab.url, createRouter)} />
                   </UNSAFE_LocationContext>
                 </TabIdContext>
-              </div>
+              </TabPane>
             </Activity>
           );
         })}

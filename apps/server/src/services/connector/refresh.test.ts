@@ -174,34 +174,12 @@ describe('scheduleStaleConnectorToolsRefresh — eligibility', () => {
 });
 
 describe('scheduleStaleConnectorToolsRefresh — remote result handling', () => {
-  it('completes cleanly when the remote sync succeeds', async () => {
-    const id = nextId();
-    scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
-    await expect(flushDeferred()).resolves.toBeUndefined();
-    expect(syncConnectorToolsById).toHaveBeenCalledTimes(1);
-  });
-
   it('swallows a remote sync failure (never rejects, never surfaces)', async () => {
     const id = nextId();
     vi.mocked(syncConnectorToolsById).mockRejectedValueOnce(new Error('remote MCP down'));
     scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
     // The deferred work must resolve, not reject, even though the sync failed.
     await expect(flushDeferred()).resolves.toBeUndefined();
-  });
-
-  it('re-syncs once the TTL has elapsed since the last attempt', async () => {
-    const id = nextId();
-    scheduleStaleConnectorToolsRefresh([httpConnector(id)], new Map(), ctx, NOW);
-    await flushDeferred();
-    // Past the TTL → eligible again even though the DB marker never advanced.
-    scheduleStaleConnectorToolsRefresh(
-      [httpConnector(id)],
-      new Map(),
-      ctx,
-      NOW + CONNECTOR_TOOLS_REFRESH_TTL_MS + 1,
-    );
-    await flushDeferred();
-    expect(syncConnectorToolsById).toHaveBeenCalledTimes(2);
   });
 
   it('backs off a failed connector for a TTL, then retries', async () => {

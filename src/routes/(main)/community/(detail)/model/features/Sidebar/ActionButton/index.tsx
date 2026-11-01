@@ -1,10 +1,10 @@
 'use client';
 
-import { ModelIcon } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import urlJoin from 'url-join';
 
+import { ModelIcon } from '@/components/LobeIcons';
 import { OFFICIAL_URL } from '@/const/url';
 
 import ShareButton from '../../../../features/ShareButton';

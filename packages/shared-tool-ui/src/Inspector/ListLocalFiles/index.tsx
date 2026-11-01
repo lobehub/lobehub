@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,22 +24,29 @@ export const createListLocalFilesInspector = (translationKey: string) => {
       if (isArgumentsStreaming) {
         if (!dirPath)
           return (
-            <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-              <span>{t(translationKey as any)}</span>
+            <div className={inspectorTextStyles.root}>
+              <span className={shinyTextStyles.shinyText}>{t(translationKey as any)}</span>
             </div>
           );
 
         return (
-          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
-            <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}:</span>
+          <div className={inspectorTextStyles.root}>
+            <span className={shinyTextStyles.shinyText} style={{ marginInlineEnd: 6 }}>
+              {t(translationKey as any)}:
+            </span>
             <FilePathDisplay isDirectory filePath={dirPath} />
           </div>
         );
       }
 
       return (
-        <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
-          <span style={{ marginInlineEnd: 6 }}>{t(translationKey as any)}:</span>
+        <div className={inspectorTextStyles.root}>
+          <span
+            className={cx(isLoading && shinyTextStyles.shinyText)}
+            style={{ marginInlineEnd: 6 }}
+          >
+            {t(translationKey as any)}:
+          </span>
           <FilePathDisplay isDirectory filePath={dirPath} />
           {!isLoading && resultCount > 0 && (
             <span style={{ marginInlineStart: 4 }}>({resultCount})</span>

@@ -33,10 +33,6 @@ const { fromIdMock, ipcHandlers, ipcMainHandleMock, sessionFromPartitionMock } =
   };
 });
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
-}));
-
 vi.mock('electron', () => ({
   ipcMain: { handle: ipcMainHandleMock },
   session: { fromPartition: sessionFromPartitionMock },
@@ -121,6 +117,355 @@ describe('BrowserSidebarCtr retained webview registration', () => {
       'browserSidebarStateChanged',
       expect.objectContaining({ attached: true, sessionId: 'topic:a' }),
     );
+  });
+
+  describe('navigate outcome', () => {
+    const register = async (guest: FakeWebContents) => {
+      fromIdMock.mockImplementation((id: number) => (id === guest.id ? guest : undefined));
+      await invokeIpc('browserSidebar.registerWebview', {
+        sessionId: 'topic:a',
+        webContentsId: guest.id,
+      });
+    };
+
+    it('stops waiting for a page whose load never finishes', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      // The document commits, but a request on it never completes: loadURL
+      // never settles.
+      guest.loadURL = vi.fn((nextUrl: string) => {
+        guest.getURL.mockReturnValue(nextUrl);
+        guest.emit('did-navigate', {}, nextUrl);
+        return new Promise(() => {});
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'http://127.0.0.1:9876/',
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(pending).resolves.toEqual({ success: true });
+      vi.useRealTimers();
+    });
+
+    it('does not report success while the requested document has not committed', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      // The server has not answered yet: nothing commits, loadURL never settles.
+      guest.loadURL = vi.fn(() => new Promise(() => {}));
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'http://127.0.0.1:18748/',
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'http://127.0.0.1:18748/ has not responded within 15s, so the browser is still showing http://127.0.0.1:16001/. The load continues in the background — check with readPage or snapshot before acting on the page, or navigate again.',
+        success: false,
+      });
+      expect(guest.listenerCount('did-navigate')).toBe(1);
+      vi.useRealTimers();
+    });
+
+    it('ignores in-page navigations of the old page while the requested one is pending', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      // The old SPA changes its hash / pushState while the new server is still
+      // silent: that is not the requested document committing.
+      guest.loadURL = vi.fn(() => {
+        guest.emit('did-navigate-in-page', {}, 'http://127.0.0.1:16001/#tab', true);
+        return new Promise(() => {});
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'http://127.0.0.1:18748/',
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(pending).resolves.toMatchObject({ success: false });
+      vi.useRealTimers();
+    });
+
+    it('reports a navigation that left the requested page unopened', async () => {
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      // A 204 / download / refused connection rejects without committing.
+      guest.loadURL = vi.fn(async () => {
+        throw Object.assign(new Error("ERR_FAILED (-2) loading 'http://127.0.0.1:18748/'"), {
+          errno: -2,
+        });
+      });
+      await register(guest);
+
+      await expect(
+        invokeIpc('browserSidebar.navigate', {
+          sessionId: 'topic:a',
+          url: 'http://127.0.0.1:18748/',
+        }),
+      ).resolves.toEqual({
+        error:
+          "Could not open http://127.0.0.1:18748/: ERR_FAILED (-2) loading 'http://127.0.0.1:18748/'. The browser is still showing http://127.0.0.1:16001/.",
+        success: false,
+      });
+    });
+
+    it('says an error page is showing when the failed URL committed', async () => {
+      const guest = createWebContents(7);
+      guest.loadURL = vi.fn(async (nextUrl: string) => {
+        guest.getURL.mockReturnValue(nextUrl);
+        throw Object.assign(new Error('ERR_CONNECTION_REFUSED (-102)'), { errno: -102 });
+      });
+      await register(guest);
+
+      await expect(
+        invokeIpc('browserSidebar.navigate', {
+          sessionId: 'topic:a',
+          url: 'http://127.0.0.1:18748/',
+        }),
+      ).resolves.toEqual({
+        error:
+          'Could not open http://127.0.0.1:18748/: ERR_CONNECTION_REFUSED (-102). The browser is showing its error page.',
+        success: false,
+      });
+    });
+
+    it('treats a superseded navigation (ERR_ABORTED) as settled', async () => {
+      const guest = createWebContents(7);
+      guest.loadURL = vi.fn(async () => {
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      await expect(
+        invokeIpc('browserSidebar.navigate', {
+          sessionId: 'topic:a',
+          url: 'https://example.com/redirects',
+        }),
+      ).resolves.toEqual({ success: true });
+    });
+
+    it('waits for a slow replacement navigation to commit after ERR_ABORTED', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      // A redirect rejects loadURL as the replacement starts; the replacement
+      // document only commits 10s later.
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        setTimeout(() => {
+          guest.getURL.mockReturnValue('https://example.com/landing');
+          guest.emit('did-navigate', {}, 'https://example.com/landing');
+        }, 10_000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      let settled: unknown;
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/redirects',
+      }).then((result) => (settled = result));
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(settled).toBeUndefined();
+
+      await vi.advanceTimersByTimeAsync(2000);
+      await expect(pending).resolves.toEqual({ success: true });
+      expect(guest.listenerCount('did-navigate')).toBe(1);
+      vi.useRealTimers();
+    });
+
+    it('waits for a redirect that starts after the requested document committed', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      guest.isLoading.mockReturnValue(true);
+      // The requested page commits, then a script redirect aborts its load; the
+      // redirect target only commits 10s later.
+      guest.loadURL = vi.fn(async () => {
+        guest.getURL.mockReturnValue('https://example.com/start');
+        guest.emit('did-navigate', {}, 'https://example.com/start');
+        setTimeout(() => {
+          guest.getURL.mockReturnValue('https://example.com/landing');
+          guest.emit('did-navigate', {}, 'https://example.com/landing');
+        }, 10_000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      let settled: unknown;
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/start',
+      }).then((result) => (settled = result));
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(settled).toBeUndefined();
+
+      await vi.advanceTimersByTimeAsync(2000);
+      await expect(pending).resolves.toEqual({ success: true });
+      vi.useRealTimers();
+    });
+
+    it('keeps the committed page when its redirect stops without committing', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.isLoading.mockReturnValue(true);
+      // The requested page commits, then a redirect it starts gets a 204.
+      guest.loadURL = vi.fn(async () => {
+        guest.getURL.mockReturnValue('https://example.com/start');
+        guest.emit('did-navigate', {}, 'https://example.com/start');
+        setTimeout(() => guest.emit('did-stop-loading'), 1000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/start',
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(pending).resolves.toEqual({ success: true });
+      vi.useRealTimers();
+    });
+
+    it('reports a redirect from the committed page that fails to its error page', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        guest.getURL.mockReturnValue('https://example.com/start');
+        guest.emit('did-navigate', {}, 'https://example.com/start');
+        setTimeout(() => {
+          // Chromium commits the error page under the failed URL without did-navigate.
+          guest.getURL.mockReturnValue('http://127.0.0.1:18748/');
+          guest.emit(
+            'did-fail-load',
+            {},
+            -102,
+            'ERR_CONNECTION_REFUSED',
+            'http://127.0.0.1:18748/',
+            true,
+          );
+          guest.emit('did-stop-loading');
+        }, 1000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/start',
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'Could not open https://example.com/start: ERR_CONNECTION_REFUSED (-102). The browser is still showing http://127.0.0.1:18748/.',
+        success: false,
+      });
+      vi.useRealTimers();
+    });
+
+    it('reports a same-URL reload of the committed page that fails', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        guest.getURL.mockReturnValue('https://example.com/start');
+        guest.emit('did-navigate', {}, 'https://example.com/start');
+        setTimeout(() => {
+          guest.emit(
+            'did-fail-load',
+            {},
+            -105,
+            'ERR_NAME_NOT_RESOLVED',
+            'https://example.com/start',
+            true,
+          );
+          guest.emit('did-stop-loading');
+        }, 1000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/start',
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'Could not open https://example.com/start: ERR_NAME_NOT_RESOLVED (-105). The browser is showing its error page.',
+        success: false,
+      });
+      vi.useRealTimers();
+    });
+
+    it('does not report success when the replacement after ERR_ABORTED never commits', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/redirects',
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'https://example.com/redirects has not responded within 15s, so the browser is still showing http://127.0.0.1:16001/. The load continues in the background — check with readPage or snapshot before acting on the page, or navigate again.',
+        success: false,
+      });
+      expect(guest.listenerCount('did-navigate')).toBe(1);
+      vi.useRealTimers();
+    });
+
+    it('reports a replacement after ERR_ABORTED that stops without committing', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        setTimeout(() => {
+          guest.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', 'http://x/', true);
+          guest.emit('did-stop-loading');
+        }, 1000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/redirects',
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'Could not open https://example.com/redirects: ERR_CONNECTION_REFUSED (-102). The browser is still showing http://127.0.0.1:16001/.',
+        success: false,
+      });
+      // Only the page's own listeners remain.
+      expect(guest.listenerCount('did-fail-load')).toBe(1);
+      expect(guest.listenerCount('did-stop-loading')).toBe(1);
+      vi.useRealTimers();
+    });
   });
 
   it('keeps sessions isolated and activates the most recently registered host', async () => {

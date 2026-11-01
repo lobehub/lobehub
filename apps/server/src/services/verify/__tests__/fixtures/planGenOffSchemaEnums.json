@@ -1,0 +1,64 @@
+{
+  "criteria": [
+    {
+      "title": "Report document is delivered",
+      "description": "A report exists.",
+      "instruction": "Open it.",
+      "verifierType": "agent",
+      "required": true,
+      "onFail": "auto_repair",
+      "requiredEvidence": [
+        {
+          "type": "document",
+          "modality": "document",
+          "scope": "deliverable",
+          "hint": "the report"
+        }
+      ]
+    },
+    {
+      "title": "Metrics are computed per group",
+      "description": "Metrics table.",
+      "instruction": "Check table.",
+      "verifierType": "agent",
+      "required": true,
+      "onFail": "auto_repair",
+      "requiredEvidence": [
+        {
+          "type": "structured",
+          "modality": "structured",
+          "scope": "task_artifacts",
+          "hint": "metrics json"
+        },
+        {
+          "type": "text",
+          "modality": "text",
+          "scope": "run_evidence",
+          "hint": "log"
+        }
+      ]
+    },
+    {
+      "title": "Charts render",
+      "description": "Charts.",
+      "instruction": "Look.",
+      "verifierType": "llm",
+      "required": true,
+      "onFail": "manual",
+      "requiredEvidence": [
+        {
+          "type": "hologram",
+          "modality": "image",
+          "scope": "run_evidence",
+          "hint": "unknown type"
+        }
+      ]
+    },
+    {
+      "title": "Unknown verifier",
+      "description": "x",
+      "verifierType": "oracle",
+      "required": true
+    }
+  ]
+}

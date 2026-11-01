@@ -8,8 +8,13 @@
     "./executor": "./src/executor.ts"
   },
   "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest"
+  },
   "dependencies": {
     "@lobechat/agent-manager-runtime": "workspace:*",
+    "@lobechat/builtin-tool-agent-builder": "workspace:*",
+    "@lobechat/business-const": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
     "lucide-react": "^1.22.0",

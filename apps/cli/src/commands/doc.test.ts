@@ -21,6 +21,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       updateDocument: { mutate: vi.fn() },
     },
     notebook: {
+      associateDocument: { mutate: vi.fn() },
       createDocument: { mutate: vi.fn() },
       listDocuments: { query: vi.fn() },
     },
@@ -33,16 +34,6 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
 
 vi.mock('../api/client', () => ({
   getTrpcClient: mockGetTrpcClient,
-}));
-
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-  setVerbose: vi.fn(),
 }));
 
 describe('doc command', () => {
@@ -69,6 +60,7 @@ describe('doc command', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     exitSpy.mockRestore();
     consoleSpy.mockRestore();
   });
@@ -107,13 +99,21 @@ describe('doc command', () => {
     });
 
     it('should output JSON when --json flag is used', async () => {
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
       const docs = [{ fileType: 'md', id: 'doc1', title: 'Test' }];
       mockTrpcClient.document.queryDocuments.query.mockResolvedValue(docs);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'list', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(docs, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...docs[0], url: 'https://app.lobehub.com/resource/page/doc1' }],
+          null,
+          2,
+        ),
+      );
     });
 
     it('should output JSON with selected fields', async () => {
@@ -207,13 +207,21 @@ describe('doc command', () => {
     });
 
     it('should output JSON when --json flag is used', async () => {
-      const doc = { content: 'test', id: 'doc1', title: 'Test' };
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
+      const doc = { content: 'test', id: 'doc1', knowledgeBaseId: 'kb1', title: 'Test' };
       mockTrpcClient.document.getDocumentById.query.mockResolvedValue(doc);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'view', 'doc1', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(doc, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          { ...doc, url: 'https://app.lobehub.com/resource/library/kb1/file/doc1' },
+          null,
+          2,
+        ),
+      );
     });
 
     it('should exit with error when document not found', async () => {
@@ -230,6 +238,24 @@ describe('doc command', () => {
   // ── create ────────────────────────────────────────────
 
   describe('create', () => {
+    /**
+     * Regression: inside an agent run the created document was never tied to the
+     * run, so a Goal could not show it as the Task's deliverable.
+     */
+    it.each([
+      { env: 'op-run-1', expected: { operationId: 'op-run-1' } },
+      { env: '', expected: undefined },
+    ])('passes the current run operation when set: %j', async ({ env, expected }) => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', env);
+      mockTrpcClient.document.createDocument.mutate.mockResolvedValue({ id: 'new-doc' });
+
+      await createProgram().parseAsync(['node', 'test', 'doc', 'create', '--title', 'Report']);
+
+      const [params] = mockTrpcClient.document.createDocument.mutate.mock.calls[0];
+      if (expected) expect(params).toMatchObject(expected);
+      else expect(params).not.toHaveProperty('operationId');
+    });
+
     it('should create a document with title and body', async () => {
       mockTrpcClient.document.createDocument.mutate.mockResolvedValue({ id: 'new-doc' });
 
@@ -251,6 +277,10 @@ describe('doc command', () => {
           title: 'My Doc',
         }),
       );
+      // The server builds Lexical editor state from content; a `{ type: 'doc' }`
+      // placeholder made node ids change on every read.
+      const [params] = mockTrpcClient.document.createDocument.mutate.mock.calls[0];
+      expect(params).not.toHaveProperty('editorData');
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('new-doc'));
     });
 
@@ -378,6 +408,8 @@ describe('doc command', () => {
           expect.objectContaining({ content: 'content2', title: 'Doc 2' }),
         ]),
       });
+      const [{ documents }] = mockTrpcClient.document.createDocuments.mutate.mock.calls[0];
+      expect(documents.every((doc: object) => !('editorData' in doc))).toBe(true);
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Created 2'));
 
       vi.restoreAllMocks();
@@ -412,6 +444,20 @@ describe('doc command', () => {
   // ── edit ──────────────────────────────────────────────
 
   describe('edit', () => {
+    it.each([
+      { env: 'op-run-1', expected: { operationId: 'op-run-1' } },
+      { env: '', expected: undefined },
+    ])('passes the current run operation when set: %j', async ({ env, expected }) => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', env);
+      mockTrpcClient.document.updateDocument.mutate.mockResolvedValue({});
+
+      await createProgram().parseAsync(['node', 'test', 'doc', 'edit', 'doc1', '--body', 'v2']);
+
+      const [params] = mockTrpcClient.document.updateDocument.mutate.mock.calls[0];
+      if (expected) expect(params).toMatchObject(expected);
+      else expect(params).not.toHaveProperty('operationId');
+    });
+
     it('should update document title', async () => {
       mockTrpcClient.document.updateDocument.mutate.mockResolvedValue({});
 
@@ -439,6 +485,8 @@ describe('doc command', () => {
           id: 'doc1',
         }),
       );
+      const [params] = mockTrpcClient.document.updateDocument.mutate.mock.calls[0];
+      expect(params).not.toHaveProperty('editorData');
     });
 
     it('should update file type', async () => {
@@ -544,26 +592,28 @@ describe('doc command', () => {
   // ── link-topic ────────────────────────────────────────
 
   describe('link-topic', () => {
-    it('should link a document to a topic', async () => {
+    it('attaches the existing document instead of creating a copy', async () => {
+      vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-current');
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'topic_123');
       mockTrpcClient.document.getDocumentById.query.mockResolvedValue({
         content: 'doc content',
-        description: 'desc',
         id: 'doc1',
         title: 'My Doc',
       });
-      mockTrpcClient.notebook.createDocument.mutate.mockResolvedValue({ id: 'new-doc' });
+      mockTrpcClient.notebook.associateDocument.mutate.mockResolvedValue({
+        documentId: 'doc1',
+        topicId: 'topic_123',
+      });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'link-topic', 'doc1', 'topic_123']);
 
-      expect(mockTrpcClient.notebook.createDocument.mutate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: 'doc content',
-          title: 'My Doc',
-          topicId: 'topic_123',
-        }),
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Linked'));
+      expect(mockTrpcClient.notebook.associateDocument.mutate).toHaveBeenCalledWith({
+        documentId: 'doc1',
+        topicId: 'topic_123',
+      });
+      expect(mockTrpcClient.notebook.createDocument.mutate).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('doc1'));
     });
 
     it('should error when document not found', async () => {
@@ -572,6 +622,7 @@ describe('doc command', () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'link-topic', 'bad-id', 'topic_123']);
 
+      expect(mockTrpcClient.notebook.associateDocument.mutate).not.toHaveBeenCalled();
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
@@ -624,13 +675,21 @@ describe('doc command', () => {
     });
 
     it('should output JSON with --json flag', async () => {
+      vi.stubEnv('LOBEHUB_SERVER', 'https://app.lobehub.com');
+      vi.stubEnv('LOBEHUB_WORKSPACE_ID', '');
       const docs = [{ id: 'doc1', title: 'Note' }];
       mockTrpcClient.notebook.listDocuments.query.mockResolvedValue({ data: docs, total: 1 });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'doc', 'topic-docs', 'topic_123', '--json']);
 
-      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(docs, null, 2));
+      expect(consoleSpy).toHaveBeenCalledWith(
+        JSON.stringify(
+          [{ ...docs[0], url: 'https://app.lobehub.com/resource/page/doc1' }],
+          null,
+          2,
+        ),
+      );
     });
 
     it('should show message when no documents found', async () => {

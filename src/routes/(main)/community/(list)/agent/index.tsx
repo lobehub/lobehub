@@ -4,29 +4,24 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import { buildAssistantListQuery } from '@/features/CommunityAgentList/assistantListQuery';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { assistantSelectors } from '@/store/discover/selectors';
 import { type AssistantQueryParams } from '@/types/discover';
-import { AssistantSorts, DiscoverTab } from '@/types/discover';
+import { DiscoverTab } from '@/types/discover';
 
 import AssistantEmpty from '../../features/AssistantEmpty';
 import Pagination from '../features/Pagination';
 import List from './features/List';
-import Loading from './loading';
 
 const AssistantPage = memo(() => {
-  const { q, page, category, sort, order, source } = useQuery() as AssistantQueryParams;
-  const useAssistantList = useDiscoverStore((s) => s.useAssistantList);
-  const { data, isLoading, error, mutate } = useAssistantList({
-    category,
-    includeAgentGroup: true,
-    order,
-    page,
-    pageSize: 21,
-    q,
-    sort: sort ?? AssistantSorts.Recommended,
-    source,
-  });
+  const query = useQuery() as AssistantQueryParams;
+  const useAssistantList = useDiscoverStore((s) => s.useFetchAssistantList);
+  const { error, isLoading, mutate, queryKey } = useAssistantList(buildAssistantListQuery(query));
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(assistantSelectors.assistantList(queryKey));
 
   const items = data?.items ?? [];
 
@@ -38,7 +33,7 @@ const AssistantPage = memo(() => {
       errorVariant={'page'}
       isEmpty={items.length === 0}
       isLoading={isLoading}
-      loading={<Loading />}
+      loading={<RouteLoading />}
       onRetry={() => mutate()}
     >
       {data && (

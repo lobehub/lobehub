@@ -5,6 +5,8 @@ import type { UIChatMessage } from '@lobechat/types';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AssistantActionsBar } from '../../Assistant/Actions';
+import { UserActionsBar } from '../../User/Actions';
 import { GroupActionsBar } from './index';
 
 const storeMock = vi.hoisted(() => ({ isGenerating: false }));
@@ -48,6 +50,27 @@ const data = { id: 'group-1', role: 'assistantGroup', tools: [] } as unknown as 
 
 const renderBar = (props: { contentId?: string }) =>
   render(<GroupActionsBar data={data} id="group-1" {...props} />);
+
+describe('message action defaults', () => {
+  it('does not expose the retired text-to-speech action', () => {
+    render(
+      <>
+        <AssistantActionsBar
+          data={{ content: 'Assistant reply', role: 'assistant' } as UIChatMessage}
+          id="assistant-1"
+        />
+        <UserActionsBar
+          data={{ content: 'User prompt', role: 'user' } as UIChatMessage}
+          id="user-1"
+        />
+      </>,
+    );
+
+    for (const bar of screen.getAllByTestId('action-bar')) {
+      expect(bar.getAttribute('data-menu')?.split(',')).not.toContain('tts');
+    }
+  });
+});
 
 describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', () => {
   it('still generating with no text block → only delete', () => {

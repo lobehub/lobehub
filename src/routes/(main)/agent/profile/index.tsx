@@ -6,6 +6,7 @@ import { memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { delayed } from '@/components/Skeleton/Delayed';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import AgentBuilder from '@/features/AgentBuilder';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
@@ -25,6 +26,13 @@ import { useClickToFocusEditor } from './features/useClickToFocusEditor';
 
 const styles = StyleSheet.create({
   contentWrapper: {
+    /**
+     * Do not stretch the column to this scroller's height. A stretched column
+     * stays viewport-tall while the editor overflows it, so CodeMirror picks it
+     * as the nearest scrollable ancestor (`scrollHeight > clientHeight`) and
+     * drag-selecting past the bottom edge scrolls nothing.
+     */
+    alignItems: 'flex-start',
     cursor: 'text',
     display: 'flex',
     overflowY: 'auto',
@@ -103,7 +111,7 @@ const AgentProfile: FC = () => {
   const { aid } = useParams<{ aid: string }>();
 
   return (
-    <Suspense fallback={<ProfileSkeleton />}>
+    <Suspense fallback={delayed(<ProfileSkeleton />)}>
       <ResourceConfigAccessGate
         loading={<ProfileSkeleton />}
         redirectPath={`/agent/${aid ?? ''}`}

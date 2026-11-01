@@ -1,6 +1,7 @@
 import type { UniformSearchResult } from '@lobechat/types';
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Flexbox } from '@lobehub/ui';
+import { Avatar, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo, useState } from 'react';
 
 import { ENGINE_ICON_MAP } from '../../../../../const';

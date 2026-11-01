@@ -1,21 +1,13 @@
 import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
-
-import {
-  assertGoldenFinalState,
-  extractGoldenOutcomes,
-} from './fixtures/agent-signal/assertGoldenFinalState';
 
 /**
  * E2E tests for `lh agent-signal trigger`.
  *
- * The "golden fixture" block runs fully offline — it is the structural
- * regression baseline that the execAgent migration asserts
- * against. The "live trigger" block requires a running server + authenticated
- * CLI and is gated behind AGENT_SIGNAL_AGENT_ID (or AGENT_ID).
+ * Requires a running server + authenticated CLI and is gated behind
+ * AGENT_SIGNAL_AGENT_ID (or AGENT_ID). Offline golden fixture coverage lives
+ * in tests/agentSignalGolden.test.ts.
  *
  * Prerequisites for the live block:
  * - `lh` (or LH_CLI_PATH) points at the built CLI
@@ -27,11 +19,6 @@ const CLI = process.env.LH_CLI_PATH || 'lh';
 const AGENT_ID = process.env.AGENT_SIGNAL_AGENT_ID || process.env.AGENT_ID;
 const TIMEOUT = 60_000;
 
-const goldenPath = fileURLToPath(
-  new URL('./fixtures/agent-signal/nightly-review.golden.json', import.meta.url),
-);
-const golden = JSON.parse(readFileSync(goldenPath, 'utf-8'));
-
 function run(args: string): string {
   return execSync(`${CLI} ${args}`, {
     encoding: 'utf-8',
@@ -39,31 +26,6 @@ function run(args: string): string {
     timeout: TIMEOUT,
   }).trim();
 }
-
-describe('agent-signal golden fixture - structural regression', () => {
-  it('captures a recognizable nightly-review source payload', () => {
-    expect(golden.source.sourceType).toBe('agent.nightly_review.requested');
-    expect(golden.source.payload.agentId).toBeTruthy();
-    expect(golden.source.payload.userId).toBeTruthy();
-    expect(golden.source.scopeKey).toContain('agent:');
-  });
-
-  it('extracts ideas / write outcomes / brief from finalState', () => {
-    const outcomes = extractGoldenOutcomes(golden.finalState);
-
-    expect(outcomes.ideas.length).toBeGreaterThanOrEqual(1);
-    expect(outcomes.writeOutcomes.length).toBeGreaterThanOrEqual(1);
-    expect(outcomes.brief).toBeDefined();
-  });
-
-  it('passes the shared structural assertion', () => {
-    expect(() => assertGoldenFinalState(golden.finalState)).not.toThrow();
-  });
-
-  it('rejects an empty finalState', () => {
-    expect(() => assertGoldenFinalState({ messages: [] })).toThrow(/artifact/i);
-  });
-});
 
 describe.skipIf(!AGENT_ID)('lh agent-signal trigger - live', () => {
   it('triggers a nightly review and returns a workflow run id', () => {

@@ -22,9 +22,9 @@ vi.mock('@/auth', () => ({
 vi.mock('@/database/models/aiProvider', () => {
   const mockGetAiProviderById = vi.fn();
   return {
-    AiProviderModel: vi.fn().mockImplementation(() => ({
-      getAiProviderById: mockGetAiProviderById,
-    })),
+    AiProviderModel: vi.fn(function () {
+      return { getAiProviderById: mockGetAiProviderById };
+    }),
   };
 });
 
@@ -185,6 +185,32 @@ describe('GET /webapi/models/[provider]/pricing', () => {
 
     expect(response.status).toBe(502);
     expect(responseBody.errorType).toBe(ChatErrorType.BadGateway);
+  });
+
+  it('should release the unread bodies of non-2xx pricing responses', async () => {
+    const mockParams = Promise.resolve({ provider: 'newapi' });
+    const mockModelInstance = new AiProviderModel({} as any, 'test-user-id');
+    vi.mocked(mockModelInstance.getAiProviderById).mockResolvedValue({
+      keyVaults: {
+        apiKey: 'test-key',
+        baseURL: 'https://newapi.test.com/v1',
+      },
+    } as any);
+
+    const cancelAuthed = vi.fn();
+    const cancelAnonymous = vi.fn();
+    const stalledResponse = (cancel: () => void, status: number) =>
+      new Response(new ReadableStream({ cancel, pull: () => new Promise(() => {}) }), { status });
+    mockSsrfSafeFetch
+      .mockResolvedValueOnce(stalledResponse(cancelAuthed, 401))
+      .mockResolvedValueOnce(stalledResponse(cancelAnonymous, 503));
+
+    const response = await GET(request, { params: mockParams });
+
+    expect(response.status).toBe(502);
+    expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+    expect(cancelAuthed).toHaveBeenCalled();
+    expect(cancelAnonymous).toHaveBeenCalled();
   });
 
   it('should return InternalServerError if SSRF protection blocks the request', async () => {

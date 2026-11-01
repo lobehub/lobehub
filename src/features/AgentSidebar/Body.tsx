@@ -1,5 +1,5 @@
-import { Accordion, Flexbox } from '@lobehub/ui';
-import React, { type Key, memo, useCallback, useMemo } from 'react';
+import { AccordionRoot, Flexbox } from '@lobehub/ui';
+import React, { memo, useCallback, useMemo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { useGlobalStore } from '@/store/global';
@@ -28,7 +28,7 @@ const Body = memo(() => {
   }, [sections]);
 
   const handleExpandedChange = useCallback(
-    (keys: Key[]) => {
+    (keys: string[]) => {
       if (!agentId) return;
       updateSystemStatus({
         expandAgentSidebarSectionsByAgent: {
@@ -43,12 +43,17 @@ const Body = memo(() => {
 
   return (
     <Flexbox paddingInline={4}>
-      <Accordion expandedKeys={expandedKeys} gap={8} onExpandedChange={handleExpandedChange}>
+      <AccordionRoot
+        indicatorPlacement="inline"
+        style={{ gap: 8 }}
+        value={expandedKeys}
+        onValueChange={(next) => handleExpandedChange(next as string[])}
+      >
         <Topic
           expanded={expandedKeys.includes(ChatSidebarKey.Topic)}
           itemKey={ChatSidebarKey.Topic}
         />
-      </Accordion>
+      </AccordionRoot>
     </Flexbox>
   );
 });

@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { FileService } from '@/server/services/file';
 import { calculateThumbnailDimensions } from '@/utils/number';
 import { getYYYYmmddHHMMss } from '@/utils/time';
@@ -18,7 +19,7 @@ import { fetchImageFromUrl, GenerationService } from './index';
 const { mockSsrfSafeFetch } = vi.hoisted(() => ({ mockSsrfSafeFetch: vi.fn() }));
 vi.mock('@lobechat/ssrf-safe-fetch', () => ({ ssrfSafeFetch: mockSsrfSafeFetch }));
 
-global.fetch = vi.fn(() => {
+global.fetch = vi.fn(function () {
   throw new Error('raw global fetch must not be used for image URLs; use ssrfSafeFetch');
 }) as any;
 
@@ -30,6 +31,7 @@ vi.mock('mime');
 vi.mock('nanoid');
 vi.mock('sharp');
 vi.mock('@/server/services/file');
+vi.mock('@/database/models/generationTopic');
 vi.mock('@/utils/number');
 vi.mock('@/utils/time');
 vi.mock('@/utils/url');
@@ -39,20 +41,32 @@ describe('GenerationService', () => {
   const mockDb = {} as any;
   const mockUserId = 'test-user';
   let mockFileService: any;
+  let mockTopicModel: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     // Setup common mocks used across all tests
     mockFileService = {
+      deleteFile: vi.fn(),
+      getFileByteArray: vi.fn(),
       uploadMedia: vi.fn(),
     };
-    vi.mocked(FileService).mockImplementation(() => mockFileService);
+    vi.mocked(FileService).mockImplementation(function () {
+      return mockFileService;
+    });
+    mockTopicModel = {
+      findById: vi.fn(),
+      updateCoverIfEmpty: vi.fn(),
+    };
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return mockTopicModel;
+    });
     vi.mocked(nanoid).mockReturnValue('test-uuid');
     vi.mocked(getYYYYmmddHHMMss).mockReturnValue('20240101123000');
 
     // Setup mime.getExtension with consistent behavior
-    vi.mocked(mime.getExtension).mockImplementation((mimeType) => {
+    vi.mocked(mime.getExtension).mockImplementation(function (mimeType) {
       const extensions = {
         'image/png': 'png',
         'image/jpeg': 'jpg',
@@ -63,7 +77,7 @@ describe('GenerationService', () => {
     });
 
     // Setup inferFileExtensionFromImageUrl with consistent behavior
-    vi.mocked(inferFileExtensionFromImageUrl).mockImplementation((url) => {
+    vi.mocked(inferFileExtensionFromImageUrl).mockImplementation(function (url) {
       if (url.includes('.jpg')) return 'jpg';
       if (url.includes('.gif')) return 'gif';
       if (url.includes('image') && !url.includes('.')) return ''; // For error testing
@@ -214,12 +228,87 @@ describe('GenerationService', () => {
         });
       });
 
-      it('should throw error when network request fails', async () => {
-        mockSsrfSafeFetch.mockRejectedValueOnce(new Error('Network error'));
+      describe('transient failures', () => {
+        const okResponse = () => ({
+          ok: true,
+          status: 200,
+          headers: { get: vi.fn().mockReturnValue('image/jpeg') },
+          arrayBuffer: vi.fn().mockResolvedValue(Buffer.from('img').buffer),
+        });
 
-        await expect(fetchImageFromUrl('https://example.com/image.jpg')).rejects.toThrow(
-          'Network error',
-        );
+        beforeEach(() => {
+          vi.useFakeTimers();
+        });
+
+        afterEach(() => {
+          vi.useRealTimers();
+        });
+
+        it('should retry a reset connection and return the image', async () => {
+          mockSsrfSafeFetch
+            .mockRejectedValueOnce(
+              new Error('Fetch failed: Invalid response body while trying to fetch: aborted'),
+            )
+            .mockResolvedValueOnce(okResponse());
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          await vi.runAllTimersAsync();
+
+          await expect(promise).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should retry a connection reset while reading the streamed body', async () => {
+          const reset = new Error('Fetch failed: aborted');
+          mockSsrfSafeFetch
+            .mockResolvedValueOnce({
+              ...okResponse(),
+              arrayBuffer: vi.fn().mockRejectedValue(reset),
+            })
+            .mockResolvedValueOnce(okResponse());
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          await vi.runAllTimersAsync();
+
+          await expect(promise).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should retry 5xx responses', async () => {
+          mockSsrfSafeFetch
+            .mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable' })
+            .mockResolvedValueOnce(okResponse());
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          await vi.runAllTimersAsync();
+
+          await expect(promise).resolves.toMatchObject({ mimeType: 'image/jpeg' });
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
+        });
+
+        it('should give up after all retries without reporting an abort', async () => {
+          mockSsrfSafeFetch.mockRejectedValue(new Error('Fetch failed: aborted'));
+
+          const promise = fetchImageFromUrl('https://example.com/image.jpg');
+          const assertion = expect(promise).rejects.toThrow(
+            'Failed to fetch image from https://example.com/image.jpg after 3 attempts: network error',
+          );
+          await vi.runAllTimersAsync();
+
+          await assertion;
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(3);
+        });
+
+        it('should not retry SSRF blocks', async () => {
+          mockSsrfSafeFetch.mockRejectedValueOnce(
+            new Error('SSRF blocked: 10.0.0.1 is not allowed'),
+          );
+
+          await expect(fetchImageFromUrl('https://example.com/image.jpg')).rejects.toThrow(
+            'SSRF blocked',
+          );
+          expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(1);
+        });
       });
     });
 
@@ -330,9 +419,9 @@ describe('GenerationService', () => {
       // Reset and configure sha256 with stable implementation
       vi.mocked(sha256)
         .mockReset()
-        .mockImplementation(
-          (buffer: any) => `hash-${buffer.length}-${buffer.slice(0, 4).toString('hex')}`,
-        );
+        .mockImplementation(function (buffer: any) {
+          return `hash-${buffer.length}-${buffer.slice(0, 4).toString('hex')}`;
+        });
     });
 
     it('should transform base64 image successfully', async () => {
@@ -918,6 +1007,103 @@ describe('GenerationService', () => {
       expect(filename).toContain('_cover.'); // Cover suffix
 
       expect(result).toBe('generations/covers/test-uuid_256x192_20240101123000_cover.webp');
+    });
+  });
+
+  describe('ensureTopicCover', () => {
+    const coverKey = 'generations/covers/test-uuid_256x192_20240101123000_cover.webp';
+
+    beforeEach(() => {
+      vi.mocked(sharp).mockReturnValue({
+        metadata: vi.fn().mockResolvedValue({ height: 384, width: 512 }),
+        resize: vi.fn().mockReturnThis(),
+        toBuffer: vi.fn().mockResolvedValue(Buffer.from('cover')),
+        webp: vi.fn().mockReturnThis(),
+      } as any);
+      vi.mocked(calculateThumbnailDimensions).mockReturnValue({
+        shouldResize: true,
+        thumbnailHeight: 192,
+        thumbnailWidth: 256,
+      });
+      mockFileService.getFileByteArray.mockResolvedValue(new Uint8Array([1, 2, 3]));
+      mockFileService.uploadMedia.mockResolvedValue({ key: coverKey });
+    });
+
+    it('creates a cover from the stored asset when the topic has none', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
+      mockTopicModel.updateCoverIfEmpty.mockResolvedValue({ coverUrl: coverKey, id: 'gt_1' });
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.getFileByteArray).toHaveBeenCalledWith('generations/thumb.webp');
+      expect(mockSsrfSafeFetch).not.toHaveBeenCalled();
+      expect(mockTopicModel.updateCoverIfEmpty).toHaveBeenCalledWith('gt_1', coverKey);
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('skips topics that already have a cover', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: 'existing', id: 'gt_1' });
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.getFileByteArray).not.toHaveBeenCalled();
+      expect(mockFileService.uploadMedia).not.toHaveBeenCalled();
+    });
+
+    it('removes its upload when a concurrent generation set the cover first', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
+      mockTopicModel.updateCoverIfEmpty.mockResolvedValue(undefined);
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith(coverKey);
+    });
+
+    it('removes its upload when saving the cover fails', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
+      mockTopicModel.updateCoverIfEmpty.mockRejectedValue(new Error('DB down'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(service.ensureTopicCover('gt_1', 'generations/thumb.webp')).resolves.toBe(
+        undefined,
+      );
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith(coverKey);
+    });
+
+    it('keeps its upload when the failed save actually committed the cover', async () => {
+      mockTopicModel.findById
+        .mockResolvedValueOnce({ coverUrl: null, id: 'gt_1' })
+        .mockResolvedValueOnce({ coverUrl: coverKey, id: 'gt_1' });
+      mockTopicModel.updateCoverIfEmpty.mockRejectedValue(new Error('connection lost'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('keeps its upload when the topic cannot be re-checked after a failed save', async () => {
+      mockTopicModel.findById
+        .mockResolvedValueOnce({ coverUrl: null, id: 'gt_1' })
+        .mockRejectedValueOnce(new Error('DB down'));
+      mockTopicModel.updateCoverIfEmpty.mockRejectedValue(new Error('connection lost'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when cover processing fails', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
+      mockFileService.getFileByteArray.mockRejectedValue(new Error('S3 down'));
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(service.ensureTopicCover('gt_1', 'generations/thumb.webp')).resolves.toBe(
+        undefined,
+      );
+      expect(consoleError).toHaveBeenCalled();
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
     });
   });
 });

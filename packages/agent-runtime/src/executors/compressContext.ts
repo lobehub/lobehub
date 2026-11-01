@@ -47,11 +47,11 @@ export const compressContext =
     const { operationId, stepIndex, userId } = operation;
     const events: AgentEvent[] = [];
     const newState = structuredClone(state);
-    const topicId = state.metadata?.topicId ?? operation.topicId;
-    const workspaceId = state.metadata?.workspaceId ?? operation.workspaceId;
-    const agentId = operation.agentId ?? state.metadata?.agentId;
-    const groupId = operation.groupId ?? state.metadata?.groupId;
-    const threadId = operation.threadId ?? state.metadata?.threadId;
+    const topicId = state.origin?.topicId ?? operation.topicId;
+    const workspaceId = state.origin?.workspaceId ?? operation.workspaceId;
+    const agentId = operation.agentId ?? state.origin?.agentId;
+    const groupId = operation.groupId ?? state.origin?.groupId;
+    const threadId = operation.threadId ?? state.origin?.threadId;
     const compression = transports.compression;
     const llm = transports.llm;
     // The latest user turn is the active contract even after assistant/tool steps have followed it.
@@ -109,7 +109,7 @@ export const compressContext =
         tokenCount: currentTokenCount,
         userId,
       } as AnyHookEvent,
-      state.metadata?._hooks,
+      state.host?.hooks,
     );
 
     let createdGroupId: string | undefined;
@@ -276,7 +276,7 @@ export const compressContext =
           summary: summaryResult.content.slice(0, 500),
           userId,
         } as AnyHookEvent,
-        state.metadata?._hooks,
+        state.host?.hooks,
       );
 
       return {
@@ -322,7 +322,7 @@ export const compressContext =
           tokenCount: currentTokenCount,
           userId,
         } as AnyHookEvent,
-        state.metadata?._hooks,
+        state.host?.hooks,
       );
 
       events.push({ error, type: 'compression_error' });

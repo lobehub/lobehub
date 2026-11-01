@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { preloadLang } from './preloadLang';
 
-const { getAntdLocale, load } = vi.hoisted(() => ({
-  getAntdLocale: vi.fn(() => Promise.resolve({})),
+const { load } = vi.hoisted(() => ({
   load: vi.fn(),
 }));
 
@@ -16,8 +15,6 @@ vi.mock('i18next', () => ({
     services: { backendConnector: { load } },
   },
 }));
-
-vi.mock('@/utils/locale', () => ({ getAntdLocale }));
 
 describe('preloadLang', () => {
   beforeEach(() => {
@@ -37,7 +34,6 @@ describe('preloadLang', () => {
     vi.runAllTimers();
 
     expect(load).toHaveBeenCalledWith('zh-CN', ['common', 'chat', 'setting'], expect.any(Function));
-    expect(getAntdLocale).toHaveBeenCalledWith('zh-CN');
   });
 
   it('should resolve "auto" to the system language so the preloaded bundle matches switchLang', () => {

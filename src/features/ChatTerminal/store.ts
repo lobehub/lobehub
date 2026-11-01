@@ -3,9 +3,18 @@ import { create } from 'zustand';
 
 import { electronTerminalService } from '@/services/electron/terminal';
 
+import { DeviceTerminalSession } from './deviceTerminal';
 import { xtermManager } from './xtermManager';
 
 const log = debug('lobe-desktop:chat-terminal');
+
+/** What a freshly spawned session reports back, from either transport. */
+interface SpawnedSession {
+  cwd: string;
+  id: string;
+  pid: number;
+  shell: string;
+}
 
 export interface TerminalPane {
   /** Relative width inside the tab — only meaningful against sibling panes */
@@ -29,6 +38,13 @@ interface ChatTerminalState {
   createErrors: Record<string, string | undefined>;
   /** Per topic key, so a create in-flight for one topic doesn't block another */
   creatingByTopic: Record<string, boolean>;
+  /**
+   * Device the user picked for a topic's NEW terminals; `deviceId: undefined`
+   * means this machine. Absent means no pick, so the panel follows the device
+   * the conversation runs on (see `resolveTerminalDevice`). Sessions already
+   * opened keep running where they started.
+   */
+  devicePickByTopic: Record<string, { deviceId?: string } | undefined>;
   /** Terminal tabs per topic key — sessions created in a topic only show in that topic */
   tabsByTopic: Record<string, TerminalTab[]>;
 }
@@ -37,11 +53,14 @@ interface ChatTerminalActions {
   closeOtherTabs: (topicKey: string, tabId: string) => void;
   closePane: (topicKey: string, paneId: string) => void;
   closeTab: (topicKey: string, tabId: string) => void;
-  createTab: (topicKey: string, cwd?: string) => Promise<void>;
+  /** `deviceId` is where the shell runs; omitted means this machine. */
+  createTab: (topicKey: string, cwd?: string, deviceId?: string) => Promise<void>;
   setActivePane: (topicKey: string, tabId: string, paneId: string) => void;
   setActiveTab: (topicKey: string, tabId: string) => void;
   setPaneFlex: (topicKey: string, tabId: string, flex: number[]) => void;
-  splitPane: (topicKey: string, tabId: string, cwd?: string) => Promise<void>;
+  /** Point a topic's next terminal at a device; `undefined` means this machine. */
+  setTerminalDevice: (topicKey: string, deviceId?: string) => void;
+  splitPane: (topicKey: string, tabId: string, cwd?: string, deviceId?: string) => Promise<void>;
 }
 
 const tabTitle = (cwd: string, shell: string) => {
@@ -79,14 +98,19 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
 ) => {
   // Shared by createTab and splitPane: both spawn a PTY and both are gated by
   // the same per-topic in-flight flag so a double click can't fork two shells.
-  const spawnSession = async (topicKey: string, cwd?: string) => {
+  const spawnSession = async (topicKey: string, cwd?: string, deviceId?: string) => {
     if (get().creatingByTopic[topicKey]) return;
     set((s) => ({
       createErrors: { ...s.createErrors, [topicKey]: undefined },
       creatingByTopic: { ...s.creatingByTopic, [topicKey]: true },
     }));
     try {
-      const info = await electronTerminalService.createSession({ cols: 80, cwd, rows: 24 });
+      // A device session owns its own polling transport, which also registers
+      // the sink routing this terminal's input back to that device. Without a
+      // target the shell is local, and only the desktop app has one.
+      const info: SpawnedSession = deviceId
+        ? (await DeviceTerminalSession.open(deviceId, { cols: 80, cwd, rows: 24 })).info
+        : await electronTerminalService.createSession({ cols: 80, cwd, rows: 24 });
       xtermManager.ensure(info.id);
       return info;
     } catch (error) {
@@ -167,8 +191,8 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
 
     createErrors: {},
 
-    createTab: async (topicKey, cwd) => {
-      const info = await spawnSession(topicKey, cwd);
+    createTab: async (topicKey, cwd, deviceId) => {
+      const info = await spawnSession(topicKey, cwd, deviceId);
       if (!info) return;
       const { activeTabIds, tabsByTopic } = get();
       set({
@@ -190,6 +214,8 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
 
     creatingByTopic: {},
 
+    devicePickByTopic: {},
+
     setActivePane: (topicKey, tabId, paneId) => {
       updateTab(topicKey, tabId, (tab) =>
         tab.activePaneId === paneId || !tab.panes.some((pane) => pane.id === paneId)
@@ -210,8 +236,12 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
       );
     },
 
-    splitPane: async (topicKey, tabId, cwd) => {
-      const info = await spawnSession(topicKey, cwd);
+    setTerminalDevice: (topicKey, deviceId) => {
+      set((s) => ({ devicePickByTopic: { ...s.devicePickByTopic, [topicKey]: { deviceId } } }));
+    },
+
+    splitPane: async (topicKey, tabId, cwd, deviceId) => {
+      const info = await spawnSession(topicKey, cwd, deviceId);
       if (!info) return;
       updateTab(topicKey, tabId, (tab) => {
         const found = tab.panes.findIndex((pane) => pane.id === tab.activePaneId);

@@ -222,6 +222,129 @@ describe('LarkAdapter', () => {
       expect(mockChat.processMessage).not.toHaveBeenCalled();
     });
 
+    it('should process a post (rich text) message carrying a document link', async () => {
+      // A user @mentioning the bot and pasting a docx link produces a `post`
+      // body — before flattening, it had no `text` field and was dropped.
+      const msg = makeLarkMessage({
+        content: JSON.stringify({
+          content: [
+            [
+              { tag: 'at', user_id: 'ou_bot', user_name: 'Bot' },
+              { tag: 'text', text: ' 看下 ' },
+              { href: 'https://x.feishu.cn/docx/AAA', tag: 'a', text: '纪要' },
+            ],
+          ],
+          title: '',
+        }),
+        message_type: 'post',
+      });
+      const res = await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
+
+      expect(res.status).toBe(200);
+      expect(mockChat.processMessage).toHaveBeenCalledTimes(1);
+      const message = await mockChat.processMessage.mock.calls[0][2]();
+      expect(message.text).toBe('@Bot 看下 纪要 (https://x.feishu.cn/docx/AAA)');
+    });
+
+    it('should process an @bot + text + image post with persistent attachment metadata', async () => {
+      (adapter as any)._botUserId = 'ou_bot';
+      const msg = makeLarkMessage({
+        content: JSON.stringify({
+          content: [
+            [
+              { tag: 'at', user_id: 'ou_bot', user_name: 'TestBot' },
+              { tag: 'text', text: ' 看这张图' },
+              { tag: 'img', image_key: 'img_inline' },
+            ],
+          ],
+        }),
+        mentions: [{ id: { open_id: 'ou_bot' }, key: '@_user_1', name: 'TestBot' }],
+        message_type: 'post',
+      });
+
+      const res = await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
+
+      expect(res.status).toBe(200);
+      expect(mockChat.processMessage).toHaveBeenCalledTimes(1);
+      const message = await mockChat.processMessage.mock.calls[0][2]();
+      expect(message.text).toBe('@TestBot 看这张图[image]');
+      expect(message.isMention).toBe(true);
+      expect(message.attachments).toEqual([
+        {
+          fetchMetadata: { imageKey: 'img_inline' },
+          mimeType: 'image/jpeg',
+          name: 'image-1.jpg',
+          type: 'image',
+        },
+      ]);
+      expect(message.toJSON().attachments).toEqual(message.attachments);
+    });
+
+    it('should process an image-only content_v2 post', async () => {
+      const msg = makeLarkMessage({
+        content: JSON.stringify({ content_v2: [[{ tag: 'img', image_key: 'img_only' }]] }),
+        message_type: 'post',
+      });
+
+      await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
+
+      expect(mockChat.processMessage).toHaveBeenCalledTimes(1);
+      const message = await mockChat.processMessage.mock.calls[0][2]();
+      expect(message.attachments).toHaveLength(1);
+    });
+
+    it.each([true, false])(
+      'preserves card button links with visible text: %s',
+      async (withText) => {
+        const url = 'https://x.feishu.cn/docx/CardTok';
+        const msg = makeLarkMessage({
+          content: JSON.stringify({
+            elements: [
+              {
+                tag: 'button',
+                ...(withText ? { text: { content: 'Read notes', tag: 'plain_text' } } : {}),
+                url,
+              },
+            ],
+          }),
+          message_type: 'interactive',
+        });
+        const expected = `${withText ? 'Read notes\n' : ''}[links: ${url}]`;
+
+        expect(adapter.parseMessage(msg).text).toBe(expected);
+        const response = await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
+
+        expect(response.status).toBe(200);
+        expect(mockChat.processMessage).toHaveBeenCalledTimes(1);
+        const message = await mockChat.processMessage.mock.calls[0][2]();
+        expect(message.text).toBe(expected);
+      },
+    );
+
+    it('should process an interactive card that carries text', async () => {
+      const msg = makeLarkMessage({
+        content: JSON.stringify({
+          elements: [{ tag: 'div', text: { content: '会议纪要已生成', tag: 'lark_md' } }],
+        }),
+        message_type: 'interactive',
+      });
+      const res = await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
+
+      expect(res.status).toBe(200);
+      expect(mockChat.processMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should still skip unknown message types with no text at all', async () => {
+      const msg = makeLarkMessage({
+        content: JSON.stringify({ chat_id: 'oc_other' }),
+        message_type: 'share_chat',
+      });
+      const res = await adapter.handleWebhook(makeRequest(makeWebhookPayload(msg)));
+
+      expect(res.status).toBe(200);
+      expect(mockChat.processMessage).not.toHaveBeenCalled();
+    });
+
     it('should process image message', async () => {
       const msg = makeLarkMessage({
         content: JSON.stringify({ image_key: 'img_test_key' }),
@@ -497,6 +620,19 @@ describe('LarkAdapter', () => {
       expect(message.text).toBe('hello');
     });
 
+    it('should flatten a post body into text with its links', () => {
+      const raw = makeLarkMessage({
+        content: JSON.stringify({
+          content: [[{ href: 'https://x.feishu.cn/docx/AAA', tag: 'a', text: '纪要' }]],
+          title: '智能纪要',
+        }),
+        message_type: 'post',
+      });
+      const message = adapter.parseMessage(raw);
+      expect(message.text).toBe('智能纪要\n纪要 (https://x.feishu.cn/docx/AAA)');
+      expect(message.attachments).toEqual([]);
+    });
+
     it('should create metadata-only attachment for image message', () => {
       const raw = makeLarkMessage({
         content: JSON.stringify({ image_key: 'img_lazy' }),
@@ -679,10 +815,33 @@ describe('extractMediaMetadata', () => {
     expect(extractMediaMetadata(makeLarkMessage())).toEqual([]);
   });
 
-  it('returns empty array for post messages', () => {
+  it('returns metadata-only attachments for every post image in rich-text order', () => {
     expect(
-      extractMediaMetadata(makeLarkMessage({ message_type: 'post', content: JSON.stringify({}) })),
-    ).toEqual([]);
+      extractMediaMetadata(
+        makeLarkMessage({
+          message_type: 'post',
+          content: JSON.stringify({
+            content_v2: [
+              [{ tag: 'img', image_key: 'img_1' }],
+              [{ tag: 'md', text: '![second](img_2) ![public](https://example.com/a.png)' }],
+            ],
+          }),
+        }),
+      ),
+    ).toEqual([
+      {
+        fetchMetadata: { imageKey: 'img_1' },
+        mimeType: 'image/jpeg',
+        name: 'image-1.jpg',
+        type: 'image',
+      },
+      {
+        fetchMetadata: { imageKey: 'img_2' },
+        mimeType: 'image/jpeg',
+        name: 'image-2.jpg',
+        type: 'image',
+      },
+    ]);
   });
 
   it('returns empty array for malformed content JSON', () => {
@@ -922,5 +1081,99 @@ describe('downloadMediaFromRawMessage', () => {
     );
 
     expect(warn).toHaveBeenCalled();
+  });
+
+  it('downloads post images in order and keeps later images when one item fails', async () => {
+    const secondBytes = Buffer.from('second');
+    const thirdBytes = Buffer.from('third');
+    downloadSpy
+      .mockRejectedValueOnce(new Error('first failed'))
+      .mockResolvedValueOnce(secondBytes)
+      .mockResolvedValueOnce(thirdBytes);
+    const warn = vi.fn();
+
+    const result = await downloadMediaFromRawMessage(
+      api,
+      makeLarkMessage({
+        content: JSON.stringify({
+          content_v2: [
+            [
+              { tag: 'img', image_key: 'img_1' },
+              { tag: 'md', text: '![second](img_2)' },
+            ],
+            [{ tag: 'img', image_key: 'img_3' }],
+          ],
+        }),
+        message_type: 'post',
+      }),
+      { warn },
+    );
+
+    expect(downloadSpy.mock.calls).toEqual([
+      ['om_test_msg_001', 'img_1', 'image'],
+      ['om_test_msg_001', 'img_2', 'image'],
+      ['om_test_msg_001', 'img_3', 'image'],
+    ]);
+    expect(result).toEqual([
+      { buffer: secondBytes, mimeType: 'image/jpeg', name: 'image-2.jpg', type: 'image' },
+      { buffer: thirdBytes, mimeType: 'image/jpeg', name: 'image-3.jpg', type: 'image' },
+    ]);
+    expect(warn).toHaveBeenCalledWith(
+      'Failed to download post image %s for message %s: %s',
+      'img_1',
+      'om_test_msg_001',
+      expect.any(Error),
+    );
+  });
+});
+
+describe('LarkAdapter.fetchMessages', () => {
+  const makeAdapter = () => {
+    const adapter = new LarkAdapter({ appId: 'a', appSecret: 's', platform: 'lark' });
+    adapter.initialize({
+      getLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
+      getUserName: () => 'TestBot',
+      processMessage: vi.fn(),
+    } as any);
+    return adapter;
+  };
+  const page = (...ids: string[]) => ({
+    hasMore: false,
+    items: ids.map((id, index) =>
+      makeLarkMessage({ create_time: String(1_700_000_000_000 + index), message_id: id }),
+    ),
+  });
+  const threadId = 'lark:oc_test_chat';
+
+  it('fetches the NEWEST page for the default backward direction, oldest-first within it', async () => {
+    // Feishu's own default is ascending, i.e. the chat's oldest messages —
+    // the opposite of what `direction: 'backward'` promises.
+    const adapter = makeAdapter();
+    const listMessages = vi
+      .spyOn((adapter as any).api, 'listMessages')
+      .mockResolvedValue(page('om_newest', 'om_middle', 'om_oldest'));
+
+    const result = await adapter.fetchMessages(threadId, { limit: 3 });
+
+    expect(listMessages).toHaveBeenCalledWith(
+      'oc_test_chat',
+      expect.objectContaining({ sortType: 'ByCreateTimeDesc' }),
+    );
+    expect(result.messages.map((m) => m.id)).toEqual(['om_oldest', 'om_middle', 'om_newest']);
+  });
+
+  it('maps forward onto ascending order and keeps the page as returned', async () => {
+    const adapter = makeAdapter();
+    const listMessages = vi
+      .spyOn((adapter as any).api, 'listMessages')
+      .mockResolvedValue(page('om_1', 'om_2'));
+
+    const result = await adapter.fetchMessages(threadId, { direction: 'forward' });
+
+    expect(listMessages).toHaveBeenCalledWith(
+      'oc_test_chat',
+      expect.objectContaining({ sortType: 'ByCreateTimeAsc' }),
+    );
+    expect(result.messages.map((m) => m.id)).toEqual(['om_1', 'om_2']);
   });
 });

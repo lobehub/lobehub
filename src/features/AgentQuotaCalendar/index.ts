@@ -1,1 +1,1 @@
-export { openQuotaCalendarModal } from './QuotaCalendarModal';
+export { openQuotaCalendarModal, type QuotaCalendarProvider } from './QuotaCalendarModal';

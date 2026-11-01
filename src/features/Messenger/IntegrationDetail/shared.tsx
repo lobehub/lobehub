@@ -1,8 +1,17 @@
 'use client';
 
-import { Block, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button, confirmModal, Select, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Select,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { ArrowLeftIcon, CheckCircle2Icon, Trash2Icon, UserIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -117,62 +126,7 @@ export const ConnectionRow = memo<ConnectionRowProps>(
 );
 ConnectionRow.displayName = 'MessengerConnectionRow';
 
-const ConnectionsSkeleton = memo<{ withNestedContent?: boolean }>(
-  ({ withNestedContent = false }) => (
-    <Flexbox gap={12}>
-      {Array.from({ length: 2 }).map((_, index) => (
-        <Block className={styles.card} key={index}>
-          <Flexbox gap={12}>
-            <Flexbox horizontal align="center" gap={12}>
-              <Skeleton.Avatar active shape={'square'} size={36} />
-              <Flexbox flex={1} gap={6}>
-                <Skeleton.Button active size={'small'} style={{ width: 56 }} />
-                <Skeleton.Button active style={{ height: 18, width: '40%' }} />
-              </Flexbox>
-              <Skeleton.Button active size={'small'} style={{ width: 72 }} />
-              <Skeleton.Button active size={'small'} style={{ width: 84 }} />
-            </Flexbox>
-            {withNestedContent && (
-              <Flexbox gap={6} style={{ paddingInlineStart: 48 }}>
-                <Skeleton.Button active size={'small'} style={{ width: 72 }} />
-                <Skeleton.Button active style={{ height: 32, width: '100%' }} />
-              </Flexbox>
-            )}
-          </Flexbox>
-        </Block>
-      ))}
-    </Flexbox>
-  ),
-);
-ConnectionsSkeleton.displayName = 'MessengerConnectionsSkeleton';
-
-export const IntegrationDetailSkeleton = memo<{ withNestedContent?: boolean }>(
-  ({ withNestedContent = false }) => (
-    <Flexbox gap={20}>
-      <Flexbox horizontal align="center" gap={12}>
-        <Skeleton.Button active size={'small'} style={{ width: 20 }} />
-        <Skeleton.Button active style={{ height: 28, width: 96 }} />
-      </Flexbox>
-
-      <Block className={styles.card}>
-        <Flexbox horizontal align="center" gap={16}>
-          <Skeleton.Avatar active shape={'square'} size={48} />
-          <Flexbox flex={1} gap={6}>
-            <Skeleton.Button active size={'small'} style={{ width: 64 }} />
-            <Skeleton active paragraph={{ rows: 1, width: '65%' }} title={false} />
-          </Flexbox>
-          <Skeleton.Button active style={{ height: 40, width: 120 }} />
-        </Flexbox>
-      </Block>
-
-      <Flexbox gap={8}>
-        <Skeleton.Button active size={'small'} style={{ width: 72 }} />
-        <ConnectionsSkeleton withNestedContent={withNestedContent} />
-      </Flexbox>
-    </Flexbox>
-  ),
-);
-IntegrationDetailSkeleton.displayName = 'MessengerIntegrationDetailSkeleton';
+export { IntegrationDetailSkeleton } from '@/components/Skeleton/Settings/MessengerDetail';
 
 interface DetailLayoutProps {
   children?: ReactNode;
@@ -488,7 +442,9 @@ export const useLinkActions = ({
       content:
         platform === 'wechat'
           ? t('messenger.unlinkConfirmWechat')
-          : t('messenger.unlinkConfirm', { platform: name }),
+          : platform === 'linq'
+            ? t('messenger.unlinkConfirmLinq')
+            : t('messenger.unlinkConfirm', { platform: name }),
       okButtonProps: { danger: true },
       onOk: async () => {
         try {

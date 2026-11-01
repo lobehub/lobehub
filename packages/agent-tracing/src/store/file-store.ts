@@ -10,8 +10,14 @@ const PARTIAL_DIR = '_partial';
 export class FileSnapshotStore implements ISnapshotStore {
   private dir: string;
 
-  constructor(rootDir?: string) {
-    this.dir = path.resolve(rootDir ?? process.cwd(), DEFAULT_DIR);
+  /**
+   * @param rootDir Directory `dirName` resolves against. Defaults to the cwd.
+   * @param dirName Leaf directory holding the snapshots. Overridable so a host
+   *   that owns its own layout (the CLI writes to `~/.lobehub/traces`) does not
+   *   end up with a nested hidden `.agent-tracing/` inside it.
+   */
+  constructor(rootDir?: string, dirName: string = DEFAULT_DIR) {
+    this.dir = path.resolve(rootDir ?? process.cwd(), dirName);
   }
 
   // ==================== Completed snapshots ====================
@@ -26,14 +32,20 @@ export class FileSnapshotStore implements ISnapshotStore {
 
     await fs.writeFile(filePath, JSON.stringify(snapshot, null, 2), 'utf8');
 
-    // Update latest symlink
+    // Update latest symlink. Best-effort convenience pointer: two runs
+    // finishing at once race between the unlink and the symlink, and losing
+    // that race must not throw away an already-written snapshot.
     const latestPath = path.join(this.dir, 'latest.json');
     try {
       await fs.unlink(latestPath);
     } catch {
       // ignore if doesn't exist
     }
-    await fs.symlink(filename, latestPath);
+    try {
+      await fs.symlink(filename, latestPath);
+    } catch {
+      // ignore — `getLatest` falls back to the newest file by name
+    }
   }
 
   async get(traceId: string): Promise<ExecutionSnapshot | null> {
@@ -140,9 +152,26 @@ export class FileSnapshotStore implements ISnapshotStore {
     }
   }
 
+  /**
+   * Write the in-progress snapshot atomically (temp file + rename).
+   *
+   * A partial exists precisely so a killed process can be recovered from it, so
+   * it must never be observed half-written — a plain `writeFile` interrupted by
+   * `SIGKILL` leaves truncated JSON, which fails to parse at exactly the moment
+   * the file is needed. `rename` within one directory is atomic.
+   */
   async savePartial(operationId: string, partial: Partial<ExecutionSnapshot>): Promise<void> {
     await fs.mkdir(this.partialDir(), { recursive: true });
-    await fs.writeFile(this.partialPath(operationId), JSON.stringify(partial), 'utf8');
+    const target = this.partialPath(operationId);
+    const tmp = `${target}.${process.pid}.tmp`;
+
+    try {
+      await fs.writeFile(tmp, JSON.stringify(partial), 'utf8');
+      await fs.rename(tmp, target);
+    } catch (error) {
+      await fs.unlink(tmp).catch(() => {});
+      throw error;
+    }
   }
 
   async removePartial(operationId: string): Promise<void> {

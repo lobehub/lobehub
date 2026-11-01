@@ -1,23 +1,28 @@
-import { type AgentEvalBenchmark, type AgentEvalBenchmarkListItem } from '@lobechat/types';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
+import type { BenchmarkDetail, BenchmarkListItem } from './projection';
 
 export interface BenchmarkSliceState {
-  benchmarkDetailMap: Record<string, AgentEvalBenchmark>;
-  benchmarkList: AgentEvalBenchmarkListItem[];
+  /** Replica view of the benchmark details, one entry per benchmark id. */
+  benchmarkDetailMap: Record<string, BenchmarkDetail>;
+  /** Replica bookkeeping of `benchmarkDetailMap`. */
+  benchmarkDetailReplica: ReplicaState<BenchmarkDetail>;
+  /** Replica view of the benchmark list (one entry per cache scope). */
+  benchmarkList: BenchmarkListItem[];
+  /**
+   * Whether the list has ever been hydrated or fetched. Keeps a loaded-but-
+   * empty list distinguishable from one that was never loaded, so the sidebar
+   * shows its skeleton instead of a premature empty state.
+   */
   benchmarkListInit: boolean;
-  isCreatingBenchmark: boolean;
-  isDeletingBenchmark: boolean;
-  isLoadingBenchmarkList: boolean;
-  isUpdatingBenchmark: boolean;
-  loadingBenchmarkDetailIds: string[];
+  /** Replica bookkeeping of `benchmarkList`. */
+  benchmarkListReplica: ReplicaState<BenchmarkListItem[]>;
 }
 
 export const benchmarkInitialState: BenchmarkSliceState = {
   benchmarkDetailMap: {},
+  benchmarkDetailReplica: createReplicaState(),
   benchmarkList: [],
   benchmarkListInit: false,
-  isCreatingBenchmark: false,
-  isDeletingBenchmark: false,
-  isLoadingBenchmarkList: true,
-  isUpdatingBenchmark: false,
-  loadingBenchmarkDetailIds: [],
+  benchmarkListReplica: createReplicaState(),
 };

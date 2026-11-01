@@ -1,13 +1,13 @@
 'use client';
 
-import { Empty, Flexbox } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox, useModalContext } from '@lobehub/ui';
 import { SearchX } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 import { type DiscoverSkillDetail } from '@/types/discover';
 
 import { DetailActionContext, DetailProvider } from './DetailProvider';
@@ -53,7 +53,8 @@ export const SkillDetailContent = memo<SkillDetailContentProps>(
     const { close } = useModalContext();
 
     const useSkillDetail = useDiscoverStore((s) => s.useFetchSkillDetail);
-    const { data, error, isLoading, isValidating, mutate } = useSkillDetail({ identifier });
+    const { error, isLoading, isValidating, mutate, queryKey } = useSkillDetail({ identifier });
+    const data = useDiscoverStore(skillSelectors.skillDetail(queryKey));
 
     const actions = useMemo(() => ({ close, selectSkill: setIdentifier }), [close]);
 

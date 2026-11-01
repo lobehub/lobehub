@@ -1,8 +1,7 @@
 'use client';
 
 import type { BlockProps } from '@lobehub/ui';
-import { ActionIcon, Block, Popover, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Block, createStaticStyles, Popover, Text } from '@lobehub/ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -51,6 +50,8 @@ export const SidebarHeaderSelectPopover = memo<SidebarHeaderSelectPopoverProps>(
 // Popover clones this trigger to inject onClick/ref; rest must reach Block.
 interface SidebarHeaderSelectTriggerProps extends Omit<BlockProps, 'children' | 'title'> {
   avatar?: ReactNode | string;
+  /** Rendered as is in place of the avatar tile, e.g. an agent avatar. */
+  avatarNode?: ReactNode;
   background?: string;
   /** Plain-text name behind `title`, seeding the avatar fallback. */
   name?: string;
@@ -58,7 +59,7 @@ interface SidebarHeaderSelectTriggerProps extends Omit<BlockProps, 'children' | 
 }
 
 export const SidebarHeaderSelectTrigger = memo<SidebarHeaderSelectTriggerProps>(
-  ({ avatar, background, className, name, style, title, ...rest }) => (
+  ({ avatar, avatarNode, background, className, name, style, title, ...rest }) => (
     <Block
       clickable
       horizontal
@@ -70,7 +71,9 @@ export const SidebarHeaderSelectTrigger = memo<SidebarHeaderSelectTriggerProps>(
       variant={'borderless'}
       {...rest}
     >
-      <Avatar avatar={avatar} background={background} name={name} shape={'square'} size={28} />
+      {avatarNode ?? (
+        <Avatar avatar={avatar} background={background} name={name} shape={'square'} size={28} />
+      )}
       <Text ellipsis weight={500}>
         {title}
       </Text>

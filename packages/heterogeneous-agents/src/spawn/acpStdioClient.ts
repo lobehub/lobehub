@@ -1,6 +1,8 @@
 import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 
+import { spawnManaged } from '@lobechat/utils/managedProcess';
+
 import { resolveCliSpawnPlan } from './cliSpawn';
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
@@ -32,6 +34,8 @@ export interface AcpStdioClientOptions {
   args: string[];
   commandPath: string;
   cwd: string;
+  /** Create a dedicated Unix process group. Disable beneath a detached wrapper. */
+  detached?: boolean;
   env: NodeJS.ProcessEnv;
   onMessage: (message: AcpRpcMessage) => Promise<void> | void;
   onRawMessage: (line: string) => Promise<void> | void;
@@ -100,9 +104,10 @@ export class AcpStdioClient {
 
     const spawnPlan = await resolveCliSpawnPlan(this.options.commandPath, this.options.args);
     if (this.closed) throw new Error('ACP stdio client is closed');
-    const child = spawn(spawnPlan.command, spawnPlan.args, {
+    const detached = process.platform !== 'win32' && (this.options.detached ?? true);
+    const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
-      detached: process.platform !== 'win32',
+      detached,
       env: this.options.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -153,7 +158,9 @@ export class AcpStdioClient {
       if (timeoutMs !== false) {
         pending.timeout = setTimeout(() => {
           this.pendingRequests.delete(String(id));
-          reject(new Error(`ACP request timed out: ${method}`));
+          reject(
+            Object.assign(new Error(`ACP request timed out: ${method}`), { code: 'ETIMEDOUT' }),
+          );
         }, timeoutMs);
         pending.timeout.unref?.();
       }
@@ -172,12 +179,13 @@ export class AcpStdioClient {
     if (this.fatalError) throw this.fatalError;
   }
 
-  close(signal: NodeJS.Signals = 'SIGTERM'): void {
+  /** Pass null when the host already delivered the terminating OS signal. */
+  close(signal: NodeJS.Signals | null = 'SIGTERM'): void {
     if (this.closed) return;
     this.closed = true;
     this.stdoutBuffer = '';
     this.rejectPendingRequests(new Error('ACP stdio client closed by host'));
-    this.shutdownProcess(signal);
+    if (signal !== null) this.shutdownProcess(signal);
   }
 
   private consumeStdout(chunk: Buffer): void {
@@ -314,14 +322,20 @@ export class AcpStdioClient {
       return;
     }
 
-    try {
-      process.kill(-child.pid, signal);
-    } catch {
+    const detached = this.options.detached ?? true;
+    if (detached) {
       try {
-        child.kill(signal);
+        process.kill(-child.pid, signal);
+        return;
       } catch {
-        // already gone
+        // Fall through to a direct signal when the process group is gone.
       }
+    }
+
+    try {
+      child.kill(signal);
+    } catch {
+      // already gone
     }
   }
 

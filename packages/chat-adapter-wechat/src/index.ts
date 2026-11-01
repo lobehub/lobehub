@@ -20,3 +20,5 @@ export type {
   WechatThreadId,
 } from './types';
 export { MessageItemType, MessageState, MessageType, WECHAT_RET_CODES } from './types';
+export type { DecodedWechatVoice } from './voice';
+export { decodeWechatVoice, WechatVoiceEncodeType } from './voice';

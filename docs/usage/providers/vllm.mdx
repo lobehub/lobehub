@@ -79,19 +79,18 @@ This guide will walk you through how to use vLLM in LobeHub:
 
   ### Step 4: Configure vLLM in LobeHub
 
-  - Open the `App Settings` panel in LobeHub
-  - Under `AI Providers`, locate the `vLLM` configuration section
+  - Open **App Settings → AI Providers**, select **vLLM**, and enable the provider
 
   <Image alt={'Enter vLLM API Key'} inStep src={'/blog/assets02dce7325584974cdba327fe2f996b9e.webp'} />
 
-  - Enable the vLLM provider and enter the API service URL and API key
+  - Enter the vLLM server URL. If the server requires API key authentication, enter the API key
 
   <Callout type={'warning'}>
     \* If your vLLM server is not configured with an API key, leave the API key field blank.\
     \* If your vLLM server is running locally, make sure to enable "Client Request Mode".
   </Callout>
 
-  - Add the model you are running to the model list below
+  - Select **Check** to test the connection, then fetch or add the running model in the model list
   - Assign the vLLM model to your assistant to start chatting
 
     <Image alt={'Select vLLM Model'} inStep src={'/blog/assets8477415ecec1f37e38ab38ff1217d0a7.webp'} />

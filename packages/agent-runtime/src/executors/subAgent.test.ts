@@ -16,7 +16,7 @@ const createState = (overrides?: Partial<AgentState>): AgentState => ({
   lastModified: '2026-07-09T00:00:00.000Z',
   maxSteps: 100,
   messages: [],
-  metadata: {
+  origin: {
     agentId: 'parent-agent',
     threadId: 'thread-1',
     topicId: 'topic-1',
@@ -175,7 +175,9 @@ describe('sub-agent executors', () => {
 
     const result = await execSubAgent(host)(
       instruction,
-      createState({ metadata: { agentId: 'parent-agent', isSubAgent: true, topicId: 'topic-1' } }),
+      createState({
+        origin: { agentId: 'parent-agent', topicId: 'topic-1', lineage: { isSubAgent: true } },
+      }),
     );
 
     expect(execSubAgentTransport).not.toHaveBeenCalled();

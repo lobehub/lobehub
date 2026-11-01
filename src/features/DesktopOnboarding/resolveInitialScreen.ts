@@ -20,7 +20,7 @@ interface ResolveInitialScreenInput {
  * 3. `Login` if the user has previously completed onboarding.
  * 4. `Welcome` for first-time users.
  *
- * On non-macOS, `Permissions` is rewritten to `DataMode` since the macOS-only
+ * On non-macOS, `Permissions` is rewritten to `KeepAwake` since the macOS-only
  * screen has no useful content.
  */
 export const resolveInitialScreen = ({
@@ -33,7 +33,7 @@ export const resolveInitialScreen = ({
   const chosen = requested ?? saved ?? fallback;
 
   if (!isMac && chosen === DesktopOnboardingScreen.Permissions) {
-    return DesktopOnboardingScreen.DataMode;
+    return DesktopOnboardingScreen.KeepAwake;
   }
   return chosen;
 };

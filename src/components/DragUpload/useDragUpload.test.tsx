@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,9 +12,10 @@ import { getContainer, useDragUpload } from './useDragUpload';
 // Mock the hooks and components
 vi.mock('@/hooks/useMediaUploadAbility');
 vi.mock('@/store/agent');
-vi.mock('@lobehub/ui/base-ui', () => {
-  return { toast: { warning: vi.fn() } };
-});
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
+}));
 
 describe('useDragUpload', () => {
   let mockOnUploadFiles: Mock;

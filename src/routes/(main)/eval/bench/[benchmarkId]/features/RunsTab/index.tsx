@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Text } from '@lobehub/ui';
-import { Button, Select } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Select, Text } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -47,7 +45,7 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
   const { t } = useTranslation('eval');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
-  const runList = useEvalStore(runSelectors.runList);
+  const runList = useEvalStore(runSelectors.runList(benchmarkId));
   const refreshRuns = useEvalStore((s) => s.refreshRuns);
   useFetchRuns(benchmarkId);
 

@@ -26,11 +26,11 @@ export interface RecommendedAction {
   execute: (ctx: ActionContext) => Promise<void>;
   /** i18n interpolation values for title/description/cta */
   i18nValues?: Record<string, string>;
-  icon: ReactNode;
   id: string;
   isEligible: (ctx: ActionContext) => boolean;
   /** Higher = shown earlier. Defaults to 0. */
   priority?: number;
+  renderIcon: (size: number) => ReactNode;
   tagKey?: string;
 
   titleKey: string;

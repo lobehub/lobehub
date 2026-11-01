@@ -1,14 +1,13 @@
 'use client';
 
 import type { EvalThreadResult } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Tabs } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
@@ -34,10 +33,10 @@ const CaseDetail = memo(() => {
   const pollingConfig = { refreshInterval: isActive ? POLLING_INTERVAL : 0 };
   useFetchRunDetail(runId!, pollingConfig);
   const {
-    data: resultsData,
     error: resultsError,
-    isLoading: resultsLoading,
-    mutate: mutateResults,
+    isHydrated: resultsHydrated,
+    isValidating: resultsValidating,
+    revalidate: revalidateResults,
   } = useFetchRunResults(runId!, pollingConfig);
 
   const runDetail = useEvalStore(runSelectors.getRunDetailById(runId!));
@@ -96,12 +95,13 @@ const CaseDetail = memo(() => {
   // failed fetch (ux Read §1.1). A page-level failure gets a reason + Reload.
   return (
     <AsyncBoundary
-      data={resultsData}
+      data={runResults}
       error={resultsError}
       errorVariant={'page'}
       isEmpty={!caseResult}
-      isLoading={resultsLoading}
-      onRetry={() => mutateResults()}
+      isLoading={!resultsHydrated || resultsValidating}
+      loading={<RouteLoading />}
+      onRetry={() => void revalidateResults()}
     >
       {caseResult && (
         <Flexbox height="100%" style={{ overflow: 'hidden' }}>

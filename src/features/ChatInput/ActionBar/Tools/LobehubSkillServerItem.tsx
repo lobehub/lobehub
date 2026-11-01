@@ -1,6 +1,5 @@
-import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui/base-ui';
-import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
+import { Checkbox, Flexbox, Icon, Spin, stopPropagation } from '@lobehub/ui';
+import { SquareArrowOutUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -246,7 +245,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
       if (isConnecting) {
         return (
           <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
-            <Icon spin icon={Loader2} />
+            <Spin size="small" />
           </Flexbox>
         );
       }
@@ -273,7 +272,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
       switch (server.status) {
         case LobehubSkillStatus.CONNECTED: {
           if (isToggling) {
-            return <Icon spin icon={Loader2} />;
+            return <Spin size="small" />;
           }
           return (
             <Checkbox
@@ -291,7 +290,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(
           if (isWaitingAuth) {
             return (
               <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
-                <Icon spin icon={Loader2} />
+                <Spin size="small" />
               </Flexbox>
             );
           }

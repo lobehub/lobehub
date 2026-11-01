@@ -17,167 +17,174 @@ vi.mock('@lobechat/const', () => ({
 
 vi.mock('@lobechat/heterogeneous-agents/client', () => ({
   getHeterogeneousAgentClientConfig: (type: string) =>
-    type === 'claude-code'
+    type === 'deepseek-harness'
       ? {
-          defaultCommand: 'claude',
-          icon: () => <span>Claude Code Icon</span>,
-          title: 'Claude Code',
+          icon: () => <span>DeepSeek Icon</span>,
+          title: 'DeepSeek Harness',
         }
-      : type === 'kimi-code'
+      : type === 'claude-code'
         ? {
-            defaultCommand: 'kimi',
-            icon: () => <span>Kimi Code Icon</span>,
-            title: 'Kimi Code',
+            defaultCommand: 'claude',
+            icon: () => <span>Claude Code Icon</span>,
+            title: 'Claude Code',
           }
-        : type === 'opencode'
+        : type === 'droid'
           ? {
-              defaultCommand: 'opencode',
-              icon: () => <span>OpenCode Icon</span>,
-              title: 'OpenCode',
+              defaultCommand: 'droid',
+              icon: () => <span>Factory Droid Icon</span>,
+              title: 'Factory Droid',
             }
-          : type === 'pi'
+          : type === 'kimi-code'
             ? {
-                defaultCommand: 'pi',
-                icon: () => <span>Pi Icon</span>,
-                title: 'Pi',
+                defaultCommand: 'kimi',
+                icon: () => <span>Kimi Code Icon</span>,
+                title: 'Kimi Code',
               }
-            : {
-                defaultCommand: 'codex',
-                icon: () => <span>Codex Icon</span>,
-                title: 'Codex',
-              },
+            : type === 'opencode'
+              ? {
+                  defaultCommand: 'opencode',
+                  icon: () => <span>OpenCode Icon</span>,
+                  title: 'OpenCode',
+                }
+              : type === 'pi'
+                ? {
+                    defaultCommand: 'pi',
+                    icon: () => <span>Pi Icon</span>,
+                    title: 'Pi',
+                  }
+                : {
+                    defaultCommand: 'codex',
+                    icon: () => <span>Codex Icon</span>,
+                    title: 'Codex',
+                  },
   isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
+  isLocalRuntimeHeterogeneousType: (type: string) => type === 'deepseek-harness',
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    'aria-label': ariaLabel,
-    className,
-    onClick,
-  }: {
-    'aria-label'?: string;
-    'className'?: string;
-    'onClick'?: () => void;
-  }) => (
-    <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
-      Refresh
-    </button>
-  ),
-  CopyButton: () => <button type="button">Copy</button>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span>Icon</span>,
-  Input: ({
-    onBlur,
-    onChange,
-    onKeyDown,
-    placeholder,
-    ref,
-    value,
-  }: {
-    onBlur?: () => void;
-    onChange?: (event: { target: { value: string } }) => void;
-    onKeyDown?: (event: { key: string; preventDefault: () => void }) => void;
-    placeholder?: string;
-    ref?: React.Ref<HTMLInputElement>;
-    value?: string;
-  }) => (
-    <input
-      placeholder={placeholder}
-      ref={ref}
-      value={value}
-      onBlur={onBlur}
-      onChange={(event) => {
-        onChange?.({ target: { value: event.target.value } });
-      }}
-      onKeyDown={(event) => {
-        onKeyDown?.({ key: event.key, preventDefault: () => event.preventDefault() });
-      }}
-    />
-  ),
-  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  TooltipGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  Segmented: ({
-    disabled,
-    onChange,
-    options,
-  }: {
-    disabled?: boolean;
-    onChange?: (value: string) => void;
-    options: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
-  }) => (
-    <div>
-      {options.map((option) => (
-        <button
-          disabled={disabled || option.disabled}
-          key={option.value}
-          type="button"
-          onClick={() => onChange?.(option.value)}
-        >
-          {option.label}
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      CopyButton: () => <button type="button">Copy</button>,
+      Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+      Icon: () => <span>Icon</span>,
+      Input: ({
+        onBlur,
+        onChange,
+        onKeyDown,
+        placeholder,
+        ref,
+        value,
+      }: {
+        onBlur?: () => void;
+        onChange?: (event: { target: { value: string } }) => void;
+        onKeyDown?: (event: { key: string; preventDefault: () => void }) => void;
+        placeholder?: string;
+        ref?: React.Ref<HTMLInputElement>;
+        value?: string;
+      }) => (
+        <input
+          placeholder={placeholder}
+          ref={ref}
+          value={value}
+          onBlur={onBlur}
+          onChange={(event) => {
+            onChange?.({ target: { value: event.target.value } });
+          }}
+          onKeyDown={(event) => {
+            onKeyDown?.({ key: event.key, preventDefault: () => event.preventDefault() });
+          }}
+        />
+      ),
+      Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+      TooltipGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      ActionIcon: ({
+        'aria-label': ariaLabel,
+        className,
+        onClick,
+      }: {
+        'aria-label'?: string;
+        'className'?: string;
+        'onClick'?: () => void;
+      }) => (
+        <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
+          Refresh
         </button>
-      ))}
-    </div>
-  ),
-  Select: ({
-    onChange,
-    options,
-    value,
-  }: {
-    onChange?: (value: string) => void;
-    options?: Array<{
-      disabled?: boolean;
-      label?: ReactNode;
-      options?: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
-      value?: string;
-    }>;
-    value?: string;
-  }) => (
-    <select value={value} onChange={(event) => onChange?.(event.target.value)}>
-      {options?.flatMap((option) =>
-        option.options
-          ? option.options.map((child) => (
-              <option disabled={child.disabled} key={child.value} value={child.value}>
-                {child.label}
-              </option>
-            ))
-          : option.value
-            ? [
-                <option disabled={option.disabled} key={option.value} value={option.value}>
-                  {option.label}
-                </option>,
-              ]
-            : [],
-      )}
-    </select>
-  ),
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    card: 'card',
-    label: 'label',
-    path: 'path',
-  }),
-  cssVar: new Proxy({}, { get: (_, key) => `var(--${String(key)})` }),
-}));
-
-vi.mock('lucide-react', () => ({
-  CheckCircle2: () => null,
-  Loader2Icon: () => null,
-  PencilLine: () => null,
-  RefreshCw: () => null,
-  XCircle: () => null,
-}));
+      ),
+      Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
+        <button type="button" onClick={onClick}>
+          {children}
+        </button>
+      ),
+      Segmented: ({
+        disabled,
+        onChange,
+        options,
+      }: {
+        disabled?: boolean;
+        onChange?: (value: string) => void;
+        options: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
+      }) => (
+        <div>
+          {options.map((option) => (
+            <button
+              disabled={disabled || option.disabled}
+              key={option.value}
+              type="button"
+              onClick={() => onChange?.(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ),
+      Select: ({
+        onChange,
+        options,
+        value,
+      }: {
+        onChange?: (value: string) => void;
+        options?: Array<{
+          disabled?: boolean;
+          label?: ReactNode;
+          options?: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
+          value?: string;
+        }>;
+        value?: string;
+      }) => (
+        <select value={value} onChange={(event) => onChange?.(event.target.value)}>
+          {options?.flatMap((option) =>
+            option.options
+              ? option.options.map((child) => (
+                  <option disabled={child.disabled} key={child.value} value={child.value}>
+                    {child.label}
+                  </option>
+                ))
+              : option.value
+                ? [
+                    <option disabled={option.disabled} key={option.value} value={option.value}>
+                      {option.label}
+                    </option>,
+                  ]
+                : [],
+          )}
+        </select>
+      ),
+      Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+      Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -185,9 +192,6 @@ vi.mock('react-i18next', () => ({
       (
         ({
           'heterogeneousStatus.account.label': 'Account',
-          'heterogeneousStatus.apiMode.enableInLabs': 'Enable in Labs',
-          'heterogeneousStatus.apiMode.labDisabled':
-            'Other provider bindings are a Labs experiment. Enable it to use a configured provider instead of LobeHub.',
           'heterogeneousStatus.apiMode.defaultProvider': 'LobeHub',
           'heterogeneousStatus.apiMode.provider': 'Provider',
           'heterogeneousStatus.apiMode.providerPlaceholder': 'Select a provider',
@@ -259,7 +263,23 @@ const claudeServerModels = [{ model: 'claude-sonnet-4-6' }, { model: 'claude-hai
 
 const codexServerModels = [{ model: 'gpt-5.4' }];
 
+vi.mock('@/store/aiInfra/slices/aiProvider/selectors', () => ({
+  aiProviderSelectors: { providerKeyVaults: () => () => ({ apiKey: 'configured' }) },
+}));
+
 describe('HeterogeneousAgentStatusCard', () => {
+  it('shows the bundled runtime and provider-key state without probing a CLI', () => {
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={{ type: 'deepseek-harness' }} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('DeepSeek Harness')).toBeInTheDocument();
+    expect(screen.getByText('heterogeneousStatus.runtime.keyReady')).toBeInTheDocument();
+    expect(detectHeterogeneousAgentCommand).not.toHaveBeenCalled();
+  });
+
   it('shows the embedded Codex install guide when the CLI is unavailable', async () => {
     detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
     getClaudeAuthStatus.mockResolvedValue(null);
@@ -287,6 +307,32 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(screen.getByText('codex Install Guide')).toBeInTheDocument();
     expect(screen.getByText('codex')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('codex')).not.toBeInTheDocument();
+  });
+
+  it('detects Factory Droid and shows its install guide when unavailable', async () => {
+    detectHeterogeneousAgentCommand.mockResolvedValue({ available: false });
+
+    const provider = {
+      command: 'droid',
+      type: 'droid',
+    } satisfies HeterogeneousProviderConfig;
+
+    render(
+      <MemoryRouter>
+        <HeterogeneousAgentStatusCard provider={provider} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
+        agentType: 'droid',
+        command: 'droid',
+      });
+    });
+
+    expect(screen.getByText('Factory Droid CLI')).toBeInTheDocument();
+    expect(screen.getByText('Factory Droid CLI is unavailable')).toBeInTheDocument();
+    expect(screen.getByText('droid Install Guide')).toBeInTheDocument();
   });
 
   it('detects OpenCode and shows its install guide when unavailable', async () => {
@@ -415,7 +461,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     render(
       <MemoryRouter>
-        <HeterogeneousAgentStatusCard apiModeLabEnabled provider={provider} />
+        <HeterogeneousAgentStatusCard provider={provider} />
       </MemoryRouter>,
     );
 
@@ -511,7 +557,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     expect(await screen.findByDisplayValue('claude')).toBeInTheDocument();
   });
 
-  it('offers the deployment default when switching to API mode with Labs enabled', async () => {
+  it('offers the deployment default when switching to API mode', async () => {
     detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
     getClaudeAuthStatus.mockResolvedValue(null);
     const onAuthModeChange = vi.fn();
@@ -524,7 +570,6 @@ describe('HeterogeneousAgentStatusCard', () => {
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
           apiModeAvailable
-          apiModeLabEnabled
           serverDefaultAvailable
           provider={provider}
           serverDefaultModels={claudeServerModels}
@@ -555,7 +600,6 @@ describe('HeterogeneousAgentStatusCard', () => {
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
           apiModeAvailable
-          apiModeLabEnabled
           serverDefaultAvailable
           provider={apiProvider}
           serverDefaultModels={claudeServerModels}
@@ -565,56 +609,6 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     expect(await screen.findByText('Auth Method')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'LobeHub' })).toBeEnabled();
-  });
-
-  it('gates the deployment default behind Labs like the rest of API mode', async () => {
-    detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
-    getClaudeAuthStatus.mockResolvedValue(null);
-    const provider = {
-      command: 'claude',
-      type: 'claude-code',
-    } satisfies HeterogeneousProviderConfig;
-
-    // Labs off: even with stale server-default props from the parent, the API
-    // experiment stays hidden for subscription agents.
-    const { rerender } = render(
-      <MemoryRouter>
-        <HeterogeneousAgentStatusCard
-          apiModeAvailable
-          serverDefaultAvailable
-          provider={provider}
-          serverDefaultModels={claudeServerModels}
-        />
-      </MemoryRouter>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('claude')).toBeInTheDocument();
-    });
-    expect(screen.queryByText('Auth Method')).not.toBeInTheDocument();
-
-    // A leftover server-default agent stays visible so it can switch back,
-    // but only sees the Labs pointer — no provider or model pickers.
-    const leftoverProvider = {
-      ...provider,
-      apiConfig: { model: 'claude-sonnet-4-6', source: 'server-default' as const },
-      authMode: 'api' as const,
-    } satisfies HeterogeneousProviderConfig;
-
-    rerender(
-      <MemoryRouter>
-        <HeterogeneousAgentStatusCard
-          apiModeAvailable
-          serverDefaultAvailable
-          provider={leftoverProvider}
-          serverDefaultModels={claudeServerModels}
-        />
-      </MemoryRouter>,
-    );
-
-    expect(await screen.findByText('Auth Method')).toBeInTheDocument();
-    expect(screen.getByText('Enable in Labs')).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'LobeHub' })).not.toBeInTheDocument();
   });
 
   it('lists the deployment default alongside configured providers in API mode', async () => {
@@ -632,7 +626,6 @@ describe('HeterogeneousAgentStatusCard', () => {
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
           apiModeAvailable
-          apiModeLabEnabled
           serverDefaultAvailable
           provider={provider}
           serverDefaultModels={claudeServerModels}
@@ -665,7 +658,6 @@ describe('HeterogeneousAgentStatusCard', () => {
     render(
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
-          apiModeLabEnabled
           provider={provider}
           serverDefaultUnavailableReason="Deployment default model is unavailable"
           onServerDefaultRetry={onServerDefaultRetry}
@@ -691,7 +683,6 @@ describe('HeterogeneousAgentStatusCard', () => {
     render(
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
-          apiModeLabEnabled
           serverDefaultAvailable
           provider={provider}
           serverDefaultModels={claudeServerModels}
@@ -722,7 +713,6 @@ describe('HeterogeneousAgentStatusCard', () => {
     render(
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
-          apiModeLabEnabled
           serverDefaultAvailable
           provider={provider}
           serverDefaultModels={codexServerModels}
@@ -741,7 +731,7 @@ describe('HeterogeneousAgentStatusCard', () => {
     });
   });
 
-  it('keeps leftover API mode visible so the agent can switch back when Labs is off', async () => {
+  it('shows provider configuration for an existing API-mode agent', async () => {
     detectHeterogeneousAgentCommand.mockResolvedValue({ available: true });
     const provider = {
       apiConfig: { model: 'claude-primary', providerId: 'anthropic' },
@@ -758,9 +748,7 @@ describe('HeterogeneousAgentStatusCard', () => {
 
     expect(await screen.findByText('Auth Method')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'API' })).toBeEnabled();
-    expect(screen.getByText('Enable in Labs')).toBeInTheDocument();
-    // The pickers stay hidden while Labs is off; only the pointer remains.
-    expect(screen.queryByText('Model Select')).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Anthropic' })).toBeInTheDocument();
   });
 
   it('persists null when clearing the small-fast model', async () => {
@@ -781,7 +769,6 @@ describe('HeterogeneousAgentStatusCard', () => {
       <MemoryRouter>
         <HeterogeneousAgentStatusCard
           apiModeAvailable
-          apiModeLabEnabled
           provider={provider}
           onApiConfigChange={onApiConfigChange}
         />
