@@ -1,5 +1,10 @@
 // @vitest-environment node
-import { matchesTaskListFilter, TASK_LIST_FILTER_NONE, type TaskListFilter } from '@lobechat/types';
+import {
+  matchesTaskListFilter,
+  TASK_LIST_FILTER_NONE,
+  type TaskListFilter,
+  toTaskListFilterAgentCreator,
+} from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -34,7 +39,7 @@ afterEach(async () => {
  * - `alpha`  backlog, urgent, agent A, member self, project P, created 2 days ago
  * - `beta`   running, high, agent B, member other, no project, created 20 days ago
  * - `gamma`  completed 3 days ago, priority NULL, no agent, no member, project P
- * - `delta`  completed 60 days ago, low, agent A, created 120 days ago
+ * - `delta`  completed 60 days ago, low, agent A, created 120 days ago by agent A
  * - `literal` backlog, no priority, its name holds `100%_done`
  */
 const seed = async () => {
@@ -95,6 +100,7 @@ const seed = async () => {
     .set({
       completedAt: daysAgo(60),
       createdAt: daysAgo(120),
+      createdByAgentId: 'agt_filter_a',
       status: 'completed',
       updatedAt: daysAgo(60),
     })
@@ -127,8 +133,22 @@ describe('TaskModel list filter', () => {
       [{ agent: { operator: 'isNot', values: [TASK_LIST_FILTER_NONE] } }, [alpha, beta, delta]],
       [{ assignee: { operator: 'is', values: [otherUserId] } }, [beta]],
       [{ assignee: { operator: 'is', values: [TASK_LIST_FILTER_NONE] } }, [gamma, delta, literal]],
-      [{ creator: { operator: 'is', values: [userId] } }, all],
-      [{ creator: { operator: 'isNot', values: [userId] } }, []],
+      // An agent-created task is credited to the agent, not the member behind it.
+      [{ creator: { operator: 'is', values: [userId] } }, [alpha, beta, gamma, literal]],
+      [{ creator: { operator: 'isNot', values: [userId] } }, [delta]],
+      [
+        { creator: { operator: 'is', values: [toTaskListFilterAgentCreator('agt_filter_a')] } },
+        [delta],
+      ],
+      [
+        {
+          creator: {
+            operator: 'is',
+            values: [userId, toTaskListFilterAgentCreator('agt_filter_a')],
+          },
+        },
+        all,
+      ],
       [{ project: { operator: 'is', values: [projectId] } }, [alpha, gamma]],
       [{ project: { operator: 'isNot', values: [projectId, TASK_LIST_FILTER_NONE] } }, []],
       [{ createdAt: { operator: 'within', window: 'week' } }, [alpha, gamma, literal]],

@@ -2707,6 +2707,7 @@
   "taskList.filter.field.project": "项目",
   "taskList.filter.field.status": "状态",
   "taskList.filter.field.updatedAt": "更新时间",
+  "taskList.filter.me": "我",
   "taskList.filter.noAgent": "无执行助理",
   "taskList.filter.noProject": "无项目",
   "taskList.filter.operator.before": "早于",

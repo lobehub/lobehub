@@ -30,7 +30,7 @@ const filterId = z.string().min(1).max(255);
 /**
  * The Tasks page filter (`TaskListFilter` in `@lobechat/types`). Ids may hold
  * `TASK_LIST_FILTER_NONE` for "no agent / member / project"; a creator is
- * never missing, so that set takes plain ids. Ownership is still enforced by
+ * never missing, so that set takes member ids and `agent:<id>` agent creators. Ownership is still enforced by
  * the model, so a filter can only narrow what the caller may already see.
  */
 export const taskListFilterSchema = z.object({

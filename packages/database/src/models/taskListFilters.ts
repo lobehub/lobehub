@@ -1,5 +1,6 @@
 import {
   resolveTaskListFilterDateCutoff,
+  TASK_LIST_FILTER_AGENT_CREATOR_PREFIX,
   TASK_LIST_FILTER_NONE,
   type TaskListFilter,
   type TaskListFilterDate,
@@ -201,7 +202,11 @@ export const buildTaskFilterConditions = (filter: TaskListFilter, now?: number):
     buildSetCondition(sql`coalesce(${tasks.priority}, 0)`, filter.priority),
     buildSetCondition(tasks.assigneeAgentId, filter.agent),
     buildSetCondition(tasks.assigneeUserId, filter.assignee),
-    buildSetCondition(tasks.createdByUserId, filter.creator),
+    // An agent-created task is credited to the agent, as `matchesTaskListFilter` does.
+    buildSetCondition(
+      sql`case when ${tasks.createdByAgentId} is not null then ${TASK_LIST_FILTER_AGENT_CREATOR_PREFIX} || ${tasks.createdByAgentId} else ${tasks.createdByUserId} end`,
+      filter.creator,
+    ),
     buildSetCondition(tasks.projectId, filter.project),
     buildDateCondition(tasks.createdAt, filter.createdAt, now),
     buildDateCondition(tasks.updatedAt, filter.updatedAt, now),

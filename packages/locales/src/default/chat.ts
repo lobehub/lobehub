@@ -3139,6 +3139,7 @@ export default {
   'taskList.filter.field.project': 'Project',
   'taskList.filter.field.status': 'Status',
   'taskList.filter.field.updatedAt': 'Updated',
+  'taskList.filter.me': 'Me',
   'taskList.filter.noAgent': 'No agent',
   'taskList.filter.noProject': 'No project',
   'taskList.filter.operator.before': 'is older than',

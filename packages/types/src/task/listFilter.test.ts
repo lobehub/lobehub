@@ -6,6 +6,7 @@ import {
   normalizeTaskListFilter,
   TASK_LIST_FILTER_NONE,
   type TaskListFilterTarget,
+  toTaskListFilterAgentCreator,
 } from './listFilter';
 
 const NOW = new Date('2026-11-01T12:00:00Z').getTime();
@@ -77,6 +78,20 @@ describe('normalizeTaskListFilter', () => {
 describe('matchesTaskListFilter', () => {
   it('passes everything without a filter', () => {
     expect(matchesTaskListFilter(task(), undefined, NOW)).toBe(true);
+  });
+
+  it('credits an agent-created task to the agent, not the member', () => {
+    const byAgent = task({ createdByAgentId: 'agt_writer' });
+    const byMember = { operator: 'is' as const, values: ['user_creator'] };
+    const byWriter = {
+      operator: 'is' as const,
+      values: [toTaskListFilterAgentCreator('agt_writer')],
+    };
+
+    expect(matchesTaskListFilter(task(), { creator: byMember }, NOW)).toBe(true);
+    expect(matchesTaskListFilter(byAgent, { creator: byMember }, NOW)).toBe(false);
+    expect(matchesTaskListFilter(byAgent, { creator: byWriter }, NOW)).toBe(true);
+    expect(matchesTaskListFilter(task(), { creator: byWriter }, NOW)).toBe(false);
   });
 
   it('matches value sets with is / isNot', () => {

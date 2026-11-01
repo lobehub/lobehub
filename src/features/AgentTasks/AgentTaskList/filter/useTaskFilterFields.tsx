@@ -5,6 +5,7 @@ import {
   TASK_LIST_FILTER_NONE,
   type TaskListFilterDateField,
   type TaskListFilterSetField,
+  toTaskListFilterAgentCreator,
 } from '@lobechat/types';
 import { Avatar, Icon } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
@@ -34,6 +35,8 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { PRIORITY_META } from '../../features/TaskPriorityTag';
 import TaskStatusIcon from '../../features/TaskStatusIcon';
@@ -78,8 +81,9 @@ interface UseTaskFilterFieldsParams {
 
 /**
  * Everything the "Add filter" menu and the filter chips can offer on this
- * page, with display labels and icons for each value. Member fields only
- * exist inside a workspace (personal mode has no members to pick).
+ * page, with display labels and icons for each value. Assignee and creator
+ * list the workspace members, or just the signed-in user in personal mode;
+ * the creator field also lists the agents, since an agent can create a task.
  */
 export const useTaskFilterFields = ({
   agentId,
@@ -98,6 +102,9 @@ export const useTaskFilterFields = ({
 
   useFetchWorkspaceMembers();
   const members = useWorkspaceMembers();
+  const selfUserId = useUserStore(userProfileSelectors.userId);
+  const selfAvatar = useUserStore(userProfileSelectors.userAvatar);
+  const selfName = useUserStore(userProfileSelectors.displayUserName);
 
   const useFetchProjectList = useProjectStore((s) => s.useFetchProjectList);
   useFetchProjectList(!projectId);
@@ -177,15 +184,25 @@ export const useTaskFilterFields = ({
       options: agentOptions,
     };
 
-    const memberOptions: TaskFilterOption[] = members.map((member) => {
-      const name =
-        member.user?.fullName || member.user?.username || member.user?.email || member.userId;
-      return {
-        icon: <UserAvatar avatar={member.user?.avatar} name={name} size={OPTION_ICON_SIZE} />,
-        label: name,
-        value: member.userId,
-      };
-    });
+    const memberOptions: TaskFilterOption[] = hasMembers
+      ? members.map((member) => {
+          const name =
+            member.user?.fullName || member.user?.username || member.user?.email || member.userId;
+          return {
+            icon: <UserAvatar avatar={member.user?.avatar} name={name} size={OPTION_ICON_SIZE} />,
+            label: name,
+            value: member.userId,
+          };
+        })
+      : selfUserId
+        ? [
+            {
+              icon: <UserAvatar avatar={selfAvatar} name={selfName} size={OPTION_ICON_SIZE} />,
+              label: selfName || t('taskList.filter.me'),
+              value: selfUserId,
+            },
+          ]
+        : [];
     const assigneeField: TaskFilterSetFieldDef = {
       icon: UserRoundIcon,
       key: 'assignee',
@@ -205,7 +222,16 @@ export const useTaskFilterFields = ({
       key: 'creator',
       kind: 'set',
       label: t('taskList.filter.field.creator'),
-      options: memberOptions,
+      options: [
+        ...memberOptions,
+        // Same agents as the agent field, minus "no agent": every task has a creator.
+        ...agentOptions
+          .filter((option) => option.value !== TASK_LIST_FILTER_NONE)
+          .map((option) => ({
+            ...option,
+            value: toTaskListFilterAgentCreator(String(option.value)),
+          })),
+      ],
     };
 
     const projectField: TaskFilterSetFieldDef = {
@@ -256,7 +282,8 @@ export const useTaskFilterFields = ({
       statusField,
       priorityField,
       ...(agentId ? [] : [agentField]),
-      ...(hasMembers ? [assigneeField, creatorField] : []),
+      assigneeField,
+      creatorField,
       ...(projectId ? [] : [projectField]),
       ...dateFields,
     ];
@@ -268,6 +295,9 @@ export const useTaskFilterFields = ({
     members,
     projectId,
     projects,
+    selfAvatar,
+    selfName,
+    selfUserId,
     sidebarAgents,
     t,
   ]);
