@@ -111,7 +111,9 @@ const splitTokenCandidates = (text: string): string[] => {
   const runs = text.match(/[\dA-Z]{1,5}(?:[\s.-][\dA-Z]{1,5})+/gi) ?? [];
 
   for (const run of runs) {
-    const groups = run.split(/[\s.-]/).slice(0, 24);
+    // Every group: a bound here would let leading filler push the secret past it.
+    // The joined-length cap below already keeps the work per start bounded.
+    const groups = run.split(/[\s.-]/);
     for (let start = 0; start < groups.length; start += 1) {
       let joined = '';
       for (let end = start; end < groups.length; end += 1) {

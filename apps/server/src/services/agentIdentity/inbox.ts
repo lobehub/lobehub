@@ -119,7 +119,11 @@ export class AgentInboxService {
         agentId: account.agentId,
         attachments: detail?.attachments,
         cc: detail?.cc,
-        codes: extractVerificationCodes(message.text),
+        // A sender can put the code in the subject alone; the agent reads the
+        // subject too, so it is as much a secret as the body.
+        codes: extractVerificationCodes(
+          message.subject ? `${message.subject}\n${message.text}` : message.text,
+        ),
         deliveredAt: message.receivedAt,
         direction: 'inbound',
         fromAddress: message.from,

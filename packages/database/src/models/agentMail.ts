@@ -122,8 +122,8 @@ export class AgentMailModel {
 
   /**
    * The newest inbound mail from someone other than `recipient`, delivered at or
-   * after `since`, whose body contains any of `candidates` once case and
-   * separators are stripped from both sides — the check for links, tokens and
+   * after `since`, whose subject or body contains any of `candidates` once case
+   * and separators are stripped from both sides — the check for links, tokens and
    * credentials an unattended reply must not relay. Sent mail never counts: the
    * agent's own words are not another sender's secret.
    *
@@ -151,7 +151,7 @@ export class AgentMailModel {
           or(
             ...params.candidates.map(
               (candidate) =>
-                sql`strpos(lower(regexp_replace(${agentMails.text}, '[^0-9A-Za-z]', '', 'g')), ${candidate}) > 0`,
+                sql`strpos(lower(regexp_replace(coalesce(${agentMails.subject}, '') || ' ' || ${agentMails.text}, '[^0-9A-Za-z]', '', 'g')), ${candidate}) > 0`,
             ),
           ),
         ),
