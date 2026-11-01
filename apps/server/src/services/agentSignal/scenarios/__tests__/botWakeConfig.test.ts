@@ -11,7 +11,7 @@ import {
 
 describe('parseBotWakeSettings', () => {
   it.each([null, undefined, {}, { botWake: null }, { botWake: 'yes' }, { botWake: [] }])(
-    'defaults for %j',
+    'defaults for %j, switched on since nothing turned it off',
     (settings) => {
       const parsed = parseBotWakeSettings(settings as never);
 
@@ -22,7 +22,7 @@ describe('parseBotWakeSettings', () => {
       });
       expect(parsed.ruleMode).toBe('enforce');
       expect(parsed.scheduler).toEqual({ collectMs: 20_000, cooldownMs: 60_000, mode: 'off' });
-      expect(parsed.config.enabled).toBeUndefined();
+      expect(parsed.config.enabled).toBe(true);
     },
   );
 
@@ -41,13 +41,13 @@ describe('parseBotWakeSettings', () => {
   it('has no duties until the owner writes them: the duty judge is off by default', () => {
     const K = BOT_WAKE_SETTING_KEYS;
 
-    expect(parseBotWakeSettings({ [K.enabled]: true }).rules.duties).toEqual({
+    expect(parseBotWakeSettings({ [K.disabled]: false }).rules.duties).toEqual({
       mode: 'enforce',
       text: undefined,
       threshold: 0.65,
     });
     expect(
-      parseBotWakeSettings({ [K.duties]: '   ', [K.enabled]: true }).rules.duties.text,
+      parseBotWakeSettings({ [K.duties]: '   ', [K.disabled]: false }).rules.duties.text,
     ).toBeUndefined();
   });
 
@@ -58,7 +58,7 @@ describe('parseBotWakeSettings', () => {
       parseBotWakeSettings({
         [K.duties]: '  评估需求\n通知提需求的人  ',
         [K.dutiesThreshold]: 0.6,
-        [K.enabled]: true,
+        [K.disabled]: false,
       }).rules.duties,
     ).toEqual({ mode: 'enforce', text: '评估需求\n通知提需求的人', threshold: 0.6 });
     expect(
@@ -83,7 +83,7 @@ describe('parseBotWakeSettings', () => {
       botWakeClassifierInitiateThreshold: 0.8,
       botWakeProactiveEnabled: true,
       botWakeProactiveThreshold: 0.6,
-      [K.enabled]: true,
+      [K.disabled]: false,
       [K.windowSeconds]: 60,
     };
     const { rules } = parseBotWakeSettings(old);
@@ -93,7 +93,7 @@ describe('parseBotWakeSettings', () => {
     expect(rules.windowSeconds).toBe(60);
     expect(rules).not.toHaveProperty('proactive');
     expect(flattenBotWakeSettings(old)).toEqual({
-      [K.enabled]: true,
+      [K.disabled]: false,
       [K.pace]: 'custom',
       [K.windowSeconds]: 60,
     });
@@ -111,7 +111,7 @@ describe('parseBotWakeSettings', () => {
 
   it('hands the instructions to the classifier only while their switch is on, or was never set', () => {
     const K = BOT_WAKE_SETTING_KEYS;
-    const text = { [K.customInstructions]: 'billing only', [K.enabled]: true };
+    const text = { [K.customInstructions]: 'billing only', [K.disabled]: false };
 
     expect(parseBotWakeSettings(text).rules.customInstructions).toBe('billing only');
     expect(
@@ -139,14 +139,14 @@ describe('parseBotWakeSettings', () => {
       })?.[K.customInstructionsEnabled],
     ).toBe(false);
     expect(
-      flattenBotWakeSettings({ [K.enabled]: true })?.[K.customInstructionsEnabled],
+      flattenBotWakeSettings({ [K.disabled]: false })?.[K.customInstructionsEnabled],
     ).toBeUndefined();
   });
 
   it('ignores a mode an earlier form saved: the settings page no longer offers one', () => {
     const parsed = parseBotWakeSettings({
       botWakeClassifierMode: 'off',
-      botWakeEnabled: true,
+      botWakeDisabled: false,
       botWakeMode: 'shadow',
     });
 
@@ -244,7 +244,7 @@ describe('parseBotWakeSettings', () => {
 
 describe('hasPassiveListeningRule', () => {
   it.each([
-    { expected: false, keywords: 0, name: 'nothing configured', settings: {} },
+    { expected: true, keywords: 0, name: 'nothing configured: bot-wake is on', settings: {} },
     { expected: true, keywords: 1, name: 'a watch keyword', settings: {} },
     {
       expected: true,
@@ -276,7 +276,8 @@ describe('hasPassiveListeningRule', () => {
       name: 'keyword beats a disabled bot-wake',
       settings: { botWake: { enabled: false } },
     },
-    { expected: false, keywords: 0, name: 'null settings', settings: null },
+    { expected: true, keywords: 0, name: 'null settings: bot-wake is on', settings: null },
+    { expected: false, keywords: 0, name: 'switched off', settings: { botWakeDisabled: true } },
   ])('$name -> $expected', ({ expected, keywords, settings }) => {
     expect(hasPassiveListeningRule(settings, keywords)).toBe(expected);
   });
@@ -297,7 +298,7 @@ describe('parseBotWakeSettings from the settings form', () => {
       denyChannels: 'botWakeDenyChannels',
       duties: 'botWakeDuties',
       dutiesThreshold: 'botWakeDutiesThreshold',
-      enabled: 'botWakeEnabled',
+      disabled: 'botWakeDisabled',
       maxSilentWakes: 'botWakeMaxSilentWakes',
       ownerPresenceSeconds: 'botWakeOwnerPresenceSeconds',
       pace: 'botWakePace',
@@ -317,7 +318,7 @@ describe('parseBotWakeSettings from the settings form', () => {
       [K.denyChannels]: [{ id: 'c9' }],
       [K.duties]: 'Triage bug reports.',
       [K.dutiesThreshold]: 0.7,
-      [K.enabled]: true,
+      [K.disabled]: false,
       [K.maxSilentWakes]: 1,
       [K.ownerPresenceSeconds]: 15,
       [K.schedulerMode]: 'enforce',
@@ -345,7 +346,7 @@ describe('parseBotWakeSettings from the settings form', () => {
     const settings = {
       [K.duties]: 'Triage bug reports.',
       [K.dutiesThreshold]: 0.6,
-      [K.enabled]: true,
+      [K.disabled]: false,
       botWake: { duties: { mode: 'shadow' } },
     };
 
@@ -361,7 +362,7 @@ describe('parseBotWakeSettings from the settings form', () => {
   // A bot that saved the retired "help me" override beside its form options must keep them live.
   it('keeps reading the form options beside a retired help-me override, and drops it', () => {
     const settings = {
-      [K.enabled]: true,
+      [K.disabled]: false,
       [K.windowSeconds]: 60,
       botWake: { proactive: { mode: 'shadow' } },
     };
@@ -388,10 +389,10 @@ describe('parseBotWakeSettings from the settings form', () => {
   });
 
   it('takes a nested botWake object as it is, so the form defaults saved beside it cannot switch it off', () => {
-    // The channel form always saves its defaults, including `botWakeEnabled: false`.
+    // The channel form always saves its defaults, including `botWakeDisabled: true`.
     const { config, rules, ruleMode, scheduler } = parseBotWakeSettings({
       botWake: { enabled: true, rules: { scope: 'none', windowSeconds: 99 } },
-      [K.enabled]: false,
+      [K.disabled]: true,
       [K.scope]: 'all',
       [K.schedulerMode]: 'enforce',
       [K.windowSeconds]: 300,
@@ -407,27 +408,38 @@ describe('parseBotWakeSettings from the settings form', () => {
   it('reads the flat keys when botWake is not an object', () => {
     for (const botWake of [null, 'yes', [], 7]) {
       expect(
-        parseBotWakeSettings({ botWake, [K.enabled]: true, [K.scope]: 'bot-threads' } as never)
+        parseBotWakeSettings({ botWake, [K.disabled]: false, [K.scope]: 'bot-threads' } as never)
           .rules.scope,
       ).toBe('bot-threads');
     }
   });
 
-  it('keeps a cleared form from enabling anything', () => {
-    expect(parseBotWakeSettings({ [K.enabled]: false }).config.enabled).toBe(false);
-    expect(parseBotWakeSettings({ [K.enabled]: 'true' }).config.enabled).toBe(false);
+  it('is on unless the owner turned it off', () => {
+    expect(parseBotWakeSettings({ [K.disabled]: true }).config.enabled).toBe(false);
+    expect(parseBotWakeSettings({ [K.disabled]: false }).config.enabled).toBe(true);
+    expect(parseBotWakeSettings({}).config.enabled).toBe(true);
+  });
+
+  it('ignores the retired botWakeEnabled the form saved as false while the switch was hidden', () => {
+    expect(parseBotWakeSettings({ botWakeEnabled: false }).config.enabled).toBe(true);
+    expect(parseBotWakeSettings({ botWakeEnabled: true, [K.disabled]: true }).config.enabled).toBe(
+      false,
+    );
+    expect(
+      flattenBotWakeSettings({ botWakeEnabled: false, [K.disabled]: true }),
+    ).not.toHaveProperty('botWakeEnabled');
   });
 
   it('counts a form-enabled bot as listening to messages nobody addressed to it', () => {
-    expect(hasPassiveListeningRule({ [K.enabled]: true }, 0)).toBe(true);
-    expect(hasPassiveListeningRule({ [K.enabled]: true, [K.scope]: 'none' }, 0)).toBe(false);
-    expect(hasPassiveListeningRule({ [K.enabled]: false }, 0)).toBe(false);
+    expect(hasPassiveListeningRule({ [K.disabled]: false }, 0)).toBe(true);
+    expect(hasPassiveListeningRule({ [K.disabled]: false, [K.scope]: 'none' }, 0)).toBe(false);
+    expect(hasPassiveListeningRule({ [K.disabled]: true }, 0)).toBe(false);
   });
 });
 
 describe('flattenBotWakeSettings', () => {
   it('leaves settings without a nested botWake as they are, but for the pace the form shows', () => {
-    const settings = { concurrency: 'queue', [BOT_WAKE_SETTING_KEYS.enabled]: true };
+    const settings = { concurrency: 'queue', [BOT_WAKE_SETTING_KEYS.disabled]: false };
 
     expect(flattenBotWakeSettings(settings)).toEqual({
       ...settings,
@@ -471,7 +483,7 @@ describe('flattenBotWakeSettings', () => {
       // Instructions written before their switch existed show it on, so a save keeps them live.
       [K.customInstructionsEnabled]: true,
       [K.denyChannels]: ['200'],
-      [K.enabled]: true,
+      [K.disabled]: false,
       [K.maxSilentWakes]: 1,
       [K.ownerPresenceSeconds]: 60,
       // Tuned numbers: the form shows them under a custom pace.
@@ -487,24 +499,24 @@ describe('flattenBotWakeSettings', () => {
   it('shows untouched numbers as the balanced pace and tuned ones as custom', () => {
     const K = BOT_WAKE_SETTING_KEYS;
 
-    expect(flattenBotWakeSettings({ [K.enabled]: true })?.[K.pace]).toBe('balanced');
+    expect(flattenBotWakeSettings({ [K.disabled]: false })?.[K.pace]).toBe('balanced');
     expect(
-      flattenBotWakeSettings({ [K.enabled]: true, [K.schedulerMode]: 'enforce' })?.[K.pace],
+      flattenBotWakeSettings({ [K.disabled]: false, [K.schedulerMode]: 'enforce' })?.[K.pace],
     ).toBe('custom');
     expect(flattenBotWakeSettings({ [K.pace]: 'calm' })?.[K.pace]).toBe('calm');
     // The threshold the form used to save by default is untouched; a tuned one is custom, or the
     // next save would let the preset replace it.
     expect(
-      flattenBotWakeSettings({ [K.enabled]: true, [K.classifierThreshold]: 0.5 })?.[K.pace],
+      flattenBotWakeSettings({ [K.disabled]: false, [K.classifierThreshold]: 0.5 })?.[K.pace],
     ).toBe('balanced');
     expect(
-      flattenBotWakeSettings({ [K.enabled]: true, [K.classifierThreshold]: 0.9 })?.[K.pace],
+      flattenBotWakeSettings({ [K.disabled]: false, [K.classifierThreshold]: 0.9 })?.[K.pace],
     ).toBe('custom');
   });
 
   it('runs a preset pace on its own numbers, and a custom or absent one on the saved numbers', () => {
     const K = BOT_WAKE_SETTING_KEYS;
-    const tuned = { [K.enabled]: true, [K.schedulerMode]: 'enforce', [K.windowSeconds]: 90 };
+    const tuned = { [K.disabled]: false, [K.schedulerMode]: 'enforce', [K.windowSeconds]: 90 };
 
     const calm = parseBotWakeSettings({ ...tuned, [K.pace]: 'calm' });
     expect(calm.rules).toMatchObject({
@@ -526,7 +538,7 @@ describe('flattenBotWakeSettings', () => {
   // window: the form saves the threshold, so a preset pace has to override it.
   it('runs a preset pace on its own classifier threshold, and a custom one on the saved one', () => {
     const K = BOT_WAKE_SETTING_KEYS;
-    const saved = { [K.enabled]: true, [K.classifierThreshold]: 0.5 };
+    const saved = { [K.disabled]: false, [K.classifierThreshold]: 0.5 };
 
     for (const pace of ['calm', 'balanced', 'active']) {
       expect(parseBotWakeSettings({ ...saved, [K.pace]: pace }).rules.classifier.threshold).toBe(
@@ -536,7 +548,7 @@ describe('flattenBotWakeSettings', () => {
     expect(parseBotWakeSettings({ ...saved, [K.pace]: 'custom' }).rules.classifier.threshold).toBe(
       0.5,
     );
-    expect(parseBotWakeSettings({ [K.enabled]: true }).rules.classifier.threshold).toBe(0.75);
+    expect(parseBotWakeSettings({ [K.disabled]: false }).rules.classifier.threshold).toBe(0.75);
   });
 
   it('keeps the migrated row reading the same as the nested one', () => {
@@ -561,14 +573,14 @@ describe('flattenBotWakeSettings', () => {
     const K = BOT_WAKE_SETTING_KEYS;
 
     const flattened = flattenBotWakeSettings({
-      [K.enabled]: false,
+      [K.disabled]: true,
       [K.scope]: 'all',
       botWake: { enabled: true, rules: { scope: 'none' } },
     });
 
     // The stale flat keys are dropped too: the nested object never mentioned them, so leaving
     // them behind would switch the migrated row off on the next read.
-    expect(flattened).toEqual({ [K.enabled]: true, [K.pace]: 'balanced', [K.scope]: 'none' });
+    expect(flattened).toEqual({ [K.disabled]: false, [K.pace]: 'balanced', [K.scope]: 'none' });
   });
 });
 
@@ -588,7 +600,7 @@ describe('an operator override of the modes', () => {
       botWake: { classifier: { mode: 'off' }, mode: 'shadow' },
       concurrency: 'burst',
       [K.classifierThreshold]: 0.8,
-      [K.enabled]: true,
+      [K.disabled]: false,
       [K.scope]: 'none',
       [K.windowSeconds]: 90,
     });
@@ -636,7 +648,7 @@ describe('an operator override of the modes', () => {
   it('applies to the flat options when the nested object is only the override', () => {
     const parsed = parseBotWakeSettings({
       botWake: { classifier: { mode: 'shadow' }, mode: 'off' },
-      [K.enabled]: true,
+      [K.disabled]: false,
       [K.scope]: 'bot-threads',
     });
 
@@ -658,7 +670,7 @@ describe('an operator override of the modes', () => {
   it('is not read from the flat keys an earlier form saved', () => {
     const parsed = parseBotWakeSettings({
       botWakeClassifierMode: 'off',
-      botWakeEnabled: true,
+      botWakeDisabled: false,
       botWakeMode: 'shadow',
     });
 

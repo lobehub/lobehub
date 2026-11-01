@@ -1,6 +1,8 @@
 'use client';
 
-import { Avatar, createStaticStyles, cssVar, Icon, Spin, Upload } from '@lobehub/ui';
+import { Avatar, Icon, Spin, Upload } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PencilIcon, X } from 'lucide-react';
 import { memo, type ReactNode, useMemo } from 'react';
 
@@ -25,61 +27,49 @@ interface AvatarUploadProps {
   value?: string;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  delete: css`
-    cursor: pointer;
-
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 2px;
-    inset-inline-end: 2px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 20px;
-    height: 20px;
-    border: 2px solid ${cssVar.colorBgContainer};
-    border-radius: 50%;
-
-    color: ${cssVar.colorTextLightSolid};
-
-    opacity: 0;
-    background: ${cssVar.colorError};
-
-    transition: opacity ${cssVar.motionDurationMid} ease;
-  `,
-  overlay: css`
-    cursor: pointer;
-
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 8px;
-
-    opacity: 0;
-    background: ${cssVar.colorBgMask};
-
-    transition: opacity ${cssVar.motionDurationMid} ease;
-  `,
-  wrapper: css`
-    cursor: pointer;
-    position: relative;
-    flex: none;
-    border-radius: 8px;
-
-    &:hover .avatar-edit-overlay,
-    &:hover .avatar-delete-badge {
-      opacity: 1;
-    }
-  `,
-}));
+const styles = stylex.create({
+  delete: {
+    cursor: 'pointer',
+    position: 'absolute',
+    zIndex: 2,
+    insetBlockStart: '2px',
+    insetInlineEnd: '2px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '20px',
+    height: '20px',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '50%',
+    color: cssVar.colorTextLightSolid,
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    backgroundColor: cssVar.colorError,
+    backgroundImage: 'none',
+    transition: `opacity ${cssVar.motionDurationMid} ease`,
+  },
+  overlay: {
+    cursor: 'pointer',
+    position: 'absolute',
+    zIndex: 1,
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '8px',
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    backgroundColor: cssVar.colorBgMask,
+    backgroundImage: 'none',
+    transition: `opacity ${cssVar.motionDurationMid} ease`,
+  },
+  wrapper: {
+    cursor: 'pointer',
+    position: 'relative',
+    flex: 'none',
+    borderRadius: '8px',
+  },
+});
 
 const AvatarUpload = memo<AvatarUploadProps>(
   ({
@@ -113,9 +103,9 @@ const AvatarUpload = memo<AvatarUploadProps>(
     return (
       <Upload maxCount={1} onFiles={([file]) => handleUpload(file)}>
         <Spin size="small" spinning={!!loading}>
-          <div className={styles.wrapper}>
+          <div {...stylex.props(styles.wrapper, stylex.defaultMarker())}>
             <Avatar avatar={value || placeholder} shape={shape} size={size} title={title} />
-            <div className={`${styles.overlay} avatar-edit-overlay`}>
+            <div {...stylex.props(styles.overlay)}>
               <Icon
                 color={cssVar.colorTextLightSolid}
                 icon={PencilIcon}
@@ -124,7 +114,7 @@ const AvatarUpload = memo<AvatarUploadProps>(
             </div>
             {allowDelete && (
               <div
-                className={`${styles.delete} avatar-delete-badge`}
+                {...stylex.props(styles.delete)}
                 onClick={(event) => {
                   event.stopPropagation();
                   onDelete?.();

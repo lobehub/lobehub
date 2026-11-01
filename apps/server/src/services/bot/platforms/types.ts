@@ -75,10 +75,15 @@ export interface FieldSchema {
   enumRecommended?: string;
   /**
    * Rollout gate for the field: the key of a boolean in the user's feature flags (for example
-   * `enableBotWake`). The form hides the field unless that flag is on for the signed-in user.
+   * `enableChannels`). The form hides the field unless that flag is on for the signed-in user.
    * The server stays authoritative; this only keeps unreleased options out of sight.
    */
   featureFlag?: string;
+  /**
+   * For a `boolean`: the switch shows on while the stored value is not `true`. For an off switch
+   * (`...Disabled`) whose absence means on, labelled as what it turns on.
+   */
+  inverted?: boolean;
   /** Array item schema */
   items?: FieldSchema;
   /** Unique field identifier */

@@ -10,6 +10,9 @@ import { registerGenerateCommand } from './generate';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
+    aiModel: {
+      getAiProviderModelList: { query: vi.fn() },
+    },
     aiChat: {
       decide: { mutate: vi.fn() },
       outputJSON: { mutate: vi.fn() },
@@ -738,6 +741,108 @@ describe('generate command', () => {
         }),
       );
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Image generation started'));
+    });
+
+    it('should pass repeated --param values with JSON types preserved', async () => {
+      mockTrpcClient.generationTopic.createTopic.mutate.mockResolvedValue('topic-1');
+      mockTrpcClient.image.createImage.mutate.mockResolvedValue({ data: {}, success: true });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'image',
+        'a cute cat',
+        '-m',
+        'gpt-image-2.5',
+        '-p',
+        'lobehub',
+        '--param',
+        'size=1536x1024',
+        '--param',
+        'quality="high"',
+        '--param',
+        'steps=30',
+      ]);
+
+      expect(mockTrpcClient.image.createImage.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: { prompt: 'a cute cat', quality: 'high', size: '1536x1024', steps: 30 },
+        }),
+      );
+    });
+
+    it('should reject an empty prompt without creating a topic', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'image', '  ']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Prompt is empty'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.generationTopic.createTopic.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should reject a malformed --param', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'image', 'a cat', '--param', 'size']);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('expected key=value'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.generationTopic.createTopic.mutate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('image-params', () => {
+    it('should list the parameters the model declares', async () => {
+      mockTrpcClient.aiModel.getAiProviderModelList.query.mockResolvedValue([
+        {
+          id: 'gpt-image-2.5',
+          parameters: {
+            prompt: { default: '' },
+            size: { default: 'auto', enum: ['auto', '1024x1024'] },
+          },
+        },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'image-params',
+        '-m',
+        'gpt-image-2.5',
+        '-p',
+        'lobehub',
+      ]);
+
+      expect(mockTrpcClient.aiModel.getAiProviderModelList.query).toHaveBeenCalledWith({
+        id: 'lobehub',
+        type: 'image',
+      });
+      const output = consoleSpy.mock.calls.flat().join('\n');
+      expect(output).toContain('size');
+      expect(output).toContain('auto | 1024x1024');
+      expect(output).not.toMatch(/^\s*prompt/m);
+    });
+
+    it('should fail when the model is not available', async () => {
+      mockTrpcClient.aiModel.getAiProviderModelList.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'image-params',
+        '-m',
+        'missing',
+        '-p',
+        'lobehub',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Image model not found'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 

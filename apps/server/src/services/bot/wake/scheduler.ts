@@ -12,7 +12,6 @@ import {
   wakeStateKeys,
 } from '@/server/services/agentSignal/scenarios/botWake/facts';
 import { isBotWakeEnabled } from '@/server/services/agentSignal/scenarios/botWake/gate';
-import { createBotWakeRolloutProbe } from '@/server/services/agentSignal/scenarios/botWake/rollout';
 import type { SchedulerOptions } from '@/server/services/agentSignal/scenarios/botWake/scheduler';
 import { WakeScheduler } from '@/server/services/agentSignal/scenarios/botWake/scheduler';
 import { QueueService } from '@/server/services/queue';
@@ -112,33 +111,21 @@ export const resolveWakeScheduler = (
   });
 };
 
-/** The slice of a bot provider a flush needs: its settings and whose rollout flag applies. */
+/** The slice of a bot provider a flush needs: its settings. */
 export interface WakeFlushProvider {
   settings?: Record<string, unknown> | null;
-  userId: string;
 }
 
 /**
  * QStash delivered a flush. Re-reads the bot's settings, so a changed config applies at once.
- *
- * Nothing is replayed when the `bot_wake` rollout flag has been turned off since the messages
- * were parked: a parked follow-up nobody addressed to the bot would otherwise run as a plain
- * wake and be answered, which is the behaviour the flag exists to take away.
  */
 export const handleWakeFlush = async (
   payload: WakeFlushPayload,
   loadProvider: (platform: string, applicationId: string) => Promise<WakeFlushProvider | undefined>,
-  options: { rollout?: (userId: string) => Promise<boolean> } = {},
 ): Promise<void> => {
   const provider = await loadProvider(payload.platform, payload.applicationId);
   if (!provider) {
     botWakeFlushCounter.add(1, { result: 'no_provider' });
-    return;
-  }
-
-  const rolledOut = options.rollout ?? ((userId: string) => createBotWakeRolloutProbe(userId)());
-  if (!(await rolledOut(provider.userId))) {
-    botWakeFlushCounter.add(1, { result: 'flag_off' });
     return;
   }
 

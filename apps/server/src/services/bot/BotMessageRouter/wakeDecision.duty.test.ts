@@ -81,7 +81,6 @@ const make = (
     db: {} as never,
     operatorUserId: OWNER,
     platform: 'discord',
-    rollout: async () => true,
     settings,
     state,
     userId: 'u1',

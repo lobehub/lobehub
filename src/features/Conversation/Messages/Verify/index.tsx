@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
@@ -10,14 +12,17 @@ import { phaseCardBackground, phaseFromStatus } from '@/features/Acceptance/util
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../../store';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  card: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 16px;
-    background: ${cssVar.colorBgElevated};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+});
 
 interface VerifyMessageProps {
   id: string;
@@ -48,7 +53,10 @@ const VerifyMessage = memo<VerifyMessageProps>(({ id }) => {
 
   return (
     <Flexbox paddingBlock={8}>
-      <div className={styles.card} style={{ background: phaseCardBackground(phase, cssVar) }}>
+      <div
+        className={stylex.props(styles.card).className}
+        style={{ background: phaseCardBackground(phase, cssVar) }}
+      >
         <RunResult embedded operationId={operationId} round={ordinal} />
         <CheckerDock embedded operationId={operationId} />
       </div>

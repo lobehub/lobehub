@@ -465,9 +465,9 @@ export default {
   'channel.replyEmojiPlaceholder': 'e.g. <:doge:1234567890>',
   'channel.replyEmojiUsageLabel': 'When to use',
   'channel.replyEmojiUsagePlaceholder': 'e.g. when someone ships something',
-  'channel.botWakeEnabled': 'Judge unprompted follow-ups',
+  'channel.botWakeEnabled': 'Speak up on its own',
   'channel.botWakeEnabledHint':
-    "Turns on the wake options below. The bot judges messages nobody addressed to it and may join in; off keeps today's behavior, where a watch keyword wakes the bot without any check.",
+    'When on, the bot reads messages nobody addressed to it and may join in, following the duties, channels and pace below. When off, it only answers @-mentions, DMs, replies and watch keywords.',
   'channel.botWakeScope': 'Where it may join',
   'channel.botWakeScopeHint': 'Limits the places where the bot may join unprompted.',
   'channel.botWakeScopeAll': 'Everywhere it can see',
@@ -667,6 +667,7 @@ export default {
   'channel.wake.section.judgementDesc':
     'What the bot is responsible for, so it can step in without being called, and the instructions it follows.',
   'channel.wake.section.more': 'More',
+  'channel.wake.section.switch': 'Proactive participation',
   'channel.tab.advanced': 'Advanced',
   'channel.tab.unsaved': 'Unsaved changes',
   'channel.tab.records': 'Wake records',

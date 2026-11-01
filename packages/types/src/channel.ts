@@ -1,4 +1,5 @@
-import type { LobeAgentConfig } from './agent';
+import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
+import { getWorkingDirEffectivePath } from './device';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -19,6 +20,41 @@ export type ChannelRuntime = (typeof CHANNEL_RUNTIMES)[number];
 
 export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
+
+/**
+ * The device a Channel seats an Agent on until someone picks another: the one the Agent is bound
+ * to, else this person's own desktop for an Agent that runs on its user's machine (`local`, or an
+ * external runtime with no target). Never another available or online device.
+ */
+export const defaultChannelAgentDevice = ({
+  agencyConfig,
+  localDeviceId,
+  runtime,
+  workspaceScoped,
+}: {
+  agencyConfig?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null;
+  /** This person's own desktop, when they act from one. */
+  localDeviceId?: string;
+  runtime: string;
+  /** The Agent runs on workspace devices only, never a personal desktop. */
+  workspaceScoped?: boolean;
+}): string | undefined => {
+  const target = agencyConfig?.executionTarget;
+  if (target === 'none' || target === 'sandbox' || target === 'auto') return;
+  const localDefault =
+    !workspaceScoped && (target === 'local' || (target === undefined && runtime !== 'native'));
+  return agencyConfig?.boundDeviceId || (localDefault ? localDeviceId : undefined);
+};
+
+/** The directory on that device: the Agent's own choice there, else the device's default. */
+export const defaultChannelAgentDirectory = (
+  agencyConfig: Pick<LobeAgentAgencyConfig, 'workingDirByDevice'> | null | undefined,
+  deviceId: string,
+  deviceDefaultCwd?: string | null,
+): string | undefined =>
+  getWorkingDirEffectivePath(agencyConfig?.workingDirByDevice?.[deviceId]) ||
+  deviceDefaultCwd ||
+  undefined;
 
 export const CHANNEL_LIMITS = {
   /** Files attached to one message. */
@@ -155,6 +191,7 @@ export interface ChannelContextMessage {
   /** Stable references; URLs and document contents are resolved at execution time. */
   fileIds?: string[];
   id: string;
+  replyToId?: string | null;
   sequence: number;
   threadId: string | null;
 }
@@ -212,6 +249,8 @@ export type ChannelAuditDetails = Record<string, boolean | number | string | str
 
 /** Public client projection. No execution configuration, private topic or draft fields. */
 export interface ChannelListItem {
+  /** The bound Agent of a direct conversation; null for a group. */
+  agentId: string | null;
   /** Server-computed for the current member. */
   canDelete: boolean;
   createdAt: Date;
@@ -254,6 +293,11 @@ export interface ChannelPublicMessage {
   id: string;
   mentions: string[];
   recipientMemberIds: string[];
+  /** Bounded public quote, including when its original is outside the loaded page. */
+  replyTo?: Pick<
+    ChannelPublicMessage,
+    'id' | 'author' | 'content' | 'sequence' | 'threadId'
+  > | null;
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;
   sequence: number;

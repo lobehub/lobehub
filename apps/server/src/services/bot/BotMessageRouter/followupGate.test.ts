@@ -14,20 +14,19 @@ const base = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const setup = (deps: { decision?: unknown; rolledOut?: boolean; scheduler?: unknown } = {}) => {
+const setup = (deps: { decision?: unknown; enabled?: boolean; scheduler?: unknown } = {}) => {
   const observe = vi.fn();
   const judge = vi.fn(async () => deps.decision as never);
-  const isRolledOut = vi.fn(async () => deps.rolledOut ?? true);
   const rememberEngaged = vi.fn(async () => {});
   const gate = createFollowupGate({
     applicationId: 'app',
     observe,
     platform: 'discord',
-    recorder: { isRolledOut, judge, rememberEngaged },
+    recorder: { enabled: deps.enabled ?? true, judge, rememberEngaged },
     scheduler: deps.scheduler as never,
   });
 
-  return { gate, isRolledOut, judge, observe, rememberEngaged };
+  return { gate, judge, observe, rememberEngaged };
 };
 
 describe('follow-up gate', () => {
@@ -36,16 +35,15 @@ describe('follow-up gate', () => {
     mockDefer.mockResolvedValue(true);
   });
 
-  it('proceeds untouched while the rollout is off: no judging, no scheduling, no parking', async () => {
+  it('proceeds untouched while the wake switch is off: no judging, no scheduling, no parking', async () => {
     const submit = vi.fn(async () => 'hold' as const);
-    const { gate, isRolledOut, judge, observe } = setup({
+    const { gate, judge, observe } = setup({
       decision: { decidedBy: 'x', reason: 'r', verdict: 'deny' },
-      rolledOut: false,
+      enabled: false,
       scheduler: { submit },
     });
 
     expect(await gate(base())).toBe('proceed');
-    expect(isRolledOut).toHaveBeenCalled();
     expect(judge).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
     expect(mockDefer).not.toHaveBeenCalled();

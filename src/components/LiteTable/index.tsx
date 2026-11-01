@@ -1,157 +1,350 @@
-import { createStaticStyles, cx, Skeleton } from '@lobehub/ui';
+import { Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
-const LIST_BREAKPOINT = 600;
+import { sx } from '@/styles/sx';
+
+const styles = stylex.create({
+  body: { overflowX: 'auto' },
+  clickableRow: {
+    cursor: 'pointer',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+  container: { containerType: 'inline-size' },
+  table: {
+    borderCollapse: 'collapse',
+    width: '100%',
+    minWidth: { 'default': 'max-content', '@container (max-width: 600px)': '0' },
+    fontSize: '13px',
+    display: { 'default': null, '@container (max-width: 600px)': 'block' },
+  },
+  cell: {
+    'paddingBlockStart': {
+      'default': '8px',
+      '@container (max-width: 600px)': {
+        'default': '6px',
+        ":is([data-list-slot='title'])": '8px',
+        ":is([data-list-slot='extra'])": '8px',
+      },
+    },
+    'paddingBlockEnd': {
+      'default': '8px',
+      '@container (max-width: 600px)': {
+        'default': '6px',
+        ":is([data-list-slot='title'])": '8px',
+        ":is([data-list-slot='extra'])": '8px',
+      },
+    },
+    'paddingInlineStart': {
+      'default': '8px',
+      ':first-child': '24px',
+      '@container (max-width: 600px)': '0',
+    },
+    'paddingInlineEnd': {
+      'default': '8px',
+      ':last-child': '24px',
+      '@container (max-width: 600px)': '0',
+    },
+    'textAlign': 'start',
+    'verticalAlign': 'middle',
+    'display': { 'default': null, '@container (max-width: 600px)': 'flex' },
+    'gridColumn': {
+      'default': null,
+      '@container (max-width: 600px)': {
+        'default': '1 / -1',
+        ":is([data-list-slot='title'])": '1',
+        ":is([data-list-slot='extra'])": '2',
+      },
+    },
+    'gap': { 'default': null, '@container (max-width: 600px)': '16px' },
+    'alignItems': { 'default': null, '@container (max-width: 600px)': 'center' },
+    'justifyContent': {
+      'default': null,
+      '@container (max-width: 600px)': {
+        'default': 'space-between',
+        ':not([data-label], [data-list-slot])': 'flex-end',
+        ":is([data-list-slot='title'])": 'flex-start',
+        ":is([data-list-slot='extra'])": 'flex-end',
+        ":is([data-list-slot='actions'])": 'flex-end',
+      },
+    },
+    'gridRow': {
+      'default': null,
+      '@container (max-width: 600px)': {
+        'default': null,
+        ":is([data-list-slot='title'])": '1',
+        ":is([data-list-slot='extra'])": '1',
+      },
+    },
+    'borderBlockEndWidth': {
+      'default': null,
+      '@container (max-width: 600px)': {
+        'default': null,
+        ":is([data-list-slot='title'])": '1px',
+        ":is([data-list-slot='extra'])": '1px',
+      },
+    },
+    'borderBlockEndStyle': {
+      'default': null,
+      '@container (max-width: 600px)': {
+        'default': null,
+        ":is([data-list-slot='title'])": 'solid',
+        ":is([data-list-slot='extra'])": 'solid',
+      },
+    },
+    'borderBlockEndColor': {
+      'default': null,
+      '@container (max-width: 600px)': {
+        'default': null,
+        ":is([data-list-slot='title'])": cssVar.colorBorderSecondary,
+        ":is([data-list-slot='extra'])": cssVar.colorBorderSecondary,
+      },
+    },
+    'fontSize': {
+      'default': null,
+      '@container (max-width: 600px)': { 'default': null, ":is([data-list-slot='title'])": '14px' },
+    },
+    'fontWeight': {
+      'default': null,
+      '@container (max-width: 600px)': { 'default': null, ":is([data-list-slot='title'])": 600 },
+    },
+    '::before': {
+      content: {
+        'default': null,
+        '@container (max-width: 600px)': {
+          'default': null,
+          ':is([data-label])': 'attr(data-label)',
+        },
+      },
+      flexShrink: {
+        'default': null,
+        '@container (max-width: 600px)': { 'default': null, ':is([data-label])': 0 },
+      },
+      color: {
+        'default': null,
+        '@container (max-width: 600px)': {
+          'default': null,
+          ':is([data-label])': cssVar.colorTextSecondary,
+        },
+      },
+    },
+  },
+  heading: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '8px',
+    paddingInlineStart: { 'default': '8px', ':first-child': '24px' },
+    paddingInlineEnd: { 'default': '8px', ':last-child': '24px' },
+    textAlign: 'start',
+    verticalAlign: 'middle',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  row: {
+    backgroundColor: {
+      'default': null,
+      ':hover': cssVar.colorFillQuaternary,
+      '@container (max-width: 600px)': { 'default': null, ':hover': 'transparent' },
+    },
+    backgroundImage: {
+      'default': null,
+      ':hover': 'none',
+      '@container (max-width: 600px)': { 'default': null, ':hover': 'none' },
+    },
+    display: { 'default': null, '@container (max-width: 600px)': 'grid' },
+    gridTemplateColumns: { 'default': null, '@container (max-width: 600px)': '1fr auto' },
+    alignItems: { 'default': null, '@container (max-width: 600px)': 'center' },
+    paddingBlockStart: { 'default': null, '@container (max-width: 600px)': '4px' },
+    paddingBlockEnd: { 'default': null, '@container (max-width: 600px)': '8px' },
+    paddingInlineStart: { 'default': null, '@container (max-width: 600px)': '16px' },
+    paddingInlineEnd: { 'default': null, '@container (max-width: 600px)': '16px' },
+    borderWidth: { 'default': null, '@container (max-width: 600px)': '1px' },
+    borderStyle: { 'default': null, '@container (max-width: 600px)': 'solid' },
+    borderColor: { 'default': null, '@container (max-width: 600px)': cssVar.colorBorderSecondary },
+    borderRadius: { 'default': null, '@container (max-width: 600px)': cssVar.borderRadiusLG },
+  },
+  wideTable: {
+    borderCollapse: 'collapse',
+    width: '100%',
+    minWidth: { 'default': 'max-content', '@container (max-width: 800px)': '0' },
+    fontSize: '13px',
+    display: { 'default': null, '@container (max-width: 800px)': 'block' },
+  },
+  wideCell: {
+    'paddingBlockStart': {
+      'default': '8px',
+      '@container (max-width: 800px)': {
+        'default': '6px',
+        ":is([data-list-slot='title'])": '8px',
+        ":is([data-list-slot='extra'])": '8px',
+      },
+    },
+    'paddingBlockEnd': {
+      'default': '8px',
+      '@container (max-width: 800px)': {
+        'default': '6px',
+        ":is([data-list-slot='title'])": '8px',
+        ":is([data-list-slot='extra'])": '8px',
+      },
+    },
+    'paddingInlineStart': {
+      'default': '8px',
+      ':first-child': '24px',
+      '@container (max-width: 800px)': '0',
+    },
+    'paddingInlineEnd': {
+      'default': '8px',
+      ':last-child': '24px',
+      '@container (max-width: 800px)': '0',
+    },
+    'textAlign': 'start',
+    'verticalAlign': 'middle',
+    'display': { 'default': null, '@container (max-width: 800px)': 'flex' },
+    'gridColumn': {
+      'default': null,
+      '@container (max-width: 800px)': {
+        'default': '1 / -1',
+        ":is([data-list-slot='title'])": '1',
+        ":is([data-list-slot='extra'])": '2',
+      },
+    },
+    'gap': { 'default': null, '@container (max-width: 800px)': '16px' },
+    'alignItems': { 'default': null, '@container (max-width: 800px)': 'center' },
+    'justifyContent': {
+      'default': null,
+      '@container (max-width: 800px)': {
+        'default': 'space-between',
+        ':not([data-label], [data-list-slot])': 'flex-end',
+        ":is([data-list-slot='title'])": 'flex-start',
+        ":is([data-list-slot='extra'])": 'flex-end',
+        ":is([data-list-slot='actions'])": 'flex-end',
+      },
+    },
+    'gridRow': {
+      'default': null,
+      '@container (max-width: 800px)': {
+        'default': null,
+        ":is([data-list-slot='title'])": '1',
+        ":is([data-list-slot='extra'])": '1',
+      },
+    },
+    'borderBlockEndWidth': {
+      'default': null,
+      '@container (max-width: 800px)': {
+        'default': null,
+        ":is([data-list-slot='title'])": '1px',
+        ":is([data-list-slot='extra'])": '1px',
+      },
+    },
+    'borderBlockEndStyle': {
+      'default': null,
+      '@container (max-width: 800px)': {
+        'default': null,
+        ":is([data-list-slot='title'])": 'solid',
+        ":is([data-list-slot='extra'])": 'solid',
+      },
+    },
+    'borderBlockEndColor': {
+      'default': null,
+      '@container (max-width: 800px)': {
+        'default': null,
+        ":is([data-list-slot='title'])": cssVar.colorBorderSecondary,
+        ":is([data-list-slot='extra'])": cssVar.colorBorderSecondary,
+      },
+    },
+    'fontSize': {
+      'default': null,
+      '@container (max-width: 800px)': { 'default': null, ":is([data-list-slot='title'])": '14px' },
+    },
+    'fontWeight': {
+      'default': null,
+      '@container (max-width: 800px)': { 'default': null, ":is([data-list-slot='title'])": 600 },
+    },
+    '::before': {
+      content: {
+        'default': null,
+        '@container (max-width: 800px)': {
+          'default': null,
+          ':is([data-label])': 'attr(data-label)',
+        },
+      },
+      flexShrink: {
+        'default': null,
+        '@container (max-width: 800px)': { 'default': null, ':is([data-label])': 0 },
+      },
+      color: {
+        'default': null,
+        '@container (max-width: 800px)': {
+          'default': null,
+          ':is([data-label])': cssVar.colorTextSecondary,
+        },
+      },
+    },
+  },
+  wideHeading: {
+    paddingBlockStart: '8px',
+    paddingBlockEnd: '8px',
+    paddingInlineStart: { 'default': '8px', ':first-child': '24px' },
+    paddingInlineEnd: { 'default': '8px', ':last-child': '24px' },
+    textAlign: 'start',
+    verticalAlign: 'middle',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+    whiteSpace: 'nowrap',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  wideRow: {
+    backgroundColor: {
+      'default': null,
+      ':hover': cssVar.colorFillQuaternary,
+      '@container (max-width: 800px)': { 'default': null, ':hover': 'transparent' },
+    },
+    backgroundImage: {
+      'default': null,
+      ':hover': 'none',
+      '@container (max-width: 800px)': { 'default': null, ':hover': 'none' },
+    },
+    display: { 'default': null, '@container (max-width: 800px)': 'grid' },
+    gridTemplateColumns: { 'default': null, '@container (max-width: 800px)': '1fr auto' },
+    alignItems: { 'default': null, '@container (max-width: 800px)': 'center' },
+    paddingBlockStart: { 'default': null, '@container (max-width: 800px)': '4px' },
+    paddingBlockEnd: { 'default': null, '@container (max-width: 800px)': '8px' },
+    paddingInlineStart: { 'default': null, '@container (max-width: 800px)': '16px' },
+    paddingInlineEnd: { 'default': null, '@container (max-width: 800px)': '16px' },
+    borderWidth: { 'default': null, '@container (max-width: 800px)': '1px' },
+    borderStyle: { 'default': null, '@container (max-width: 800px)': 'solid' },
+    borderColor: { 'default': null, '@container (max-width: 800px)': cssVar.colorBorderSecondary },
+    borderRadius: { 'default': null, '@container (max-width: 800px)': cssVar.borderRadiusLG },
+  },
+  head: { display: { 'default': null, '@container (max-width: 600px)': 'none' } },
+  wideHead: { display: { 'default': null, '@container (max-width: 800px)': 'none' } },
+  bodyRows: {
+    display: { 'default': null, '@container (max-width: 600px)': 'flex' },
+    flexDirection: { 'default': null, '@container (max-width: 600px)': 'column' },
+    gap: { 'default': null, '@container (max-width: 600px)': '12px' },
+    paddingInlineStart: { 'default': null, '@container (max-width: 600px)': '16px' },
+    paddingInlineEnd: { 'default': null, '@container (max-width: 600px)': '16px' },
+  },
+  wideBodyRows: {
+    display: { 'default': null, '@container (max-width: 800px)': 'flex' },
+    flexDirection: { 'default': null, '@container (max-width: 800px)': 'column' },
+    gap: { 'default': null, '@container (max-width: 800px)': '12px' },
+    paddingInlineStart: { 'default': null, '@container (max-width: 800px)': '16px' },
+    paddingInlineEnd: { 'default': null, '@container (max-width: 800px)': '16px' },
+  },
+  fixedTable: { tableLayout: 'fixed', minWidth: '0' },
+});
 
 /** Placeholder rows shown before the first load settles. */
 const SKELETON_ROWS = 4;
-
-const styles = createStaticStyles(({ css, cssVar }) => {
-  const listLayout = `
-      display: block;
-      min-width: 0;
-
-      thead {
-        display: none;
-      }
-
-      tbody {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        padding-inline: 16px;
-      }
-
-      tbody tr {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        align-items: center;
-
-        padding-block: 4px 8px;
-        padding-inline: 16px;
-        border: 1px solid ${cssVar.colorBorderSecondary};
-        border-radius: ${cssVar.borderRadiusLG};
-
-        &:hover {
-          background: transparent;
-        }
-      }
-
-      td {
-        display: flex;
-        grid-column: 1 / -1;
-        gap: 16px;
-        align-items: center;
-        justify-content: space-between;
-
-        padding-block: 6px;
-        padding-inline: 0 !important;
-      }
-
-      td[data-label]::before {
-        content: attr(data-label);
-        flex-shrink: 0;
-        color: ${cssVar.colorTextSecondary};
-      }
-
-      td:not([data-label], [data-list-slot]) {
-        justify-content: flex-end;
-      }
-
-      td[data-list-slot='title'] {
-        grid-column: 1;
-        grid-row: 1;
-        justify-content: flex-start;
-
-        padding-block: 8px;
-        border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-        font-size: 14px;
-        font-weight: 600;
-      }
-
-      td[data-list-slot='extra'] {
-        grid-column: 2;
-        grid-row: 1;
-        justify-content: flex-end;
-
-        padding-block: 8px;
-        border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-      }
-
-      td[data-list-slot='actions'] {
-        justify-content: flex-end;
-      }
-  `;
-
-  return {
-    body: css`
-      overflow-x: auto;
-    `,
-    clickableRow: css`
-      cursor: pointer;
-
-      &:focus-visible {
-        outline: 2px solid ${cssVar.colorPrimary};
-        outline-offset: -2px;
-      }
-    `,
-    container: css`
-      container-type: inline-size;
-    `,
-    fixedTable: css`
-      table-layout: fixed;
-      min-width: 0;
-    `,
-    wideList: css`
-      @container (max-width: 800px) {
-        ${listLayout}
-      }
-    `,
-    table: css`
-      border-collapse: collapse;
-      width: 100%;
-      min-width: max-content;
-      font-size: 13px;
-
-      th,
-      td {
-        padding-block: 8px;
-        padding-inline: 8px;
-        text-align: start;
-        vertical-align: middle;
-      }
-
-      thead th {
-        font-weight: 500;
-        color: ${cssVar.colorTextSecondary};
-        white-space: nowrap;
-        background: ${cssVar.colorFillQuaternary};
-      }
-
-      tr {
-        th:first-child,
-        td:first-child {
-          padding-inline-start: 24px;
-        }
-
-        th:last-child,
-        td:last-child {
-          padding-inline-end: 24px;
-        }
-      }
-
-      tbody tr:hover {
-        background: ${cssVar.colorFillQuaternary};
-      }
-
-      @container (max-width: ${LIST_BREAKPOINT}px) {
-        ${listLayout}
-      }
-    `,
-  };
-});
 
 export interface LiteTableColumn<RecordType> {
   key: string;
@@ -193,6 +386,7 @@ const LiteTableInner = <RecordType,>({
 }: LiteTableProps<RecordType>) => {
   const items = dataSource ?? [];
   const initialLoading = !!loading && items.length === 0;
+  const wide = listBreakpoint === 800;
 
   const listLabelOf = (column: LiteTableColumn<RecordType>) =>
     column.listSlot || column.listLabel === false
@@ -200,35 +394,40 @@ const LiteTableInner = <RecordType,>({
       : (column.listLabel ?? (typeof column.title === 'string' ? column.title : undefined));
 
   return (
-    <div aria-busy={initialLoading} className={cx(styles.container, className)}>
+    <div aria-busy={initialLoading} {...sx(styles.container, className)}>
       {!initialLoading && items.length === 0 ? (
         emptyText
       ) : (
         // The loading state keeps the table chrome and skeletonises only the
         // cells, so settling is a content swap rather than a relayout (ux §4.1).
-        <div className={styles.body}>
+        <div {...stylex.props(styles.body)}>
           <table
-            className={cx(
-              styles.table,
+            {...stylex.props(
+              wide ? styles.wideTable : styles.table,
               tableLayout === 'fixed' && styles.fixedTable,
-              listBreakpoint === 800 && styles.wideList,
             )}
           >
-            <thead>
+            <thead {...stylex.props(wide ? styles.wideHead : styles.head)}>
               <tr>
                 {columns.map((column) => (
-                  <th key={column.key} style={{ width: column.width }}>
+                  <th
+                    {...sx(wide ? styles.wideHeading : styles.heading, undefined, {
+                      width: column.width,
+                    })}
+                    key={column.key}
+                  >
                     {column.title}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody {...stylex.props(wide ? styles.wideBodyRows : styles.bodyRows)}>
               {initialLoading
                 ? Array.from({ length: SKELETON_ROWS }, (_, index) => (
-                    <tr key={index}>
+                    <tr key={index} {...stylex.props(wide ? styles.wideRow : styles.row)}>
                       {columns.map((column) => (
                         <td
+                          {...stylex.props(wide ? styles.wideCell : styles.cell)}
                           data-label={listLabelOf(column)}
                           data-list-slot={column.listSlot}
                           key={column.key}
@@ -240,7 +439,10 @@ const LiteTableInner = <RecordType,>({
                   ))
                 : items.map((record, index) => (
                     <tr
-                      className={onRowClick ? styles.clickableRow : undefined}
+                      {...stylex.props(
+                        wide ? styles.wideRow : styles.row,
+                        onRowClick && styles.clickableRow,
+                      )}
                       key={rowKey(record)}
                       tabIndex={onRowClick ? 0 : undefined}
                       onClick={onRowClick ? () => onRowClick(record) : undefined}
@@ -259,6 +461,7 @@ const LiteTableInner = <RecordType,>({
                     >
                       {columns.map((column) => (
                         <td
+                          {...stylex.props(wide ? styles.wideCell : styles.cell)}
                           data-label={listLabelOf(column)}
                           data-list-slot={column.listSlot}
                           key={column.key}

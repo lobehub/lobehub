@@ -256,6 +256,7 @@
   "builtins.lobe-browser.apiName.readPage": "读取了页面文本",
   "builtins.lobe-browser.apiName.screenshot": "截取了页面截图",
   "builtins.lobe-browser.apiName.scroll": "滚动了页面",
+  "builtins.lobe-browser.apiName.setViewport": "调整了视口尺寸",
   "builtins.lobe-browser.apiName.snapshot": "读取了页面元素",
   "builtins.lobe-browser.title": "浏览器",
   "builtins.lobe-canvas.apiName.createCanvas": "创建画布",

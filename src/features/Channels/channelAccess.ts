@@ -1,4 +1,4 @@
-import type { ChannelDetail } from '@lobechat/types';
+import type { ChannelDetail, ChannelListItem } from '@lobechat/types';
 
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
@@ -9,3 +9,10 @@ export const visibleChannelDetail = (cached: ChannelDetail | undefined, error: u
   isTrpcErrorCode(error, 'UNAUTHORIZED')
     ? undefined
     : cached;
+
+/**
+ * Inviting needs an admin of an open Channel; archived Channels take no new members until
+ * reopened. Inviting from a direct conversation starts a new group instead of joining it.
+ */
+export const canInviteMembers = (channel: Pick<ChannelListItem, 'canDelete' | 'status'>) =>
+  channel.canDelete && channel.status !== 'archived';

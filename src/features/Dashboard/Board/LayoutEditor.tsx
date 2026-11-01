@@ -148,6 +148,7 @@ const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize, editabl
     >
       <WidgetCard
         className={gridStyles.editCard}
+        view={entry.view}
         widget={entry.widget}
         handle={
           <span

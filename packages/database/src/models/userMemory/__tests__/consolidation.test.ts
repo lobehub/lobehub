@@ -404,6 +404,42 @@ describe('UserMemoryConsolidationModel', () => {
     expect(reverted.blockedBy).toBeUndefined();
     expect(await model.listPendingLegacyContexts()).toHaveLength(2);
   });
+
+  it('lets a new run adopt the queue a stopped run left, keeping its lineage', async () => {
+    const a = await createLegacy('scheduler backend', '2026-05-01');
+    const b = await createLegacy('scheduler cron mode', '2026-06-01');
+    await model.enqueue('run_a', [
+      { id: a.context.id, key: 'product/tasks', route: 'evidence' },
+      { id: b.context.id, key: 'product/tasks', route: 'evidence' },
+    ]);
+    const filed = await model.applyContextPlan('run_a', {
+      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
+      nextSteps: [],
+      now: 'v1',
+      openQuestions: [],
+      title: 'Task system',
+    });
+    // run_a stops here: b is still queued.
+    expect(await model.findResumableQueue()).toEqual({
+      count: 1,
+      keys: ['product/tasks'],
+      origin: 'run_a',
+      runId: 'run_a',
+    });
+
+    expect(await model.adoptQueue('run_a', 'run_a', 'run_b')).toBe(1);
+    expect((await model.listQueued('run_b')).map((q) => q.id)).toEqual([b.context.id]);
+    expect(await model.findResumableQueue()).toMatchObject({ origin: 'run_a', runId: 'run_b' });
+
+    const evidence = await model.listQueueEvidence('run_a');
+    expect(evidence).toHaveLength(2);
+    expect(evidence).toEqual(
+      expect.arrayContaining([
+        { contextId: filed.contextId, count: 1, key: 'product/tasks' },
+        { contextId: null, count: 1, key: 'product/tasks' },
+      ]),
+    );
+  });
 });
 
 describe('deriveContextStatus', () => {

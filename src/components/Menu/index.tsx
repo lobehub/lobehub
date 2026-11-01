@@ -1,16 +1,11 @@
 import { List, type ListProps } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { memo } from 'react';
 
-export type MenuProps = ListProps;
+import styles from './Menu.module.css';
 
-const styles = createStaticStyles(({ css }) => ({
-  inset: css`
-    & > li:not([role='separator']) {
-      margin-inline: 4px;
-    }
-  `,
-}));
+export type MenuProps = ListProps;
 
 const Menu = memo<MenuProps>(
   ({ className, compact, selectable = false, styles: customStyles, ...rest }) => (

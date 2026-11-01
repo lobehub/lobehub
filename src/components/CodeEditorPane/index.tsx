@@ -13,7 +13,7 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { detectIndentStyle } from './indent';
 import { getEditorLanguage } from './language';
 import StatusBar, { type CursorPosition } from './StatusBar';
-import { styles } from './style';
+import styles from './style.module.css';
 
 /**
  * The parts of the underlying CodeMirror 6 view that the compat wrapper does

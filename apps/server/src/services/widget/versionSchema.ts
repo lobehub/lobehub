@@ -1,6 +1,7 @@
 import { WIDGET_OUTPUT_TYPES, WIDGET_RUNTIMES } from '@lobechat/types';
 import { z } from 'zod';
 
+import { widgetLayoutSchema, widgetSurfaceSchema } from './layoutSchema';
 import { WIDGET_SANDBOX_MAX_TIMEOUT_MS } from './sandbox/types';
 
 /**
@@ -66,8 +67,10 @@ export const widgetManifestSchema = z.object({
 export const widgetViewSchema = z.object({
   chart: z.enum(['line', 'bar', 'area']).optional(),
   columns: z.array(z.string()).optional(),
+  layout: widgetLayoutSchema.optional(),
   limit: z.number().int().positive().max(500).optional(),
   size: z.enum(['sm', 'md', 'lg']).optional(),
+  surface: widgetSurfaceSchema.optional(),
 });
 
 export const widgetVersionContentSchema = z.object({

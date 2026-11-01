@@ -203,7 +203,11 @@ export const SchemaField = memo<SchemaFieldProps>(
         break;
       }
       case 'boolean': {
-        children = <Switch disabled={disabled} />;
+        children = field.inverted ? (
+          <InvertedSwitch disabled={disabled} />
+        ) : (
+          <Switch disabled={disabled} />
+        );
         break;
       }
       case 'number':
@@ -351,6 +355,20 @@ const FormCheckbox = ({
   onChange?: (checked: boolean) => void;
   value?: boolean;
 }) => <Checkbox {...props} checked={value === true} onChange={(next) => onChange?.(next)} />;
+
+/**
+ * {@link Switch} bound to an off switch: on while the stored value is not `true`, so a row saved
+ * before the property existed reads as on.
+ */
+const InvertedSwitch = ({
+  onChange,
+  value,
+  ...props
+}: {
+  disabled?: boolean;
+  onChange?: (value: boolean) => void;
+  value?: boolean;
+}) => <Switch {...props} checked={value !== true} onChange={(checked) => onChange?.(!checked)} />;
 
 // --------------- Object-list field (e.g. allowFrom: [{id, name?}]) ---------------
 

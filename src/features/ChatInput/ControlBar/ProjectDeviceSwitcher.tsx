@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,32 +24,25 @@ import {
 } from './projectDeviceTargets';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   // Picking a device here really picks an environment, and the path is what
   // tells them apart, so it wraps in full instead of truncating.
-  desc: css`
-    min-width: 0;
-    overflow-wrap: anywhere;
-  `,
-  hint: css`
-    padding-block: 6px;
-    padding-inline: 8px;
-    font-size: 11px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  status: css`
-    flex: none;
-    white-space: nowrap;
-  `,
-  title: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+  desc: { minWidth: '0', overflowWrap: 'anywhere' },
+  hint: {
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    fontSize: '11px',
+    color: cssVar.colorTextDescription,
+  },
+  status: { flex: 'none', whiteSpace: 'nowrap' },
+  title: {
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 interface ProjectDeviceSwitcherProps {
   /** Tag on the current directory's row, naming what runs there. */
@@ -101,7 +96,7 @@ const ProjectDeviceSwitcher = ({
 
   const content = (
     <Flexbox style={{ maxWidth: 400, minWidth: 280 }}>
-      <div className={styles.title}>{t('heteroAgent.executionTarget.title')}</div>
+      <div {...stylex.props(styles.title)}>{t('heteroAgent.executionTarget.title')}</div>
       {targets.map((target) => {
         const selectable = target.online && target.allowed;
         const row = (
@@ -114,8 +109,8 @@ const ProjectDeviceSwitcher = ({
             desc={
               target.allowed ? (
                 <>
-                  <span className={styles.desc}>{target.directory.path}</span>
-                  <span className={styles.status}>
+                  <span {...stylex.props(styles.desc)}>{target.directory.path}</span>
+                  <span {...stylex.props(styles.status)}>
                     <ExecutionTargetDeviceStatus
                       offlineLabel={t('heteroAgent.executionTarget.offline')}
                       online={target.online}
@@ -126,7 +121,9 @@ const ProjectDeviceSwitcher = ({
                   </span>
                 </>
               ) : (
-                <span className={styles.desc}>{t('heteroAgent.executionTarget.fixedTip')}</span>
+                <span {...stylex.props(styles.desc)}>
+                  {t('heteroAgent.executionTarget.fixedTip')}
+                </span>
               )
             }
             icon={
@@ -145,14 +142,16 @@ const ProjectDeviceSwitcher = ({
           row
         );
       })}
-      <div className={styles.hint}>{t('heteroAgent.executionTarget.projectDevicesHint')}</div>
+      <div {...stylex.props(styles.hint)}>
+        {t('heteroAgent.executionTarget.projectDevicesHint')}
+      </div>
     </Flexbox>
   );
 
   const trigger = (
-    <div className={workingDirectoryChipStyles.chip}>
+    <div {...stylex.props(workingDirectoryChipStyles.chip)}>
       <ExecutionTargetIcon devicePlatform={directory?.platform} target={'device'} />
-      <span className={workingDirectoryChipStyles.label}>
+      <span {...stylex.props(workingDirectoryChipStyles.label)}>
         {directory
           ? projectDirectoryDeviceName(directory, devices)
           : t('heteroAgent.executionTarget.unknownDevice')}

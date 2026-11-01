@@ -262,6 +262,7 @@ export default {
   'builtins.lobe-browser.apiName.readPage': 'Read page text',
   'builtins.lobe-browser.apiName.screenshot': 'Captured screenshot',
   'builtins.lobe-browser.apiName.scroll': 'Scrolled page',
+  'builtins.lobe-browser.apiName.setViewport': 'Set viewport',
   'builtins.lobe-browser.apiName.snapshot': 'Read page elements',
   'builtins.lobe-browser.title': 'Browser',
   'builtins.github.render.error': 'Error',

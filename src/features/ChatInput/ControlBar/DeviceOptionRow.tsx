@@ -1,7 +1,8 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Button, createStaticStyles, Icon } from '@lobehub/ui';
+import { Button, Icon } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { RefreshCwIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,14 +14,9 @@ import DeviceDetailPopover from './DeviceDetailPopover';
 import { handleDeviceRowKeyDown } from './deviceRowKeyDown';
 import OptionRow from './OptionRow';
 
-const styles = createStaticStyles(({ css }) => ({
-  reconnectButton: css`
-    min-height: 18px;
-    padding-block: 0;
-    padding-inline: 2px;
-    font-size: 11px;
-  `,
-}));
+const styles = stylex.create({
+  reconnectButton: { minHeight: '18px', paddingBlock: '0', paddingInline: '2px', fontSize: '11px' },
+});
 
 interface DeviceOptionRowProps {
   active: boolean;
@@ -79,7 +75,7 @@ const DeviceOptionRow = ({
               )}
               {device.online || presenceUnknown ? null : (
                 <Button
-                  className={styles.reconnectButton}
+                  className={stylex.props(styles.reconnectButton).className}
                   icon={<Icon icon={RefreshCwIcon} size={10} />}
                   loading={reconnecting}
                   size={'small'}

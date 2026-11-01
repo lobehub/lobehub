@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -10,6 +10,7 @@ import {
   agentDocuments,
   agents,
   briefs,
+  channelMembers,
   chatGroups,
   chatGroupsAgents,
   dashboards,
@@ -21,6 +22,7 @@ import {
   users,
   widgets,
 } from '../../../schemas';
+import { ChannelRepository } from '../../channel';
 import { ProjectCoordinatorRepository } from '../index';
 
 const serverDB = await getTestDB();
@@ -200,6 +202,31 @@ describe('ProjectCoordinatorRepository.replaceCoordinator', () => {
     expect(await model.listAgents(other.id)).toContainEqual(
       expect.objectContaining({ agent: expect.objectContaining({ id: coordinatorId }) }),
     );
+  });
+
+  it('keeps a coordinator that answers in a Channel when it is replaced', async () => {
+    const project = await createProject({ name: 'Default channel' });
+    const coordinatorId = project.coordinatorAgentId;
+    const { channel } = await new ChannelRepository(serverDB, userId).create({
+      agents: [{ agentId: coordinatorId }],
+      projectId: project.id,
+      title: 'General',
+    });
+    const lead = await new AgentModel(serverDB, userId).create({ title: 'Lead' });
+
+    await repo.replaceCoordinator(project.id, lead.id);
+
+    expect(await serverDB.select().from(agents).where(eq(agents.id, coordinatorId))).toHaveLength(
+      1,
+    );
+    expect(
+      await serverDB
+        .select({ agentId: channelMembers.agentId })
+        .from(channelMembers)
+        .where(
+          and(eq(channelMembers.channelId, channel.id), eq(channelMembers.actorType, 'agent')),
+        ),
+    ).toEqual([{ agentId: coordinatorId }]);
   });
 
   it('keeps a reusable main agent as a member when it is replaced', async () => {

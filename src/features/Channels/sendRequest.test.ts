@@ -8,6 +8,22 @@ const payload = { content: '@Agent first reply', fileIds: ['file-a'], mentions: 
 describe('Channel ambiguous send identity', () => {
   beforeEach(() => sessionStorage.clear());
 
+  it('preserves an ordinary send retry started before quote replies were supported', () => {
+    const key = crypto.randomUUID();
+    sessionStorage.setItem(
+      'lobehub:channel-send-requests:v1',
+      JSON.stringify([
+        {
+          fingerprint: JSON.stringify([payload.content, payload.mentions, payload.fileIds]),
+          key,
+          scope,
+        },
+      ]),
+    );
+
+    expect(createChannelSendRequest().get(scope, payload)).toBe(key);
+  });
+
   it('reuses the request after an ambiguous failure, including composer remount and reload', () => {
     const first = createChannelSendRequest();
     const key = first.get(scope, payload);
@@ -25,6 +41,14 @@ describe('Channel ambiguous send identity', () => {
     const recipient = request.get(scope, { ...payload, content: 'different', mentions: ['b'] });
     expect(recipient).not.toBe(edited);
     expect(request.get(scope, { ...payload, fileIds: ['file-b'] })).not.toBe(recipient);
+  });
+
+  it('gives a different quote its own retry identity and restores an unchanged quote after reload', () => {
+    const request = createChannelSendRequest();
+    const first = request.get(scope, { ...payload, replyToId: 'first' });
+    expect(createChannelSendRequest().get(scope, { ...payload, replyToId: 'first' })).toBe(first);
+    expect(request.get(scope, { ...payload, replyToId: 'second' })).not.toBe(first);
+    expect(request.get(scope, payload)).not.toBe(first);
   });
 
   it('lets a successful message be intentionally sent again and isolates conversations and identities', () => {

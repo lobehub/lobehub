@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, Flexbox, Grid, Skeleton } from '@lobehub/ui';
+import { Block, Flexbox, Grid, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, type ReactNode } from 'react';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -8,15 +10,20 @@ import type { RouteSkeletonChrome, RouteSkeletonProps } from '@/spa/router/route
 
 const COMMUNITY_MAX_WIDTH = 1440;
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  footer: css`
-    border-block-start: 1px dashed ${cssVar.colorBorder};
-    background: ${cssVar.colorBgContainer};
-  `,
-  toolbar: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  footer: {
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorder,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  toolbar: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 // Mirrors the community list layout (search header + centered wide-screen
 // container) for the fallback that paints before that layout has mounted.
@@ -34,7 +41,7 @@ export const CommunityPageChrome = ({
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.toolbar}
+        className={stylex.props(styles.toolbar).className}
         flex={'none'}
         gap={12}
         height={56}
@@ -87,7 +94,7 @@ const CommunityListSkeleton = memo<CommunityListSkeletonProps>(
                 <Skeleton height={20} width={50} />
               </Flexbox>
               <Flexbox
-                className={styles.footer}
+                className={stylex.props(styles.footer).className}
                 gap={4}
                 padding={8}
                 style={{ marginBottom: -16, marginInline: -16 }}

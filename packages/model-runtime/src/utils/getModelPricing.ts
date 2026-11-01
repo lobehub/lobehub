@@ -2,6 +2,7 @@ import type {
   LobeDefaultAiModelListItem,
   ModelParamsSchema,
   Pricing,
+  TTSModelParamsSchema,
   VideoModelParamsSchema,
 } from 'model-bank';
 
@@ -57,7 +58,7 @@ export async function getModelParameters(
   model: string,
   provider?: string,
   pricingContext?: ModelPricingContext,
-): Promise<ModelParamsSchema | VideoModelParamsSchema | undefined> {
+): Promise<ModelParamsSchema | TTSModelParamsSchema | VideoModelParamsSchema | undefined> {
   const card = await findModelCard(
     model,
     provider,

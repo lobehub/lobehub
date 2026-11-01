@@ -32,7 +32,7 @@ const runtimeSchema = {
 
 const outputTypeSchema = {
   description:
-    'Shape of the JSON the script prints: stat (one number), list (items), series (time series), table (columns + rows).',
+    'Shape of the JSON the script prints: stat (one number), list (items), series (time series), table (columns + rows), data (free-form JSON drawn by view.layout — for rich cards such as weather).',
   enum: [...WIDGET_OUTPUT_TYPES],
   type: 'string',
 };
@@ -124,7 +124,7 @@ const manifestSchema = {
 
 const viewSchema = {
   additionalProperties: false,
-  description: 'Rendering hints for the card.',
+  description: 'How the card looks.',
   properties: {
     chart: { enum: ['line', 'bar', 'area'], type: 'string' },
     columns: {
@@ -132,7 +132,17 @@ const viewSchema = {
       items: { type: 'string' },
       type: 'array',
     },
+    layout: {
+      description:
+        'Declarative card template (a tree of stack / grid / text / icon / image / progress / ring / dots / sparkline / badge / divider / spacer / repeat nodes) whose values bind to the output by path. Required for outputType data; replaces the default rendering for the other types. See <card_layout>.',
+      type: 'object',
+    },
     limit: { description: 'Maximum list / table rows on the card.', type: 'number' },
+    surface: {
+      description:
+        'Card background: a surface name (default, sky, cloudy, rain, storm, snow, night, sunset, forest, ocean, sand, rose, slate) or a binding {"bind":"data.x","map":{…}} that picks one from the data.',
+      type: ['string', 'object'],
+    },
   },
   type: 'object',
 };
