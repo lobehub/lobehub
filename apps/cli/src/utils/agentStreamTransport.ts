@@ -499,6 +499,10 @@ class MuxWakeChannel implements WakeChannel {
   connect() {
     if (this.stopped) return;
     const mux = new GatewayMuxClient({
+      // Same per-attempt bound as `/ws`: a token mint that hangs or a socket
+      // that never gets `ready` is a failed dial, retried and counted toward
+      // the fallback — mirrored member events only ever arrive on this wire.
+      connectTimeoutMs: CONNECT_TIMEOUT_MS,
       gatewayUrl: this.options.gatewayUrl,
       getToken: this.mintToken,
       maxDialFailures: MUX_MAX_DIAL_FAILURES,
@@ -554,9 +558,14 @@ class MuxWakeChannel implements WakeChannel {
     // Recover the terminal from the server even when the Gateway is down.
     this.onWake(true);
     if (++this.retries > this.options.maxRetries) {
-      this.onFatal(
-        new AgentGatewayUnavailableError(
-          'Reconnect attempts exhausted; complete history not confirmed: agent gateway (/v2/ws) unreachable',
+      // Deferred: the mux announces `reconnecting` before it arms the timer,
+      // so shutting it down from inside the notification would leave that
+      // timer live and hold the process open after the caller moved to polling.
+      queueMicrotask(() =>
+        this.onFatal(
+          new AgentGatewayUnavailableError(
+            'Reconnect attempts exhausted; complete history not confirmed: agent gateway (/v2/ws) unreachable',
+          ),
         ),
       );
       return;

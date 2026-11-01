@@ -13,6 +13,8 @@ import { AgentGatewayUnavailableError, consumeAgentStream } from './agentStreamT
  */
 let sockets: TestSocket[];
 let failDial: number | undefined;
+/** `/v2/ws` opens but the hub never sends `ready`, like a half-open proxy. */
+let silentReady: boolean;
 class TestSocket {
   static OPEN = 1;
   static CONNECTING = 0;
@@ -31,7 +33,7 @@ class TestSocket {
       }
       this.readyState = 1;
       this.onopen?.();
-      if (this.isMux)
+      if (this.isMux && !silentReady)
         this.message({ connectionId: 'conn-1', protocol: 2, type: 'ready', userId: 'user-1' });
     });
   }
@@ -109,6 +111,7 @@ describe('protocol v2 (/v2/ws) wake channel', () => {
     vi.useFakeTimers();
     sockets = [];
     failDial = undefined;
+    silentReady = false;
     journal = [event(1, 'agent_runtime_init')];
     readHistory = vi.fn(async (cursor) => {
       const events = journal.filter(
@@ -295,5 +298,37 @@ describe('protocol v2 (/v2/ws) wake channel', () => {
     await rejected;
     await expect(transport.done).rejects.toBeInstanceOf(AgentGatewayUnavailableError);
     expect(v1Sockets()).toHaveLength(0);
+  });
+
+  it('moves to /ws when /v2/ws opens but never sends ready, instead of waiting forever', async () => {
+    silentReady = true;
+    const transport = consumeAgentStream(options(), (item) => item.type === 'agent_runtime_end');
+
+    // Three dials, each abandoned after the 10s connect deadline, plus backoff.
+    await vi.advanceTimersByTimeAsync(40_000);
+
+    expect(muxSockets()).toHaveLength(3);
+    expect(muxSockets().every((socket) => socket.readyState === 3)).toBe(true);
+    expect(v1Sockets()).toHaveLength(1);
+
+    journal.push(event(2, 'agent_runtime_end'));
+    v1Sockets()[0].message({ type: 'session_complete' });
+    await flush();
+    await expect(transport.done).resolves.toBeUndefined();
+  });
+
+  it('leaves no reconnect timer behind once the retry budget ends the stream', async () => {
+    // A reconnect delay that a zero-time flush cannot fire.
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+    const transport = consumeAgentStream({ ...options(), maxRetries: 0 }, () => false);
+    const rejected = expect(transport.done).rejects.toBeInstanceOf(AgentGatewayUnavailableError);
+    await flush();
+
+    muxSockets()[0].disconnect();
+    await flush();
+
+    await rejected;
+    // A live timer here would keep `lh agent run` alive after it fell back to polling.
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
