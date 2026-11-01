@@ -1,4 +1,4 @@
 /* The outline rows are NavItems rendered by FocusOutline; they must not shrink inside the list. */
-.outlineList > * {
+.lobe-acceptance-focus-review-416dc1e9-outline-list > * {
   flex-shrink: 0;
 }

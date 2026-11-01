@@ -1,9 +1,9 @@
 /* @xyflow/react renders these inside the canvas, out of StyleX's reach. */
-.canvas :global(.react-flow__edgelabel-renderer) {
+.lobe-flow-canvas-885d63c0-canvas .react-flow__edgelabel-renderer {
   z-index: 5;
 }
 
-.canvas :global(.react-flow__controls-button) {
+.lobe-flow-canvas-885d63c0-canvas .react-flow__controls-button {
   border-color: var(--lobe-color-border-secondary);
   background: var(--lobe-color-bg-container);
   fill: var(--lobe-color-text-secondary);

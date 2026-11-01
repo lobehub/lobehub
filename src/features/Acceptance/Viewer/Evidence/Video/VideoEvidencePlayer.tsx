@@ -1,5 +1,7 @@
 'use client';
 
+import './styles.css';
+
 import { isFullFrameRect } from '@lobechat/const/verify';
 import type {
   AcceptanceCommentTime,
@@ -26,7 +28,6 @@ import FloatingCommentAction from '../FloatingCommentAction';
 import { noteKeyOf, toClaimMarkers, toNoteMarkers, toSections } from './chapters';
 import { readStoredRate, storeRate } from './playbackRate';
 import { styles } from './styles';
-import moduleStyles from './styles.module.css';
 import { useVideoRegionGesture } from './useVideoRegionGesture';
 import { DraftRegion, type FrameRegion, FrameRegions } from './VideoChrome';
 import { VideoClaimList } from './VideoClaimList';
@@ -191,7 +192,7 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
           })}
         >
           <Video.Root
-            className={`${moduleStyles.player} ${moduleStyles.compactControls}`}
+            className={`${'lobe-video-3f6c2110-player'} ${'lobe-video-3f6c2110-compact-controls'}`}
             defaultPlaybackRate={defaultRate}
             markers={markers}
             maxHeight={frameMaxHeight ? undefined : MAX_HEIGHT}
@@ -215,7 +216,7 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
             }}
           >
             <div data-acceptance-video-stage {...stylex.props(styles.stage)}>
-              <Video.Frame className={moduleStyles.frame}>
+              <Video.Frame className={'lobe-video-3f6c2110-frame'}>
                 {onRegion ? (
                   <CommentSurface
                     active={activeMark}

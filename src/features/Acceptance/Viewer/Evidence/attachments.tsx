@@ -1,5 +1,7 @@
 'use client';
 
+import './attachments.css';
+
 import type { AcceptanceAttachment } from '@lobechat/types';
 import { Button, Flexbox, Icon, Image, Spin, toast, Upload, useResponsive } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -10,8 +12,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
 import { sx } from '@/styles/sx';
-
-import moduleStyles from './attachments.module.css';
 
 /** 10MB — a screenshot, not a video; keeps the reject payload light. */
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
@@ -176,7 +176,7 @@ export const AttachmentStrip = memo<AttachmentStripProps>(
     return (
       <Flexbox horizontal gap={8} wrap={'wrap'}>
         {attachments.map((attachment) => (
-          <div key={attachment.id} {...sx([styles.thumb], moduleStyles.thumb)}>
+          <div key={attachment.id} {...sx([styles.thumb], 'lobe-attachments-a50411c3-thumb')}>
             <Image alt={attachment.name ?? ''} preview={false} src={attachment.url} />
             {!disabled && (
               <button
@@ -191,7 +191,7 @@ export const AttachmentStrip = memo<AttachmentStripProps>(
           </div>
         ))}
         {uploading && (
-          <div {...sx([styles.thumb, styles.thumbLoading], moduleStyles.thumb)}>
+          <div {...sx([styles.thumb, styles.thumbLoading], 'lobe-attachments-a50411c3-thumb')}>
             <Spin size="small" />
           </div>
         )}
@@ -263,8 +263,8 @@ export const AttachmentThumbs = memo<AttachmentThumbsProps>(({ attachments, size
           {...sx(
             [styles.thumb, size === 'comment' && styles.thumbLarge],
             size === 'comment'
-              ? `${moduleStyles.thumb} ${moduleStyles.thumbLarge}`
-              : moduleStyles.thumb,
+              ? `${'lobe-attachments-a50411c3-thumb'} ${'lobe-attachments-a50411c3-thumb-large'}`
+              : 'lobe-attachments-a50411c3-thumb',
           )}
         >
           <Image alt={attachment.name ?? ''} src={attachment.url!} />

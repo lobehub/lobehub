@@ -1,5 +1,7 @@
 'use client';
 
+import './AcceptanceFocusReview.css';
+
 import type { AcceptanceChecklistItem } from '@lobechat/types';
 import { Button, Flexbox, Icon, Text, useResponsive } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -16,7 +18,6 @@ import {
   type ProposalDismissInput,
 } from '../Checks/types';
 import AcceptanceStatusPill from '../Header/AcceptanceStatusPill';
-import moduleStyles from './AcceptanceFocusReview.module.css';
 import { FocusCheckHeading } from './FocusCheckHeading';
 import { FocusedCheckDetails } from './FocusedCheckDetails';
 import { FocusOutline } from './FocusOutline';
@@ -206,7 +207,10 @@ const AcceptanceFocusReview = ({
           )}
         </Flexbox>
         {(md || outlineOpen) && (
-          <Flexbox flex={1} {...sx([styles.outlineList], moduleStyles.outlineList)}>
+          <Flexbox
+            flex={1}
+            {...sx([styles.outlineList], 'lobe-acceptance-focus-review-416dc1e9-outline-list')}
+          >
             <FocusOutline
               checks={orderedChecks}
               focusedCheckId={focusedCheck.id}

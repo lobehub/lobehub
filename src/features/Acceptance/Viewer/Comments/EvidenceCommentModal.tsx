@@ -1,5 +1,7 @@
 'use client';
 
+import './EvidenceCommentModal.css';
+
 import type { AcceptanceCommentTime, AcceptanceReviewAnnotation } from '@lobechat/types';
 import { createModal, Flexbox, Icon, Text, toast, useModalContext } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -29,13 +31,12 @@ import {
   readEvidenceCommentDraft,
   saveEvidenceCommentDraft,
 } from './evidenceCommentDraft';
-import moduleStyles from './EvidenceCommentModal.module.css';
 import { readVideoCommentDrafts } from './videoCommentDraft';
 import { VideoCommentEditor } from './VideoCommentEditor';
 
 const MODAL_WIDTH = 'min(1180px, calc(100vw - 48px))';
 
-// The popup's chrome lives in EvidenceCommentModal.module.css, which repeats MODAL_WIDTH.
+// The popup's chrome lives in EvidenceCommentModal.css, which repeats MODAL_WIDTH.
 const phone = '@media (width <= 767px)';
 
 const styles = stylex.create({
@@ -330,7 +331,7 @@ export const openEvidenceCommentModal = (options: EvidenceCommentModalProps) =>
     classNames: {
       close: stylex.props(styles.close).className,
       header: stylex.props(styles.header).className,
-      popup: moduleStyles.popup,
+      popup: 'lobe-evidence-comment-modal-fa2b0329-popup',
     },
     footer: null,
     maskClosable: true,

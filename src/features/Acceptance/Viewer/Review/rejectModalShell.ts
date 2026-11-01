@@ -1,7 +1,8 @@
+import './rejectModalShell.css';
+
 import * as stylex from '@stylexjs/stylex';
 
 import { frostedModalStyles } from './modals';
-import moduleStyles from './rejectModalShell.module.css';
 
 export const CHECK_REJECT_MODAL_SIZE = { height: '98dvh', width: '98vw' } as const;
 export const TEXT_REJECT_MODAL_WIDTH = 'min(560px, calc(100vw - 32px))';
@@ -50,9 +51,9 @@ export const checkRejectModalShell = (evidenceCount: number) => {
       content: stylex.props(styles.mobileContent).className,
       header: stylex.props(styles.mobileHeader).className,
       popup: [
-        moduleStyles.modalPopup,
-        moduleStyles.mobilePopup,
-        evidenceCount > 0 && moduleStyles.modalPopupMedia,
+        'lobe-reject-modal-shell-5f6eda7d-modal-popup',
+        'lobe-reject-modal-shell-5f6eda7d-mobile-popup',
+        evidenceCount > 0 && 'lobe-reject-modal-shell-5f6eda7d-modal-popup-media',
       ]
         .filter(Boolean)
         .join(' '),

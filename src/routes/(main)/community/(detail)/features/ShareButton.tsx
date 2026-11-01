@@ -1,3 +1,5 @@
+import './ShareButton.css';
+
 import {
   ActionIcon,
   Avatar,
@@ -23,7 +25,6 @@ import ImperativeModal from '@/components/ImperativeModal';
 import { useShare } from '@/hooks/useShare';
 
 import CardBanner from '../../components/CardBanner';
-import iconStyles from './ShareButton.module.css';
 
 const styles = stylex.create({
   banner: {
@@ -106,7 +107,7 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
               item.icon && (
                 <a href={item.link} key={item.title} rel="noreferrer" target="_blank">
                   <ActionIcon
-                    className={iconStyles.icon}
+                    className={'lobe-share-button-4579d448-icon'}
                     icon={item.icon}
                     size={{ blockSize: 36, borderRadius: 18, size: 16 }}
                     title={item.title}

@@ -1,3 +1,5 @@
+import './FlowCanvas.css';
+
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -18,7 +20,6 @@ import { useSingleton } from '@/hooks/useSingleton';
 import { sx } from '@/styles/sx';
 
 import { FlowAnchorContext } from './flowAnchor';
-import moduleStyles from './FlowCanvas.module.css';
 import { FlowEdge } from './FlowEdge';
 import type { FlowGraphData } from './flowGraph';
 import { getSelectedFlowNodeId, panNodeIntoView } from './flowViewport';
@@ -121,7 +122,7 @@ export function FlowCanvas({
         ref={ref}
         {...sx(
           [styles.canvas],
-          moduleStyles.canvas,
+          'lobe-flow-canvas-885d63c0-canvas',
           fullscreen ? { flex: 1, height: '100%', minHeight: 0 } : undefined,
         )}
       >
