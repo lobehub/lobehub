@@ -327,8 +327,9 @@ export class TaskModel {
   async updateFieldsForIds(
     ids: string[],
     data: Parameters<typeof rows.updateFieldsForIds>[2],
+    configById?: ReadonlyMap<string, unknown>,
   ): Promise<TaskItem[]> {
-    return rows.updateFieldsForIds(this.ctx, ids, data);
+    return rows.updateFieldsForIds(this.ctx, ids, data, configById);
   }
 
   // ========== Config ==========

@@ -416,16 +416,31 @@ export const lockForBulkEdit = async (ctx: TaskModelContext, ids: string[]) => {
  * Write the same plain-column patch to many tasks in one statement. Callers
  * own the invariants (and the assignee repo-selection rule, see
  * `withStaleReposCleared`) — this is only the set-based write.
+ *
+ * `configById` replaces the `config` column of just those rows, in the same
+ * statement (a `CASE` on the id), for rows whose patch has to rewrite their
+ * own config; every other row keeps its config untouched.
  */
 export const updateFieldsForIds = async (
   ctx: TaskModelContext,
   ids: string[],
   data: Partial<Pick<NewTask, 'assigneeAgentId' | 'assigneeUserId' | 'priority'>>,
+  configById?: ReadonlyMap<string, unknown>,
 ): Promise<TaskItem[]> => {
   if (ids.length === 0) return [];
+  const configCases = configById ? [...configById].filter(([id]) => ids.includes(id)) : [];
+  const config =
+    configCases.length > 0
+      ? sql`CASE ${tasks.id} ${sql.join(
+          configCases.map(
+            ([id, value]) => sql`WHEN ${id} THEN ${JSON.stringify(value ?? null)}::jsonb`,
+          ),
+          sql` `,
+        )} ELSE ${tasks.config} END`
+      : undefined;
   return ctx.db
     .update(tasks)
-    .set({ ...data, updatedAt: new Date() })
+    .set({ ...data, ...(config && { config }), updatedAt: new Date() })
     .where(and(inArray(tasks.id, ids), taskOwnership(ctx)))
     .returning();
 };

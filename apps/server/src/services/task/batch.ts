@@ -226,20 +226,19 @@ export class TaskBatchService {
       }
 
       // Moving a task off an agent drops that agent's cloud-repo selection
-      // (`withStaleReposCleared`). Rows that need it get their own write with
-      // the merged config; every other row shares one UPDATE.
-      const plain: string[] = [];
-      const written: TaskItem[] = [];
+      // (`withStaleReposCleared`). The cleared config is computed from each
+      // locked row and written by the same single UPDATE as the shared patch,
+      // so a large reassignment is one statement, not one write per task.
+      const configById = new Map<string, unknown>();
       for (const row of changing) {
         const rowData = withStaleReposCleared(row, data);
-        if (rowData === data) {
-          plain.push(row.id);
-          continue;
-        }
-        const updated = await model.update(row.id, rowData);
-        if (updated) written.push(updated);
+        if (rowData !== data) configById.set(row.id, rowData.config);
       }
-      written.push(...(await model.updateFieldsForIds(plain, data)));
+      const written = await model.updateFieldsForIds(
+        changing.map((row) => row.id),
+        data,
+        configById,
+      );
 
       const { actorKind, ...actorColumns } = taskActivityActor(actor);
       const after = new Map(written.map((task) => [task.id, task]));

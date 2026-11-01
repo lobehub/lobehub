@@ -48,7 +48,7 @@ export const useTaskBatchActions = () => {
 
   const run = useCallback(
     async (action: TaskBatchAction) => {
-      const { progress, selectedIds, setProgress } = useTaskSelectionStore.getState();
+      const { generation, progress, selectedIds, setProgress } = useTaskSelectionStore.getState();
       // One batch at a time: a second action must not race the first.
       if (progress) return;
       const ids = [...selectedIds];
@@ -101,6 +101,10 @@ export const useTaskBatchActions = () => {
       else toast.success(message);
 
       const selection = useTaskSelectionStore.getState();
+      // The list this batch started from was left (or its selection cleared)
+      // while the requests ran: its ids mean nothing to the list on screen now,
+      // so neither restore them nor clear the new list's own selection.
+      if (selection.generation !== generation) return;
       if (failedCount > 0) {
         // Keep exactly what still needs attention selected.
         const done = new Set([...updated, ...skipped.map((item) => item.id)]);

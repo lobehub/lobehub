@@ -5,6 +5,12 @@ import { pruneSelection, selectRange, toggleSelection } from './taskSelectionMod
 interface TaskSelectionState {
   /** Last row clicked without Shift — where the next Shift+click range starts. */
   anchorId?: string;
+  /**
+   * Bumped by every `clear()` — leaving the list, switching collection, Esc.
+   * A batch that finishes after its selection was cleared must not write that
+   * selection back into whatever list is on screen now.
+   */
+  generation: number;
   panelOpen: boolean;
   /** A batch is in flight: `done` of `total` tasks sent so far. */
   progress?: { done: number; total: number };
@@ -30,7 +36,14 @@ const EMPTY: readonly string[] = [];
  */
 export const useTaskSelectionStore = create<TaskSelectionState & TaskSelectionActions>((set) => ({
   anchorId: undefined,
-  clear: () => set({ anchorId: undefined, panelOpen: false, selectedIds: EMPTY }),
+  clear: () =>
+    set((state) => ({
+      anchorId: undefined,
+      generation: state.generation + 1,
+      panelOpen: false,
+      selectedIds: EMPTY,
+    })),
+  generation: 0,
   panelOpen: false,
   prune: (visibleIds) =>
     set((state) => {

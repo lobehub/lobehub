@@ -1,11 +1,16 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
+import {
+  applyTaskReposSelection,
+  readTaskExecutionConfig,
+  toTaskExecutionConfigPatch,
+} from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskModel } from '@/database/models/task';
-import { taskActivities, tasks, users } from '@/database/schemas';
+import { agents, taskActivities, tasks, users } from '@/database/schemas';
 
 import { TaskBatchService } from './batch';
 
@@ -73,6 +78,45 @@ describe('TaskBatchService (real PostgreSQL)', () => {
       const logged = await activitiesOf([a.id, b.id, c.id], 'priority');
       expect(logged.map((row) => row.taskId).sort()).toEqual([a.id, b.id].sort());
       expect(logged[0].payload).toMatchObject({ from: 0, to: 2 });
+    });
+
+    it('reassigns tasks in one statement and drops only the previous agent repo selection', async () => {
+      await db.insert(agents).values([
+        { id: 'agt_batch_a', slug: 'agt_batch_a', userId },
+        { id: 'agt_batch_b', slug: 'agt_batch_b', userId },
+      ]);
+      const withRepos = await createTasks(2, { assigneeAgentId: 'agt_batch_a' });
+      for (const task of withRepos) {
+        await model.updateTaskConfig(task.id, {
+          checkpoint: { onAgentRequest: true },
+          execution: toTaskExecutionConfigPatch(
+            applyTaskReposSelection(undefined, ['lobehub/lobehub']),
+          ),
+        });
+      }
+      const [unassigned] = await createTasks(1, {
+        config: { checkpoint: { onAgentRequest: false } },
+      });
+      const ids = [...withRepos.map((task) => task.id), unassigned.id];
+
+      const { result } = await service.updateFields(
+        ids,
+        { assigneeAgentId: 'agt_batch_b' },
+        { userId },
+      );
+
+      expect(result.updated.sort()).toEqual([...ids].sort());
+      for (const task of withRepos) {
+        const stored = await model.findById(task.id);
+        expect(stored?.assigneeAgentId).toBe('agt_batch_b');
+        expect(readTaskExecutionConfig(stored?.config as Record<string, unknown>)).toBeUndefined();
+        // Only the repo selection goes; the rest of the config stays.
+        expect((stored?.config as any).checkpoint).toEqual({ onAgentRequest: true });
+      }
+      const other = await model.findById(unassigned.id);
+      expect(other?.assigneeAgentId).toBe('agt_batch_b');
+      expect(other?.config).toEqual({ checkpoint: { onAgentRequest: false } });
+      expect(await activitiesOf(ids, 'assignee_agent')).toHaveLength(3);
     });
 
     it('assigns a member and leaves running tasks alone', async () => {
