@@ -202,6 +202,20 @@ describe('WindowsMenu', () => {
 
       expect(copyImageAt).toHaveBeenCalledWith(12, 34);
     });
+
+    it('disables Copy Image when the image has no decoded contents', () => {
+      windowsMenu.buildContextMenu('default', {
+        hasImageContents: false,
+        mediaType: 'image',
+        srcURL: 'https://example.com/broken.png',
+        x: 12,
+        y: 34,
+      });
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const copyImage = template.find((item: any) => item.label === 'context.copyImage');
+      expect(copyImage.enabled).toBe(false);
+    });
   });
 
   describe('buildTrayMenu', () => {

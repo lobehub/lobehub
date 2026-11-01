@@ -65,6 +65,8 @@ export abstract class BaseMenuPlatform {
    * Context menu > Copy Image: copy the right-clicked image itself to the clipboard.
    * The standard Copy role only copies a text selection, so it does nothing on an image.
    * `x`/`y` come from the `context-menu` event of the window the menu popped up over.
+   * Disabled when Electron reports no decoded bitmap (broken or still-loading image),
+   * since `copyImageAt` would silently copy nothing.
    */
   protected buildCopyImageMenuItem(
     label: string,
@@ -81,6 +83,7 @@ export abstract class BaseMenuPlatform {
         if (data.x === undefined || data.y === undefined) return;
         target.webContents.copyImageAt(data.x, data.y);
       },
+      enabled: data.hasImageContents !== false,
       label,
     };
   }
