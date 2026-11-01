@@ -3,7 +3,7 @@
  * emits (`.cm-editor.cm-editor`) so these rules win regardless of which style
  * sheet the browser inserted last.
  */
-.container {
+.lobe-code-editor-pane-d8fecd5f-container {
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -14,32 +14,32 @@
   background: var(--lobe-color-bg-container);
 }
 
-.container :global(.cm-textarea) {
+.lobe-code-editor-pane-d8fecd5f-container .cm-textarea {
   height: 0;
   opacity: 0;
 }
 
-.editorArea {
+.lobe-code-editor-pane-d8fecd5f-editor-area {
   overflow: hidden;
   flex: 1;
   min-height: 0;
 }
 
-.editorArea :global(.cm-editor) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-editor {
   height: 100%;
   padding-block: 0;
 }
 
 /* Own the vertical scroll here rather than in an outer wrapper, so the
    gutter and the fold markers stay pinned while the text scrolls. */
-.editorArea :global(.cm-scroller) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-scroller {
   overflow: auto;
   font-variant-ligatures: none;
   line-height: 20px;
 }
 
-.editorArea :global(.cm-editor.cm-editor) span,
-.editorArea :global(.cm-editor.cm-editor) :global(.cm-line) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-editor.cm-editor span,
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-editor.cm-editor .cm-line {
   font-family: var(--lobe-font-family-code);
   font-size: 12px;
   line-height: 20px;
@@ -47,12 +47,12 @@
 
 /* Clicking below the last line should still land in the document, the way
    every desktop editor behaves. */
-.editorArea :global(.cm-content) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-content {
   min-height: 100%;
   padding-block: 8px;
 }
 
-.editorArea :global(.cm-gutters) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-gutters {
   user-select: none;
   border-inline-end: 1px solid var(--lobe-color-border-secondary);
   background: var(--lobe-color-bg-container);
@@ -60,13 +60,13 @@
 
 /* The bundled theme pads every line by 12px, which lands on top of the
    gutter's own trailing space and pushes the code away from its number. */
-.editorArea :global(.cm-editor.cm-editor) :global(.cm-line) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-editor.cm-editor .cm-line {
   padding-inline: 6px 12px;
 }
 
 /* The number sits closer to the code than to the pane edge: it labels the
    line, so the eye should travel from it rightwards, not across a gap. */
-.editorArea :global(.cm-lineNumbers) :global(.cm-gutterElement) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-lineNumbers .cm-gutterElement {
   min-width: 22px;
   padding-inline: 16px 2px;
 
@@ -81,36 +81,36 @@
    hard-coded near-white, in dark mode too, and qualifies both of them with
    the editor class. Naming that class twice is what outranks it: otherwise
    the focused line reads as a white band with its punctuation washed out. */
-.editorArea :global(.cm-editor.cm-editor) :global(.cm-activeLineGutter) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-editor.cm-editor .cm-activeLineGutter {
   color: var(--lobe-color-text) !important;
   background: transparent;
 }
 
-.editorArea :global(.cm-editor.cm-editor) :global(.cm-activeLine) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-editor.cm-editor .cm-activeLine {
   background: var(--lobe-color-fill-quaternary);
 }
 
 /* A focused editor gets the stronger cue; an unfocused one keeps a faint
    marker so the caret position is still findable after a click elsewhere. */
-.editorArea :global(.cm-editor.cm-editor:not(.cm-focused)) :global(.cm-activeLine) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-editor.cm-editor:not(.cm-focused) .cm-activeLine {
   background: transparent;
 }
 
-.editorArea :global(.cm-matchingBracket),
-.editorArea :global(.cm-editor.cm-focused) :global(.cm-matchingBracket) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-matchingBracket,
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-editor.cm-focused .cm-matchingBracket {
   border-radius: 2px;
   background: var(--lobe-color-fill-secondary);
   outline: 1px solid var(--lobe-color-border);
 }
 
-.editorArea :global(.cm-nonmatchingBracket) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-nonmatchingBracket {
   border-radius: 2px;
   background: var(--lobe-color-error-bg);
 }
 
 /* Fold markers render as empty divs; the chevron is entirely ours. */
-.editorArea :global(.gutter-fold-open),
-.editorArea :global(.gutter-fold-close) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .gutter-fold-open,
+.lobe-code-editor-pane-d8fecd5f-editor-area .gutter-fold-close {
   cursor: pointer;
 
   display: flex;
@@ -125,8 +125,8 @@
   transition: opacity 0.15s;
 }
 
-.editorArea :global(.gutter-fold-open)::before,
-.editorArea :global(.gutter-fold-close)::before {
+.lobe-code-editor-pane-d8fecd5f-editor-area .gutter-fold-open::before,
+.lobe-code-editor-pane-d8fecd5f-editor-area .gutter-fold-close::before {
   content: '';
 
   width: 5px;
@@ -137,29 +137,29 @@
 
 /* Pointing down: this range is expanded. Only offered on gutter hover, so
    the gutter is not a column of permanent arrows. */
-.editorArea :global(.gutter-fold-open) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .gutter-fold-open {
   opacity: 0;
 }
 
-.editorArea :global(.gutter-fold-open)::before {
+.lobe-code-editor-pane-d8fecd5f-editor-area .gutter-fold-open::before {
   transform: translateY(-1px) rotate(45deg);
 }
 
 /* Pointing right: content is hidden here, so this one always shows. */
-.editorArea :global(.gutter-fold-close)::before {
+.lobe-code-editor-pane-d8fecd5f-editor-area .gutter-fold-close::before {
   transform: translateX(-2px) rotate(-45deg);
 }
 
-.editorArea :global(.gutter-fold-open):hover,
-.editorArea :global(.gutter-fold-close):hover {
+.lobe-code-editor-pane-d8fecd5f-editor-area .gutter-fold-open:hover,
+.lobe-code-editor-pane-d8fecd5f-editor-area .gutter-fold-close:hover {
   color: var(--lobe-color-text);
 }
 
-.editorArea :global(.cm-gutters):hover :global(.gutter-fold-open) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-gutters:hover .gutter-fold-open {
   opacity: 1;
 }
 
-.editorArea :global(.cm-editor.cm-editor) :global(.cm-foldPlaceholder) {
+.lobe-code-editor-pane-d8fecd5f-editor-area .cm-editor.cm-editor .cm-foldPlaceholder {
   width: auto;
   height: auto;
   padding-inline: 6px;

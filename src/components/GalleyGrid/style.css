@@ -1,4 +1,4 @@
-.container {
+.lobe-galley-grid-17c2ab70-container {
   display: grid;
   grid-gap: var(--galley-grid-gap, 6px);
   grid-template-columns: repeat(var(--galley-grid-col, 3), 1fr);
@@ -7,7 +7,7 @@
   max-width: var(--galley-grid-max, 200px);
 }
 
-.container > div {
+.lobe-galley-grid-17c2ab70-container > div {
   width: 100%;
   min-width: var(--galley-grid-min, 64px);
   min-height: var(--galley-grid-min, 64px);
