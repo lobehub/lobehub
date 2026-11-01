@@ -1,7 +1,7 @@
 import { systemPrompt } from '@lobechat/builtin-tool-dashboard';
+import { widgetLayoutSchema } from '@lobechat/widget-spec';
 import { describe, expect, it } from 'vitest';
 
-import { widgetLayoutSchema } from '../layoutSchema';
 import { widgetViewSchema } from '../versionSchema';
 
 const text = (value: unknown) => ({ type: 'text', value });

@@ -1,6 +1,5 @@
+import { parseWidgetOutput, WIDGET_OUTPUT_LIMITS } from '@lobechat/widget-spec';
 import { describe, expect, it } from 'vitest';
-
-import { parseWidgetOutput, WIDGET_OUTPUT_LIMITS } from '../outputContract';
 
 const json = (value: unknown) => JSON.stringify(value);
 

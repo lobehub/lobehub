@@ -156,6 +156,8 @@ export const WIDGET_LAYOUT_ICONS = [
   'users',
   'git-pull-request',
   'git-commit',
+  'git-fork',
+  'circle-dot',
   'dollar-sign',
   'server',
   'database',

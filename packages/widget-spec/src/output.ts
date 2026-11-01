@@ -104,7 +104,8 @@ const dataSchema = z.object({
   type: z.literal('data'),
 });
 
-const outputSchema = z.discriminatedUnion('type', [
+/** One widget output document, without the stdout framing. */
+export const widgetOutputSchema = z.discriminatedUnion('type', [
   statSchema,
   listSchema,
   seriesSchema,
@@ -157,7 +158,7 @@ export const parseWidgetOutput = (
     return fail('EMPTY_OUTPUT', 'Script printed nothing to stdout; expected one JSON document');
   }
 
-  const bytes = Buffer.byteLength(stdout, 'utf8');
+  const bytes = new TextEncoder().encode(stdout).byteLength;
   if (bytes > WIDGET_OUTPUT_LIMITS.bytes) {
     return fail(
       'OUTPUT_TOO_LARGE',
@@ -172,7 +173,7 @@ export const parseWidgetOutput = (
     return fail('INVALID_JSON', 'stdout is not a JSON document');
   }
 
-  const parsed = outputSchema.safeParse(raw);
+  const parsed = widgetOutputSchema.safeParse(raw);
   if (!parsed.success) {
     const tooBig = parsed.error.issues.some((issue) => issue.code === 'too_big');
     const detail = parsed.error.issues

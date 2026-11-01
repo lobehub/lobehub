@@ -11,6 +11,7 @@
 import type { WidgetLayoutNode, WidgetLayoutValue } from './layout';
 
 export * from './layout';
+export * from './preset';
 
 export const WIDGET_VISIBILITIES = ['private', 'public'] as const;
 export type WidgetVisibility = (typeof WIDGET_VISIBILITIES)[number];
@@ -212,10 +213,37 @@ export interface WidgetManifest {
   };
   /** Hostnames the sandbox may reach; empty or omitted means no network. */
   network?: { allow: string[] };
+  /**
+   * Settings a person fills in (a city, a target date, a repository) that
+   * the script reads from its environment. Never secrets: values are stored
+   * in plain text and shown in reviews — credentials go in `env`.
+   */
+  params?: WidgetParam[];
   /** Suggested refresh schedule applied when the version is published. */
   schedule?: { pattern: string; timezone?: string };
   timeoutMs?: number;
   title?: string;
+}
+
+export const WIDGET_PARAM_TYPES = ['string', 'number', 'boolean', 'date', 'select'] as const;
+export type WidgetParamType = (typeof WIDGET_PARAM_TYPES)[number];
+export type WidgetParamValue = string | number | boolean;
+
+/**
+ * One setting of a widget. The script reads it as the environment variable
+ * `name`: numbers and booleans as their text, a date as `YYYY-MM-DD`. The
+ * effective value is `value` (this widget's choice), else `default`.
+ */
+export interface WidgetParam {
+  default?: WidgetParamValue;
+  description?: string;
+  label?: string;
+  name: string;
+  /** Choices of a `select` param. */
+  options?: { label?: string; value: string }[];
+  required?: boolean;
+  type: WidgetParamType;
+  value?: WidgetParamValue;
 }
 
 /** Rendering hints for the widget card, independent of the data. */

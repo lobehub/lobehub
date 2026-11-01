@@ -103,6 +103,38 @@ const manifestSchema = {
       required: ['allow'],
       type: 'object',
     },
+    params: {
+      description:
+        'Settings a person fills in (city, target date, repository) that the script reads from its environment as text. Never secrets — credentials go in env. Set value for this widget; default is the fallback.',
+      items: {
+        additionalProperties: false,
+        properties: {
+          default: { type: ['string', 'number', 'boolean'] },
+          description: { type: 'string' },
+          label: { description: 'Human label, e.g. "City".', type: 'string' },
+          name: { description: 'UPPER_SNAKE_CASE env name, e.g. CITY.', type: 'string' },
+          options: {
+            description: 'Choices of a select param.',
+            items: {
+              additionalProperties: false,
+              properties: { label: { type: 'string' }, value: { type: 'string' } },
+              required: ['value'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          required: { type: 'boolean' },
+          type: { enum: ['string', 'number', 'boolean', 'date', 'select'], type: 'string' },
+          value: {
+            description: "This widget's value (a date as YYYY-MM-DD).",
+            type: ['string', 'number', 'boolean'],
+          },
+        },
+        required: ['name', 'type'],
+        type: 'object',
+      },
+      type: 'array',
+    },
     schedule: {
       additionalProperties: false,
       description:
@@ -161,6 +193,22 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
+        'Ready-made widgets (weather, countdown, year progress, GitHub repository, Hacker News, …) with their settings. Check it before writing a widget from scratch: install a match with createWidgetDraft({presetId, params}).',
+      name: DashboardApiName.listWidgetPresets,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          category: {
+            description: 'Only presets of this category.',
+            enum: ['time', 'weather', 'dev', 'life', 'finance', 'content', 'business'],
+            type: 'string',
+          },
+        },
+        type: 'object',
+      },
+    },
+    {
+      description:
         'Create an empty dashboard (in a project conversation it belongs to the project) and return its id. Check listDashboards first so you do not duplicate an existing board; to create a board for one widget, addWidgetToDashboard with newDashboardTitle does both in one step.',
       name: DashboardApiName.createDashboard,
       parameters: {
@@ -182,11 +230,21 @@ export const DashboardManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Create a monitoring widget and save its first draft. Nothing runs and nothing goes live; call dryRunWidget next. The widget is owned by the current agent (and project, in a project conversation).',
+        'Create a monitoring widget and save its first draft. Nothing runs and nothing goes live; call dryRunWidget next. The widget is owned by the current agent (and project, in a project conversation). Pass presetId to install a preset from listWidgetPresets: its script, manifest and view are used, params fills its settings, and any other field you pass overrides the preset.',
       name: DashboardApiName.createWidgetDraft,
       parameters: {
         additionalProperties: false,
         properties: {
+          params: {
+            additionalProperties: { type: ['string', 'number', 'boolean'] },
+            description:
+              'With presetId: values for the preset\'s params by name, e.g. {"CITY":"Hangzhou"}.',
+            type: 'object',
+          },
+          presetId: {
+            description: 'Id of a preset from listWidgetPresets to install.',
+            type: 'string',
+          },
           description: {
             description:
               'Metric definition (口径) shown on the card: data source, filters, time window and unit.',
@@ -199,7 +257,7 @@ export const DashboardManifest: BuiltinToolManifest = {
           title: { description: 'Short card title, e.g. "Open bug issues".', type: 'string' },
           view: viewSchema,
         },
-        required: ['title', 'description', 'script', 'runtime', 'outputType'],
+        required: [],
         type: 'object',
       },
     },
