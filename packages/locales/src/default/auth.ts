@@ -67,6 +67,7 @@ export default {
     'Only workspace admins can create API Keys. Contact a workspace admin if you need one.',
   'apikey.list.restrictedEmpty.title': 'API Key creation is restricted',
   'apikey.list.title': 'API Key List',
+  'apikey.scopes.agentCredential': 'Write account credentials',
   'apikey.scopes.count': '{{count}} scopes',
   'apikey.scopes.fullAccess': 'Full access',
   'apikey.scopes.grantJoin': ': ',
