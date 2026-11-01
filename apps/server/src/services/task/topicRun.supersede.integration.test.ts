@@ -136,6 +136,46 @@ describe('a follow-up that supersedes a live Task run (real PostgreSQL)', () => 
     expect((await readTask(task.id))?.status).toBe('paused');
   });
 
+  it('takes over from a run a queued follow-up already stopped, before it reads interrupted', async () => {
+    // A queued follow-up sent "now" interrupts the run and clears the topic
+    // marker before it starts, and names no `replacesOperationId`: the run row
+    // and the operation still read `running`, only its interrupt is set.
+    const { task, taskOperationId, topicId } = await seedRunningTask();
+    const service = new TopicRunService(db, userId);
+    const isStopRequested = async (operationId: string) => operationId === taskOperationId;
+
+    const link = await service.resolveOwnableRun(topicId, {
+      isStopRequested,
+      supersedeLiveRun: true,
+    });
+    expect(link?.takeOverOperationId).toBe(taskOperationId);
+
+    await seedOperation(topicId, 'op-send-now', { createdAt: at(14), status: 'running' });
+    await expect(service.reopen({ link: link!, operationId: 'op-send-now' })).resolves.toBe(
+      'reopened',
+    );
+    await complete(task, topicId, 'op-send-now');
+
+    expect((await readRun(topicId)).status).toBe('completed');
+    expect((await readTask(task.id))?.status).toBe('paused');
+  });
+
+  it('leaves a live run nobody asked to stop, and fails closed on an unreadable interrupt state', async () => {
+    const { topicId } = await seedRunningTask();
+    const service = new TopicRunService(db, userId);
+
+    await expect(
+      service.resolveOwnableRun(topicId, { isStopRequested: async () => false }),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.resolveOwnableRun(topicId, {
+        isStopRequested: async () => {
+          throw new Error('redis down');
+        },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it('takes over from a run that already ended but never settled the row', async () => {
     // Every later follow-up of the stuck topic: the run row still names the
     // interrupted run, and no client tracks it any more.

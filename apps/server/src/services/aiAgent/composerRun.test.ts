@@ -15,7 +15,11 @@ const run = (supersedeLiveRun?: boolean, replacesOperationId?: string) => {
   const execAgent = vi.fn().mockResolvedValue({ operationId: 'op-2' });
   return startComposerRun(
     {
-      aiAgentService: { execAgent, interruptTask: vi.fn() } as any,
+      aiAgentService: {
+        execAgent,
+        interruptTask: vi.fn(),
+        isOperationInterrupted: vi.fn().mockResolvedValue(true),
+      } as any,
       db: {} as any,
       supersedeLiveRun,
       userId: 'user-1',
@@ -40,13 +44,18 @@ describe('startComposerRun', () => {
 
     await run(undefined, 'op-1');
     expect(resolveOwnableRun).toHaveBeenCalledWith('tpc-1', {
+      isStopRequested: expect.any(Function),
       replacesOperationId: 'op-1',
       supersedeLiveRun: true,
       threadId: undefined,
     });
+    // The interrupt state comes from the runtime the send runs on.
+    const [, send] = resolveOwnableRun.mock.calls[0];
+    await expect(send.isStopRequested('op-1')).resolves.toBe(true);
 
     await run(false);
     expect(resolveOwnableRun).toHaveBeenLastCalledWith('tpc-1', {
+      isStopRequested: expect.any(Function),
       replacesOperationId: undefined,
       supersedeLiveRun: false,
       threadId: undefined,

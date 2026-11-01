@@ -37,6 +37,11 @@ export interface TopicRunLink {
 
 /** What the send knows about the run it may replace. */
 export interface TopicRunSendContext {
+  /**
+   * Whether someone already asked this run to stop (its interrupt sentinel is
+   * set). Such a run ends `interrupted` and never settles its row itself.
+   */
+  isStopRequested?: (operationId: string) => Promise<boolean>;
   /** The run the client asked this send to replace (`replacesOperationId`). */
   replacesOperationId?: string;
   /**
@@ -147,6 +152,9 @@ export class TopicRunService {
    * - **it is no longer in flight**: interrupted, or ended with its report still
    *   in transit. Nothing will run under it again; its late report, if any, is
    *   ignored once a newer run owns the row (`onTopicComplete`).
+   * - **it was already asked to stop**: a queued follow-up sent "now" stops the
+   *   run and clears the topic marker before starting, so neither of the two
+   *   rules below can see it.
    * - **it is the run this send replaces** (`replacesOperationId`): the start
    *   interrupts it before dispatching. Honored only for the caller's own run on
    *   this topic, the same check the start applies before stopping it.
@@ -174,8 +182,15 @@ export class TopicRunService {
     if (!operation) return undefined;
     if (!isAgentOperationInFlight(operation.status)) return operationId;
 
+    if (operation.topicId !== topicId) return undefined;
+
+    // Already asked to stop — most often by this very send: a queued follow-up
+    // sent "now" interrupts the run and clears the topic marker before it
+    // starts, so the run still reads `running` but is on its way out.
+    if (await this.isStopRequested(send, operationId)) return operationId;
+
     // Workspace reads are member-wide: a teammate's live run is never ours to end.
-    if (operation.topicId !== topicId || operation.userId !== this.userId) return undefined;
+    if (operation.userId !== this.userId) return undefined;
 
     if (send.replacesOperationId === operationId) return operationId;
 
@@ -187,6 +202,21 @@ export class TopicRunService {
     if (marker?.operationId !== operationId || marker.heteroType) return undefined;
 
     return operationId;
+  }
+
+  /** Fails closed: an unreadable sentinel leaves the run with its owner. */
+  private async isStopRequested(send: TopicRunSendContext, operationId: string) {
+    if (!send.isStopRequested) return false;
+    try {
+      return await send.isStopRequested(operationId);
+    } catch (error) {
+      console.error(
+        '[TopicRunService] failed to read the interrupt state of %s:',
+        operationId,
+        error,
+      );
+      return false;
+    }
   }
 
   /**

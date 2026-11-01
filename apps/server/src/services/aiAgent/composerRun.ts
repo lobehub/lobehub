@@ -52,7 +52,7 @@ export type ComposerRunRequest = Pick<
 };
 
 export interface ComposerRunContext {
-  aiAgentService: Pick<AiAgentService, 'execAgent' | 'interruptTask'>;
+  aiAgentService: Pick<AiAgentService, 'execAgent' | 'interruptTask' | 'isOperationInterrupted'>;
   /** Server-derived request provenance; never client-passable. */
   clientIp?: string;
   db: LobeChatDatabase;
@@ -94,6 +94,10 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
   const topicRun = appContext?.topicId
     ? await topicRunService.resolveOwnableRun(appContext.topicId, {
         replacesOperationId: input.replacesOperationId,
+        // A queued follow-up sent "now" stops the run itself before this
+        // start, and clears the topic marker: the run still reads `running`
+        // here but has already been asked to stop.
+        isStopRequested: (operationId) => ctx.aiAgentService.isOperationInterrupted(operationId),
         supersedeLiveRun: ctx.supersedeLiveRun ?? true,
         threadId: appContext.threadId,
       })
