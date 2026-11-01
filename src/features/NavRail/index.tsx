@@ -19,6 +19,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { isDesktop } from '@/const/version';
 import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';
+import InboxButton from '@/features/HomeSidebar/Header/components/InboxButton';
 import User from '@/features/HomeSidebar/Header/components/User';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useAgentStore } from '@/store/agent';
@@ -90,6 +91,9 @@ const NavRail = memo(() => {
       </Flexbox>
       <div style={{ flex: 1 }} />
       <Flexbox align={'center'} gap={RAIL_GAP}>
+        {/* The rail replaces the Home sidebar header, which used to own the only
+            entry point to the notification inbox modal. */}
+        <InboxButton />
         <MoreMenu active={activeTab === 'more'} />
         {showMarket && (
           <RailItem
