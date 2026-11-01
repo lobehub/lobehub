@@ -727,6 +727,57 @@ describe('createAnthropicCompatibleRuntime', () => {
     );
   });
 
+  it('should keep the real output tokens when replaying a non-stream response as a stream', async () => {
+    const messagesCreate = vi.fn().mockResolvedValue({
+      content: [{ text: 'Answer', type: 'text' }],
+      id: 'msg_non_stream',
+      model: 'custom-model',
+      role: 'assistant',
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      type: 'message',
+      usage: { cache_read_input_tokens: 300, input_tokens: 12, output_tokens: 42 },
+    });
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        handlePayload: (payload) => ({
+          max_tokens: 1024,
+          messages: [{ content: 'Question', role: 'user' }],
+          model: payload.model,
+        }),
+      },
+      customClient: {
+        createClient: () =>
+          ({
+            baseURL: 'https://example.com/anthropic',
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({ apiKey: 'test-key' });
+
+    const response = await runtime.chat({
+      messages: [{ content: 'Question', role: 'user' }],
+      model: 'custom-model',
+      stream: false,
+    });
+    const text = await response.text();
+    const usageLine = text
+      .split('\n\n')
+      .find((event) => event.includes('event: usage'))
+      ?.split('\n')
+      .find((line) => line.startsWith('data: '));
+
+    expect(JSON.parse(usageLine!.slice('data: '.length))).toMatchObject({
+      inputCacheMissTokens: 12,
+      inputCachedTokens: 300,
+      totalInputTokens: 312,
+      totalOutputTokens: 42,
+      totalTokens: 354,
+    });
+  });
+
   it('should strip trailing assistant prefill when a logical id maps to a Claude 5 model', async () => {
     // The prefill strip inside handlePayload sees the logical id; when the
     // mapping only later resolves to a Claude 4.6+/5 upstream id, chat() must
