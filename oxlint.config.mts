@@ -1,23 +1,24 @@
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
-import { eslint } from '@lobehub/lint';
+import { defineConfig, type UserOverride } from '@lobehub/oxlint-config';
 import { restrictedImports } from '@lobehub/ui/eslint';
-import { flat as mdxFlat } from 'eslint-plugin-mdx';
 
 import {
   browserBundleRestrictedImportPaths,
   performanceRestrictedImportPaths,
   performanceRestrictedImportPatterns,
-} from './eslint.bundleBoundaries.mjs';
-import { stylexMigrationConfig } from './scripts/stylexMigration/eslint.mjs';
+} from './lint.bundleBoundaries.mjs';
+import { stylexMigrationOverrides } from './scripts/stylexMigration/oxlint.mjs';
 
-const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
+const [, uiRestrictedImportOptions] = restrictedImports.rules['no-restricted-imports'] as [
+  string,
+  { paths: { message: string; name: string }[]; patterns?: object[] },
+];
 
 const baseRestrictedImportOptions = {
-  ...restrictedImports.rules['no-restricted-imports'][1],
+  ...uiRestrictedImportOptions,
   patterns: [
-    ...(restrictedImports.rules['no-restricted-imports'][1].patterns ?? []),
+    ...(uiRestrictedImportOptions.patterns ?? []),
     {
       regex: '^@modelcontextprotocol/(?:sdk)(/|$)',
       message:
@@ -59,7 +60,7 @@ const shellRouterRestrictedPaths = [
 // subpath is Node-only (spawn, rpc, quota-sampler, ...). New entries are
 // Node-only until listed there, and the package's runtimeBoundary test keeps
 // the listed entries free of Node code.
-const heteroBrowserEntries = JSON.parse(
+const heteroBrowserEntries: string[] = JSON.parse(
   readFileSync(
     new URL('packages/heterogeneous-agents/browser-entries.json', import.meta.url),
     'utf8',
@@ -244,7 +245,17 @@ const legacyRawRedisClientConsumers = [
   'apps/server/src/services/understanding/sourceStore.ts',
 ];
 
-const createRestrictedImportRule = ({ paths = [], patterns, serverSide = false } = {}) => [
+interface RestrictedImportRuleOptions {
+  paths?: object[];
+  patterns?: object[];
+  serverSide?: boolean;
+}
+
+const createRestrictedImportRule = ({
+  paths = [],
+  patterns,
+  serverSide = false,
+}: RestrictedImportRuleOptions = {}) => [
   'error',
   {
     ...baseRestrictedImportOptions,
@@ -306,7 +317,31 @@ const electronIpcRemoveListenerRestrictedSyntax = {
   selector: "CallExpression > MemberExpression.callee[property.name='removeListener']",
 };
 
-export default eslint(
+const CORE = ['eslint-core'] satisfies UserOverride['jsPlugins'];
+
+const restrictImports = (
+  files: string[],
+  rule: unknown,
+  excludeFiles?: string[],
+): UserOverride => ({
+  files,
+  ...(excludeFiles && { excludeFiles }),
+  jsPlugins: CORE,
+  rules: { 'eslint-core/no-restricted-imports': rule as never },
+});
+
+const restrictSyntax = (
+  files: string[],
+  selectors: object[],
+  excludeFiles?: string[],
+): UserOverride => ({
+  files,
+  ...(excludeFiles && { excludeFiles }),
+  jsPlugins: CORE,
+  rules: { 'eslint-core/no-restricted-syntax': ['error', ...selectors] as never },
+});
+
+export default defineConfig(
   {
     ignores: [
       // Vendored skill releases; maintained in lobehub/acceptance and lobehub/lobe-design-skill.
@@ -352,8 +387,6 @@ export default eslint(
       '.i18nrc.js',
       // vendored code (copied from @microsoft/fetch-event-source)
       'packages/utils/src/client/fetchEventSource/parse.ts',
-      // generated files (regenerate with `bun generate:openapi` in packages/openapi)
-      'packages/openapi/openapi.yml',
       // generated files (regenerate with `bun generate` in packages/sdk)
       'packages/sdk/src/generated/**',
       // generated files (regenerate with `codex app-server generate-ts`)
@@ -361,56 +394,35 @@ export default eslint(
     ],
     next: true,
     react: 'next',
+    stylex: true,
   },
-  {
-    languageOptions: {
-      parserOptions: {
-        tsconfigRootDir,
-      },
-    },
-  },
-  {
-    ...restrictedImports,
-    rules: {
-      ...restrictedImports.rules,
-      'no-restricted-imports': ['error', baseRestrictedImportOptions],
-    },
-  },
+  restrictImports(['**/*'], ['error', baseRestrictedImportOptions]),
   // Performance import boundaries. These restrictions preserve real import()
   // seams instead of relying on component-level conditional rendering.
-  {
-    files: ['src/**/*.{ts,tsx}', 'apps/share/src/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule(),
-    },
-  },
-  {
-    // Server-side trees under src/: Next.js shells and route handlers, server
-    // helpers, instrumentation and the proxy may import server code.
-    files: [
+  restrictImports(
+    ['src/**/*.{ts,tsx}', 'apps/share/src/**/*.{ts,tsx}'],
+    createRestrictedImportRule(),
+  ),
+  // Server-side trees under src/: Next.js shells and route handlers, server
+  // helpers, instrumentation and the proxy may import server code.
+  restrictImports(
+    [
       'src/app/**/*.{ts,tsx}',
       'src/libs/**/*.{ts,tsx}',
       'src/scripts/**/*.{ts,tsx}',
       'src/*.{ts,tsx}',
       'src/**/*.server.{ts,tsx}',
     ],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({ serverSide: true }),
-    },
-  },
-  {
-    // Bundle-size restrictions target shipped code; tests may reach the barrels.
-    files: ['src/**/*.test.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': ['error', baseRestrictedImportOptions],
-    },
-  },
-  {
-    // Boot-path trees are statically reachable from the SPA entry. A heavy
-    // @lobehub/ui member imported here lands in the first-screen chunk together
-    // with shiki / katex / elkjs / emoji data; the CI entry-graph gate catches
-    // the regression, this rule explains it at the import site.
-    files: [
+    createRestrictedImportRule({ serverSide: true }),
+  ),
+  // Bundle-size restrictions target shipped code; tests may reach the barrels.
+  restrictImports(['src/**/*.test.{ts,tsx}'], ['error', baseRestrictedImportOptions]),
+  // Boot-path trees are statically reachable from the SPA entry. A heavy
+  // @lobehub/ui member imported here lands in the first-screen chunk together
+  // with shiki / katex / elkjs / emoji data; the CI entry-graph gate catches
+  // the regression, this rule explains it at the import site.
+  restrictImports(
+    [
       'src/layout/**/*.{ts,tsx}',
       'src/spa/**/*.{ts,tsx}',
       'src/store/**/*.{ts,tsx}',
@@ -422,135 +434,125 @@ export default eslint(
       'src/features/HomeSidebar/**/*.{ts,tsx}',
       'src/features/NavPanel/**/*.{ts,tsx}',
     ],
-    ignores: ['src/**/*.test.{ts,tsx}', 'src/layout/AuthProvider/MarketAuth/ProfileSetupModal.tsx'],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: [
-          {
-            importNames: [
-              'CodeDiff',
-              'CodeEditor',
-              'EmojiPicker',
-              'Highlighter',
-              'HtmlPreview',
-              'Markdown',
-              'Mermaid',
-              'PatchDiff',
-              'Snippet',
-              'SortableList',
-              'SyntaxHighlighter',
-              'SyntaxMermaid',
-            ],
-            message:
-              'Boot-path modules must not statically import heavy @lobehub/ui members. Load them with lazy(() => import("@lobehub/ui/es/<Member>/index")) or move the consumer into a route tree.',
-            name: '@lobehub/ui',
-          },
-          {
-            message:
-              'Boot-path modules must load EmojiPicker with lazy(); it carries the emoji-mart dataset.',
-            name: '@/components/EmojiPicker',
-          },
-          {
-            allowTypeImports: true,
-            message:
-              'Boot-path modules must not import @lobehub/analytics; it bundles posthog-js. Use "@/libs/analytics/client", which loads it after first paint and queues events.',
-            name: '@lobehub/analytics',
-          },
-          {
-            allowTypeImports: true,
-            message:
-              'Boot-path modules must not import @lobehub/analytics/react; use useAnalytics from "@/libs/analytics/client".',
-            name: '@lobehub/analytics/react',
-          },
-        ],
-        patterns: [
-          {
-            message:
-              'The builtin tool client barrel exports the whole render registry. Import the dedicated subpath (e.g. "/client/displayControls") or resolve renders lazily.',
-            regex: '^@lobechat/builtin-tool-[^/]+/client(?:$|/index$)',
-          },
-        ],
-      }),
-    },
-  },
-  {
-    files: ['src/components/Skeleton/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: [
-          {
-            name: '@/components/Skeleton',
-            message:
-              'Skeleton internals must import sibling components directly to avoid a cycle through their own barrel.',
-          },
-          {
-            name: '@/components/Skeleton/index',
-            message:
-              'Skeleton internals must import sibling components directly to avoid a cycle through their own barrel.',
-          },
-        ],
-      }),
-    },
-  },
-  {
-    files: ['src/features/Conversation/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: [
-          {
-            message:
-              'Conversation internals must use stable subpaths such as "./store", "./ConversationProvider", or "./Messages" instead of the root barrel.',
-            name: '@/features/Conversation',
-          },
-        ],
-      }),
-    },
-  },
-  {
-    files: ['src/features/NavPanel/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: shellRouterRestrictedPaths,
-        patterns: [
-          {
-            group: [
-              '@/routes/**/_layout/Sidebar',
-              '@/routes/**/_layout/Sidebar/**',
-              '@/routes/**/_layout/SideBar',
-              '@/routes/**/_layout/SideBar/**',
-            ],
-            message:
-              'NavPanel must not own route Sidebar implementations. Register route content through NavPanelPortal.',
-          },
-        ],
-      }),
-    },
-  },
-  {
-    files: [
+    createRestrictedImportRule({
+      paths: [
+        {
+          importNames: [
+            'CodeDiff',
+            'CodeEditor',
+            'EmojiPicker',
+            'Highlighter',
+            'HtmlPreview',
+            'Markdown',
+            'Mermaid',
+            'PatchDiff',
+            'Snippet',
+            'SortableList',
+            'SyntaxHighlighter',
+            'SyntaxMermaid',
+          ],
+          message:
+            'Boot-path modules must not statically import heavy @lobehub/ui members. Load them with lazy(() => import("@lobehub/ui/es/<Member>/index")) or move the consumer into a route tree.',
+          name: '@lobehub/ui',
+        },
+        {
+          message:
+            'Boot-path modules must load EmojiPicker with lazy(); it carries the emoji-mart dataset.',
+          name: '@/components/EmojiPicker',
+        },
+        {
+          allowTypeImports: true,
+          message:
+            'Boot-path modules must not import @lobehub/analytics; it bundles posthog-js. Use "@/libs/analytics/client", which loads it after first paint and queues events.',
+          name: '@lobehub/analytics',
+        },
+        {
+          allowTypeImports: true,
+          message:
+            'Boot-path modules must not import @lobehub/analytics/react; use useAnalytics from "@/libs/analytics/client".',
+          name: '@lobehub/analytics/react',
+        },
+      ],
+      patterns: [
+        {
+          message:
+            'The builtin tool client barrel exports the whole render registry. Import the dedicated subpath (e.g. "/client/displayControls") or resolve renders lazily.',
+          regex: '^@lobechat/builtin-tool-[^/]+/client(?:$|/index$)',
+        },
+      ],
+    }),
+    ['src/**/*.test.{ts,tsx}', 'src/layout/AuthProvider/MarketAuth/ProfileSetupModal.tsx'],
+  ),
+  restrictImports(
+    ['src/components/Skeleton/**/*.{ts,tsx}'],
+    createRestrictedImportRule({
+      paths: [
+        {
+          name: '@/components/Skeleton',
+          message:
+            'Skeleton internals must import sibling components directly to avoid a cycle through their own barrel.',
+        },
+        {
+          name: '@/components/Skeleton/index',
+          message:
+            'Skeleton internals must import sibling components directly to avoid a cycle through their own barrel.',
+        },
+      ],
+    }),
+  ),
+  restrictImports(
+    ['src/features/Conversation/**/*.{ts,tsx}'],
+    createRestrictedImportRule({
+      paths: [
+        {
+          message:
+            'Conversation internals must use stable subpaths such as "./store", "./ConversationProvider", or "./Messages" instead of the root barrel.',
+          name: '@/features/Conversation',
+        },
+      ],
+    }),
+  ),
+  restrictImports(
+    ['src/features/NavPanel/**/*.{ts,tsx}'],
+    createRestrictedImportRule({
+      paths: shellRouterRestrictedPaths,
+      patterns: [
+        {
+          group: [
+            '@/routes/**/_layout/Sidebar',
+            '@/routes/**/_layout/Sidebar/**',
+            '@/routes/**/_layout/SideBar',
+            '@/routes/**/_layout/SideBar/**',
+          ],
+          message:
+            'NavPanel must not own route Sidebar implementations. Register route content through NavPanelPortal.',
+        },
+      ],
+    }),
+  ),
+  restrictImports(
+    [
       'src/routes/**/_layout/Sidebar.{ts,tsx}',
       'src/routes/**/_layout/Sidebar/**/*.{ts,tsx}',
       'src/routes/**/_layout/SideBar.{ts,tsx}',
       'src/routes/**/_layout/SideBar/**/*.{ts,tsx}',
     ],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: [
-          {
-            message:
-              'Route Sidebars must import NavPanelPortal from its dedicated subpath instead of the NavPanel host barrel.',
-            name: '@/features/NavPanel',
-          },
-          ...shellRouterRestrictedPaths,
-        ],
-      }),
-    },
-  },
-  {
-    // Sidebar/titlebar/command-menu trees the desktop shell renders outside TabHost.
-    // GenerationLayout is split deliberately: Body and Header are portal'd into the
-    // sidebar, while the layout root stays in the route tree and owns the url sync.
-    files: [
+    createRestrictedImportRule({
+      paths: [
+        {
+          message:
+            'Route Sidebars must import NavPanelPortal from its dedicated subpath instead of the NavPanel host barrel.',
+          name: '@/features/NavPanel',
+        },
+        ...shellRouterRestrictedPaths,
+      ],
+    }),
+  ),
+  // Sidebar/titlebar/command-menu trees the desktop shell renders outside TabHost.
+  // GenerationLayout is split deliberately: Body and Header are portal'd into the
+  // sidebar, while the layout root stays in the route tree and owns the url sync.
+  restrictImports(
+    [
       'src/features/AgentSidebar/**/*.{ts,tsx}',
       'src/features/CommandMenu/**/*.{ts,tsx}',
       'src/features/Electron/titlebar/**/*.{ts,tsx}',
@@ -560,279 +562,237 @@ export default eslint(
       'src/routes/(main)/(create)/features/GenerationLayout/Body/**/*.{ts,tsx}',
       'src/routes/(main)/(create)/features/GenerationLayout/Header/**/*.{ts,tsx}',
     ],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: shellRouterRestrictedPaths,
-      }),
-    },
-  },
-  {
-    files: ['src/features/HomeInbox/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: [
-          {
-            message:
-              'Load RunReplyEditor with import() after reply intent so the editor stays outside the home static closure.',
-            name: '@/features/AgentTasks/AgentTaskDetail/RunReplyEditor',
-          },
-          {
-            message:
-              'HomeInbox must not mount TopicChatDrawer; navigate to the topic or load an interaction-owned surface dynamically.',
-            name: '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer',
-          },
-          {
-            message:
-              'HomeInbox must not mount TopicChatDrawer; navigate to the topic or load an interaction-owned surface dynamically.',
-            name: '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer/index',
-          },
-          {
-            message:
-              'Use the imperative DocumentModal loader instead of statically importing the implementation.',
-            name: '@/features/DocumentModal',
-          },
-          {
-            message:
-              'Use the imperative DocumentModal loader instead of statically importing the implementation.',
-            name: '@/features/DocumentModal/index',
-          },
-        ],
-      }),
-    },
-  },
-  {
-    files: [
+    createRestrictedImportRule({ paths: shellRouterRestrictedPaths }),
+  ),
+  restrictImports(
+    ['src/features/HomeInbox/**/*.{ts,tsx}'],
+    createRestrictedImportRule({
+      paths: [
+        {
+          message:
+            'Load RunReplyEditor with import() after reply intent so the editor stays outside the home static closure.',
+          name: '@/features/AgentTasks/AgentTaskDetail/RunReplyEditor',
+        },
+        {
+          message:
+            'HomeInbox must not mount TopicChatDrawer; navigate to the topic or load an interaction-owned surface dynamically.',
+          name: '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer',
+        },
+        {
+          message:
+            'HomeInbox must not mount TopicChatDrawer; navigate to the topic or load an interaction-owned surface dynamically.',
+          name: '@/features/AgentTasks/AgentTaskDetail/TopicChatDrawer/index',
+        },
+        {
+          message:
+            'Use the imperative DocumentModal loader instead of statically importing the implementation.',
+          name: '@/features/DocumentModal',
+        },
+        {
+          message:
+            'Use the imperative DocumentModal loader instead of statically importing the implementation.',
+          name: '@/features/DocumentModal/index',
+        },
+      ],
+    }),
+  ),
+  restrictImports(
+    [
       'src/features/Home/**/*.{ts,tsx}',
       'src/features/HomeLayout/**/*.{ts,tsx}',
       'src/routes/(main)/home/**/*.{ts,tsx}',
     ],
-    ignores: ['src/features/Home/InputArea/EditorInput.tsx'],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: [
-          {
-            message:
-              'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
-            name: '@/features/Conversation',
-          },
-        ],
-        patterns: [
-          {
-            message:
-              'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
-            // `hooks/useAgentModelSelection` reaches the store only through the
-            // editor-free `store/apiContext`; Home model switches share its path.
-            regex:
-              '^@/features/ChatInput(?:$|/(?!(?:hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
-          },
-        ],
-      }),
-    },
-  },
-  {
-    // The home sidebar tree carries both sets of constraints: it is a shell tree
-    // rendered outside TabHost, and it is also a home cold path. Flat config
-    // replaces `no-restricted-imports` rather than merging it, so the shell paths
-    // have to be repeated here instead of relying on the shell block above.
-    files: ['src/features/HomeSidebar/**/*.{ts,tsx}'],
-    ignores: ['src/features/HomeSidebar/hooks/useCreateModal.tsx'],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: [
-          {
-            message:
-              'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
-            name: '@/features/Conversation',
-          },
-          ...shellRouterRestrictedPaths,
-        ],
-        patterns: [
-          {
-            message:
-              'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
-            regex:
-              '^@/features/ChatInput(?:$|/(?!(?:store/initialState|utils/contextSelections)$).+)',
-          },
-        ],
-      }),
-    },
-  },
-  {
-    files: ['src/features/Home/InputArea/index.tsx'],
-    rules: {
-      'no-restricted-imports': createRestrictedImportRule({
-        paths: [
-          {
-            message:
-              'The home input must load EditorInput through useProgressiveEditor instead of adding it to the route static closure.',
-            name: './EditorInput',
-          },
-        ],
-      }),
-    },
-  },
+    createRestrictedImportRule({
+      paths: [
+        {
+          message:
+            'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
+          name: '@/features/Conversation',
+        },
+      ],
+      patterns: [
+        {
+          message:
+            'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
+          // `hooks/useAgentModelSelection` reaches the store only through the
+          // editor-free `store/apiContext`; Home model switches share its path.
+          regex:
+            '^@/features/ChatInput(?:$|/(?!(?:hooks/useAgentModelSelection|store/initialState|utils/contextSelections)$).+)',
+        },
+      ],
+    }),
+    ['src/features/Home/InputArea/EditorInput.tsx'],
+  ),
+  // The home sidebar tree carries both sets of constraints: it is a shell tree
+  // rendered outside TabHost, and it is also a home cold path. A later override
+  // replaces `eslint-core/no-restricted-imports` rather than merging it, so the
+  // shell paths have to be repeated here instead of relying on the shell block above.
+  restrictImports(
+    ['src/features/HomeSidebar/**/*.{ts,tsx}'],
+    createRestrictedImportRule({
+      paths: [
+        {
+          message:
+            'Home cold-path modules must use stable Conversation subpaths instead of the root barrel that exports ChatInput.',
+          name: '@/features/Conversation',
+        },
+        ...shellRouterRestrictedPaths,
+      ],
+      patterns: [
+        {
+          message:
+            'Home cold-path modules must not statically import ChatInput. Load an isolated editor entry with import().',
+          regex:
+            '^@/features/ChatInput(?:$|/(?!(?:store/initialState|utils/contextSelections)$).+)',
+        },
+      ],
+    }),
+    ['src/features/HomeSidebar/hooks/useCreateModal.tsx'],
+  ),
+  restrictImports(
+    ['src/features/Home/InputArea/index.tsx'],
+    createRestrictedImportRule({
+      paths: [
+        {
+          message:
+            'The home input must load EditorInput through useProgressiveEditor instead of adding it to the route static closure.',
+          name: './EditorInput',
+        },
+      ],
+    }),
+  ),
   // Global rule overrides
   {
+    files: ['**/*'],
     rules: {
-      '@eslint-react/hooks-extra/no-direct-set-state-in-use-effect': 0,
-      '@eslint-react/jsx-key-before-spread': 0,
-      '@eslint-react/naming-convention/ref-name': 0,
-      '@eslint-react/naming-convention/use-state': 0,
-      '@eslint-react/no-array-index-key': 0,
-      '@next/next/no-img-element': 0,
-      '@typescript-eslint/no-use-before-define': 0,
-      '@typescript-eslint/no-useless-constructor': 0,
-      'no-extra-boolean-cast': 0,
-      'no-restricted-syntax': 0,
-      'react-refresh/only-export-components': 0,
-      'react/no-unknown-property': 0,
-      'regexp/match-any': 0,
-      'unicorn/better-regex': 0,
+      '@eslint-react/jsx-no-key-after-spread': 'off',
+      '@eslint-react/naming-convention-ref-name': 'off',
+      '@eslint-react/no-array-index-key': 'off',
+      '@eslint-react/set-state-in-effect': 'off',
+      '@eslint-react/use-state': 'off',
+      // There is no Pages Router: ESLint's version only checked pages/ and never fired,
+      // while Oxlint's reports every root-relative <a href>.
+      'nextjs/no-html-link-for-pages': 'off',
+      'nextjs/no-img-element': 'off',
+      'no-extra-boolean-cast': 'off',
+      // Default exports are allowed here; the preset bans them through this rule.
+      'no-restricted-exports': 'off',
+      'no-use-before-define': 'off',
+      'no-useless-constructor': 'off',
+      'react/no-unknown-property': 'off',
+      'react/only-export-components': 'off',
       // conflicts with prettier, which lowercases hex literals
-      'unicorn/number-literal-case': 0,
+      'unicorn/number-literal-case': 'off',
     },
   },
   // TypeScript files - enforce consistent type imports
   {
     files: ['**/*.{ts,tsx}'],
     rules: {
-      '@typescript-eslint/consistent-type-imports': [
-        2,
-        {
-          fixStyle: 'separate-type-imports',
-        },
-      ],
-      'no-restricted-syntax': [
-        'error',
-        ...useRefLazyInitRestrictedSyntax,
-        ...uppercaseRestrictedSyntax,
-      ],
+      'typescript/consistent-type-imports': ['error', { fixStyle: 'separate-type-imports' }],
     },
   },
-  {
-    files: ['apps/server/src/**/*.{ts,tsx}'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          ...baseRestrictedImportOptions,
-          paths: [...(baseRestrictedImportOptions.paths ?? []), ...serverI18nRestrictedImportPaths],
-          patterns: [
-            ...(baseRestrictedImportOptions.patterns ?? []),
-            ...serverI18nRestrictedImportPatterns,
-          ],
-        },
-      ],
-    },
-  },
-  {
-    // Redis access boundary for server code (see `redisAccessRestrictedImportPaths`).
-    files: ['apps/server/src/**/*.{ts,tsx}'],
-    // Tests of the legacy consumers import the raw module to mock or seed it;
-    // the boundary is about production code paths.
-    ignores: [
+  restrictSyntax(
+    ['**/*.{ts,tsx}'],
+    [...useRefLazyInitRestrictedSyntax, ...uppercaseRestrictedSyntax],
+  ),
+  restrictImports(
+    ['apps/server/src/**/*.{ts,tsx}'],
+    [
+      'error',
+      {
+        ...baseRestrictedImportOptions,
+        paths: [...(baseRestrictedImportOptions.paths ?? []), ...serverI18nRestrictedImportPaths],
+        patterns: [
+          ...(baseRestrictedImportOptions.patterns ?? []),
+          ...serverI18nRestrictedImportPatterns,
+        ],
+      },
+    ],
+  ),
+  // Redis access boundary for server code (see `redisAccessRestrictedImportPaths`).
+  // Tests of the legacy consumers import the raw module to mock or seed it;
+  // the boundary is about production code paths.
+  ...(() => {
+    const files = ['apps/server/src/**/*.{ts,tsx}'];
+    const excludeFiles = [
       ...legacyRawRedisClientConsumers,
       'apps/server/src/services/redis/**',
       'apps/server/src/modules/Redis/**',
       '**/*.test.{ts,tsx}',
       '**/__tests__/**',
-    ],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          ...baseRestrictedImportOptions,
-          paths: [
-            ...(baseRestrictedImportOptions.paths ?? []),
-            ...serverI18nRestrictedImportPaths,
-            ...redisAccessRestrictedImportPaths,
-          ],
-          patterns: [
-            ...(baseRestrictedImportOptions.patterns ?? []),
-            ...serverI18nRestrictedImportPatterns,
-            {
-              group: ['@/server/modules/Redis/*'],
-              message: 'Use domain methods in services/redis.',
-            },
-          ],
-        },
-      ],
-      'no-restricted-syntax': [
-        'error',
-        ...useRefLazyInitRestrictedSyntax,
-        ...uppercaseRestrictedSyntax,
-        ...redisAccessRestrictedSyntax,
-      ],
-    },
-  },
-  {
-    files: [
+    ];
+    return [
+      restrictImports(
+        files,
+        [
+          'error',
+          {
+            ...baseRestrictedImportOptions,
+            paths: [
+              ...(baseRestrictedImportOptions.paths ?? []),
+              ...serverI18nRestrictedImportPaths,
+              ...redisAccessRestrictedImportPaths,
+            ],
+            patterns: [
+              ...(baseRestrictedImportOptions.patterns ?? []),
+              ...serverI18nRestrictedImportPatterns,
+              {
+                group: ['@/server/modules/Redis/*'],
+                message: 'Use domain methods in services/redis.',
+              },
+            ],
+          },
+        ],
+        excludeFiles,
+      ),
+      restrictSyntax(
+        files,
+        [
+          ...useRefLazyInitRestrictedSyntax,
+          ...uppercaseRestrictedSyntax,
+          ...redisAccessRestrictedSyntax,
+        ],
+        excludeFiles,
+      ),
+    ];
+  })(),
+  restrictSyntax(
+    [
       'apps/desktop/src/overlay/**/*.{ts,tsx}',
       'packages/electron-client-ipc/src/**/*.{ts,tsx}',
       'src/**/*.{ts,tsx}',
     ],
-    ignores: ['src/hooks/usePWAInstall.ts'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        ...useRefLazyInitRestrictedSyntax,
-        ...uppercaseRestrictedSyntax,
-        electronIpcRemoveListenerRestrictedSyntax,
-      ],
-    },
-  },
-  // MDX files
-  {
-    ...mdxFlat,
-    files: ['**/*.mdx'],
-    rules: {
-      ...mdxFlat.rules,
-      '@typescript-eslint/consistent-type-imports': 0,
-      '@typescript-eslint/no-unused-vars': 1,
-      'mdx/remark': 0,
-      'no-undef': 0,
-      'react/jsx-no-undef': 0,
-      'react/no-unescaped-entities': 0,
-    },
-  },
+    [
+      ...useRefLazyInitRestrictedSyntax,
+      ...uppercaseRestrictedSyntax,
+      electronIpcRemoveListenerRestrictedSyntax,
+    ],
+    ['src/hooks/usePWAInstall.ts'],
+  ),
   // Store/image and types/generation - disable sorting
   {
     files: ['src/store/image/**/*', 'src/types/generation/**/*'],
     rules: {
-      'perfectionist/sort-interfaces': 0,
-      'perfectionist/sort-object-types': 0,
-      'perfectionist/sort-objects': 0,
+      'perfectionist/sort-interfaces': 'off',
     },
   },
   // model-bank aiModels - enforce English-only descriptions
-  {
-    files: ['packages/model-bank/src/aiModels/**/*'],
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        ...useRefLazyInitRestrictedSyntax,
-        ...uppercaseRestrictedSyntax,
-        {
-          message: 'Chinese characters are not allowed in aiModels files. Use English instead.',
-          selector: 'Literal[value=/[\\u4e00-\\u9fff]/]',
-        },
-      ],
-    },
-  },
-  // CLI scripts
-  {
-    files: ['scripts/**/*'],
-    rules: {
-      'unicorn/no-process-exit': 0,
-      'unicorn/prefer-top-level-await': 0,
-    },
-  },
+  restrictSyntax(
+    ['packages/model-bank/src/aiModels/**/*'],
+    [
+      ...useRefLazyInitRestrictedSyntax,
+      ...uppercaseRestrictedSyntax,
+      {
+        message: 'Chinese characters are not allowed in aiModels files. Use English instead.',
+        selector: 'Literal[value=/[\\u4e00-\\u9fff]/]',
+      },
+    ],
+  ),
   // E2E and test files - allow console.log for debugging
   {
     files: ['e2e/**/*', '**/*.test.ts', '**/*.test.tsx'],
-    rules: {
-      'no-console': 0,
-    },
+    rules: { 'no-console': 'off' },
   },
   // CLIs and debug utilities - console output is the primary interface
   {
@@ -841,9 +801,7 @@ export default eslint(
       'apps/cli/**/*',
       'packages/model-runtime/src/utils/debugStream.ts',
     ],
-    rules: {
-      'no-console': 0,
-    },
+    rules: { 'no-console': 'off' },
   },
   // Business stubs - keep `use`-prefixed APIs mirroring the cloud implementation,
   // even when the OSS fallback doesn't call any hooks
@@ -856,16 +814,12 @@ export default eslint(
       'src/business/client/hooks/useRenderBusinessChatErrorMessageExtra.tsx',
       'src/business/client/hooks/useRenderBusinessVideoBatchItem.tsx',
     ],
-    rules: {
-      '@eslint-react/no-unnecessary-use-prefix': 0,
-    },
+    rules: { '@eslint-react/no-unnecessary-use-prefix': 'off' },
   },
-  ...stylexMigrationConfig,
+  ...(stylexMigrationOverrides as UserOverride[]),
   // CommonJS files rely on `require()` by design
   {
     files: ['**/*.cjs', 'apps/desktop/shell/**/*.js'],
-    rules: {
-      '@typescript-eslint/no-require-imports': 0,
-    },
+    rules: { 'typescript/no-require-imports': 'off' },
   },
 );

@@ -207,8 +207,8 @@ export const UserLabSchema = z.object({
    */
   enableMessageTextSelectionActions: z.boolean().optional(),
   /**
-   * show the Integrations settings page (GitHub App and the coming-soon
-   * directory); hidden until the closed loop leaves alpha
+   * @deprecated Integrations left Labs and is always shown. Kept so a write
+   * from an older released client is not stripped by the schema.
    */
   enableIntegrations: z.boolean().optional(),
   /**

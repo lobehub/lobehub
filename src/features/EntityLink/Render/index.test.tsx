@@ -293,6 +293,25 @@ describe('Link Render — internal entities', () => {
     expect(mockOpenAcceptance).not.toHaveBeenCalled();
   });
 
+  it('opens the app, not the gateway apex, from the desktop cloud preview', () => {
+    // Desktop in cloud mode reports `https://lobehub.com` as its origin, where
+    // `/acceptance/<id>` is the marketing site's page rather than the report.
+    mockAppOrigin = 'https://lobehub.com';
+    mockEntityPreview = { title: 'Workspace publishing' };
+    const { container, getByRole } = renderLink({
+      linkHref: '/acceptance/acceptance-1',
+      linkKind: 'generic',
+      linkLabel: 'Acceptance',
+    });
+    fireEvent.mouseEnter(container.firstElementChild!);
+
+    fireEvent.click(getByRole('button', { name: 'report.actions.openInBrowser' }));
+
+    expect(mockOpenTrustedExternalUrl).toHaveBeenCalledWith(
+      'https://app.lobehub.com/acceptance/acceptance-1',
+    );
+  });
+
   it('offers no browser action without an app origin to resolve against', () => {
     mockAppOrigin = '';
     const { container, queryByRole } = renderLink({

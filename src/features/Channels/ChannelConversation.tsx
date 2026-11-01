@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import AsyncError from '@/components/AsyncError';
+import { ChannelConversationSkeleton } from '@/components/Skeleton/Channel';
+import { delayed } from '@/components/Skeleton/Delayed';
 import { createStore, Provider } from '@/features/Conversation/store';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -128,6 +130,9 @@ const Timeline = ({
         error={sync.error}
         errorVariant="page"
         isLoading={!detail && !sync.error}
+        // Delayed so a fast fetch (switching Channels, opening a thread) paints no placeholder;
+        // right after the route skeleton it hands over immediately.
+        loading={delayed(<ChannelConversationSkeleton />)}
         onRetry={() => void channelActions.refreshDetail(params)}
       >
         {detail && (

@@ -122,7 +122,10 @@ export interface LinearSyncResult {
   skipped: { identifier: string; reason: LinearSyncSkipReason }[];
   /** Every skipped issue, including those past the `skipped` list. Absent in older results. */
   skippedCount?: number;
-  /** More issues matched than one run imports; run again for the rest. */
+  /**
+   * More issues matched than one run imports. A rule run continues on its own
+   * until this clears; it stays set only when the run stopped early.
+   */
   truncated: boolean;
   unchanged: number;
   updated: number;
@@ -151,16 +154,31 @@ export type LinearSyncJobErrorCode =
   | 'unavailable'
   /** No progress for too long; the run was likely cut off. */
   | 'timeout'
+  /** The user stopped it; tasks written before then are kept. */
+  | 'canceled'
   | 'failed';
 
 /** What a background sync was asked to do, kept on its `async_tasks` row. */
 export interface LinearSyncJobMetadata {
   connectionId: string;
+  /**
+   * Where the next round of a rule run resumes reading Linear, so a long run
+   * does not reread what earlier rounds covered. Absent: read from the start.
+   */
+  cursor?: string;
   /** Picked issues (`kind: 'issues'`). */
   issueIds?: string[];
   kind: 'issues' | 'rule';
   projectId: string;
+  /**
+   * This round reconciles linked tasks but creates none: the closing pass of
+   * a run that used up its creating rounds.
+   */
+  reconcileOnly?: boolean;
+  /** The outcome so far; while a rule run continues, the total of its finished rounds. */
   result?: LinearSyncResult;
+  /** Rounds a rule run has finished; each creates at most a fixed number of tasks. */
+  rounds?: number;
   /** The saved rule being run (`kind: 'rule'`). */
   ruleId?: string;
 }

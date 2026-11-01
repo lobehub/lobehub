@@ -1,10 +1,12 @@
 'use client';
 
-import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
   createModal,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
   ModalFooter,
   type ModalInstance,

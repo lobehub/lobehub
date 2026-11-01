@@ -30,8 +30,6 @@
   "features.inAppBrowser.title": "インアプリブラウザー",
   "features.inputMarkdown.desc": "入力エリアでMarkdown（太字、コードブロック、表など）をリアルタイムでレンダリングします。",
   "features.inputMarkdown.title": "入力欄のMarkdownレンダリング",
-  "features.integrations.desc": "統合設定ページを表示します: GitHubアプリを接続して、マージされたプルリクエストが配信を受け入れ、失敗したチェックやレビューがそれを開いたエージェントに届くようにします。デフォルトでは非表示です。",
-  "features.integrations.title": "統合",
   "features.messageTextSelectionActions.desc": "チャットメッセージ内のテキストを選択すると、次の会話コンテキストに選択したテキストを追加できるクイックアクションを表示します。",
   "features.messageTextSelectionActions.title": "メッセージテキスト選択アクション",
   "features.oauthApps.desc": "個人およびワークスペース設定でOAuthアプリ管理を表示します。この機能はデフォルトでは非表示です。",

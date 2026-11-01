@@ -48,6 +48,7 @@ const styles = createStaticStyles(({ css }) => ({
   checks: css`
     width: 100%;
     max-width: ${acceptanceChecksLayout.maxWidth}px;
+    margin-inline: auto;
   `,
   headerBand: css`
     flex: none;

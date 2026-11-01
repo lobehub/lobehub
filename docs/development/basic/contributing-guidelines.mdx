@@ -1,8 +1,7 @@
 ---
 title: Code Style and Contribution Guidelines
 description: >-
-  Learn about LobeHub's code style and contribution process for consistent
-  coding.
+  Learn about LobeHub's code style and contribution process for consistent coding.
 tags:
   - Code Style
   - Contribution Guidelines
@@ -17,17 +16,17 @@ Welcome to the Code Style and Contribution Guidelines for LobeHub. This guide wi
 
 ## Code Style
 
-In LobeHub, we use the [@lobehub/lint](https://github.com/lobehub/lobe-lint) package to maintain a unified code style. This package incorporates configurations for `ESLint`, `Prettier`, `remarklint`, and `stylelint` to ensure that our JavaScript, Markdown, and CSS files adhere to the same coding standards.
+In LobeHub, we use the shared configs from [lobe-lint](https://github.com/lobehub/lobe-lint) to maintain a unified code style. They cover `Oxlint`, `Prettier`, `remarklint`, and `stylelint` to ensure that our JavaScript, Markdown, and CSS files adhere to the same coding standards.
 
-### ESLint
+### Oxlint
 
-We use ESLint to check for issues in our JavaScript code. You can find the `eslint.config.mjs` flat config file in the project's root directory, which contains our extensions and custom rules for the ESLint configuration of `@lobehub/lint`.
+We use Oxlint to check for issues in our JavaScript and TypeScript code. You can find the `oxlint.config.mts` file in the project's root directory, which contains our extensions and custom rules on top of `@lobehub/oxlint-config`.
 
-To ensure your code aligns with the project's standards, run ESLint before committing your code.
+To ensure your code aligns with the project's standards, run `bun run lint:ts` before committing your code.
 
 ### Prettier
 
-Prettier is responsible for code formatting to maintain consistency. Our Prettier configuration can be found in `prettier.config.mjs`, imported from `@lobehub/lint`.
+Prettier is responsible for code formatting to maintain consistency. Our Prettier configuration can be found in `prettier.config.mjs`, imported from `@lobehub/prettier-config`.
 
 It's recommended to configure your editor to run Prettier automatically when saving files.
 
@@ -37,7 +36,7 @@ For Markdown files, we use remarklint to ensure consistent document formatting. 
 
 ### stylelint
 
-We utilize stylelint to standardize the style of our CSS code. In the configuration file for stylelint, we have made some custom rule adjustments based on `@lobehub/lint` configuration.
+We utilize stylelint to standardize the style of our CSS and Less files. In the configuration file for stylelint, we have made some custom rule adjustments based on `@lobehub/stylelint-config`. StyleX styles are checked by Oxlint instead.
 
 ### Style Checking
 
