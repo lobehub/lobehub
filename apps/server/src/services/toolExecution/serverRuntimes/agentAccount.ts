@@ -73,6 +73,14 @@ const MAX_WAIT_LOOKBACK_MS = 30 * 60 * 1000;
 const compact = (value: string) => value.replaceAll(/[^\da-z]/gi, '').toLowerCase();
 
 /**
+ * Most secret candidates one unattended reply may carry. Each is one predicate
+ * in the relay query, so the count is bounded — and a reply over it is held for
+ * the user rather than checked in part: padding the text with harmless links
+ * must not push a copied secret past the ones that get checked.
+ */
+const MAX_SECRET_CANDIDATES = 200;
+
+/**
  * Secret-shaped fragments of the outgoing text that the numeric code extractor
  * never records: links (magic-login and reset URLs) and long or mixed
  * letter/digit tokens (alphanumeric OTPs, API keys, passwords). Each is checked
@@ -83,7 +91,7 @@ const secretCandidates = (text: string): string[] => {
   const tokens = (text.match(/[\w+./=-]{6,}/g) ?? []).filter(
     (token) => token.length >= 20 || (/\d/.test(token) && /[A-Z]/i.test(token)),
   );
-  return [...new Set([...urls, ...tokens, ...splitTokenCandidates(text)])].slice(0, 200);
+  return [...new Set([...urls, ...tokens, ...splitTokenCandidates(text)])];
 };
 
 /** Shortest a regrouped token must be once joined; shorter joins are ordinary words and times. */
@@ -232,6 +240,15 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
       // code falls off it, and the relay would then go out unattended.
       // Compared with separators stripped on both sides, so a code reformatted
       // on request (`839 201`, `839-201`, `8.3.9.2.0.1`) is still recognised.
+      // Fail closed: a reply with more secret-shaped fragments than one check
+      // covers cannot be cleared, so it goes to the user instead of out.
+      const candidates = [...new Set(secretCandidates(args.text).map(compact))];
+      if (candidates.length > MAX_SECRET_CANDIDATES) {
+        return {
+          refusal: `This reply carries more links and tokens (${candidates.length}) than can be checked for content copied from other senders' mail (at most ${MAX_SECRET_CANDIDATES}). Send it without \`threadKey\` to ask the user to approve it.`,
+        };
+      }
+
       const compactText = compact(args.text);
       const relayed = (
         await inbox.listCodesFromOtherSenders({
@@ -252,7 +269,7 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
             // Same treatment as the codes above: a token reformatted on the way
             // out (`AB12CD34` sent as `ab-12-cd-34`) is the same secret, so both
             // sides are compared with case and separators stripped.
-            candidates: secretCandidates(args.text).map(compact),
+            candidates,
             recipient,
             since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
           });
