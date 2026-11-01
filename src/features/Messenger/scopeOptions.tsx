@@ -1,9 +1,9 @@
+import './scopeOptions.css';
+
 import { Avatar, Flexbox, Tag, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 
 import WorkspaceAvatar from '@/components/WorkspaceAvatar';
-
-import scopeStyles from './scopeOptions.module.css';
 
 export const PERSONAL_SCOPE = 'personal';
 
@@ -20,7 +20,7 @@ const styles = stylex.create({
   scopeTitle: { flex: '1', minWidth: 0 },
 });
 
-export const messengerScopeSelectClassNames = { value: scopeStyles.scopeValue };
+export const messengerScopeSelectClassNames = { value: 'lobe-scope-options-21d07918-scope-value' };
 
 interface ResolvePersonalScopeLabelParams {
   fallbackLabel: string;

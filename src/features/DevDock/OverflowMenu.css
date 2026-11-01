@@ -1,0 +1,13 @@
+.lobe-overflow-menu-f4b5c876-popup {
+  min-width: 224px;
+}
+
+.lobe-overflow-menu-f4b5c876-popup .lobe-overflow-menu-f4b5c876-pin {
+  opacity: 0;
+}
+
+.lobe-overflow-menu-f4b5c876-popup [role^='menuitem']:hover .lobe-overflow-menu-f4b5c876-pin,
+.lobe-overflow-menu-f4b5c876-popup .lobe-overflow-menu-f4b5c876-pin:focus-visible,
+.lobe-overflow-menu-f4b5c876-popup .lobe-overflow-menu-f4b5c876-pin[data-pinned='true'] {
+  opacity: 1;
+}

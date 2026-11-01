@@ -1,5 +1,7 @@
 'use client';
 
+import './ShareDeviceModal.css';
+
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
 import {
   Button,
@@ -27,7 +29,6 @@ import { createWorkspaceLambdaClient } from '@/libs/trpc/client';
 
 import { refreshDeviceList } from './const';
 import { getDeviceActionErrorMessage } from './deviceActionError';
-import selectStyles from './ShareDeviceModal.module.css';
 
 const styles = stylex.create({
   footer: { paddingBlock: '16px', paddingInline: '24px' },
@@ -248,7 +249,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
               </Text>
               <Select
                 showSearch
-                classNames={{ value: selectStyles.selectValue }}
+                classNames={{ value: 'lobe-share-device-modal-e63c1678-select-value' }}
                 options={targetOptions}
                 placeholder={tSetting('devices.share.selectPlaceholder')}
                 style={{ width: '100%' }}
@@ -262,7 +263,7 @@ const ShareDeviceContent = memo<ShareDeviceContentProps>(({ device }) => {
                 {tSetting('workspace.general.transferScope.title')}
               </Text>
               <Select
-                classNames={{ value: selectStyles.selectValue }}
+                classNames={{ value: 'lobe-share-device-modal-e63c1678-select-value' }}
                 options={visibilityOptions}
                 style={{ width: '100%' }}
                 value={visibility}

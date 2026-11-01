@@ -1,5 +1,7 @@
 'use client';
 
+import './ToolPage.css';
+
 import { Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -10,7 +12,6 @@ import { sx } from '@/styles/sx';
 import ApiList from './ApiList';
 import { LIFECYCLE_MODE_LABEL, LIFECYCLE_MODES, type LifecycleMode } from './lifecycleMode';
 import MessageList from './MessageList';
-import moduleStyles from './ToolPage.module.css';
 import ToolPreview from './ToolPreview';
 import { toApiAnchor, type ToolsetEntry } from './useDevtoolsEntries';
 
@@ -160,7 +161,7 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
       {view === 'api' && (
         <ApiList activeApiName={activeApi} apis={toolset.apis} onSelect={handleSelect} />
       )}
-      <div {...sx([styles.content], moduleStyles.content)} ref={scrollRef}>
+      <div {...sx([styles.content], 'lobe-tool-page-d7746a9a-content')} ref={scrollRef}>
         <Flexbox className={stylex.props(styles.body).className}>
           <Flexbox className={stylex.props(styles.header).className}>
             <Flexbox horizontal align={'center'} gap={10} wrap={'wrap'}>
@@ -191,8 +192,10 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
               </Text>
               <Tabs
                 activeKey={view}
-                className={sx([styles.controlTabs], moduleStyles.controlTabs).className}
                 size={'small'}
+                className={
+                  sx([styles.controlTabs], 'lobe-tool-page-d7746a9a-control-tabs').className
+                }
                 items={[
                   { key: 'api', label: 'By API' },
                   { key: 'aggregate', label: 'Aggregate' },
@@ -211,8 +214,10 @@ const DevtoolsToolPage = ({ toolset }: DevtoolsToolPageProps) => {
               </Text>
               <Tabs
                 activeKey={mode}
-                className={sx([styles.controlTabs], moduleStyles.controlTabs).className}
                 size={'small'}
+                className={
+                  sx([styles.controlTabs], 'lobe-tool-page-d7746a9a-control-tabs').className
+                }
                 items={LIFECYCLE_MODES.map((value) => ({
                   key: value,
                   label: LIFECYCLE_MODE_LABEL[value],

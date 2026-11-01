@@ -1,5 +1,7 @@
 'use client';
 
+import './OverflowMenu.css';
+
 import { type DropdownItem, DropdownMenu } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -8,7 +10,6 @@ import { memo } from 'react';
 
 import { sx } from '@/styles/sx';
 
-import popupStyles from './OverflowMenu.module.css';
 import {
   type DevDockItem,
   type DevDockSelectItem,
@@ -70,7 +71,7 @@ const PinToggle = memo<{ item: DevDockItem }>(({ item }) => {
   const setPinned = useDevDockStore((s) => s.setPinned);
   return (
     <button
-      {...sx([styles.pinButton], popupStyles.pin)}
+      {...sx([styles.pinButton], 'lobe-overflow-menu-f4b5c876-pin')}
       data-pinned={pinned}
       title={pinned ? 'Unpin from bar' : 'Pin to bar'}
       type={'button'}
@@ -194,7 +195,7 @@ const OverflowMenu = memo(() => {
     <DropdownMenu
       items={buildItems}
       placement={'topRight'}
-      popupProps={{ className: popupStyles.popup }}
+      popupProps={{ className: 'lobe-overflow-menu-f4b5c876-popup' }}
     >
       <span {...stylex.props(styles.trigger)} title={'More tools'}>
         <Ellipsis size={13} />

@@ -1,5 +1,7 @@
 'use client';
 
+import '../inspectorTable.css';
+
 import { Button, Input } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { RefreshCw } from 'lucide-react';
@@ -7,7 +9,6 @@ import { RefreshCw } from 'lucide-react';
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
 import { inspectorStyles as styles } from '../inspectorStyles';
-import tableStyles from '../inspectorTable.module.css';
 import {
   formatLocalDatabaseCellValue,
   type LocalDatabaseColumn,
@@ -84,7 +85,7 @@ const RecordTable = ({
       </div>
       <div {...stylex.props(styles.tableScroll)}>
         <table
-          className={tableStyles.table}
+          className={'lobe-inspector-table-90f58e23-table'}
           style={{ minWidth: '100%', width: Math.max(tableWidth, 640) }}
         >
           <colgroup>

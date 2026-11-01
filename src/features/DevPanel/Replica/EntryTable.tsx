@@ -1,5 +1,7 @@
 'use client';
 
+import '../inspectorTable.css';
+
 import { Button, Input } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { RefreshCw } from 'lucide-react';
@@ -7,7 +9,6 @@ import { RefreshCw } from 'lucide-react';
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
 import { inspectorStyles as styles } from '../inspectorStyles';
-import tableStyles from '../inspectorTable.module.css';
 import { describeReplicaValue, type ReplicaEntryRow } from './model';
 import { MAX_RENDERED_ENTRIES } from './useReplicaInspector';
 
@@ -81,7 +82,10 @@ const EntryTable = ({
       </Button>
     </div>
     <div {...stylex.props(styles.tableScroll)}>
-      <table className={tableStyles.table} style={{ minWidth: '100%', width: TABLE_WIDTH }}>
+      <table
+        className={'lobe-inspector-table-90f58e23-table'}
+        style={{ minWidth: '100%', width: TABLE_WIDTH }}
+      >
         <colgroup>
           {COLUMNS.map(({ label, width }) => (
             <col key={label} style={{ width }} />

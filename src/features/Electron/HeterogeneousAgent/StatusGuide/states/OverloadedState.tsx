@@ -1,3 +1,5 @@
+import './OverloadedState.css';
+
 import { Button, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';
 import { Ban, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -5,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import GuideActions from '../GuideActions';
 import GuideShell from '../GuideShell';
 import type { HeterogeneousAgentGuideStateProps } from '../types';
-import styles from './OverloadedState.module.css';
 
 const OverloadedState = ({
   autoRetry,
@@ -75,7 +76,7 @@ const OverloadedState = ({
           <Highlighter
             wrap
             actionIconSize={'small'}
-            classNames={{ content: styles.errorDetails }}
+            classNames={{ content: 'lobe-overloaded-state-799d4050-error-details' }}
             language={'log'}
             style={{ maxHeight: 200, overflow: 'auto' }}
             variant={'outlined'}

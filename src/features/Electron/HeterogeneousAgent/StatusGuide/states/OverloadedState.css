@@ -1,4 +1,4 @@
 /* The Highlighter renders its own <pre>; doubled class keeps the padding above its base rule. */
-.errorDetails.errorDetails pre {
+.lobe-overloaded-state-799d4050-error-details.lobe-overloaded-state-799d4050-error-details pre {
   padding: 12px;
 }

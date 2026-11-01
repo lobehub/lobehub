@@ -1,0 +1,27 @@
+.lobe-inline-table-b75cf865-table table {
+  font-size: 13px;
+}
+
+.lobe-inline-table-b75cf865-table th {
+  background: transparent;
+  box-shadow: inset 0 999px 0 var(--lobe-color-fill-quaternary);
+}
+
+.lobe-inline-table-b75cf865-table td {
+  border: none;
+  background: transparent;
+}
+
+.lobe-inline-table-b75cf865-table tr:hover > td {
+  background: var(--lobe-color-fill-quaternary);
+}
+
+.lobe-inline-table-b75cf865-table tr td:first-child,
+.lobe-inline-table-b75cf865-table tr th:first-child {
+  padding-inline-start: 24px;
+}
+
+.lobe-inline-table-b75cf865-table tr td:last-child,
+.lobe-inline-table-b75cf865-table tr th:last-child {
+  padding-inline-end: 24px;
+}
