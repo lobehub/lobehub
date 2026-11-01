@@ -1,15 +1,15 @@
-.icon {
+.lobe-share-button-4579d448-icon {
   border: 1px solid var(--lobe-color-fill-secondary);
 }
 
-.icon svg {
+.lobe-share-button-4579d448-icon svg {
   fill: var(--lobe-color-text-secondary);
 }
 
-.icon:hover {
+.lobe-share-button-4579d448-icon:hover {
   border: 1px solid var(--lobe-color-border-secondary);
 }
 
-.icon:hover svg {
+.lobe-share-button-4579d448-icon:hover svg {
   fill: var(--lobe-color-text);
 }
