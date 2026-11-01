@@ -12,6 +12,7 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { WorkModel } from '@/database/models/work';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { assertDocumentWriteWithinLimit } from '@/server/services/document/writeLimit';
 import { NotebookRuntimeService } from '@/server/services/notebook';
 import {
   assertCanEditResource,
@@ -20,6 +21,9 @@ import {
 
 import { isWorkspaceNonOwner } from './_helpers/assertWorkspaceRowManageable';
 import { resolveRootOperation } from './_helpers/runProvenance';
+
+/** Request-size backstop for document content, independent of the per-plan limit. */
+const DOCUMENT_CONTENT_INPUT_MAX = 10_000_000;
 
 const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -68,7 +72,8 @@ export const notebookRouter = router({
     .use(withScopedPermission('document:create'))
     .input(
       z.object({
-        content: z.string(),
+        // Hard backstop above any plan limit; the plan limit is enforced below.
+        content: z.string().max(DOCUMENT_CONTENT_INPUT_MAX),
         description: z.string(),
         metadata: z.record(z.string(), z.any()).optional(),
         operationId: z.string().optional(),
@@ -115,6 +120,14 @@ export const notebookRouter = router({
         topicId: input.topicId,
       });
       if (twin) return twin;
+
+      // Refuse before any row exists so a rejected write leaves nothing behind.
+      await assertDocumentWriteWithinLimit({
+        charCount: input.content.length,
+        source: 'user',
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
 
       // Create the document
       const document = await ctx.documentModel.create({
@@ -226,7 +239,7 @@ export const notebookRouter = router({
     .input(
       z.object({
         append: z.boolean().optional(),
-        content: z.string().optional(),
+        content: z.string().max(DOCUMENT_CONTENT_INPUT_MAX).optional(),
         description: z.string().optional(),
         id: z.string(),
         metadata: z.record(z.string(), z.any()).optional(),
@@ -244,13 +257,27 @@ export const notebookRouter = router({
       });
 
       let contentToUpdate = input.content;
+      let previousCharCount = 0;
 
-      // Handle append mode
-      if (input.append && input.content) {
+      if (input.content !== undefined) {
         const existing = await ctx.documentModel.findById(input.id);
-        if (existing?.content) {
+        previousCharCount = existing?.content?.length ?? 0;
+
+        // Handle append mode
+        if (input.append && input.content && existing?.content) {
           contentToUpdate = existing.content + '\n\n' + input.content;
         }
+      }
+
+      // Check the post-write total before persisting anything.
+      if (contentToUpdate !== undefined) {
+        await assertDocumentWriteWithinLimit({
+          charCount: contentToUpdate.length,
+          previousCharCount,
+          source: 'user',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
       }
 
       await ctx.documentModel.update(input.id, {

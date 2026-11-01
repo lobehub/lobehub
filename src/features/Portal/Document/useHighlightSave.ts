@@ -8,9 +8,25 @@ import { useTranslation } from 'react-i18next';
 
 import { documentService } from '@/services/document';
 import { invalidateDocumentMutation } from '@/services/document/invalidation';
+import { useDocumentStore } from '@/store/document';
+import {
+  type DocumentCharLimitRefusal,
+  getCharLimitRefusal,
+  notifyCharLimitRefused,
+} from '@/store/document/slices/editor/charLimit';
 
 const isConflictError = (error: unknown) =>
   (error as { data?: { code?: string } })?.data?.code === 'CONFLICT';
+
+/**
+ * Records (or clears) a save refused by the plan's per-document character limit
+ * on the document's store entry, which the portal's limit banner reads.
+ */
+const setCharLimitError = (id: string, charLimitError: DocumentCharLimitRefusal | undefined) => {
+  const { documents, internal_dispatchDocument } = useDocumentStore.getState();
+  if (!documents[id] || documents[id].charLimitError === charLimitError) return;
+  internal_dispatchDocument({ id, type: 'updateDocument', value: { charLimitError } });
+};
 
 export interface UseHighlightSaveParams {
   content: string;
@@ -70,6 +86,7 @@ export const useHighlightSave = ({
         expectedUpdatedAtRef.current = savedAt;
       }
       baseContentRef.current = toWrite;
+      setCharLimitError(documentIdRef.current, undefined);
       commitSaved(toWrite, result?.updatedAt);
       if (bufferRef.current === toWrite) {
         bufferRef.current = undefined;
@@ -81,11 +98,20 @@ export const useHighlightSave = ({
         if (expectedUpdatedAtRef.current?.getTime() !== expectedUpdatedAt?.getTime()) return;
         bufferRef.current = undefined;
         setBuffer(undefined);
+        setCharLimitError(documentIdRef.current, undefined);
         // Refreshes the document's replica entry, which the portal body reads.
         await Promise.allSettled([
           invalidateDocumentMutation({ documentId: documentIdRef.current }),
         ]);
         toast.error(tRef.current('document.saveConflict'));
+        return;
+      }
+      // Keep the buffer: the banner explains why it is unsaved, and the next
+      // edit schedules the next attempt.
+      const charLimitError = getCharLimitRefusal(error, toWrite.length);
+      if (charLimitError) {
+        setCharLimitError(documentIdRef.current, charLimitError);
+        if (source === 'manual') notifyCharLimitRefused(charLimitError);
         return;
       }
       console.error('[HighlightEditor] save failed:', error);
@@ -118,6 +144,8 @@ export const useHighlightSave = ({
       debouncedAutoSave.cancel();
       bufferRef.current = undefined;
       setBuffer(undefined);
+      // The refused buffer is gone, so its refusal no longer applies.
+      setCharLimitError(documentIdRef.current, undefined);
     }
     baseContentRef.current = content;
     expectedUpdatedAtRef.current = updatedAt;
