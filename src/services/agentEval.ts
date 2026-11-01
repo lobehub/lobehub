@@ -225,12 +225,7 @@ class AgentEvalService {
        * Conversation replayed into the eval topic before `input` is sent. The
        * router has always accepted it; this client had not exposed it.
        */
-      messages?: Array<{
-        content: string;
-        id?: string;
-        parentId?: string;
-        role: 'assistant' | 'system' | 'user';
-      }>;
+      messages?: EvalTestCaseContent['messages'];
     };
     datasetId: string;
     evalConfig?: { criteria?: string; judgePrompt?: string };
@@ -264,12 +259,7 @@ class AgentEvalService {
       environment?: EvalCaseEnvironment;
       expected?: string;
       input?: string;
-      messages?: Array<{
-        content: string;
-        id?: string;
-        parentId?: string;
-        role: 'assistant' | 'system' | 'user';
-      }>;
+      messages?: EvalTestCaseContent['messages'];
     };
     evalConfig?: { criteria?: string; judgePrompt?: string } | null;
     evalMode?: RubricType | null;
