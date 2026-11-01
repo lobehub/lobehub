@@ -69,7 +69,7 @@ describe('convertAnthropicUsage', () => {
   });
 
   /**
-   * Replays the usage-bearing events of real streams, one per relay shape (LOBE-15324).
+   * Replays the usage-bearing events of real streams, one per relay shape.
    */
   describe('relay event shapes', () => {
     const replay = (
@@ -262,6 +262,16 @@ describe('convertAnthropicUsage', () => {
         inputCachedTokens: 4096,
         totalInputTokens: 4121,
         totalOutputTokens: 312,
+      });
+    });
+
+    it('keeps the start output when a delta reports zero output', () => {
+      expect(
+        replay({ input_tokens: 12, output_tokens: 6 }, { input_tokens: 12, output_tokens: 0 }),
+      ).toMatchObject({
+        totalInputTokens: 12,
+        totalOutputTokens: 6,
+        totalTokens: 18,
       });
     });
 
