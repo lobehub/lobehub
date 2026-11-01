@@ -29,6 +29,10 @@ export const AGENT_SIGNAL_SOURCE_PERSISTENCE: Readonly<
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStreamStart]: 'never',
   [AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete]: 'never',
   [AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeStart]: 'never',
+  // Quick Note keeps its own runs, proposals and resource links; the signal adds nothing.
+  [AGENT_SIGNAL_SOURCE_TYPES.quickNoteAnalyzeRequested]: 'never',
+  [AGENT_SIGNAL_SOURCE_TYPES.quickNoteContentChanged]: 'never',
+  [AGENT_SIGNAL_SOURCE_TYPES.quickNoteProposalDecided]: 'never',
   // High-frequency: one per runtime step. Must stay `never`.
   [AGENT_SIGNAL_SOURCE_TYPES.runtimeAfterStep]: 'never',
   [AGENT_SIGNAL_SOURCE_TYPES.runtimeBeforeStep]: 'never',

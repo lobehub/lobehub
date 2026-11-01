@@ -388,6 +388,7 @@ describe('systemStatusSelectors', () => {
         'private',
         'agent',
         SIDEBAR_SPACER_ID,
+        'note',
         'image',
         'community',
         'memory',

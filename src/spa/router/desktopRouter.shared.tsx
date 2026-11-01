@@ -1,6 +1,14 @@
 'use client';
 
-import { Download, HomeIcon, Image, NotebookPenIcon, Settings, ShapesIcon, Video } from 'lucide-react';
+import {
+  Download,
+  HomeIcon,
+  Image,
+  NotebookPenIcon,
+  Settings,
+  ShapesIcon,
+  Video,
+} from 'lucide-react';
 import { createElement, type ReactElement } from 'react';
 import type { RouteObject } from 'react-router';
 

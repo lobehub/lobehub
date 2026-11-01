@@ -63,7 +63,7 @@ describe('stores.reset', () => {
     stores.reset();
 
     expect(resetGatewayMuxRegistry).toHaveBeenCalledTimes(1);
-    expect(storeResets).toHaveLength(19);
+    expect(storeResets).toHaveLength(20);
     expect(pageReset).toHaveBeenCalledTimes(1);
     // Confirmed manage grants and the memory-only collaborator roster must not
     // outlive the data context, even when the next one reuses the scope string.
