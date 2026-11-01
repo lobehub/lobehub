@@ -160,6 +160,8 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
         <div className={styles.usage}>
           {usage.loading ? (
             <UsageMeterGroup loading>
+              {/* CPU, memory and load: the rows a Linux / macOS device always shows. */}
+              <UsageMeterSkeleton />
               <UsageMeterSkeleton />
               <UsageMeterSkeleton />
             </UsageMeterGroup>
@@ -170,6 +172,12 @@ const DeviceHoverPanel = ({ device }: DeviceHoverPanelProps) => {
                 label={t('devices.card.memoryUsage')}
                 value={usage.latest?.memoryPercent}
               />
+              {usage.reportsLoad && (
+                <UsageMeter
+                  label={t('devices.detail.loadUsage')}
+                  value={usage.latest?.loadPercent}
+                />
+              )}
               {usage.reportsDisk && (
                 <UsageMeter label={t('devices.card.diskUsage')} value={usage.latest?.diskPercent} />
               )}
