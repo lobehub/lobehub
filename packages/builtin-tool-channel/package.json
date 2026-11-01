@@ -13,7 +13,7 @@
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^6.0.4",
+    "@lobehub/ui": "^6.10.2",
     "react": "*",
     "react-i18next": "*"
   }

@@ -110,7 +110,7 @@
   },
   "dependencies": {
     "@lobechat/business-const": "workspace:*",
-    "type-fest": "^5.7.0"
+    "type-fest": "^5.10.0"
   },
   "devDependencies": {
     "tsdown": "^0.21.10",

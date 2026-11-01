@@ -19,16 +19,16 @@
     "debug": "^4.4.3",
     "drizzle-orm": "^0.45.2",
     "formidable": "^3.5.4",
-    "hono": "^4.12.27",
+    "hono": "^4.13.16",
     "hono-openapi": "1.3.5",
     "js-sha256": "^0.11.1",
     "lodash": "^4.18.1",
     "mppx": "0.11.0",
-    "url-join": "^5.0.0",
+    "url-join": "^5.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/formidable": "^3.5.1",
-    "yaml": "^2.9.0"
+    "yaml": "^2.9.1"
   }
 }

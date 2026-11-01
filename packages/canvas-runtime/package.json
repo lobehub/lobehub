@@ -10,6 +10,6 @@
   "dependencies": {
     "@lobechat/canvas": "workspace:*",
     "@pierre/highlights": "^0.2.0",
-    "pele": "^1.6.0"
+    "pele": "^1.13.0"
   }
 }

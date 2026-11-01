@@ -25,8 +25,8 @@
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/editor": "^7.0.0",
-    "@lobehub/ui": "^6.9.0",
+    "@lobehub/editor": "^7.1.1",
+    "@lobehub/ui": "^6.10.2",
     "lucide-react": "*",
     "react": "*"
   }

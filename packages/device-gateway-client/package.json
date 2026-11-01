@@ -13,10 +13,10 @@
   },
   "dependencies": {
     "@lobechat/types": "workspace:*",
-    "ws": "^8.21.0"
+    "ws": "^8.22.1"
   },
   "devDependencies": {
-    "@types/ws": "^8.18.1",
+    "@types/ws": "^8.18.2",
     "vitest": "5.0.0"
   }
 }
