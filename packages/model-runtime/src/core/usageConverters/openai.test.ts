@@ -2,9 +2,26 @@ import type { Pricing } from 'model-bank';
 import type OpenAI from 'openai';
 import { describe, expect, it } from 'vitest';
 
-import { convertOpenAIImageUsage, convertOpenAIResponseUsage, convertOpenAIUsage } from './openai';
+import {
+  convertOpenAIImageUsage,
+  convertOpenAIResponseUsage,
+  convertOpenAITranscriptionUsage,
+  convertOpenAIUsage,
+} from './openai';
 
 describe('convertUsage', () => {
+  it('distinguishes an explicit zero cache read from missing cache usage', () => {
+    const usage = { prompt_tokens: 100, completion_tokens: 10, total_tokens: 110 };
+    expect(convertOpenAIUsage(usage).inputCachedTokens).toBeUndefined();
+    expect(
+      convertOpenAIUsage({ ...usage, prompt_tokens_details: { cached_tokens: 0 } })
+        .inputCachedTokens,
+    ).toBe(0);
+    expect(
+      convertOpenAIUsage({ ...usage, prompt_cache_hit_tokens: 0 } as typeof usage)
+        .inputCachedTokens,
+    ).toBe(0);
+  });
   it('should convert basic OpenAI usage data correctly', () => {
     // Arrange
     const openaiUsage: OpenAI.Completions.CompletionUsage = {
@@ -118,6 +135,7 @@ describe('convertUsage', () => {
     expect(result).toEqual({
       inputTextTokens: 2000,
       inputWriteCacheTokens: 1500,
+      inputCachedTokens: 0,
       // uncached 1× bucket must not include writes (2000 - 0 - 1500)
       inputCacheMissTokens: 500,
       totalInputTokens: 2000,
@@ -125,7 +143,7 @@ describe('convertUsage', () => {
       outputTextTokens: 100,
       totalTokens: 2100,
     });
-    expect(result).not.toHaveProperty('inputCachedTokens');
+    expect(result.inputCachedTokens).toBe(0);
   });
 
   it('should split miss / read / write when both cache hit and write are present', () => {
@@ -539,6 +557,7 @@ describe('convertUsage', () => {
     expect(result).toEqual({
       inputTextTokens: 100,
       inputCacheMissTokens: 100, // 100 - 0
+      inputCachedTokens: 0,
       totalInputTokens: 100,
       totalOutputTokens: 200,
       outputImageTokens: 60,
@@ -700,5 +719,49 @@ describe('convertOpenAIImageUsage', () => {
       totalTokens: 4174,
       cost: 0.16647, // Based on pricing: 14 * 5/1M + 0 * 10/1M + 4160 * 40/1M = 0.00007 + 0 + 0.1664 = 0.16647
     });
+  });
+});
+
+describe('convertOpenAITranscriptionUsage', () => {
+  const pricing: Pricing = {
+    units: [
+      { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+      { name: 'audioInput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+      { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+    ],
+  };
+
+  it('prices audio and text input separately when the modality split is reported', () => {
+    const usage = convertOpenAITranscriptionUsage(
+      {
+        input_token_details: { audio_tokens: 50, text_tokens: 9 },
+        input_tokens: 59,
+        output_tokens: 21,
+        total_tokens: 80,
+        type: 'tokens',
+      },
+      pricing,
+    );
+
+    expect(usage).toMatchObject({ inputAudioTokens: 50, inputTextTokens: 9, outputTextTokens: 21 });
+    // (50 * 6 + 9 * 2.5 + 21 * 10) / 1M = 0.0005325, rounded to 6 decimals by computeChatCost
+    expect(usage?.cost).toBe(0.000_533);
+  });
+
+  it('bills unsplit gateway input as audio', () => {
+    const usage = convertOpenAITranscriptionUsage(
+      { input_tokens: 151, output_tokens: 0, total_tokens: 151 },
+      pricing,
+    );
+
+    expect(usage).toMatchObject({ inputAudioTokens: 151, inputTextTokens: 0 });
+    expect(usage?.cost).toBe(0.000_906);
+  });
+
+  it('returns undefined for duration-billed usage', () => {
+    expect(convertOpenAITranscriptionUsage({ seconds: 6, type: 'duration' }, pricing)).toBe(
+      undefined,
+    );
+    expect(convertOpenAITranscriptionUsage(undefined, pricing)).toBe(undefined);
   });
 });

@@ -1,11 +1,11 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { Avatar, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { ArrowRight } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import { type MarkdownElementProps } from '../../type';
@@ -74,10 +74,11 @@ const Render = memo<LobeAgentsProps>(
 
     return (
       <Flexbox horizontal align={'center'} className={styles.card} gap={12} onClick={handleClick}>
-        <Avatar
-          avatar={avatar || '🤖'}
+        <AgentAvatar
+          agentId={identifier}
+          avatar={avatar}
           background={backgroundColor}
-          shape={'square'}
+          name={title || undefined}
           size={40}
           title={title || undefined}
         />

@@ -1,8 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { Avatar, Block, Flexbox, Tag, Text } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Avatar, Block, Button, Flexbox, Tag, Text, toast } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,6 +33,7 @@ const TRANSFER_ERROR_KEY_BY_CODE: Partial<Record<TransferErrorCode, string>> = {
   [TransferErrorCode.CopyInProgress]: 'error:transfer.copyInProgress',
   [TransferErrorCode.GroupHasInaccessibleMember]: 'error:transfer.groupHasInaccessibleMember',
   [TransferErrorCode.ResourceNotFound]: 'error:transfer.resourceNotFound',
+  [TransferErrorCode.SharedTransferBlocked]: 'error:transfer.sharedTransferBlocked',
   [TransferErrorCode.TargetNoWriteAccess]: 'error:transfer.targetNoWriteAccess',
   [TransferErrorCode.TargetNotWorkspaceMember]: 'error:transfer.targetNotWorkspaceMember',
   [TransferErrorCode.TransferInProgress]: 'error:transfer.transferInProgress',

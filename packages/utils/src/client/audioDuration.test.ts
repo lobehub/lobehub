@@ -35,7 +35,9 @@ beforeEach(() => {
 
   vi.stubGlobal(
     'Audio',
-    vi.fn(() => audio),
+    vi.fn(function () {
+      return audio;
+    }),
   );
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:audio');
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});

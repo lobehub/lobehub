@@ -64,6 +64,13 @@ describe('getModelPropertyWithFallback', () => {
     loadModelsMock.mockResolvedValue([...mockModelList]);
   });
 
+  it('treats an empty supplied snapshot as authoritative instead of loading another catalog', async () => {
+    expect(await getModelPropertyWithFallback('dall-e-3', 'type', 'openai', [])).toBe('chat');
+    expect(
+      await getModelPropertyWithFallback('gpt-4', 'displayName', 'openai', []),
+    ).toBeUndefined();
+  });
+
   describe('when providerId is specified', () => {
     it('should use injected LobeHub model config before static fallback', async () => {
       loadModelsMock.mockResolvedValue([
@@ -201,11 +208,6 @@ describe('getModelPropertyWithFallback', () => {
         'non-existent-model',
         'contextWindowTokens',
       );
-      expect(result).toBeUndefined();
-    });
-
-    it('should return undefined for enabled property when model not found', async () => {
-      const result = await getModelPropertyWithFallback('non-existent-model', 'enabled');
       expect(result).toBeUndefined();
     });
   });

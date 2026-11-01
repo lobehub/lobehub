@@ -61,7 +61,6 @@ const GroupForkTag = memo(() => {
 
   return (
     <Tag
-      bordered={false}
       color="default"
       icon={<Icon icon={GitFork} />}
       style={{ cursor: 'pointer' }}

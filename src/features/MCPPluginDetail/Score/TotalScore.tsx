@@ -1,6 +1,4 @@
-import { Block, Center, Flexbox, Popover } from '@lobehub/ui';
-import { Progress } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, Center, createStaticStyles, cssVar, Flexbox, Popover, Progress } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -263,14 +261,8 @@ const TotalScore = memo<TotalScoreProps>(({ scoreResult, scoreItems = [], isVali
           <Progress
             percent={Math.round(percentage)}
             showInfo={false}
-            size={{
-              height: 8,
-            }}
-            strokeColor={{
-              '0%': SEGMENT_COLORS.F_COLOR,
-              '60%': SEGMENT_COLORS.B_COLOR,
-              '80%': SEGMENT_COLORS.A_COLOR,
-            }}
+            size={8}
+            strokeColor={getGradeColor(grade)}
           />
         </Popover>
 

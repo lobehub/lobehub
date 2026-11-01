@@ -8,15 +8,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 
-import TopicChatDrawer from './index';
+import TopicChatDrawer, { TopicChatDrawerBody } from './index';
 
 const mocks = vi.hoisted(() => ({
   agentState: {
+    agentMap: {},
     useHydrateAgentConfig: vi.fn(),
   },
   chatState: {
-    dbMessagesMap: {} as Record<string, unknown[]>,
+    closeArtifact: vi.fn(),
+    clearPortalStack: vi.fn(),
+    dbMessagesMap: {
+      'topic-chat-key': [{ id: 'message-1' }],
+    } as Record<string, { id: string }[]>,
+    messagesMap: {} as Record<string, { id: string }[]>,
+    portalStack: [] as { artifact?: { id: string }; taskId?: string; type: string }[],
     replaceMessages: vi.fn(),
+    showPortal: false,
+    topicDataMap: {},
+    topicDetailMap: {},
   },
   permission: {
     allowed: true,
@@ -30,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   },
   taskState: {
     activeTaskId: 'T-1',
+    activeTopicDrawerFocusRequest: undefined as number | undefined,
     activeTopicDrawerTopicId: 'topic-1',
     closeTopicDrawer: vi.fn(),
     useFetchTaskDetail: vi.fn(),
@@ -59,7 +70,27 @@ const mocks = vi.hoisted(() => ({
 const serializeSize = (size: unknown) =>
   size === undefined ? '' : typeof size === 'string' ? size : JSON.stringify(size);
 
-vi.mock('@lobehub/ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  copyToClipboard: vi.fn(),
+  DropdownMenu: ({
+    children,
+    items,
+  }: {
+    children?: ReactNode;
+    items?: { key: string; label?: ReactNode; onClick?: () => void; type?: string }[];
+  }) => (
+    <>
+      {children}
+      {items?.map((item) =>
+        item.type === 'divider' ? null : (
+          <button key={item.key} onClick={item.onClick}>
+            {item.label}
+          </button>
+        ),
+      )}
+    </>
+  ),
   ActionIcon: ({
     disabled,
     icon,
@@ -84,47 +115,13 @@ vi.mock('@lobehub/ui', () => ({
       {title}
     </button>
   ),
-  copyToClipboard: vi.fn(),
-  DropdownMenu: ({
-    children,
-    items,
-  }: {
-    children?: ReactNode;
-    items?: { key: string; label?: ReactNode; onClick?: () => void; type?: string }[];
-  }) => (
-    <>
-      {children}
-      {items?.map((item) =>
-        item.type === 'divider' ? null : (
-          <button key={item.key} onClick={item.onClick}>
-            {item.label}
-          </button>
-        ),
-      )}
-    </>
-  ),
-  Flexbox: ({
-    children,
-    flex,
-    style,
-  }: {
-    children?: ReactNode;
-    flex?: CSSProperties['flex'];
-    style?: CSSProperties;
-  }) => <div style={{ flex, ...style }}>{children}</div>,
-  Freeze: ({ children }: { children?: ReactNode; frozen?: boolean }) => <>{children}</>,
-  Text: ({ children, style }: { children?: ReactNode; style?: CSSProperties }) => (
-    <span style={style}>{children}</span>
-  ),
-}));
-
-vi.mock('@lobehub/ui/base-ui', () => ({
   FloatingPanel: ({
     actions,
     children,
     height,
     minHeight,
     minWidth,
+    onClose,
     open,
     placement,
     resizable = true,
@@ -137,6 +134,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
     height?: unknown;
     minHeight?: number;
     minWidth?: number;
+    onClose?: () => void;
     open?: boolean;
     placement?: string;
     resizable?: boolean;
@@ -160,7 +158,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
           {title}
         </div>
         <div data-testid="panel-actions-slot">{actions}</div>
-        <button data-testid="panel-close-icon" />
+        <button data-testid="panel-close-icon" onClick={onClose} />
         <div data-testid="panel-body-slot" style={styles?.body}>
           {children}
         </div>
@@ -173,12 +171,6 @@ vi.mock('next/dynamic', () => ({
     function DynamicComponent({ children }: { children?: ReactNode }) {
       return <>{children}</>;
     },
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('@/features/Conversation/ChatList', () => ({
@@ -195,6 +187,14 @@ vi.mock('@/features/Conversation/Messages', () => ({
 
 vi.mock('@/features/Conversation/Markdown/plugins/Task', () => ({
   TaskCardScopeProvider: ({ children }: { children?: ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@/features/Portal/router', () => ({
+  PortalContent: ({ onClose }: { onClose?: () => void }) => (
+    <button data-testid="artifact-portal" onClick={onClose}>
+      artifact portal
+    </button>
+  ),
 }));
 
 vi.mock('@/features/ShareModal', () => ({
@@ -271,8 +271,20 @@ describe('TopicChatDrawer', () => {
   beforeEach(() => {
     mocks.agentState.useHydrateAgentConfig.mockClear();
     mocks.chatState.replaceMessages.mockClear();
+    mocks.chatState.portalStack = [];
+    mocks.chatState.showPortal = false;
+    mocks.chatState.closeArtifact.mockClear();
+    mocks.chatState.closeArtifact.mockImplementation(() => {
+      mocks.chatState.portalStack = mocks.chatState.portalStack.slice(0, -1);
+    });
+    mocks.chatState.clearPortalStack.mockClear();
+    mocks.chatState.clearPortalStack.mockImplementation(() => {
+      mocks.chatState.portalStack = [];
+      mocks.chatState.showPortal = false;
+    });
     mocks.navigate.mockClear();
     mocks.taskState.closeTopicDrawer.mockClear();
+    mocks.taskState.activeTopicDrawerFocusRequest = undefined;
     mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
     mocks.taskState.taskDetailMap['T-1'].activities[0] = {
       id: 'topic-1',
@@ -292,7 +304,11 @@ describe('TopicChatDrawer', () => {
   it('reconnects a running topic against the drawer agent', () => {
     mocks.taskState.taskDetailMap['T-1'].activities[0] = {
       id: 'topic-1',
-      runningOperation: { assistantMessageId: 'ast-1', operationId: 'op-1' },
+      runningOperation: {
+        assistantMessageId: 'ast-1',
+        heteroType: 'claude-code',
+        operationId: 'op-1',
+      },
       status: 'running',
       time: '2026-04-29T00:00:00.000Z',
       title: 'Topic 1',
@@ -303,8 +319,40 @@ describe('TopicChatDrawer', () => {
 
     expect(useGatewayReconnect).toHaveBeenCalledWith(
       'topic-1',
-      expect.objectContaining({ operationId: 'op-1' }),
+      expect.objectContaining({ heteroType: 'claude-code', operationId: 'op-1' }),
       'agt_assignee',
+    );
+  });
+
+  /** @example Embedded Topic B never reconnects against active drawer Topic A. */
+  it('keeps embedded operation context separate from an unrelated active drawer', () => {
+    mocks.taskState.taskDetailMap['T-1'].activities[0].runningOperation = {
+      assistantMessageId: 'ast-1',
+      heteroType: 'codex',
+      operationId: 'op-drawer',
+    };
+    const { rerender } = render(
+      <TopicChatDrawerBody agentId={'embedded-agent'} topicId={'topic-2'} />,
+    );
+    /** @example An unrelated active drawer supplies no fallback operation. */
+    expect(useGatewayReconnect).toHaveBeenLastCalledWith('topic-2', undefined, 'embedded-agent');
+    const runningOperation = {
+      assistantMessageId: 'ast-2',
+      heteroType: 'codex',
+      operationId: 'op-embedded',
+    };
+    rerender(
+      <TopicChatDrawerBody
+        agentId={'embedded-agent'}
+        runningOperation={runningOperation}
+        topicId={'topic-2'}
+      />,
+    );
+    /** @example An explicit embedded run owns its streaming context. */
+    expect(useGatewayReconnect).toHaveBeenLastCalledWith(
+      'topic-2',
+      runningOperation,
+      'embedded-agent',
     );
   });
 
@@ -356,7 +404,7 @@ describe('TopicChatDrawer', () => {
 
     expect(getByTestId('topic-panel')).toHaveAttribute(
       'data-panel-background',
-      'var(--ant-color-bg-container)',
+      'var(--lobe-color-bg-container)',
     );
   });
 
@@ -392,6 +440,39 @@ describe('TopicChatDrawer', () => {
     expect(getByTitle('taskDetail.topicDrawer.collapse')).toBeInTheDocument();
   });
 
+  it('opens expanded on hosts that default to the wide reading panel', () => {
+    const { getByTestId, getByTitle } = render(<TopicChatDrawer defaultExpanded />);
+
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-width',
+      'min(960px, calc(100vw - 16px))',
+    );
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-height', 'calc(100dvh - 16px)');
+    expect(getByTitle('taskDetail.topicDrawer.collapse')).toBeInTheDocument();
+  });
+
+  it('restores the host default size each time the drawer reopens', () => {
+    // The store mock is not reactive, so a throwaway prop forces each re-render.
+    const renderAt = (revision: number) => (
+      <TopicChatDrawer defaultExpanded {...({ 'data-revision': revision } as object)} />
+    );
+    const { getByTestId, getByTitle, queryByTestId, rerender } = render(renderAt(0));
+
+    fireEvent.click(getByTitle('taskDetail.topicDrawer.collapse'));
+    expect(getByTestId('topic-panel')).toHaveAttribute('data-width', '640');
+
+    mocks.taskState.activeTopicDrawerTopicId = undefined as unknown as string;
+    rerender(renderAt(1));
+    expect(queryByTestId('topic-panel')).not.toBeInTheDocument();
+
+    mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
+    rerender(renderAt(2));
+    expect(getByTestId('topic-panel')).toHaveAttribute(
+      'data-width',
+      'min(960px, calc(100vw - 16px))',
+    );
+  });
+
   it('opens the run in its Agent conversation', () => {
     const { getByText } = render(<TopicChatDrawer />);
 
@@ -399,6 +480,97 @@ describe('TopicChatDrawer', () => {
 
     expect(mocks.taskState.closeTopicDrawer).toHaveBeenCalledOnce();
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_assignee/topic-1');
+  });
+
+  it('closes an artifact inside the run drawer without clearing its parent task portal', () => {
+    mocks.chatState.portalStack = [
+      { taskId: 'T-1', type: 'taskDetail' },
+      { artifact: { id: 'message-1' }, type: 'artifact' },
+    ];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTestId('topic-panel')).toBeInTheDocument();
+    expect(view.getByTestId('artifact-portal')).toBeInTheDocument();
+    expect(view.queryByTestId('chat-list')).not.toBeInTheDocument();
+    expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
+
+    fireEvent.click(view.getByTestId('artifact-portal'));
+    expect(mocks.chatState.closeArtifact).toHaveBeenCalledOnce();
+    expect(mocks.chatState.clearPortalStack).not.toHaveBeenCalled();
+
+    view.unmount();
+    const conversationView = render(<TopicChatDrawer />);
+
+    expect(conversationView.getByTestId('chat-list')).toBeInTheDocument();
+    expect(conversationView.queryByTestId('artifact-portal')).not.toBeInTheDocument();
+    expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
+  });
+
+  it('closes its artifact together with the drawer so the topic reopens on the conversation', () => {
+    mocks.chatState.portalStack = [{ artifact: { id: 'message-1' }, type: 'artifact' }];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+    expect(view.getByTestId('artifact-portal')).toBeInTheDocument();
+
+    fireEvent.click(view.getByTestId('panel-close-icon'));
+
+    expect(mocks.chatState.closeArtifact).toHaveBeenCalledOnce();
+    expect(mocks.taskState.closeTopicDrawer).toHaveBeenCalledOnce();
+  });
+
+  it('leaves another conversation’s artifact open when the drawer closes', () => {
+    mocks.chatState.portalStack = [{ artifact: { id: 'another-message' }, type: 'artifact' }];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+    fireEvent.click(view.getByTestId('panel-close-icon'));
+
+    expect(mocks.chatState.closeArtifact).not.toHaveBeenCalled();
+    expect(mocks.taskState.closeTopicDrawer).toHaveBeenCalledOnce();
+  });
+
+  it('switches from its artifact to the conversation on each new focus request', () => {
+    // The store mock is not reactive and the drawer is a prop-less memo, so a
+    // throwaway prop forces each re-render after the mocked state changes.
+    const renderAt = (revision: number) => (
+      <TopicChatDrawer {...({ 'data-revision': revision } as object)} />
+    );
+    mocks.chatState.portalStack = [{ artifact: { id: 'message-1' }, type: 'artifact' }];
+    mocks.chatState.showPortal = true;
+
+    const view = render(renderAt(0));
+    expect(mocks.chatState.closeArtifact).not.toHaveBeenCalled();
+
+    mocks.taskState.activeTopicDrawerFocusRequest = 1;
+    view.rerender(renderAt(1));
+    expect(mocks.chatState.closeArtifact).toHaveBeenCalledOnce();
+    view.rerender(renderAt(2));
+    expect(view.getByTestId('chat-list')).toBeInTheDocument();
+
+    // An artifact opened later from inside the conversation stays open until
+    // another request arrives.
+    mocks.chatState.portalStack = [{ artifact: { id: 'message-1' }, type: 'artifact' }];
+    view.rerender(renderAt(3));
+    expect(view.getByTestId('artifact-portal')).toBeInTheDocument();
+    expect(mocks.chatState.closeArtifact).toHaveBeenCalledOnce();
+
+    mocks.taskState.activeTopicDrawerFocusRequest = 2;
+    view.rerender(renderAt(4));
+    expect(mocks.chatState.closeArtifact).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not take over an artifact opened by another conversation', () => {
+    mocks.chatState.portalStack = [{ artifact: { id: 'another-message' }, type: 'artifact' }];
+    mocks.chatState.showPortal = true;
+
+    const view = render(<TopicChatDrawer />);
+
+    expect(view.getByTestId('chat-list')).toBeInTheDocument();
+    expect(view.queryByTestId('artifact-portal')).not.toBeInTheDocument();
+    expect(mocks.taskState.closeTopicDrawer).not.toHaveBeenCalled();
   });
 
   it('uses a resizable bottom-right floating panel', () => {

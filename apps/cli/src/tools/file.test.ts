@@ -15,15 +15,6 @@ import {
   writeLocalFile,
 } from './file';
 
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 describe('file tools (integration wrapper)', () => {
   const tmpDir = path.join(os.tmpdir(), 'cli-file-test-' + process.pid);
 
@@ -32,6 +23,7 @@ describe('file tools (integration wrapper)', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     fs.rmSync(tmpDir, { force: true, recursive: true });
   });
 
@@ -86,13 +78,32 @@ describe('file tools (integration wrapper)', () => {
     expect(result.files).not.toContain('b.js');
   });
 
-  it('should re-export grepContent from shared package', async () => {
-    await writeFile(path.join(tmpDir, 'search.txt'), 'hello world');
+  it('searches a single file without external search tools', async () => {
+    vi.stubEnv('PATH', '');
+    const filePath = path.join(tmpDir, 'search.txt');
+    await writeFile(filePath, 'hello world\nother\nHELLO again');
 
-    const result = await grepContent({ cwd: tmpDir, pattern: 'hello' });
+    const result = await grepContent({
+      '-i': true,
+      '-n': true,
+      'output_mode': 'content',
+      'pattern': 'hello',
+      'scope': filePath,
+    });
 
-    expect(result).toHaveProperty('success');
-    expect(result).toHaveProperty('matches');
+    expect(result.success).toBe(true);
+    expect(result.matches).toEqual([`${filePath}:1:hello world`, `${filePath}:3:HELLO again`]);
+  });
+
+  it('preserves the legacy filePattern filter', async () => {
+    vi.stubEnv('PATH', '');
+    await writeFile(path.join(tmpDir, 'match.ts'), 'hello');
+    await writeFile(path.join(tmpDir, 'ignored.txt'), 'hello');
+
+    const result = await grepContent({ cwd: tmpDir, filePattern: '*.ts', pattern: 'hello' });
+
+    expect(result.success).toBe(true);
+    expect(result.matches).toEqual([path.join(tmpDir, 'match.ts')]);
   });
 
   it('should re-export searchLocalFiles from shared package', async () => {

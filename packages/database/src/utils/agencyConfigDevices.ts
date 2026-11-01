@@ -8,7 +8,7 @@ import type { LobeChatDatabase, Transaction } from '../type';
 /**
  * Collect device ids that an incoming `agencyConfig` patch is *setting*
  * (not clearing). `workingDirByDevice` entries with `undefined` value are
- * deletes (per `pruneWorkingDirByDeviceDeletes`) and are skipped.
+ * deletes (per `applyWorkingDirByDevicePatch`) and are skipped.
  */
 export const collectBoundDeviceIds = (
   agencyConfig: PartialDeep<LobeAgentAgencyConfig> | null | undefined,

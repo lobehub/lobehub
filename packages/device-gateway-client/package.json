@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./endpoint": "./src/endpoint.ts"
   },
   "main": "./src/index.ts",
   "scripts": {
@@ -11,10 +12,11 @@
     "test:coverage": "bunx vitest run --coverage"
   },
   "dependencies": {
+    "@lobechat/types": "workspace:*",
     "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/ws": "^8.18.1",
-    "vitest": "3.2.6"
+    "vitest": "5.0.0"
   }
 }

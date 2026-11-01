@@ -11,13 +11,6 @@ import AgentPickerStep from './index';
 
 // base-ui Button needs a MotionProvider the app wires globally but the unit env
 // lacks; stub it to a native button so the assertions can run.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, disabled, onClick }: any) => (
-    <button disabled={disabled} type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-}));
 
 const navigate = vi.fn();
 const finishOnboarding = vi.fn().mockResolvedValue(undefined);
@@ -129,7 +122,7 @@ describe('AgentPickerStep', () => {
     const continueButton = screen.getByRole('button', { name: 'agentPicker.continue (1)' });
     fireEvent.click(continueButton);
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/?onboarding=task'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
     expect(installMarketplaceAgents).toHaveBeenCalledWith(['t1']);
     expect(finishOnboarding).toHaveBeenCalledTimes(1);
     expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
@@ -142,7 +135,7 @@ describe('AgentPickerStep', () => {
     });
     expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
       flow: 'classic',
-      targetUrl: '/?onboarding=task',
+      targetUrl: '/',
     });
   });
 
@@ -151,7 +144,7 @@ describe('AgentPickerStep', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'agentPicker.skip' }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/?onboarding=task'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
     expect(finishOnboarding).toHaveBeenCalledTimes(1);
     expect(installMarketplaceAgents).not.toHaveBeenCalled();
     expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
@@ -164,7 +157,7 @@ describe('AgentPickerStep', () => {
     });
     expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
       flow: 'classic',
-      targetUrl: '/?onboarding=task',
+      targetUrl: '/',
     });
   });
 
@@ -203,7 +196,7 @@ describe('AgentPickerStep', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'agentPicker.skip' }));
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/?onboarding=task'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
     expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
       action: 'skip',
       entry: 'agent_skip',
@@ -214,7 +207,7 @@ describe('AgentPickerStep', () => {
     });
     expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
       flow: 'agent',
-      targetUrl: '/?onboarding=task',
+      targetUrl: '/',
     });
   });
 });

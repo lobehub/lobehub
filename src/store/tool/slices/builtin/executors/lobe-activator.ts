@@ -21,7 +21,9 @@ import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionR
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
+import { pluginSelectors } from '@/store/tool/selectors';
 import { toolSelectors } from '@/store/tool/selectors/tool';
+import { composioStoreSelectors } from '@/store/tool/slices/composioStore/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore';
 
 const skillsRuntime = new SkillsExecutionRuntime({
@@ -62,12 +64,15 @@ const service: ActivatorRuntimeService = {
           identifier: builtin.identifier,
           name: builtin.title ?? builtin.identifier,
           systemRole: builtin.manifest.systemRole,
+          // Passed through for wire-name matching: non-builtin types append
+          // a `____<type>` segment to the offered wire name.
+          type: builtin.manifest.type,
         });
         continue;
       }
 
       // Search installed plugins
-      const plugin = s.installedPlugins.find((p) => p.identifier === id);
+      const plugin = pluginSelectors.getInstalledPluginById(id)(s);
       if (plugin?.manifest) {
         results.push({
           apiDescriptions: (plugin.manifest.api || []).map((a) => ({
@@ -78,6 +83,7 @@ const service: ActivatorRuntimeService = {
           identifier: plugin.identifier,
           name: plugin.manifest.meta?.title ?? plugin.identifier,
           systemRole: plugin.manifest.systemRole,
+          type: (plugin.manifest as { type?: string }).type,
         });
         continue;
       }
@@ -98,9 +104,49 @@ const service: ActivatorRuntimeService = {
         });
         continue;
       }
+
+      // Search Composio MCP servers — the discovery allowlist includes
+      // connected Composio entries whose manifests come straight from the
+      // cached `composioServers` replica, while `getInstalledPluginById`
+      // only sees synced plugin replicas. During the startup window before
+      // the independent plugin fetch lands, the plugin probe misses and
+      // activation would fail with `Not found`; build the manifest from the
+      // cached server tools instead. Placed after the LobeHub Skill probe to
+      // mirror discovery's ownership rule: an identifier served by a
+      // connected LobeHub Skill server must not be claimed by its legacy
+      // Composio connection.
+      const composioManifest = composioStoreSelectors
+        .composioAsLobeTools(s)
+        .find((tool) => tool.identifier === id);
+      if (composioManifest) {
+        results.push({
+          apiDescriptions: (composioManifest.manifest.api || []).map((a: any) => ({
+            description: a.description,
+            name: a.name,
+          })),
+          avatar: composioManifest.manifest.meta?.avatar,
+          identifier: composioManifest.identifier,
+          name: composioManifest.manifest.meta?.title ?? composioManifest.identifier,
+          systemRole: composioManifest.manifest.systemRole,
+          type: (composioManifest.manifest as { type?: string }).type,
+        });
+        continue;
+      }
     }
 
     return results;
+  },
+  // Full discoverable list, for inverting `MD5HASH_…` wire-name segments and
+  // resolving bare API names: neither can be probed against the
+  // identifier-keyed `getToolManifests`, so the runtime hashes every
+  // discoverable identifier locally and matches the generated wire-name
+  // variants. Reuses `getToolManifests` on the same
+  // `availableToolsForDiscovery` allowlist so scoping and manifest mapping
+  // cannot drift between the two paths.
+  listToolManifests: async (): Promise<ToolManifestInfo[]> => {
+    const s = getToolStoreState();
+    const discoveryIds = toolSelectors.availableToolsForDiscovery(s).map((tool) => tool.identifier);
+    return service.getToolManifests(discoveryIds);
   },
   markActivated: () => {},
 };

@@ -104,6 +104,18 @@ LobeHub 支持使用 Better Auth 配置外部身份验证服务，供企业 / �
 - **开发环境**：`http://localhost:3210/api/auth/callback/{provider}`
 - **生产环境**：`https://yourdomain.com/api/auth/callback/{provider}`
 
+## 追加可信来源
+
+Better Auth 会校验回调和重定向 URL 的来源。如果需要允许另一个精确来源，同时保留自动生成的应用、Vercel、移动端及认证提供商来源，请配置：
+
+```bash
+AUTH_ADDITIONAL_TRUSTED_ORIGINS=https://gateway.example.com
+```
+
+多个来源使用逗号分隔。HTTP 或 HTTPS 地址只保留来源，因此 `https://gateway.example.com/signin` 会按 `https://gateway.example.com` 处理；移动端自定义协议会被完整保留。
+
+仅在确实需要替换完整生成列表时使用 `AUTH_TRUSTED_ORIGINS`。使用该变量时，必须自行包含所有必需的网页来源和移动端自定义协议。请使用精确来源，不要使用通配符。
+
 ## 邮箱密码选项
 
 **禁用邮箱密码登录（仅 SSO 模式）：**

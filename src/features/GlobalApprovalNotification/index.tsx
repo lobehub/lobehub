@@ -1,17 +1,23 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { ActionIcon } from '@lobehub/ui';
-import { ChevronUp } from 'lucide-react';
-import { AnimatePresence, m } from 'motion/react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { toast } from '@lobehub/ui';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 
 import ApprovalCard from './ApprovalCard';
+import GoalClarificationCard from './GoalClarificationCard';
+import GoalDecisionCard from './GoalDecisionCard';
 import { styles } from './styles';
+import { useApprovalIslandCollapse } from './useApprovalIslandCollapse';
 import { useGlobalPendingApprovals } from './useGlobalPendingApprovals';
+import { goalClarificationIslandKey, useIslandDismissals } from './useIslandDismissals';
+import { usePendingGoalClarifications } from './usePendingGoalClarifications';
+import { usePendingGoalDecisions } from './usePendingGoalDecisions';
 
 const SPRING = { damping: 30, stiffness: 320, type: 'spring' } as const;
 
@@ -29,22 +35,39 @@ const TOP_OFFSET = isDesktop ? TITLE_BAR_HEIGHT + 8 : 16;
 const GlobalApprovalNotification = memo(() => {
   const { t } = useTranslation('chat');
   const groups = useGlobalPendingApprovals();
-  const [collapsed, setCollapsed] = useState(false);
+  // A goal waiting on its clarification round asks through the same island.
+  // Run approvals go first: a run is blocked mid-turn, a goal has not started.
+  const pendingGoalGroups = usePendingGoalClarifications();
+  // Then the gates a running goal stopped on, then finished goals awaiting
+  // sign-off — each blocks less than the one before it.
+  const pendingGoalItems = usePendingGoalDecisions();
+  // Goal asks the user waved off leave the island but stay in the Home inbox,
+  // so they are never lost — a run approval has no such fallback and stays.
+  const { dismiss: dismissKey, dismissed } = useIslandDismissals();
+  const dismiss = (key: string) => {
+    dismissKey(key);
+    toast.info({ placement: 'top', title: t('globalApproval.dismissed') });
+  };
+  const goalGroups = useMemo(
+    () => pendingGoalGroups.filter((group) => !dismissed.has(goalClarificationIslandKey(group))),
+    [dismissed, pendingGoalGroups],
+  );
+  const goalItems = useMemo(
+    () => pendingGoalItems.filter((item) => !dismissed.has(item.key)),
+    [dismissed, pendingGoalItems],
+  );
+  const total = groups.length + goalGroups.length + goalItems.length;
+  const [collapsed, setCollapsed] = useApprovalIslandCollapse(total);
 
-  // Auto-expand whenever a fresh batch of approvals arrives after being idle.
-  const prevCount = useRef(0);
-  useEffect(() => {
-    if (groups.length > prevCount.current) setCollapsed(false);
-    prevCount.current = groups.length;
-  }, [groups.length]);
-
-  const hasApprovals = groups.length > 0;
+  const hasApprovals = total > 0;
   // Only ONE card is actionable at a time: the reused `ApprovalActions`
   // registers window-level Enter/1/2 shortcuts, so mounting a card per group
   // would let a single Enter submit every pending approval at once. Extra
   // approvals queue behind a count and surface as each one resolves.
   const top = groups[0];
-  const extraCount = groups.length - 1;
+  const topGoal = top ? undefined : goalGroups[0];
+  const topGoalItem = top || topGoal ? undefined : goalItems[0];
+  const extraCount = total - 1;
 
   return (
     <div className={styles.wrapper} style={{ '--global-approval-top': `${TOP_OFFSET}px` } as any}>
@@ -62,7 +85,7 @@ const GlobalApprovalNotification = memo(() => {
               onClick={() => setCollapsed(false)}
             >
               <span className={styles.pillDot} />
-              {t('globalApproval.pendingCount', { count: groups.length })}
+              {t('globalApproval.pendingCount', { count: total })}
             </m.div>
           ) : (
             <m.div
@@ -74,14 +97,6 @@ const GlobalApprovalNotification = memo(() => {
               key="stack"
               transition={SPRING}
             >
-              <m.div layout style={{ alignSelf: 'flex-end', pointerEvents: 'auto' }}>
-                <ActionIcon
-                  icon={ChevronUp}
-                  size="small"
-                  title={t('globalApproval.collapse')}
-                  onClick={() => setCollapsed(true)}
-                />
-              </m.div>
               <AnimatePresence mode="popLayout">
                 {top && (
                   <m.div
@@ -93,7 +108,41 @@ const GlobalApprovalNotification = memo(() => {
                     style={{ pointerEvents: 'auto', width: '100%' }}
                     transition={SPRING}
                   >
-                    <ApprovalCard group={top} />
+                    <ApprovalCard group={top} onCollapse={() => setCollapsed(true)} />
+                  </m.div>
+                )}
+                {topGoal && (
+                  <m.div
+                    layout
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: -16 }}
+                    initial={{ opacity: 0, scale: 0.96, y: -16 }}
+                    key={`goal:${topGoal.goalId}`}
+                    style={{ pointerEvents: 'auto', width: '100%' }}
+                    transition={SPRING}
+                  >
+                    <GoalClarificationCard
+                      group={topGoal}
+                      onCollapse={() => setCollapsed(true)}
+                      onDismiss={() => dismiss(goalClarificationIslandKey(topGoal))}
+                    />
+                  </m.div>
+                )}
+                {topGoalItem && (
+                  <m.div
+                    layout
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.96, y: -16 }}
+                    initial={{ opacity: 0, scale: 0.96, y: -16 }}
+                    key={topGoalItem.key}
+                    style={{ pointerEvents: 'auto', width: '100%' }}
+                    transition={SPRING}
+                  >
+                    <GoalDecisionCard
+                      item={topGoalItem}
+                      onCollapse={() => setCollapsed(true)}
+                      onDismiss={() => dismiss(topGoalItem.key)}
+                    />
                   </m.div>
                 )}
               </AnimatePresence>

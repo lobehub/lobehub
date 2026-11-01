@@ -135,12 +135,35 @@ afterEach(() => {
 });
 
 describe('TRAE ACP helpers', () => {
-  it('builds the fixed ACP server argv before user arguments', () => {
-    expect(buildTraeAcpArgs(['--feature=test'])).toEqual([
+  it('keeps existing ACP Server arguments after the subcommand', () => {
+    expect(buildTraeAcpArgs(['--dangerously-bypass-hook-trust'])).toEqual([
       'acp',
       'serve',
       '--yolo',
-      '--feature=test',
+      '--dangerously-bypass-hook-trust',
+    ]);
+  });
+
+  it('moves documented global arguments before the ACP subcommand', () => {
+    expect(
+      buildTraeAcpArgs([
+        '--dangerously-bypass-hook-trust',
+        '--profile',
+        'lobehub',
+        '-c',
+        'model_reasoning_effort="high"',
+        '--permission-mode=auto',
+      ]),
+    ).toEqual([
+      '--profile',
+      'lobehub',
+      '-c',
+      'model_reasoning_effort="high"',
+      '--permission-mode=auto',
+      'acp',
+      'serve',
+      '--yolo',
+      '--dangerously-bypass-hook-trust',
     ]);
   });
 

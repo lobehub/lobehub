@@ -1,27 +1,26 @@
 # Cloud Project Workflow Configuration
 
-Cloud-specific workflow configurations and patterns for the lobehub-cloud project.
+How the cloud project serves workflows on top of the open-source submodule.
 
 ## Table of Contents
 
 1. [Overview](#overview)
 2. [Directory Structure](#directory-structure) — submodule + cloud layout
-3. [Cloud-Specific Patterns](#cloud-specific-patterns) — cloud-only workflows + re-export pattern
-4. [TypeScript Path Mappings](#typescript-path-mappings)
-5. [Workflow Class Location](#workflow-class-location) — cloud-only vs shared
-6. [Environment Variables](#environment-variables)
-7. [Best Practices](#best-practices) — decide cloud vs OSS, re-export rules, naming
-8. [Migration Guide](#migration-guide) — moving workflows from cloud to lobehub
-9. [Examples](#examples) — `welcome-placeholder`, `agent-eval-run`
-10. [Troubleshooting](#troubleshooting) — circular imports, 404s, type errors
-11. [Related Documentation](#related-documentation)
+3. [Shared Workflows](#shared-workflows) — served through the submodule catch-all
+4. [Cloud-Only Workflows](#cloud-only-workflows) — separate `cloud/` catch-all
+5. [Path Mappings](#path-mappings)
+6. [Best Practices](#best-practices) — decide cloud vs OSS
+7. [Migration Guide](#migration-guide) — moving a workflow from cloud to lobehub
+8. [Troubleshooting](#troubleshooting)
 
 ## Overview
 
-The lobehub-cloud project extends the open-source lobehub codebase with cloud-specific features. Workflows can be implemented in either:
+Workflows live in one of two places:
 
-1. **Lobehub (open-source)** - Available to all users
-2. **Lobehub-cloud (proprietary)** - Cloud-specific business logic
+1. **Lobehub (open-source)** — available to every deployment
+2. **Lobehub-cloud (proprietary)** — cloud-only business logic
+
+Both use the same building blocks: a Next.js catch-all route that forwards into a Hono router, and one Hono sub-app per workflow with one `serve(...)` endpoint per layer.
 
 ---
 
@@ -31,325 +30,120 @@ The lobehub-cloud project extends the open-source lobehub codebase with cloud-sp
 
 ```text
 lobehub/
-└── src/
-    ├── app/(backend)/api/workflows/
-    │   ├── memory-user-memory/       # Memory extraction workflows
-    │   └── agent-eval-run/            # Benchmark evaluation workflows
-    └── server/workflows/
-        ├── agentEvalRun/
-        └── ...
+├── src/app/(backend)/api/workflows/
+│   └── [[...route]]/route.ts        # Catch-all — forwards into the Hono router below
+└── apps/server/src/
+    ├── router-hono/workflows/
+    │   ├── index.ts                  # Mounts each workflow's sub-app at /api/workflows/{name}
+    │   ├── agent-eval-run/
+    │   └── memory-user-memory/
+    └── workflows/
+        ├── agentEvalRun/             # Workflow class (static trigger*() methods)
+        └── memoryUserMemory/
 ```
 
 ### Lobehub-cloud (Proprietary)
 
 ```text
 lobehub-cloud/
-└── src/
-    ├── app/(backend)/api/workflows/
-    │   ├── welcome-placeholder/       # Cloud-only: AI placeholder generation
-    │   ├── agent-welcome/            # Cloud-only: Agent welcome messages
-    │   ├── agent-eval-run/           # Re-export from lobehub
-    │   └── memory-user-memory/       # Re-export from lobehub
-    └── server/workflows/
-        ├── welcomePlaceholder/
-        ├── agentWelcome/
-        └── agentEvalRun/             # Re-export from lobehub
+├── src/app/(backend)/api/workflows/
+│   ├── [[...route]]/route.ts        # One-line re-export of the submodule catch-all
+│   └── cloud/[[...route]]/route.ts  # Catch-all for cloud-only workflows
+└── apps/server/src/cloud-workflow/
+    ├── index.ts                      # Cloud Hono router, basePath /api/workflows/cloud
+    └── feature-name/
+        ├── index.ts                  # Sub-app — one app.post('/{layer}', serve(...)) per layer
+        ├── handlers/                 # One handler per layer
+        └── workflow.ts               # Workflow class + payload types
 ```
+
+Next.js routes the more specific `cloud/` segment to the cloud catch-all, so the two routers never collide.
 
 ---
 
-## Cloud-Specific Patterns
+## Shared Workflows
 
-### Pattern 1: Cloud-Only Workflows
-
-**Use Case**: Features exclusive to cloud users (AI generation, premium features)
-
-**Example**: `welcome-placeholder`, `agent-welcome`
-
-**Implementation**:
-
-- Implement directly in `lobehub-cloud/src/app/(backend)/api/workflows/`
-- No need for re-exports
-- Can use cloud-specific packages and services
-
-**Structure**:
-
-```text
-lobehub-cloud/src/
-├── app/(backend)/api/workflows/
-│   └── feature-name/
-│       ├── process-items/route.ts
-│       ├── paginate-items/route.ts
-│       └── execute-item/route.ts
-└── server/workflows/
-    └── featureName/
-        └── index.ts
-```
-
----
-
-### Pattern 2: Re-export from Lobehub
-
-**Use Case**: Workflows implemented in open-source but also used in cloud
-
-**Example**: `agent-eval-run`, `memory-user-memory`
-
-**Why Re-export?**
-
-- Cloud deployment needs to serve these endpoints
-- Lobehub submodule code is not directly accessible in cloud routes
-- Allows cloud-specific overrides if needed in the future
-
-#### Re-export Implementation
-
-**Step 1**: Implement workflow in lobehub submodule
+A workflow added to the submodule is served by cloud automatically: cloud's `[[...route]]/route.ts` re-exports the submodule catch-all, which already mounts every sub-app in `router-hono/workflows/index.ts`.
 
 ```typescript
-// lobehub/src/app/(backend)/api/workflows/feature/layer/route.ts
-import { serve } from '@upstash/workflow/nextjs';
+// lobehub-cloud/src/app/(backend)/api/workflows/[[...route]]/route.ts
+export { POST } from 'lobehub/src/app/(backend)/api/workflows/[[...route]]/route';
+```
 
-export const { POST } = serve<Payload>(
-  async (context) => {
-    // Implementation
-  },
-  { flowControl: { ... } }
+Do not add per-workflow re-export files in cloud. Import the submodule route through the `lobehub/...` path, not `@/...`, to avoid a circular alias.
+
+---
+
+## Cloud-Only Workflows
+
+Implement cloud-only workflows under `apps/server/src/cloud-workflow/<name>/` and mount the sub-app in `apps/server/src/cloud-workflow/index.ts`:
+
+```typescript
+// lobehub-cloud/apps/server/src/cloud-workflow/feature-name/index.ts
+import { serve } from '@upstash/workflow/hono';
+import { Hono } from 'hono';
+
+import { createWorkflowQstashClient } from '@/server/router-hono/workflows/qstashClient';
+
+const app = new Hono();
+
+app.post(
+  '/process-items',
+  serve<ProcessItemsPayload>((context) => runProcessItems(context), {
+    flowControl: { key: 'feature-name.process-items', parallelism: 1, ratePerSecond: 1 },
+    qstashClient: createWorkflowQstashClient(),
+  }),
 );
-```
 
-**Step 2**: Create re-export in lobehub-cloud
+export default app;
+```
 
 ```typescript
-// lobehub-cloud/src/app/(backend)/api/workflows/feature/layer/route.ts
-export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature/layer/route';
+// lobehub-cloud/apps/server/src/cloud-workflow/index.ts
+app.route('/feature-name', featureNameApp);
 ```
 
-**Important**: Use `lobehub/src/...` path, NOT `@/...` to avoid circular imports.
-
-#### Re-export Directory Structure
-
-```bash
-# Create directories
-mkdir -p lobehub-cloud/src/app/(backend)/api/workflows/feature-name/layer-1
-mkdir -p lobehub-cloud/src/app/(backend)/api/workflows/feature-name/layer-2
-mkdir -p lobehub-cloud/src/app/(backend)/api/workflows/feature-name/layer-3
-
-# Create re-export files
-echo "export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature-name/layer-1/route';" > \
-  lobehub-cloud/src/app/(backend)/api/workflows/feature-name/layer-1/route.ts
-
-echo "export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature-name/layer-2/route';" > \
-  lobehub-cloud/src/app/(backend)/api/workflows/feature-name/layer-2/route.ts
-
-echo "export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature-name/layer-3/route';" > \
-  lobehub-cloud/src/app/(backend)/api/workflows/feature-name/layer-3/route.ts
-```
+Their endpoints live under `/api/workflows/cloud/<name>/<layer>`, so the workflow class must trigger that path.
 
 ---
 
-## TypeScript Path Mappings
+## Path Mappings
 
-The cloud project uses tsconfig path mappings to override lobehub code:
+Cloud resolves `@/server/*` through cloud code first, then the submodule:
 
 ```json
 // lobehub-cloud/tsconfig.json
-{
-  "compilerOptions": {
-    "paths": {
-      "@/*": ["./src/*", "./lobehub/src/*"]
-    }
-  }
-}
+"@/server/*": ["./src/server/*", "./apps/server/src/*", "./lobehub/apps/server/src/*"]
 ```
 
-**Resolution Order**:
-
-1. `./src/*` (cloud code) - checked first
-2. `./lobehub/src/*` (open-source) - fallback
-
-This allows cloud to override specific modules while using lobehub defaults.
-
----
-
-## Workflow Class Location
-
-### Cloud-Only Workflows
-
-Place workflow class in cloud:
-
-```text
-lobehub-cloud/apps/server/src/workflows/featureName/index.ts
-```
-
-### Shared Workflows
-
-Place workflow class in lobehub, re-export in cloud if needed:
-
-```text
-lobehub/apps/server/src/workflows/featureName/index.ts
-```
-
----
-
-## Environment Variables
-
-Both lobehub and cloud workflows require:
-
-```bash
-# Required for all workflows
-APP_URL=https://your-app.com # Base URL for workflow endpoints
-QSTASH_TOKEN=qstash_xxx      # QStash authentication token
-
-# Optional (for custom QStash URL)
-QSTASH_URL=https://custom-qstash.com # Custom QStash endpoint
-```
-
-**Cloud-Specific**:
-
-```bash
-# Cloud database (for monetization features)
-CLOUD_DATABASE_URL=postgresql://...
-
-# Cloud-specific services
-REDIS_URL=redis://...
-```
+Cloud-only workflows can therefore import shared helpers such as `@/server/router-hono/workflows/qstashClient` directly.
 
 ---
 
 ## Best Practices
 
-### 1. Decide: Cloud or Open-Source?
-
 **Implement in Lobehub if**:
 
-- Feature is useful for all LobeHub users
-- No proprietary business logic
-- Can be open-sourced
+- The feature is useful for every deployment
+- It contains no proprietary business logic
 
 **Implement in Cloud if**:
 
-- Premium/paid feature
-- Uses cloud-specific services
-- Contains proprietary algorithms
+- It depends on cloud-only services or data
+- It contains proprietary business logic
 
-### 2. Re-export Pattern
-
-✅ **Do**:
-
-```typescript
-// Simple re-export
-export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature/route';
-```
-
-❌ **Don't**:
-
-```typescript
-// Avoid circular imports with @/ path
-export { POST } from '@/app/(backend)/api/workflows/feature/route'; // ❌
-```
-
-### 3. Keep Workflow Logic in Lobehub
-
-For shared features:
-
-- Implement core logic in `lobehub/` (open-source)
-- Only override if cloud needs different behavior
-- Use re-exports for cloud deployment
-
-### 4. Directory Naming
-
-Follow consistent naming across lobehub and cloud:
-
-```text
-# Both should use same structure
-lobehub/src/app/(backend)/api/workflows/feature-name/
-lobehub-cloud/src/app/(backend)/api/workflows/feature-name/
-```
+Keep shared logic in `lobehub/` and let cloud consume it through the catch-all re-export; override only when cloud needs different behavior.
 
 ---
 
 ## Migration Guide
 
-### Moving Workflow from Cloud to Lobehub
+### Moving a Workflow from Cloud to Lobehub
 
-**Step 1**: Copy workflow to lobehub
-
-```bash
-cp -r lobehub-cloud/src/app/(backend)/api/workflows/feature \
-      lobehub/src/app/(backend)/api/workflows/
-```
-
-**Step 2**: Remove cloud-specific dependencies
-
-- Replace cloud services with generic interfaces
-- Remove proprietary business logic
-- Update imports to use lobehub paths
-
-**Step 3**: Create re-exports in cloud
-
-```typescript
-// lobehub-cloud/src/app/(backend)/api/workflows/feature/*/route.ts
-export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature/*/route';
-```
-
-**Step 4**: Move workflow class to lobehub
-
-```bash
-mv lobehub-cloud/apps/server/src/workflows/feature \
-  lobehub/apps/server/src/workflows/
-```
-
-**Step 5**: Update cloud imports
-
-```typescript
-// Change from
-import { Workflow } from '@/server/workflows/feature';
-
-// To
-import { Workflow } from 'lobehub/apps/server/src/workflows/feature';
-```
-
----
-
-## Examples
-
-### Cloud-Only Workflow: welcome-placeholder
-
-**Location**: `lobehub-cloud/src/app/(backend)/api/workflows/welcome-placeholder/`
-
-**Why Cloud-Only**: Uses proprietary AI generation service and Redis caching
-
-**Structure**:
-
-```text
-lobehub-cloud/
-├── src/app/(backend)/api/workflows/welcome-placeholder/
-│   ├── process-users/route.ts
-│   ├── paginate-users/route.ts
-│   └── generate-user/route.ts
-└── apps/server/src/workflows/welcomePlaceholder/
-    └── index.ts
-```
-
-### Re-exported Workflow: agent-eval-run
-
-**Location**:
-
-- Implementation: `lobehub/src/app/(backend)/api/workflows/agent-eval-run/`
-- Re-export: `lobehub-cloud/src/app/(backend)/api/workflows/agent-eval-run/`
-
-**Why Re-export**: Core feature available in open-source, also used by cloud
-
-**Cloud Re-export Files**:
-
-```typescript
-// lobehub-cloud/src/app/(backend)/api/workflows/agent-eval-run/run-benchmark/route.ts
-export { POST } from 'lobehub/src/app/(backend)/api/workflows/agent-eval-run/run-benchmark/route';
-
-// lobehub-cloud/src/app/(backend)/api/workflows/agent-eval-run/paginate-test-cases/route.ts
-export { POST } from 'lobehub/src/app/(backend)/api/workflows/agent-eval-run/paginate-test-cases/route';
-
-// ... (all layers)
-```
+1. Move the sub-app from `lobehub-cloud/apps/server/src/cloud-workflow/<name>/` to `lobehub/apps/server/src/router-hono/workflows/<name>/`, and its class to `lobehub/apps/server/src/workflows/<name>/`.
+2. Replace cloud-only services with generic interfaces and remove proprietary logic.
+3. Mount the sub-app in `lobehub/apps/server/src/router-hono/workflows/index.ts` and remove it from `cloud-workflow/index.ts`.
+4. Update the class's trigger URLs from `/api/workflows/cloud/<name>/...` to `/api/workflows/<name>/...`.
 
 ---
 
@@ -357,44 +151,18 @@ export { POST } from 'lobehub/src/app/(backend)/api/workflows/agent-eval-run/pag
 
 ### Circular Import Error
 
-**Error**: `Circular definition of import alias 'POST'`
+**Error**: `Circular definition of import alias`
 
-**Cause**: Using `@/` path in re-export within cloud codebase
-
-**Solution**: Use `lobehub/src/` path instead
-
-```typescript
-// ❌ Wrong
-export { POST } from '@/app/(backend)/api/workflows/feature/route';
-
-// ✅ Correct
-export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature/route';
-```
+**Cause**: Cloud's catch-all re-export uses `@/app/...` instead of `lobehub/src/app/...`.
 
 ### Workflow Not Found (404)
 
-**Cause**: Missing re-export in cloud
-
-**Solution**: Create re-export files for all workflow layers
-
-```bash
-# Check if re-export exists
-ls lobehub-cloud/src/app/\(backend\)/api/workflows/feature-name/
-
-# If missing, create re-exports
-mkdir -p lobehub-cloud/src/app/\(backend\)/api/workflows/feature-name/layer
-echo "export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature-name/layer/route';" > lobehub-cloud/src/app/\(backend\)/api/workflows/feature-name/layer/route.ts
-```
+- Shared workflow: check that the sub-app is mounted in `lobehub/apps/server/src/router-hono/workflows/index.ts`.
+- Cloud-only workflow: check that it is mounted in `cloud-workflow/index.ts` and that the trigger URL includes the `/cloud` segment.
 
 ### Type Errors After Moving to Lobehub
 
-**Cause**: Cloud-specific types or services used in lobehub code
-
-**Solution**:
-
-1. Extract cloud-specific logic to cloud-only wrapper
-2. Use dependency injection for services
-3. Define generic interfaces in lobehub
+Cloud-only types or services leaked into the moved code. Keep them in a cloud-side wrapper or inject them through a generic interface.
 
 ---
 

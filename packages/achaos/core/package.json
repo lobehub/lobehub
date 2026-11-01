@@ -1,0 +1,13 @@
+{
+  "name": "@achaos/core",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}

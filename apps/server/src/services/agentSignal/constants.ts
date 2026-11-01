@@ -18,10 +18,23 @@ export const AGENT_SIGNAL_KEYS = {
 
 /** Server-owned timing defaults for AgentSignal storage and generation. */
 export const AGENT_SIGNAL_DEFAULTS = {
+  /**
+   * Per-user, per-UTC-day ceiling on feedback satisfaction classifier calls. Each call is a
+   * mini-model request billed to the user's provider credentials.
+   */
+  dailyFeedbackClassifierBudgetPerUser: 200,
   generationLockTtlSeconds: 5,
+  /**
+   * Most distinct topics one user's nightly review may process for one local review date, across
+   * all of that user's agents: topics fed into each agent's review context plus topics the
+   * nightly expertise ingestion reads. Everyday conversation has no count cap.
+   */
+  nightlyReviewTopicLimitPerUser: 50,
   receiptTtlSeconds: 3 * 24 * 60 * 60,
   runtimeGuardTtlSeconds: 3600,
   runtimeWaypointTtlSeconds: 3600,
+  /** Max accepted self-feedback intent declarations per operation (or topic) scope. */
+  selfFeedbackIntentDeclarationLimitPerScope: 3,
   signalDedupeTtlSeconds: 300,
   signalWindowTtlSeconds: 3600,
 } as const;

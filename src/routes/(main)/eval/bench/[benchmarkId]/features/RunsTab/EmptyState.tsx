@@ -1,6 +1,4 @@
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Activity, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,7 +49,7 @@ const EmptyState = memo<EmptyStateProps>(({ onCreate }) => {
           {t('run.empty.descriptionBenchmark')}
         </Text>
       </Flexbox>
-      <Button icon={Plus} size="small" type="primary" onClick={onCreate}>
+      <Button icon={Plus} type="primary" onClick={onCreate}>
         {t('run.actions.create')}
       </Button>
     </Flexbox>

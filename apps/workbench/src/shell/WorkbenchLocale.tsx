@@ -1,13 +1,11 @@
 'use client';
 
-import { ConfigProvider } from 'antd';
 import dayjs from 'dayjs';
 import { memo, type PropsWithChildren, useEffect, useState } from 'react';
-import { isRtlLang } from 'rtl-detect';
+import { I18nextProvider } from 'react-i18next';
 
 import type { DayjsLocaleGlobEntry } from '@/utils/dayjsLocale';
 import { loadDayjsLocaleModule, normalizeDayjsLocale } from '@/utils/dayjsLocale';
-import { getAntdLocale } from '@/utils/locale';
 
 import { createWorkbenchI18n } from './createWorkbenchI18n';
 
@@ -32,12 +30,12 @@ const dayjsLocaleLoaders: Record<string, DayjsLocaleGlobEntry> = {
   'zh-tw': () => import('dayjs/locale/zh-tw'),
 };
 
-const updateDayjs = async (lang: string) => {
+const loadDayjsLocale = async (lang: string) => {
   const locale = normalizeDayjsLocale(lang);
   const loader = dayjsLocaleLoaders[locale] ?? dayjsLocaleLoaders.en;
   const mod = await loadDayjsLocaleModule(loader!);
 
-  dayjs.locale(mod.default);
+  return mod.default;
 };
 
 interface WorkbenchLocaleProps extends PropsWithChildren {
@@ -47,31 +45,33 @@ interface WorkbenchLocaleProps extends PropsWithChildren {
 
 const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, resources }) => {
   const [i18n] = useState(() => createWorkbenchI18n(defaultLang, resources));
-  const [lang, setLang] = useState(defaultLang ?? 'en-US');
-  const [antdLocale, setAntdLocale] = useState<any>();
 
   if (!i18n.instance.isInitialized) void i18n.init({ initAsync: !resources });
 
   useEffect(() => {
+    if (defaultLang) void i18n.changeLanguage(defaultLang);
+  }, [defaultLang, i18n]);
+
+  useEffect(() => {
+    let localeRequest = 0;
     const applyLocale = async (nextLang: string) => {
-      setLang(nextLang);
-      const [nextAntdLocale] = await Promise.all([getAntdLocale(nextLang), updateDayjs(nextLang)]);
-      setAntdLocale(nextAntdLocale);
+      const request = ++localeRequest;
+      const nextDayjsLocale = await loadDayjsLocale(nextLang);
+      if (request !== localeRequest) return;
+
+      dayjs.locale(nextDayjsLocale);
     };
 
     void applyLocale(i18n.instance.language || defaultLang || 'en-US');
     i18n.instance.on('languageChanged', applyLocale);
 
     return () => {
+      localeRequest++;
       i18n.instance.off('languageChanged', applyLocale);
     };
   }, [defaultLang, i18n]);
 
-  return (
-    <ConfigProvider direction={isRtlLang(lang) ? 'rtl' : 'ltr'} locale={antdLocale}>
-      {children}
-    </ConfigProvider>
-  );
+  return <I18nextProvider i18n={i18n.instance}>{children}</I18nextProvider>;
 });
 
 WorkbenchLocale.displayName = 'WorkbenchLocale';

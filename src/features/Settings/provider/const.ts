@@ -18,3 +18,5 @@ export const LLMProviderBaseUrlKey = 'baseURL';
  * equal CUSTOM_MODELS
  */
 export const LLMProviderModelListKey = 'enabledModels';
+
+export const PROVIDER_MENU_WIDTH = 280;

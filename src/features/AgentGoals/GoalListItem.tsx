@@ -1,21 +1,20 @@
 'use client';
 
-import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowRightIcon, RefreshCwIcon } from 'lucide-react';
+import { Block, ContextMenuTrigger, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import type { KeyboardEvent } from 'react';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 
-import { GoalAcceptance } from './GoalAcceptance';
-import { getGoalPresentation } from './goalPresentation';
+import GoalAgentLabel from './GoalAgentLabel';
+import GoalItemMoreButton from './GoalItemMoreButton';
+import { goalItemPath } from './goalItemPath';
+import GoalPrivateMark from './GoalPrivateMark';
 import { GoalProgress } from './GoalProgress';
 import GoalStatusGlyph from './GoalStatusGlyph';
-import { getGoalDescription, shouldShowGoal } from './goalViewModel';
 import type { GoalItemProps } from './types';
+import { useGoalItemMenu } from './useGoalMenuItems';
 
 const styles = createStaticStyles(({ css }) => ({
   row: css`
@@ -26,24 +25,46 @@ const styles = createStaticStyles(({ css }) => ({
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     }
 
-    &:hover {
+    &:hover,
+    &[data-popup-open] {
       background: ${cssVar.colorFillQuaternary};
+    }
+
+    /* A phone row wraps: the title takes the first line, agent / progress / menu
+       the second. Same breakpoint as GoalProgress. */
+    @media (width <= 767px) {
+      flex-wrap: wrap;
+      row-gap: 6px;
+    }
+  `,
+  title: css`
+    flex: 1;
+    min-width: 0;
+
+    @media (width <= 767px) {
+      flex-basis: 100%;
     }
   `,
 }));
 
-export const GoalListItem = memo<GoalItemProps>((props) => {
-  const { t } = useTranslation('chat');
+export const GoalListItem = memo<GoalItemProps>(({ globalScopeId, goal: item, projectId }) => {
   const navigate = useWorkspaceAwareNavigate();
   const { aid } = useActiveRouteParams<{ aid?: string }>();
-  const { hideAchieved = false, projectId, task } = props;
-  const goal = task.goal;
-  const title = task.name?.trim() || task.instruction.trim() || task.identifier;
-  const description = getGoalDescription(task);
+  const { goal } = item;
+  // On the project Goals page there is no `aid` in the route, and a goal created
+  // there has no responsible agent either — so fall back the same way tasks do,
+  // to the bare detail route. Without this every card there is a dead link.
+  const agentId = aid ?? goal.agentId;
   const handleClick = () => {
-    if (projectId) navigate(`/task/${task.identifier}`);
-    else if (aid) navigate(`/agent/${aid}/goal/${task.identifier}`);
+    navigate(goalItemPath({ agentId, crossAgent: !!globalScopeId, goalId: goal.id }));
   };
+  const menuItems = useGoalItemMenu({
+    agentId,
+    globalScopeId,
+    goal,
+    projectId,
+    routeAgentId: aid,
+  });
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
@@ -51,82 +72,47 @@ export const GoalListItem = memo<GoalItemProps>((props) => {
   };
 
   return (
-    <GoalAcceptance taskId={task.id}>
-      {({ bundle, error, isLoading, retry }) => {
-        const presentation = getGoalPresentation({
-          checks: bundle?.checks,
-          goalStatus: goal?.status ?? 'planning',
-          maxRounds: goal?.maxRounds ?? null,
-          rounds: task.totalTopics ?? 0,
-        });
-        if (
-          !isLoading &&
-          !shouldShowGoal(goal?.status ?? 'planning', hideAchieved ? 'active' : 'all')
-        )
-          return null;
-
-        return (
-          <Block
-            clickable
-            horizontal
-            align={'center'}
-            className={styles.row}
-            gap={12}
-            justify={'space-between'}
-            paddingBlock={10}
-            paddingInline={0}
-            role={'link'}
-            tabIndex={0}
-            variant={'borderless'}
-            onClick={handleClick}
-            onKeyDown={handleKeyDown}
-          >
-            <Flexbox
-              horizontal
-              align={'center'}
-              flex={1}
-              gap={12}
-              justify={'space-between'}
-              style={{ minWidth: 0 }}
-            >
-              <Flexbox gap={4} style={{ minWidth: 0 }}>
-                <Flexbox horizontal align={'center'} gap={7}>
-                  <GoalStatusGlyph size={13} status={goal?.status ?? 'planning'} />
-                  <Text ellipsis fontSize={15} weight={600}>
-                    {title}
-                  </Text>
-                </Flexbox>
-                {description && description !== title && (
-                  <Text ellipsis fontSize={12} type={'secondary'}>
-                    {description}
-                  </Text>
-                )}
-              </Flexbox>
-            </Flexbox>
-            <GoalProgress
-              isLoading={isLoading}
-              presentation={presentation}
-              totalRunCost={props.task.totalRunCost}
-              totalRunDuration={props.task.totalRunDuration}
-              totalRuns={props.task.totalTopics}
-            />
-            {error ? (
-              <ActionIcon
-                icon={RefreshCwIcon}
-                size={'small'}
-                title={t('goalList.retry')}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  retry();
-                }}
-              />
-            ) : (
-              <Icon color={cssVar.colorTextQuaternary} icon={ArrowRightIcon} size={16} />
-            )}
-          </Block>
-        );
-      }}
-    </GoalAcceptance>
+    <ContextMenuTrigger items={menuItems}>
+      <Block
+        clickable
+        horizontal
+        align={'center'}
+        className={styles.row}
+        gap={12}
+        justify={'space-between'}
+        paddingBlock={10}
+        paddingInline={12}
+        role={'link'}
+        tabIndex={0}
+        variant={'borderless'}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+      >
+        <Flexbox className={styles.title} gap={4}>
+          <Flexbox horizontal align={'center'} gap={7}>
+            <GoalStatusGlyph size={13} status={goal.status} />
+            <Text ellipsis fontSize={15} weight={600}>
+              {goal.title}
+            </Text>
+            <GoalPrivateMark goal={goal} />
+          </Flexbox>
+          {goal.requirement && goal.requirement !== goal.title && (
+            <Text ellipsis fontSize={12} type={'secondary'}>
+              {goal.requirement}
+            </Text>
+          )}
+        </Flexbox>
+        {globalScopeId && <GoalAgentLabel agentId={goal.agentId} />}
+        <GoalProgress
+          pendingDecisions={item.pendingDecisions}
+          taskDone={item.taskDone}
+          taskTotal={item.taskTotal}
+          totalRunCost={item.totalRunCost}
+          totalRunDuration={item.totalRunDuration}
+        />
+        <GoalItemMoreButton items={menuItems} />
+      </Block>
+    </ContextMenuTrigger>
   );
 });
 

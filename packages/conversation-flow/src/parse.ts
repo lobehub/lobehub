@@ -1,7 +1,7 @@
 import { buildHelperMaps } from './indexing';
 import { buildIdTree } from './structuring';
 import { Transformer } from './transformation';
-import type { Message, MessageGroupMetadata, ParseResult } from './types';
+import type { Message, MessageGroupMetadata, ParseOptions, ParseResult } from './types';
 
 /**
  * Main parse function - the brain of the conversation flow engine
@@ -18,9 +18,14 @@ import type { Message, MessageGroupMetadata, ParseResult } from './types';
  *
  * @param messages - Flat array of messages from backend
  * @param messageGroups - Optional array of message group metadata for compare/manual grouping
+ * @param options - `threadId` scopes the flat list to the main flow (`null`) or to one thread
  * @returns ParseResult containing messageMap, displayTree, and flatList
  */
-export function parse(messages: Message[], messageGroups?: MessageGroupMetadata[]): ParseResult {
+export function parse(
+  messages: Message[],
+  messageGroups?: MessageGroupMetadata[],
+  options?: ParseOptions,
+): ParseResult {
   // Pre-processing: Transform sub_agent messages before building helper maps
   // This ensures FlatListBuilder and MessageCollector see the correct agentId
   // and won't merge messages from different agents into the same group
@@ -34,7 +39,7 @@ export function parse(messages: Message[], messageGroups?: MessageGroupMetadata[
 
   // Phase 1: Indexing
   // Build helper maps for O(1) access patterns
-  const helperMaps = buildHelperMaps(processedMessages, messageGroups);
+  const helperMaps = buildHelperMaps(processedMessages, messageGroups, options?.threadId);
 
   // Phase 2: Structuring
   // Convert flat parent-child relationships to tree structure

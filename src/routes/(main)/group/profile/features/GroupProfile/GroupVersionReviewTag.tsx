@@ -62,7 +62,7 @@ const GroupVersionReviewTag = memo(() => {
   if (loading || !showReviewTag) return null;
 
   return (
-    <Tag bordered={false} color="orange">
+    <Tag color="orange">
       {t('marketPublish.status.underReview', { defaultValue: 'Under Review' })}
     </Tag>
   );

@@ -127,6 +127,40 @@ describe('KimiCodeAdapter', () => {
     expect(adapter.flush()).toEqual([]);
   });
 
+  it('lifts ReadMediaFile image parts onto pluginState and leaves a placeholder in content', () => {
+    const adapter = new KimiCodeAdapter();
+    adapter.adapt({
+      role: 'assistant',
+      tool_calls: [
+        {
+          function: { arguments: '{"path":"/tmp/screen.png"}', name: 'ReadMediaFile' },
+          id: 'call-1',
+          type: 'function',
+        },
+      ],
+    });
+
+    const events = adapter.adapt({
+      content: [
+        { text: '<image path="/tmp/screen.png">', type: 'text' },
+        { imageUrl: { url: 'data:image/png;base64,iVBORw0KGgo=' }, type: 'image_url' },
+        { text: '</image>', type: 'text' },
+      ],
+      role: 'tool',
+      tool_call_id: 'call-1',
+    });
+
+    const content = '<image path="/tmp/screen.png">\n[Image: image/png]\n</image>';
+    expect(events[0].data).toEqual({
+      content,
+      isError: false,
+      pluginState: { images: [{ data: 'iVBORw0KGgo=', mediaType: 'image/png' }] },
+      toolCallId: 'call-1',
+    });
+    expect(events[0].data.content).not.toContain('base64');
+    expect(events[1].data.result).toEqual({ content, success: true });
+  });
+
   it('ignores malformed input', () => {
     const adapter = new KimiCodeAdapter();
     expect(adapter.adapt(null)).toEqual([]);
@@ -134,5 +168,57 @@ describe('KimiCodeAdapter', () => {
     expect(adapter.adapt({ role: 'assistant', tool_calls: [{ id: 3 }] })).toEqual([]);
     expect(adapter.adapt({ role: 'meta', type: 'system.version', version: '0.28.0' })).toEqual([]);
     expect(adapter.adapt({ status: 'complete', type: 'goal.summary' })).toEqual([]);
+  });
+
+  describe('buildPostRunUsageEvents', () => {
+    it('emits the post-run usage as a turn_metadata step_complete on the last step', () => {
+      const adapter = new KimiCodeAdapter();
+      adapter.adapt({ role: 'meta', session_id: 'session-1', type: 'session.resume_hint' });
+      // Two steps, so the usage event must land on stepIndex 1.
+      adapter.adapt({
+        role: 'assistant',
+        tool_calls: [
+          { function: { arguments: '{}', name: 'Read' }, id: 'call-1', type: 'function' },
+        ],
+      });
+      adapter.adapt({ content: 'contents', role: 'tool', tool_call_id: 'call-1' });
+      adapter.adapt({ content: 'Done.', role: 'assistant' });
+
+      const usage = {
+        inputCacheMissTokens: 325,
+        inputCachedTokens: 22_784,
+        inputWriteCacheTokens: 10,
+        totalInputTokens: 23_119,
+        totalOutputTokens: 80,
+        totalTokens: 23_199,
+      };
+      const events = adapter.buildPostRunUsageEvents({ model: 'kimi-k3', usage });
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        data: { model: 'kimi-k3', phase: 'turn_metadata', provider: 'kimi-code', usage },
+        stepIndex: 1,
+        type: 'step_complete',
+      });
+    });
+
+    it('omits the model from the event when the wire log did not record one', () => {
+      const adapter = new KimiCodeAdapter();
+      const events = adapter.buildPostRunUsageEvents({
+        usage: {
+          inputCacheMissTokens: 7,
+          totalInputTokens: 7,
+          totalOutputTokens: 3,
+          totalTokens: 10,
+        },
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].data).not.toHaveProperty('model');
+      expect(events[0]).toMatchObject({
+        data: { phase: 'turn_metadata', usage: { totalTokens: 10 } },
+        type: 'step_complete',
+      });
+    });
   });
 });

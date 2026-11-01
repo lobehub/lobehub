@@ -27,21 +27,34 @@ export interface HeteroExecImageRef {
  * compatible `{ content, resumeFallback }` envelope: old CLIs unwrap `content`
  * and run the primary prompt, while new CLIs reserve `resumeFallback` for a
  * retry after native resume fails.
+ *
+ * `isNewSession` is the caller's own `!resumeSessionId`. The fallback prompt is
+ * always a new session by definition — it exists precisely because native
+ * resume failed and the CLI is starting the agent from scratch — so it carries
+ * session-scoped context regardless of what the primary attempt got.
  */
 export const buildHeteroExecStdinPayload = (params: {
   imageList?: HeteroExecImageRef[];
+  isNewSession?: boolean;
   prompt: string;
   resumeFallbackSystemContext?: string;
   systemContext?: string;
 }): string => {
-  const { imageList = [], prompt, resumeFallbackSystemContext, systemContext } = params;
-  const blocks = buildHeterogeneousPrompt({ imageList, prompt, systemContext });
+  const {
+    imageList = [],
+    isNewSession,
+    prompt,
+    resumeFallbackSystemContext,
+    systemContext,
+  } = params;
+  const blocks = buildHeterogeneousPrompt({ imageList, isNewSession, prompt, systemContext });
 
   if (resumeFallbackSystemContext !== undefined) {
     return JSON.stringify({
       content: blocks,
       resumeFallback: buildHeterogeneousPrompt({
         imageList,
+        isNewSession: true,
         prompt,
         systemContext: resumeFallbackSystemContext,
       }),

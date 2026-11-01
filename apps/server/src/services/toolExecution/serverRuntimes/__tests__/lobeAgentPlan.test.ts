@@ -6,15 +6,19 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { createServerPlanRuntimeService } from '../lobeAgentPlan';
 
 vi.mock('@/database/models/document', () => ({
-  DocumentModel: vi.fn(() => ({
-    findById: vi.fn(),
-  })),
+  DocumentModel: vi.fn(function () {
+    return {
+      findById: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('@/database/models/topicDocument', () => ({
-  TopicDocumentModel: vi.fn(() => ({
-    findByTopicId: vi.fn(),
-  })),
+  TopicDocumentModel: vi.fn(function () {
+    return {
+      findByTopicId: vi.fn(),
+    };
+  }),
 }));
 
 describe('createServerPlanRuntimeService', () => {

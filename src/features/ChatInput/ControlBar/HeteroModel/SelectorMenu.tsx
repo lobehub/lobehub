@@ -3,6 +3,7 @@ import type {
   HeterogeneousProviderConfig,
   HeterogeneousReasoningEffort,
   HeterogeneousSpeedMode,
+  HeterogeneousTopicPin,
   HeteroSelection,
   HeteroSelectorCapability,
   ListHeterogeneousAgentModelsParams,
@@ -14,14 +15,14 @@ import {
   DropdownMenuRoot,
   DropdownMenuTrigger,
   renderDropdownMenuItems,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { buildSelectorSubmenu } from './buildSelectorSubmenu';
+import { buildSelectorSubmenu } from '../../components/buildSelectorSubmenu';
+import Trigger from '../../components/SelectorTrigger';
 import { ModelCatalogSelector } from './ModelCatalogSelector';
 import { buildSelectorView, resolveModelSwitchSelection } from './selectorView';
-import Trigger from './Trigger';
 
 interface SelectorMenuProps {
   agentId?: string;
@@ -29,15 +30,17 @@ interface SelectorMenuProps {
   patch: (selection: HeteroSelection) => Promise<void>;
   permissionReason?: string;
   provider: HeterogeneousProviderConfig;
+  topicPin?: HeterogeneousTopicPin;
+  topicScoped?: boolean;
 }
 
 const SelectorMenu = memo<SelectorMenuProps>(
-  ({ agentId, capability, patch, permissionReason, provider }) => {
+  ({ agentId, capability, patch, permissionReason, provider, topicPin, topicScoped }) => {
     const { t } = useTranslation('chat');
 
     const view = useMemo(
-      () => buildSelectorView({ capability, provider, t }),
-      [capability, provider, t],
+      () => buildSelectorView({ capability, provider, t, topicPin, topicScoped }),
+      [capability, provider, t, topicPin, topicScoped],
     );
 
     const select = useCallback(
@@ -73,7 +76,12 @@ const SelectorMenu = memo<SelectorMenuProps>(
     return (
       <DropdownMenuRoot>
         <DropdownMenuTrigger nativeButton={false}>
-          <Trigger ariaLabel={view.ariaLabel} fast={view.isFastSpeed} text={view.triggerText} />
+          <Trigger
+            ariaLabel={view.ariaLabel}
+            fast={view.isFastSpeed}
+            secondaryText={view.triggerLabel.secondaryText}
+            text={view.triggerLabel.text}
+          />
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           {/* The trigger label changes width as selections change, and it sits in the

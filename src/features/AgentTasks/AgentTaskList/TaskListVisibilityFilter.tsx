@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, type DropdownItem, DropdownMenu, Icon, type MenuInfo } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { type DropdownItem, DropdownMenu, Icon, type MenuInfo } from '@lobehub/ui';
+import { ActionIcon, cssVar } from '@lobehub/ui';
 import { Globe, LockIcon, UsersIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

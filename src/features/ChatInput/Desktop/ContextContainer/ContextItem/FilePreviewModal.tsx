@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui';
 
 import FileViewer from '@/features/FileViewer';
 import { type UploadFileItem } from '@/types/files/upload';

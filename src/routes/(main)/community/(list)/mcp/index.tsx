@@ -4,20 +4,21 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { mcpSelectors } from '@/store/discover/selectors';
 import { type McpQueryParams } from '@/types/discover';
 import { DiscoverTab, McpSorts } from '@/types/discover';
 
 import McpEmpty from '../../features/McpEmpty';
 import Pagination from '../features/Pagination';
 import List from './features/List';
-import Loading from './loading';
 
 const McpPage = memo(() => {
   const { q, page, category, sort, order } = useQuery() as McpQueryParams;
   const useMcpList = useDiscoverStore((s) => s.useFetchMcpList);
-  const { data, isLoading, error, mutate } = useMcpList({
+  const { error, isLoading, mutate, queryKey } = useMcpList({
     category,
     order,
     page,
@@ -25,6 +26,8 @@ const McpPage = memo(() => {
     q,
     sort: sort ?? McpSorts.Recommended,
   });
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(mcpSelectors.mcpList(queryKey));
 
   const items = data?.items ?? [];
 
@@ -36,7 +39,7 @@ const McpPage = memo(() => {
       errorVariant={'page'}
       isEmpty={items.length === 0}
       isLoading={isLoading}
-      loading={<Loading />}
+      loading={<RouteLoading />}
       onRetry={() => mutate()}
     >
       {data && (

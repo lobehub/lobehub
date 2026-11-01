@@ -13,6 +13,7 @@ import type {
   CallLLMPayload,
   InstructionExecutor,
 } from '../types';
+import { withLlmAttemptCount } from '../utils/llmCalls';
 import { getLLMRetryDelayMs, shouldRetryLLM } from '../utils/runtimeRetry';
 import { finalizeCallLlmTurn, persistInterruptedCallLlmResult } from './callLlmFinalizer';
 
@@ -76,11 +77,13 @@ const executePreparedCall = async (
   let errorHandled = false;
   let lastOutput: LLMAttemptOutput | undefined;
   let terminalError: unknown;
+  let attemptsMade = 0;
 
   try {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const execution = await runWithTrace(trace, () =>
         llm.runAttempt({
+          assistantMessageId: prepared.assistantMessageId,
           attempt,
           context: prepared.context,
           events,
@@ -92,10 +95,12 @@ const executePreparedCall = async (
         }),
       );
       lastOutput = execution.output;
+      attemptsMade = attempt;
 
       if (execution.ok) {
         return await finalizeCallLlmTurn({
           assistantMessageId: prepared.assistantMessageId,
+          attempts: attemptsMade,
           events,
           host,
           model: prepared.model,
@@ -161,10 +166,13 @@ const executePreparedCall = async (
           retryBudget,
         });
       });
-      throw error;
+      throw withLlmAttemptCount(error, attemptsMade);
     }
 
-    throw new Error('LLM execution retry loop exited unexpectedly');
+    throw withLlmAttemptCount(
+      new Error('LLM execution retry loop exited unexpectedly'),
+      attemptsMade,
+    );
   } catch (error) {
     terminalError = error;
     if (!errorHandled) {
@@ -185,7 +193,7 @@ const executePreparedCall = async (
         });
       });
     }
-    throw error;
+    throw withLlmAttemptCount(error, attemptsMade);
   } finally {
     await trace?.close(terminalError);
   }
@@ -211,7 +219,7 @@ const assertPreparedCallContext = (
   if (!messages.some((message) => message.role !== 'system')) {
     throw new Error(
       `call_llm produced no non-system messages for ${prepared.provider}/${prepared.model} ` +
-        `(topic=${prepared.state.metadata?.topicId ?? 'n/a'}, step=${stepIndex}); refusing to dispatch`,
+        `(topic=${prepared.state.origin?.topicId ?? 'n/a'}, step=${stepIndex}); refusing to dispatch`,
     );
   }
 };
@@ -323,9 +331,9 @@ export const callLlm =
       ? { id: existingAssistantMessageId }
       : await transports.messages.createAssistantMessage(
           {
-            agentId: state.metadata!.agentId!,
+            agentId: (operation.agentId ?? state.origin?.agentId) as string,
             content: '',
-            groupId: state.metadata?.groupId ?? undefined,
+            groupId: state.origin?.groupId ?? undefined,
             // Creation provenance (metadata.operationId): ties the row to the
             // operation that produced it so the id survives client reloads.
             metadata: { operationId: operation.operationId },
@@ -333,8 +341,8 @@ export const callLlm =
             parentId,
             provider,
             role: 'assistant',
-            threadId: state.metadata?.threadId,
-            topicId: state.metadata?.topicId,
+            threadId: state.origin?.threadId,
+            topicId: state.origin?.topicId,
           },
           {
             /**
@@ -391,7 +399,8 @@ export const callLlm =
       assertPreparedCallContext(prepared, operation.stepIndex);
       const trace = llm.createTrace?.({
         assistantMessageId: assistantMessage.id,
-        conversationId: state.metadata?.topicId,
+        context,
+        conversationId: state.origin?.topicId,
         model,
         provider,
       });

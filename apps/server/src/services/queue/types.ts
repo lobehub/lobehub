@@ -2,8 +2,15 @@ import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
 
 export interface QueueMessage {
   context?: AgentRuntimeContext;
+  /** Stable provider-side execute-once key for crash-safe enqueue retries. */
+  deduplicationId?: string;
   delay?: number;
   endpoint: string;
+  /**
+   * Serializes deliveries that share `key` (at most `parallelism` in flight). QStash only; the
+   * local queue ignores it.
+   */
+  flowControl?: { key: string; parallelism: number };
   operationId: string;
   payload?: any;
   priority?: 'high' | 'normal' | 'low';

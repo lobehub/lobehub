@@ -7,16 +7,6 @@ import { TrayManager } from '../TrayManager';
 // Mock electron modules (empty shim — TrayManager no longer reads nativeTheme)
 vi.mock('electron', () => ({}));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock environment constants
 vi.mock('@/const/env', () => ({
   isMac: true,
@@ -54,6 +44,7 @@ describe('TrayManager', () => {
     mockApp = {
       menuManager: {
         buildTrayMenu: vi.fn(() => ({ _mockMenu: true }) as any),
+        updateDockMenu: vi.fn(),
       },
       storeManager: {
         get: vi.fn(() => true),
@@ -61,7 +52,9 @@ describe('TrayManager', () => {
     } as unknown as App;
 
     // Mock Tray constructor
-    vi.mocked(Tray).mockImplementation(() => mockTray);
+    vi.mocked(Tray).mockImplementation(function () {
+      return mockTray;
+    });
 
     trayManager = new TrayManager(mockApp);
   });
@@ -95,6 +88,14 @@ describe('TrayManager', () => {
 
       expect(mockApp.menuManager.buildTrayMenu).toHaveBeenCalled();
       expect(mockTray.setMenu).toHaveBeenCalledWith({ _mockMenu: true });
+    });
+
+    it('should forward navigation snapshots to the dock menu even without a tray', () => {
+      const snapshot = { agents: [], pinned: [], recent: [] };
+
+      trayManager.updateNavigationSnapshot(snapshot);
+
+      expect(mockApp.menuManager.updateDockMenu).toHaveBeenCalledWith(snapshot);
     });
 
     it('should skip tray initialization when app tray is disabled', () => {

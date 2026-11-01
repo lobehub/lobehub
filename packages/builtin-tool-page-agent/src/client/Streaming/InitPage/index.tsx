@@ -2,8 +2,9 @@
 
 import type { InitDocumentArgs } from '@lobechat/editor-runtime';
 import type { BuiltinStreamingProps } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { FileText, Hash, ListTree } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,8 +37,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextDescription};
   `,
   preview: css`
-    max-height: 360px;
     overflow: auto;
+    max-height: 360px;
     padding-block: 8px;
     padding-inline: 12px;
   `,

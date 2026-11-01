@@ -1,3 +1,4 @@
+import { LayersEnum } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +10,14 @@ import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { createLocalFileScopeKey, createLocalFileTabId } from './helpers';
 import { PortalViewType } from './initialState';
 
+const dashboardFlag = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@/store/serverConfig', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getServerConfigStoreState: () => ({
+    featureFlags: { enableDashboard: dashboardFlag.enabled },
+  }),
+}));
+
 const localFileTabId = ({
   deviceId,
   filePath,
@@ -18,8 +27,6 @@ const localFileTabId = ({
   filePath: string;
   workingDirectory: string;
 }) => createLocalFileTabId({ deviceId, filePath, workingDirectory });
-
-vi.mock('zustand/traditional');
 
 describe('chatDockSlice', () => {
   describe('pushPortalView', () => {
@@ -275,7 +282,82 @@ describe('chatDockSlice', () => {
     });
   });
 
+  describe('openDashboardWidget', () => {
+    it('opens the widget view, carrying the dry run it was opened from', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.clearPortalStack();
+        result.current.openDashboardWidget('widget-1', 'run-1');
+      });
+
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.dashboardWidgetView(result.current)).toEqual({
+        runId: 'run-1',
+        type: PortalViewType.DashboardWidget,
+        widgetId: 'widget-1',
+      });
+
+      act(() => {
+        result.current.openDashboardWidget('widget-2');
+      });
+      expect(chatPortalSelectors.dashboardWidgetView(result.current)).toEqual({
+        type: PortalViewType.DashboardWidget,
+        widgetId: 'widget-2',
+      });
+    });
+
+    it('opens nothing while the dashboard feature flag is off', () => {
+      const { result } = renderHook(() => useChatStore());
+      dashboardFlag.enabled = false;
+      try {
+        act(() => {
+          result.current.clearPortalStack();
+          result.current.openDashboardWidget('widget-1', 'run-1');
+        });
+        expect(chatPortalSelectors.dashboardWidgetView(result.current)).toBeFalsy();
+        expect(result.current.portalStack).toEqual([]);
+      } finally {
+        dashboardFlag.enabled = true;
+      }
+    });
+  });
+
   describe('openArtifact', () => {
+    it('keeps a parent task portal addressable while its run artifact is open', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskDetail('task-1');
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'Run Artifact',
+          type: 'text/html',
+        });
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.Artifact);
+      expect(chatPortalSelectors.taskDetailId(result.current)).toBe('task-1');
+    });
+
+    it('keeps a parent task result portal addressable while its run artifact is open', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskResult('task-1');
+        result.current.openArtifact({
+          id: 'msg-1',
+          identifier: 'artifact-1',
+          title: 'Run Artifact',
+          type: 'text/html',
+        });
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.Artifact);
+      expect(chatPortalSelectors.taskResultId(result.current)).toBe('task-1');
+    });
+
     it('should push Artifact view and open portal', () => {
       const { result } = renderHook(() => useChatStore());
 
@@ -381,6 +463,137 @@ describe('chatDockSlice', () => {
         { agentId: 'agt_1', type: PortalViewType.AgentDetail },
       ]);
       expect(result.current.showPortal).toBe(true);
+    });
+  });
+
+  describe('openMemoryDetail', () => {
+    it('should push MemoryDetail view and expose it through the selector', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openMemoryDetail({ id: 'preference-1', layer: LayersEnum.Preference });
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { id: 'preference-1', layer: LayersEnum.Preference, type: PortalViewType.MemoryDetail },
+      ]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.memoryDetailView(result.current)).toEqual({
+        id: 'preference-1',
+        layer: LayersEnum.Preference,
+        type: PortalViewType.MemoryDetail,
+      });
+    });
+  });
+
+  describe('goal drill-down', () => {
+    it('preserves experiment history and returns to an already visited node without cycles', () => {
+      const { result } = renderHook(() => useChatStore());
+      act(() => {
+        result.current.openGoalNode('goal_1', 'third');
+        result.current.drillIntoGoalNode('goal_1', 'first');
+      });
+      expect(result.current.portalStack).toHaveLength(2);
+      expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('first');
+      act(() => result.current.goBack());
+      expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('third');
+      act(() => {
+        result.current.drillIntoGoalNode('goal_1', 'first');
+        result.current.drillIntoGoalNode('goal_1', 'third');
+      });
+      expect(result.current.portalStack).toHaveLength(1);
+      expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('third');
+    });
+
+    it('openGoal pushes a Goal view and a node drill-down returns to it on Back', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoal('goal_1');
+      });
+
+      expect(result.current.portalStack).toEqual([{ goalId: 'goal_1', type: PortalViewType.Goal }]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.goalPortalId(result.current)).toBe('goal_1');
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.goalPortalId(result.current)).toBe('goal_1');
+    });
+
+    it('openGoalNode pushes a GoalNode view and exposes it via selector', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { goalId: 'goal_1', nodeId: 'node_1', type: PortalViewType.GoalNode },
+      ]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.goalNodeView(result.current)).toEqual({
+        goalId: 'goal_1',
+        nodeId: 'node_1',
+        type: PortalViewType.GoalNode,
+      });
+    });
+
+    it('openGoalMetric pushes a GoalMetric view; a second metric replaces it in place', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoalMetric('goal_1', 'budget');
+        result.current.openGoalMetric('goal_1', 'liveness');
+      });
+
+      // Same view type replaces instead of stacking, so Back never walks
+      // through a trail of metric tabs.
+      expect(result.current.portalStack).toEqual([
+        { goalId: 'goal_1', metric: 'liveness', type: PortalViewType.GoalMetric },
+      ]);
+      expect(chatPortalSelectors.goalMetricView(result.current)?.metric).toBe('liveness');
+    });
+
+    it('a work node drill-down stacks TaskDetail on top of GoalNode for Back navigation', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openGoalNode('goal_1', 'node_1');
+        result.current.openTaskDetail('task_1');
+      });
+
+      expect(result.current.portalStack).toHaveLength(2);
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.TaskDetail);
+
+      act(() => {
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.goalNodeView(result.current)?.nodeId).toBe('node_1');
+    });
+
+    it('opens a Task result and returns to it after inspecting the original Task', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openTaskResult('task_1');
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { taskId: 'task_1', type: PortalViewType.TaskResult },
+      ]);
+      expect(chatPortalSelectors.taskResultId(result.current)).toBe('task_1');
+
+      act(() => {
+        result.current.openTaskDetail('task_1');
+        result.current.goBack();
+      });
+
+      expect(chatPortalSelectors.currentViewType(result.current)).toBe(PortalViewType.TaskResult);
     });
   });
 
@@ -796,6 +1009,110 @@ describe('chatDockSlice', () => {
       // Closing the remote tab drops only its buffer; the local tab's stays.
       expect(result.current.dirtyLocalFileContents[remoteId]).toBeUndefined();
       expect(result.current.dirtyLocalFileContents[localId]).toBe('dirty content');
+    });
+  });
+
+  describe('retargetLocalFiles', () => {
+    it('moves a renamed file tab, its buffer and active state to the new path', () => {
+      const { result } = renderHook(() => useChatStore());
+      const oldId = localFileTabId({ filePath: '/rt/notes.md', workingDirectory: '/rt' });
+      const newId = localFileTabId({ filePath: '/rt/meeting-notes.md', workingDirectory: '/rt' });
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/rt/notes.md', workingDirectory: '/rt' });
+        result.current.setLocalFileBuffer(oldId, 'draft');
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: '/rt/notes.md', to: '/rt/meeting-notes.md' }]);
+      });
+
+      const tab = result.current.openLocalFiles.find((file) => file.id === newId);
+      expect(tab?.filePath).toBe('/rt/meeting-notes.md');
+      expect(result.current.openLocalFiles.some((file) => file.id === oldId)).toBe(false);
+      expect(result.current.activeLocalFileId).toBe(newId);
+      expect(result.current.activeLocalFilePath).toBe('/rt/meeting-notes.md');
+      expect(result.current.activeLocalFileIdsByScope[createLocalFileScopeKey('/rt')]).toBe(newId);
+      expect(result.current.dirtyLocalFileContents[newId]).toBe('draft');
+      expect(oldId in result.current.dirtyLocalFileContents).toBe(false);
+    });
+
+    it('carries tabs under a moved folder and leaves other devices alone', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/mv/src/a.ts', workingDirectory: '/mv' });
+        result.current.openLocalFile({
+          deviceId: 'remote',
+          filePath: '/mv/src/a.ts',
+          workingDirectory: '/mv',
+        });
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: '/mv/src', to: '/mv/lib/src' }]);
+      });
+
+      const paths = result.current.openLocalFiles
+        .filter((file) => file.workingDirectory === '/mv')
+        .map((file) => `${file.deviceId ?? 'local'}:${file.filePath}`);
+      expect(paths).toEqual(['local:/mv/lib/src/a.ts', 'remote:/mv/src/a.ts']);
+    });
+    it('carries tabs under a moved folder with Windows path separators', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: 'C:\\win\\src\\a.ts',
+          workingDirectory: 'C:\\win',
+        });
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: 'C:\\win\\src', to: 'C:\\win\\lib' }]);
+      });
+
+      expect(
+        result.current.openLocalFiles
+          .filter((file) => file.workingDirectory === 'C:\\win')
+          .map((file) => file.filePath),
+      ).toEqual(['C:\\win\\lib\\a.ts']);
+    });
+  });
+
+  describe('closeLocalFilesAt', () => {
+    it('closes tabs of deleted files and of files inside a deleted folder', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/del/a.md', workingDirectory: '/del' });
+        result.current.openLocalFile({ filePath: '/del/dir/b.md', workingDirectory: '/del' });
+        result.current.openLocalFile({ filePath: '/del/keep.md', workingDirectory: '/del' });
+      });
+      act(() => {
+        result.current.closeLocalFilesAt(['/del/a.md', '/del/dir']);
+      });
+
+      expect(
+        result.current.openLocalFiles
+          .filter((file) => file.workingDirectory === '/del')
+          .map((file) => file.filePath),
+      ).toEqual(['/del/keep.md']);
+    });
+
+    it('closes tabs inside a deleted folder with Windows path separators', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: 'D:\\del\\dir\\b.md',
+          workingDirectory: 'D:\\del',
+        });
+      });
+      act(() => {
+        result.current.closeLocalFilesAt(['D:\\del\\dir']);
+      });
+
+      expect(
+        result.current.openLocalFiles.filter((file) => file.workingDirectory === 'D:\\del'),
+      ).toEqual([]);
     });
   });
 

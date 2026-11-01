@@ -1,4 +1,20 @@
+import { LOADING_FLAT } from '@lobechat/const';
 import type { HeteroSessionImportMessage, UIChatMessage } from '@lobechat/types';
+
+/**
+ * Is a restored transcript worth paying for on this adapter?
+ *
+ * Main consumes `resumeReplayMessages` in exactly one place —
+ * `HeterogeneousAgentImpl`'s `ensureClaudeCodeResumeTranscript` — which is
+ * gated on `agentType === 'claude-code'`. Every other adapter is handed the
+ * replay and ignores it, so restoring bodies for them would spend one
+ * authenticated round trip per historical tool, on every turn, for nothing.
+ *
+ * Keep this in step with that call site if another adapter starts rebuilding a
+ * transcript.
+ */
+export const shouldHydrateResumeReplay = (providerType?: string): boolean =>
+  providerType === 'claude-code';
 
 /**
  * Map the topic's chat messages into the normalized shape
@@ -62,4 +78,55 @@ export const buildResumeReplayMessages = (
   }
 
   return mapped;
+};
+
+/** Same limits as the gateway's `<previous_conversation>` fallback. */
+const EDITED_TOPIC_MAX_TURNS = 30;
+const EDITED_TOPIC_USER_MAX = 1024;
+const EDITED_TOPIC_ASSISTANT_MAX = 2048;
+
+/**
+ * Serialize the copied ancestry of an edited topic for a fresh local run.
+ *
+ * Use when:
+ * - A topic created by Codex edit-and-resend (`metadata.editedFrom`) starts
+ *   without a native session, so the CLI would otherwise see no history.
+ *
+ * Expects:
+ * - The topic's persisted rows and the assistant placeholder of this run,
+ *   whose parent is the edited user message.
+ *
+ * Returns:
+ * - A `<previous_conversation>` block of the completed user/assistant turns
+ *   before the edited message (the prompt itself is sent separately), or
+ *   `undefined` when there is nothing to replay. Tool rows are walked through
+ *   but not serialized, matching the gateway fallback.
+ */
+export const buildEditedTopicPreviousConversation = (
+  messages: UIChatMessage[] | undefined,
+  assistantMessageId: string,
+): string | undefined => {
+  if (!messages?.length) return;
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  const prompt = byId.get(byId.get(assistantMessageId)?.parentId ?? '');
+  if (prompt?.role !== 'user') return;
+
+  const turns: string[] = [];
+  const visited = new Set<string>([prompt.id]);
+  let id = prompt.parentId;
+  while (id && !visited.has(id) && turns.length < EDITED_TOPIC_MAX_TURNS) {
+    visited.add(id);
+    const message = byId.get(id);
+    if (!message) break;
+    id = message.parentId;
+    if (message.role !== 'user' && message.role !== 'assistant') continue;
+    const content = message.content?.trim();
+    if (!content || content === LOADING_FLAT) continue;
+    const limit = message.role === 'user' ? EDITED_TOPIC_USER_MAX : EDITED_TOPIC_ASSISTANT_MAX;
+    const body = content.length > limit ? `${content.slice(0, limit)}… [truncated]` : content;
+    turns.push(`<${message.role}>\n${body}\n</${message.role}>`);
+  }
+  if (turns.length === 0) return;
+
+  return `<previous_conversation>\n${turns.reverse().join('\n')}\n</previous_conversation>`;
 };

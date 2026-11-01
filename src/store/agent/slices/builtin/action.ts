@@ -1,13 +1,19 @@
 import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
-import { type SWRResponse } from 'swr';
+import { useLayoutEffect } from 'react';
 import { type PartialDeep } from 'type-fest';
 
-import { useOnlyFetchOnceSWR } from '@/libs/swr';
-import { builtinAgentKeys } from '@/libs/swr/keys';
+import {
+  cacheScope,
+  createReplicaSlice,
+  type ReplicaLens,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { agentService } from '@/services/agent';
 import { type StoreSetter } from '@/store/types';
 
 import { type AgentStore } from '../../store';
+import { mergeAgentConfig } from '../agent/action';
+import { type BuiltinAgentParams, builtinAgentResource } from './projection';
 
 interface UseInitBuiltinAgentContext {
   /**
@@ -17,9 +23,67 @@ interface UseInitBuiltinAgentContext {
   isLogin?: boolean;
 }
 
+/** `useInitBuiltinAgent` result: replica flags plus the SWR-era aliases. */
+export interface BuiltinAgentSyncResult extends ReplicaSyncResult {
+  /** A request is in flight and there is nothing cached to show for this entry yet. */
+  isLoading: boolean;
+  /** Alias of `revalidate`. */
+  mutate: () => Promise<unknown>;
+}
+
+const fetchBuiltinAgent = ({ slug }: BuiltinAgentParams): Promise<AgentItem> =>
+  agentService.getBuiltinAgent(slug) as Promise<AgentItem>;
+
+/**
+ * The replica view keeps the long-standing `builtinAgentIdMap` (slug → id) as a
+ * derived index alongside the materialized `builtinAgentMap` (slug → item): the
+ * id index is what selectors and route loaders read, and the full item is what
+ * re-seeds `agentMap` before paint. Both move in one commit, so a reader never
+ * sees an id without its item (or vice versa).
+ *
+ * The item is also merged into `agentMap` in that same commit. Surfaces such as
+ * AgentBuilderWelcome read `agentMap[builtinAgentIdMap[slug]]` in the render that
+ * first sees the id; seeding `agentMap` later (in a layout effect) left that
+ * render with an undefined config and crashed the agent profile page.
+ */
+const builtinAgentLens: ReplicaLens<AgentStore, AgentItem> = {
+  clear: () => ({ builtinAgentIdMap: {}, builtinAgentMap: {} }),
+  get: (state, key) => state.builtinAgentMap[key],
+  keys: (state) => Object.keys(state.builtinAgentMap),
+  set: (state, key, data) => {
+    const map = { ...state.builtinAgentMap };
+    const idMap = { ...state.builtinAgentIdMap };
+
+    if (data === undefined) {
+      delete map[key];
+      delete idMap[key];
+    } else {
+      map[key] = data;
+      if (data.id) {
+        idMap[key] = data.id;
+        const current = state.agentMap[data.id];
+        const next = mergeAgentConfig(current, data as PartialDeep<LobeAgentConfig>);
+        if (next !== current) {
+          return {
+            agentMap: { ...state.agentMap, [data.id]: next },
+            builtinAgentIdMap: idMap,
+            builtinAgentMap: map,
+          };
+        }
+      } else delete idMap[key];
+    }
+
+    return { builtinAgentIdMap: idMap, builtinAgentMap: map };
+  },
+};
+
 /**
  * Builtin Agent Slice Actions
  * Handles initialization and management of builtin agents (page-agent, inbox, etc.)
+ *
+ * The server row is a replica: the first frame paints the persisted id + config,
+ * the network only confirms, and the store remains the only writer of
+ * `builtinAgentMap` / `builtinAgentIdMap`.
  */
 
 type Setter = StoreSetter<AgentStore>;
@@ -27,58 +91,121 @@ export const createBuiltinAgentSlice = (set: Setter, get: () => AgentStore, _api
   new BuiltinAgentSliceActionImpl(set, get, _api);
 
 export class BuiltinAgentSliceActionImpl {
+  readonly #builtin;
   readonly #get: () => AgentStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => AgentStore, _api?: unknown) {
     void _api;
-    this.#set = set;
     this.#get = get;
+    this.#builtin = createReplicaSlice(builtinAgentResource, {
+      actionPrefix: 'builtinAgent',
+      // Every confirmed builtin re-seeds `agentMap`, whichever path fetched it
+      // (the mount-time sync or `refreshBuiltinAgent`). Only for the active
+      // scope: a response of a previous identity never reaches it.
+      effects: { onApplied: (item) => this.#seedAgentMap(item) },
+      fetcher: fetchBuiltinAgent,
+      get,
+      // A row without an id cannot be resolved by slug: keep what is cached.
+      prepareHead: (item) => (item?.id ? item : undefined),
+      set,
+      stateKey: 'builtinAgentReplica',
+      view: builtinAgentLens,
+    });
   }
 
+  /**
+   * Seed `agentMap` so a surface reading the builtin's own config (inbox
+   * identity / artwork) paints it instead of the default chief. In-memory only:
+   * the persisted copy lives in the builtin replica, not `agentConfig`.
+   */
+  #seedAgentMap = (item: AgentItem | null | undefined): void => {
+    if (!item?.id) return;
+    this.#get().internal_dispatchAgentMap(item.id, item as PartialDeep<LobeAgentConfig>);
+  };
+
+  /**
+   * Whether `scope` is still the identity the replica is partitioned by. An
+   * async round-trip resolves under the scope it started in; a result that
+   * arrives after an identity switch must not paint or seed the switched-to
+   * identity's view (the engine drops the replica write, this guards the
+   * `agentMap` seed that sits outside the replica).
+   */
+  #isCurrentScope = (scope: string): boolean => this.#builtin.resource.scope.get() === scope;
+
+  /**
+   * Confirm a builtin agent's latest value without a network round-trip — the
+   * authoritative update response is already in hand (e.g. after a meta edit).
+   * Writes the slug → id index and its item, then seeds `agentMap`. A response
+   * captured under a scope that is no longer active is dropped.
+   */
+  internal_replaceBuiltinAgent = (
+    slug: string,
+    item: AgentItem,
+    scope = cacheScope.get(),
+  ): void => {
+    if (!item?.id) return;
+    this.#builtin.replace({ slug }, item, scope);
+    if (this.#isCurrentScope(scope)) this.#seedAgentMap(item);
+  };
+
+  /**
+   * Re-read a builtin agent from the network and confirm it locally.
+   *
+   * Imperative by design: unlike the mount-time `useInitBuiltinAgent` sync, it
+   * does not depend on a mounted subscriber, so the create-Agent / create-Page
+   * flows can ensure a slug resolves on demand. It runs after edits, so it
+   * never reuses a request already in flight (`fresh`): that one may hold the
+   * pre-edit value. The replica drops a response that lands after an identity
+   * switch, a removal or a clear.
+   */
   refreshBuiltinAgent = async (slug: string): Promise<void> => {
-    const data = await agentService.getBuiltinAgent(slug);
-    if (data?.id) {
-      this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
-      // Mirror useInitBuiltinAgent's onSuccess: keep builtinAgentIdMap in sync
-      // so callers can rely on this as a real "ensure" path instead of just a
-      // post-init refresh.
-      this.#set(
-        { builtinAgentIdMap: { ...this.#get().builtinAgentIdMap, [slug]: data.id } },
-        false,
-        `refreshBuiltinAgent/${slug}`,
-      );
-    }
+    await this.#builtin.fetch({ slug }, { fresh: true });
   };
 
   useInitBuiltinAgent = (
     slug: string,
     context?: UseInitBuiltinAgentContext,
-  ): SWRResponse<AgentItem | null> => {
-    return useOnlyFetchOnceSWR(
-      context?.isLogin === false ? null : builtinAgentKeys.init(slug),
-      async () => {
-        const data = await agentService.getBuiltinAgent(slug);
+  ): BuiltinAgentSyncResult => {
+    // The old SWR sync never refetched on focus / reconnect: a builtin's identity
+    // and config change through an explicit edit, not by the tab regaining focus.
+    const sync = this.#builtin.useSync(context?.isLogin === false ? null : { slug }, {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    });
+    const data = this.#get().builtinAgentMap[slug];
 
-        return data as AgentItem | null;
-      },
-      {
-        onSuccess: (data: AgentItem | null) => {
-          if (data?.id) {
-            // Update builtinAgentIdMap with the agent id
-            // Update agentMap with the agent config
-            // AgentItem contains all fields needed for LobeAgentConfig
-            this.#get().internal_dispatchAgentMap(data.id, data as PartialDeep<LobeAgentConfig>);
+    /**
+     * Cache hits do not invoke SWR's onSuccess. Restore the identity and artwork
+     * before paint on every commit of the entry (hydrate as well as background
+     * revalidation), so a reload does not briefly display the default chief. The
+     * scope guard is the engine's: a response from an obsolete identity scope is
+     * dropped before it reaches this view.
+     */
+    useLayoutEffect(() => {
+      if (context?.isLogin === false) return;
+      this.#seedAgentMap(data);
+    }, [data, context?.isLogin]);
 
-            this.#set(
-              { builtinAgentIdMap: { ...this.#get().builtinAgentIdMap, [slug]: data.id } },
-              false,
-              `useInitBuiltinAgent/${slug}`,
-            );
-          }
-        },
-      },
-    );
+    return {
+      ...sync,
+      isLoading: sync.isValidating && !data,
+      mutate: sync.revalidate,
+    };
+  };
+
+  /**
+   * Seed the persisted builtin agent — the slug → id mapping and its config —
+   * before a route loader resolves a slug (see `agentChatTopicListLoader`).
+   * A route loader is the one place the async (IndexedDB) read can land before
+   * the route commits, so the id is known without waiting for the network.
+   */
+  preHydrateBuiltinAgent = async (slug: string): Promise<boolean> => {
+    const scope = cacheScope.get();
+    this.#builtin.ensureScope(scope);
+    const hydrated = await this.#builtin.hydrate({ slug }, scope);
+    this.#seedAgentMap(this.#get().builtinAgentMap[slug]);
+
+    return hydrated;
   };
 }
 

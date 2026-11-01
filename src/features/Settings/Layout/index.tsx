@@ -5,6 +5,7 @@ import { type FC } from 'react';
 import { Outlet } from 'react-router';
 
 import SideBar from '@/features/Settings/Layout/SideBar';
+import { RouteSkeletonChromeProvider } from '@/spa/router/routeSkeletonChrome';
 
 import SettingsContextProvider from './ContextProvider';
 import { styles } from './style';
@@ -19,7 +20,9 @@ const Layout: FC = () => {
     >
       <SideBar />
       <Flexbox className={styles.mainContainer} flex={1} height={'100%'}>
-        <Outlet />
+        <RouteSkeletonChromeProvider>
+          <Outlet />
+        </RouteSkeletonChromeProvider>
       </Flexbox>
     </SettingsContextProvider>
   );

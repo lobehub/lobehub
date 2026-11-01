@@ -1,16 +1,14 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox, Icon, Tag } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
-import { TRPCClientError } from '@trpc/client';
-import { Empty } from 'antd';
-import { createStaticStyles } from 'antd-style';
-import { LogIn } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import AsyncBoundary from '@/components/AsyncBoundary';
 import ListSkeleton from '@/components/ListSkeleton';
 import { usePermission } from '@/hooks/usePermission';
@@ -18,39 +16,32 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 
 import CredItem from './CredItem';
 import { createEditCredModal } from './EditCredModal';
-import { useCredsApi } from './useCredsApi';
+import MarketSignInGate from './MarketSignInGate';
+import { openShareCredModal } from './ShareCredModal';
+import { personalCredsApi as credsApi } from './useCredsApi';
 import { createViewCredModal } from './ViewCredModal';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  `,
-  empty: css`
-    padding-block: 48px;
-    padding-inline: 0;
-  `,
-  signInPrompt: css`
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    align-items: center;
-    justify-content: center;
+const styles = stylex.create({
+  container: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  empty: { paddingBlock: '48px', paddingInline: '0' },
+});
 
-    padding: 48px;
-  `,
-}));
-
+/**
+ * The caller's personal credentials, on the personal settings page. Each row
+ * can be shared into the caller's workspaces (see {@link openShareCredModal});
+ * the workspace page lists workspace credentials through `WorkspaceCredsList`.
+ */
 const CredsList: FC = () => {
   const { t } = useTranslation('setting');
-  const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
+  const { isAuthenticated } = useMarketAuth();
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
-  const credsApi = useCredsApi();
+  const workspaces = useWorkspaces();
 
   const { data, error, isLoading, refetch } = credsApi.query.list.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+
+  const credentials = data?.data ?? [];
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -62,72 +53,66 @@ const CredsList: FC = () => {
     },
   });
 
-  const credentials = data?.data ?? [];
-
   const handleEdit = (cred: UserCredSummary) => {
-    createEditCredModal({
-      cred,
-      credsApi,
-      onSuccess: () => refetch(),
-    });
+    createEditCredModal({ cred, credsApi, onSuccess: () => refetch() });
   };
 
   const handleView = (cred: UserCredSummary) => {
     createViewCredModal({ cred, credsApi });
   };
 
-  if (isAuthLoading) {
-    return <ListSkeleton paddingInline={0} />;
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className={styles.signInPrompt}>
-        <Empty description={t('creds.signInRequired')} />
-        <Button icon={LogIn} type={'primary'} onClick={() => signIn()}>
-          {t('creds.signIn')}
-        </Button>
-      </div>
-    );
-  }
-
-  // Org not created: guide users to complete Community Profile setup first.
-  if (!isLoading && error instanceof TRPCClientError && error.data?.code === 'NOT_FOUND') {
-    return (
-      <div className={styles.signInPrompt}>
-        <Empty description={t('creds.orgSetupRequired')} />
-      </div>
-    );
-  }
+  // Self-hosted deployments have no workspaces to share into.
+  const shareItems = (cred: UserCredSummary) =>
+    workspaces.length > 0
+      ? [
+          {
+            icon: <Icon icon={Share2} />,
+            key: 'share',
+            label: t('creds.share.menu'),
+            onClick: () => openShareCredModal(cred),
+          },
+        ]
+      : [];
 
   return (
-    <div className={styles.container}>
-      <AsyncBoundary
-        data={data}
-        empty={<Empty className={styles.empty} description={t('creds.empty')} />}
-        error={error}
-        errorVariant={'block'}
-        isEmpty={credentials.length === 0}
-        isLoading={isLoading}
-        loading={<ListSkeleton paddingInline={0} />}
-        onRetry={() => refetch()}
-      >
-        <Flexbox gap={0}>
-          {credentials.map((cred) => (
-            <CredItem
-              cred={cred}
-              key={cred.id}
-              onDelete={(id) => deleteMutation.mutate(id)}
-              onView={handleView}
-              onEdit={(cred) => {
-                if (!canManageCredentials) return;
-                handleEdit(cred);
-              }}
+    <MarketSignInGate>
+      <div {...stylex.props(styles.container)}>
+        <AsyncBoundary
+          data={data}
+          error={error}
+          errorVariant={'block'}
+          isEmpty={credentials.length === 0}
+          isLoading={isLoading}
+          loading={<ListSkeleton paddingInline={0} />}
+          empty={
+            <Empty
+              className={stylex.props(styles.empty).className}
+              description={t('creds.empty')}
             />
-          ))}
-        </Flexbox>
-      </AsyncBoundary>
-    </div>
+          }
+          onRetry={() => refetch()}
+        >
+          <Flexbox gap={0}>
+            {credentials.map((cred) => (
+              <CredItem
+                canManage={canManageCredentials}
+                cred={cred}
+                extraMenuItems={shareItems(cred)}
+                key={cred.id}
+                tags={
+                  !!cred.shares?.length && (
+                    <Tag>{t('creds.share.badge', { count: cred.shares.length })}</Tag>
+                  )
+                }
+                onDelete={(id) => deleteMutation.mutate(id)}
+                onEdit={canManageCredentials ? handleEdit : undefined}
+                onView={handleView}
+              />
+            ))}
+          </Flexbox>
+        </AsyncBoundary>
+      </div>
+    </MarketSignInGate>
   );
 };
 

@@ -329,6 +329,82 @@ describe('TopicModel - Delete', () => {
     });
   });
 
+  describe('agent-share visitor topics', () => {
+    // Visitor topics carry the creator's userId plus a non-null senderId, and
+    // are hidden from every creator-facing listing — so the creator's id-less
+    // sweeps must not destroy them.
+    beforeEach(async () => {
+      await serverDB.insert(agents).values({ id: 'share-agent', title: 'Shared', userId });
+      await serverDB.insert(topics).values([
+        { agentId: 'share-agent', id: 'creator-topic', userId },
+        { agentId: 'share-agent', id: 'visitor-topic', senderId: 'visitor-a', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        { id: 'creator-msg', role: 'user', topicId: 'creator-topic', userId },
+        { id: 'visitor-msg', role: 'user', topicId: 'visitor-topic', userId },
+      ]);
+    });
+
+    const remainingTopicIds = async () =>
+      (await serverDB.select().from(topics).where(eq(topics.userId, userId))).map((t) => t.id);
+
+    it('deleteAll should keep visitor topics and their messages', async () => {
+      await topicModel.deleteAll();
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+      expect(
+        await serverDB.select().from(messages).where(eq(messages.userId, userId)),
+      ).toHaveLength(1);
+    });
+
+    it('batchDeleteByAgentId should keep visitor topics', async () => {
+      await topicModel.batchDeleteByAgentId('share-agent');
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('batchDeleteBySessionId with no session should keep visitor topics', async () => {
+      await topicModel.batchDeleteBySessionId();
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('batchDeleteByGroupId with no group should keep visitor topics', async () => {
+      await topicModel.batchDeleteByGroupId();
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('delete should keep a visitor topic even when its id is named', async () => {
+      // A creator can obtain a raw visitor topic id out of band (data export),
+      // so `topic.removeTopic` must not cascade-delete the conversation.
+      await topicModel.delete('visitor-topic');
+
+      expect((await remainingTopicIds()).sort()).toEqual(['creator-topic', 'visitor-topic']);
+      expect(
+        await serverDB.select().from(messages).where(eq(messages.userId, userId)),
+      ).toHaveLength(2);
+    });
+
+    it('delete should still remove the creator own topic', async () => {
+      await topicModel.delete('creator-topic');
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('batchDelete should drop only the non-visitor ids of a mixed batch', async () => {
+      await topicModel.batchDelete(['creator-topic', 'visitor-topic']);
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('deleting the agent still cascades visitor topics away', async () => {
+      await serverDB.delete(agents).where(eq(agents.id, 'share-agent'));
+
+      expect(await remainingTopicIds()).toEqual([]);
+    });
+  });
+
   describe('workspace mode', () => {
     const workspaceId = 'topic-delete-workspace';
     const workspaceTopicModel = new TopicModel(serverDB, userId, workspaceId);

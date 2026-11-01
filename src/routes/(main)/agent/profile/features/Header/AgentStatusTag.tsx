@@ -71,7 +71,7 @@ const AgentStatusTag = memo(() => {
   if (loading || !statusConfig) return null;
 
   return (
-    <Tag bordered={false} color={statusConfig.color} style={{ marginRight: 8 }}>
+    <Tag color={statusConfig.color} style={{ marginRight: 8 }}>
       {statusConfig.label}
     </Tag>
   );

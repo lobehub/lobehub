@@ -2,14 +2,27 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { SearchRepo } from '@/database/repositories/search';
+import { MessageModel } from '@/database/models/message';
+import { GoalSearchRepo } from '@/database/repositories/goalSearch';
+import { TaskSearchRepo } from '@/database/repositories/taskSearch';
 import { router } from '@/libs/trpc/lambda';
 import { resolveMarketUserContext, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
+import { RECALL_MAX_LIMIT_PER_TYPE, RECALL_TYPES, RecallService } from '@/server/services/recall';
 
 import { getRestrictedKnowledgeBaseIds } from './_helpers/knowledgeBaseAccess';
 
 const MARKETPLACE_SEARCH_TYPES = new Set(['communityAgent', 'mcp', 'plugin']);
+
+/**
+ * The Market API rejects `pageSize` above 40 with `Invalid query parameters`.
+ * The command menu's typed view asks for 50 per type, which made MCP searches
+ * silently empty and community agent searches fail, so cap the MCP and community
+ * agent calls. Plugin search pages the locally loaded legacy catalog and keeps the
+ * requested limit.
+ */
+const MARKET_API_MAX_PAGE_SIZE = 40;
 
 /**
  * Calculate relevance score for marketplace items
@@ -41,7 +54,6 @@ const searchProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   const { ctx } = opts;
   const rawInput = (await opts.getRawInput()) as
     { includeMarketplace?: unknown; type?: unknown } | undefined;
-  const wsId = ctx.workspaceId ?? undefined;
   // Marketplace identity is only needed when the marketplace will be queried;
   // DB-only searches skip the extra auth round-trip.
   const marketContext = wantsMarketplace(rawInput)
@@ -54,10 +66,18 @@ const searchProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
         accessToken: marketContext.marketAccessToken ?? ctx.marketAccessToken,
         userInfo: marketContext.marketUserInfo,
       }),
-      searchRepo: new SearchRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
+
+/** Memoizes an async factory so concurrent callers share one initialization. */
+const once = <T>(load: () => Promise<T>) => {
+  let pending: Promise<T> | undefined;
+  return () => (pending ??= load());
+};
+
+/** Recall is DB-only, so it skips the marketplace identity lookup entirely. */
+const recallProcedure = wsCompatProcedure.use(serverDatabase);
 
 /**
  * The unified search router for all entities in the database.
@@ -77,6 +97,12 @@ export const searchRouter = router({
          * always queries the marketplace, other types never do.
          */
         includeMarketplace: z.boolean().optional(),
+        /**
+         * Whether an untyped search also returns goals (default false). The
+         * command menu has no goal rendering yet; the CLI opts in. `type:
+         * 'goal'` always searches goals.
+         */
+        includeGoals: z.boolean().optional(),
         limitPerType: z.number().optional(),
         locale: z.string().optional(),
         offset: z.number().optional(),
@@ -95,12 +121,15 @@ export const searchRouter = router({
             'plugin',
             'communityAgent',
             'knowledgeBase',
+            'task',
+            'goal',
           ])
           .optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
       const { query, type, limitPerType = 5, locale } = input;
+      const marketApiPageSize = Math.min(limitPerType, MARKET_API_MAX_PAGE_SIZE);
 
       // Early return for empty query
       if (!query || query.trim() === '') return [];
@@ -130,10 +159,36 @@ export const searchRouter = router({
         // this debounced search-as-you-type path.
         const needsKbExclusion =
           !type || ['file', 'folder', 'knowledgeBase', 'page'].includes(type);
-        const excludeKnowledgeBaseIds = needsKbExclusion
-          ? await getRestrictedKnowledgeBaseIds(ctx)
-          : [];
-        searchPromises.push(ctx.searchRepo.search({ ...input, excludeKnowledgeBaseIds }));
+        const [excludeKnowledgeBaseIds, ftsSearchRepo] = await Promise.all([
+          needsKbExclusion ? getRestrictedKnowledgeBaseIds(ctx) : [],
+          createFtsSearchRepo({
+            db: ctx.serverDB,
+            userId: ctx.userId,
+            usage: 'unified_search',
+            workspaceId: ctx.workspaceId ?? undefined,
+          }),
+        ]);
+        searchPromises.push(ftsSearchRepo.search({ ...input, excludeKnowledgeBaseIds }));
+      }
+
+      // Tasks are not in the full-text index; look them up by identifier/name.
+      if (!type || type === 'task') {
+        searchPromises.push(
+          new TaskSearchRepo(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).search({
+            limit: limitPerType,
+            query,
+          }),
+        );
+      }
+
+      // Goals are not in the full-text index either; untyped searches opt in.
+      if (type === 'goal' || (!type && input.includeGoals)) {
+        searchPromises.push(
+          new GoalSearchRepo(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined).search({
+            limit: limitPerType,
+            query,
+          }),
+        );
       }
 
       // Marketplace searches: see `includeMarketplace` on the input schema —
@@ -145,7 +200,7 @@ export const searchRouter = router({
           ctx.discoverService
             .getMcpList({
               locale,
-              pageSize: limitPerType,
+              pageSize: marketApiPageSize,
               q: query,
             })
             .then((response) =>
@@ -215,7 +270,7 @@ export const searchRouter = router({
               {
                 includeAgentGroup: true,
                 locale,
-                pageSize: limitPerType,
+                pageSize: marketApiPageSize,
                 q: query,
               },
               { throwOnError: type === 'communityAgent' },
@@ -256,10 +311,69 @@ export const searchRouter = router({
       // Execute searches in parallel and merge results
       const results = await Promise.all(searchPromises);
 
-      // Results arrive pre-ordered per type (DB types from SearchRepo with
+      // Results arrive pre-ordered per type (DB types from FtsSearchRepo with
       // topics/messages by recency, marketplace types from the discover service).
       // The command palette groups results by type, so we keep each source's order
       // instead of re-sorting the merged list by relevance.
       return results.flat();
+    }),
+
+  /**
+   * History recall for agents and the CLI: messages, topics, goals and pages
+   * matching a query inside an optional time window, grouped by type. Never
+   * reaches the marketplace.
+   */
+  recall: recallProcedure
+    .input(
+      z.object({
+        endDate: z.coerce.date().optional(),
+        exact: z.boolean().optional(),
+        includeAutomatedPrompts: z.boolean().optional(),
+        limitPerType: z.number().int().min(1).max(RECALL_MAX_LIMIT_PER_TYPE).optional(),
+        query: z.string(),
+        startDate: z.coerce.date().optional(),
+        types: z.array(z.enum(RECALL_TYPES)).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const workspaceId = ctx.workspaceId ?? undefined;
+      // Dependencies resolve on first use, so a goal-only recall never needs
+      // the full-text provider (or the restricted-KB lookup) to be available.
+      const entitySearch = once(async () => {
+        const [excludeKnowledgeBaseIds, repo] = await Promise.all([
+          getRestrictedKnowledgeBaseIds(ctx),
+          createFtsSearchRepo({
+            db: ctx.serverDB,
+            userId: ctx.userId,
+            usage: 'unified_search',
+            workspaceId,
+          }),
+        ]);
+        return { excludeKnowledgeBaseIds, repo };
+      });
+      const messageModel = once(
+        async () =>
+          new MessageModel(
+            ctx.serverDB,
+            ctx.userId,
+            workspaceId,
+            await createFtsSearchRepo({
+              db: ctx.serverDB,
+              userId: ctx.userId,
+              usage: 'message_search',
+              workspaceId,
+            }),
+          ),
+      );
+      const goalSearchRepo = new GoalSearchRepo(ctx.serverDB, ctx.userId, workspaceId);
+
+      return new RecallService({
+        searchEntities: async (options) => {
+          const { excludeKnowledgeBaseIds, repo } = await entitySearch();
+          return repo.search({ ...options, excludeKnowledgeBaseIds });
+        },
+        searchGoals: goalSearchRepo.search,
+        searchMessages: async (params) => (await messageModel()).searchByKeyword(params),
+      }).recall(input);
     }),
 });

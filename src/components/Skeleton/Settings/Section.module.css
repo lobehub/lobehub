@@ -1,0 +1,5 @@
+/* A loaded settings form renders its fields flush in the group body (each field
+   pads itself), while a bare `Form.Group` pads the body by 16px on both ends. */
+.group > :last-child {
+  padding-block: 0;
+}

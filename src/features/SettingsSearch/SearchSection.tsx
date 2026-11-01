@@ -1,11 +1,12 @@
 'use client';
 
 import { Flexbox, SearchBar } from '@lobehub/ui';
-import { memo, type PropsWithChildren, useState } from 'react';
+import { memo, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SearchResults from './SearchResults';
-import { useSettingsSearch } from './useSettingsSearch';
+import { useImeAwareQuery } from './useImeAwareQuery';
+import { type SettingsSearchScope, useSettingsSearch } from './useSettingsSearch';
 
 /**
  * Self-contained settings-search unit: owns the query state, renders the
@@ -14,32 +15,33 @@ import { useSettingsSearch } from './useSettingsSearch';
  * search index — and the lazy pinyin dict — starts warming up as soon as the
  * sidebar mounts, well before the first keystroke.
  */
-const SearchSection = memo<PropsWithChildren>(({ children }) => {
-  const { t } = useTranslation('setting');
-  const [query, setQuery] = useState('');
-  const { isIndexing, results } = useSettingsSearch(query);
+const SearchSection = memo<PropsWithChildren<{ scope: SettingsSearchScope }>>(
+  ({ children, scope }) => {
+    const { t } = useTranslation('setting');
+    const { inputProps, query } = useImeAwareQuery();
+    const { isIndexing, results } = useSettingsSearch(query, scope);
 
-  const showResults = !!query.trim();
+    const showResults = !!query.trim();
 
-  return (
-    <>
-      <Flexbox paddingInline={4}>
-        <SearchBar
-          allowClear
-          placeholder={t('settingsSearch.placeholder')}
-          value={query}
-          variant={'filled'}
-          onInputChange={setQuery}
-        />
-      </Flexbox>
-      {showResults ? (
-        <SearchResults isIndexing={isIndexing} query={query} results={results} />
-      ) : (
-        children
-      )}
-    </>
-  );
-});
+    return (
+      <>
+        <Flexbox paddingInline={4}>
+          <SearchBar
+            allowClear
+            placeholder={t('settingsSearch.placeholder')}
+            variant={'filled'}
+            {...inputProps}
+          />
+        </Flexbox>
+        {showResults ? (
+          <SearchResults isIndexing={isIndexing} query={query} results={results} />
+        ) : (
+          children
+        )}
+      </>
+    );
+  },
+);
 
 SearchSection.displayName = 'SettingsSearchSection';
 

@@ -451,16 +451,20 @@ When('用户在搜索框中输入 {string}', async function (this: CustomWorld, 
 
   // Find the search input in the sidebar
   // Support both English and Chinese placeholders
-  const searchInput = this.page.locator(
-    'input[placeholder*="Search"], input[placeholder*="搜索"], [data-testid="search-input"]',
-  );
+  const searchInput = this.page
+    .locator(
+      'input[placeholder*="Search"], input[placeholder*="搜索"], [data-testid="search-input"]',
+    )
+    .locator('visible=true');
+  const searchIcon = this.page.locator('svg.lucide-search').locator('..').locator('visible=true');
+
+  await searchInput.or(searchIcon).first().waitFor({ state: 'visible', timeout: 10_000 });
 
   if ((await searchInput.count()) > 0) {
     await searchInput.first().click();
     await searchInput.first().fill(searchText);
   } else {
     // Fallback: click on search icon to reveal search input
-    const searchIcon = this.page.locator('svg.lucide-search').locator('..');
     if ((await searchIcon.count()) > 0) {
       await searchIcon.first().click();
       await this.page.waitForTimeout(300);

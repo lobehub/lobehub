@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { act, renderHook } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSendMenuItems as useGroupSendMenuItems } from '@/routes/(main)/group/features/Conversation/MainChatInput/useSendMenuItems';
@@ -17,12 +16,6 @@ const mocks = vi.hoisted(() => ({
   focus: vi.fn(),
   inputMessage: '',
   updatePreference: vi.fn(),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: ReactNode }) => children,
-  Hotkey: () => null,
-  Icon: () => null,
 }));
 
 vi.mock('react-i18next', () => ({

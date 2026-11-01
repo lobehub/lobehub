@@ -30,8 +30,21 @@ export const parseGLMModelId = (model: string): ParsedGLMModelId | undefined => 
   };
 };
 
+/**
+ * GLM-5.3-Flash uses the GLM-5.3 text parameter contract, including always-on thinking and
+ * streaming tool calls. Keep the alias exact so unrelated Flash, Turbo, and vision variants do
+ * not accidentally inherit mainline capabilities.
+ *
+ * @see https://docs.z.ai/guides/vlm/glm-5.3-flash
+ */
+const normalizeGLMParameterModelId = (model: string) => {
+  const normalizedModelId = model.trim().toLowerCase();
+
+  return normalizedModelId === 'glm-5.3-flash' ? 'glm-5.3' : normalizedModelId;
+};
+
 export const isToolStreamSupportedGLMModel = (model: string): boolean => {
-  const parsed = parseGLMModelId(model);
+  const parsed = parseGLMModelId(normalizeGLMParameterModelId(model));
   if (!parsed) return false;
 
   if (parsed.majorVersion >= 5) return true;
@@ -44,9 +57,10 @@ export const isToolStreamSupportedGLMModel = (model: string): boolean => {
  * callers can only vary `reasoning_effort` (`low` | `high` | `max`).
  *
  * @see https://z.ai/blog/glm-5.3
+ * @see https://docs.z.ai/guides/vlm/glm-5.3-flash
  */
 export const isAlwaysOnThinkingGLMModel = (model: string): boolean => {
-  const parsed = parseGLMModelId(model);
+  const parsed = parseGLMModelId(normalizeGLMParameterModelId(model));
   if (!parsed) return false;
 
   if (parsed.majorVersion > 5) return true;

@@ -5,6 +5,11 @@ import { BrowserWindow } from 'electron';
 import type { App } from '@/core/App';
 import ZoomService, { type ZoomAction } from '@/services/zoomSrv';
 
+import type { ContextMenuData } from '../types';
+
+// Popup (`/popup/*`) and desktop utility (`/desktop/*`) windows run without the app shell.
+const NON_APP_SHELL_PATH = /^\/(?:popup|desktop)(?:\/|$)/;
+
 export abstract class BaseMenuPlatform {
   protected app: App;
   private readonly devToolsWindows = new Map<BrowserWindow, BrowserWindow>();
@@ -35,6 +40,54 @@ export abstract class BaseMenuPlatform {
     ];
   }
 
+  protected buildReloadMenuItem(label: string, ignoreCache = false): MenuItemConstructorOptions {
+    return {
+      accelerator: ignoreCache ? 'CmdOrCtrl+Shift+R' : 'CmdOrCtrl+R',
+      click: (_item, win) => {
+        const target =
+          win && 'webContents' in win ? (win as BrowserWindow) : BrowserWindow.getFocusedWindow();
+        if (!target) return;
+        const operation = () => {
+          if (ignoreCache) target.webContents.reloadIgnoringCache();
+          else target.webContents.reload();
+        };
+        const browser = [...this.app.browserManager.browsers.values()].find(
+          (browser) => browser.webContents === target.webContents,
+        );
+        if (browser) browser.runWithUnloadConfirmation(operation);
+        else operation();
+      },
+      label,
+    };
+  }
+
+  /**
+   * Context menu > Copy Image: copy the right-clicked image itself to the clipboard.
+   * The standard Copy role only copies a text selection, so it does nothing on an image.
+   * `x`/`y` come from the `context-menu` event of the window the menu popped up over.
+   * Disabled when Electron reports no decoded bitmap (broken or still-loading image),
+   * since `copyImageAt` would silently copy nothing.
+   */
+  protected buildCopyImageMenuItem(
+    label: string,
+    data: ContextMenuData,
+  ): MenuItemConstructorOptions {
+    return {
+      click: (_item, win) => {
+        const target =
+          win && 'webContents' in win
+            ? (win as BrowserWindow)
+            : (BrowserWindow.getFocusedWindow() ??
+              this.app.browserManager.getMainWindow()?.browserWindow);
+        if (!target || target.isDestroyed()) return;
+        if (data.x === undefined || data.y === undefined) return;
+        target.webContents.copyImageAt(data.x, data.y);
+      },
+      enabled: data.hasImageContents !== false,
+      label,
+    };
+  }
+
   protected buildDevToolsMenuItem(label: string, accelerator?: string): MenuItemConstructorOptions {
     return {
       accelerator,
@@ -43,6 +96,28 @@ export abstract class BaseMenuPlatform {
       },
       label,
     };
+  }
+
+  /**
+   * File > New Window: ask the window the user is working in to open its current
+   * workspace in a new window. Only full-app windows mount the File-menu bridge,
+   * so popups, devtools, or no focused window fall back to the main window.
+   */
+  protected openNewWindow(targetWindow?: BaseWindow | null): void {
+    const focused =
+      targetWindow && 'webContents' in targetWindow
+        ? (targetWindow as BrowserWindow)
+        : BrowserWindow.getFocusedWindow();
+    const focusedBrowser = focused
+      ? [...this.app.browserManager.browsers.values()].find(
+          (browser) => browser.webContents === focused.webContents,
+        )
+      : undefined;
+    const isAppShell = focusedBrowser && !NON_APP_SHELL_PATH.test(focusedBrowser.options.path);
+
+    (isAppShell ? focusedBrowser : this.app.browserManager.getMainWindow()).broadcast(
+      'openNewWindow',
+    );
   }
 
   protected closeFocusedTabOrWindow(targetWindow?: BaseWindow | null): void {

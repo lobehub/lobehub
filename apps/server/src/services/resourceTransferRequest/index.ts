@@ -3,9 +3,9 @@ import { TRPCError } from '@trpc/server';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
-import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
+import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import type { ResourceTransferRequestItem } from '@/database/schemas';
 import { workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase, Transaction } from '@/database/type';
@@ -192,8 +192,8 @@ export const executeAcceptedTransfer = async (params: {
 
     switch (request.resourceType) {
       case 'agentGroup': {
-        const chatGroupModel = new ChatGroupModel(db, recipientId, workspaceId);
-        await chatGroupModel.transferGroupOwnership(trx, {
+        const agentGroupRepo = new AgentGroupRepository(db, recipientId, workspaceId);
+        await agentGroupRepo.transferOwnership(trx, {
           fromUserId,
           groupId: request.resourceId,
           toUserId: recipientId,

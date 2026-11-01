@@ -2,7 +2,7 @@
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,20 +49,19 @@ export const SearchAgentInspector = memo<BuiltinInspectorProps<SearchAgentParams
 
     if (isArgumentsStreaming && !keyword) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-agent-management.apiName.searchAgent')}</span>
+        <div className={styles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-agent-management.apiName.searchAgent')}
+          </span>
         </div>
       );
     }
 
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-        gap={8}
-      >
-        <span className={styles.title}>{t(titleKey)}</span>
+      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+          {t(titleKey)}
+        </span>
         {keyword && <span className={highlightTextStyles.primary}>{keyword}</span>}
       </Flexbox>
     );

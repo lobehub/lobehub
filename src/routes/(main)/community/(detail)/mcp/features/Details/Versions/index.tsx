@@ -1,5 +1,4 @@
-import { Block, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { CheckIcon, MinusIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo } from 'react';
@@ -59,7 +58,7 @@ const Versions = memo(() => {
               title: t('mcp.details.versions.table.isValidated'),
             },
             {
-              align: 'end',
+              align: 'right',
               dataIndex: 'createdAt',
               render: (_, record) => <PublishedTime date={record.createdAt} />,
               title: t('mcp.details.versions.table.publishAt'),

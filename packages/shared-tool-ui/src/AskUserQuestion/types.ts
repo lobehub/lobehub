@@ -4,6 +4,11 @@
  */
 export interface AskUserQuestionOption {
   description?: string;
+  /**
+   * Stable provider-owned value. When present the UI displays `label` but
+   * submits this exact id, avoiding ambiguous or localized-label mapping.
+   */
+  id?: string;
   label: string;
   /**
    * The tool schema has no recommendation field, so models mark their pick by
@@ -19,6 +24,11 @@ export interface AskUserQuestionOption {
  * is 2-4 entries, `multiSelect` is opt-in.
  */
 export interface AskUserQuestionItem {
+  /**
+   * Why the question matters — shown under it. Tool calls do not send one;
+   * hosts that ask their own questions (goal / task clarification) do.
+   */
+  description?: string;
   header: string;
   multiSelect?: boolean;
   options: AskUserQuestionOption[];

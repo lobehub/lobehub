@@ -61,6 +61,7 @@ const createStore = (messages: UIChatMessage[]) => {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
     dbMessagesMap,
+    internal_confirmClientMessages: vi.fn(),
     internal_dispatchMessage: vi.fn((action: any) => {
       if (action.type === 'createMessage') {
         dbMessagesMap[messageKey].push(action.value);
@@ -101,6 +102,7 @@ describe('createClientRuntimeExecutors call_llm', () => {
       async ({ messages, model, provider }) => ({
         options: {},
         params: { messages: messages as any, model, provider },
+        replayAssistantReasoning: false,
       }),
     );
     vi.spyOn(messageService, 'batchMutate').mockImplementation(async (operations) => ({

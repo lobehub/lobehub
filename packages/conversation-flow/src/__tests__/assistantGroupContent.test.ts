@@ -136,6 +136,97 @@ describe('partitionAssistantGroupBlocks', () => {
     expect(segments.map(({ kind }) => kind)).toEqual(['workflow', 'answer']);
   });
 
+  it('breaks a breakout tool out of the workflow as its own standalone segment', () => {
+    const isBreakoutTool = (candidate: { id: string }) => candidate.id === 'read-image';
+    const { segments } = partitionAssistantGroupBlocks(
+      [
+        block('step-1', 'Looking.', { tools: [tool('bash-1')] }),
+        block('step-2', 'Checking the screenshot.', {
+          reasoning: { content: 'thinking' },
+          tools: [tool('bash-2'), tool('read-image'), tool('bash-3')],
+        }),
+        block('step-3', '', { tools: [tool('bash-4')] }),
+      ],
+      { isBreakoutTool, isGenerating: false },
+    );
+
+    expect(segments.map(({ kind }) => kind)).toEqual(['workflow', 'workflow', 'workflow']);
+    expect(segments[0]).toMatchObject({
+      blocks: [
+        { id: 'step-1' },
+        {
+          content: 'Checking the screenshot.',
+          id: 'step-2',
+          projection: 'workflow',
+          reasoning: { content: 'thinking' },
+          tools: [expect.objectContaining({ id: 'bash-2' })],
+        },
+      ],
+      kind: 'workflow',
+    });
+    expect(segments[1]).toMatchObject({
+      blocks: [
+        {
+          content: '',
+          id: 'step-2',
+          projection: 'workflow',
+          reasoning: undefined,
+          tools: [expect.objectContaining({ id: 'read-image' })],
+        },
+      ],
+      kind: 'workflow',
+      standalone: true,
+    });
+    expect(segments[2]).toMatchObject({
+      blocks: [
+        {
+          content: '',
+          id: 'step-2',
+          projection: 'workflow',
+          tools: [expect.objectContaining({ id: 'bash-3' })],
+        },
+        { id: 'step-3' },
+      ],
+      kind: 'workflow',
+    });
+    expect(
+      segments.flatMap((segment) =>
+        segment.kind === 'workflow' ? segment.blocks.map((b) => b.projectionKey) : [],
+      ),
+    ).toEqual([undefined, 'step-2__bash-2', 'step-2__read-image', 'step-2__bash-3', undefined]);
+  });
+
+  it('keeps a workflow block carrying images standalone', () => {
+    const { segments } = partitionAssistantGroupBlocks(
+      [
+        block('step-1', '', { tools: [tool('bash-1')] }),
+        block('step-2', '', {
+          imageList: [{ alt: 'img', id: 'img', url: 'https://x/img.png' }],
+          tools: [tool('bash-2')],
+        }),
+        block('step-3', '', { tools: [tool('bash-3')] }),
+      ],
+      { isGenerating: false },
+    );
+
+    expect(segments.map((segment) => segment.kind === 'workflow' && !!segment.standalone)).toEqual([
+      false,
+      true,
+      false,
+    ]);
+  });
+
+  it('does not break out a breakout tool from a single-tool turn', () => {
+    const { segments } = partitionAssistantGroupBlocks(
+      [block('step-1', 'Reading.', { tools: [tool('read-image')] })],
+      { isBreakoutTool: () => true, isGenerating: false },
+    );
+
+    expect(segments).toEqual([
+      { blocks: [block('step-1', 'Reading.', { tools: [tool('read-image')] })], kind: 'workflow' },
+    ]);
+  });
+
   it('keeps a short post-tool status in workflow while generating', () => {
     const { postToolTailPromoted, segments } = partitionAssistantGroupBlocks(
       [

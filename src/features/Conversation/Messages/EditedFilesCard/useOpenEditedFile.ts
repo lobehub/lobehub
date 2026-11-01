@@ -1,3 +1,4 @@
+import type { OperationEditedFile } from '@lobechat/builtin-tools/operationArtifacts';
 import { useCallback } from 'react';
 
 import { isDesktop } from '@/const/version';
@@ -9,7 +10,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
-import type { OperationEditedFile } from './deriveEditedFiles';
+import { useConversationStore } from '../../store';
 
 // Home-relative paths are already anchored: the file tools expand exactly `~`,
 // `~/…`, and `~\…` at write time (see local-file-shell's `expandTilde`). A
@@ -151,9 +152,14 @@ export const planFilesystemOpen = ({
  * Context is resolved from the CURRENT agent config, not the round that ran:
  * best effort, matching how the files sidebar targets "where the agent works
  * now".
+ *
+ * The agent-share visitor page never gets an open action: its portal hosts no
+ * LocalFile view (see AgentShareVisitor/ArtifactPanel) and the creator's
+ * sandbox/filesystem reads are owner-scoped, so a click would do nothing.
  */
 export const useOpenEditedFile = () => {
   const [openLocalFile, activeTopicId] = useChatStore((s) => [s.openLocalFile, s.activeTopicId]);
+  const isAgentShareVisitor = useConversationStore((s) => !!s.context.agentShareId);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
@@ -171,8 +177,10 @@ export const useOpenEditedFile = () => {
   const filesystemAvailable = (effectiveTarget === 'local' && isDesktop) || isDeviceMode;
 
   return useCallback(
-    (entry: OperationEditedFile): (() => void) | undefined => {
-      if (!canPreviewEditedFile(entry)) return undefined;
+    (
+      entry: Pick<OperationEditedFile, 'kind' | 'path' | 'sandboxBacked'>,
+    ): (() => void) | undefined => {
+      if (isAgentShareVisitor || !canPreviewEditedFile(entry)) return undefined;
       if (entry.sandboxBacked) {
         if (!activeTopicId) return undefined;
         return () =>
@@ -203,6 +211,13 @@ export const useOpenEditedFile = () => {
           workingDirectory,
         });
     },
-    [activeTopicId, filesystemAvailable, openLocalFile, remoteDeviceId, workingDirectory],
+    [
+      activeTopicId,
+      filesystemAvailable,
+      isAgentShareVisitor,
+      openLocalFile,
+      remoteDeviceId,
+      workingDirectory,
+    ],
   );
 };

@@ -13,6 +13,7 @@ export const DEFAULT_PREFERENCE: UserPreference = {
     enableMessageTextSelectionActions: false,
     enableOAuthApps: false,
   },
+  projectTopicGroupMode: 'byAgent',
   topicGroupMode: 'byTime',
   topicIncludeCompleted: false,
   topicSortBy: 'updatedAt',

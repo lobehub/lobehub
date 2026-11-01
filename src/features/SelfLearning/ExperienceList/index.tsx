@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Center, createStaticStyles, Empty, Flexbox, Text } from '@lobehub/ui';
 import { DnaIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

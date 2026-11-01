@@ -1,13 +1,12 @@
 import type { TaskStatus, WorkListItem } from '@lobechat/types';
-import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { ChevronDownIcon, ChevronRightIcon, Trash2Icon } from 'lucide-react';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
+import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 import TaskStatusTag from '@/features/AgentTasks/features/TaskStatusTag';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
+import { useResourceDeletedPrompt } from '@/features/Work/useResourceDeletedPrompt';
 import { useChatStore } from '@/store/chat';
 
 import VersionList from './VersionList';
@@ -57,17 +56,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
-  const { t } = useTranslation('chat');
   const [expanded, setExpanded] = useState(false);
-  const [openDocument, openFilePreview, openTaskDetail] = useChatStore((s) => [
+  const [openCanvas, openDocument, openFilePreview, openTaskDetail] = useChatStore((s) => [
+    s.openCanvas,
     s.openDocument,
     s.openFilePreview,
     s.openTaskDetail,
   ]);
   const ToggleIcon = expanded ? ChevronDownIcon : ChevronRightIcon;
-  // The underlying task was deleted outside the tool path — the Work survives as
-  // an orphan rendered from its snapshot, and opening the (gone) task detail 404s.
-  const taskDeleted = work.type === 'task' && work.taskDeleted;
+  const promptResourceDeleted = useResourceDeletedPrompt();
+  // The underlying resource (task / document) was deleted outside the tool path
+  // — the Work survives as an orphan rendered from its snapshot, and opening the
+  // gone resource 404s, so a title click explains that and offers removal.
+  const resourceDeleted = work.resourceDeleted;
 
   const descriptor = getWorkTypeDescriptor(work);
   const label = descriptor.getIdentifier(work) ?? work.resourceId;
@@ -82,7 +83,9 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
     if (!openTarget) return undefined;
     switch (openTarget.kind) {
       case 'document': {
-        return () => openDocument(openTarget.documentId);
+        return resourceDeleted
+          ? () => promptResourceDeleted(work)
+          : () => openDocument(openTarget.documentId);
       }
       case 'external': {
         // Defense in depth: only ever hand http(s) to shell.openExternal.
@@ -90,11 +93,16 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
           ? () => window.open(openTarget.url, '_blank', 'noopener,noreferrer')
           : undefined;
       }
+      case 'canvas': {
+        return () => openCanvas(openTarget.canvasId, openTarget.version);
+      }
       case 'filePreview': {
         return () => openFilePreview({ fileId: openTarget.fileId });
       }
       case 'task': {
-        return taskDeleted ? undefined : () => openTaskDetail(openTarget.identifier);
+        return resourceDeleted
+          ? () => promptResourceDeleted(work)
+          : () => openTaskDetail(openTarget.taskId);
       }
     }
   })();
@@ -120,11 +128,6 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
         <Text className={styles.context} style={{ flexShrink: 0 }}>
           {label}
         </Text>
-        {taskDeleted && (
-          <Tag color={'warning'} icon={<Trash2Icon size={12} />} size={'small'}>
-            {t('workingPanel.works.taskDeleted')}
-          </Tag>
-        )}
         {title && (
           <Text
             ellipsis

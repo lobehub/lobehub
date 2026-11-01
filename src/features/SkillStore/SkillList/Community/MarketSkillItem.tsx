@@ -1,9 +1,19 @@
 'use client';
 
-import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Tag } from '@lobehub/ui';
-import { confirmModal, createModal } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Avatar,
+  Block,
+  confirmModal,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar } from 'antd-style';
 import { t as translate } from 'i18next';
 import { DownloadIcon, Loader2, MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';

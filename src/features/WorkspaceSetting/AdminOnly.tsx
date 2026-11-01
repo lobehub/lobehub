@@ -1,11 +1,11 @@
 'use client';
 
-import { Flexbox, FluentEmoji } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, FluentEmoji } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsWorkspaceLoading } from '@/business/client/hooks/useIsWorkspaceLoading';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { MAX_WIDTH } from '@/const/layoutTokens';
 import { usePermission } from '@/hooks/usePermission';
 
@@ -49,7 +49,7 @@ const AdminOnly = memo<{ children: ReactNode }>(({ children }) => {
   // Don't paint the 403 before workspace context resolves — `myRole` is `null`
   // during bootstrap, which would briefly flash the forbidden screen for admins
   // landing directly on the URL.
-  if (isLoading) return null;
+  if (isLoading) return <RouteLoading />;
   if (!canManageWorkspace) return <Forbidden />;
   return <>{children}</>;
 });

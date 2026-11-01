@@ -1,21 +1,27 @@
 'use client';
 
+import { isServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig } from '@lobechat/types';
-import { TooltipGroup } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
+import { applyTopicModelToHeterogeneousProvider } from '@lobechat/types';
+import { Select, TooltipGroup } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
+import { useTopicId } from '@/features/ChatInput/hooks/useTopicId';
 import { useProviderBindingCompatibleProviders } from '@/features/HeterogeneousAgent/hooks/useProviderBinding';
 import {
   buildServerDefaultModelOptions,
   COMPACT_MODEL_PICKER_STYLE,
   compactModelTriggerText,
   modelPickerStyles,
+  resolveServerDefaultAgentModels,
 } from '@/features/HeterogeneousAgent/modelPicker';
 import ModelSelect from '@/features/ModelSelect';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useAiInfraStore } from '@/store/aiInfra';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 interface ApiModeModelBarProps {
   agentId: string;
@@ -29,10 +35,17 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const updateAgentConfigById = useAgentStore((state) => state.updateAgentConfigById);
   const heterogeneousProvider = agencyConfig?.heterogeneousProvider;
+  // This composer's conversation (see `useTopicId`), never the global active topic.
+  const topicId = useTopicId();
+  const topicModel = useChatStore(
+    (state) => (topicId ? topicSelectors.getTopicHeteroPinById(topicId)(state) : undefined),
+    isEqual,
+  );
+  const updateTopicModel = useChatStore((state) => state.updateTopicModel);
   const { providers } = useProviderBindingCompatibleProviders(heterogeneousProvider?.type);
   const providerIds = useMemo(() => providers.map(({ id }) => id), [providers]);
   const serverDefaultAgentType =
-    heterogeneousProvider?.type === 'claude-code' || heterogeneousProvider?.type === 'codex'
+    heterogeneousProvider && isServerDefaultHeterogeneousAgentType(heterogeneousProvider.type)
       ? heterogeneousProvider.type
       : undefined;
   const apiConfig = heterogeneousProvider?.apiConfig;
@@ -42,17 +55,20 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   const useFetchServerDefaultCapability = useAgentStore(
     (state) => state.useFetchServerDefaultHeterogeneousCapability,
   );
-  const serverCapability = useFetchServerDefaultCapability(
-    !!serverDefaultApiConfig && !!serverDefaultAgentType,
-  );
+  const serverCapabilityEnabled = !!serverDefaultApiConfig && !!serverDefaultAgentType;
+  const serverCapabilitySync = useFetchServerDefaultCapability(serverCapabilityEnabled);
+  // The last confirmed capability paints at once; the sync only confirms it.
+  const serverCapability = useAgentStore(agentSelectors.heteroServerDefaultCapability);
+  const serverCapabilityLoading =
+    serverCapabilityEnabled && !serverCapability && !serverCapabilitySync.error;
   const builtinAiModelList = useAiInfraStore((state) => state.builtinAiModelList);
   const serverDefaultModelOptions = useMemo(() => {
     const models =
-      serverCapability.data?.enabled === true && serverDefaultAgentType
-        ? serverCapability.data.models[serverDefaultAgentType]
+      serverCapability?.enabled === true && serverDefaultAgentType
+        ? resolveServerDefaultAgentModels(serverCapability.models, serverDefaultAgentType)
         : [];
     return buildServerDefaultModelOptions(models, builtinAiModelList);
-  }, [builtinAiModelList, serverCapability.data, serverDefaultAgentType]);
+  }, [builtinAiModelList, serverCapability, serverDefaultAgentType]);
 
   if (
     !heterogeneousProvider ||
@@ -61,7 +77,23 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
   )
     return null;
 
+  const effectiveProvider = applyTopicModelToHeterogeneousProvider(
+    heterogeneousProvider,
+    topicModel,
+  );
+  const effectiveApiConfig = effectiveProvider.apiConfig;
+  const effectiveProviderApiConfig =
+    effectiveApiConfig?.source !== 'server-default' ? effectiveApiConfig : undefined;
+
   const persist = async (apiConfig: HeterogeneousApiConfig) => {
+    if (topicId && apiConfig.source !== 'server-default' && apiConfig.providerId) {
+      await updateTopicModel(topicId, {
+        model: apiConfig.model,
+        provider: apiConfig.providerId,
+      });
+      return;
+    }
+
     await updateAgentConfigById(agentId, {
       agencyConfig: {
         ...agencyConfig,
@@ -76,7 +108,7 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
         <Select
           className={modelPickerStyles.picker}
           labelRender={compactTriggerLabel}
-          loading={serverCapability.isLoading}
+          loading={serverCapabilityLoading}
           options={serverDefaultModelOptions}
           popupMatchSelectWidth={false}
           size="small"
@@ -100,10 +132,10 @@ const ApiModeModelBar = memo<ApiModeModelBarProps>(({ agentId }) => {
       style={COMPACT_MODEL_PICKER_STYLE}
       variant="borderless"
       value={
-        providerApiConfig
+        effectiveProviderApiConfig
           ? {
-              model: providerApiConfig.model,
-              provider: providerApiConfig.providerId,
+              model: effectiveProviderApiConfig.model,
+              provider: effectiveProviderApiConfig.providerId,
             }
           : undefined
       }

@@ -1,5 +1,5 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   AGENT_SIGNAL_TRIGGER_SOURCE_TYPES,
@@ -130,7 +130,7 @@ describe('buildTriggerSourceEvent', () => {
       now: NOW,
       scopeKey: 'agent:agent_1:user:user_1',
       sourceId: 'custom-source-id',
-      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
+      sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentSelfReflectionRequested,
       timestamp: 123,
       userId,
     });
@@ -138,5 +138,77 @@ describe('buildTriggerSourceEvent', () => {
     expect(event.sourceId).toBe('custom-source-id');
     expect(event.scopeKey).toBe('agent:agent_1:user:user_1');
     expect(event.timestamp).toBe(123);
+  });
+
+  describe('nightly review guard key', () => {
+    /**
+     * ROOT CAUSE:
+     *
+     * The nightly review handler claims `nightly-review:{userId}:{agentId}:{localDate}` once per
+     * day and only runs when `sourceId` equals that key. Letting the caller choose `localDate`
+     * (with a matching `sourceId`) minted a fresh guard key per call, so one user could start an
+     * unbounded number of model-backed reviews through `triggerSourceEvent`.
+     */
+    it('derives localDate, agentId and sourceId server-side outside development', () => {
+      const event = buildTriggerSourceEvent({
+        agentId,
+        now: NOW,
+        payloadOverride: { agentId: 'agent_other', localDate: '1999-01-01' },
+        sourceId: 'nightly-review:user_1:agent_1:1999-01-01',
+        sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
+        userId,
+      });
+
+      const payload = event.payload as Record<string, unknown>;
+      expect(payload.localDate).toBe('2026-05-31');
+      expect(payload.agentId).toBe(agentId);
+      expect(event.sourceId).toBe('nightly-review:user_1:agent_1:2026-05-31');
+    });
+
+    it('still allows overrides that do not feed the guard key', () => {
+      const event = buildTriggerSourceEvent({
+        agentId,
+        now: NOW,
+        payloadOverride: { reviewWindowStart: '2026-05-29T12:00:00.000Z' },
+        sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
+        userId,
+      });
+
+      const payload = event.payload as Record<string, unknown>;
+      expect(payload.reviewWindowStart).toBe('2026-05-29T12:00:00.000Z');
+    });
+
+    it('lets development pin a localDate and sourceId to replay one day', () => {
+      const event = buildTriggerSourceEvent({
+        agentId,
+        allowNightlyReviewGuardOverride: true,
+        now: NOW,
+        payloadOverride: { localDate: '2026-05-01' },
+        sourceId: 'custom-source-id',
+        sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
+        userId,
+      });
+
+      expect((event.payload as Record<string, unknown>).localDate).toBe('2026-05-01');
+      expect(event.sourceId).toBe('custom-source-id');
+    });
+
+    it('defaults the override permission to NODE_ENV=development', () => {
+      vi.stubEnv('NODE_ENV', 'development');
+
+      try {
+        const event = buildTriggerSourceEvent({
+          agentId,
+          now: NOW,
+          payloadOverride: { localDate: '2026-05-01' },
+          sourceType: AGENT_SIGNAL_SOURCE_TYPES.agentNightlyReviewRequested,
+          userId,
+        });
+
+        expect(event.sourceId).toBe('nightly-review:user_1:agent_1:2026-05-01');
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
   });
 });

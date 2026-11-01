@@ -50,6 +50,8 @@ const npmShim = (packagePath: string) =>
   `@ECHO off\r\n"%dp0%\\node.exe"  "%dp0%\\${packagePath}" %*\r\n`;
 
 const noErr = null;
+const DROID_ACP_HELP = `Usage: droid exec [options]
+  --output-format <format>  Output format (ACP modes)`;
 const TRAE_ACP_HELP = `Start the ACP server
 Usage: trae-cli acp serve [flags]
   -y, --yolo   Enable YOLO mode`;
@@ -263,20 +265,21 @@ describe('cliAgentBinaries', () => {
     });
 
     it('reports unavailable when `where` only returns unrunnable matches (.ps1 / extensionless)', async () => {
-      callExecFile(
-        [
-          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude',
-          'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.ps1',
-        ].join('\r\n'),
-      );
+      const unrunnableMatches = [
+        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude',
+        'C:\\Users\\Hanam\\AppData\\Roaming\\npm\\claude.ps1',
+      ];
+      callExecFile(unrunnableMatches.join('\r\n'));
 
       const { claudeCodeBinary } = await import('../cliAgentBinaries');
       const status = await claudeCodeBinary.detect();
 
       expect(status.available).toBe(false);
-      // Must not attempt to invoke the unrunnable matches.
+      // PATH recovery may issue registry queries and retry `where`, but must
+      // never attempt to invoke either unrunnable result.
       expect(execMock).not.toHaveBeenCalled();
-      expect(execFileMock).toHaveBeenCalledTimes(1); // just `where`
+      const invokedFiles = execFileMock.mock.calls.map(([file]) => file);
+      for (const match of unrunnableMatches) expect(invokedFiles).not.toContain(match);
     });
   });
 
@@ -324,6 +327,31 @@ describe('cliAgentBinaries', () => {
         available: true,
         path: '/Users/test/.local/bin/qodercli',
         version: '1.1.15',
+      });
+    });
+
+    it('detects Factory Droid by its ACP capability', async () => {
+      callExecFile('/Users/test/.local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile(DROID_ACP_HELP);
+
+      const { droidBinary } = await import('../cliAgentBinaries');
+      await expect(droidBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/droid',
+        version: '0.206.0',
+      });
+    });
+
+    it('detects Devin through the shared version probe', async () => {
+      callExecFile('/Users/test/.local/bin/devin\n');
+      callExecFile('devin 3000.4.25 (7e8e528a)');
+
+      const { devinBinary } = await import('../cliAgentBinaries');
+      await expect(devinBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/devin',
+        version: '3000.4.25',
       });
     });
 
@@ -425,13 +453,15 @@ describe('cliAgentBinaries', () => {
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(true);
-        expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
+        expect(status.path).toBe(
+          '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex',
+        );
         expect(status.version).toBe('0.138.0');
 
         expect(execFileMock).toHaveBeenCalledTimes(2);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');
         expect(execFileMock.mock.calls[1]![0]).toBe(
-          '/Applications/ChatGPT.app/Contents/Resources/codex',
+          '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex',
         );
       } finally {
         process.env.PATH = originalPath;
@@ -448,17 +478,15 @@ describe('cliAgentBinaries', () => {
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
-        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
-        callExecFileError(new Error('ENOENT')); // /Applications/Codex.app
-        callExecFileError(new Error('ENOENT')); // ~/Applications/Codex.app
+        // ChatGPT.app (two layouts) + Codex.app × /Applications and ~/Applications
+        for (let i = 0; i < 6; i++) callExecFileError(new Error('ENOENT'));
 
         const { codexBinary } = await import('../cliAgentBinaries');
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(false);
-        expect(execFileMock).toHaveBeenCalledTimes(5);
-        expect(execFileMock.mock.calls[4]![0]).toBe(
+        expect(execFileMock).toHaveBeenCalledTimes(7);
+        expect(execFileMock.mock.calls[6]![0]).toBe(
           path.join(os.homedir(), 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex'),
         );
       } finally {
@@ -475,8 +503,14 @@ describe('cliAgentBinaries', () => {
       const status = await detectHeterogeneousCliCommand('codex', '/custom/bin/codex');
 
       expect(status.available).toBe(false);
-      // Only the explicit path's --version attempt — no fallback probing.
-      expect(execFileMock).toHaveBeenCalledTimes(1);
+      // PATH recovery may retry the explicit launcher in a second environment,
+      // but every version probe must keep that launcher rather than switching
+      // to a built-in Codex fallback.
+      const versionProbeFiles = execFileMock.mock.calls
+        .filter(([, args]) => Array.isArray(args) && args.includes('--version'))
+        .map(([file]) => file);
+      expect(versionProbeFiles.length).toBeGreaterThan(0);
+      expect(versionProbeFiles).toEqual(versionProbeFiles.map(() => '/custom/bin/codex'));
     });
 
     it('falls back to the login shell PATH for tools installed by shell setup', async () => {

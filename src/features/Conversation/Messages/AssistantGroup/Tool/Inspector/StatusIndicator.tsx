@@ -1,6 +1,5 @@
 import { type ToolIntervention } from '@lobechat/types';
-import { Block, Icon, Tooltip } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Icon, Spin, Tooltip } from '@lobehub/ui';
 import {
   AlertTriangle,
   Ban,
@@ -14,8 +13,7 @@ import {
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { LOADING_FLAT } from '@/const/message';
+import { hasToolResultBody } from '../toolResultBody';
 
 interface StatusIndicatorProps {
   intervention?: ToolIntervention;
@@ -40,7 +38,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(
     const { t } = useTranslation('chat');
 
     const hasError = !!result?.error;
-    const hasSuccessResult = !!result?.content && result.content !== LOADING_FLAT;
+    const hasSuccessResult = hasToolResultBody(result);
     const hasResult = hasSuccessResult || hasError;
     const isPending = intervention?.status === 'pending';
     const isReject = intervention?.status === 'rejected';
@@ -78,7 +76,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(
     } else if (hasResult || isToolComplete) {
       icon = <Icon color={cssVar.colorSuccess} icon={successIcon ?? Check} />;
     } else {
-      icon = <NeuralNetworkLoading size={16} />;
+      icon = <Spin size="small" variant="network" />;
     }
 
     return (

@@ -1,12 +1,15 @@
 import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
-import type { ModulePreloadOptions } from 'vite';
+import type { ModulePreloadOptions, Plugin } from 'vite';
 
-import { viteEmotionSpeedy } from './emotionSpeedy';
+import { canvasRuntime } from './canvasRuntime';
+import { viteCompletionSounds } from './completionSounds';
 import { lobeIconImports } from './lobeIconImports';
+import { lobeUiImports } from './lobeUiImports';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
+import { stylexPlugin, stylexTokenModules } from './stylex';
 
 /**
  * Shared manual chunk naming — groups leaf-node modules to reduce chunk file count.
@@ -173,6 +176,22 @@ function sharedManualChunks(id: string): string | undefined {
     if (locale) return `i18n-${locale}-ui-runtime`;
   }
 
+  // The antd locale above imports per-component locales (calendar, date-picker,
+  // time-picker, rc pagination/picker) and is itself re-exported by the
+  // `antd/locale/*` entry. Lazy groups capture only matched modules, so left
+  // unmatched these land in an entry-set chunk that imports the ui-runtime chunk
+  // while ui-runtime imports it back. That cycle breaks rolldown's lazy init
+  // ("r is not a function") and every non-English locale silently falls back to
+  // English. en_US stays out: antd components import it statically as their
+  // default locale, so it belongs with the antd vendor graph.
+  const antdPartMatch = id.match(
+    /[\\/](?:antd|@rc-component[\\/][^\\/]+)[\\/](?:[^\\/]+[\\/])*locale[\\/]([A-Za-z]{2}_[A-Z]{2})\.js$/,
+  );
+  if (antdPartMatch && antdPartMatch[1] !== 'en_US') {
+    const locale = ANTD_LOCALE[antdPartMatch[1]];
+    if (locale) return `i18n-${locale}-ui-runtime`;
+  }
+
   const dayjsMatch = id.match(/dayjs\/locale\/([^/.]+)\.js/);
   if (dayjsMatch) {
     const locale = DAYJS_LOCALE[dayjsMatch[1]];
@@ -315,20 +334,158 @@ export const sharedRollupOutput = {
 };
 
 interface SharedRolldownOutputOptions {
+  // Multi-entry builds (the desktop renderer's main/overlay/popup) pass their
+  // entry modules so the first-screen catch-all is split per entry set instead
+  // of merging every entry's static graph into one chunk.
+  initialEntries?: Record<string, string>;
+  // Without initialEntries, multi-entry builds must opt out: a constant-name
+  // catch-all would merge every entry's static graph.
+  splitInitial?: boolean;
   strictExecutionOrder?: boolean;
 }
 
-export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => ({
-  chunkFileNames: sharedChunkFileNames,
-  strictExecutionOrder: options.strictExecutionOrder ?? true,
-  codeSplitting: {
-    groups: [
-      {
-        name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
+interface ModuleGraph {
+  getModuleInfo: (id: string) => { importedIds: readonly string[] } | null;
+}
+
+// Rolldown's entry-set chunking can park a small module a first-screen chunk
+// needs inside a heavy lazy chunk, which the entry then preloads whole
+// (rolldown/rolldown#10787). Naming every first-screen chunk, vendor groups
+// included, by the set of entries that statically reach its modules rules that
+// out, and an entry still loads only the chunks whose set contains it.
+export const createEntrySetLabeler = (entries: Record<string, string>) => {
+  let reach: [label: string, ids: Set<string>][] | undefined;
+
+  const collect = (ctx: ModuleGraph, entry: string) => {
+    if (!ctx.getModuleInfo(entry))
+      throw new Error(`initial entry ${entry} is not in the module graph`);
+    const ids = new Set<string>();
+    const stack = [entry];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      if (ids.has(id)) continue;
+      const info = ctx.getModuleInfo(id);
+      if (!info) continue;
+      ids.add(id);
+      stack.push(...info.importedIds);
+    }
+    return ids;
+  };
+
+  return (id: string, ctx: ModuleGraph) => {
+    reach ??= Object.entries(entries).map(([label, entry]) => [
+      label,
+      collect(ctx, entry.replaceAll('\\', '/')),
+    ]);
+    const labels = reach.filter(([, ids]) => ids.has(id)).map(([label]) => label);
+    return labels.length > 0 ? labels.join('+') : null;
+  };
+};
+
+// @lobehub/ui members on the first-screen path of dist/desktop, measured with
+// bundle-size-gate --type entry-graph. lobeUiImports splits the barrel into one
+// module per member; folding the eager ones back into one chunk keeps the heavy
+// members (Markdown, Mermaid, EmojiPicker, Highlighter, Image) on lazy routes.
+const UI_CORE_MEMBER_RE =
+  /^(?:Accordion|ActionIcon|Block|Collapse|ConfigProvider|Flex|FluentEmoji|Grid|Hotkey|Icon|Img|Modal|MotionProvider|Skeleton|Text|ThemeProvider|color|styles|utils|hooks\/use(?:IsClient|NativeButton|TextOverflow)|icons\/lucideExtra|base-ui\/(?:ActionIcon|Avatar|Button|Checkbox|ContextMenu|Modal|Popover|Switch|Text|Toast|Tooltip|controlSize|focusRing|zIndex))(?:\/|\.)/;
+
+const isUiCoreModule = (id: string) => {
+  const member = id.replaceAll('\\', '/').split('/node_modules/@lobehub/ui/es/')[1];
+
+  return Boolean(member && UI_CORE_MEMBER_RE.test(member));
+};
+
+interface Group {
+  name: string | ((id: string, ctx: ModuleGraph) => string | null);
+  priority: number;
+  test?: RegExp | ((id: string) => boolean);
+}
+
+// Groups apply to the entry's static graph only. Off the first screen, a
+// monolithic vendor chunk makes every route pay for members it never renders,
+// so lazy modules fall back to entry-set chunking. Named lazy chunks survive
+// only where the file name is a routing contract (i18n/, devtools/).
+const isNamedLazyChunk = (name: string) => name.startsWith('i18n-') || name.startsWith('devtools-');
+
+// Every module left over in the entry's static graph is needed for the first
+// paint anyway, so folding them into one chunk costs nothing on first load and
+// stops the entry-set splitter from fanning them out into dozens of small files.
+const splitByInitial = (
+  groups: Group[],
+  label?: (id: string, ctx: ModuleGraph) => string | null,
+) => {
+  // Rolldown's $initial tag skips re-export targets the first screen never
+  // uses, yet with strictExecutionOrder their barrel's init still calls them,
+  // so the chunks holding them get preloaded anyway. The labeler's static walk
+  // covers those modules, so entry-set mode selects by label instead of tag.
+  const initial = label ? {} : { tags: ['$initial' as const] };
+  const withEntrySet =
+    (base: Group['name']): Group['name'] =>
+    (id, ctx) => {
+      const name = typeof base === 'string' ? base : base(id, ctx);
+      const set = name && label!(id, ctx);
+      return set ? `${name}-${set}` : null;
+    };
+
+  return [
+    ...groups.map((g) => ({
+      ...g,
+      name: label ? withEntrySet(g.name) : g.name,
+      priority: g.priority + 10,
+      ...initial,
+    })),
+    {
+      name: (id: string) => {
+        const name = sharedManualChunks(id);
+        return name && isNamedLazyChunk(name) ? name : null;
       },
-    ],
-  },
-});
+      priority: 3,
+    },
+    {
+      name: label ? withEntrySet('initial') : 'app-initial',
+      priority: 0,
+      ...initial,
+    },
+  ];
+};
+
+// Recursive dependency capture ignores the $initial tag: a lazy group would
+// drag first-screen modules into its chunk and the entry would then preload it.
+// Groups capture only matched modules; dependencies fall back to automatic
+// entry-set chunking. Requires preserveEntrySignatures: 'allow-extension'.
+export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => {
+  const groups: Group[] = [
+    // The canvas runtime's own modules carry page-level CSS (base.css styles
+    // body). App chunks also reuse modules the runtime pulls in, so without a
+    // chunk of its own that CSS would ride along and restyle the App's body.
+    {
+      name: 'canvas-runtime',
+      priority: 4,
+      test: /[\\/]packages[\\/]canvas-runtime[\\/]src[\\/]/,
+    },
+    {
+      name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
+      priority: 3,
+    },
+    {
+      name: 'vendor-antd',
+      priority: 2,
+      test: /[\\/]node_modules[\\/](?:antd|@ant-design|@rc-component)[\\/]/,
+    },
+    { name: 'vendor-ui-core', priority: 1, test: isUiCoreModule },
+  ];
+  const { initialEntries } = options;
+  const splitInitial = Boolean(initialEntries) || (options.splitInitial ?? true);
+  const label = initialEntries && createEntrySetLabeler(initialEntries);
+
+  return {
+    chunkFileNames: sharedChunkFileNames,
+    strictExecutionOrder: options.strictExecutionOrder ?? true,
+    codeSplitting: splitInitial
+      ? { groups: splitByInitial(groups, label), includeDependenciesRecursively: false }
+      : { groups },
+  };
+};
 
 type Platform = 'web' | 'mobile' | 'desktop' | 'auth';
 
@@ -336,15 +493,31 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 interface SharedRendererOptions {
   platform: Platform;
+  stylexOverlaySrcDirs?: string[];
   tsconfigPaths?: boolean;
 }
 
 export function sharedRendererPlugins(options: SharedRendererOptions) {
   return [
-    viteEmotionSpeedy(),
+    canvasRuntime(),
+    viteCompletionSounds(),
     viteMarkdownImport(),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
+
+    // Editor.tsx takes the provider-only entry so the editor runtime stays off
+    // the first screen. In dev that entry is prebundled separately from
+    // @lobehub/editor/react, which the editors use, giving the app a second
+    // EditorContext; point the dev import back at the one bundle.
+    isDev &&
+      ({
+        enforce: 'pre',
+        name: 'lobe-dev-editor-provider',
+        resolveId(source, importer) {
+          if (source !== '@lobehub/editor/react/EditorProvider') return null;
+          return this.resolve('@lobehub/editor/react', importer, { skipSelf: true });
+        },
+      } satisfies Plugin),
 
     isDev && {
       name: 'lobe-dev-strip-manifest',
@@ -360,8 +533,9 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
         exclude: [/\.(css|json|html)$/],
         hotKeys: ['altKey', 'ctrlKey'],
       }),
+    stylexPlugin({ overlaySrcDirs: options.stylexOverlaySrcDirs }),
     react(),
-    ...(options.platform === 'desktop' ? [] : lobeIconImports()),
+    ...(options.platform === 'desktop' ? [] : [...lobeIconImports(), ...lobeUiImports()]),
   ];
 }
 
@@ -386,18 +560,15 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
 }
 
 export const sharedOptimizeDeps = {
+  exclude: [...stylexTokenModules],
   include: [
     'react',
     'react-dom',
     'react-dom/client',
     'react-router',
     'react-router/dom',
-    'antd',
-    '@ant-design/icons',
     '@lobehub/ui',
-    '@lobehub/ui/base-ui',
     '@lobehub/ui > @emotion/react',
-    'antd-style',
     'zustand',
     'zustand/middleware',
     'swr',
@@ -432,7 +603,4 @@ export const sharedOptimizeDeps = {
 // snapshots. They must still share one LexicalComposerContext at runtime.
 export const sharedRendererDedupe = ['@lobehub/editor', 'react', 'react-dom'];
 
-export const __testing = {
-  sharedChunkFileNames,
-  sharedManualChunks,
-};
+export const __testing = { isUiCoreModule, sharedChunkFileNames, sharedManualChunks };

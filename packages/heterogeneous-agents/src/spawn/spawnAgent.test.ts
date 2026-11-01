@@ -14,6 +14,7 @@ let nextFakeProc: any = null;
 const tempDirs: string[] = [];
 
 const platformMock = vi.mocked(os.platform);
+const originalPlatform = process.platform;
 const execFileMock = vi.mocked(childProcess.execFile);
 const detectHeterogeneousCliCommandMock = vi.mocked(
   resolveCliCommand.detectHeterogeneousCliCommand,
@@ -178,11 +179,17 @@ const createGrokAcpProc = ({
 
 const createFakeAcpProc = ({
   promptAutoComplete = true,
-}: { promptAutoComplete?: boolean } = {}) => {
+  responseText = 'TRAE response',
+  sessionId = 'trae-session-1',
+}: { promptAutoComplete?: boolean; responseText?: string; sessionId?: string } = {}) => {
   const proc = new EventEmitter() as any;
   const stdout = new PassThrough();
   const stderr = new PassThrough();
-  const requests: Array<{ id?: number; method?: string }> = [];
+  const requests: Array<{
+    id?: number;
+    method?: string;
+    params?: Record<string, unknown>;
+  }> = [];
   const send = (message: Record<string, unknown>) =>
     stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
   proc.stdout = stdout;
@@ -193,7 +200,11 @@ const createFakeAcpProc = ({
   proc.stdin = {
     once: vi.fn(),
     write: vi.fn((chunk: string) => {
-      const message = JSON.parse(chunk.trim()) as { id?: number; method?: string };
+      const message = JSON.parse(chunk.trim()) as {
+        id?: number;
+        method?: string;
+        params?: Record<string, unknown>;
+      };
       requests.push(message);
       queueMicrotask(() => {
         switch (message.method) {
@@ -217,11 +228,14 @@ const createFakeAcpProc = ({
                     currentValue: 'seed-2.0-code',
                     id: 'model',
                     name: 'Model',
-                    options: [{ name: 'GPT 5.4', value: 'gpt-5.4' }],
+                    options: [
+                      { name: 'GPT 5.4', value: 'gpt-5.4' },
+                      { name: 'Sonnet', value: 'sonnet' },
+                    ],
                     type: 'select',
                   },
                 ],
-                sessionId: 'trae-session-1',
+                sessionId,
               },
             });
             return;
@@ -235,9 +249,9 @@ const createFakeAcpProc = ({
             send({
               method: 'session/update',
               params: {
-                sessionId: 'trae-session-1',
+                sessionId,
                 update: {
-                  content: { text: 'TRAE response', type: 'text' },
+                  content: { text: responseText, type: 'text' },
                   sessionUpdate: 'agent_message_chunk',
                 },
               },
@@ -332,11 +346,16 @@ describe('spawnAgent', () => {
     nextFakeProc = null;
     platformMock.mockReturnValue('linux');
     execFileMock.mockReset();
+    // ACP sessions read `process.platform` directly; pin it so signal tests skip win32 taskkill.
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' });
+    vi.stubEnv('LOBEHUB_JWT', ''); // a host token would land in a never-cleaned Codex JWT file
     detectHeterogeneousCliCommandMock.mockResolvedValue({ available: true, path: 'traecli' });
   });
 
   afterEach(async () => {
     nextFakeProc = null;
+    vi.unstubAllEnvs();
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   });
 
@@ -381,6 +400,32 @@ describe('spawnAgent', () => {
     // Events flow through the pipeline (session id extracted by adapter).
     expect(events.length).toBeGreaterThan(0);
     for (const event of events) expect(event.operationId).toBe('op-1');
+  });
+
+  it('inherits an outer wrapper process group instead of detaching again', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit] });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      detached: false,
+      operationId: 'op-inherited-group',
+      prompt: 'do a thing',
+    });
+
+    expect(spawnCalls[0].options.detached).toBe(false);
+    handle.kill('SIGKILL');
+    expect(fake.proc.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(processKill).not.toHaveBeenCalled();
+
+    fake.start();
+    for await (const _event of handle.events) {
+      // Drain the adapted stream so the fake process can settle cleanly.
+    }
+    await handle.exit;
+    processKill.mockRestore();
   });
 
   it('runs Grok Build through ACP and exposes its native session to CLI callers', async () => {
@@ -429,28 +474,6 @@ describe('spawnAgent', () => {
       type: 'agent_runtime_end',
     });
 
-    processKill.mockRestore();
-  });
-
-  it('preserves SIGKILL when force-stopping a Grok ACP run', async () => {
-    const fake = createGrokAcpProc({ promptAutoComplete: false });
-    nextFakeProc = fake.proc;
-    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
-
-    const { spawnAgent } = await import('./spawnAgent');
-    const handle = await spawnAgent({
-      agentType: 'grok-build',
-      operationId: 'op-grok-force-stop',
-      prompt: 'keep running',
-    });
-    await vi.waitFor(() => {
-      expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
-    });
-
-    handle.kill('SIGKILL');
-
-    expect(processKill).toHaveBeenCalledWith(-54_321, 'SIGKILL');
-    await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' });
     processKill.mockRestore();
   });
 
@@ -564,6 +587,94 @@ describe('spawnAgent', () => {
     killSpy.mockRestore();
   });
 
+  it('runs Devin through ACP behind the standard handle contract', async () => {
+    const fake = createFakeAcpProc({
+      responseText: 'Devin response',
+      sessionId: 'devin-session-1',
+    });
+    nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        extraArgs: ['--model', 'sonnet'],
+        initialModel: 'sonnet',
+        operationId: 'op-devin',
+        prompt: 'do a thing',
+      });
+      const events = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['acp', '--model', 'sonnet'],
+        command: 'devin',
+      });
+      expect(fake.requests.map(({ method }) => method).filter(Boolean)).toEqual([
+        'initialize',
+        'session/new',
+        'session/set_config_option',
+        'session/prompt',
+      ]);
+      expect(
+        fake.requests.find(({ method }) => method === 'session/set_config_option')?.params,
+      ).toEqual({
+        configId: 'model',
+        sessionId: 'devin-session-1',
+        value: 'sonnet',
+      });
+      expect(handle.sessionId).toBe('devin-session-1');
+      expect(events).toContainEqual(expect.objectContaining({ type: 'agent_runtime_end' }));
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('applies a permission mode through ACP session/set_config_option', async () => {
+    const fake = createFakeAcpProc({
+      responseText: 'Devin response',
+      sessionId: 'devin-session-1',
+    });
+    nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        extraArgs: ['--model', 'sonnet'],
+        initialModel: 'sonnet',
+        operationId: 'op-devin',
+        permissionMode: 'bypass',
+        prompt: 'do a thing',
+      });
+      const events = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['acp', '--model', 'sonnet'],
+        command: 'devin',
+      });
+      const setConfigRequests = fake.requests.filter(
+        ({ method }) => method === 'session/set_config_option',
+      );
+      expect(setConfigRequests).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            params: { configId: 'mode', sessionId: 'devin-session-1', value: 'bypass' },
+          }),
+        ]),
+      );
+      expect(handle.sessionId).toBe('devin-session-1');
+      expect(events).toContainEqual(expect.objectContaining({ type: 'agent_runtime_end' }));
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
   it('runs TRAE through ACP behind the standard handle contract', async () => {
     const fake = createFakeAcpProc();
     nextFakeProc = fake.proc;
@@ -612,6 +723,50 @@ describe('spawnAgent', () => {
     }
   });
 
+  it('runs Factory Droid through its fixed safe ACP invocation', async () => {
+    const fake = createFakeAcpProc();
+    nextFakeProc = fake.proc;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'droid',
+        extraArgs: ['--tag', 'lobe'],
+        initialModel: 'gpt-5.4',
+        operationId: 'op-droid',
+        prompt: 'do a thing',
+      });
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
+      expect(spawnCalls[0]).toMatchObject({
+        args: ['exec', '--output-format', 'acp', '--tag', 'lobe'],
+        command: 'droid',
+      });
+      expect(fake.requests.map((request) => request.method)).toEqual([
+        'initialize',
+        'session/new',
+        'session/set_config_option',
+        'session/prompt',
+      ]);
+      expect(handle.sessionId).toBe('trae-session-1');
+      expect(
+        events.some(
+          (event) =>
+            event.type === 'stream_chunk' &&
+            event.data?.chunkType === 'text' &&
+            event.data?.content === 'TRAE response',
+        ),
+      ).toBe(true);
+      expect(events.find((event) => event.type === 'stream_start')?.data?.provider).toBe('droid');
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
   it('preserves SIGKILL when force-stopping a TRAE ACP run', async () => {
     const fake = createFakeAcpProc({ promptAutoComplete: false });
     nextFakeProc = fake.proc;
@@ -638,6 +793,106 @@ describe('spawnAgent', () => {
       processKill.mockRestore();
     }
   });
+
+  it('reports a host-interrupted Devin ACP run as interrupted, not a transport error', async () => {
+    const fake = createFakeAcpProc({ promptAutoComplete: false, sessionId: 'devin-session-1' });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        operationId: 'op-devin-interrupt',
+        prompt: 'keep running',
+      });
+      await vi.waitFor(() => {
+        expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+      });
+
+      // The wrapper delivers the protocol-level cancel through `interrupt` when
+      // the OS signal already reached the agent through a shared process group.
+      expect(handle.interrupt).toBeTypeOf('function');
+      handle.interrupt?.('SIGINT');
+      fake.proc.emit('close', null, 'SIGINT');
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGINT' });
+      expect(events.some(({ type }) => type === 'error')).toBe(false);
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ reason: 'interrupted' }),
+          type: 'agent_runtime_end',
+        }),
+      );
+    } finally {
+      processKill.mockRestore();
+    }
+  });
+
+  it.each(['starting', 'running'] as const)(
+    'does not resend an inherited-group SIGTERM while ACP is %s',
+    async (phase) => {
+      const fake = createFakeAcpProc({ promptAutoComplete: false });
+      nextFakeProc = fake.proc;
+      const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      try {
+        const { spawnAgent } = await import('./spawnAgent');
+        const handle = await spawnAgent({
+          agentType: 'devin',
+          detached: false,
+          operationId: 'op-devin-sigterm',
+          prompt: 'keep running',
+        });
+        if (phase === 'running') {
+          await vi.waitFor(() => {
+            expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+          });
+        }
+
+        handle.interrupt?.('SIGTERM');
+        const events = [];
+        for await (const event of handle.events) events.push(event);
+
+        await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGTERM' });
+        expect(events.some(({ type }) => type === 'error')).toBe(false);
+        expect(fake.proc.kill).not.toHaveBeenCalled();
+        expect(processKill).not.toHaveBeenCalled();
+        if (phase === 'starting') {
+          expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(false);
+        }
+      } finally {
+        processKill.mockRestore();
+      }
+    },
+  );
+
+  it.each(['SIGTERM', 'SIGKILL'] as const)(
+    'still delivers an owned %s to an inherited-group ACP child',
+    async (signal) => {
+      const fake = createFakeAcpProc({ promptAutoComplete: false });
+      nextFakeProc = fake.proc;
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        detached: false,
+        operationId: 'op-devin-owned-signal',
+        prompt: 'keep running',
+      });
+      await vi.waitFor(() => {
+        expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+      });
+
+      if (signal === 'SIGKILL') handle.interrupt?.(signal);
+      else handle.kill(signal);
+
+      await expect(handle.exit).resolves.toEqual({ code: null, signal });
+      expect(fake.proc.kill).toHaveBeenCalledExactlyOnceWith(signal);
+    },
+  );
 
   it('allows the official canonical trae-cli command to run through ACP', async () => {
     const fake = createFakeAcpProc();
@@ -749,6 +1004,117 @@ describe('spawnAgent', () => {
       prompt: 'do a thing',
     });
     expect(spawnCalls[0].args).toContain('--include-partial-messages');
+  });
+
+  it("charges a resumed claude run against the transcript under the child's HOME", async () => {
+    // The child gets an overridden HOME, so the transcript `--resume` loads
+    // (and its last cost-state) lives there, not under the parent's homedir.
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-home-'));
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-cwd-'));
+    tempDirs.push(home, cwd);
+    const sessionId = '72f65fa9-0355-45d3-b903-8f41027ed5f2';
+    const { resolveClaudeCodeTranscriptPath } = await import('./ensureResumeTranscript');
+    const transcript = (await resolveClaudeCodeTranscriptPath({ cwd, home, sessionId }))!;
+    await mkdir(path.dirname(transcript), { recursive: true });
+    await writeFile(
+      transcript,
+      `${JSON.stringify({ sessionId, totalCostUSD: 69.67, type: 'cost-state' })}\n`,
+    );
+
+    const result = `${JSON.stringify({
+      is_error: false,
+      result: 'done',
+      total_cost_usd: 76.43,
+      type: 'result',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    })}\n`;
+    const fake = createFakeProc({ stdoutChunks: [ccInit, result] });
+    nextFakeProc = fake.proc;
+    const configDir = process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'claude-code',
+        cwd,
+        env: { HOME: home },
+        operationId: 'op-home',
+        prompt: 'continue',
+        resumeSessionId: sessionId,
+      });
+      fake.start();
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+      await handle.exit;
+
+      const resultUsage = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'result_usage',
+      );
+      expect(resultUsage?.data.costUsd).toBeCloseTo(6.76);
+    } finally {
+      if (configDir !== undefined) process.env.CLAUDE_CONFIG_DIR = configDir;
+    }
+  });
+
+  it('reads the cost baseline from the env the child actually receives', async () => {
+    // options.env unsets CLAUDE_CONFIG_DIR for the child, so the CLI resumes from
+    // HOME/.claude; the parent's config dir holds an unrelated transcript.
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-home-'));
+    const parentConfigDir = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-parent-'));
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-cwd-'));
+    tempDirs.push(home, parentConfigDir, cwd);
+    const sessionId = '72f65fa9-0355-45d3-b903-8f41027ed5f2';
+    const { resolveClaudeCodeTranscriptPath } = await import('./ensureResumeTranscript');
+    const writeCostState = async (params: { configDir?: string; home?: string }, cost: number) => {
+      const transcript = (await resolveClaudeCodeTranscriptPath({ ...params, cwd, sessionId }))!;
+      await mkdir(path.dirname(transcript), { recursive: true });
+      await writeFile(
+        transcript,
+        `${JSON.stringify({ sessionId, totalCostUSD: cost, type: 'cost-state' })}\n`,
+      );
+    };
+    await writeCostState({ home }, 69.67);
+    await writeCostState({ configDir: parentConfigDir }, 50);
+
+    const result = `${JSON.stringify({
+      is_error: false,
+      result: 'done',
+      total_cost_usd: 76.43,
+      type: 'result',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    })}\n`;
+    const fake = createFakeProc({ stdoutChunks: [ccInit, result] });
+    nextFakeProc = fake.proc;
+    const configDir = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = parentConfigDir;
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'claude-code',
+        cwd,
+        // JS callers can spread an unset key; the child then has no config dir.
+        env: { CLAUDE_CONFIG_DIR: undefined as unknown as string, HOME: home },
+        operationId: 'op-child-env',
+        prompt: 'continue',
+        resumeSessionId: sessionId,
+      });
+      fake.start();
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+      await handle.exit;
+
+      const resultUsage = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'result_usage',
+      );
+      expect(resultUsage?.data.costUsd).toBeCloseTo(6.76);
+    } finally {
+      if (configDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = configDir;
+    }
   });
 
   it('appends --resume <id> for claude when resuming a session', async () => {
@@ -1079,35 +1445,18 @@ describe('spawnAgent', () => {
     ]);
   });
 
-  it('spawns Pi in JSON mode, resumes its native session, and sends images as @path args', async () => {
-    const dir = await mkdtemp(path.join(os.tmpdir(), 'lobe-pi-spawn-'));
-    tempDirs.push(dir);
-    const imagePath = path.join(dir, 'input.png');
-    await writeFile(imagePath, 'image');
-    nextFakeProc = createFakeProc().proc;
+  it('rejects spawning Pi via the legacy CLI path — pi is RPC-only', async () => {
     const { spawnAgent } = await import('./spawnAgent');
-    await spawnAgent({
-      agentType: 'pi',
-      extraArgs: ['--provider', 'anthropic'],
-      operationId: 'op-pi',
-      prompt: [
-        { text: 'continue', type: 'text' },
-        { source: { path: imagePath, type: 'path' }, type: 'image' },
-      ],
-      resumeSessionId: 'pi-session-previous',
-    });
-
-    expect(spawnCalls[0]).toMatchObject({ command: 'pi' });
-    expect(spawnCalls[0].args).toEqual([
-      '--mode',
-      'json',
-      '--session-id',
-      'pi-session-previous',
-      `@${imagePath}`,
-      '--provider',
-      'anthropic',
-    ]);
-    expect((nextFakeProc as any).stdin.write.mock.calls[0][0]).toBe('continue');
+    await expect(
+      spawnAgent({
+        agentType: 'pi',
+        extraArgs: ['--provider', 'anthropic'],
+        operationId: 'op-pi',
+        prompt: 'continue',
+        resumeSessionId: 'pi-session-previous',
+      }),
+    ).rejects.toThrow(/RPC transport only/);
+    expect(spawnCalls).toHaveLength(0);
   });
 
   it('seeds a real Codex resumed stream with the previous cumulative usage from the session file', async () => {
@@ -1258,14 +1607,6 @@ describe('spawnAgent', () => {
     expect(command).toBe('/usr/local/bin/claude-wrapped');
     expect(args).toContain('--my-flag');
     expect(args).toContain('x');
-  });
-
-  it('rejects with an error on unknown agent type', async () => {
-    nextFakeProc = createFakeProc().proc;
-    const { spawnAgent } = await import('./spawnAgent');
-    await expect(
-      spawnAgent({ agentType: 'kimi-cli', operationId: 'op-1', prompt: 'hi' }),
-    ).rejects.toThrow('Unknown local heterogeneous agent type: "kimi-cli"');
   });
 
   it('events iterator drains all pipeline events including the trailing flush', async () => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useAppProcessMetrics } from './appProcessMetrics';
@@ -35,7 +35,7 @@ const GpuProcessWidget = memo(() => {
         'GPU process CPU usage and resident memory — Chromium exposes no GPU utilisation figure'
       }
     >
-      GPU proc {gpu.cpuPercent.toFixed(1)}% · {Math.round(gpu.memoryMB)} MB
+      GPU {gpu.cpuPercent.toFixed(1)}% · {Math.round(gpu.memoryMB)}M
     </span>
   );
 });

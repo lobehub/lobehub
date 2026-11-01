@@ -25,6 +25,9 @@ export const TaskApiName = {
   /** List tasks with optional filters */
   listTasks: 'listTasks',
 
+  /** List workspace members that can be assigned tasks (resolves names → user ids) */
+  listWorkspaceMembers: 'listWorkspaceMembers',
+
   /** Trigger an async run of a single task (real execution, not just status) */
   runTask: 'runTask',
 
@@ -53,10 +56,16 @@ export type TaskApiNameType = (typeof TaskApiName)[keyof typeof TaskApiName];
 
 export interface CreateTaskParams {
   assigneeAgentId?: string;
+  /** Workspace member (user id) who owns the task outcome; coexists with `assigneeAgentId` (the executing agent). */
+  assigneeUserId?: string;
   instruction: string;
+  /** Model the task runs with; omitted pins the assignee agent's current model. */
+  model?: string;
   name: string;
   parentIdentifier?: string;
   priority?: number;
+  /** Provider for `model`; omitted is resolved from the assignee agent. */
+  provider?: string;
   sortOrder?: number;
 }
 
@@ -73,6 +82,7 @@ export interface CreateTaskState {
   /** Lifecycle status the task was created in (usually `backlog`). */
   status?: TaskStatus;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== createGoal ====================
@@ -89,6 +99,8 @@ export interface GoalCriterionDraft {
 
 export interface CreateGoalParams {
   criteria: GoalCriterionDraft[];
+  /** ISO-8601 calendar-time budget; past it the coordinator stops dispatching. */
+  deadline?: string | null;
   instruction: string;
   maxIterations?: number | null;
   maxTotalCost?: number | null;
@@ -96,13 +108,13 @@ export interface CreateGoalParams {
 }
 
 export interface CreateGoalState {
-  identifier?: string;
+  /** The `goals` row the Goal Graph was created as — what the card opens. */
+  goalId?: string;
   name?: string;
-  operationId?: string;
   startedAt?: string;
   success: boolean;
+  /** The responsible task the first coordinator tick dispatched, when it got that far. */
   taskId?: string;
-  topicId?: string;
 }
 
 // ==================== createTasks (batch) ====================
@@ -117,6 +129,7 @@ export interface CreateTasksItemResult {
   identifier?: string;
   name: string;
   success: boolean;
+  taskId?: string;
 }
 
 export interface CreateTasksState {
@@ -144,6 +157,24 @@ export interface ListTasksState {
   total?: number;
 }
 
+// ==================== listWorkspaceMembers ====================
+
+export interface ListWorkspaceMembersParams {
+  /** Cap on the members returned (default 50, max 100). */
+  limit?: number;
+  /** Case-insensitive match on name, @handle, email, linked IM identity, or an exact user id. */
+  query?: string;
+}
+
+export interface ListWorkspaceMembersState {
+  /** Members actually returned (after `query` and `limit`). */
+  count: number;
+  query?: string;
+  success: boolean;
+  /** Members matching `query` before the `limit` cap. */
+  total: number;
+}
+
 // ==================== viewTask ====================
 
 export interface ViewTaskParams {
@@ -153,6 +184,7 @@ export interface ViewTaskParams {
 export interface ViewTaskState {
   identifier?: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== task comments ====================
@@ -166,6 +198,7 @@ export interface AddTaskCommentState {
   commentId?: string;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 export interface UpdateTaskCommentParams {
@@ -192,18 +225,25 @@ export interface DeleteTaskCommentState {
 export interface EditTaskParams {
   addDependencies?: string[];
   assigneeAgentId?: string | null;
+  /** Workspace member (user id) to assign the task to; `null` clears the human assignee. */
+  assigneeUserId?: string | null;
   description?: string;
   identifier: string;
   instruction?: string;
+  /** Task model override; `null` clears it so the task follows the assignee agent again. */
+  model?: string | null;
   name?: string;
   parentIdentifier?: string | null;
   priority?: number;
+  /** Provider for the task model; `null` clears it. */
+  provider?: string | null;
   removeDependencies?: string[];
 }
 
 export interface EditTaskState {
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== runTask / runTasks ====================
@@ -212,27 +252,38 @@ export interface RunTaskParams {
   /** Optional existing topic to continue (rather than creating a new topic). */
   continueTopicId?: string;
   identifier: string;
+  /** Replaces the task's pinned model, for this run and later ones. */
+  model?: string;
   /** Optional extra prompt prepended to the task instruction for this run. */
   prompt?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTaskState {
   identifier: string;
   operationId?: string;
   success: boolean;
+  taskId?: string;
   topicId?: string;
 }
 
 export interface RunTasksParams {
   /** Identifiers of tasks to run, in execution order. */
   identifiers: string[];
+  /** Replaces the pinned model of every task in the batch, for this run and later ones. */
+  model?: string;
+  /** Provider for `model`. Omit to resolve it from the assignee agent. */
+  provider?: string;
 }
 
 export interface RunTasksItemResult {
   error?: string;
   identifier: string;
   operationId?: string;
+  refs?: string[];
   success: boolean;
+  taskId?: string;
   topicId?: string;
 }
 
@@ -262,6 +313,7 @@ export interface SetTaskScheduleState {
   automationMode?: TaskAutomationMode | null;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== setTaskVerify ====================
@@ -286,6 +338,7 @@ export interface SetTaskVerifyState {
   enabled?: boolean | null;
   identifier: string;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== updateTaskStatus ====================
@@ -297,8 +350,10 @@ export interface UpdateTaskStatusParams {
 }
 
 export interface UpdateTaskStatusState {
+  identifier?: string;
   status: TaskStatus;
   success: boolean;
+  taskId?: string;
 }
 
 // ==================== deleteTask ====================
@@ -310,4 +365,5 @@ export interface DeleteTaskParams {
 export interface DeleteTaskState {
   identifier: string;
   success: boolean;
+  taskId?: string;
 }

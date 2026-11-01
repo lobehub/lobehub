@@ -21,8 +21,10 @@ const UNKNOWN_STATUS = '__unknown__';
 export interface SubtaskGraphPlan {
   /** Tasks that already finished (completed / canceled) and are skipped. */
   alreadyDone: string[];
+  alreadyDoneTasks?: { id: string; identifier: string }[];
   /** Tasks blocked by an unbroken cycle and therefore unreachable. */
   blockedByCycle: string[];
+  blockedByCycleTasks?: { id: string; identifier: string }[];
   /**
    * Tasks waiting on a dependency we cannot satisfy in this batch — either an
    * in-flight task (running / scheduled / etc.) or a task outside this subtree.
@@ -31,23 +33,30 @@ export interface SubtaskGraphPlan {
    * layer.
    */
   blockedExternally: string[];
+  blockedExternallyTasks?: { id: string; identifier: string }[];
   /** Identifiers participating in at least one dependency cycle. */
   cycles: string[];
+  cyclesTasks?: { id: string; identifier: string }[];
   /**
-   * Descendants whose own status excludes them from this batch (running /
-   * scheduled / etc.). Distinct from `blockedExternally`, which describes a
+   * Descendants whose own state excludes them from this batch (running /
+   * scheduled / archived / etc.). Distinct from `blockedExternally`, which describes a
    * runnable task held back by *some other* task.
    */
   ineligible: string[];
+  ineligibleTasks?: { id: string; identifier: string }[];
   /** Topologically sorted layers of runnable tasks. Layer N waits on layer N-1. */
   layers: string[][];
+  layerTasks?: { id: string; identifier: string }[][];
   /** Total runnable tasks across all layers. */
   totalRunnable: number;
 }
 
 export interface SubtaskNode {
+  /** Archived by the user: never run, so it sits out like an ineligible status. */
+  archived?: boolean;
   /** Tasks this one depends on (must be `completed` first). */
   dependsOn: string[];
+  id: string;
   identifier: string;
   status: string;
 }
@@ -75,27 +84,27 @@ export const planSubtaskLayers = (
   const alreadyDone: string[] = [];
   const ineligible: string[] = [];
   const runnableSet = new Set<string>();
-  const statusByIdentifier = new Map<string, string>();
+  const statusById = new Map<string, string>();
 
   for (const node of nodes) {
-    statusByIdentifier.set(node.identifier, node.status);
+    statusById.set(node.id, node.status);
     if (TERMINAL_STATUSES.has(node.status)) {
-      alreadyDone.push(node.identifier);
-    } else if (RUNNABLE_STATUSES.has(node.status)) {
-      runnableSet.add(node.identifier);
+      alreadyDone.push(node.id);
+    } else if (RUNNABLE_STATUSES.has(node.status) && !node.archived) {
+      runnableSet.add(node.id);
     } else {
-      ineligible.push(node.identifier);
+      ineligible.push(node.id);
     }
   }
 
-  const resolveDepStatus = (depIdentifier: string): string =>
-    statusByIdentifier.get(depIdentifier) ?? externalStatuses.get(depIdentifier) ?? UNKNOWN_STATUS;
+  const resolveDepStatus = (depId: string): string =>
+    statusById.get(depId) ?? externalStatuses.get(depId) ?? UNKNOWN_STATUS;
 
   type EdgeKind = 'satisfied' | 'in-batch' | 'external';
-  const classifyEdge = (depIdentifier: string): EdgeKind => {
-    const status = resolveDepStatus(depIdentifier);
+  const classifyEdge = (depId: string): EdgeKind => {
+    const status = resolveDepStatus(depId);
     if (TERMINAL_STATUSES.has(status)) return 'satisfied';
-    if (runnableSet.has(depIdentifier)) return 'in-batch';
+    if (runnableSet.has(depId)) return 'in-batch';
     // Runnable status outside this batch, in-flight (running/scheduled), or
     // unknown — all block until something else completes them.
     return 'external';
@@ -111,17 +120,17 @@ export const planSubtaskLayers = (
   }
 
   for (const node of nodes) {
-    if (!runnableSet.has(node.identifier)) continue;
+    if (!runnableSet.has(node.id)) continue;
     for (const dep of node.dependsOn) {
       const kind = classifyEdge(dep);
       if (kind === 'satisfied') continue;
       if (kind === 'external') {
-        externallyBlocked.add(node.identifier);
+        externallyBlocked.add(node.id);
         continue;
       }
       // in-batch
-      inBatchUpstream.get(node.identifier)!.push(dep);
-      inBatchDownstream.get(dep)!.push(node.identifier);
+      inBatchUpstream.get(node.id)!.push(dep);
+      inBatchDownstream.get(dep)!.push(node.id);
     }
   }
 
@@ -258,50 +267,56 @@ export class TaskGraphService {
 
     const ids = descendants.map((d) => d.id);
     const deps = await this.taskModel.getDependenciesByTaskIds(ids);
-    const idToIdentifier = new Map(descendants.map((d) => [d.id, d.identifier]));
-
-    // Fetch upstream tasks referenced by `blocks` deps that aren't in this
-    // subtree, so we know whether they're done or still in flight.
-    const externalUpstreamIds = new Set<string>();
-    for (const dep of deps) {
-      if (dep.type !== 'blocks') continue;
-      if (!idToIdentifier.has(dep.dependsOnId)) externalUpstreamIds.add(dep.dependsOnId);
-    }
-    const externalUpstreams =
-      externalUpstreamIds.size > 0 ? await this.taskModel.findByIds([...externalUpstreamIds]) : [];
-    const allIdToIdentifier = new Map(idToIdentifier);
-    const externalStatusByIdentifier = new Map<string, string>();
-    for (const upstream of externalUpstreams) {
-      allIdToIdentifier.set(upstream.id, upstream.identifier);
-      externalStatusByIdentifier.set(upstream.identifier, upstream.status);
-    }
-
-    const dependsOnByIdentifier = new Map<string, string[]>();
+    const descendantIds = new Set(ids);
+    const externalIds = [
+      ...new Set(
+        deps
+          .filter((dep) => dep.type === 'blocks' && !descendantIds.has(dep.dependsOnId))
+          .map((dep) => dep.dependsOnId),
+      ),
+    ];
+    const upstreams = externalIds.length ? await this.taskModel.findByIds(externalIds) : [];
+    const externalStatuses = new Map(upstreams.map((task) => [task.id, task.status]));
+    const knownIds = new Set([...ids, ...upstreams.map((task) => task.id)]);
+    const dependsOnById = new Map<string, string[]>();
     let missingCounter = 0;
     for (const dep of deps) {
-      if (dep.type !== 'blocks') continue;
-      const taskIdentifier = idToIdentifier.get(dep.taskId);
-      if (!taskIdentifier) continue;
-
-      let upstreamIdentifier = allIdToIdentifier.get(dep.dependsOnId);
-      if (!upstreamIdentifier) {
-        // Upstream task no longer exists. Synthesize a placeholder identifier
-        // (with no recorded status) so the dependent is treated as externally
-        // blocked rather than silently freed.
-        upstreamIdentifier = `__missing:${missingCounter++}`;
-      }
-
-      const list = dependsOnByIdentifier.get(taskIdentifier) ?? [];
-      list.push(upstreamIdentifier);
-      dependsOnByIdentifier.set(taskIdentifier, list);
+      if (dep.type !== 'blocks' || !descendantIds.has(dep.taskId)) continue;
+      const list = dependsOnById.get(dep.taskId) ?? [];
+      list.push(knownIds.has(dep.dependsOnId) ? dep.dependsOnId : `__missing:${missingCounter++}`);
+      dependsOnById.set(dep.taskId, list);
     }
-
-    const nodes: SubtaskNode[] = descendants.map((d) => ({
-      dependsOn: dependsOnByIdentifier.get(d.identifier) ?? [],
-      identifier: d.identifier,
-      status: d.status,
+    const nodes = descendants.map((task) => ({
+      archived: !!task.archivedAt,
+      dependsOn: dependsOnById.get(task.id) ?? [],
+      id: task.id,
+      identifier: task.identifier,
+      status: task.status,
     }));
 
-    return { descendants, plan: planSubtaskLayers(nodes, externalStatusByIdentifier) };
+    return { descendants, plan: planSubtaskLayers(nodes, externalStatuses) };
   }
 }
+
+/** Keep identifier outputs for older clients, adding stable references alongside. */
+export const displaySubtaskPlan = (plan: SubtaskGraphPlan, descendants: TaskItem[]) => {
+  const byId = new Map(descendants.map((task) => [task.id, task]));
+  const tasks = (ids: string[]) =>
+    ids.map((id) => ({ id, identifier: byId.get(id)?.identifier ?? id }));
+  const identifiers = (ids: string[]) => tasks(ids).map((task) => task.identifier);
+  return {
+    alreadyDone: identifiers(plan.alreadyDone),
+    alreadyDoneTasks: tasks(plan.alreadyDone),
+    blockedByCycle: identifiers(plan.blockedByCycle),
+    blockedByCycleTasks: tasks(plan.blockedByCycle),
+    blockedExternally: identifiers(plan.blockedExternally),
+    blockedExternallyTasks: tasks(plan.blockedExternally),
+    cycles: identifiers(plan.cycles),
+    cyclesTasks: tasks(plan.cycles),
+    ineligible: identifiers(plan.ineligible),
+    ineligibleTasks: tasks(plan.ineligible),
+    layers: plan.layers.map(identifiers),
+    layerTasks: plan.layers.map(tasks),
+    totalRunnable: plan.totalRunnable,
+  };
+};

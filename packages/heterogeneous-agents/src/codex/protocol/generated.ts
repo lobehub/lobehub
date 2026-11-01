@@ -643,6 +643,15 @@ export type ThreadTokenUsage = { total: TokenUsageBreakdown, last: TokenUsageBre
 // Source: v2/ThreadTokenUsageUpdatedNotification.ts
 export type ThreadTokenUsageUpdatedNotification = { threadId: string, turnId: string, tokenUsage: ThreadTokenUsage, };
 
+// Source: v2/ThreadUnsubscribeParams.ts
+export type ThreadUnsubscribeParams = { threadId: string, };
+
+// Source: v2/ThreadUnsubscribeResponse.ts
+export type ThreadUnsubscribeResponse = { status: ThreadUnsubscribeStatus, };
+
+// Source: v2/ThreadUnsubscribeStatus.ts
+export type ThreadUnsubscribeStatus = "notLoaded" | "notSubscribed" | "unsubscribed";
+
 // Source: v2/TokenUsageBreakdown.ts
 export type TokenUsageBreakdown = { totalTokens: number, inputTokens: number, cachedInputTokens: number, cacheWriteInputTokens: number, outputTokens: number, reasoningOutputTokens: number, };
 

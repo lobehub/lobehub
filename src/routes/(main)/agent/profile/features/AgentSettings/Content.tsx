@@ -1,12 +1,13 @@
 'use client';
 
+import { DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import isEqual from 'fast-deep-equal';
-import { ActivityIcon, GitBranchIcon, MessageSquareHeartIcon } from 'lucide-react';
+import { GitBranchIcon, MessageSquareHeartIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import {
   AgentSettings as Settings,
   SettingsModalLayout,
@@ -16,17 +17,12 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
 const TAB_META = {
   [ChatSettingsTabs.Graph]: { icon: GitBranchIcon, labelKey: 'agentTab.graph' },
   [ChatSettingsTabs.Opening]: { icon: MessageSquareHeartIcon, labelKey: 'agentTab.opening' },
-  [ChatSettingsTabs.SelfIteration]: {
-    icon: ActivityIcon,
-    labelKey: 'agentTab.selfIteration',
-  },
 } as const;
 
 const Content = memo(() => {
@@ -39,19 +35,16 @@ const Content = memo(() => {
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
   const enableAgentGraphConfigLab = useUserStore(labPreferSelectors.enableAgentGraphConfig);
   const [tab, setTab] = useState(ChatSettingsTabs.Opening);
   const showGraphTab = enableAgentGraphConfigLab && !isInbox && !isHeterogeneous;
 
   const availableTabs = useMemo(
     () =>
-      [
-        ChatSettingsTabs.Opening,
-        enableAgentSelfIteration ? ChatSettingsTabs.SelfIteration : null,
-        showGraphTab ? ChatSettingsTabs.Graph : null,
-      ].filter(Boolean) as ChatSettingsTabs[],
-    [enableAgentSelfIteration, showGraphTab],
+      [ChatSettingsTabs.Opening, showGraphTab ? ChatSettingsTabs.Graph : null].filter(
+        Boolean,
+      ) as ChatSettingsTabs[],
+    [showGraphTab],
   );
 
   const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0];
@@ -81,12 +74,15 @@ const Content = memo(() => {
     [availableTabs, t],
   );
 
-  const displayTitle = isInbox ? 'Lobe AI' : meta.title || t('defaultSession', { ns: 'common' });
+  const displayTitle = isInbox
+    ? DEFAULT_INBOX_TITLE
+    : meta.title || t('defaultSession', { ns: 'common' });
 
   return (
     <SettingsModalLayout
       activeTab={activeTab}
-      avatar={isInbox ? DEFAULT_INBOX_AVATAR : meta.avatar || DEFAULT_AVATAR}
+      agentId={agentId}
+      avatar={isInbox ? DEFAULT_INBOX_AVATAR : meta.avatar || ''}
       background={meta.backgroundColor || undefined}
       tabs={tabs}
       title={displayTitle}

@@ -8,6 +8,7 @@ interface DevDockUIState {
   activePanelId: string | null;
   expanded: boolean;
   maximized: boolean;
+  mesurer: boolean;
   panelHeight: number;
   pinOverrides: Record<string, boolean>;
   reactScan: boolean;
@@ -20,6 +21,7 @@ const DEFAULT_UI: DevDockUIState = {
   activePanelId: null,
   expanded: true,
   maximized: false,
+  mesurer: false,
   panelHeight: 360,
   pinOverrides: {},
   reactScan: bootReactScan,
@@ -40,6 +42,7 @@ const readPersisted = (): DevDockUIState => {
 export interface DevDockStore extends DevDockUIState {
   setExpanded: (expanded: boolean) => void;
   setMaximized: (maximized: boolean) => void;
+  setMesurer: (mesurer: boolean) => void;
   setPanelHeight: (panelHeight: number) => void;
   setPinned: (id: string, pinned: boolean) => void;
   setReactScan: (reactScan: boolean) => void;
@@ -55,6 +58,7 @@ export const useDevDockStore = create<DevDockStore>((set, get) => {
       activePanelId,
       expanded,
       maximized,
+      mesurer,
       panelHeight,
       pinOverrides,
       reactScan,
@@ -66,6 +70,7 @@ export const useDevDockStore = create<DevDockStore>((set, get) => {
         activePanelId,
         expanded,
         maximized,
+        mesurer,
         panelHeight,
         pinOverrides,
         reactScan,
@@ -78,6 +83,7 @@ export const useDevDockStore = create<DevDockStore>((set, get) => {
     ...readPersisted(),
     setExpanded: (expanded) => update({ expanded }),
     setMaximized: (maximized) => update({ maximized }),
+    setMesurer: (mesurer) => update({ mesurer }),
     setPanelHeight: (panelHeight) =>
       update({ panelHeight: Math.max(MIN_PANEL_HEIGHT, panelHeight) }),
     setPinned: (id, pinned) => update({ pinOverrides: { ...get().pinOverrides, [id]: pinned } }),

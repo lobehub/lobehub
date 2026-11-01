@@ -1,5 +1,9 @@
 import { LOADING_FLAT } from '@lobechat/const';
-import type { AssistantContentBlock, UIChatMessage } from '@lobechat/types';
+import type {
+  AssistantContentBlock,
+  ChatToolPayloadWithResult,
+  UIChatMessage,
+} from '@lobechat/types';
 
 const ASSISTANT_GROUP_STATUS_TEXT_MAX_LENGTH = 100;
 const MARKDOWN_HEADING_MAX_LEVEL = 6;
@@ -13,6 +17,8 @@ export type AssistantGroupBlockProjection = 'answer' | 'workflow';
  */
 export interface AssistantGroupSemanticBlock extends AssistantContentBlock {
   projection?: AssistantGroupBlockProjection;
+  /** Set when one block's tools are split into several workflow sub-blocks. */
+  projectionKey?: string;
 }
 
 export interface AssistantGroupAnswerSegment<
@@ -27,6 +33,8 @@ export interface AssistantGroupWorkflowSegment<
 > {
   blocks: Block[];
   kind: 'workflow';
+  /** Rendered on its own between neighbouring workflow runs (e.g. an image result). */
+  standalone?: boolean;
 }
 
 export type AssistantGroupSegment<
@@ -34,6 +42,8 @@ export type AssistantGroupSegment<
 > = AssistantGroupAnswerSegment<Block> | AssistantGroupWorkflowSegment<Block>;
 
 export interface PartitionAssistantGroupOptions {
+  /** Tools whose result should surface between collapsed workflow runs instead of inside one. */
+  isBreakoutTool?: (tool: ChatToolPayloadWithResult) => boolean;
   isGenerating: boolean;
   /**
    * Whether all non-intervention tools have settled. Only used while generating
@@ -74,7 +84,7 @@ const isTrailingReasoningCandidate = (block: AssistantContentBlock): boolean =>
 const createProjectedBlock = (
   block: AssistantContentBlock,
   projection: AssistantGroupBlockProjection,
-  overrides: Partial<AssistantContentBlock>,
+  overrides: Partial<AssistantGroupSemanticBlock>,
 ): AssistantGroupSemanticBlock => ({
   ...block,
   ...overrides,
@@ -91,15 +101,53 @@ const appendAnswerBlock = (
 const appendWorkflowBlock = (
   segments: AssistantGroupSegment[],
   block: AssistantGroupSemanticBlock,
+  standalone = false,
 ) => {
   const lastSegment = segments.at(-1);
 
-  if (lastSegment?.kind === 'workflow') {
+  if (lastSegment?.kind === 'workflow' && !lastSegment.standalone && !standalone) {
     lastSegment.blocks.push(block);
     return;
   }
 
-  segments.push({ blocks: [block], kind: 'workflow' });
+  segments.push({ blocks: [block], kind: 'workflow', ...(standalone && { standalone }) });
+};
+
+const hasImages = (block: AssistantContentBlock): boolean => !!block.imageList?.length;
+
+const appendWorkflowToolRuns = (
+  segments: AssistantGroupSegment[],
+  block: AssistantGroupSemanticBlock,
+  isBreakoutTool: NonNullable<PartitionAssistantGroupOptions['isBreakoutTool']>,
+) => {
+  const tools = block.tools ?? [];
+  if (!tools.some(isBreakoutTool)) {
+    appendWorkflowBlock(segments, block, hasImages(block));
+    return;
+  }
+
+  const runs: { standalone: boolean; tools: ChatToolPayloadWithResult[] }[] = [];
+  for (const tool of tools) {
+    const last = runs.at(-1);
+    if (isBreakoutTool(tool)) runs.push({ standalone: true, tools: [tool] });
+    else if (last && !last.standalone) last.tools.push(tool);
+    else runs.push({ standalone: false, tools: [tool] });
+  }
+
+  runs.forEach((run, index) => {
+    const head = index === 0;
+    appendWorkflowBlock(
+      segments,
+      createProjectedBlock(block, 'workflow', {
+        content: head ? block.content : '',
+        imageList: head ? block.imageList : undefined,
+        projectionKey: `${block.id}__${run.tools[0]!.id}`,
+        reasoning: head ? block.reasoning : undefined,
+        tools: run.tools,
+      }),
+      run.standalone || (head && hasImages(block)),
+    );
+  });
 };
 
 /**
@@ -127,7 +175,13 @@ const appendWorkflowRangeBlock = (
   segments: AssistantGroupSegment[],
   block: AssistantContentBlock,
   collapsesIntoWorkflow: boolean,
+  isBreakoutTool: PartitionAssistantGroupOptions['isBreakoutTool'],
 ) => {
+  const appendWorkflowRest = (rest: AssistantGroupSemanticBlock) => {
+    if (!collapsesIntoWorkflow) appendWorkflowBlock(segments, rest);
+    else appendWorkflowToolRuns(segments, rest, isBreakoutTool ?? (() => false));
+  };
+
   if (block.error) {
     if (hasTools(block)) {
       appendWorkflowBlock(
@@ -161,8 +215,7 @@ const appendWorkflowRangeBlock = (
         tools: undefined,
       }),
     );
-    appendWorkflowBlock(
-      segments,
+    appendWorkflowRest(
       createProjectedBlock(block, 'workflow', {
         content: '',
         imageList: undefined,
@@ -172,7 +225,7 @@ const appendWorkflowRangeBlock = (
     return;
   }
 
-  appendWorkflowBlock(segments, block);
+  appendWorkflowRest(block);
 };
 
 const appendPostToolBlocks = (
@@ -274,7 +327,7 @@ export const partitionAssistantGroupBlocks = (
     const workflowEndIndex = answerSplitIndex ?? blocks.length;
 
     for (const block of blocks.slice(firstToolIndex, workflowEndIndex)) {
-      appendWorkflowRangeBlock(segments, block, totalToolCount > 1);
+      appendWorkflowRangeBlock(segments, block, totalToolCount > 1, options.isBreakoutTool);
     }
 
     for (const block of blocks.slice(workflowEndIndex)) {
@@ -288,7 +341,7 @@ export const partitionAssistantGroupBlocks = (
   }
 
   for (const block of blocks.slice(firstToolIndex, lastToolIndex + 1)) {
-    appendWorkflowRangeBlock(segments, block, totalToolCount > 1);
+    appendWorkflowRangeBlock(segments, block, totalToolCount > 1, options.isBreakoutTool);
   }
 
   appendPostToolBlocks(segments, blocks.slice(lastToolIndex + 1));

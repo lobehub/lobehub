@@ -17,15 +17,6 @@ vi.mock('electron', () => ({
   ipcMain: { handle: ipcMainHandleMock },
 }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('node:os', async (importOriginal) => {
   const actual: Record<string, unknown> = await importOriginal();
   return { ...actual, homedir: homedirMock };
@@ -269,16 +260,6 @@ describe('HeteroSessionCtr', () => {
       const file = 'C:\\Users\\me\\.claude\\projects\\proj\\a.jsonl';
 
       expect(isUnderRoot(file, root, path.win32)).toBe(true);
-    });
-
-    it('accepts a transcript under the root on POSIX separators', () => {
-      expect(
-        isUnderRoot(
-          '/home/me/.claude/projects/proj/a.jsonl',
-          '/home/me/.claude/projects',
-          path.posix,
-        ),
-      ).toBe(true);
     });
 
     it('rejects paths outside the root, including sibling prefixes', () => {

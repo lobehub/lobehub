@@ -1,11 +1,15 @@
 import type {
   ChatCompletionTool,
+  DecisionPayload,
+  DecisionQuestions,
+  DecisionResponse,
   GenerateObjectPayload,
   GenerateObjectSchema,
 } from '@lobechat/model-runtime';
-import type { OpenAIChatMessage } from '@lobechat/types';
+import type { OpenAIChatMessage, RequestTrigger } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '@/database/type';
+import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 export interface AiGenerationObjectInput {
@@ -17,12 +21,22 @@ export interface AiGenerationObjectInput {
   tools?: ChatCompletionTool[];
 }
 
+export interface AiGenerationDecisionInput<
+  Q extends DecisionQuestions = DecisionQuestions,
+> extends DecisionPayload<Q> {
+  provider: string;
+}
+
 export interface AiGenerationObjectOptions {
   /**
-   * Free-form context forwarded to non-tracing hooks (billing, routing). Use
-   * `tracing` instead for `llm_generation_tracing` config.
+   * Context forwarded to non-tracing hooks (billing, routing). Use `tracing`
+   * instead for `llm_generation_tracing` config.
+   *
+   * `trigger` is required: it is the feature recorded on spend / route-attempt
+   * logs, and a missing one leaves the usage unattributed. It names the feature
+   * (e.g. `task`), not the prompt — the prompt goes in `tracing.scenario`.
    */
-  metadata?: Record<string, unknown>;
+  metadata: Record<string, unknown> & { trigger: RequestTrigger };
   signal?: AbortSignal;
   /**
    * Structured tracing config (scenario / promptVersion / schemaName /
@@ -34,7 +48,7 @@ export interface AiGenerationObjectOptions {
 }
 
 /**
- * Thin wrapper around `initModelRuntimeFromDB` + `ModelRuntime.generateObject`.
+ * Thin wrapper around `initModelRuntimeForRequest` + `ModelRuntime.generateObject`.
  *
  * Almost every server-side caller that produces structured output goes through
  * the same two-step dance: resolve the user's provider config from the DB,
@@ -44,6 +58,11 @@ export interface AiGenerationObjectOptions {
  * has one place to land.
  *
  * Construct one per request — `db` and `userId` come from the request context.
+ *
+ * A provider only the user's device reaches (Ollama, LM Studio, a private base
+ * URL; `agent_llm_relay` on) is relayed to the browser tab that sent the
+ * request; with no such tab — a bot, a workflow, deferred work — the call
+ * fails at once with `ClientLlmExecutorUnavailable` (`no_executor`).
  */
 export class AiGenerationService {
   private readonly db: LobeChatDatabase;
@@ -58,11 +77,11 @@ export class AiGenerationService {
 
   async generateObject<T = unknown>(
     input: AiGenerationObjectInput,
-    options: AiGenerationObjectOptions = {},
+    options: AiGenerationObjectOptions,
   ): Promise<T> {
-    const runtime = this.workspaceId
-      ? await initModelRuntimeFromDB(this.db, this.userId, input.provider, this.workspaceId)
-      : await initModelRuntimeFromDB(this.db, this.userId, input.provider);
+    const runtime = await initModelRuntimeForRequest(this.db, this.userId, input.provider, {
+      workspaceId: this.workspaceId,
+    });
     return (await runtime.generateObject(
       {
         messages: input.messages as GenerateObjectPayload['messages'],
@@ -73,5 +92,28 @@ export class AiGenerationService {
       },
       { metadata: options.metadata, signal: options.signal, tracing: options.tracing },
     )) as T;
+  }
+
+  /**
+   * Asks a decision model typed questions about one state and returns its probabilities.
+   *
+   * Always called from the server: decision endpoints are hosted APIs, and the device relay
+   * {@link generateObject} may use has no decision call. A provider without a decision endpoint
+   * rejects with `CapabilityNotSupported`.
+   */
+  async decide<Q extends DecisionQuestions>(
+    input: AiGenerationDecisionInput<Q>,
+    options: AiGenerationObjectOptions,
+  ): Promise<DecisionResponse<Q>> {
+    const runtime = await initModelRuntimeFromDB(
+      this.db,
+      this.userId,
+      input.provider,
+      this.workspaceId,
+    );
+    return runtime.decide(
+      { model: input.model, questions: input.questions, state: input.state },
+      { metadata: options.metadata, signal: options.signal, tracing: options.tracing },
+    );
   }
 }
