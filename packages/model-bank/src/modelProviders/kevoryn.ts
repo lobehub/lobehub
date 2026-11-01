@@ -1,16 +1,16 @@
 import type { ModelProviderCard } from '@/types/llm';
 
-// Kevoryn — AI API Gateway, 66+ models with one key
+// Kevoryn — AI API Gateway, one key for 80+ frontier models
 // https://kevoryn.com
 const Kevoryn: ModelProviderCard = {
   chatModels: [],
   checkModel: 'deepseek-v4-pro',
   description:
-    'Kevoryn is an AI API gateway providing unified access to 66+ frontier models (GPT-5.5, Claude Opus 4.8, Gemini 3.1 Pro, DeepSeek V4, Kimi K2.6, Qwen 3.6, MiniMax M2.7) through a single OpenAI-compatible endpoint. Supports direct access from China without a VPN, with WeChat/Alipay payment.',
+    'Kevoryn is an AI API gateway providing unified access to 80+ frontier models (Claude, GPT, Gemini, Grok, DeepSeek, Kimi, GLM, Qwen, MiniMax and more) through a single endpoint. It keeps the native OpenAI, Anthropic and Gemini protocols, bills pay-as-you-go with no subscription, supports direct access from mainland China, and accepts WeChat/Alipay payment.',
   enabled: true,
   id: 'kevoryn',
   modelList: { showModelFetcher: true },
-  modelsUrl: 'https://kevoryn.com/models',
+  modelsUrl: 'https://kevoryn.com/model-plaza',
   name: 'Kevoryn',
   settings: {
     proxyUrl: {
