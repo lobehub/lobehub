@@ -69,6 +69,29 @@ describe('ClientMessageTransport', () => {
     );
   });
 
+  it('keeps raw Work intents available to replay but outside runtime conversation messages', async () => {
+    const store = createStore();
+    const intent = {
+      type: 'skill' as const,
+      provider: 'example',
+      toolName: 'create',
+      data: { body: 'raw payload' },
+    };
+    const row = {
+      id: 'tool-1',
+      role: 'tool',
+      content: 'truncated',
+      metadata: { operationId: 'op', toolWorkRegistration: intent },
+    };
+    store.dbMessagesMap['message-key'] = [row as any];
+    const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
+    expect((await transport.getToolMessage('tool-1'))?.metadata?.toolWorkRegistration).toEqual(
+      intent,
+    );
+    expect((await transport.query())[0].metadata).toEqual({ operationId: 'op' });
+    expect(row.metadata.toolWorkRegistration).toEqual(intent);
+  });
+
   describe('query', () => {
     const projectedRow = {
       content: '',
@@ -82,6 +105,18 @@ describe('ClientMessageTransport', () => {
       (store as any).dbMessagesMap['message-key'] = messages;
       return store;
     };
+
+    it('refuses to treat an unavailable projected result as a pending tool', async () => {
+      vi.spyOn(messageService, 'getToolResultPayloads').mockResolvedValue({});
+      const transport = new ClientMessageTransport(
+        () => storeWith([projectedRow]),
+        'message-key',
+        'operation-1',
+      );
+      await expect(transport.getToolMessage('tool-1')).rejects.toThrow(
+        'Cannot restore tool result',
+      );
+    });
 
     it('refills a projected tool payload before the list becomes a context', async () => {
       const fetchPayloads = vi

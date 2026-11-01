@@ -1,4 +1,4 @@
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import { tasks } from '../schemas/task';
 import type { LobeChatDatabase } from '../type';
@@ -37,8 +37,12 @@ export class TaskArchiveModel {
    * Archive a task unless it is running or its schedule / heartbeat can still
    * fire (mirrors `isTaskArchiveBlocked` in `@lobechat/types`). Returns null when the task is missing or blocked; an already archived
    * task keeps its original `archived_at`.
+   *
+   * `onlyStatuses` narrows it to tasks still in one of those statuses, checked
+   * in the same UPDATE: a caller archiving from an earlier read (e.g. "this
+   * task is finished") can't archive a task that was reopened since.
    */
-  async archive(id: string) {
+  async archive(id: string, options: { onlyStatuses?: string[] } = {}) {
     const [task] = await this.db
       .update(tasks)
       .set({ archivedAt: sql`COALESCE(${tasks.archivedAt}, now())`, updatedAt: new Date() })
@@ -47,6 +51,7 @@ export class TaskArchiveModel {
           eq(tasks.id, id),
           this.ownership(),
           ne(tasks.status, 'running'),
+          options.onlyStatuses ? inArray(tasks.status, options.onlyStatuses) : undefined,
           // A paused schedule can't fire (dispatcher and tick skip paused);
           // a paused heartbeat still ticks, so it stays blocked.
           sql`(${RUNNABLE_AUTOMATION} AND NOT (${tasks.automationMode} = 'schedule' AND ${tasks.status} = 'paused')) IS NOT TRUE`,

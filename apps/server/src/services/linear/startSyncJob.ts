@@ -67,6 +67,30 @@ export const startLinearRuleSyncJob = async (
   return taskId;
 };
 
+/**
+ * Queue the next round of a rule run that stopped at its per-round cap. The
+ * same job goes back to pending with the total so far, so it stays the one run
+ * of its rule (a click on Sync joins it) and is handed off again like a new one.
+ */
+export const continueLinearRuleSyncJob = async (
+  db: LobeChatDatabase,
+  userId: string,
+  workspaceId: string | undefined,
+  taskId: string,
+  metadata: LinearSyncJobMetadata,
+): Promise<boolean> => {
+  // A run the user stopped during this round is not queued again.
+  const queued = await LinearSyncJobModel.transition(
+    db,
+    { userId, workspaceId: workspaceId ?? null },
+    taskId,
+    [AsyncTaskStatus.Processing],
+    { metadata, status: AsyncTaskStatus.Pending },
+  );
+  if (queued) await dispatchJob(db, userId, workspaceId, taskId);
+  return queued;
+};
+
 const recordJob = (
   db: LobeChatDatabase,
   userId: string,
@@ -85,11 +109,15 @@ const dispatchJob = async (
   workspaceId: string | undefined,
   taskId: string,
 ) => {
+  // Only a job still waiting to be claimed; one the user stopped stays stopped.
   const fail = () =>
-    new AsyncTaskModel(db, userId, workspaceId).update(taskId, {
-      error: { code: 'failed' satisfies LinearSyncJobErrorCode },
-      status: AsyncTaskStatus.Error,
-    });
+    LinearSyncJobModel.transition(
+      db,
+      { userId, workspaceId: workspaceId ?? null },
+      taskId,
+      [AsyncTaskStatus.Pending],
+      { error: { code: 'failed' satisfies LinearSyncJobErrorCode }, status: AsyncTaskStatus.Error },
+    );
 
   // Kept alive past the response, so a rejected hand-off can still be retried
   // or reported; otherwise the job sits queued until the client gives up on it.

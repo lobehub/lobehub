@@ -71,6 +71,7 @@ const createMessageTransport = (): MessageTransport => ({
   deleteMessage: vi.fn(),
   findById: vi.fn().mockResolvedValue({ id: 'parent-1' }),
   findToolMessageIdByToolCallId: vi.fn(),
+  getToolMessage: vi.fn(),
   query: vi.fn(),
   update: vi.fn(),
   updatePluginState: vi.fn(),
