@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
+  AgentInterventionInteractionKind,
+  AgentInterventionProvider,
   AgentInterventionRequestData,
   AgentInterventionResponseData,
   AgentStreamEvent,
@@ -25,6 +27,8 @@ export interface InterventionAnswer {
 export interface PendingArgs {
   /** Whatever the MCP tool's input schema accepted (e.g. `{ questions: [...] }`). */
   arguments: unknown;
+  /** Semantic shape of this interaction. Defaults to `question`. */
+  interactionKind?: AgentInterventionInteractionKind;
   /**
    * Wire correlation key for this intervention. Used as the `toolCallId`
    * on outbound `agent_intervention_request` events and looked up by
@@ -55,7 +59,7 @@ export interface PendingOptions {
   /**
    * Absolute deadline (`Date.now() + timeoutMs`). When it elapses, the
    * pending promise resolves with `{ cancelled: true, cancelReason: 'timeout' }`.
-   * Default: 5 minutes.
+   * Default: 10 minutes.
    */
   timeoutMs?: number;
 }
@@ -66,7 +70,7 @@ interface PendingEntry {
   resolve: (answer: InterventionAnswer) => void;
 }
 
-interface BridgeOptions {
+export interface AskUserBridgeOptions {
   /**
    * Stamps `stepIndex` on emitted events. The bridge has no visibility into
    * the CC adapter's own step counter, so the producer (which owns the
@@ -74,6 +78,10 @@ interface BridgeOptions {
    * tests, but real producers should plug in their adapter's current value.
    */
   getStepIndex?: () => number;
+  /** Legacy renderer identifier. This is not used to infer the provider. */
+  identifier?: string;
+  /** Agent provider that owns every request emitted by this bridge. */
+  provider?: AgentInterventionProvider;
 }
 
 /**
@@ -108,13 +116,17 @@ export class AskUserBridge {
   private readonly outboundQueue: AgentStreamEvent[] = [];
   private readonly outboundWaiters: Array<(value: IteratorResult<AgentStreamEvent>) => void> = [];
   private readonly getStepIndex: () => number;
+  private readonly identifier: string;
+  private readonly provider: AgentInterventionProvider;
   private closed = false;
 
   constructor(
     public readonly operationId: string,
-    options: BridgeOptions = {},
+    options: AskUserBridgeOptions = {},
   ) {
     this.getStepIndex = options.getStepIndex ?? (() => 0);
+    this.identifier = options.identifier ?? 'claude-code';
+    this.provider = options.provider ?? 'claude-code';
   }
 
   /** Currently-blocked MCP handler count. Useful for telemetry / shutdown gates. */
@@ -175,14 +187,16 @@ export class AskUserBridge {
 
       // Emit the intervention request AFTER setting up the pending entry,
       // so any synchronous resolve from a test fixture finds the slot.
-      // Hardcoded to AskUserQuestion for now — the only intervention shape
-      // we support. Take an explicit `apiName` in PendingArgs when adding
-      // more (e.g. CC approval, file picker).
+      // The canonical UI payload remains AskUserQuestion-shaped for all three
+      // semantic kinds. Consumers use `interactionKind` and `provider` for
+      // behavior; `identifier` remains only a renderer compatibility key.
       const data: AgentInterventionRequestData = {
         apiName: 'askUserQuestion',
         arguments: JSON.stringify(args.arguments ?? {}),
         deadline,
-        identifier: 'claude-code',
+        identifier: this.identifier,
+        interactionKind: args.interactionKind ?? 'question',
+        provider: this.provider,
         toolCallId,
       };
       this.emit({
@@ -206,6 +220,7 @@ export class AskUserBridge {
       cancelled?: boolean;
       cancelReason?: InterventionAnswer['cancelReason'];
       result?: unknown;
+      resolutionRequestId?: string;
     },
   ): void {
     const entry = this.pending_.get(toolCallId);
@@ -220,6 +235,7 @@ export class AskUserBridge {
       cancelReason: payload.cancelled ? (payload.cancelReason ?? 'user_cancelled') : undefined,
       cancelled: payload.cancelled,
       result: payload.cancelled ? undefined : payload.result,
+      resolutionRequestId: payload.resolutionRequestId,
     });
     entry.resolve(
       payload.cancelled
@@ -306,12 +322,15 @@ export class AskUserBridge {
       cancelReason?: InterventionAnswer['cancelReason'];
       cancelled?: boolean;
       result?: unknown;
+      resolutionRequestId?: string;
     },
   ): void {
     const data: AgentInterventionResponseData = {
       cancelled: payload.cancelled,
       cancelReason: payload.cancelReason,
+      producerAck: true,
       result: payload.result,
+      resolutionRequestId: payload.resolutionRequestId,
       toolCallId,
     };
     this.emit({

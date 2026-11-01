@@ -248,3 +248,63 @@ describe('generateObject tool-calling fallback', () => {
     expect(getCreateMock(instance)).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('generateObject via Responses API', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const createInstance = () => new TestRuntime({ apiKey: 'test' });
+
+  const multimodalPayload = {
+    ...generateObjectPayload,
+    messages: [
+      { content: 'You distil standards.', role: 'system' as const },
+      {
+        content: [
+          { text: 'What is wrong in this frame?', type: 'text' as const },
+          {
+            image_url: { detail: 'high' as const, url: 'data:image/png;base64,AAAA' },
+            type: 'image_url' as const,
+          },
+        ],
+        role: 'user' as const,
+      },
+    ],
+    responseApi: true,
+  };
+
+  it('should convert content parts to Responses input parts', async () => {
+    const instance = createInstance();
+    const createMock = vi
+      .spyOn((instance as any).client.responses, 'create')
+      .mockResolvedValue({ output_text: '{"summary":"s","title":"t"}' } as any);
+
+    const result = await instance.generateObject(multimodalPayload as any);
+
+    const requestPayload = createMock.mock.calls[0][0] as any;
+    expect(requestPayload.input).toEqual([
+      { content: 'You distil standards.', role: 'developer' },
+      {
+        content: [
+          { text: 'What is wrong in this frame?', type: 'input_text' },
+          { detail: 'high', image_url: 'data:image/png;base64,AAAA', type: 'input_image' },
+        ],
+        role: 'user',
+      },
+    ]);
+    expect(result).toEqual({ summary: 's', title: 't' });
+  });
+
+  it('should leave string content untouched', async () => {
+    const instance = createInstance();
+    const createMock = vi
+      .spyOn((instance as any).client.responses, 'create')
+      .mockResolvedValue({ output_text: '{"summary":"s","title":"t"}' } as any);
+
+    await instance.generateObject({ ...generateObjectPayload, responseApi: true } as any);
+
+    const requestPayload = createMock.mock.calls[0][0] as any;
+    expect(requestPayload.input).toEqual([{ content: 'Generate a handoff', role: 'user' }]);
+  });
+});

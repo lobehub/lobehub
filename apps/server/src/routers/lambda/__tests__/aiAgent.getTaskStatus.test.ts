@@ -19,25 +19,33 @@ import { cleanupTestUser, createTestUser } from './integration/setup';
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 // Mock AgentRuntimeService
 const mockGetOperationStatus = vi.fn();
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    getOperationStatus: mockGetOperationStatus,
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      getOperationStatus: mockGetOperationStatus,
+    };
+  }),
 }));
 
 // Mock AiAgentService
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({})),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 // Mock AiChatService
 vi.mock('@/server/services/aiChat', () => ({
-  AiChatService: vi.fn().mockImplementation(() => ({})),
+  AiChatService: vi.fn().mockImplementation(function () {
+    return {};
+  }),
 }));
 
 describe('aiAgentRouter.getSubAgentTaskStatus', () => {
@@ -232,6 +240,73 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
       expect(mockGetOperationStatus).toHaveBeenCalledWith({
         operationId: 'op-test-123',
       });
+    });
+
+    it('accumulates LLM calls against the persisted versioned baseline', async () => {
+      await serverDB
+        .update(threads)
+        .set({
+          metadata: { operationId: 'op-test-123', totalLlmCalls: 4, totalSteps: 4 },
+        })
+        .where(eq(threads.id, testThreadId));
+
+      mockGetOperationStatus.mockResolvedValue({
+        currentState: {
+          llmCalls: 3,
+          status: 'done',
+          stepCount: 9,
+          usage: { llm: { apiCalls: 3, tokens: { total: 100 } } },
+        },
+        isCompleted: true,
+        hasError: false,
+        metadata: {},
+        stats: { totalMessages: 2 },
+      });
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      const result = await caller.getSubAgentTaskStatus({ threadId: testThreadId });
+
+      expect(result.status).toBe('completed');
+      // 4 previous + 3 in this operation — not the operation's own 3.
+      expect(result.taskDetail?.totalSteps).toBe(7);
+
+      const [row] = await serverDB.select().from(threads).where(eq(threads.id, testThreadId));
+      expect((row.metadata as any)?.totalLlmCalls).toBe(7);
+      expect((row.metadata as any)?.totalSteps).toBe(7);
+    });
+
+    it('keeps the LLM-call total stable when the same operation is polled again', async () => {
+      await serverDB
+        .update(threads)
+        .set({ metadata: { operationId: 'op-test-123', totalLlmCalls: 4, totalSteps: 4 } })
+        .where(eq(threads.id, testThreadId));
+
+      // The operation keeps reporting the same cumulative count on every poll.
+      mockGetOperationStatus.mockResolvedValue({
+        currentState: {
+          llmCalls: 3,
+          status: 'running',
+          stepCount: 6,
+          usage: { llm: { apiCalls: 3, tokens: { total: 100 } } },
+        },
+        isCompleted: false,
+        hasError: false,
+        metadata: {},
+        stats: { totalMessages: 2 },
+      });
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      const first = await caller.getSubAgentTaskStatus({ threadId: testThreadId });
+      expect(first.taskDetail?.totalSteps).toBe(7);
+
+      // A second poll must not add the operation's cumulative count again.
+      const second = await caller.getSubAgentTaskStatus({ threadId: testThreadId });
+      expect(second.taskDetail?.totalSteps).toBe(7);
+
+      const [row] = await serverDB.select().from(threads).where(eq(threads.id, testThreadId));
+      expect((row.metadata as any)?.totalLlmCalls).toBe(7);
+      expect((row.metadata as any)?.totalSteps).toBe(7);
+      expect((row.metadata as any)?.llmCallsBaseline).toBe(4);
     });
 
     it('should extract totalToolCalls from usage.tools.totalCalls', async () => {

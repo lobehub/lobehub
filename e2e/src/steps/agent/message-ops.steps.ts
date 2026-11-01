@@ -101,7 +101,10 @@ When('用户点击消息的复制按钮', async function (this: CustomWorld) {
   }
 
   // Last fallback: find more button by icon and open menu
-  const moreButtonByIcon = this.page.locator('svg.lucide-more-horizontal').locator('..');
+  const moreButtonByIcon = this.page
+    .locator('svg.lucide-more-horizontal')
+    .locator('..')
+    .locator('visible=true');
   if ((await moreButtonByIcon.count()) > 0) {
     await moreButtonByIcon.first().click();
     await this.page.waitForTimeout(300);
@@ -144,7 +147,10 @@ When('用户点击助手消息的编辑按钮', async function (this: CustomWorl
 
   // Fallback: Look for edit in more menu
   console.log('   📍 Fallback: Looking for edit in more menu...');
-  const moreButtonByIcon = this.page.locator('svg.lucide-more-horizontal').locator('..');
+  const moreButtonByIcon = this.page
+    .locator('svg.lucide-more-horizontal')
+    .locator('..')
+    .locator('visible=true');
   if ((await moreButtonByIcon.count()) > 0) {
     await moreButtonByIcon.first().click();
     await this.page.waitForTimeout(300);

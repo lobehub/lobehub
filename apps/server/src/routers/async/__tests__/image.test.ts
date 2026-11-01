@@ -44,7 +44,9 @@ vi.mock('@lobechat/business-const', async (importOriginal) => ({
 
 vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
   ...((await importOriginal()) as any),
-  buildMappedBusinessModelFields: vi.fn(() => ({})),
+  buildMappedBusinessModelFields: vi.fn(function () {
+    return {};
+  }),
   resolveBusinessModelMapping: vi.fn(),
 }));
 
@@ -85,15 +87,26 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
     generationBatchModelMock = { findById: vi.fn() };
     generationModelMock = { createAssetAndFile: vi.fn() };
     generationServiceMock = {
+      ensureTopicCover: vi.fn(),
       transformImageForGeneration: vi.fn(),
       uploadImageForGeneration: vi.fn(),
     };
 
-    vi.mocked(AsyncTaskModel).mockImplementation(() => asyncTaskModelMock);
-    vi.mocked(GenerationBatchModel).mockImplementation(() => generationBatchModelMock);
-    vi.mocked(GenerationModel).mockImplementation(() => generationModelMock);
-    vi.mocked(GenerationService).mockImplementation(() => generationServiceMock);
-    vi.mocked(FileModel).mockImplementation(() => ({}) as any);
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return asyncTaskModelMock;
+    });
+    vi.mocked(GenerationBatchModel).mockImplementation(function () {
+      return generationBatchModelMock;
+    });
+    vi.mocked(GenerationModel).mockImplementation(function () {
+      return generationModelMock;
+    });
+    vi.mocked(GenerationService).mockImplementation(function () {
+      return generationServiceMock;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return {} as any;
+    });
     vi.mocked(initModelRuntimeFromDB).mockResolvedValue({} as any);
 
     // The batch must exist so the route proceeds into the guarded section.
@@ -132,6 +145,34 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
     );
   });
 
+  it('stamps the task spend attribution onto the completion charge metadata', async () => {
+    // The submitting request is long gone by the time this router charges, so
+    // the attribution has to come off the task — otherwise a share visitor's
+    // image spend is billed to the creator with no trace of its origin.
+    asyncTaskModelMock.findById.mockResolvedValue({
+      metadata: {
+        precharge: { reservationKey: 'brk-1' },
+        spendOrigin: {
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          trigger: 'agent_share',
+        },
+      },
+    });
+    vi.mocked(resolveBusinessModelMapping).mockRejectedValue(new Error('mapping failed'));
+
+    const caller = imageRouter.createCaller(mockCtx);
+    await caller.createImage(createInput());
+
+    expect(chargeAfterGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          agentShare: { agentId: 'agent-1', shareId: 'share-1', visitorUserId: 'visitor-1' },
+          trigger: 'agent_share',
+        }),
+      }),
+    );
+  });
+
   it('threads undefined prechargeResult when the task has no precharge handle', async () => {
     asyncTaskModelMock.findById.mockResolvedValue({ metadata: undefined });
     vi.mocked(resolveBusinessModelMapping).mockRejectedValue(new Error('mapping failed'));
@@ -146,6 +187,54 @@ describe('imageRouter.createImage — model mapping failure reconciles billing',
         isError: true,
         prechargeResult: undefined,
       }),
+    );
+  });
+
+  it('fills the topic cover from the thumbnail before marking the task Success', async () => {
+    // Topics created by agent tools have no image page polling them, so the
+    // server success path is the only place the cover can be set reliably.
+    asyncTaskModelMock.findById.mockResolvedValue({ metadata: undefined });
+    vi.mocked(resolveBusinessModelMapping).mockResolvedValue({
+      requestedModelId: 'some-model',
+      resolvedModelId: 'some-model',
+    } as any);
+    vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+      createImage: vi.fn().mockResolvedValue({
+        height: 512,
+        imageUrl: 'https://example.com/image.png',
+        width: 512,
+      }),
+    } as any);
+    generationServiceMock.transformImageForGeneration.mockResolvedValue({
+      image: {
+        extension: 'png',
+        hash: 'hash',
+        height: 512,
+        mime: 'image/png',
+        size: 1,
+        width: 512,
+      },
+      thumbnailImage: {},
+    });
+    generationServiceMock.uploadImageForGeneration.mockResolvedValue({
+      imageUrl: 'generations/image.png',
+      thumbnailImageUrl: 'generations/image_512.webp',
+    });
+
+    const caller = imageRouter.createCaller(mockCtx);
+    const result = await caller.createImage(createInput());
+
+    expect(result).toMatchObject({ success: true });
+    expect(generationServiceMock.ensureTopicCover).toHaveBeenCalledWith(
+      'topic-1',
+      'generations/image_512.webp',
+    );
+    const successCall = asyncTaskModelMock.update.mock.calls.findIndex(
+      ([, value]: [string, { status: AsyncTaskStatus }]) =>
+        value.status === AsyncTaskStatus.Success,
+    );
+    expect(generationServiceMock.ensureTopicCover.mock.invocationCallOrder[0]).toBeLessThan(
+      asyncTaskModelMock.update.mock.invocationCallOrder[successCall],
     );
   });
 });

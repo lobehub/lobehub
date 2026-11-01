@@ -7,8 +7,6 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useOperationState } from './useOperationState';
 
-vi.mock('zustand/traditional');
-
 describe('useOperationState', () => {
   const TEST_CONTEXT = {
     agentId: 'test-agent-id',
@@ -134,7 +132,7 @@ describe('useOperationState', () => {
               },
               'op-stream': {
                 id: 'op-stream',
-                type: 'groupAgentStream',
+                type: 'callLLM',
                 status: 'running',
                 context: { messageId },
                 abortController: new AbortController(),

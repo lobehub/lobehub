@@ -1,10 +1,16 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, truncate, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { defaultGetLocalFilePreview } from '../filePreview';
+import {
+  defaultCopyAssetForPublish,
+  defaultGetLocalFilePreview,
+  defaultReadExternalAssetForPublish,
+  EXTERNAL_PUBLISH_ASSET_MAX_BYTES,
+  toLocalFilePreviewFailure,
+} from '../filePreview';
 
 const mockedHome = vi.hoisted(() => ({ dir: '' }));
 
@@ -129,12 +135,31 @@ describe('defaultGetLocalFilePreview', () => {
     expect(result).toEqual({ error: 'File is not an image', success: false });
   });
 
+  it('marks a deleted file as a terminal not-found failure', async () => {
+    const result = await defaultGetLocalFilePreview({
+      path: path.join(root, 'deleted.md'),
+      workingDirectory: root,
+    });
+    expect(result).toMatchObject({ code: 'not_found', success: false });
+  });
+
+  it('classifies only deleted / denied errors as terminal', () => {
+    const errno = (code: string) => Object.assign(new Error(code), { code });
+    expect(toLocalFilePreviewFailure(errno('ENOENT'))).toMatchObject({ code: 'not_found' });
+    expect(toLocalFilePreviewFailure(errno('EACCES'))).toMatchObject({ code: 'forbidden' });
+    expect(toLocalFilePreviewFailure(errno('EBUSY'))).toEqual({ error: 'EBUSY', success: false });
+  });
+
   it('refuses to read a file outside the working directory', async () => {
     const result = await defaultGetLocalFilePreview({
       path: path.join(outside, 'secret.txt'),
       workingDirectory: root,
     });
-    expect(result).toEqual({ error: 'File is outside the approved workspace', success: false });
+    expect(result).toEqual({
+      code: 'forbidden',
+      error: 'File is outside the approved workspace',
+      success: false,
+    });
   });
 
   it('errors when the working directory is missing', async () => {
@@ -150,6 +175,71 @@ describe('defaultGetLocalFilePreview', () => {
       path: path.join(root, 'ghost.txt'),
       workingDirectory: root,
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('defaultReadExternalAssetForPublish', () => {
+  it('reads a file outside the workspace through the dedicated publish method', async () => {
+    const result = await defaultReadExternalAssetForPublish({
+      path: path.join(outside, 'secret.txt'),
+      workingDirectory: root,
+    });
+
+    expect(result).toMatchObject({
+      base64: Buffer.from('do not read\n').toString('base64'),
+      contentType: 'text/plain; charset=utf-8',
+      success: true,
+    });
+  });
+
+  it('rejects a file over the publish limit without reading it', async () => {
+    const huge = path.join(outside, 'huge.bin');
+    await writeFile(huge, '');
+    await truncate(huge, EXTERNAL_PUBLISH_ASSET_MAX_BYTES + 1);
+
+    const result = await defaultReadExternalAssetForPublish({
+      path: huge,
+      workingDirectory: root,
+    });
+
+    expect(result).toEqual({ error: 'File is too large to publish', success: false });
+  });
+});
+
+describe('defaultCopyAssetForPublish', () => {
+  it('copies an outside file into a nested workspace directory', async () => {
+    const to = path.join(root, '.lobe-artifacts', 'site', 'secret.txt');
+    const result = await defaultCopyAssetForPublish({
+      from: path.join(outside, 'secret.txt'),
+      to,
+      workingDirectory: root,
+    });
+
+    expect(result).toEqual({ success: true });
+    expect(await readFile(to, 'utf8')).toBe('do not read\n');
+  });
+
+  it('refuses a destination outside the workspace', async () => {
+    const result = await defaultCopyAssetForPublish({
+      from: path.join(outside, 'secret.txt'),
+      to: path.join(outside, 'copy.txt'),
+      workingDirectory: root,
+    });
+
+    expect(result).toEqual({
+      error: 'Destination is outside the approved workspace',
+      success: false,
+    });
+  });
+
+  it('refuses a destination that escapes through dot segments', async () => {
+    const result = await defaultCopyAssetForPublish({
+      from: path.join(outside, 'secret.txt'),
+      to: path.join(root, '..', path.basename(outside), 'copy.txt'),
+      workingDirectory: root,
+    });
+
     expect(result.success).toBe(false);
   });
 });

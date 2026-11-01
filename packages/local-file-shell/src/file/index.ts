@@ -1,3 +1,5 @@
+export { copyLocalFiles, getCopyName } from './copy';
+export { createLocalDirectory, createLocalFile } from './create';
 export { editLocalFile } from './edit';
 export { expandTilde, resolveAgainstCwd } from './expandTilde';
 export { globLocalFiles } from './glob';
@@ -6,6 +8,8 @@ export type { ListFilesOptions } from './list';
 export { listLocalFiles } from './list';
 export { moveLocalFiles } from './move';
 export { readLocalFile } from './read';
+export type { ReadLocalImageFileOptions } from './readImage';
+export { getLocalImageMimeType, MAX_IMAGE_READ_BYTES, readLocalImageFile } from './readImage';
 export { renameLocalFile } from './rename';
 export { searchLocalFiles } from './search';
 export { writeLocalFile } from './write';

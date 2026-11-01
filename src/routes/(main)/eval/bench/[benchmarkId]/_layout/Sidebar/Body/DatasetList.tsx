@@ -1,6 +1,13 @@
 'use client';
 
-import { AccordionItem, Flexbox, Text } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+  Flexbox,
+  Text,
+} from '@lobehub/ui';
 import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +16,7 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useEvalStore } from '@/store/eval';
+import { datasetSelectors, useEvalStore } from '@/store/eval';
 
 interface DatasetListProps {
   activeKey: string;
@@ -20,54 +27,54 @@ interface DatasetListProps {
 const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey }) => {
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
-  const datasetList = useEvalStore((s) => s.datasetList);
-  const isLoading = useEvalStore((s) => s.isLoadingDatasets);
+  const datasetList = useEvalStore(datasetSelectors.datasetList(benchmarkId));
+  const isLoading = useEvalStore(datasetSelectors.isLoadingDatasetList(benchmarkId));
 
   return (
-    <AccordionItem
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      title={
-        <Flexbox horizontal align="center" gap={4}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('sidebar.datasets')}
-          </Text>
-          {datasetList.length > 0 && (
-            <Text fontSize={12} type="secondary">
-              {datasetList.length}
+    <AccordionItem value={itemKey}>
+      <AccordionHeader style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+        <AccordionTrigger>
+          <Flexbox horizontal align="center" gap={4}>
+            <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+              {t('sidebar.datasets')}
+            </Text>
+            {datasetList.length > 0 && (
+              <Text fontSize={12} type="secondary">
+                {datasetList.length}
+              </Text>
+            )}
+          </Flexbox>
+        </AccordionTrigger>
+      </AccordionHeader>
+      <AccordionPanel>
+        <Flexbox gap={1} paddingBlock={1}>
+          {isLoading && datasetList.length === 0 ? (
+            <SkeletonList rows={3} />
+          ) : datasetList.length > 0 ? (
+            datasetList.map((ds: any) => (
+              <WorkspaceLink
+                key={ds.id}
+                to={`/eval/bench/${benchmarkId}/datasets/${ds.id}`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate(`/eval/bench/${benchmarkId}/datasets/${ds.id}`);
+                }}
+              >
+                <NavItem
+                  active={activeKey === `dataset-${ds.id}`}
+                  icon={Database}
+                  iconSize={16}
+                  title={ds.name}
+                />
+              </WorkspaceLink>
+            ))
+          ) : (
+            <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">
+              {t('dataset.empty')}
             </Text>
           )}
         </Flexbox>
-      }
-    >
-      <Flexbox gap={1} paddingBlock={1}>
-        {isLoading && datasetList.length === 0 ? (
-          <SkeletonList rows={3} />
-        ) : datasetList.length > 0 ? (
-          datasetList.map((ds: any) => (
-            <WorkspaceLink
-              key={ds.id}
-              to={`/eval/bench/${benchmarkId}/datasets/${ds.id}`}
-              onClick={(e) => {
-                e.preventDefault();
-                navigate(`/eval/bench/${benchmarkId}/datasets/${ds.id}`);
-              }}
-            >
-              <NavItem
-                active={activeKey === `dataset-${ds.id}`}
-                icon={Database}
-                iconSize={16}
-                title={ds.name}
-              />
-            </WorkspaceLink>
-          ))
-        ) : (
-          <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">
-            {t('dataset.empty')}
-          </Text>
-        )}
-      </Flexbox>
+      </AccordionPanel>
     </AccordionItem>
   );
 });

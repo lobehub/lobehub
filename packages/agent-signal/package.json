@@ -9,6 +9,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./brief": {
+      "types": "./src/brief/index.ts",
+      "default": "./src/brief/index.ts"
+    },
     "./source": {
       "types": "./src/source/index.ts",
       "default": "./src/source/index.ts"

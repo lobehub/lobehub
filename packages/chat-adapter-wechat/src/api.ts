@@ -250,12 +250,23 @@ export class WechatApiClient {
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });
 
-    const { upload_param: uploadParam } = await parseResponse<{ upload_param?: string }>(
-      uploadParamResp,
-      'getuploadurl',
-    );
+    const uploadParamBody = await parseResponse<{
+      errcode?: number;
+      errmsg?: string;
+      upload_param?: string;
+    }>(uploadParamResp, 'getuploadurl');
+    const uploadParam = uploadParamBody?.upload_param;
     if (!uploadParam) {
-      throw new Error('getuploadurl returned empty upload_param');
+      // iLink can answer `ret: 0` and still hand back no upload_param (with an
+      // `errcode` / `errmsg` of its own). Carry the body along: this message
+      // is what reaches the delivery boundary and the agent's tool result, and
+      // "empty upload_param" alone diagnoses nothing.
+      throw Object.assign(
+        new Error(
+          `getuploadurl returned empty upload_param: ${JSON.stringify(uploadParamBody ?? null).slice(0, 300)}`,
+        ),
+        { code: uploadParamBody?.errcode },
+      );
     }
 
     // Step 2 + 3: upload ciphertext to CDN

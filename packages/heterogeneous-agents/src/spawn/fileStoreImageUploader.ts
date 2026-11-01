@@ -13,7 +13,15 @@ const IMAGE_EXT_BY_MEDIA_TYPE: Record<string, string> = {
 export interface FileStoreCreateFileInput {
   fileType: string;
   hash: string;
-  metadata: { date: string; dirname: string; filename: string; path: string };
+  metadata: {
+    date: string;
+    dirname: string;
+    filename: string;
+    height?: number;
+    path: string;
+    ratio?: number;
+    width?: number;
+  };
   name: string;
   size: number;
   url: string;
@@ -26,9 +34,13 @@ export interface FileStoreCreateFileInput {
  * runtime that spawned the CLI holds those credentials.
  */
 export interface FileStorePort {
+  abortS3Upload: (input: { pathname: string }) => Promise<unknown>;
   checkFileHash: (input: { hash: string }) => Promise<{ isExist?: boolean; url?: string }>;
   createFile: (input: FileStoreCreateFileInput) => Promise<{ id: string; url: string }>;
-  createS3PreSignedUrl: (input: { pathname: string }) => Promise<string | { url: string }>;
+  createS3PreSignedUrl: (input: {
+    pathname: string;
+    size: number;
+  }) => Promise<string | { url: string }>;
 }
 
 /**
@@ -41,7 +53,7 @@ export interface FileStorePort {
  */
 export const createFileStoreImageUploader =
   (resolvePort: () => Promise<FileStorePort | undefined>): UploadHeterogeneousImage =>
-  async ({ data, mediaType }) => {
+  async ({ data, height, mediaType, width }) => {
     const port = await resolvePort();
     if (!port) return undefined;
 
@@ -56,31 +68,52 @@ export const createFileStoreImageUploader =
     const existing = await port.checkFileHash({ hash });
 
     let pathname: string;
+    let reservedPathname: string | undefined;
     if (existing?.isExist && existing.url) {
       pathname = existing.url;
     } else {
       pathname = `files/${date}/${hash}.${ext}`;
-      const presigned = await port.createS3PreSignedUrl({ pathname });
-      const presignedUrl = typeof presigned === 'string' ? presigned : presigned.url;
-
-      const uploadRes = await fetch(presignedUrl, {
-        body: buffer,
-        headers: { 'Content-Type': mediaType },
-        method: 'PUT',
-      });
-      if (!uploadRes.ok) {
-        throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
-      }
+      reservedPathname = pathname;
     }
 
-    const record = await port.createFile({
-      fileType: mediaType,
-      hash,
-      metadata: { date, dirname: '', filename: fileName, path: pathname },
-      name: fileName,
-      size: buffer.length,
-      url: pathname,
-    });
+    try {
+      if (reservedPathname) {
+        const presigned = await port.createS3PreSignedUrl({ pathname, size: buffer.length });
+        const presignedUrl = typeof presigned === 'string' ? presigned : presigned.url;
 
-    return { fileId: record.id, url: record.url };
+        const uploadRes = await fetch(presignedUrl, {
+          body: buffer,
+          headers: { 'Content-Type': mediaType },
+          method: 'PUT',
+        });
+        if (!uploadRes.ok) {
+          throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+        }
+      }
+
+      const record = await port.createFile({
+        fileType: mediaType,
+        hash,
+        metadata: {
+          date,
+          dirname: '',
+          filename: fileName,
+          path: pathname,
+          // Same shape the web uploader records, so any file consumer can reserve layout.
+          ...(width && height
+            ? { height, ratio: Math.round((width / height) * 10_000) / 10_000, width }
+            : {}),
+        },
+        name: fileName,
+        size: buffer.length,
+        url: pathname,
+      });
+
+      return { fileId: record.id, url: record.url };
+    } catch (error) {
+      if (reservedPathname) {
+        await port.abortS3Upload({ pathname: reservedPathname }).catch(() => undefined);
+      }
+      throw error;
+    }
   };

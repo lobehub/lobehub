@@ -1,22 +1,29 @@
 'use client';
 
-import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError } from '@lobechat/types';
-import { TraceNameMap } from '@lobechat/types';
+import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
-import { ModelIcon } from '@lobehub/icons';
-import { Flexbox, Highlighter, Icon } from '@lobehub/ui';
-import { Alert, Button, Select } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
+import {
+  Alert,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Highlighter,
+  Select,
+  Spin,
+} from '@lobehub/ui';
+import { CircleCheckIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ModelIcon } from '@/components/LobeIcons';
 import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
 import { chatService } from '@/services/chat';
-import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -79,7 +86,9 @@ const Checker = memo<ConnectionCheckerProps>(
       aiProviderSelectors.isProviderConfigUpdating(provider)(s),
       s.updateAiProviderConfig,
     ]);
-    const aiProviderModelList = useAiInfraStore((s) => s.aiProviderModelList);
+    const aiProviderModelList = useAiInfraStore((s) =>
+      aiModelSelectors.getAiProviderModelList(provider)(s),
+    );
 
     // Sort models for better UX:
     // 1. checkModel first (provider's recommended test model)
@@ -136,7 +145,11 @@ const Checker = memo<ConnectionCheckerProps>(
         },
 
         onFinish: async (value) => {
-          if (!isError && value) {
+          // A provider error inside a 200 stream (a relayed device call, or any
+          // in-stream error) also finishes the stream: keep that error.
+          if (isError) return;
+
+          if (value) {
             setError(undefined);
             setPass(true);
           } else {
@@ -166,6 +179,7 @@ const Checker = memo<ConnectionCheckerProps>(
           topicId: checkModel,
           traceName: TraceNameMap.ConnectivityChecker,
         },
+        trigger: RequestTrigger.ProviderCheck,
       });
     };
 
@@ -186,7 +200,7 @@ const Checker = memo<ConnectionCheckerProps>(
             listItemHeight={36}
             options={sortedModels.map((id) => ({ label: id, value: id }))}
             popupClassName={cx(styles.popup)}
-            suffixIcon={isProviderConfigUpdating && <Icon spin icon={Loader2Icon} />}
+            suffixIcon={isProviderConfigUpdating && <Spin size="small" />}
             value={checkModel}
             optionRender={({ value }) => {
               return (
@@ -215,16 +229,8 @@ const Checker = memo<ConnectionCheckerProps>(
           />
           <Button
             disabled={!canManageProvider || isProviderConfigUpdating}
+            icon={pass ? CircleCheckIcon : undefined}
             loading={loading}
-            icon={
-              pass ? (
-                <CheckCircleFilled
-                  style={{
-                    color: cssVar.colorSuccess,
-                  }}
-                />
-              ) : undefined
-            }
             style={
               pass
                 ? {

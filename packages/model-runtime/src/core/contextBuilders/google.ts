@@ -4,7 +4,8 @@ import type {
   Part,
   Tool as GoogleFunctionCallTool,
 } from '@google/genai';
-import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/utils';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
+import { resolveImageMimeTypeFromBase64 } from '../../utils/imageMimeType';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { safeParseJSON } from '../../utils/safeParseJSON';
@@ -74,6 +75,21 @@ const supportsFunctionCallId = (model?: string) => {
 
   return version.major > 3 || (version.major === 3 && version.minor >= 5);
 };
+
+/**
+ * Magic-byte sniffing cannot tell audio-only containers from video ones, so an
+ * `.m4a` voice note (`ftypmp42`) is detected as `video/mp4`. Vertex AI
+ * intermittently rejects such audio-only payloads with 400 INVALID_ARGUMENT,
+ * while `audio/mp4` succeeds consistently.
+ */
+const AUDIO_CONTAINER_MIME_TYPES: Record<string, string> = {
+  'video/mp4': 'audio/mp4',
+  'video/ogg': 'audio/ogg',
+  'video/webm': 'audio/webm',
+};
+
+const toAudioContainerMimeType = (mimeType: string) =>
+  AUDIO_CONTAINER_MIME_TYPES[mimeType] ?? mimeType;
 
 const buildExternalUrlFileDataPart = async (
   url: string,
@@ -233,7 +249,7 @@ export const buildGooglePart = async (
             : recordedMimeType || urlMimeType || 'audio/mp3';
 
         return {
-          inlineData: { data: urlBase64, mimeType: resolvedMimeType },
+          inlineData: { data: urlBase64, mimeType: toAudioContainerMimeType(resolvedMimeType) },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }

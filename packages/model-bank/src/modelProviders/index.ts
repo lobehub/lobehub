@@ -39,6 +39,8 @@ import KimiCodingPlanProvider from './kimiCodingPlan';
 import LMStudioProvider from './lmstudio';
 import LobeHubProvider from './lobehub';
 import LongCatProvider from './longcat';
+import MagpieProvider from './magpie';
+import MetaProvider from './meta';
 import MinimaxProvider from './minimax';
 import MinimaxCodingPlanProvider from './minimaxCodingPlan';
 import MistralProvider from './mistral';
@@ -71,6 +73,8 @@ import SuperGrokProvider from './superGrok';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
+import { TypeSafeProvider } from './typesafe';
+import UnslothProvider from './unsloth';
 import UpstageProvider from './upstage';
 import V0Provider from './v0';
 import VercelAIGatewayProvider from './vercelaigateway';
@@ -158,12 +162,20 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   VertexAIProvider,
   { ...AzureProvider, chatModels: [] },
   AzureAIProvider,
+  MetaProvider,
+  XAIProvider,
+  QwenProvider,
+  ZhiPuProvider,
+  MinimaxProvider,
+  MistralProvider,
+  XiaomiMiMoProvider,
   AiHubMixProvider,
   OpenRouterProvider,
   FalProvider,
   OllamaProvider,
   OllamaCloudProvider,
   VLLMProvider,
+  UnslothProvider,
   ComfyUIProvider,
   HuggingFaceProvider,
   CloudflareProvider,
@@ -176,24 +188,21 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   Ai302Provider,
   NvidiaProvider,
   TogetherAIProvider,
+  TypeSafeProvider,
   FireworksAIProvider,
   GroqProvider,
   PerplexityProvider,
-  MistralProvider,
   ModelScopeProvider,
   Ai21Provider,
   UpstageProvider,
-  XAIProvider,
   SuperGrokProvider,
   JinaProvider,
   SambaNovaProvider,
   CohereProvider,
   V0Provider,
-  QwenProvider,
   WenxinProvider,
   TencentcloudProvider,
   HunyuanProvider,
-  ZhiPuProvider,
   SiliconCloudProvider,
   ZeroOneProvider,
   SparkProvider,
@@ -202,7 +211,6 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   BaichuanProvider,
   VolcengineProvider,
   VolcengineCodingPlanProvider,
-  MinimaxProvider,
   MinimaxCodingPlanProvider,
   LMStudioProvider,
   InternLMProvider,
@@ -223,8 +231,8 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   OpenCodeZenProvider,
   OpenCodeCodingPlanProvider,
   StraicoProvider,
-  XiaomiMiMoProvider,
   LongCatProvider,
+  MagpieProvider,
   StreamLakeProvider,
   AntGroupProvider,
 ];
@@ -239,6 +247,58 @@ export const isProviderDisableBrowserRequest = (id: string) => {
   );
   return !!provider;
 };
+
+/**
+ * Providers that run on the user's own machine: requests leave from the device
+ * unless `fetchOnClient` says otherwise (a desktop app or a deployment that
+ * proxies them sets it to `false`).
+ *
+ * magpie belongs here for the same reason: the user runs it, and it answers on
+ * `127.0.0.1`. A deployment that reaches one elsewhere sets `MAGPIE_PROXY_URL`,
+ * which arrives as `fetchOnClient: false` and keeps the requests on the server.
+ */
+const LOCAL_FETCH_ON_CLIENT_PROVIDERS = new Set(['lmstudio', 'magpie', 'ollama', 'unsloth']);
+
+export interface ProviderFetchOnClientConfig {
+  /** The user's choice, else the deployment's override for the provider. */
+  fetchOnClient?: boolean;
+  keyVaults?: { apiKey?: string; baseURL?: string };
+}
+
+/**
+ * Whether requests to `provider` must leave from the user's device rather than
+ * the server — the single rule the client and the server both apply, so the
+ * server never relays a call the client did not prepare for (or the reverse).
+ *
+ * 1. A provider that disables browser requests always runs on the server.
+ * 2. Local providers (magpie / Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
+ * 3. Neither a base URL nor an API key: the server's own configuration.
+ * 4. Only a base URL: an endpoint the server may not reach, so the device.
+ * 5. Otherwise `fetchOnClient`, default the server.
+ */
+export const isProviderFetchOnClient = (
+  provider: string,
+  config: ProviderFetchOnClientConfig | undefined,
+): boolean => {
+  if (isProviderDisableBrowserRequest(provider)) return false;
+
+  if (LOCAL_FETCH_ON_CLIENT_PROVIDERS.has(provider)) return config?.fetchOnClient ?? true;
+
+  const hasEndpoint = !!config?.keyVaults?.baseURL;
+  const hasApiKey = !!config?.keyVaults?.apiKey;
+  if (!hasEndpoint && !hasApiKey) return false;
+  if (hasEndpoint && !hasApiKey) return true;
+
+  return config?.fetchOnClient ?? false;
+};
+
+/**
+ * Human-readable provider name for a provider id (`meta` → `Meta`). Unknown ids
+ * (custom providers, typos) fall back to the id itself so callers always get a
+ * non-empty label.
+ */
+export const getProviderDisplayName = (id: string) =>
+  DEFAULT_MODEL_PROVIDER_LIST.find((provider) => provider.id === id)?.name || id;
 
 export const isProviderOAuthDeviceFlow = (id?: string) =>
   DEFAULT_MODEL_PROVIDER_LIST.some(
@@ -283,6 +343,8 @@ export { default as KimiCodingPlanProviderCard } from './kimiCodingPlan';
 export { default as LMStudioProviderCard } from './lmstudio';
 export { default as LobeHubProviderCard } from './lobehub';
 export { default as LongCatProviderCard } from './longcat';
+export { default as MagpieProviderCard } from './magpie';
+export { default as MetaProviderCard } from './meta';
 export { default as MinimaxProviderCard } from './minimax';
 export { default as MinimaxCodingPlanProviderCard } from './minimaxCodingPlan';
 export { default as MistralProviderCard } from './mistral';
@@ -315,6 +377,7 @@ export { default as SuperGrokProviderCard } from './superGrok';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
 export { default as TogetherAIProviderCard } from './togetherai';
+export { default as UnslothProviderCard } from './unsloth';
 export { default as UpstageProviderCard } from './upstage';
 export { default as V0ProviderCard } from './v0';
 export { default as VercelAIGatewayProviderCard } from './vercelaigateway';

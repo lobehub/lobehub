@@ -2,7 +2,6 @@
  * @vitest-environment happy-dom
  */
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import TaskParentBar from './TaskParentBar';
@@ -17,6 +16,7 @@ const createState = (parent: any) => ({
   activeTaskId: 'T-child',
   taskDetailMap: {
     'T-child': {
+      id: 'T-child',
       identifier: 'T-child',
       instruction: 'Child instruction',
       parent,
@@ -24,29 +24,6 @@ const createState = (parent: any) => ({
     },
   },
 });
-
-vi.mock('@lobehub/ui', () => ({
-  Button: ({
-    children,
-    icon,
-    onClick,
-  }: {
-    children: ReactNode;
-    icon?: ReactNode;
-    onClick?: () => void;
-  }) => (
-    <button type="button" onClick={onClick}>
-      {icon}
-      {children}
-    </button>
-  ),
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
 
 vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,
@@ -95,12 +72,14 @@ describe('TaskParentBar', () => {
     mocks.getDetail.mockReset();
     mocks.taskState = createState({
       agentId: 'agt_parent',
+      id: 'T-parent',
       identifier: 'T-parent',
       name: 'Parent task',
     });
     mocks.getDetail.mockResolvedValue({
       data: {
         agentId: 'agt_parent',
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
@@ -118,18 +97,20 @@ describe('TaskParentBar', () => {
 
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent/parent-task');
     await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
   });
 
   it('falls back to the global route when the parent task owner is unknown', async () => {
     mocks.taskState = createState({
+      id: 'T-parent',
       identifier: 'T-parent',
       name: 'Parent task',
     });
     mocks.getDetail.mockResolvedValue({
       data: {
         agentId: null,
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
@@ -142,19 +123,21 @@ describe('TaskParentBar', () => {
     await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-parent');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-parent/parent-task');
   });
 
   it("opens parent subtasks inside the clicked subtask's owning agent route", async () => {
     mocks.getDetail.mockResolvedValue({
       data: {
         agentId: 'agt_parent',
+        id: 'T-parent',
         identifier: 'T-parent',
         instruction: 'Parent instruction',
         status: 'running',
         subtasks: [
           {
             assignee: { id: 'agt_sibling' },
+            id: 'T-sibling',
             identifier: 'T-sibling',
             status: 'backlog',
           },

@@ -1,9 +1,20 @@
 'use client';
 
-import { ActionIcon, Block, Center, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { Button, confirmModal, DropdownMenu, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import type { DropdownItem } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  Center,
+  confirmModal,
+  createStaticStyles,
+  DropdownMenu,
+  Empty,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { DnaIcon, HistoryIcon, MoreHorizontalIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +22,6 @@ import { Link, useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -62,7 +72,7 @@ const SelfLearning = memo(() => {
     [first.data],
   );
   const warmup = useHistoryWarmup(activeAgentId ?? undefined, learnedTotal);
-  const { data, error, isLoading, mutate } = useExpertiseOverview(
+  const { data, error, mutate } = useExpertiseOverview(
     activeAgentId ?? undefined,
     warmup.refreshInterval,
   );
@@ -273,8 +283,6 @@ const SelfLearning = memo(() => {
             error={error}
             errorVariant={'page'}
             isEmpty={!error && allDomains.length === 0}
-            isLoading={isLoading}
-            loading={<Loading debugId="SelfLearning" />}
             empty={
               <Center height={'100%'} style={{ minHeight: '50vh' }} width={'100%'}>
                 <Empty

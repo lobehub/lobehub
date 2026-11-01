@@ -20,15 +20,6 @@ vi.mock('electron', () => ({
 
 vi.mock('execa', () => ({ execa: vi.fn() }));
 
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('@/utils/net-fetch', () => ({ netFetch: vi.fn() }));
 
 vi.mock('@/utils/file-system', () => ({ makeSureDirExist: vi.fn() }));
@@ -74,7 +65,7 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
         fileType: 'txt',
         filename: 'test.txt',
         lineCount: 5,
-        loc: [0, 200],
+        loc: [0, 5],
         modifiedTime: expect.any(Date),
         totalCharCount: 29,
         totalLineCount: 5,
@@ -163,6 +154,24 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
       expect(result.content).toBe('[Image: cat.png]');
     });
 
+    it('should upload AVIF as an image for downstream media analysis', async () => {
+      mockUploadService.uploadLocalFile.mockResolvedValue({
+        id: 'file-avif',
+        url: 'https://files.example.com/sample.avif',
+      });
+      const filePath = path.join(tmpDir, 'sample.avif');
+      await writeFile(filePath, Buffer.from('avif'));
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(mockUploadService.uploadLocalFile).toHaveBeenCalledWith(filePath);
+      expect(result.isImage).toBe(true);
+      expect(result.fileType).toBe('image/avif');
+      expect(result.imageFileId).toBe('file-avif');
+      expect(result.imageUrl).toBe('https://files.example.com/sample.avif');
+      expect(result.content).toBe('[Image: sample.avif]');
+    });
+
     it('should resolve a relative image path against cwd', async () => {
       mockUploadService.uploadLocalFile.mockResolvedValue({
         id: 'file-2',
@@ -204,6 +213,41 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
       expect(result.isImage).toBe(true);
       expect(result.imageUrl).toBeUndefined();
       expect(result.content).toContain('[Image: failed.png]');
+    });
+
+    it('should surface the storage-quota reason instead of a generic placeholder', async () => {
+      mockUploadService.uploadLocalFile.mockRejectedValue(
+        new Error(
+          'Command failed: lobe-cli.js file upload shot17.png --json id,url\n[ERROR] storage_block:upgrade_required',
+        ),
+      );
+      const filePath = path.join(tmpDir, 'shot17.png');
+      await writeFile(filePath, pngBytes);
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(result.imageUrl).toBeUndefined();
+      expect(result.content).toContain('[Image: shot17.png]');
+      expect(result.content).toContain('storage_block:upgrade_required');
+      expect(result.content).toMatch(/file storage is full/i);
+      expect(result.content).toMatch(/retrying will not help/i);
+    });
+
+    it('should tell a network upload failure apart from a full storage', async () => {
+      mockUploadService.uploadLocalFile.mockRejectedValue(
+        new Error(
+          'Command failed: lobe-cli.js file upload a.png\n[ERROR] fetch failed: ECONNRESET',
+        ),
+      );
+      const filePath = path.join(tmpDir, 'net.png');
+      await writeFile(filePath, pngBytes);
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(result.content).toContain('[Image: net.png]');
+      expect(result.content).toMatch(/network/i);
+      expect(result.content).toContain('ECONNRESET');
+      expect(result.content).not.toMatch(/storage is full/i);
     });
 
     it('should return a readable error for a missing image', async () => {
@@ -256,7 +300,7 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
           fileType: 'txt',
           filename: 'a.txt',
           lineCount: 1,
-          loc: [0, 200],
+          loc: [0, 1],
           modifiedTime: expect.any(Date),
           totalCharCount: 9,
           totalLineCount: 1,
@@ -268,7 +312,7 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
           fileType: 'txt',
           filename: 'b.txt',
           lineCount: 1,
-          loc: [0, 200],
+          loc: [0, 1],
           modifiedTime: expect.any(Date),
           totalCharCount: 9,
           totalLineCount: 1,

@@ -4,7 +4,9 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { listTraeAcpModelsMock } = vi.hoisted(() => ({
+const { listCodexModelsMock, listDroidAcpModelsMock, listTraeAcpModelsMock } = vi.hoisted(() => ({
+  listCodexModelsMock: vi.fn(),
+  listDroidAcpModelsMock: vi.fn(),
   listTraeAcpModelsMock: vi.fn(),
 }));
 
@@ -20,6 +22,17 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('../spawn/traeAcpSession', () => ({
   listTraeAcpModels: listTraeAcpModelsMock,
+}));
+
+vi.mock('../spawn/droidAcpSession', () => ({
+  listDroidAcpModels: listDroidAcpModelsMock,
+}));
+
+vi.mock('./codex', () => ({ listCodexModels: listCodexModelsMock }));
+
+// Catalog parsing uses a mocked process; directory failures exercise the real spawn separately.
+vi.mock('../spawn/workingDirectory', () => ({
+  resolveHeteroSpawnCwd: vi.fn((cwd: string) => cwd),
 }));
 
 const execFileMock = vi.mocked(childProcess.execFile);
@@ -43,11 +56,93 @@ const importModule = () => import('./listHeterogeneousAgentModels');
 describe('heterogeneous agent model discovery', () => {
   beforeEach(() => {
     execFileMock.mockReset();
+    listCodexModelsMock.mockReset();
+    listDroidAcpModelsMock.mockReset();
     listTraeAcpModelsMock.mockReset();
   });
 
   afterEach(() => {
     vi.resetModules();
+  });
+
+  it('loads Pi provider extensions with the same discovery policy as the configured run', async () => {
+    resolveExecFile('custom  fixture-model  4K  512  no  no');
+    const { listHeterogeneousAgentModels } = await importModule();
+    const result = await listHeterogeneousAgentModels({
+      args: [
+        '-e',
+        '/config/provider.mjs',
+        '-ne',
+        '--offline',
+        '--mode',
+        'rpc',
+        '--',
+        '-e',
+        '/ignored',
+      ],
+      command: '/custom/pi',
+      type: 'pi',
+    });
+    expect(result).toMatchObject({ models: [{ modelId: 'fixture-model' }], status: 'success' });
+    expect(execFileMock).toHaveBeenCalledWith(
+      '/custom/pi',
+      ['--list-models', '-e', '/config/provider.mjs', '-ne', '--offline'],
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it.each(['droid', 'trae'] as const)(
+    'reports an unsupported %s ACP discovery method as a client capability error',
+    async (type) => {
+      const { AcpRpcResponseError } = await import('../spawn/acpStdioClient');
+      const discover = type === 'droid' ? listDroidAcpModelsMock : listTraeAcpModelsMock;
+      discover.mockRejectedValue(
+        new AcpRpcResponseError('session/new', {
+          code: -32_601,
+          message: 'Method not found',
+        }),
+      );
+      const { listHeterogeneousAgentModels } = await importModule();
+      await expect(
+        listHeterogeneousAgentModels({ command: `/custom/${type}`, type }),
+      ).resolves.toMatchObject({ error: { code: 'unsupported_client' }, status: 'error' });
+    },
+  );
+
+  it('queries Codex independently of task transport and forwards the target configuration', async () => {
+    const models = [{ id: 'future-model', modelId: 'future-model', providerId: 'codex' }];
+    listCodexModelsMock.mockResolvedValue(models);
+    const { listHeterogeneousAgentModels } = await importModule();
+    await expect(
+      listHeterogeneousAgentModels({
+        args: ['--profile', 'team'],
+        command: '/custom/codex',
+        cwd: '/repo',
+        env: { CODEX_HOME: '/config' },
+        type: 'codex',
+      }),
+    ).resolves.toMatchObject({ models, status: 'success' });
+    expect(listCodexModelsMock).toHaveBeenCalledWith({
+      args: ['--profile', 'team'],
+      commandPath: '/custom/codex',
+      cwd: '/repo',
+      env: { CODEX_HOME: '/config' },
+      timeoutMs: 15_000,
+    });
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['unsupported_client', 'unsupported_client'],
+    ['unsupported_configuration', 'unsupported_configuration'],
+    ['ETIMEDOUT', 'timeout'],
+  ])('returns a catalog error for Codex %s so the picker can fall back', async (code, expected) => {
+    listCodexModelsMock.mockRejectedValue(Object.assign(new Error('failure'), { code }));
+    const { listHeterogeneousAgentModels } = await importModule();
+    await expect(
+      listHeterogeneousAgentModels({ command: '/custom/codex', type: 'codex' }),
+    ).resolves.toMatchObject({ error: { code: expected }, status: 'error' });
   });
 
   it('parses opaque model ids, splitting only at the first slash and preserving order', async () => {
@@ -273,6 +368,63 @@ describe('heterogeneous agent model discovery', () => {
     );
   });
 
+  it('parses and discovers Devin model variants from JSON', async () => {
+    const stdout = JSON.stringify({
+      families: [
+        {
+          family_label: 'Claude Sonnet 4.6',
+          variants: [
+            { label: 'Claude Sonnet 4.6', model_uid: 'claude-sonnet-4-6' },
+            { label: 'Claude Sonnet 4.6 Thinking', model_uid: 'claude-sonnet-4-6-thinking' },
+          ],
+        },
+        {
+          family_label: 'Duplicate',
+          variants: [{ label: 'Duplicate', model_uid: 'claude-sonnet-4-6' }, {}],
+        },
+      ],
+    });
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseDevinModelCatalog } = await importModule();
+
+    expect(parseDevinModelCatalog(stdout)).toEqual([
+      {
+        id: 'claude-sonnet-4-6',
+        label: 'Claude Sonnet 4.6',
+        modelId: 'claude-sonnet-4-6',
+        providerId: 'devin',
+      },
+      {
+        id: 'claude-sonnet-4-6-thinking',
+        label: 'Claude Sonnet 4.6 Thinking',
+        modelId: 'claude-sonnet-4-6-thinking',
+        providerId: 'devin',
+      },
+    ]);
+    expect(parseDevinModelCatalog('not json')).toEqual([]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/devin',
+        cwd: '/repo',
+        env: { DEVIN_MODEL: 'sonnet' },
+        type: 'devin',
+      }),
+    ).resolves.toMatchObject({
+      models: [
+        { id: 'claude-sonnet-4-6', providerId: 'devin' },
+        { id: 'claude-sonnet-4-6-thinking', providerId: 'devin' },
+      ],
+      status: 'success',
+    });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/devin',
+      ['models', 'list', '--format', 'json'],
+      expect.objectContaining({ cwd: '/repo', env: { DEVIN_MODEL: 'sonnet' } }),
+      expect.any(Function),
+    );
+  });
+
   it('parses and discovers Grok Build models', async () => {
     const stdout = [
       'You are not authenticated.',
@@ -342,7 +494,6 @@ describe('heterogeneous agent model discovery', () => {
       expect.objectContaining({
         cwd: '/repo',
         env: { OPENCODE_CONFIG_DIR: '/config', PATH: '/custom/bin' },
-        maxBuffer: 256 * 1024,
         timeout: 15_000,
       }),
       expect.any(Function),
@@ -352,11 +503,25 @@ describe('heterogeneous agent model discovery', () => {
   it('keeps the resolver login-shell PATH when the caller also provides PATH', async () => {
     const originalShell = process.env.SHELL;
     process.env.SHELL = '/bin/zsh';
-    rejectExecFile(new Error('not on inherited PATH'));
-    resolveExecFile('/login/bin:/usr/bin');
-    resolveExecFile('/login/bin/opencode\n');
-    resolveExecFile('1.18.3');
-    resolveExecFile('openai/gpt-5.6\n');
+    execFileMock.mockImplementation(((
+      file: string,
+      args: string[],
+      options: any,
+      callback: any,
+    ) => {
+      if (file === '/bin/zsh') {
+        callback(null, { stderr: '', stdout: '/login/bin:/usr/bin' });
+      } else if (file === 'which' && options.env?.PATH?.includes('/login/bin')) {
+        callback(null, { stderr: '', stdout: '/login/bin/opencode\n' });
+      } else if (file === '/login/bin/opencode' && args.includes('--version')) {
+        callback(null, { stderr: '', stdout: '1.18.3' });
+      } else if (file === '/login/bin/opencode' && args.includes('models')) {
+        callback(null, { stderr: '', stdout: 'openai/gpt-5.6\n' });
+      } else {
+        callback(new Error('unavailable in inherited environment'), { stderr: '', stdout: '' });
+      }
+      return {} as any;
+    }) as any);
 
     try {
       const { listHeterogeneousAgentModels } = await importModule();
@@ -521,6 +686,67 @@ describe('heterogeneous agent model discovery', () => {
     );
   });
 
+  it('parses and discovers Kimi Code models from provider list JSON', async () => {
+    const stdout = JSON.stringify({
+      models: {
+        'kimi-code/k3': {
+          defaultEffort: 'high',
+          displayName: 'K3',
+          model: 'k3',
+          provider: 'managed:kimi-code',
+          supportEfforts: ['low', 'high', 'max'],
+        },
+        'kimi-code/kimi-for-coding-highspeed': {
+          displayName: 'K2.7 Code Highspeed',
+          model: 'kimi-for-coding-highspeed',
+          provider: 'managed:kimi-code',
+        },
+        'broken-alias': { provider: 'managed:kimi-code' },
+      },
+      providers: {
+        'managed:kimi-code': { baseUrl: 'https://api.kimi.com/coding/v1', type: 'kimi' },
+      },
+    });
+    resolveExecFile(stdout);
+    const { listHeterogeneousAgentModels, parseKimiCodeModelCatalog } = await importModule();
+
+    const expected = [
+      {
+        id: 'kimi-code/k3',
+        label: 'K3',
+        modelId: 'k3',
+        providerId: 'kimi-code',
+      },
+      {
+        id: 'kimi-code/kimi-for-coding-highspeed',
+        label: 'K2.7 Code Highspeed',
+        modelId: 'kimi-for-coding-highspeed',
+        providerId: 'kimi-code',
+      },
+    ];
+    expect(parseKimiCodeModelCatalog(stdout)).toEqual(expected);
+    expect(parseKimiCodeModelCatalog('not json')).toEqual([]);
+    expect(parseKimiCodeModelCatalog('{}')).toEqual([]);
+
+    await expect(
+      listHeterogeneousAgentModels({
+        command: '/custom/kimi',
+        cwd: '/repo',
+        env: { KIMI_CODE_HOME: '/config' },
+        type: 'kimi-code',
+      }),
+    ).resolves.toMatchObject({ models: expected, status: 'success' });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      '/custom/kimi',
+      ['provider', 'list', '--json'],
+      expect.objectContaining({
+        cwd: '/repo',
+        env: { KIMI_CODE_HOME: '/config' },
+      }),
+      expect.any(Function),
+    );
+  });
+
   it('discovers TRAE models through ACP and forwards provider arguments', async () => {
     listTraeAcpModelsMock.mockResolvedValue([
       { id: 'seed-2.0-code', modelId: 'seed-2.0-code', providerId: 'trae' },
@@ -545,6 +771,35 @@ describe('heterogeneous agent model discovery', () => {
         commandPath: '/custom/traecli',
         cwd: '/repo',
         env: { TRAE_CONFIG_DIR: '/config' },
+      }),
+    );
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it('discovers Factory Droid models through ACP and forwards only safe provider arguments', async () => {
+    listDroidAcpModelsMock.mockResolvedValue([
+      { id: 'gpt-5.4', modelId: 'gpt-5.4', providerId: 'droid' },
+    ]);
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({
+        args: ['--tag', 'lobe'],
+        command: '/custom/droid',
+        cwd: '/repo',
+        env: { FACTORY_API_KEY: 'test-key' },
+        type: 'droid',
+      }),
+    ).resolves.toMatchObject({
+      models: [{ id: 'gpt-5.4', modelId: 'gpt-5.4', providerId: 'droid' }],
+      status: 'success',
+    });
+    expect(listDroidAcpModelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--tag', 'lobe'],
+        commandPath: '/custom/droid',
+        cwd: '/repo',
+        env: { FACTORY_API_KEY: 'test-key' },
       }),
     );
     expect(execFileMock).not.toHaveBeenCalled();

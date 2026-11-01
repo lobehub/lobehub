@@ -1,46 +1,63 @@
 'use client';
 
+import { resolveGoalAttemptBudget } from '@lobechat/builtin-tool-goal';
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
+import { GOAL_TITLE_MAX_LENGTH } from '@lobechat/const/goal';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { InputNumber } from 'antd';
-import { createGlobalStyle, createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  InputNumber,
+  Spin,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import {
   ArrowLeft,
   Paperclip,
   Pencil,
   PencilLine,
   Plus,
+  RotateCw,
   ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react';
-import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import TaskVisibilityChipLabel from '@/features/AgentTasks/features/TaskVisibilityChipLabel';
-import TaskVisibilityTag from '@/features/AgentTasks/features/TaskVisibilityTag';
-import { useAgentVisibility } from '@/features/AgentTasks/shared/useAgentVisibility';
-import { EditorCanvas } from '@/features/EditorCanvas';
-import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
+import GeneratingBorder from '@/components/GeneratingBorder';
 import {
   CriterionList,
   CriterionRequiredChip,
   CriterionRow,
   openCriterionEditModal,
-} from '@/features/Verify';
+} from '@/features/Acceptance';
+import { useEscapeDiscardGuard } from '@/features/AgentTasks/shared/useEscapeDiscardGuard';
+import { EditorCanvas } from '@/features/EditorCanvas';
+import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
-import { verifyService } from '@/services/verify';
-import { useTaskStore } from '@/store/task';
+import { goalService } from '@/services/goal';
+import { useGoalStore } from '@/store/goal';
 import { shinyTextStyles } from '@/styles';
 
-import { buildGoalTaskConfig } from './goalConfig';
+import GoalAgentPill from '../GoalAgentPill';
+import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
-import { deriveGoalTitle } from './goalTitle';
+import {
+  deriveGoalTitle,
+  resolveDraftedTitle,
+  resolveFallbackTitle,
+  resolveSubmittedGoalTitle,
+} from './goalTitle';
+import { hasUnsavedGoalDraft } from './hasUnsavedGoalDraft';
 
 const styles = createStaticStyles(({ css }) => ({
   budgetField: css`
@@ -74,6 +91,7 @@ const styles = createStaticStyles(({ css }) => ({
     max-height: 320px;
   `,
   footer: css`
+    flex-shrink: 0;
     padding-block: 8px;
     padding-inline: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -133,69 +151,21 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   head: css`
     position: relative;
+    min-height: 0;
     padding-block: 16px 8px;
     padding-inline: 16px;
   `,
   inputShell: css`
-    position: relative;
-
     overflow: hidden;
-
     min-height: 208px;
-    border-radius: 8px;
-
     background: ${cssVar.colorBgElevated};
   `,
-  inputShellLoading: css`
-    background: ${cssVar.colorBgElevated};
-
-    &::after {
-      pointer-events: none;
-      content: '';
-
-      position: absolute;
-      z-index: 1;
-      inset: 0;
-
-      padding: 2px;
-      border-radius: inherit;
-
-      background: conic-gradient(
-        from var(--goal-border-angle),
-        ${cssVar.colorBorderSecondary} 0deg 210deg,
-        #ff3d8d 238deg,
-        #8b5cf6 258deg,
-        #00c8ff 278deg,
-        #22e6a8 298deg,
-        #ffd43b 318deg,
-        #ff6b35 338deg,
-        ${cssVar.colorBorderSecondary} 360deg
-      );
-
-      mask:
-        linear-gradient(#fff 0 0) content-box,
-        linear-gradient(#fff 0 0);
-
-      animation: goal-input-flow 1.8s linear infinite;
-
-      mask-composite: exclude;
-    }
-
-    @keyframes goal-input-flow {
-      from {
-        --goal-border-angle: 0deg;
-      }
-
-      to {
-        --goal-border-angle: 360deg;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      &::after {
-        animation: none;
-      }
-    }
+  /* A block (not flex) scroller: as a flex item the editor's overflow-hidden
+     wrapper would shrink to fit and clip instead of scrolling. */
+  inputScroller: css`
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
   `,
   instructionEditor: css`
     min-height: 36px;
@@ -246,14 +216,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const GoalBorderFlowStyle = createGlobalStyle`
-  @property --goal-border-angle {
-    inherits: false;
-    initial-value: 0deg;
-    syntax: '<angle>';
-  }
-`;
-
 const GENERATION_ESTIMATE_SECONDS = 90;
 
 export const formatGoalGenerationRemainingTime = (seconds: number) => {
@@ -261,13 +223,6 @@ export const formatGoalGenerationRemainingTime = (seconds: number) => {
   const rest = seconds % 60;
   return `${minutes}:${rest.toString().padStart(2, '0')}`;
 };
-
-const criterionRequirement = (drafts: GoalCriterionDraft[]) =>
-  drafts
-    .map((draft) => draft.title.trim())
-    .filter(Boolean)
-    .map((title) => `- ${title}`)
-    .join('\n');
 
 export interface CreateGoalContentProps {
   /** The agent that owns the goal. Goals are always agent-scoped. */
@@ -277,7 +232,7 @@ export interface CreateGoalContentProps {
   initialRequirement?: string;
   initialRoundBudget?: number;
   initialTitle?: string;
-  onCreated?: (goal: { agentId?: string; identifier: string }) => void;
+  onCreated?: (goal: { agentId?: string; goalId: string }) => void;
   projectId?: string;
 }
 
@@ -292,13 +247,16 @@ export interface CreateGoalContentProps {
 const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const { agentId, initialRequirement, initialRoundBudget, initialTitle, onCreated, projectId } =
     props;
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const { close } = useModalContext();
   const { allowed: canCreate, reason } = usePermission('create_content');
 
-  const createTask = useTaskStore((s) => s.createTask);
-  const isCreating = useTaskStore((s) => s.isCreatingTask);
-  const activeWorkspaceId = useActiveWorkspaceId();
+  const [isCreating, setIsCreating] = useState(false);
+  // Drafting failed, so the review step offers to draft again.
+  const [generateFailed, setGenerateFailed] = useState(false);
+  // The stopgap title a failed draft leaves behind; still unedited at submit,
+  // it is replaced by a generated one once the goal exists.
+  const fallbackTitleRef = useRef<string>(undefined);
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [plan, setPlan] = useState<CreateGoalParams>({
@@ -308,20 +266,14 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     maxTotalCost: null,
     name: initialTitle ?? '',
   });
-  // Default to private in workspace mode so sharing is opt-in; personal mode
-  // ignores the field and hides the chip.
-  const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [remainingSeconds, setRemainingSeconds] = useState(GENERATION_ESTIMATE_SECONDS);
-
-  // A private agent can only run a private task, goals included.
-  const isPrivateAgent = useAgentVisibility(agentId) === 'private';
-  useEffect(() => {
-    if (isPrivateAgent && visibility === 'public') setVisibility('private');
-  }, [isPrivateAgent, visibility]);
+  // Who plans the goal (its main agent) and who does its Tasks. Unset executor
+  // means the main agent does them itself.
+  const [plannerId, setPlannerId] = useState(agentId);
+  const [executorId, setExecutorId] = useState<string>();
 
   const editor = useEditor();
   const instructionRef = useRef(plan.instruction);
-  const requirement = useMemo(() => criterionRequirement(plan.criteria), [plan.criteria]);
 
   useEffect(() => {
     if (step !== 'preparing') return;
@@ -346,13 +298,15 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const handleNext = useCallback(async () => {
     const instruction = instructionRef.current.trim() || plan.instruction.trim();
     if (!canCreate || !instruction) return;
-    const name = plan.name.trim() || deriveGoalTitle(instruction);
+    const typed = plan.name.trim();
+    const name = typed || deriveGoalTitle(instruction);
     setPlan((current) => ({
       ...current,
       instruction,
       name,
     }));
     instructionRef.current = instruction;
+    setGenerateFailed(false);
     setStep('preparing');
     try {
       const generated = await generateGoalCriteria({
@@ -360,25 +314,40 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         goal: instruction,
       });
       instructionRef.current = generated.instruction;
+      const draftedTitle = resolveDraftedTitle({
+        generated: generated.title,
+        previousFallback: fallbackTitleRef.current,
+        retrying: generateFailed,
+        typed,
+      });
+      fallbackTitleRef.current = undefined;
       setPlan((current) => ({
         ...current,
         criteria: generated.criteria,
         instruction: generated.instruction,
-        name: generated.title,
+        name: draftedTitle,
       }));
       setStep('review');
     } catch (error) {
       console.error('[CreateGoalContent] generate failed:', error);
+      // Never the instruction itself: a pasted prompt as the title is what
+      // took over the goal page. The instruction stays the goal's body.
+      fallbackTitleRef.current = resolveFallbackTitle({
+        name,
+        previousFallback: fallbackTitleRef.current,
+        typed,
+      });
       setPlan((current) => ({
         ...current,
         criteria: [createFallbackGoalCriterion(instruction)],
         instruction,
-        name: instruction,
+        name,
       }));
+      setGenerateFailed(true);
       setStep('review');
       toast.warning(t('createGoal.generateFailed'));
     }
-  }, [canCreate, plan.instruction, plan.name, t]);
+  }, [canCreate, generateFailed, plan.instruction, plan.name, t]);
 
   const handleCreateBlank = useCallback(() => {
     if (!canCreate) return;
@@ -436,59 +405,67 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     if (!canCreate) return;
     const instruction =
       instructionRef.current.trim() || plan.instruction.trim() || plan.name.trim();
-    const editorData = instructionRef.current.trim()
-      ? (editor?.getDocument?.('json') as unknown)
-      : undefined;
     const reviewedCriteria = plan.criteria.filter((criterion) => criterion.title.trim());
     if (!instruction || reviewedCriteria.length === 0) return;
 
-    let verifyCriteriaIds: string[] = [];
+    const { needsGeneratedTitle, title } = resolveSubmittedGoalTitle({
+      fallbackTitle: fallbackTitleRef.current,
+      instruction,
+      name: plan.name,
+    });
+    const budget = buildGoalCreateInput({
+      costBudget: plan.maxTotalCost,
+      instruction,
+    });
+
+    setIsCreating(true);
     try {
-      verifyCriteriaIds = await verifyService.createCriteria(reviewedCriteria);
-      const { config, goal } = buildGoalTaskConfig({
-        costBudget: plan.maxTotalCost,
-        instruction,
-        requirement,
-        roundBudget: plan.maxIterations,
-        verifyCriteriaIds,
-      });
-      const result = await createTask({
-        assigneeAgentId: agentId,
-        config,
-        editorData,
-        goal,
-        instruction,
-        name: plan.name.trim() || undefined,
+      const { agentId: goalAgentId, taskAgentId } = buildGoalAgents(plannerId, executorId);
+      const graph = await goalService.create({
+        agentId: goalAgentId,
+        config: {
+          recovery: { maxAttemptsPerTask: resolveGoalAttemptBudget(plan.maxIterations) },
+          ...(taskAgentId ? { taskAgentId } : {}),
+        },
+        // `maxIterations` is the per-Task attempt budget above; it is not the
+        // graph-wide round cap, which counts runs across every Task and would
+        // strand the fourth task of a goal whose limit is three attempts.
+        // Structured criteria persist alongside the prose requirement: the goal
+        // page shows/edits them and the terminal acceptance is gated on them.
+        criteria: reviewedCriteria.map(({ description, instruction: how, title: name }) => ({
+          description,
+          instruction: how,
+          title: name,
+        })),
+        maxTotalCost: budget.maxTotalCost ?? undefined,
+        // No seed tasks: the coordinator plans the decomposition on first
+        // advance, turning a complex ask into several explorable directions.
+        ...buildReviewedGoalContent(instruction),
         projectId,
-        visibility: activeWorkspaceId ? visibility : undefined,
+        title,
       });
-
-      if (!result) throw new Error('The goal was not created.');
-
+      // `goal.create` already queued the first advance server-side, but on a
+      // queue-less serverless deployment that kickoff is an in-process timer
+      // the host may freeze before firing. This request-bound advance is the
+      // durable fallback — fired and forgotten so the modal still closes
+      // immediately; the server dedupes a raced decomposition.
+      void goalService.advance(graph.goal.id).catch(() => {});
+      // A stopgap title is named from the instruction once the goal exists;
+      // failing that, it keeps the stopgap rather than blocking the create.
+      if (needsGeneratedTitle)
+        void useGoalStore
+          .getState()
+          .autoRenameGoalTitle(graph.goal.id)
+          .catch(() => {});
       close();
-      onCreated?.({
-        agentId: result.assigneeAgentId ?? undefined,
-        identifier: result.identifier,
-      });
+      onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {
       console.error('[CreateGoalContent] create failed:', error);
-      await Promise.allSettled(verifyCriteriaIds.map((id) => verifyService.deleteCriterion(id)));
       toast.error(t('createGoal.createFailed'));
+    } finally {
+      setIsCreating(false);
     }
-  }, [
-    activeWorkspaceId,
-    agentId,
-    canCreate,
-    close,
-    createTask,
-    editor,
-    onCreated,
-    plan,
-    projectId,
-    requirement,
-    t,
-    visibility,
-  ]);
+  }, [canCreate, close, executorId, onCreated, plan, plannerId, projectId, t]);
 
   const handlePrimaryAction =
     step === 'describe' ? handleNext : step === 'review' ? handleSubmit : undefined;
@@ -512,11 +489,34 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     }
   }, []);
 
+  // Escape is easy to hit by accident, so it asks before throwing away a
+  // described or drafted goal; an untouched modal still closes straight away.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEscapeDiscardGuard(rootRef, {
+    hasUnsavedInput: () =>
+      hasUnsavedGoalDraft({
+        editorJson: editor?.getDocument?.('json'),
+        initialInstruction: initialRequirement ?? initialTitle,
+        instruction: instructionRef.current,
+        step,
+      }),
+    onEscape: () =>
+      confirmModal({
+        cancelText: t('createGoal.discardConfirm.cancel'),
+        content: t('createGoal.discardConfirm.content'),
+        okButtonProps: { danger: true },
+        okText: t('createGoal.discardConfirm.ok'),
+        onOk: close,
+        title: t('createGoal.discardConfirm.title'),
+      }),
+  });
+
   return (
-    <Flexbox onKeyDown={handleKeyDown}>
-      <GoalBorderFlowStyle />
-      <Flexbox horizontal className={styles.head}>
-        <Flexbox flex={1} gap={6}>
+    <Flexbox flex={1} ref={rootRef} style={{ minHeight: 0 }} onKeyDown={handleKeyDown}>
+      {/* The describe step's editor lives in the head, so the head shrinks and
+          its editor scrolls; on review only the body below scrolls. */}
+      <Flexbox horizontal className={styles.head} style={{ flexShrink: step === 'review' ? 0 : 1 }}>
+        <Flexbox flex={1} gap={6} style={{ minHeight: 0 }}>
           {step === 'review' && (
             <Flexbox horizontal align={'center'} gap={8}>
               <ActionIcon
@@ -531,32 +531,51 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </Flexbox>
           )}
           {step === 'review' ? (
-            <input
-              className={styles.title}
-              disabled={!canCreate}
-              placeholder={t('createGoal.titlePlaceholder')}
-              value={plan.name}
-              onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
-            />
+            <>
+              <input
+                className={styles.title}
+                disabled={!canCreate}
+                maxLength={GOAL_TITLE_MAX_LENGTH}
+                placeholder={t('createGoal.titlePlaceholder')}
+                value={plan.name}
+                onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
+              />
+              {generateFailed && (
+                <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+                  <Text fontSize={12} type={'warning'}>
+                    {t('createGoal.generateFailed')}
+                  </Text>
+                  <Button
+                    disabled={!canCreate}
+                    icon={RotateCw}
+                    size={'small'}
+                    type={'text'}
+                    onClick={() => void handleNext()}
+                  >
+                    {t('regenerate', { ns: 'common' })}
+                  </Button>
+                </Flexbox>
+              )}
+            </>
           ) : (
             <div className={styles.titleStatic}>{t('createGoal.describeTitle')}</div>
           )}
           {step !== 'review' && (
             <>
-              <div
-                className={`${styles.inputShell} ${step === 'preparing' ? styles.inputShellLoading : ''}`}
-              >
-                <EditorCanvas
-                  disabled={!canCreate || step === 'preparing'}
-                  editor={editor}
-                  editorData={{ content: plan.instruction }}
-                  entityId={'create-goal-description'}
-                  floatingToolbar={false}
-                  placeholder={t('createGoal.instructionPlaceholder')}
-                  style={{ fontSize: 14, minHeight: 206, padding: 16 }}
-                  onContentChange={handleContentChange}
-                />
-              </div>
+              <GeneratingBorder className={styles.inputShell} generating={step === 'preparing'}>
+                <div className={styles.inputScroller}>
+                  <EditorCanvas
+                    disabled={!canCreate || step === 'preparing'}
+                    editor={editor}
+                    editorData={{ content: plan.instruction }}
+                    entityId={'create-goal-description'}
+                    floatingToolbar={false}
+                    placeholder={t('createGoal.instructionPlaceholder')}
+                    style={{ fontSize: 14, minHeight: 206, padding: 16 }}
+                    onContentChange={handleContentChange}
+                  />
+                </div>
+              </GeneratingBorder>
               {step === 'preparing' ? (
                 <Flexbox
                   horizontal
@@ -566,7 +585,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   justify={'space-between'}
                 >
                   <Flexbox horizontal align={'center'} gap={8}>
-                    <NeuralNetworkLoading size={18} />
+                    <Spin size="small" variant="network" />
                     <div
                       aria-label={t('createGoal.generating')}
                       className={styles.generatingTextViewport}
@@ -622,7 +641,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8}>
                 <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={16} />
-                <Text fontSize={13} weight={600}>
+                <Text fontSize={13} style={{ flex: 'none' }} weight={600}>
                   {t('createGoal.criteriaTitle')}
                 </Text>
                 <Text className={styles.sectionHint} fontSize={12}>
@@ -680,6 +699,42 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
           <Flexbox className={styles.reviewSection} gap={10}>
             <Text fontSize={13} weight={600}>
+              {t('createGoal.agentsTitle')}
+            </Text>
+            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+              <GoalAgentPill
+                agentId={plannerId}
+                disabled={!canCreate}
+                disabledReason={reason}
+                label={t('goalDetail.mainAgentLabel')}
+                placeholder={t('goalDetail.mainAgentUnassigned')}
+                tooltip={t('goalDetail.mainAgent')}
+                onChange={(next) => {
+                  if (!next) return;
+                  setPlannerId(next);
+                  // One agent, one slot: the new main agent does its own Tasks.
+                  if (next === executorId) setExecutorId(undefined);
+                }}
+              />
+              {plannerId && (
+                <GoalAgentPill
+                  agentId={executorId}
+                  disabled={!canCreate}
+                  disabledReason={reason}
+                  label={t('goalDetail.taskAgentLabel')}
+                  placeholder={t('goalDetail.taskAgentFollowsMain')}
+                  tooltip={t('goalDetail.taskAgent')}
+                  onChange={(next) => setExecutorId(next && next !== plannerId ? next : undefined)}
+                />
+              )}
+            </Flexbox>
+            <Text className={styles.sectionHint} fontSize={12}>
+              {t('createGoal.agentsHint')}
+            </Text>
+          </Flexbox>
+
+          <Flexbox className={styles.reviewSection} gap={10}>
+            <Text fontSize={13} weight={600}>
               {t('createGoal.budgetTitle')}
             </Text>
             <Flexbox gap={12}>
@@ -692,7 +747,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   min={2}
                   size={'small'}
                   style={{ width: '100%' }}
-                  value={plan.maxIterations ?? undefined}
+                  value={plan.maxIterations ?? null}
                   variant={'filled'}
                   suffix={
                     <Text fontSize={12} type={'secondary'}>
@@ -737,17 +792,6 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
       <Flexbox horizontal align={'center'} className={styles.footer} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-          {activeWorkspaceId && (
-            <TaskVisibilityTag
-              visibility={visibility}
-              lockedReason={
-                isPrivateAgent ? t('createTask.visibility.privateAgentLocked') : undefined
-              }
-              onChange={setVisibility}
-            >
-              <TaskVisibilityChipLabel visibility={visibility} />
-            </TaskVisibilityTag>
-          )}
           {step === 'review' && (
             <ActionIcon
               icon={Paperclip}

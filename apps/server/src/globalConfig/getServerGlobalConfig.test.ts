@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 interface MockGlobalConfigOptions {
+  agentGatewayProtocol?: number;
   agentGatewayUrl?: string;
+  appUrl?: string;
   enableAgentGateway?: boolean;
   toolNameMaxLengthEnv?: string;
 }
@@ -39,7 +41,11 @@ const mockGlobalConfigDependencies = (
 
   vi.doMock('@/envs/app', () => ({
     appEnv: {
+      ...(options.agentGatewayProtocol === undefined
+        ? {}
+        : { AGENT_GATEWAY_PROTOCOL: options.agentGatewayProtocol }),
       ...(options.agentGatewayUrl ? { AGENT_GATEWAY_URL: options.agentGatewayUrl } : {}),
+      ...(options.appUrl ? { APP_URL: options.appUrl } : {}),
       ...(options.enableAgentGateway === undefined
         ? {}
         : { ENABLE_AGENT_GATEWAY: options.enableAgentGateway }),
@@ -142,6 +148,7 @@ const loadServerConfig = async (
 describe('getServerGlobalConfig', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('should only enable LobeHub by default in business feature mode', async () => {
@@ -198,6 +205,33 @@ describe('getServerGlobalConfig', () => {
     });
   });
 
+  it('should declare gateway protocol 2 only where the v2 socket exists', async () => {
+    // The business gateway serves `/v2/ws`; `lobehub/lobehub-gateway`, which is
+    // what a self-hosted deployment runs, serves only `/ws`.
+    await expect(loadServerConfig(true)).resolves.toMatchObject({ agentGatewayProtocol: 2 });
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: true,
+      }),
+    ).resolves.toMatchObject({ agentGatewayProtocol: 1 });
+  });
+
+  it('should let AGENT_GATEWAY_PROTOCOL correct either guess', async () => {
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayProtocol: 2,
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: true,
+      }),
+    ).resolves.toMatchObject({ agentGatewayProtocol: 2 });
+
+    // An on-prem business deployment sitting in front of a v1 gateway.
+    await expect(loadServerConfig(true, { agentGatewayProtocol: 1 })).resolves.toMatchObject({
+      agentGatewayProtocol: 1,
+    });
+  });
+
   // The client-driven chat path builds tool names in the browser, so `0`
   // (tool-name compression off) only takes effect if the server ships the value
   // with the global config.
@@ -234,5 +268,38 @@ describe('getServerGlobalConfig', () => {
         toolNameMaxLength: expected,
       });
     }
+  });
+
+  it('should expose DEVICE_GATEWAY_PUBLIC_URL without a device gateway service token', async () => {
+    vi.stubEnv('DEVICE_GATEWAY_PUBLIC_URL', 'https://device-gateway.example.com');
+    vi.stubEnv('DEVICE_GATEWAY_SERVICE_TOKEN', undefined);
+    vi.stubEnv('DEVICE_GATEWAY_URL', undefined);
+
+    await expect(loadServerConfig(false)).resolves.toHaveProperty(
+      'deviceGatewayUrl',
+      'https://device-gateway.example.com',
+    );
+  });
+
+  it('should expose the OIDC issuer derived from APP_URL, as the provider does', async () => {
+    await expect(
+      loadServerConfig(false, { appUrl: 'https://chat.example.com/' }),
+    ).resolves.toHaveProperty('oidcIssuer', 'https://chat.example.com/oidc');
+  });
+
+  it('reports internal device gateway configuration independently of its public URL', async () => {
+    vi.stubEnv('DEVICE_GATEWAY_URL', undefined);
+    vi.stubEnv('DEVICE_GATEWAY_PUBLIC_URL', 'https://public-gateway.example.com');
+    await expect(loadServerConfig(false)).resolves.toHaveProperty('deviceGatewayConfigured', false);
+
+    vi.stubEnv('DEVICE_GATEWAY_URL', 'https://internal-gateway.example.com');
+    vi.stubEnv('DEVICE_GATEWAY_PUBLIC_URL', undefined);
+    const config = await loadServerConfig(false);
+    expect(config.deviceGatewayConfigured).toBe(true);
+    expect(config.deviceGatewayUrl).toBeUndefined();
+  });
+
+  it('should omit the OIDC issuer when APP_URL is not configured', async () => {
+    await expect(loadServerConfig(false)).resolves.not.toHaveProperty('oidcIssuer');
   });
 });

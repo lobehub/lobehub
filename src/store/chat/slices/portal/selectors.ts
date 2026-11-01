@@ -8,6 +8,7 @@ import {
   createLocalFileScopeKey,
   createSandboxLocalFileScopeKey,
   getLocalFileTabId,
+  isRemoteLocalFile,
 } from './helpers';
 import { type OpenLocalFileEntry, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
@@ -68,10 +69,20 @@ const getViewData = <T extends PortalViewType>(
   return null;
 };
 
+const getStackViewData = <T extends PortalViewType>(
+  s: ChatStoreState,
+  type: T,
+): Extract<PortalViewData, { type: T }> | null => {
+  const view = s.portalStack.findLast((item) => item.type === type);
+  return (view as Extract<PortalViewData, { type: T }> | undefined) ?? null;
+};
+
 const agentDetailId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.AgentDetail);
   return view?.agentId;
 };
+
+const memoryDetailView = (s: ChatStoreState) => getViewData(s, PortalViewType.MemoryDetail);
 
 // Artifact selectors
 const currentArtifact = (s: ChatStoreState): PortalArtifact | undefined => {
@@ -151,6 +162,7 @@ const currentFile = (s: ChatStoreState): PortalFile | undefined => {
 
 const previewFileId = (s: ChatStoreState) => currentFile(s)?.fileId;
 const chunkText = (s: ChatStoreState) => currentFile(s)?.chunkText;
+const previewFileSource = (s: ChatStoreState) => currentFile(s)?.source;
 
 // Local File selectors
 const currentLocalFileScopeWorkingDirectory = (s: ChatStoreState): string | undefined =>
@@ -219,6 +231,9 @@ const currentLocalFile = (s: ChatStoreState): OpenLocalFileEntry | undefined => 
   );
 };
 
+const isCurrentLocalFileRemote = (s: ChatStoreState): boolean =>
+  isRemoteLocalFile(currentLocalFile(s));
+
 const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
 const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
 
@@ -245,9 +260,26 @@ const messageDetailId = (s: ChatStoreState): string | undefined => {
 
 // Task Detail selectors
 const taskDetailId = (s: ChatStoreState): string | undefined => {
-  const view = getViewData(s, PortalViewType.TaskDetail);
+  const view = getStackViewData(s, PortalViewType.TaskDetail);
   return view?.taskId;
 };
+
+const taskResultId = (s: ChatStoreState): string | undefined => {
+  const view = getStackViewData(s, PortalViewType.TaskResult);
+  return view?.taskId;
+};
+
+const dashboardWidgetView = (s: ChatStoreState) => getViewData(s, PortalViewType.DashboardWidget);
+
+// Goal detail drill-down selectors
+const goalPortalId = (s: ChatStoreState): string | undefined =>
+  getViewData(s, PortalViewType.Goal)?.goalId;
+const goalNodeView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNode);
+const goalMetricView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalMetric);
+const goalNorthStarView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalNorthStar);
+const goalReportView = (s: ChatStoreState) => getViewData(s, PortalViewType.GoalReport);
+const goalReportChapterView = (s: ChatStoreState) =>
+  getViewData(s, PortalViewType.GoalReportChapter);
 
 // Topic chat selectors — the second, side-by-side topic opened in the portal
 const portalTopicId = (s: ChatStoreState): string | undefined => {
@@ -327,12 +359,23 @@ export const chatPortalSelectors = {
   // File preview data
   currentFile,
   previewFileId,
+  previewFileSource,
   chunkText,
+
+  // Goal drill-down data
+  goalMetricView,
+  goalNorthStarView,
+  dashboardWidgetView,
+  goalNodeView,
+  goalPortalId,
+  goalReportChapterView,
+  goalReportView,
 
   // Local file data
   activeLocalFileId,
   activeLocalFilePath,
   currentLocalFile,
+  isCurrentLocalFileRemote,
   dirtyLocalFileContents,
   isLocalFileDirty,
   localFileBuffer,
@@ -340,11 +383,15 @@ export const chatPortalSelectors = {
   localFileWorkingDirectory,
   openLocalFiles,
 
+  // Memory detail data
+  memoryDetailView,
+
   // Message detail data
   messageDetailId,
 
   // Task detail data
   taskDetailId,
+  taskResultId,
 
   // Topic chat data
   portalTopicId,

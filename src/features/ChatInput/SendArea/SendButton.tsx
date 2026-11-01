@@ -1,5 +1,5 @@
 import { SendButton as Send } from '@lobehub/editor/react';
-import { Tooltip } from '@lobehub/ui';
+import { Flexbox, Tooltip } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,10 @@ const SendButton = memo(() => {
   const sendMenu = useChatInputStore((s) => s.sendMenu);
   const shape = useChatInputStore((s) => s.sendButtonProps?.shape);
   const size = useChatInputStore((s) => s.sendButtonProps?.size);
-  const { generating, disabled } = useChatInputStore(selectors.sendButtonProps, isEqual);
+  const { generating, disabled, showSendWhileGenerating } = useChatInputStore(
+    selectors.sendButtonProps,
+    isEqual,
+  );
   const [send, handleStop] = useChatInputStore((s) => [s.handleSendButton, s.handleStop]);
 
   // Workspace viewer doesn't have `message:create` → backend would 403.
@@ -28,19 +31,32 @@ const SendButton = memo(() => {
   const viewOnly = !canUseResource;
   const canSend = canCreate && !viewOnly;
 
-  const button = (
-    <Send
-      disabled={disabled || !canSend}
-      generating={generating}
-      menu={canSend ? (sendMenu as any) : undefined}
-      placement={'topRight'}
-      shape={shape}
-      size={size}
-      trigger={['hover']}
-      onClick={generating || !canSend ? undefined : () => send()}
-      onStop={() => handleStop()}
-    />
-  );
+  // Stop keeps its spinner so the running state stays visible; Send sits beside
+  // it for the follow-up the user typed (Enter sends too).
+  const button =
+    generating && showSendWhileGenerating ? (
+      <Flexbox horizontal align={'center'} gap={8}>
+        <Send generating shape={shape} size={size} onStop={() => handleStop()} />
+        <Send
+          disabled={disabled || !canSend}
+          shape={shape}
+          size={size}
+          onClick={canSend ? () => send() : undefined}
+        />
+      </Flexbox>
+    ) : (
+      <Send
+        disabled={disabled || !canSend}
+        generating={generating}
+        menu={canSend ? (sendMenu as any) : undefined}
+        placement={'topRight'}
+        shape={shape}
+        size={size}
+        trigger={['hover']}
+        onClick={generating || !canSend ? undefined : () => send()}
+        onStop={() => handleStop()}
+      />
+    );
 
   if (!canCreate) return <Tooltip title={reason}>{button}</Tooltip>;
   if (viewOnly) return <Tooltip title={t('permission.viewOnlySendTip')}>{button}</Tooltip>;

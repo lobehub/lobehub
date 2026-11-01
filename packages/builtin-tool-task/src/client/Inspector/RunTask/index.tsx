@@ -1,8 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
 import { Play } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,24 +50,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export const RunTaskInspector = memo<BuiltinInspectorProps<RunTaskParams, RunTaskState>>(
-  ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+  ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
     const { t } = useTranslation('plugin');
 
     const params = args || partialArgs || ({} as Partial<RunTaskParams>);
-    const identifier = params.identifier;
+    const identifier = pluginState?.identifier ?? params.identifier;
     const continueTopicId = params.continueTopicId;
     const prompt = params.prompt;
 
     return (
-      <div
-        style={{ flexWrap: 'wrap', gap: 4 }}
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
         <Icon icon={Play} size={12} style={{ color: cssVar.colorWarning }} />
-        <span>{t('builtins.lobe-task.apiName.runTask')}</span>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {t('builtins.lobe-task.apiName.runTask')}
+        </span>
         {identifier && (
           <span className={styles.identifierChip} style={{ marginInlineStart: 4 }}>
             {identifier}

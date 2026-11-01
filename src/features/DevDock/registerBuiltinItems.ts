@@ -1,17 +1,21 @@
 import {
+  Activity,
   AppWindow,
   ArrowUpDown,
   Bot,
   Cpu,
+  Database,
   Flag,
   Gauge,
   Gpu,
   GraduationCap,
   Languages,
+  Layers3,
   LayoutGrid,
   MemoryStick,
   RotateCw,
   Route,
+  Ruler,
   ScanEye,
   Terminal,
 } from 'lucide-react';
@@ -59,6 +63,22 @@ export const registerBuiltinDevDockItems = () => {
     },
     {
       defaultPinned: true,
+      icon: Database,
+      id: 'local-database',
+      label: 'Local Database',
+      load: () => import('@/features/DevPanel/LocalDatabase'),
+      type: 'panel',
+    },
+    {
+      defaultPinned: true,
+      icon: Layers3,
+      id: 'replica',
+      label: 'Replica',
+      load: () => import('@/features/DevPanel/Replica'),
+      type: 'panel',
+    },
+    {
+      defaultPinned: true,
       icon: Route,
       id: 'route-path',
       label: 'Route Path',
@@ -72,6 +92,15 @@ export const registerBuiltinDevDockItems = () => {
       id: 'fps',
       label: 'FPS',
       load: () => import('./widgets/FpsWidget'),
+      slot: 'right',
+      type: 'readout',
+    },
+    {
+      defaultPinned: true,
+      icon: Activity,
+      id: 'cls',
+      label: 'CLS',
+      load: () => import('./widgets/ClsWidget'),
       slot: 'right',
       type: 'readout',
     },
@@ -103,6 +132,15 @@ export const registerBuiltinDevDockItems = () => {
           slot: 'right',
           type: 'readout',
         },
+    {
+      getChecked: () => useDevDockStore.getState().mesurer,
+      icon: Ruler,
+      id: 'mesurer',
+      label: 'Mesurer',
+      onToggle: (checked) => useDevDockStore.getState().setMesurer(checked),
+      subscribe: subscribeDevDock,
+      type: 'toggle',
+    },
     {
       getChecked: () => useDevDockStore.getState().reactScan,
       icon: ScanEye,
@@ -157,6 +195,13 @@ export const registerBuiltinDevDockItems = () => {
 
   if (isDesktop) {
     items.push(
+      {
+        icon: Cpu,
+        id: 'background-processes',
+        label: 'Background Processes',
+        type: 'panel',
+        load: () => import('@/features/BackgroundActivity'),
+      },
       {
         defaultPinned: true,
         icon: Gpu,

@@ -1,8 +1,10 @@
-import { imageUrlToBase64, videoUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
+import { videoUrlToBase64 } from '../../utils/videoToBase64';
 import type OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OpenAIChatMessage } from '../../types';
+import { clearReferenceImageCache } from '../../utils/referenceImageCache';
 import { serializeScopedSignature, type SignatureScope } from '../../utils/signatureScope';
 import { parseDataUri } from '../../utils/uriParser';
 import {
@@ -14,8 +16,10 @@ import {
 } from './openai';
 
 // 模拟依赖
-vi.mock('@lobechat/utils', () => ({
+vi.mock('../../utils/imageToBase64', () => ({
   imageUrlToBase64: vi.fn(),
+}));
+vi.mock('../../utils/videoToBase64', () => ({
   videoUrlToBase64: vi.fn(),
 }));
 vi.mock('../../utils/uriParser');
@@ -428,6 +432,47 @@ describe('convertOpenAIMessages', () => {
     expect((result[0] as any).reasoning).toBeUndefined();
   });
 
+  describe('reasoning passback for thinking families', () => {
+    // Upstream rejects a thinking-mode turn that carries tool_calls without the
+    // historical reasoning: "If thinking mode and tool_calls, `reasoning_content`
+    // must be passed back to the API."
+    const assistantTurn = {
+      content: 'Calling a tool',
+      reasoning: { content: 'step-by-step thinking' },
+      role: 'assistant',
+      tool_calls: [
+        { function: { arguments: '{}', name: 'search' }, id: 'call-1', type: 'function' },
+      ],
+    } as any;
+
+    it.each([['deepseek-v4-pro'], ['glm-5.3'], ['kimi-k3']])(
+      'echoes structured reasoning back for %s',
+      async (model) => {
+        const result = await convertOpenAIMessages([assistantTurn], { model });
+
+        expect((result[0] as any).reasoning_content).toBe('step-by-step thinking');
+      },
+    );
+
+    it('leaves unrelated models untouched', async () => {
+      const result = await convertOpenAIMessages([assistantTurn], { model: 'gpt-5.6-sol' });
+
+      expect((result[0] as any).reasoning_content).toBeUndefined();
+    });
+
+    it('keeps the empty placeholder scoped to DeepSeek thinking models', async () => {
+      const withoutReasoning = { ...assistantTurn, reasoning: undefined };
+
+      const deepseek = await convertOpenAIMessages([withoutReasoning], {
+        model: 'deepseek-v4-pro',
+      });
+      const glm = await convertOpenAIMessages([withoutReasoning], { model: 'glm-5.3' });
+
+      expect((deepseek[0] as any).reasoning_content).toBe('');
+      expect((glm[0] as any).reasoning_content).toBeUndefined();
+    });
+  });
+
   it('should preserve reasoning_content field from messages (for DeepSeek compatibility)', async () => {
     const messages = [
       {
@@ -832,6 +877,33 @@ describe('convertOpenAIResponseInputs', () => {
             type: 'input_image',
             image_url: 'data:image/jpeg;base64,test123',
           },
+        ],
+      },
+    ]);
+  });
+
+  it('should preserve the requested image detail on input_image parts', async () => {
+    const messages: OpenAIChatMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Inspect the circled area' },
+          {
+            type: 'image_url',
+            image_url: { detail: 'high', url: 'data:image/png;base64,test123' },
+          },
+        ],
+      },
+    ];
+
+    const result = await convertOpenAIResponseInputs(messages);
+
+    expect(result).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Inspect the circled area' },
+          { detail: 'high', image_url: 'data:image/png;base64,test123', type: 'input_image' },
         ],
       },
     ]);
@@ -1554,6 +1626,7 @@ describe('convertOpenAIResponseInputs', () => {
 describe('convertImageUrlToFile', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    clearReferenceImageCache();
   });
 
   afterEach(() => {
@@ -1664,7 +1737,23 @@ describe('convertImageUrlToFile', () => {
         expect(result).toHaveProperty('type', testCase.contentType || 'image/png');
 
         vi.clearAllMocks();
+        clearReferenceImageCache();
       }
+    });
+
+    it('should reuse one download for repeated conversions of the same URL', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+        headers: new Headers({ 'content-type': 'image/png' }),
+      } satisfies Partial<Response>);
+
+      const first = await convertImageUrlToFile('https://example.com/reference.png');
+      const second = await convertImageUrlToFile('https://example.com/reference.png');
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(first).not.toBe(second);
+      expect(second).toHaveProperty('type', 'image/png');
     });
 
     it('should throw error when HTTP request fails', async () => {

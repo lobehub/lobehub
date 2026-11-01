@@ -1,7 +1,7 @@
-import { ProviderIcon } from '@lobehub/icons';
 import { Avatar, Flexbox, SortableList } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { ProviderIcon } from '@/components/LobeIcons';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
 interface GroupItemProps extends AiProviderListItem {

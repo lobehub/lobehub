@@ -6,6 +6,8 @@ import type {
 } from '@lobechat/types';
 import { and, count, eq, inArray, isNotNull, like, or, sql } from 'drizzle-orm';
 
+import { clampToolIdentifier } from '@/utils/clampToolIdentifier';
+
 import { agents, messagePlugins, messages, threads, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { idGenerator } from '../../utils/idGenerator';
@@ -55,6 +57,17 @@ export class HeteroSessionImporterRepo {
    */
   private scopeWhere = (cols: { userId: any; workspaceId: any }) =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
+
+  /**
+   * Identity probes must see trashed rows because clientId uniqueness still
+   * covers them. This never feeds a product read; it only prevents a retry
+   * from treating an existing database identity as insertable.
+   */
+  private identityScopeWhere = (cols: { userId: any; workspaceId: any }) =>
+    buildWorkspaceWhere(
+      { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
+      cols,
+    );
 
   /**
    * The agent's heterogeneous runtime type (`claude-code`, `codex`, …), pinned
@@ -109,9 +122,15 @@ export class HeteroSessionImporterRepo {
 
       // 1. find or create the topic by clientId within the active scope
       const [existingTopic] = await tx
-        .select({ id: topics.id, metadata: topics.metadata })
+        .select({ id: topics.id, isDeleted: topics.isDeleted, metadata: topics.metadata })
         .from(topics)
-        .where(and(eq(topics.clientId, session.topicClientId), this.scopeWhere(topics)));
+        .where(and(eq(topics.clientId, session.topicClientId), this.identityScopeWhere(topics)));
+
+      if (existingTopic?.isDeleted === true) {
+        throw new Error(
+          `session ${session.sessionId} is already imported into a trashed topic; restore it before syncing`,
+        );
+      }
 
       // the (clientId, userId) unique index makes one session = one topic per
       // user GLOBALLY — if it exists outside the active scope, appending there
@@ -168,7 +187,7 @@ export class HeteroSessionImporterRepo {
               threadId: messages.threadId,
             })
             .from(messages)
-            .where(and(eq(messages.topicId, topicId), this.scopeWhere(messages)))
+            .where(and(eq(messages.topicId, topicId), this.identityScopeWhere(messages)))
         : [];
       const clientIdToDbId = new Map<string, string>();
       for (const row of existingRows) if (row.clientId) clientIdToDbId.set(row.clientId, row.id);
@@ -200,7 +219,7 @@ export class HeteroSessionImporterRepo {
         const [existingThread] = await tx
           .select({ id: threads.id })
           .from(threads)
-          .where(and(eq(threads.clientId, thread.clientId), this.scopeWhere(threads)));
+          .where(and(eq(threads.clientId, thread.clientId), this.identityScopeWhere(threads)));
 
         let threadId = existingThread?.id;
         if (!threadId) {
@@ -302,11 +321,11 @@ export class HeteroSessionImporterRepo {
     const pluginRows = fresh
       .filter((m) => m.plugin || m.toolCallId)
       .map((m) => ({
-        apiName: m.plugin?.apiName ?? null,
+        apiName: clampToolIdentifier(m.plugin?.apiName) ?? null,
         arguments: m.plugin?.arguments ?? null,
         clientId: m.clientId,
         id: clientIdToDbId.get(m.clientId)!,
-        identifier: m.plugin?.identifier ?? null,
+        identifier: clampToolIdentifier(m.plugin?.identifier) ?? null,
         state: m.pluginState ?? null,
         toolCallId: m.toolCallId ?? null,
         type: m.plugin?.type ?? null,

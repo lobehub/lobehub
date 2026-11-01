@@ -4,14 +4,6 @@ import type { App } from '@/core/App';
 
 import UpdaterCtr from '../UpdaterCtr';
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 vi.mock('@/modules/updater/configs', () => ({
   UPDATE_CHANNEL: 'stable',
 }));
@@ -38,7 +30,7 @@ const mockStoreGet = vi.fn();
 const mockStoreSet = vi.fn();
 
 const mockApp = {
-  rendererUpdateManager: {
+  coreUpdateManager: {
     switchChannel: mockRendererSwitchChannel,
   },
   storeManager: {

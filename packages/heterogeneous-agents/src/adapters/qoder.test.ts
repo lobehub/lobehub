@@ -45,37 +45,6 @@ describe('QoderAdapter', () => {
     ).toEqual(['stream_end', 'visible_output_end', 'agent_runtime_end']);
   });
 
-  it('maps partial text and thinking deltas', () => {
-    const adapter = new QoderAdapter();
-    adapter.adapt({ subtype: 'init', type: 'system' });
-    adapter.adapt({
-      event: { message: { id: 'msg-1', model: 'qoder-default' }, type: 'message_start' },
-      type: 'stream_event',
-    });
-
-    const text = adapter.adapt({
-      event: {
-        delta: { text: 'Hel', type: 'text_delta' },
-        index: 0,
-        type: 'content_block_delta',
-      },
-      type: 'stream_event',
-    });
-    const thinking = adapter.adapt({
-      event: {
-        delta: { thinking: 'reasoning', type: 'thinking_delta' },
-        index: 0,
-        type: 'content_block_delta',
-      },
-      type: 'stream_event',
-    });
-
-    expect(text[0]).toMatchObject({ data: { chunkType: 'text', content: 'Hel' } });
-    expect(thinking[0]).toMatchObject({
-      data: { chunkType: 'reasoning', reasoning: 'reasoning' },
-    });
-  });
-
   it('normalizes tool calls, results, and parent lineage to Qoder', () => {
     const adapter = new QoderAdapter();
     adapter.adapt({ subtype: 'init', type: 'system' });
@@ -119,159 +88,6 @@ describe('QoderAdapter', () => {
     });
   });
 
-  it('preserves synthesized todo state from Qoder Task tools', () => {
-    const adapter = new QoderAdapter();
-    adapter.adapt({ subtype: 'init', type: 'system' });
-    adapter.adapt({
-      message: {
-        content: [
-          {
-            id: 'task-create-1',
-            input: {
-              activeForm: 'Adding Qoder todo support',
-              description: 'Keep the synthesized task state for the UI.',
-              subject: 'Add Qoder todo support',
-            },
-            name: 'TaskCreate',
-            type: 'tool_use',
-          },
-        ],
-        id: 'msg-task-create',
-      },
-      type: 'assistant',
-    });
-
-    const events = adapter.adapt({
-      message: {
-        content: [
-          {
-            content: 'Task #1 created successfully: Add Qoder todo support',
-            tool_use_id: 'task-create-1',
-            type: 'tool_result',
-          },
-        ],
-        role: 'user',
-      },
-      type: 'user',
-    });
-    const pluginState = {
-      todos: {
-        items: [{ id: '1', status: 'todo', text: 'Add Qoder todo support' }],
-        updatedAt: expect.any(String),
-      },
-    };
-    expect(events.find((event) => event.type === 'tool_result')?.data.pluginState).toEqual(
-      pluginState,
-    );
-    expect(events.find((event) => event.type === 'tool_end')?.data.result.state).toEqual(
-      pluginState,
-    );
-
-    adapter.adapt({
-      message: {
-        content: [
-          {
-            id: 'task-update-1',
-            input: { status: 'completed', taskId: '1' },
-            name: 'TaskUpdate',
-            type: 'tool_use',
-          },
-        ],
-        id: 'msg-task-update',
-      },
-      type: 'assistant',
-    });
-    const updatedEvents = adapter.adapt({
-      message: {
-        content: [
-          {
-            content: 'Updated task #1 status',
-            tool_use_id: 'task-update-1',
-            type: 'tool_result',
-          },
-        ],
-        role: 'user',
-      },
-      type: 'user',
-    });
-    const updatedPluginState = {
-      todos: {
-        items: [{ id: '1', status: 'completed', text: 'Add Qoder todo support' }],
-        updatedAt: expect.any(String),
-      },
-    };
-    expect(updatedEvents.find((event) => event.type === 'tool_result')?.data.pluginState).toEqual(
-      updatedPluginState,
-    );
-    expect(updatedEvents.find((event) => event.type === 'tool_end')?.data.result.state).toEqual(
-      updatedPluginState,
-    );
-  });
-
-  it('preserves Qoder WebSearch structured sources on tool_result and tool_end', () => {
-    const adapter = new QoderAdapter();
-    adapter.adapt({ subtype: 'init', type: 'system' });
-    adapter.adapt({
-      message: {
-        content: [
-          {
-            id: 'web-search-1',
-            input: { query: 'TradingView copper futures symbol ticker' },
-            name: 'WebSearch',
-            type: 'tool_use',
-          },
-        ],
-        id: 'msg-search',
-      },
-      type: 'assistant',
-    });
-
-    const events = adapter.adapt({
-      message: {
-        content: [
-          {
-            content: 'Web search results for query: "TradingView copper futures symbol ticker"',
-            tool_use_id: 'web-search-1',
-            type: 'tool_result',
-          },
-        ],
-        role: 'user',
-      },
-      tool_use_result: {
-        durationSeconds: 2.938580792,
-        query: 'TradingView copper futures symbol ticker',
-        results: [
-          {
-            hostname: 'www.tradingview.com',
-            link: 'https://www.tradingview.com/symbols/COMEX-HG1!/',
-            snippet: 'The current price of Copper Futures is 6.7190 USD',
-            title: 'HG1! Charts and Quotes - Futures',
-          },
-        ],
-      },
-      type: 'user',
-    });
-
-    const result = events.find((event) => event.type === 'tool_result');
-    const end = events.find((event) => event.type === 'tool_end');
-    expect(result?.data.pluginState).toEqual({
-      durationSeconds: 2.938580792,
-      query: 'TradingView copper futures symbol ticker',
-      results: [
-        {
-          hostname: 'www.tradingview.com',
-          link: 'https://www.tradingview.com/symbols/COMEX-HG1!/',
-          snippet: 'The current price of Copper Futures is 6.7190 USD',
-          title: 'HG1! Charts and Quotes - Futures',
-        },
-      ],
-    });
-    expect(end?.data).toMatchObject({
-      payload: { toolCalling: { identifier: 'qoder' } },
-      result: { state: result?.data.pluginState, success: true },
-    });
-  });
-
   it('emits one structured Qoder auth error even though Qoder exits successfully', () => {
     const adapter = new QoderAdapter();
     adapter.adapt({ subtype: 'init', type: 'system' });
@@ -308,6 +124,128 @@ describe('QoderAdapter', () => {
       stderr: authText,
     });
     expect(events[2].data.message).toContain('Qoder');
+  });
+
+  it('reports credits usage although Qoder zeroes every token field', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ model: 'Auto', session_id: 'q-session', subtype: 'init', type: 'system' });
+    adapter.adapt({
+      event: { message: { id: 'msg-1', model: 'Auto' }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    // Qoder's message_delta: token fields always 0, consumption in credits only
+    const turn = adapter.adapt({
+      event: {
+        delta: { stop_reason: 'end_turn' },
+        type: 'message_delta',
+        usage: {
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          credits: 0.6151926628571428,
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      type: 'stream_event',
+    });
+
+    const turnUsage = turn.find(
+      (event) => event.type === 'step_complete' && event.data.phase === 'turn_metadata',
+    );
+    expect(turnUsage?.data).toMatchObject({
+      model: 'Auto',
+      provider: 'qoder',
+      usage: {
+        credits: 0.6151926628571428,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 0,
+      },
+    });
+
+    // The result event carries the session grand total in total_credits
+    const result = adapter.adapt({
+      subtype: 'success',
+      total_cost_usd: 0,
+      total_credits: 1.0052312114285713,
+      type: 'result',
+      usage: {
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+      },
+    });
+    const resultUsage = result.find(
+      (event) => event.type === 'step_complete' && event.data.phase === 'result_usage',
+    );
+    expect(resultUsage?.data).toMatchObject({
+      costUsd: 0,
+      usage: { credits: 1.0052312114285713, totalTokens: 0 },
+    });
+  });
+
+  it('merges token counts with credits when Qoder reports both', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    adapter.adapt({
+      event: { message: { id: 'msg-1', model: 'Qwen3.8-Flash' }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    const turn = adapter.adapt({
+      event: {
+        delta: { stop_reason: 'end_turn' },
+        type: 'message_delta',
+        usage: { cache_read_input_tokens: 4, credits: 0.5, input_tokens: 10, output_tokens: 5 },
+      },
+      type: 'stream_event',
+    });
+
+    expect(
+      turn.find((event) => event.type === 'step_complete' && event.data.phase === 'turn_metadata')
+        ?.data.usage,
+    ).toEqual({
+      credits: 0.5,
+      inputCacheMissTokens: 10,
+      inputCachedTokens: 4,
+      totalInputTokens: 14,
+      totalOutputTokens: 5,
+      totalTokens: 19,
+    });
+  });
+
+  it('still drops usage events when Qoder reports neither tokens nor credits', () => {
+    const adapter = new QoderAdapter();
+    adapter.adapt({ subtype: 'init', type: 'system' });
+    adapter.adapt({
+      event: { message: { id: 'msg-1', model: 'Auto' }, type: 'message_start' },
+      type: 'stream_event',
+    });
+
+    const turn = adapter.adapt({
+      event: {
+        type: 'message_delta',
+        usage: {
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      },
+      type: 'stream_event',
+    });
+    expect(turn.filter((event) => event.type === 'step_complete')).toEqual([]);
+
+    const result = adapter.adapt({
+      subtype: 'success',
+      total_cost_usd: 0,
+      total_credits: 0,
+      type: 'result',
+      usage: { input_tokens: 0, output_tokens: 0 },
+    });
+    expect(result.filter((event) => event.type === 'step_complete')).toEqual([]);
   });
 
   it('normalizes pending tool identity when flushing', () => {

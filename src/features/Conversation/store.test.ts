@@ -10,6 +10,7 @@ import { type ConversationContext, type ConversationHooks } from './types';
 vi.mock('@/store/chat', () => ({
   useChatStore: {
     getState: vi.fn(() => ({
+      dbMessagesMap: {},
       messagesMap: {},
       operations: {},
       optimisticCreateMessage: vi.fn(),

@@ -17,7 +17,7 @@ export type ApiKey = {
     id: string;
     lastUsedAt?: string | null;
     name: string;
-    scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+    scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     updatedAt: string;
 };
 
@@ -33,6 +33,11 @@ export type Agent = {
     params?: {
         [key: string]: unknown;
     } | null;
+    personal?: boolean;
+    plugins?: Array<{
+        identifier: string;
+        mode: 'pinned' | 'auto' | 'disabled';
+    }>;
     provider?: string | null;
     slug?: string | null;
     systemRole?: string | null;
@@ -45,6 +50,24 @@ export type AgentGroup = {
     id: string;
     name: string;
     sort?: number | null;
+    updatedAt: string;
+};
+
+export type ChatGroup = {
+    avatar: string | null;
+    backgroundColor: string | null;
+    createdAt: string;
+    description: string | null;
+    id: string;
+    members: Array<{
+        agentId: string;
+        enabled: boolean | null;
+        order: number | null;
+        role: 'supervisor' | 'participant' | 'assistant' | null;
+    }>;
+    personal: boolean;
+    pinned: boolean | null;
+    title: string | null;
     updatedAt: string;
 };
 
@@ -308,6 +331,14 @@ export type Usage = {
         since: string;
         until: string;
     };
+    quota: {
+        limit: number | null;
+        remaining: number | null;
+        resetsAt: string | null;
+        source: 'personal' | 'workspace_pool' | 'member_budget';
+        used: number;
+        usedRatio: number | null;
+    } | null;
     remainingBalance: number | null;
     scope: 'personal' | 'workspace';
     spent: number;
@@ -437,9 +468,13 @@ export type PostApiV1AgentGroupsData = {
 
 export type PostApiV1AgentGroupsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -470,10 +505,6 @@ export type PostApiV1AgentGroupsError = PostApiV1AgentGroupsErrors[keyof PostApi
 
 export type PostApiV1AgentGroupsResponses = {
     /**
-     * Response
-     */
-    200: unknown;
-    /**
      * Successful response
      */
     201: {
@@ -499,9 +530,13 @@ export type DeleteApiV1AgentGroupsByIdData = {
 
 export type DeleteApiV1AgentGroupsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -557,9 +592,13 @@ export type GetApiV1AgentGroupsByIdData = {
 
 export type GetApiV1AgentGroupsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -616,9 +655,13 @@ export type PatchApiV1AgentGroupsByIdData = {
 
 export type PatchApiV1AgentGroupsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -668,15 +711,20 @@ export type GetApiV1AgentsData = {
         keyword?: string;
         page?: string;
         pageSize?: string;
+        personal?: 'true' | 'false';
     };
     url: '/api/v1/agents';
 };
 
 export type GetApiV1AgentsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -794,9 +842,14 @@ export type PostApiV1AgentsData = {
         } | null;
         description?: string | null;
         model?: string | null;
+        plugins?: Array<{
+            identifier: string;
+            mode?: 'pinned' | 'auto' | 'disabled';
+        }>;
         params?: {
             [key: string]: unknown;
         } | null;
+        personal?: boolean;
         provider?: string | null;
         systemRole?: string | null;
         title: string;
@@ -808,9 +861,13 @@ export type PostApiV1AgentsData = {
 
 export type PostApiV1AgentsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -864,9 +921,13 @@ export type DeleteApiV1AgentsByIdData = {
 
 export type DeleteApiV1AgentsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -922,9 +983,13 @@ export type GetApiV1AgentsByIdData = {
 
 export type GetApiV1AgentsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1038,9 +1103,14 @@ export type PatchApiV1AgentsByIdData = {
         } | null;
         description?: string | null;
         model?: string | null;
+        plugins?: Array<{
+            identifier: string;
+            mode?: 'pinned' | 'auto' | 'disabled';
+        }>;
         params?: {
             [key: string]: unknown;
         } | null;
+        personal?: boolean;
         provider?: string | null;
         systemRole?: string | null;
         title?: string;
@@ -1054,9 +1124,13 @@ export type PatchApiV1AgentsByIdData = {
 
 export type PatchApiV1AgentsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1098,6 +1172,70 @@ export type PatchApiV1AgentsByIdResponses = {
 };
 
 export type PatchApiV1AgentsByIdResponse = PatchApiV1AgentsByIdResponses[keyof PatchApiV1AgentsByIdResponses];
+
+export type PostApiV1AgentsByIdDuplicateData = {
+    body: {
+        title?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/agents/{id}/duplicate';
+};
+
+export type PostApiV1AgentsByIdDuplicateErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1AgentsByIdDuplicateError = PostApiV1AgentsByIdDuplicateErrors[keyof PostApiV1AgentsByIdDuplicateErrors];
+
+export type PostApiV1AgentsByIdDuplicateResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data?: {
+            [key: string]: unknown;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1AgentsByIdDuplicateResponse = PostApiV1AgentsByIdDuplicateResponses[keyof PostApiV1AgentsByIdDuplicateResponses];
 
 export type GetApiV1ApiKeysData = {
     body?: never;
@@ -1157,7 +1295,7 @@ export type PostApiV1ApiKeysData = {
     body: {
         expiresAt?: string | null;
         name: string;
-        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+        scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
     };
     path?: never;
     query?: never;
@@ -1166,9 +1304,13 @@ export type PostApiV1ApiKeysData = {
 
 export type PostApiV1ApiKeysErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1199,10 +1341,6 @@ export type PostApiV1ApiKeysError = PostApiV1ApiKeysErrors[keyof PostApiV1ApiKey
 
 export type PostApiV1ApiKeysResponses = {
     /**
-     * Response
-     */
-    200: unknown;
-    /**
      * Successful response
      */
     201: {
@@ -1213,7 +1351,7 @@ export type PostApiV1ApiKeysResponses = {
             id: string;
             lastUsedAt?: string | null;
             name: string;
-            scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
+            scopes?: Array<'*' | 'agent:read' | 'agent:write' | 'eval:read' | 'eval:write' | 'chat:read' | 'chat:write' | 'model:invoke' | 'model:read' | 'model:write' | 'file:read' | 'file:write' | 'knowledge:read' | 'knowledge:write' | 'mcp:read' | 'mcp:write' | 'usage:read' | 'workspace:read' | 'workspace:write' | 'user:read' | 'user:write'> | null;
             updatedAt: string;
             key: string;
         };
@@ -1236,9 +1374,13 @@ export type DeleteApiV1ApiKeysByIdData = {
 
 export type DeleteApiV1ApiKeysByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1294,9 +1436,13 @@ export type GetApiV1ApiKeysByIdData = {
 
 export type GetApiV1ApiKeysByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1354,9 +1500,13 @@ export type PatchApiV1ApiKeysByIdData = {
 
 export type PatchApiV1ApiKeysByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1421,9 +1571,13 @@ export type PostApiV1ChatData = {
 
 export type PostApiV1ChatErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1481,9 +1635,13 @@ export type PostApiV1ChatTranslateData = {
 
 export type PostApiV1ChatTranslateErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1563,9 +1721,13 @@ export type PostApiV1ChatGenerateReplyData = {
 
 export type PostApiV1ChatGenerateReplyErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1610,13 +1772,556 @@ export type PostApiV1ChatGenerateReplyResponses = {
 
 export type PostApiV1ChatGenerateReplyResponse = PostApiV1ChatGenerateReplyResponses[keyof PostApiV1ChatGenerateReplyResponses];
 
+export type GetApiV1ChatGroupsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        page?: string;
+        pageSize?: string;
+        personal?: 'true' | 'false';
+    };
+    url: '/api/v1/chat-groups';
+};
+
+export type GetApiV1ChatGroupsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1ChatGroupsError = GetApiV1ChatGroupsErrors[keyof GetApiV1ChatGroupsErrors];
+
+export type GetApiV1ChatGroupsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            chatGroups: Array<ChatGroup>;
+            total?: number;
+            [key: string]: unknown;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1ChatGroupsResponse = GetApiV1ChatGroupsResponses[keyof GetApiV1ChatGroupsResponses];
+
+export type PostApiV1ChatGroupsData = {
+    body: {
+        avatar?: string | null;
+        backgroundColor?: string | null;
+        clientId?: string | null;
+        members: Array<{
+            agentId: string;
+            role?: 'participant' | 'assistant';
+        }>;
+        personal?: boolean;
+        title: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/chat-groups';
+};
+
+export type PostApiV1ChatGroupsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ChatGroupsError = PostApiV1ChatGroupsErrors[keyof PostApiV1ChatGroupsErrors];
+
+export type PostApiV1ChatGroupsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data?: ChatGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1ChatGroupsResponse = PostApiV1ChatGroupsResponses[keyof PostApiV1ChatGroupsResponses];
+
+export type DeleteApiV1ChatGroupsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/chat-groups/{id}';
+};
+
+export type DeleteApiV1ChatGroupsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1ChatGroupsByIdError = DeleteApiV1ChatGroupsByIdErrors[keyof DeleteApiV1ChatGroupsByIdErrors];
+
+export type DeleteApiV1ChatGroupsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1ChatGroupsByIdResponse = DeleteApiV1ChatGroupsByIdResponses[keyof DeleteApiV1ChatGroupsByIdResponses];
+
+export type GetApiV1ChatGroupsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/chat-groups/{id}';
+};
+
+export type GetApiV1ChatGroupsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1ChatGroupsByIdError = GetApiV1ChatGroupsByIdErrors[keyof GetApiV1ChatGroupsByIdErrors];
+
+export type GetApiV1ChatGroupsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: ChatGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1ChatGroupsByIdResponse = GetApiV1ChatGroupsByIdResponses[keyof GetApiV1ChatGroupsByIdResponses];
+
+export type PatchApiV1ChatGroupsByIdData = {
+    body: {
+        avatar?: string | null;
+        backgroundColor?: string | null;
+        description?: string | null;
+        personal?: boolean;
+        pinned?: boolean;
+        title?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/chat-groups/{id}';
+};
+
+export type PatchApiV1ChatGroupsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1ChatGroupsByIdError = PatchApiV1ChatGroupsByIdErrors[keyof PatchApiV1ChatGroupsByIdErrors];
+
+export type PatchApiV1ChatGroupsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: ChatGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1ChatGroupsByIdResponse = PatchApiV1ChatGroupsByIdResponses[keyof PatchApiV1ChatGroupsByIdResponses];
+
+export type DeleteApiV1ChatGroupsByIdMembersData = {
+    body: {
+        agentIds: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/chat-groups/{id}/members';
+};
+
+export type DeleteApiV1ChatGroupsByIdMembersErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1ChatGroupsByIdMembersError = DeleteApiV1ChatGroupsByIdMembersErrors[keyof DeleteApiV1ChatGroupsByIdMembersErrors];
+
+export type DeleteApiV1ChatGroupsByIdMembersResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: ChatGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1ChatGroupsByIdMembersResponse = DeleteApiV1ChatGroupsByIdMembersResponses[keyof DeleteApiV1ChatGroupsByIdMembersResponses];
+
+export type PostApiV1ChatGroupsByIdMembersData = {
+    body: {
+        agentIds: Array<string>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/chat-groups/{id}/members';
+};
+
+export type PostApiV1ChatGroupsByIdMembersErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ChatGroupsByIdMembersError = PostApiV1ChatGroupsByIdMembersErrors[keyof PostApiV1ChatGroupsByIdMembersErrors];
+
+export type PostApiV1ChatGroupsByIdMembersResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: ChatGroup;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1ChatGroupsByIdMembersResponse = PostApiV1ChatGroupsByIdMembersResponses[keyof PostApiV1ChatGroupsByIdMembersResponses];
+
+export type GetApiV1EvalRunsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        offset?: number;
+        page?: number;
+        pageSize?: number;
+        experimentId?: string;
+        datasetId?: string;
+        status?: 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'aborted' | 'external';
+    };
+    url: '/api/v1/eval/runs';
+};
+
+export type GetApiV1EvalRunsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1EvalRunsError = GetApiV1EvalRunsErrors[keyof GetApiV1EvalRunsErrors];
+
+export type GetApiV1EvalRunsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            runs: Array<{
+                id: string;
+                createdAt: string;
+                updatedAt: string;
+                config: {
+                    [key: string]: unknown;
+                };
+                executionMode: 'internal' | 'external';
+                datasetId: string;
+                experimentId: string | null;
+                parentRunId: string | null;
+                status: 'idle' | 'pending' | 'running' | 'external' | 'completed' | 'failed' | 'aborted';
+                targetAgentId: string | null;
+                name: string | null;
+                metrics: {
+                    [key: string]: unknown;
+                } | null;
+                startedAt: string | null;
+            }>;
+            total: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1EvalRunsResponse = GetApiV1EvalRunsResponses[keyof GetApiV1EvalRunsResponses];
+
 export type PostApiV1EvalRunsData = {
     body: {
         config?: {
+            maxConcurrency?: number;
+            caseSelection?: {
+                mode: 'all';
+            } | {
+                mode: 'include' | 'exclude';
+                caseIds: Array<string>;
+            };
             k?: number;
             maxSteps?: number;
             timeout?: number;
         };
+        executionMode?: 'internal' | 'external';
+        experimentId?: string;
         datasetId: string;
         id?: string;
         name?: string;
@@ -1629,9 +2334,13 @@ export type PostApiV1EvalRunsData = {
 
 export type PostApiV1EvalRunsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1665,7 +2374,25 @@ export type PostApiV1EvalRunsResponses = {
      * Successful response
      */
     202: {
-        data?: EvalRun;
+        data?: {
+            id: string;
+            createdAt: string;
+            updatedAt: string;
+            config: {
+                [key: string]: unknown;
+            };
+            executionMode: 'internal' | 'external';
+            datasetId: string;
+            experimentId: string | null;
+            parentRunId: string | null;
+            status: 'idle' | 'pending' | 'running' | 'external' | 'completed' | 'failed' | 'aborted';
+            targetAgentId: string | null;
+            name: string | null;
+            metrics: {
+                [key: string]: unknown;
+            } | null;
+            startedAt: string | null;
+        };
         message?: string;
         success: true;
         timestamp: string;
@@ -1673,6 +2400,87 @@ export type PostApiV1EvalRunsResponses = {
 };
 
 export type PostApiV1EvalRunsResponse = PostApiV1EvalRunsResponses[keyof PostApiV1EvalRunsResponses];
+
+export type GetApiV1EvalRunsByIdTopicsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        limit?: number;
+        offset?: number;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/eval/runs/{id}/topics';
+};
+
+export type GetApiV1EvalRunsByIdTopicsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1EvalRunsByIdTopicsError = GetApiV1EvalRunsByIdTopicsErrors[keyof GetApiV1EvalRunsByIdTopicsErrors];
+
+export type GetApiV1EvalRunsByIdTopicsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            topics: Array<{
+                createdAt: string;
+                evalResult: {
+                    [key: string]: unknown;
+                } | null;
+                passed: boolean | null;
+                runId: string;
+                score: number | null;
+                status: string | null;
+                testCaseId: string;
+                topicId: string;
+                input: string;
+            }>;
+            total: number;
+            runId: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1EvalRunsByIdTopicsResponse = GetApiV1EvalRunsByIdTopicsResponses[keyof GetApiV1EvalRunsByIdTopicsResponses];
 
 export type GetApiV1EvalRunsByIdData = {
     body?: never;
@@ -1685,9 +2493,13 @@ export type GetApiV1EvalRunsByIdData = {
 
 export type GetApiV1EvalRunsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1721,7 +2533,25 @@ export type GetApiV1EvalRunsByIdResponses = {
      * Successful response
      */
     200: {
-        data?: EvalRun;
+        data?: {
+            id: string;
+            createdAt: string;
+            updatedAt: string;
+            config: {
+                [key: string]: unknown;
+            };
+            executionMode: 'internal' | 'external';
+            datasetId: string;
+            experimentId: string | null;
+            parentRunId: string | null;
+            status: 'idle' | 'pending' | 'running' | 'external' | 'completed' | 'failed' | 'aborted';
+            targetAgentId: string | null;
+            name: string | null;
+            metrics: {
+                [key: string]: unknown;
+            } | null;
+            startedAt: string | null;
+        };
         message?: string;
         success: true;
         timestamp: string;
@@ -1735,15 +2565,24 @@ export type GetApiV1EvalRunsByIdResultsData = {
     path: {
         id: string;
     };
-    query?: never;
+    query?: {
+        limit?: number;
+        offset?: number;
+        page?: number;
+        pageSize?: number;
+    };
     url: '/api/v1/eval/runs/{id}/results';
 };
 
 export type GetApiV1EvalRunsByIdResultsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1778,9 +2617,20 @@ export type GetApiV1EvalRunsByIdResultsResponses = {
      */
     200: {
         data?: {
-            results: Array<EvalRunResult>;
-            runId: string;
+            results: Array<{
+                createdAt: string;
+                passed: boolean | null;
+                score: number | null;
+                status: string | null;
+                testCaseId: string;
+                topicId: string;
+                input: string;
+                result: {
+                    [key: string]: unknown;
+                } | null;
+            }>;
             total: number;
+            runId: string;
         };
         message?: string;
         success: true;
@@ -1789,6 +2639,2317 @@ export type GetApiV1EvalRunsByIdResultsResponses = {
 };
 
 export type GetApiV1EvalRunsByIdResultsResponse = GetApiV1EvalRunsByIdResultsResponses[keyof GetApiV1EvalRunsByIdResultsResponses];
+
+export type PostApiV1EvalRunsByIdResultsData = {
+    body: {
+        items: Array<{
+            testCaseId?: string;
+            correct: boolean;
+            score: number;
+            result?: {
+                [key: string]: unknown;
+            };
+            threadId?: string;
+            topicId: string;
+        }>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/runs/{id}/results';
+};
+
+export type PostApiV1EvalRunsByIdResultsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1EvalRunsByIdResultsError = PostApiV1EvalRunsByIdResultsErrors[keyof PostApiV1EvalRunsByIdResultsErrors];
+
+export type PostApiV1EvalRunsByIdResultsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            items: Array<{
+                idempotent: boolean;
+                reportedThreads: number;
+                runId: string;
+                runStatus?: string;
+                success: boolean;
+                threadId?: string;
+                topicFinalized: boolean;
+                topicId: string;
+                totalThreads: number;
+            }>;
+            runId: string;
+            runStatus: string;
+            success: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1EvalRunsByIdResultsResponse = PostApiV1EvalRunsByIdResultsResponses[keyof PostApiV1EvalRunsByIdResultsResponses];
+
+export type GetApiV1EvalBenchmarksData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        offset?: number;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/eval/benchmarks';
+};
+
+export type GetApiV1EvalBenchmarksErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1EvalBenchmarksError = GetApiV1EvalBenchmarksErrors[keyof GetApiV1EvalBenchmarksErrors];
+
+export type GetApiV1EvalBenchmarksResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            benchmarks: Array<{
+                id: string;
+                identifier: string;
+                name: string;
+                description: string | null;
+                metadata: {
+                    [key: string]: unknown;
+                } | null;
+                referenceUrl: string | null;
+                rubrics: Array<{
+                    id: string;
+                    name: string;
+                    type: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+                    weight: number;
+                    threshold?: number;
+                    extractor?: {
+                        type: 'regex';
+                        pattern: string;
+                        group?: number;
+                    } | {
+                        type: 'delimiter';
+                        delimiter: string;
+                        position?: 'first' | 'last';
+                    } | {
+                        type: 'last-line';
+                        trim?: boolean;
+                    } | {
+                        type: 'choice-index';
+                        labels?: Array<string>;
+                        pattern?: string;
+                    };
+                    config: {
+                        value: string;
+                        threshold?: number;
+                    } | {
+                        value: number;
+                        tolerance?: number;
+                    } | {
+                        pattern: string;
+                    } | {
+                        code: string;
+                    } | {
+                        criteria: string;
+                        model?: string;
+                        provider?: string;
+                        systemRole?: string;
+                    } | {
+                        values: Array<string>;
+                        caseSensitive?: boolean;
+                    } | {
+                        schema: {
+                            [key: string]: unknown;
+                        };
+                    } | {
+                        extractor: {
+                            type: 'regex';
+                            pattern: string;
+                            group?: number;
+                        } | {
+                            type: 'delimiter';
+                            delimiter: string;
+                            position?: 'first' | 'last';
+                        } | {
+                            type: 'last-line';
+                            trim?: boolean;
+                        } | {
+                            type: 'choice-index';
+                            labels?: Array<string>;
+                            pattern?: string;
+                        };
+                        innerMatcher?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+                    };
+                }>;
+                createdAt: string;
+                updatedAt: string;
+                isSystem: boolean;
+            }>;
+            total: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1EvalBenchmarksResponse = GetApiV1EvalBenchmarksResponses[keyof GetApiV1EvalBenchmarksResponses];
+
+export type PostApiV1EvalBenchmarksData = {
+    body: {
+        id?: string;
+        identifier: string;
+        name: string;
+        description?: string | null;
+        metadata?: {
+            [key: string]: unknown;
+        } | null;
+        referenceUrl?: string | null;
+        rubrics?: Array<{
+            id: string;
+            name: string;
+            type: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+            weight: number;
+            threshold?: number;
+            extractor?: {
+                type: 'regex';
+                pattern: string;
+                group?: number;
+            } | {
+                type: 'delimiter';
+                delimiter: string;
+                position?: 'first' | 'last';
+            } | {
+                type: 'last-line';
+                trim?: boolean;
+            } | {
+                type: 'choice-index';
+                labels?: Array<string>;
+                pattern?: string;
+            };
+            config: {
+                value: string;
+                threshold?: number;
+            } | {
+                value: number;
+                tolerance?: number;
+            } | {
+                pattern: string;
+            } | {
+                code: string;
+            } | {
+                criteria: string;
+                model?: string;
+                provider?: string;
+                systemRole?: string;
+            } | {
+                values: Array<string>;
+                caseSensitive?: boolean;
+            } | {
+                schema: {
+                    [key: string]: unknown;
+                };
+            } | {
+                extractor: {
+                    type: 'regex';
+                    pattern: string;
+                    group?: number;
+                } | {
+                    type: 'delimiter';
+                    delimiter: string;
+                    position?: 'first' | 'last';
+                } | {
+                    type: 'last-line';
+                    trim?: boolean;
+                } | {
+                    type: 'choice-index';
+                    labels?: Array<string>;
+                    pattern?: string;
+                };
+                innerMatcher?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+            };
+        }>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/eval/benchmarks';
+};
+
+export type PostApiV1EvalBenchmarksErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1EvalBenchmarksError = PostApiV1EvalBenchmarksErrors[keyof PostApiV1EvalBenchmarksErrors];
+
+export type PostApiV1EvalBenchmarksResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data?: {
+            id: string;
+            identifier: string;
+            name: string;
+            description: string | null;
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+            referenceUrl: string | null;
+            rubrics: Array<{
+                id: string;
+                name: string;
+                type: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+                weight: number;
+                threshold?: number;
+                extractor?: {
+                    type: 'regex';
+                    pattern: string;
+                    group?: number;
+                } | {
+                    type: 'delimiter';
+                    delimiter: string;
+                    position?: 'first' | 'last';
+                } | {
+                    type: 'last-line';
+                    trim?: boolean;
+                } | {
+                    type: 'choice-index';
+                    labels?: Array<string>;
+                    pattern?: string;
+                };
+                config: {
+                    value: string;
+                    threshold?: number;
+                } | {
+                    value: number;
+                    tolerance?: number;
+                } | {
+                    pattern: string;
+                } | {
+                    code: string;
+                } | {
+                    criteria: string;
+                    model?: string;
+                    provider?: string;
+                    systemRole?: string;
+                } | {
+                    values: Array<string>;
+                    caseSensitive?: boolean;
+                } | {
+                    schema: {
+                        [key: string]: unknown;
+                    };
+                } | {
+                    extractor: {
+                        type: 'regex';
+                        pattern: string;
+                        group?: number;
+                    } | {
+                        type: 'delimiter';
+                        delimiter: string;
+                        position?: 'first' | 'last';
+                    } | {
+                        type: 'last-line';
+                        trim?: boolean;
+                    } | {
+                        type: 'choice-index';
+                        labels?: Array<string>;
+                        pattern?: string;
+                    };
+                    innerMatcher?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+                };
+            }>;
+            createdAt: string;
+            updatedAt: string;
+            isSystem: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1EvalBenchmarksResponse = PostApiV1EvalBenchmarksResponses[keyof PostApiV1EvalBenchmarksResponses];
+
+export type DeleteApiV1EvalBenchmarksByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/benchmarks/{id}';
+};
+
+export type DeleteApiV1EvalBenchmarksByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1EvalBenchmarksByIdError = DeleteApiV1EvalBenchmarksByIdErrors[keyof DeleteApiV1EvalBenchmarksByIdErrors];
+
+export type DeleteApiV1EvalBenchmarksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1EvalBenchmarksByIdResponse = DeleteApiV1EvalBenchmarksByIdResponses[keyof DeleteApiV1EvalBenchmarksByIdResponses];
+
+export type GetApiV1EvalBenchmarksByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/benchmarks/{id}';
+};
+
+export type GetApiV1EvalBenchmarksByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1EvalBenchmarksByIdError = GetApiV1EvalBenchmarksByIdErrors[keyof GetApiV1EvalBenchmarksByIdErrors];
+
+export type GetApiV1EvalBenchmarksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+            identifier: string;
+            name: string;
+            description: string | null;
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+            referenceUrl: string | null;
+            rubrics: Array<{
+                id: string;
+                name: string;
+                type: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+                weight: number;
+                threshold?: number;
+                extractor?: {
+                    type: 'regex';
+                    pattern: string;
+                    group?: number;
+                } | {
+                    type: 'delimiter';
+                    delimiter: string;
+                    position?: 'first' | 'last';
+                } | {
+                    type: 'last-line';
+                    trim?: boolean;
+                } | {
+                    type: 'choice-index';
+                    labels?: Array<string>;
+                    pattern?: string;
+                };
+                config: {
+                    value: string;
+                    threshold?: number;
+                } | {
+                    value: number;
+                    tolerance?: number;
+                } | {
+                    pattern: string;
+                } | {
+                    code: string;
+                } | {
+                    criteria: string;
+                    model?: string;
+                    provider?: string;
+                    systemRole?: string;
+                } | {
+                    values: Array<string>;
+                    caseSensitive?: boolean;
+                } | {
+                    schema: {
+                        [key: string]: unknown;
+                    };
+                } | {
+                    extractor: {
+                        type: 'regex';
+                        pattern: string;
+                        group?: number;
+                    } | {
+                        type: 'delimiter';
+                        delimiter: string;
+                        position?: 'first' | 'last';
+                    } | {
+                        type: 'last-line';
+                        trim?: boolean;
+                    } | {
+                        type: 'choice-index';
+                        labels?: Array<string>;
+                        pattern?: string;
+                    };
+                    innerMatcher?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+                };
+            }>;
+            createdAt: string;
+            updatedAt: string;
+            isSystem: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1EvalBenchmarksByIdResponse = GetApiV1EvalBenchmarksByIdResponses[keyof GetApiV1EvalBenchmarksByIdResponses];
+
+export type PatchApiV1EvalBenchmarksByIdData = {
+    body: {
+        identifier?: string;
+        name?: string;
+        description?: string | null;
+        metadata?: {
+            [key: string]: unknown;
+        } | null;
+        referenceUrl?: string | null;
+        rubrics?: Array<{
+            id: string;
+            name: string;
+            type: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+            weight: number;
+            threshold?: number;
+            extractor?: {
+                type: 'regex';
+                pattern: string;
+                group?: number;
+            } | {
+                type: 'delimiter';
+                delimiter: string;
+                position?: 'first' | 'last';
+            } | {
+                type: 'last-line';
+                trim?: boolean;
+            } | {
+                type: 'choice-index';
+                labels?: Array<string>;
+                pattern?: string;
+            };
+            config: {
+                value: string;
+                threshold?: number;
+            } | {
+                value: number;
+                tolerance?: number;
+            } | {
+                pattern: string;
+            } | {
+                code: string;
+            } | {
+                criteria: string;
+                model?: string;
+                provider?: string;
+                systemRole?: string;
+            } | {
+                values: Array<string>;
+                caseSensitive?: boolean;
+            } | {
+                schema: {
+                    [key: string]: unknown;
+                };
+            } | {
+                extractor: {
+                    type: 'regex';
+                    pattern: string;
+                    group?: number;
+                } | {
+                    type: 'delimiter';
+                    delimiter: string;
+                    position?: 'first' | 'last';
+                } | {
+                    type: 'last-line';
+                    trim?: boolean;
+                } | {
+                    type: 'choice-index';
+                    labels?: Array<string>;
+                    pattern?: string;
+                };
+                innerMatcher?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+            };
+        }>;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/benchmarks/{id}';
+};
+
+export type PatchApiV1EvalBenchmarksByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1EvalBenchmarksByIdError = PatchApiV1EvalBenchmarksByIdErrors[keyof PatchApiV1EvalBenchmarksByIdErrors];
+
+export type PatchApiV1EvalBenchmarksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+            identifier: string;
+            name: string;
+            description: string | null;
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+            referenceUrl: string | null;
+            rubrics: Array<{
+                id: string;
+                name: string;
+                type: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+                weight: number;
+                threshold?: number;
+                extractor?: {
+                    type: 'regex';
+                    pattern: string;
+                    group?: number;
+                } | {
+                    type: 'delimiter';
+                    delimiter: string;
+                    position?: 'first' | 'last';
+                } | {
+                    type: 'last-line';
+                    trim?: boolean;
+                } | {
+                    type: 'choice-index';
+                    labels?: Array<string>;
+                    pattern?: string;
+                };
+                config: {
+                    value: string;
+                    threshold?: number;
+                } | {
+                    value: number;
+                    tolerance?: number;
+                } | {
+                    pattern: string;
+                } | {
+                    code: string;
+                } | {
+                    criteria: string;
+                    model?: string;
+                    provider?: string;
+                    systemRole?: string;
+                } | {
+                    values: Array<string>;
+                    caseSensitive?: boolean;
+                } | {
+                    schema: {
+                        [key: string]: unknown;
+                    };
+                } | {
+                    extractor: {
+                        type: 'regex';
+                        pattern: string;
+                        group?: number;
+                    } | {
+                        type: 'delimiter';
+                        delimiter: string;
+                        position?: 'first' | 'last';
+                    } | {
+                        type: 'last-line';
+                        trim?: boolean;
+                    } | {
+                        type: 'choice-index';
+                        labels?: Array<string>;
+                        pattern?: string;
+                    };
+                    innerMatcher?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external';
+                };
+            }>;
+            createdAt: string;
+            updatedAt: string;
+            isSystem: boolean;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1EvalBenchmarksByIdResponse = PatchApiV1EvalBenchmarksByIdResponses[keyof PatchApiV1EvalBenchmarksByIdResponses];
+
+export type GetApiV1EvalDatasetsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        offset?: number;
+        page?: number;
+        pageSize?: number;
+        benchmarkId?: string;
+    };
+    url: '/api/v1/eval/datasets';
+};
+
+export type GetApiV1EvalDatasetsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1EvalDatasetsError = GetApiV1EvalDatasetsErrors[keyof GetApiV1EvalDatasetsErrors];
+
+export type GetApiV1EvalDatasetsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            datasets: Array<{
+                id: string;
+                identifier: string;
+                name: string;
+                benchmarkId: string | null;
+                description: string | null;
+                metadata: {
+                    [key: string]: unknown;
+                } | null;
+                evalConfig: {
+                    [key: string]: unknown;
+                } | null;
+                evalMode: string | null;
+                createdAt: string;
+                updatedAt: string;
+                sourceExperimentId: string | null;
+                testCaseCount: number;
+            }>;
+            total: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1EvalDatasetsResponse = GetApiV1EvalDatasetsResponses[keyof GetApiV1EvalDatasetsResponses];
+
+export type PostApiV1EvalDatasetsData = {
+    body: {
+        id?: string;
+        identifier: string;
+        name: string;
+        benchmarkId?: string | null;
+        description?: string | null;
+        metadata?: {
+            [key: string]: unknown;
+        } | null;
+        evalConfig?: {
+            [key: string]: unknown;
+        } | null;
+        evalMode?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external' | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/eval/datasets';
+};
+
+export type PostApiV1EvalDatasetsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1EvalDatasetsError = PostApiV1EvalDatasetsErrors[keyof PostApiV1EvalDatasetsErrors];
+
+export type PostApiV1EvalDatasetsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data?: {
+            id: string;
+            identifier: string;
+            name: string;
+            benchmarkId: string | null;
+            description: string | null;
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+            evalConfig: {
+                [key: string]: unknown;
+            } | null;
+            evalMode: string | null;
+            createdAt: string;
+            updatedAt: string;
+            sourceExperimentId: string | null;
+            testCaseCount: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1EvalDatasetsResponse = PostApiV1EvalDatasetsResponses[keyof PostApiV1EvalDatasetsResponses];
+
+export type DeleteApiV1EvalDatasetsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/datasets/{id}';
+};
+
+export type DeleteApiV1EvalDatasetsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1EvalDatasetsByIdError = DeleteApiV1EvalDatasetsByIdErrors[keyof DeleteApiV1EvalDatasetsByIdErrors];
+
+export type DeleteApiV1EvalDatasetsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1EvalDatasetsByIdResponse = DeleteApiV1EvalDatasetsByIdResponses[keyof DeleteApiV1EvalDatasetsByIdResponses];
+
+export type GetApiV1EvalDatasetsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/datasets/{id}';
+};
+
+export type GetApiV1EvalDatasetsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1EvalDatasetsByIdError = GetApiV1EvalDatasetsByIdErrors[keyof GetApiV1EvalDatasetsByIdErrors];
+
+export type GetApiV1EvalDatasetsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+            identifier: string;
+            name: string;
+            benchmarkId: string | null;
+            description: string | null;
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+            evalConfig: {
+                [key: string]: unknown;
+            } | null;
+            evalMode: string | null;
+            createdAt: string;
+            updatedAt: string;
+            sourceExperimentId: string | null;
+            testCaseCount: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1EvalDatasetsByIdResponse = GetApiV1EvalDatasetsByIdResponses[keyof GetApiV1EvalDatasetsByIdResponses];
+
+export type PatchApiV1EvalDatasetsByIdData = {
+    body: {
+        identifier?: string;
+        name?: string;
+        benchmarkId?: string | null;
+        description?: string | null;
+        metadata?: {
+            [key: string]: unknown;
+        } | null;
+        evalConfig?: {
+            [key: string]: unknown;
+        } | null;
+        evalMode?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external' | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/datasets/{id}';
+};
+
+export type PatchApiV1EvalDatasetsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1EvalDatasetsByIdError = PatchApiV1EvalDatasetsByIdErrors[keyof PatchApiV1EvalDatasetsByIdErrors];
+
+export type PatchApiV1EvalDatasetsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+            identifier: string;
+            name: string;
+            benchmarkId: string | null;
+            description: string | null;
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+            evalConfig: {
+                [key: string]: unknown;
+            } | null;
+            evalMode: string | null;
+            createdAt: string;
+            updatedAt: string;
+            sourceExperimentId: string | null;
+            testCaseCount: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1EvalDatasetsByIdResponse = PatchApiV1EvalDatasetsByIdResponses[keyof PatchApiV1EvalDatasetsByIdResponses];
+
+export type GetApiV1EvalDatasetsByDatasetIdTestCasesData = {
+    body?: never;
+    path: {
+        datasetId: string;
+    };
+    query?: {
+        limit?: number;
+        offset?: number;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/eval/datasets/{datasetId}/test-cases';
+};
+
+export type GetApiV1EvalDatasetsByDatasetIdTestCasesErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1EvalDatasetsByDatasetIdTestCasesError = GetApiV1EvalDatasetsByDatasetIdTestCasesErrors[keyof GetApiV1EvalDatasetsByDatasetIdTestCasesErrors];
+
+export type GetApiV1EvalDatasetsByDatasetIdTestCasesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            testCases: Array<{
+                id: string;
+                input: string;
+                expected?: string;
+                category?: string;
+                choices?: Array<string>;
+                environment?: {
+                    envPrompt?: string;
+                    toolForwarding?: {
+                        [key: string]: {
+                            endpoint: string;
+                            timeoutMs?: number;
+                        };
+                    };
+                };
+                messages?: Array<{
+                    content: string;
+                    role: 'user' | 'assistant' | 'system' | 'tool';
+                    id?: string;
+                    parentId?: string | null;
+                    model?: string;
+                    provider?: string;
+                    createdAt?: string | number;
+                    updatedAt?: string | number;
+                    tools?: Array<{
+                        [key: string]: unknown;
+                    }>;
+                    tool_call_id?: string;
+                    metadata?: {
+                        [key: string]: unknown;
+                    };
+                    reasoning?: {
+                        [key: string]: unknown;
+                    };
+                    plugin?: {
+                        [key: string]: unknown;
+                    };
+                    pluginState?: {
+                        [key: string]: unknown;
+                    };
+                    pluginError?: {
+                        [key: string]: unknown;
+                    };
+                    pluginIntervention?: {
+                        [key: string]: unknown;
+                    };
+                    error?: {
+                        [key: string]: unknown;
+                    };
+                    search?: {
+                        [key: string]: unknown;
+                    };
+                }>;
+                caseId?: string;
+                sortOrder: number | null;
+                evalMode?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external' | null;
+                evalConfig?: {
+                    [key: string]: unknown;
+                } | null;
+                createdAt: string;
+                updatedAt: string;
+                datasetId: string;
+                content: {
+                    [key: string]: unknown;
+                };
+                metadata: {
+                    [key: string]: unknown;
+                } | null;
+            }>;
+            total: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1EvalDatasetsByDatasetIdTestCasesResponse = GetApiV1EvalDatasetsByDatasetIdTestCasesResponses[keyof GetApiV1EvalDatasetsByDatasetIdTestCasesResponses];
+
+export type PostApiV1EvalDatasetsByDatasetIdTestCasesData = {
+    body: {
+        id?: string;
+        input: string;
+        expected?: string;
+        category?: string;
+        choices?: Array<string>;
+        environment?: {
+            envPrompt?: string;
+            toolForwarding?: {
+                [key: string]: {
+                    endpoint: string;
+                    timeoutMs?: number;
+                };
+            };
+        };
+        messages?: Array<{
+            content: string;
+            role: 'user' | 'assistant' | 'system' | 'tool';
+            id?: string;
+            parentId?: string | null;
+            model?: string;
+            provider?: string;
+            createdAt?: string | number;
+            updatedAt?: string | number;
+            tools?: Array<{
+                [key: string]: unknown;
+            }>;
+            tool_call_id?: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            reasoning?: {
+                [key: string]: unknown;
+            };
+            plugin?: {
+                [key: string]: unknown;
+            };
+            pluginState?: {
+                [key: string]: unknown;
+            };
+            pluginError?: {
+                [key: string]: unknown;
+            };
+            pluginIntervention?: {
+                [key: string]: unknown;
+            };
+            error?: {
+                [key: string]: unknown;
+            };
+            search?: {
+                [key: string]: unknown;
+            };
+        }>;
+        caseId?: string;
+        sortOrder?: number;
+        evalMode?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external' | null;
+        evalConfig?: {
+            [key: string]: unknown;
+        } | null;
+    };
+    path: {
+        datasetId: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/datasets/{datasetId}/test-cases';
+};
+
+export type PostApiV1EvalDatasetsByDatasetIdTestCasesErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1EvalDatasetsByDatasetIdTestCasesError = PostApiV1EvalDatasetsByDatasetIdTestCasesErrors[keyof PostApiV1EvalDatasetsByDatasetIdTestCasesErrors];
+
+export type PostApiV1EvalDatasetsByDatasetIdTestCasesResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data?: {
+            id: string;
+            input: string;
+            expected?: string;
+            category?: string;
+            choices?: Array<string>;
+            environment?: {
+                envPrompt?: string;
+                toolForwarding?: {
+                    [key: string]: {
+                        endpoint: string;
+                        timeoutMs?: number;
+                    };
+                };
+            };
+            messages?: Array<{
+                content: string;
+                role: 'user' | 'assistant' | 'system' | 'tool';
+                id?: string;
+                parentId?: string | null;
+                model?: string;
+                provider?: string;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                tools?: Array<{
+                    [key: string]: unknown;
+                }>;
+                tool_call_id?: string;
+                metadata?: {
+                    [key: string]: unknown;
+                };
+                reasoning?: {
+                    [key: string]: unknown;
+                };
+                plugin?: {
+                    [key: string]: unknown;
+                };
+                pluginState?: {
+                    [key: string]: unknown;
+                };
+                pluginError?: {
+                    [key: string]: unknown;
+                };
+                pluginIntervention?: {
+                    [key: string]: unknown;
+                };
+                error?: {
+                    [key: string]: unknown;
+                };
+                search?: {
+                    [key: string]: unknown;
+                };
+            }>;
+            caseId?: string;
+            sortOrder: number | null;
+            evalMode?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external' | null;
+            evalConfig?: {
+                [key: string]: unknown;
+            } | null;
+            createdAt: string;
+            updatedAt: string;
+            datasetId: string;
+            content: {
+                [key: string]: unknown;
+            };
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1EvalDatasetsByDatasetIdTestCasesResponse = PostApiV1EvalDatasetsByDatasetIdTestCasesResponses[keyof PostApiV1EvalDatasetsByDatasetIdTestCasesResponses];
+
+export type DeleteApiV1EvalTestCasesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/test-cases/{id}';
+};
+
+export type DeleteApiV1EvalTestCasesByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1EvalTestCasesByIdError = DeleteApiV1EvalTestCasesByIdErrors[keyof DeleteApiV1EvalTestCasesByIdErrors];
+
+export type DeleteApiV1EvalTestCasesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1EvalTestCasesByIdResponse = DeleteApiV1EvalTestCasesByIdResponses[keyof DeleteApiV1EvalTestCasesByIdResponses];
+
+export type GetApiV1EvalTestCasesByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/test-cases/{id}';
+};
+
+export type GetApiV1EvalTestCasesByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1EvalTestCasesByIdError = GetApiV1EvalTestCasesByIdErrors[keyof GetApiV1EvalTestCasesByIdErrors];
+
+export type GetApiV1EvalTestCasesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+            input: string;
+            expected?: string;
+            category?: string;
+            choices?: Array<string>;
+            environment?: {
+                envPrompt?: string;
+                toolForwarding?: {
+                    [key: string]: {
+                        endpoint: string;
+                        timeoutMs?: number;
+                    };
+                };
+            };
+            messages?: Array<{
+                content: string;
+                role: 'user' | 'assistant' | 'system' | 'tool';
+                id?: string;
+                parentId?: string | null;
+                model?: string;
+                provider?: string;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                tools?: Array<{
+                    [key: string]: unknown;
+                }>;
+                tool_call_id?: string;
+                metadata?: {
+                    [key: string]: unknown;
+                };
+                reasoning?: {
+                    [key: string]: unknown;
+                };
+                plugin?: {
+                    [key: string]: unknown;
+                };
+                pluginState?: {
+                    [key: string]: unknown;
+                };
+                pluginError?: {
+                    [key: string]: unknown;
+                };
+                pluginIntervention?: {
+                    [key: string]: unknown;
+                };
+                error?: {
+                    [key: string]: unknown;
+                };
+                search?: {
+                    [key: string]: unknown;
+                };
+            }>;
+            caseId?: string;
+            sortOrder: number | null;
+            evalMode?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external' | null;
+            evalConfig?: {
+                [key: string]: unknown;
+            } | null;
+            createdAt: string;
+            updatedAt: string;
+            datasetId: string;
+            content: {
+                [key: string]: unknown;
+            };
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1EvalTestCasesByIdResponse = GetApiV1EvalTestCasesByIdResponses[keyof GetApiV1EvalTestCasesByIdResponses];
+
+export type PatchApiV1EvalTestCasesByIdData = {
+    body: {
+        input?: string;
+        expected?: string;
+        category?: string;
+        choices?: Array<string>;
+        environment?: {
+            envPrompt?: string;
+            toolForwarding?: {
+                [key: string]: {
+                    endpoint: string;
+                    timeoutMs?: number;
+                };
+            };
+        };
+        messages?: Array<{
+            content: string;
+            role: 'user' | 'assistant' | 'system' | 'tool';
+            id?: string;
+            parentId?: string | null;
+            model?: string;
+            provider?: string;
+            createdAt?: string | number;
+            updatedAt?: string | number;
+            tools?: Array<{
+                [key: string]: unknown;
+            }>;
+            tool_call_id?: string;
+            metadata?: {
+                [key: string]: unknown;
+            };
+            reasoning?: {
+                [key: string]: unknown;
+            };
+            plugin?: {
+                [key: string]: unknown;
+            };
+            pluginState?: {
+                [key: string]: unknown;
+            };
+            pluginError?: {
+                [key: string]: unknown;
+            };
+            pluginIntervention?: {
+                [key: string]: unknown;
+            };
+            error?: {
+                [key: string]: unknown;
+            };
+            search?: {
+                [key: string]: unknown;
+            };
+        }>;
+        caseId?: string;
+        sortOrder?: number;
+        evalMode?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external' | null;
+        evalConfig?: {
+            [key: string]: unknown;
+        } | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/test-cases/{id}';
+};
+
+export type PatchApiV1EvalTestCasesByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1EvalTestCasesByIdError = PatchApiV1EvalTestCasesByIdErrors[keyof PatchApiV1EvalTestCasesByIdErrors];
+
+export type PatchApiV1EvalTestCasesByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+            input: string;
+            expected?: string;
+            category?: string;
+            choices?: Array<string>;
+            environment?: {
+                envPrompt?: string;
+                toolForwarding?: {
+                    [key: string]: {
+                        endpoint: string;
+                        timeoutMs?: number;
+                    };
+                };
+            };
+            messages?: Array<{
+                content: string;
+                role: 'user' | 'assistant' | 'system' | 'tool';
+                id?: string;
+                parentId?: string | null;
+                model?: string;
+                provider?: string;
+                createdAt?: string | number;
+                updatedAt?: string | number;
+                tools?: Array<{
+                    [key: string]: unknown;
+                }>;
+                tool_call_id?: string;
+                metadata?: {
+                    [key: string]: unknown;
+                };
+                reasoning?: {
+                    [key: string]: unknown;
+                };
+                plugin?: {
+                    [key: string]: unknown;
+                };
+                pluginState?: {
+                    [key: string]: unknown;
+                };
+                pluginError?: {
+                    [key: string]: unknown;
+                };
+                pluginIntervention?: {
+                    [key: string]: unknown;
+                };
+                error?: {
+                    [key: string]: unknown;
+                };
+                search?: {
+                    [key: string]: unknown;
+                };
+            }>;
+            caseId?: string;
+            sortOrder: number | null;
+            evalMode?: 'equals' | 'contains' | 'regex' | 'starts-with' | 'ends-with' | 'any-of' | 'numeric' | 'extract-match' | 'json-schema' | 'javascript' | 'python' | 'llm-rubric' | 'factuality' | 'answer-relevance' | 'similar' | 'levenshtein' | 'rubric' | 'external' | null;
+            evalConfig?: {
+                [key: string]: unknown;
+            } | null;
+            createdAt: string;
+            updatedAt: string;
+            datasetId: string;
+            content: {
+                [key: string]: unknown;
+            };
+            metadata: {
+                [key: string]: unknown;
+            } | null;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1EvalTestCasesByIdResponse = PatchApiV1EvalTestCasesByIdResponses[keyof PatchApiV1EvalTestCasesByIdResponses];
+
+export type PostApiV1EvalRunsByIdClaimData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/runs/{id}/claim';
+};
+
+export type PostApiV1EvalRunsByIdClaimErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1EvalRunsByIdClaimError = PostApiV1EvalRunsByIdClaimErrors[keyof PostApiV1EvalRunsByIdClaimErrors];
+
+export type PostApiV1EvalRunsByIdClaimResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+            createdAt: string;
+            updatedAt: string;
+            config: {
+                [key: string]: unknown;
+            };
+            executionMode: 'internal' | 'external';
+            datasetId: string;
+            experimentId: string | null;
+            parentRunId: string | null;
+            status: 'idle' | 'pending' | 'running' | 'external' | 'completed' | 'failed' | 'aborted';
+            targetAgentId: string | null;
+            name: string | null;
+            metrics: {
+                [key: string]: unknown;
+            } | null;
+            startedAt: string | null;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1EvalRunsByIdClaimResponse = PostApiV1EvalRunsByIdClaimResponses[keyof PostApiV1EvalRunsByIdClaimResponses];
+
+export type PatchApiV1EvalRunsByIdStatusData = {
+    body: {
+        status: 'running' | 'external' | 'completed' | 'failed' | 'aborted';
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/runs/{id}/status';
+};
+
+export type PatchApiV1EvalRunsByIdStatusErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1EvalRunsByIdStatusError = PatchApiV1EvalRunsByIdStatusErrors[keyof PatchApiV1EvalRunsByIdStatusErrors];
+
+export type PatchApiV1EvalRunsByIdStatusResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            id: string;
+            createdAt: string;
+            updatedAt: string;
+            config: {
+                [key: string]: unknown;
+            };
+            executionMode: 'internal' | 'external';
+            datasetId: string;
+            experimentId: string | null;
+            parentRunId: string | null;
+            status: 'idle' | 'pending' | 'running' | 'external' | 'completed' | 'failed' | 'aborted';
+            targetAgentId: string | null;
+            name: string | null;
+            metrics: {
+                [key: string]: unknown;
+            } | null;
+            startedAt: string | null;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1EvalRunsByIdStatusResponse = PatchApiV1EvalRunsByIdStatusResponses[keyof PatchApiV1EvalRunsByIdStatusResponses];
+
+export type PostApiV1EvalRunsByIdRetryErrorsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/runs/{id}/retry-errors';
+};
+
+export type PostApiV1EvalRunsByIdRetryErrorsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1EvalRunsByIdRetryErrorsError = PostApiV1EvalRunsByIdRetryErrorsErrors[keyof PostApiV1EvalRunsByIdRetryErrorsErrors];
+
+export type PostApiV1EvalRunsByIdRetryErrorsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            runId: string;
+            retryCount: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1EvalRunsByIdRetryErrorsResponse = PostApiV1EvalRunsByIdRetryErrorsResponses[keyof PostApiV1EvalRunsByIdRetryErrorsResponses];
+
+export type PutApiV1EvalRunsByRunIdTopicsByTopicIdResultData = {
+    body: {
+        testCaseId?: string;
+        correct: boolean;
+        score: number;
+        result?: {
+            [key: string]: unknown;
+        };
+        threadId?: string;
+    };
+    path: {
+        runId: string;
+        topicId: string;
+    };
+    query?: never;
+    url: '/api/v1/eval/runs/{runId}/topics/{topicId}/result';
+};
+
+export type PutApiV1EvalRunsByRunIdTopicsByTopicIdResultErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1EvalRunsByRunIdTopicsByTopicIdResultError = PutApiV1EvalRunsByRunIdTopicsByTopicIdResultErrors[keyof PutApiV1EvalRunsByRunIdTopicsByTopicIdResultErrors];
+
+export type PutApiV1EvalRunsByRunIdTopicsByTopicIdResultResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            idempotent: boolean;
+            reportedThreads: number;
+            runId: string;
+            runStatus?: string;
+            success: boolean;
+            threadId?: string;
+            topicFinalized: boolean;
+            topicId: string;
+            totalThreads: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1EvalRunsByRunIdTopicsByTopicIdResultResponse = PutApiV1EvalRunsByRunIdTopicsByTopicIdResultResponses[keyof PutApiV1EvalRunsByRunIdTopicsByTopicIdResultResponses];
+
+export type GetApiV1PluginsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        limit?: number;
+        offset?: number;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/plugins';
+};
+
+export type GetApiV1PluginsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1PluginsError = GetApiV1PluginsErrors[keyof GetApiV1PluginsErrors];
+
+export type GetApiV1PluginsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            plugins: Array<{
+                identifier?: string;
+                type?: string;
+                createdAt?: string;
+                updatedAt?: string;
+            }>;
+            total: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1PluginsResponse = GetApiV1PluginsResponses[keyof GetApiV1PluginsResponses];
 
 export type GetApiV1FilesData = {
     body?: never;
@@ -1809,9 +4970,13 @@ export type GetApiV1FilesData = {
 
 export type GetApiV1FilesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1936,9 +5101,13 @@ export type DeleteApiV1FilesByIdData = {
 
 export type DeleteApiV1FilesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -1994,9 +5163,13 @@ export type GetApiV1FilesByIdData = {
 
 export type GetApiV1FilesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2057,9 +5230,13 @@ export type PatchApiV1FilesByIdData = {
 
 export type PatchApiV1FilesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2115,9 +5292,13 @@ export type GetApiV1FilesByIdUrlData = {
 
 export type GetApiV1FilesByIdUrlErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2175,9 +5356,13 @@ export type PostApiV1FilesByIdParsesData = {
 
 export type PostApiV1FilesByIdParsesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2233,9 +5418,13 @@ export type GetApiV1FilesByIdChunksData = {
 
 export type GetApiV1FilesByIdChunksErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2294,9 +5483,13 @@ export type PostApiV1FilesByIdChunksData = {
 
 export type PostApiV1FilesByIdChunksErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2429,9 +5622,13 @@ export type PostApiV1FilesQueriesData = {
 
 export type PostApiV1FilesQueriesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2487,6 +5684,907 @@ export type PostApiV1FilesQueriesResponses = {
 
 export type PostApiV1FilesQueriesResponse = PostApiV1FilesQueriesResponses[keyof PostApiV1FilesQueriesResponses];
 
+export type GetApiV1GoalsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        agentId?: string;
+        limit?: number;
+        offset?: number;
+        projectId?: string;
+        statuses?: string;
+        topicId?: string;
+    };
+    url: '/api/v1/goals';
+};
+
+export type GetApiV1GoalsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1GoalsError = GetApiV1GoalsErrors[keyof GetApiV1GoalsErrors];
+
+export type GetApiV1GoalsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1GoalsResponse = GetApiV1GoalsResponses[keyof GetApiV1GoalsResponses];
+
+export type PostApiV1GoalsData = {
+    body: {
+        agentId?: string;
+        config?: {
+            [key: string]: unknown;
+        };
+        criteria?: Array<{
+            description?: string;
+            instruction?: string;
+            title: string;
+        }>;
+        deadline?: string;
+        maxTotalCost?: number;
+        problemDescription?: string;
+        projectId?: string;
+        requirement?: string;
+        tasks?: Array<string | {
+            description?: string;
+            title: string;
+        }>;
+        title: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/goals';
+};
+
+export type PostApiV1GoalsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsError = PostApiV1GoalsErrors[keyof PostApiV1GoalsErrors];
+
+export type PostApiV1GoalsResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsResponse = PostApiV1GoalsResponses[keyof PostApiV1GoalsResponses];
+
+export type DeleteApiV1GoalsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}';
+};
+
+export type DeleteApiV1GoalsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1GoalsByIdError = DeleteApiV1GoalsByIdErrors[keyof DeleteApiV1GoalsByIdErrors];
+
+export type DeleteApiV1GoalsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1GoalsByIdResponse = DeleteApiV1GoalsByIdResponses[keyof DeleteApiV1GoalsByIdResponses];
+
+export type GetApiV1GoalsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}';
+};
+
+export type GetApiV1GoalsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1GoalsByIdError = GetApiV1GoalsByIdErrors[keyof GetApiV1GoalsByIdErrors];
+
+export type GetApiV1GoalsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1GoalsByIdResponse = GetApiV1GoalsByIdResponses[keyof GetApiV1GoalsByIdResponses];
+
+export type PatchApiV1GoalsByIdData = {
+    body: {
+        budget?: {
+            deadline?: string | null;
+            maxAttemptsPerTask?: number;
+            maxConcurrentTasks?: number | null;
+            maxExperiments?: number;
+            maxManagerTurns?: number;
+            maxRounds?: number | null;
+            maxStepsPerRun?: number | null;
+            maxTotalCost?: number | null;
+        };
+        requirement?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}';
+};
+
+export type PatchApiV1GoalsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1GoalsByIdError = PatchApiV1GoalsByIdErrors[keyof PatchApiV1GoalsByIdErrors];
+
+export type PatchApiV1GoalsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1GoalsByIdResponse = PatchApiV1GoalsByIdResponses[keyof PatchApiV1GoalsByIdResponses];
+
+export type GetApiV1GoalsByIdSupervisionData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/supervision';
+};
+
+export type GetApiV1GoalsByIdSupervisionErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1GoalsByIdSupervisionError = GetApiV1GoalsByIdSupervisionErrors[keyof GetApiV1GoalsByIdSupervisionErrors];
+
+export type GetApiV1GoalsByIdSupervisionResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1GoalsByIdSupervisionResponse = GetApiV1GoalsByIdSupervisionResponses[keyof GetApiV1GoalsByIdSupervisionResponses];
+
+export type PostApiV1GoalsByIdAdvanceData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/advance';
+};
+
+export type PostApiV1GoalsByIdAdvanceErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdAdvanceError = PostApiV1GoalsByIdAdvanceErrors[keyof PostApiV1GoalsByIdAdvanceErrors];
+
+export type PostApiV1GoalsByIdAdvanceResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdAdvanceResponse = PostApiV1GoalsByIdAdvanceResponses[keyof PostApiV1GoalsByIdAdvanceResponses];
+
+export type PostApiV1GoalsByIdPauseData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/pause';
+};
+
+export type PostApiV1GoalsByIdPauseErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdPauseError = PostApiV1GoalsByIdPauseErrors[keyof PostApiV1GoalsByIdPauseErrors];
+
+export type PostApiV1GoalsByIdPauseResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdPauseResponse = PostApiV1GoalsByIdPauseResponses[keyof PostApiV1GoalsByIdPauseResponses];
+
+export type PostApiV1GoalsByIdResumeData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/resume';
+};
+
+export type PostApiV1GoalsByIdResumeErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdResumeError = PostApiV1GoalsByIdResumeErrors[keyof PostApiV1GoalsByIdResumeErrors];
+
+export type PostApiV1GoalsByIdResumeResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdResumeResponse = PostApiV1GoalsByIdResumeResponses[keyof PostApiV1GoalsByIdResumeResponses];
+
+export type PostApiV1GoalsByIdRestartData = {
+    body: {
+        agentId?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/goals/{id}/restart';
+};
+
+export type PostApiV1GoalsByIdRestartErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1GoalsByIdRestartError = PostApiV1GoalsByIdRestartErrors[keyof PostApiV1GoalsByIdRestartErrors];
+
+export type PostApiV1GoalsByIdRestartResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1GoalsByIdRestartResponse = PostApiV1GoalsByIdRestartResponses[keyof PostApiV1GoalsByIdRestartResponses];
+
+export type PostApiV1ImMessagesData = {
+    body: {
+        agentId: string;
+        clientMessageId?: string;
+        content: string;
+        fileIds?: Array<string>;
+        groupId?: string;
+        topicId?: string | null;
+    } | {
+        agentId?: string;
+        clientMessageId?: string;
+        content: string;
+        fileIds?: Array<string>;
+        groupId: string;
+        topicId?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/im/messages';
+};
+
+export type PostApiV1ImMessagesErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ImMessagesError = PostApiV1ImMessagesErrors[keyof PostApiV1ImMessagesErrors];
+
+export type PostApiV1ImMessagesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            accepted: boolean;
+            operationId: string | null;
+            topicId: string;
+            userMessage: {
+                agentId: string | null;
+                content: string;
+                createdAt: string;
+                error: boolean;
+                files?: Array<{
+                    id: string;
+                    name: string;
+                    fileType: string;
+                    size: number;
+                    url: string;
+                }>;
+                id: string;
+                role: 'assistant' | 'user';
+            };
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1ImMessagesResponse = PostApiV1ImMessagesResponses[keyof PostApiV1ImMessagesResponses];
+
+export type GetApiV1ImTopicsByTopicIdSyncData = {
+    body?: never;
+    path: {
+        topicId: string;
+    };
+    query?: {
+        cursor?: string;
+        limit?: number;
+        state?: string;
+        waitMs?: number;
+    };
+    url: '/api/v1/im/topics/{topicId}/sync';
+};
+
+export type GetApiV1ImTopicsByTopicIdSyncErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1ImTopicsByTopicIdSyncError = GetApiV1ImTopicsByTopicIdSyncErrors[keyof GetApiV1ImTopicsByTopicIdSyncErrors];
+
+export type GetApiV1ImTopicsByTopicIdSyncResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            cursor: string;
+            messages: Array<{
+                agentId: string | null;
+                content: string;
+                createdAt: string;
+                error: boolean;
+                files?: Array<{
+                    id: string;
+                    name: string;
+                    fileType: string;
+                    size: number;
+                    url: string;
+                }>;
+                id: string;
+                role: 'assistant' | 'user';
+            }>;
+            readUpTo: {
+                messageId: string;
+                readAt: string;
+            } | null;
+            state: string;
+            typing: boolean;
+            unread: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1ImTopicsByTopicIdSyncResponse = GetApiV1ImTopicsByTopicIdSyncResponses[keyof GetApiV1ImTopicsByTopicIdSyncResponses];
+
+export type PostApiV1ImTopicsByTopicIdReadData = {
+    body: {
+        messageId: string;
+    };
+    path: {
+        topicId: string;
+    };
+    query?: never;
+    url: '/api/v1/im/topics/{topicId}/read';
+};
+
+export type PostApiV1ImTopicsByTopicIdReadErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1ImTopicsByTopicIdReadError = PostApiV1ImTopicsByTopicIdReadErrors[keyof PostApiV1ImTopicsByTopicIdReadErrors];
+
+export type PostApiV1ImTopicsByTopicIdReadResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            unread: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1ImTopicsByTopicIdReadResponse = PostApiV1ImTopicsByTopicIdReadResponses[keyof PostApiV1ImTopicsByTopicIdReadResponses];
+
 export type GetApiV1KnowledgeBasesData = {
     body?: never;
     path?: never;
@@ -2500,9 +6598,13 @@ export type GetApiV1KnowledgeBasesData = {
 
 export type GetApiV1KnowledgeBasesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2562,9 +6664,13 @@ export type PostApiV1KnowledgeBasesData = {
 
 export type PostApiV1KnowledgeBasesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2618,9 +6724,13 @@ export type DeleteApiV1KnowledgeBasesByIdData = {
 
 export type DeleteApiV1KnowledgeBasesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2676,9 +6786,13 @@ export type GetApiV1KnowledgeBasesByIdData = {
 
 export type GetApiV1KnowledgeBasesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2736,9 +6850,13 @@ export type PatchApiV1KnowledgeBasesByIdData = {
 
 export type PatchApiV1KnowledgeBasesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2797,9 +6915,13 @@ export type GetApiV1KnowledgeBasesByIdFilesData = {
 
 export type GetApiV1KnowledgeBasesByIdFilesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2857,9 +6979,13 @@ export type DeleteApiV1KnowledgeBasesByIdFilesBatchData = {
 
 export type DeleteApiV1KnowledgeBasesByIdFilesBatchErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2917,9 +7043,13 @@ export type PostApiV1KnowledgeBasesByIdFilesBatchData = {
 
 export type PostApiV1KnowledgeBasesByIdFilesBatchErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -2978,9 +7108,13 @@ export type PostApiV1KnowledgeBasesByIdFilesMoveData = {
 
 export type PostApiV1KnowledgeBasesByIdFilesMoveErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3106,9 +7240,13 @@ export type PostApiV1McpServersData = {
 
 export type PostApiV1McpServersErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3162,9 +7300,13 @@ export type DeleteApiV1McpServersByIdData = {
 
 export type DeleteApiV1McpServersByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3220,9 +7362,13 @@ export type GetApiV1McpServersByIdData = {
 
 export type GetApiV1McpServersByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3293,9 +7439,13 @@ export type PatchApiV1McpServersByIdData = {
 
 export type PatchApiV1McpServersByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3349,9 +7499,13 @@ export type PostApiV1McpServersByIdSyncData = {
 
 export type PostApiV1McpServersByIdSyncErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3398,6 +7552,299 @@ export type PostApiV1McpServersByIdSyncResponses = {
 
 export type PostApiV1McpServersByIdSyncResponse = PostApiV1McpServersByIdSyncResponses[keyof PostApiV1McpServersByIdSyncResponses];
 
+export type GetApiV1MemoriesPersonaData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories/persona';
+};
+
+export type GetApiV1MemoriesPersonaErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1MemoriesPersonaError = GetApiV1MemoriesPersonaErrors[keyof GetApiV1MemoriesPersonaErrors];
+
+export type GetApiV1MemoriesPersonaResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1MemoriesPersonaResponse = GetApiV1MemoriesPersonaResponses[keyof GetApiV1MemoriesPersonaResponses];
+
+export type GetApiV1MemoriesPersonaVersionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories/persona/versions';
+};
+
+export type GetApiV1MemoriesPersonaVersionsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1MemoriesPersonaVersionsError = GetApiV1MemoriesPersonaVersionsErrors[keyof GetApiV1MemoriesPersonaVersionsErrors];
+
+export type GetApiV1MemoriesPersonaVersionsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1MemoriesPersonaVersionsResponse = GetApiV1MemoriesPersonaVersionsResponses[keyof GetApiV1MemoriesPersonaVersionsResponses];
+
+export type DeleteApiV1MemoriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/memories';
+};
+
+export type DeleteApiV1MemoriesErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1MemoriesError = DeleteApiV1MemoriesErrors[keyof DeleteApiV1MemoriesErrors];
+
+export type DeleteApiV1MemoriesResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1MemoriesResponse = DeleteApiV1MemoriesResponses[keyof DeleteApiV1MemoriesResponses];
+
+export type DeleteApiV1MemoriesByCategoryByIdData = {
+    body?: never;
+    path: {
+        category: 'identities' | 'preferences' | 'contexts' | 'activities' | 'experiences';
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/memories/{category}/{id}';
+};
+
+export type DeleteApiV1MemoriesByCategoryByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1MemoriesByCategoryByIdError = DeleteApiV1MemoriesByCategoryByIdErrors[keyof DeleteApiV1MemoriesByCategoryByIdErrors];
+
+export type DeleteApiV1MemoriesByCategoryByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1MemoriesByCategoryByIdResponse = DeleteApiV1MemoriesByCategoryByIdResponses[keyof DeleteApiV1MemoriesByCategoryByIdResponses];
+
+export type GetApiV1MemoriesByCategoryData = {
+    body?: never;
+    path: {
+        category: 'identities' | 'preferences' | 'contexts' | 'activities' | 'experiences';
+    };
+    query?: never;
+    url: '/api/v1/memories/{category}';
+};
+
+export type GetApiV1MemoriesByCategoryErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1MemoriesByCategoryError = GetApiV1MemoriesByCategoryErrors[keyof GetApiV1MemoriesByCategoryErrors];
+
+export type GetApiV1MemoriesByCategoryResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1MemoriesByCategoryResponse = GetApiV1MemoriesByCategoryResponses[keyof GetApiV1MemoriesByCategoryResponses];
+
 export type DeleteApiV1MessageTranslationsByMessageIdData = {
     body?: never;
     path: {
@@ -3409,9 +7856,13 @@ export type DeleteApiV1MessageTranslationsByMessageIdData = {
 
 export type DeleteApiV1MessageTranslationsByMessageIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3467,9 +7918,13 @@ export type GetApiV1MessageTranslationsByMessageIdData = {
 
 export type GetApiV1MessageTranslationsByMessageIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3531,9 +7986,13 @@ export type PatchApiV1MessageTranslationsByMessageIdData = {
 
 export type PatchApiV1MessageTranslationsByMessageIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3594,9 +8053,13 @@ export type PostApiV1MessageTranslationsByMessageIdData = {
 
 export type PostApiV1MessageTranslationsByMessageIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3645,6 +8108,8 @@ export type GetApiV1MessagesCountData = {
     body?: never;
     path?: never;
     query?: {
+        topicId?: string;
+        threadId?: string;
         topicIds?: string | null;
         userId?: string | null;
     };
@@ -3653,9 +8118,13 @@ export type GetApiV1MessagesCountData = {
 
 export type GetApiV1MessagesCountErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3711,9 +8180,13 @@ export type DeleteApiV1MessagesData = {
 
 export type DeleteApiV1MessagesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3762,21 +8235,28 @@ export type GetApiV1MessagesData = {
     body?: never;
     path?: never;
     query?: {
+        threadId?: string;
         topicId?: string | null;
         userId?: string | null;
         role?: 'user' | 'system' | 'assistant' | 'tool' | null;
         keyword?: string;
-        page?: string;
-        pageSize?: string;
+        page?: number;
+        pageSize?: number;
+        limit?: number;
+        offset?: number;
     };
     url: '/api/v1/messages';
 };
 
 export type GetApiV1MessagesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3829,18 +8309,18 @@ export type PostApiV1MessagesData = {
         role: 'user' | 'system' | 'assistant' | 'tool';
         model?: string | null;
         provider?: string | null;
-        topicId?: string | null | null;
-        threadId?: string | null | null;
-        parentId?: string | null | null;
-        quotaId?: string | null | null;
-        agentId?: string | null | null;
+        topicId?: string | null;
+        threadId?: string | null;
+        parentId?: string | null;
+        quotaId?: string | null;
+        agentId?: string | null;
         clientId?: string | null;
         metadata?: unknown | null;
         reasoning?: unknown | null;
         search?: unknown | null;
         tools?: unknown | null;
-        traceId?: string | null | null;
-        observationId?: string | null | null;
+        traceId?: string | null;
+        observationId?: string | null;
         files?: Array<string> | null;
         favorite?: boolean | null;
     };
@@ -3851,9 +8331,13 @@ export type PostApiV1MessagesData = {
 
 export type PostApiV1MessagesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3907,9 +8391,13 @@ export type DeleteApiV1MessagesByIdData = {
 
 export type DeleteApiV1MessagesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -3965,9 +8453,13 @@ export type GetApiV1MessagesByIdData = {
 
 export type GetApiV1MessagesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4016,18 +8508,18 @@ export type PostApiV1MessagesRepliesData = {
         role: 'user';
         model?: string | null;
         provider?: string | null;
-        topicId?: string | null | null;
-        threadId?: string | null | null;
-        parentId?: string | null | null;
-        quotaId?: string | null | null;
-        agentId?: string | null | null;
+        topicId?: string | null;
+        threadId?: string | null;
+        parentId?: string | null;
+        quotaId?: string | null;
+        agentId?: string | null;
         clientId?: string | null;
         metadata?: unknown | null;
         reasoning?: unknown | null;
         search?: unknown | null;
         tools?: unknown | null;
-        traceId?: string | null | null;
-        observationId?: string | null | null;
+        traceId?: string | null;
+        observationId?: string | null;
         files?: Array<string> | null;
         favorite?: boolean | null;
     };
@@ -4038,9 +8530,13 @@ export type PostApiV1MessagesRepliesData = {
 
 export type PostApiV1MessagesRepliesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4092,16 +8588,20 @@ export type GetApiV1ModelsData = {
         pageSize?: string;
         enabled?: string | null;
         provider?: string | null;
-        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'stt' | null;
+        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'decision' | 'stt' | null;
     };
     url: '/api/v1/models';
 };
 
 export type GetApiV1ModelsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4170,7 +8670,7 @@ export type PostApiV1ModelsData = {
         releasedAt?: string | null;
         sort?: number | null;
         source?: 'remote' | 'custom' | 'builtin' | null;
-        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'stt' | null;
+        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'decision' | 'stt' | null;
         id: string;
         providerId: string;
     };
@@ -4181,9 +8681,13 @@ export type PostApiV1ModelsData = {
 
 export type PostApiV1ModelsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4238,9 +8742,13 @@ export type GetApiV1ModelsByProviderIdByModelIdData = {
 
 export type GetApiV1ModelsByProviderIdByModelIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4307,7 +8815,7 @@ export type PatchApiV1ModelsByProviderIdByModelIdData = {
         releasedAt?: string | null;
         sort?: number | null;
         source?: 'remote' | 'custom' | 'builtin' | null;
-        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'stt' | null;
+        type?: 'chat' | 'embedding' | 'tts' | 'asr' | 'image' | 'text2video' | 'text2music' | 'realtime' | 'decision' | 'stt' | null;
     };
     path: {
         modelId: string;
@@ -4319,9 +8827,13 @@ export type PatchApiV1ModelsByProviderIdByModelIdData = {
 
 export type PatchApiV1ModelsByProviderIdByModelIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4366,6 +8878,591 @@ export type PatchApiV1ModelsByProviderIdByModelIdResponses = {
 
 export type PatchApiV1ModelsByProviderIdByModelIdResponse = PatchApiV1ModelsByProviderIdByModelIdResponses[keyof PatchApiV1ModelsByProviderIdByModelIdResponses];
 
+export type GetApiV1NotificationsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        category?: string;
+        cursor?: string;
+        isRead?: boolean | 'true' | 'false';
+        limit?: number;
+        unreadOnly?: boolean | 'true' | 'false';
+    };
+    url: '/api/v1/notifications';
+};
+
+export type GetApiV1NotificationsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1NotificationsError = GetApiV1NotificationsErrors[keyof GetApiV1NotificationsErrors];
+
+export type GetApiV1NotificationsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1NotificationsResponse = GetApiV1NotificationsResponses[keyof GetApiV1NotificationsResponses];
+
+export type GetApiV1NotificationsSettingsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        scope?: 'personal' | 'workspace';
+    };
+    url: '/api/v1/notifications/settings';
+};
+
+export type GetApiV1NotificationsSettingsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1NotificationsSettingsError = GetApiV1NotificationsSettingsErrors[keyof GetApiV1NotificationsSettingsErrors];
+
+export type GetApiV1NotificationsSettingsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1NotificationsSettingsResponse = GetApiV1NotificationsSettingsResponses[keyof GetApiV1NotificationsSettingsResponses];
+
+export type PatchApiV1NotificationsSettingsData = {
+    body: {
+        content?: {
+            scheduledTaskSummary?: boolean;
+        };
+        email?: {
+            enabled?: boolean;
+            items?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+        };
+        im?: {
+            enabled?: boolean;
+            items?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+            platforms?: {
+                [key: string]: {
+                    enabled?: boolean;
+                    items?: {
+                        [key: string]: {
+                            [key: string]: boolean;
+                        };
+                    };
+                    tenantId?: string;
+                };
+            };
+        };
+        inbox?: {
+            enabled?: boolean;
+            items?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+        };
+        push?: {
+            enabled?: boolean;
+            items?: {
+                [key: string]: {
+                    [key: string]: boolean;
+                };
+            };
+        };
+    };
+    path?: never;
+    query?: {
+        scope?: 'personal' | 'workspace';
+    };
+    url: '/api/v1/notifications/settings';
+};
+
+export type PatchApiV1NotificationsSettingsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1NotificationsSettingsError = PatchApiV1NotificationsSettingsErrors[keyof PatchApiV1NotificationsSettingsErrors];
+
+export type PatchApiV1NotificationsSettingsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1NotificationsSettingsResponse = PatchApiV1NotificationsSettingsResponses[keyof PatchApiV1NotificationsSettingsResponses];
+
+export type GetApiV1NotificationsUnreadCountData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/unread-count';
+};
+
+export type GetApiV1NotificationsUnreadCountErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1NotificationsUnreadCountError = GetApiV1NotificationsUnreadCountErrors[keyof GetApiV1NotificationsUnreadCountErrors];
+
+export type GetApiV1NotificationsUnreadCountResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1NotificationsUnreadCountResponse = GetApiV1NotificationsUnreadCountResponses[keyof GetApiV1NotificationsUnreadCountResponses];
+
+export type GetApiV1NotificationsCountsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/counts';
+};
+
+export type GetApiV1NotificationsCountsErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1NotificationsCountsError = GetApiV1NotificationsCountsErrors[keyof GetApiV1NotificationsCountsErrors];
+
+export type GetApiV1NotificationsCountsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1NotificationsCountsResponse = GetApiV1NotificationsCountsResponses[keyof GetApiV1NotificationsCountsResponses];
+
+export type PostApiV1NotificationsReadData = {
+    body: {
+        ids: Array<string>;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/read';
+};
+
+export type PostApiV1NotificationsReadErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1NotificationsReadError = PostApiV1NotificationsReadErrors[keyof PostApiV1NotificationsReadErrors];
+
+export type PostApiV1NotificationsReadResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1NotificationsReadResponse = PostApiV1NotificationsReadResponses[keyof PostApiV1NotificationsReadResponses];
+
+export type PostApiV1NotificationsReadAllData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/read-all';
+};
+
+export type PostApiV1NotificationsReadAllErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1NotificationsReadAllError = PostApiV1NotificationsReadAllErrors[keyof PostApiV1NotificationsReadAllErrors];
+
+export type PostApiV1NotificationsReadAllResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1NotificationsReadAllResponse = PostApiV1NotificationsReadAllResponses[keyof PostApiV1NotificationsReadAllResponses];
+
+export type PostApiV1NotificationsArchiveAllData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/notifications/archive-all';
+};
+
+export type PostApiV1NotificationsArchiveAllErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1NotificationsArchiveAllError = PostApiV1NotificationsArchiveAllErrors[keyof PostApiV1NotificationsArchiveAllErrors];
+
+export type PostApiV1NotificationsArchiveAllResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1NotificationsArchiveAllResponse = PostApiV1NotificationsArchiveAllResponses[keyof PostApiV1NotificationsArchiveAllResponses];
+
+export type PostApiV1NotificationsByIdArchiveData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/notifications/{id}/archive';
+};
+
+export type PostApiV1NotificationsByIdArchiveErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1NotificationsByIdArchiveError = PostApiV1NotificationsByIdArchiveErrors[keyof PostApiV1NotificationsByIdArchiveErrors];
+
+export type PostApiV1NotificationsByIdArchiveResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1NotificationsByIdArchiveResponse = PostApiV1NotificationsByIdArchiveResponses[keyof PostApiV1NotificationsByIdArchiveResponses];
+
 export type GetApiV1PermissionsData = {
     body?: never;
     path?: never;
@@ -4381,9 +9478,13 @@ export type GetApiV1PermissionsData = {
 
 export type GetApiV1PermissionsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4445,9 +9546,13 @@ export type PostApiV1PermissionsData = {
 
 export type PostApiV1PermissionsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4501,9 +9606,13 @@ export type DeleteApiV1PermissionsByIdData = {
 
 export type DeleteApiV1PermissionsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4559,9 +9668,13 @@ export type GetApiV1PermissionsByIdData = {
 
 export type GetApiV1PermissionsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4621,9 +9734,13 @@ export type PatchApiV1PermissionsByIdData = {
 
 export type PatchApiV1PermissionsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4680,9 +9797,13 @@ export type GetApiV1ProvidersData = {
 
 export type GetApiV1ProvidersErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4757,9 +9878,13 @@ export type PostApiV1ProvidersData = {
 
 export type PostApiV1ProvidersErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4813,9 +9938,13 @@ export type DeleteApiV1ProvidersByIdData = {
 
 export type DeleteApiV1ProvidersByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4871,9 +10000,13 @@ export type GetApiV1ProvidersByIdData = {
 
 export type GetApiV1ProvidersByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4945,9 +10078,13 @@ export type PatchApiV1ProvidersByIdData = {
 
 export type PatchApiV1ProvidersByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -4989,6 +10126,136 @@ export type PatchApiV1ProvidersByIdResponses = {
 };
 
 export type PatchApiV1ProvidersByIdResponse = PatchApiV1ProvidersByIdResponses[keyof PatchApiV1ProvidersByIdResponses];
+
+export type DeleteApiV1PushTokensByDeviceIdData = {
+    body?: never;
+    path: {
+        deviceId: string;
+    };
+    query?: {
+        expoToken?: string;
+    };
+    url: '/api/v1/push-tokens/{deviceId}';
+};
+
+export type DeleteApiV1PushTokensByDeviceIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1PushTokensByDeviceIdError = DeleteApiV1PushTokensByDeviceIdErrors[keyof DeleteApiV1PushTokensByDeviceIdErrors];
+
+export type DeleteApiV1PushTokensByDeviceIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1PushTokensByDeviceIdResponse = DeleteApiV1PushTokensByDeviceIdResponses[keyof DeleteApiV1PushTokensByDeviceIdResponses];
+
+export type PutApiV1PushTokensByDeviceIdData = {
+    body: {
+        appVersion?: string;
+        expoToken: string;
+        locale?: string;
+        platform: 'ios' | 'android';
+    };
+    path: {
+        deviceId: string;
+    };
+    query?: never;
+    url: '/api/v1/push-tokens/{deviceId}';
+};
+
+export type PutApiV1PushTokensByDeviceIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PutApiV1PushTokensByDeviceIdError = PutApiV1PushTokensByDeviceIdErrors[keyof PutApiV1PushTokensByDeviceIdErrors];
+
+export type PutApiV1PushTokensByDeviceIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            deviceId: string;
+            platform: string;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PutApiV1PushTokensByDeviceIdResponse = PutApiV1PushTokensByDeviceIdResponses[keyof PutApiV1PushTokensByDeviceIdResponses];
 
 export type PostApiV1ResponsesData = {
     body: {
@@ -5042,6 +10309,7 @@ export type PostApiV1ResponsesData = {
             effort?: 'low' | 'medium' | 'high';
         } | null;
         stream?: boolean | null;
+        strict_tool_resume?: boolean;
         temperature?: number | null;
         tool_choice?: 'auto' | 'required' | 'none' | {
             name: string;
@@ -5058,6 +10326,7 @@ export type PostApiV1ResponsesData = {
         } | {
             type: string;
         }> | null;
+        tools_mode?: 'additional' | 'exclusive';
         top_p?: number | null;
         truncation?: {
             type?: 'auto' | 'disabled';
@@ -5072,9 +10341,13 @@ export type PostApiV1ResponsesData = {
 
 export type PostApiV1ResponsesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5138,9 +10411,13 @@ export type GetApiV1RolesData = {
 
 export type GetApiV1RolesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5202,9 +10479,13 @@ export type PostApiV1RolesData = {
 
 export type PostApiV1RolesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5258,9 +10539,13 @@ export type DeleteApiV1RolesByIdData = {
 
 export type DeleteApiV1RolesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5316,9 +10601,13 @@ export type GetApiV1RolesByIdData = {
 
 export type GetApiV1RolesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5378,9 +10667,13 @@ export type PatchApiV1RolesByIdData = {
 
 export type PatchApiV1RolesByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5434,9 +10727,13 @@ export type DeleteApiV1RolesByIdPermissionsData = {
 
 export type DeleteApiV1RolesByIdPermissionsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5496,9 +10793,13 @@ export type GetApiV1RolesByIdPermissionsData = {
 
 export type GetApiV1RolesByIdPermissionsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5557,9 +10858,13 @@ export type PatchApiV1RolesByIdPermissionsData = {
 
 export type PatchApiV1RolesByIdPermissionsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5604,6 +10909,747 @@ export type PatchApiV1RolesByIdPermissionsResponses = {
 
 export type PatchApiV1RolesByIdPermissionsResponse = PatchApiV1RolesByIdPermissionsResponses[keyof PatchApiV1RolesByIdPermissionsResponses];
 
+export type PostApiV1SignalsSourceEventsData = {
+    body: {
+        payload: {
+            [key: string]: unknown;
+        };
+        scopeKey?: string;
+        sourceId: string;
+        sourceType: 'client.gateway.error' | 'client.gateway.runtime_end' | 'client.gateway.step_complete' | 'client.gateway.stream_start' | 'client.runtime.complete' | 'client.runtime.start';
+        timestamp?: number;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/signals/source-events';
+};
+
+export type PostApiV1SignalsSourceEventsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1SignalsSourceEventsError = PostApiV1SignalsSourceEventsErrors[keyof PostApiV1SignalsSourceEventsErrors];
+
+export type PostApiV1SignalsSourceEventsResponses = {
+    /**
+     * Successful response
+     */
+    202: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1SignalsSourceEventsResponse = PostApiV1SignalsSourceEventsResponses[keyof PostApiV1SignalsSourceEventsResponses];
+
+export type PostApiV1SignalsTriggerData = {
+    body: {
+        agentId?: string;
+        payloadOverride?: {
+            [key: string]: unknown;
+        };
+        scopeKey?: string;
+        sourceId?: string;
+        sourceType: 'agent.nightly_review.requested' | 'agent.self_reflection.requested' | 'agent.self_feedback_intent.declared' | 'agent.user.message' | 'tool.outcome.completed' | 'tool.outcome.failed';
+        timestamp?: number;
+        topicId?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/signals/trigger';
+};
+
+export type PostApiV1SignalsTriggerErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1SignalsTriggerError = PostApiV1SignalsTriggerErrors[keyof PostApiV1SignalsTriggerErrors];
+
+export type PostApiV1SignalsTriggerResponses = {
+    /**
+     * Successful response
+     */
+    202: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1SignalsTriggerResponse = PostApiV1SignalsTriggerResponses[keyof PostApiV1SignalsTriggerResponses];
+
+export type GetApiV1SignalsReceiptsData = {
+    body?: never;
+    path?: never;
+    query: {
+        agentId: string;
+        cursor?: number;
+        limit?: number;
+        sinceCreatedAt?: number;
+        topicId: string;
+    };
+    url: '/api/v1/signals/receipts';
+};
+
+export type GetApiV1SignalsReceiptsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1SignalsReceiptsError = GetApiV1SignalsReceiptsErrors[keyof GetApiV1SignalsReceiptsErrors];
+
+export type GetApiV1SignalsReceiptsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1SignalsReceiptsResponse = GetApiV1SignalsReceiptsResponses[keyof GetApiV1SignalsReceiptsResponses];
+
+export type GetApiV1TasksData = {
+    body?: never;
+    path?: never;
+    query?: {
+        assigneeAgentId?: string;
+        limit?: number;
+        offset?: number;
+        projectId?: string;
+        statuses?: string;
+    };
+    url: '/api/v1/tasks';
+};
+
+export type GetApiV1TasksErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksError = GetApiV1TasksErrors[keyof GetApiV1TasksErrors];
+
+export type GetApiV1TasksResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksResponse = GetApiV1TasksResponses[keyof GetApiV1TasksResponses];
+
+export type PostApiV1TasksData = {
+    body: {
+        assigneeAgentId?: string;
+        assigneeUserId?: string;
+        automationMode?: 'heartbeat' | 'schedule';
+        config?: {
+            [key: string]: unknown;
+        };
+        createdByAgentId?: string;
+        description?: string;
+        instruction: string;
+        name?: string;
+        parentTaskId?: string;
+        priority?: number;
+        projectId?: string;
+        schedulePattern?: string;
+        scheduleTimezone?: string;
+        visibility?: 'private' | 'public';
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/tasks';
+};
+
+export type PostApiV1TasksErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksError = PostApiV1TasksErrors[keyof PostApiV1TasksErrors];
+
+export type PostApiV1TasksResponses = {
+    /**
+     * Successful response
+     */
+    201: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksResponse = PostApiV1TasksResponses[keyof PostApiV1TasksResponses];
+
+export type DeleteApiV1TasksByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}';
+};
+
+export type DeleteApiV1TasksByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type DeleteApiV1TasksByIdError = DeleteApiV1TasksByIdErrors[keyof DeleteApiV1TasksByIdErrors];
+
+export type DeleteApiV1TasksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type DeleteApiV1TasksByIdResponse = DeleteApiV1TasksByIdResponses[keyof DeleteApiV1TasksByIdResponses];
+
+export type GetApiV1TasksByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}';
+};
+
+export type GetApiV1TasksByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdError = GetApiV1TasksByIdErrors[keyof GetApiV1TasksByIdErrors];
+
+export type GetApiV1TasksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdResponse = GetApiV1TasksByIdResponses[keyof GetApiV1TasksByIdResponses];
+
+export type PatchApiV1TasksByIdData = {
+    body: {
+        assigneeAgentId?: string | null;
+        assigneeUserId?: string | null;
+        automationMode?: 'heartbeat' | 'schedule' | null;
+        config?: {
+            [key: string]: unknown;
+        };
+        description?: string | null;
+        heartbeatInterval?: number;
+        instruction?: string;
+        name?: string;
+        parentTaskId?: string | null;
+        priority?: number;
+        schedulePattern?: string | null;
+        scheduleTimezone?: string | null;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}';
+};
+
+export type PatchApiV1TasksByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1TasksByIdError = PatchApiV1TasksByIdErrors[keyof PatchApiV1TasksByIdErrors];
+
+export type PatchApiV1TasksByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1TasksByIdResponse = PatchApiV1TasksByIdResponses[keyof PatchApiV1TasksByIdResponses];
+
+export type PatchApiV1TasksByIdStatusData = {
+    body: {
+        error?: string;
+        status: 'backlog' | 'running' | 'scheduled' | 'paused' | 'completed' | 'failed' | 'canceled';
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/status';
+};
+
+export type PatchApiV1TasksByIdStatusErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PatchApiV1TasksByIdStatusError = PatchApiV1TasksByIdStatusErrors[keyof PatchApiV1TasksByIdStatusErrors];
+
+export type PatchApiV1TasksByIdStatusResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PatchApiV1TasksByIdStatusResponse = PatchApiV1TasksByIdStatusResponses[keyof PatchApiV1TasksByIdStatusResponses];
+
+export type GetApiV1TasksByIdRunsData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: {
+        limit?: number;
+    };
+    url: '/api/v1/tasks/{id}/runs';
+};
+
+export type GetApiV1TasksByIdRunsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TasksByIdRunsError = GetApiV1TasksByIdRunsErrors[keyof GetApiV1TasksByIdRunsErrors];
+
+export type GetApiV1TasksByIdRunsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TasksByIdRunsResponse = GetApiV1TasksByIdRunsResponses[keyof GetApiV1TasksByIdRunsResponses];
+
+export type PostApiV1TasksByIdRunsData = {
+    body: {
+        prompt?: string;
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/tasks/{id}/runs';
+};
+
+export type PostApiV1TasksByIdRunsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1TasksByIdRunsError = PostApiV1TasksByIdRunsErrors[keyof PostApiV1TasksByIdRunsErrors];
+
+export type PostApiV1TasksByIdRunsResponses = {
+    /**
+     * Successful response
+     */
+    202: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1TasksByIdRunsResponse = PostApiV1TasksByIdRunsResponses[keyof PostApiV1TasksByIdRunsResponses];
+
 export type GetApiV1TopicsData = {
     body?: never;
     path?: never;
@@ -5622,9 +11668,13 @@ export type GetApiV1TopicsData = {
 
 export type GetApiV1TopicsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5686,9 +11736,13 @@ export type PostApiV1TopicsData = {
 
 export type PostApiV1TopicsErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5742,9 +11796,13 @@ export type DeleteApiV1TopicsByIdData = {
 
 export type DeleteApiV1TopicsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5800,9 +11858,13 @@ export type GetApiV1TopicsByIdData = {
 
 export type GetApiV1TopicsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5866,9 +11928,13 @@ export type PatchApiV1TopicsByIdData = {
 
 export type PatchApiV1TopicsByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -5910,6 +11976,83 @@ export type PatchApiV1TopicsByIdResponses = {
 };
 
 export type PatchApiV1TopicsByIdResponse = PatchApiV1TopicsByIdResponses[keyof PatchApiV1TopicsByIdResponses];
+
+export type GetApiV1TopicsByTopicIdThreadsData = {
+    body?: never;
+    path: {
+        topicId: string;
+    };
+    query?: {
+        limit?: number;
+        offset?: number;
+        page?: number;
+        pageSize?: number;
+    };
+    url: '/api/v1/topics/{topicId}/threads';
+};
+
+export type GetApiV1TopicsByTopicIdThreadsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1TopicsByTopicIdThreadsError = GetApiV1TopicsByTopicIdThreadsErrors[keyof GetApiV1TopicsByTopicIdThreadsErrors];
+
+export type GetApiV1TopicsByTopicIdThreadsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: {
+            threads: Array<{
+                id?: string;
+                topicId?: string;
+                title?: string | null;
+                type?: string;
+                status?: string | null;
+                parentThreadId?: string | null;
+                createdAt?: string;
+                updatedAt?: string;
+            }>;
+            total: number;
+        };
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1TopicsByTopicIdThreadsResponse = GetApiV1TopicsByTopicIdThreadsResponses[keyof GetApiV1TopicsByTopicIdThreadsResponses];
 
 export type GetApiV1UsersMeData = {
     body?: never;
@@ -5980,9 +12123,13 @@ export type GetApiV1UsersData = {
 
 export type GetApiV1UsersErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -6048,9 +12195,13 @@ export type PostApiV1UsersData = {
 
 export type PostApiV1UsersErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -6104,9 +12255,13 @@ export type DeleteApiV1UsersByIdData = {
 
 export type DeleteApiV1UsersByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -6162,9 +12317,13 @@ export type GetApiV1UsersByIdData = {
 
 export type GetApiV1UsersByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -6229,9 +12388,13 @@ export type PatchApiV1UsersByIdData = {
 
 export type PatchApiV1UsersByIdErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -6285,9 +12448,13 @@ export type DeleteApiV1UsersByIdRolesData = {
 
 export type DeleteApiV1UsersByIdRolesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -6343,9 +12510,13 @@ export type GetApiV1UsersByIdRolesData = {
 
 export type GetApiV1UsersByIdRolesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */
@@ -6407,9 +12578,13 @@ export type PatchApiV1UsersByIdRolesData = {
 
 export type PatchApiV1UsersByIdRolesErrors = {
     /**
-     * Invalid request
+     * Validation Error
      */
-    400: ApiError;
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
     /**
      * Authentication required
      */

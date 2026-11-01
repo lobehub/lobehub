@@ -2,6 +2,8 @@ import type { MessageMetadata } from '@lobechat/types';
 import { getTableColumns, type SQL, sql } from 'drizzle-orm';
 import type { PgColumn, PgTable } from 'drizzle-orm/pg-core';
 
+import { MAX_TOOL_IDENTIFIER_LENGTH } from '@/utils/clampToolIdentifier';
+
 import {
   messageChunks,
   messageGroups,
@@ -108,9 +110,9 @@ const seedIdMapTable = async (
 };
 
 /**
- * Deterministic per-message remap for tool-call ids: the same expression is
- * used for `messages.tools[].id` and `message_plugins.tool_call_id`, so a
- * message and its plugin rows stay linked without materializing a map.
+ * Deterministic per-assistant remap for tool-call ids. Both a call and its
+ * separate result row use the copied assistant id, so their identities agree
+ * without materializing tool payloads outside the database.
  */
 const remappedToolId = (newMessageIdExpr: SQL, sourceToolIdExpr: SQL) =>
   sql`'toolu_' || substr(md5(${newMessageIdExpr} || ${sourceToolIdExpr}), 1, 24)`;
@@ -127,6 +129,18 @@ const buildCopyColumns = (table: PgTable, overrides: Record<string, SQL | undefi
   return { exprs: sql.join(exprs, sql`, `), names: sql.join(names, sql`, `) };
 };
 
+/**
+ * Copies an authorized message graph and its dependent rows inside a transaction.
+ *
+ * Use when:
+ * - Creating an independent topic from selected historical messages.
+ *
+ * Expects:
+ * - An open transaction and explicit, authorized source-to-target identity maps.
+ *
+ * Returns:
+ * - Copied rows with remapped graph and tool references; source rows remain unchanged.
+ */
 export const copyMessagesInDatabase = async ({
   agentIdExpr,
   agentIdPairs,
@@ -191,6 +205,12 @@ export const copyMessagesInDatabase = async ({
         case
           when jsonb_typeof(_tool.elem) = 'object' and jsonb_typeof(_tool.elem -> 'id') = 'string'
             then jsonb_set(_tool.elem, '{id}', to_jsonb(${remappedToolId(newMessageId, sql`(_tool.elem ->> 'id')`)}))
+              || case when _tool.elem ? 'result_msg_id'
+                then jsonb_build_object('result_msg_id', (
+                  select _result.new_id from _copy_msg_id_map _result
+                  where _result.source_id = _tool.elem ->> 'result_msg_id'
+                ))
+                else '{}'::jsonb end
           else _tool.elem
         end
         order by _tool.ord)
@@ -272,10 +292,24 @@ export const copyMessagesInDatabase = async ({
   };
 
   await copyChildRows(messagePlugins, messagePlugins.id, {
+    apiName: sql`left(${messagePlugins.apiName}, ${MAX_TOOL_IDENTIFIER_LENGTH})`,
     id: newMessageId,
+    identifier: sql`left(${messagePlugins.identifier}, ${MAX_TOOL_IDENTIFIER_LENGTH})`,
     toolCallId: sql`case
       when ${messagePlugins.toolCallId} is null then null
-      else ${remappedToolId(newMessageId, sql`${messagePlugins.toolCallId}`)}
+      else ${remappedToolId(
+        // A separate result borrows its parent's seed only when that parent owns the call.
+        // Legacy same-row calls/plugins retain their own seed, regardless of parent role.
+        sql`coalesce((
+          select _assistant.new_id from ${messages} _result
+          join _copy_msg_id_map _assistant on _assistant.source_id = _result.parent_id
+          join ${messages} _owner on _owner.id = _assistant.source_id
+          where _result.id = ${messagePlugins.id} and _result.role = 'tool'
+            and _owner.tools @> jsonb_build_array(jsonb_build_object('id', ${messagePlugins.toolCallId}))
+            and not coalesce(_result.tools @> jsonb_build_array(jsonb_build_object('id', ${messagePlugins.toolCallId})), false)
+        ), ${newMessageId})`,
+        sql`${messagePlugins.toolCallId}`,
+      )}
     end`,
   });
 

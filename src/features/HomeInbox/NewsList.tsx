@@ -1,20 +1,29 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Avatar, Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BriefCardArtifacts from '@/features/DailyBrief/BriefCardArtifacts';
 import BriefIcon from '@/features/DailyBrief/BriefIcon';
+import BriefPriorityIcon from '@/features/DailyBrief/BriefPriorityIcon';
+import SelfReviewBriefDetails from '@/features/DailyBrief/SelfReviewBriefDetails';
 import { type BriefItem } from '@/features/DailyBrief/types';
+import { useSelfReviewBriefView } from '@/features/DailyBrief/useSelfReviewBriefView';
 import { homeType } from '@/features/Home/components/homeType';
 import Time from '@/features/Home/components/Time';
 import { useBriefStore } from '@/store/brief';
 
+import NewsChatActions from './NewsChatActions';
+
+const Markdown = lazy(() => import('@lobehub/ui/es/Markdown/index'));
+
 const AVATAR_SIZE = 20;
+/** The leading priority glyph (BriefPriorityIcon's default size). */
+const PRIORITY_SIZE = 14;
 const ROW_GAP = 10;
+/** How far the headline sits from the row's inline start: priority glyph, avatar, two gaps. */
+const HEADLINE_INSET = PRIORITY_SIZE + AVATAR_SIZE + ROW_GAP * 2;
 const ROW_PADDING_INLINE = 14;
 
 const BARE_PADDING_INLINE = 8;
@@ -22,10 +31,10 @@ const BARE_PADDING_INLINE = 8;
 const RAIL_COLLAPSED_COUNT = 6;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  // Line the content up under the headline, past the leading avatar.
+  // Line the content up under the headline, past the leading priority glyph and avatar.
   bareBody: css`
     padding-block-end: 8px;
-    padding-inline: ${BARE_PADDING_INLINE + AVATAR_SIZE + ROW_GAP}px ${BARE_PADDING_INLINE}px;
+    padding-inline: ${BARE_PADDING_INLINE + HEADLINE_INSET}px ${BARE_PADDING_INLINE}px;
   `,
   // Inside a rail card the shell is already drawn; only the hover bleed remains.
   bareList: css`
@@ -38,7 +47,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   body: css`
     padding-block-end: 12px;
-    padding-inline: ${ROW_PADDING_INLINE + AVATAR_SIZE + ROW_GAP}px ${ROW_PADDING_INLINE}px;
+    padding-inline: ${ROW_PADDING_INLINE + HEADLINE_INSET}px ${ROW_PADDING_INLINE}px;
   `,
   list: css`
     overflow: hidden;
@@ -73,6 +82,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface NewsItemProps {
   bare?: boolean;
   brief: BriefItem;
+  showTime: boolean;
 }
 
 /**
@@ -80,8 +90,10 @@ interface NewsItemProps {
  * it leads the row; opening it reads it (there is nothing to decide) and drops
  * the finding's detail inline.
  */
-const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
+const NewsItem = memo<NewsItemProps>(({ bare, brief, showTime }) => {
   const markBriefRead = useBriefStore((s) => s.markBriefRead);
+  // Nightly self-review ideas list themselves from metadata, like proposals do.
+  const selfReview = useSelfReviewBriefView(brief.metadata);
 
   const [expanded, setExpanded] = useState(false);
   const [localRead, setLocalRead] = useState(false);
@@ -100,10 +112,20 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
     });
   }, [brief.id, markBriefRead, read]);
 
+  // Only a run-owned brief (it names both an agent and a topic) has a thread to
+  // go back to: "View chat" reopens the conversation the agent worked in, and
+  // "Continue chat" opens the same thread with the reply composer hot. A brief
+  // without a topic stays a pure information row.
+  const agentId = brief.agentId ?? brief.agent?.id;
+  const topicId = brief.topicId;
+  const hasTopicChat = Boolean(agentId && topicId);
+
   return (
     <Flexbox className={bare ? undefined : styles.section}>
       <Button className={cx(styles.row, bare && styles.bareRow)} type={'text'} onClick={toggle}>
         <Flexbox horizontal align={'center'} gap={ROW_GAP} style={{ width: '100%' }}>
+          {/* Priority leads the row, so a scan down the list reads levels first. */}
+          <BriefPriorityIcon muted={read} priority={brief.priority} />
           {brief.agent?.avatar ? (
             <Avatar
               avatar={brief.agent.avatar}
@@ -128,9 +150,9 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
               minWidth: 0,
             }}
           >
-            {brief.title}
+            {selfReview?.title ?? brief.title}
           </Text>
-          <Time date={brief.createdAt} />
+          {showTime && <Time date={brief.createdAt} />}
           <Icon
             color={cssVar.colorTextQuaternary}
             icon={expanded ? ChevronDownIcon : ChevronRightIcon}
@@ -139,14 +161,28 @@ const NewsItem = memo<NewsItemProps>(({ bare, brief }) => {
         </Flexbox>
       </Button>
 
-      {expanded && (brief.summary || brief.artifacts) && (
+      {expanded && (brief.summary || brief.artifacts || hasTopicChat) && (
         <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
-          {brief.summary && (
-            <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
-              {brief.summary}
-            </Markdown>
+          {selfReview ? (
+            <SelfReviewBriefDetails content={selfReview.content} details={selfReview.details} />
+          ) : (
+            brief.summary && (
+              <Suspense fallback={null}>
+                <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
+                  {brief.summary}
+                </Markdown>
+              </Suspense>
+            )
           )}
-          <BriefCardArtifacts artifacts={brief.artifacts} />
+          <BriefCardArtifacts agentId={agentId} artifacts={brief.artifacts} />
+          {agentId && topicId && (
+            <NewsChatActions
+              agentId={agentId}
+              taskId={brief.taskId}
+              title={brief.taskName ?? brief.title}
+              topicId={topicId}
+            />
+          )}
         </Flexbox>
       )}
     </Flexbox>
@@ -157,6 +193,8 @@ interface NewsListProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
   news: BriefItem[];
+  /** Relative time is useful within today's feed, but redundant under a dated historical heading. */
+  showTime: boolean;
 }
 
 /**
@@ -164,7 +202,7 @@ interface NewsListProps {
  * recurring run, but there is nothing to decide. One line each — the detail
  * lives behind the click, so a week of findings still fits on screen.
  */
-const NewsList = memo<NewsListProps>(({ bare, news }) => {
+const NewsList = memo<NewsListProps>(({ bare, news, showTime }) => {
   const { t } = useTranslation('home');
   const [expanded, setExpanded] = useState(false);
 
@@ -178,7 +216,7 @@ const NewsList = memo<NewsListProps>(({ bare, news }) => {
   return (
     <Flexbox className={bare ? styles.bareList : styles.list}>
       {shown.map((brief) => (
-        <NewsItem bare={bare} brief={brief} key={brief.id} />
+        <NewsItem bare={bare} brief={brief} key={brief.id} showTime={showTime} />
       ))}
       {collapsed && (
         <Button

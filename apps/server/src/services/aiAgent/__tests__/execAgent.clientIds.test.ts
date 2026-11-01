@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as modelHints from '@/server/modules/AgentRuntime/adapters/serverCallLlmContextHints';
+
 import { AiAgentService } from '../index';
 
 // Use vi.hoisted to ensure mock functions are available before vi.mock runs
@@ -17,122 +19,154 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    // Resume validation reads the parent message and asserts topic ownership.
-    findById: vi.fn().mockResolvedValue({
-      id: 'msg_parent00001',
-      role: 'assistant',
-      topicId: 'topic-1',
-    }),
-    getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
-    getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      // Resume validation reads the parent message and asserts topic ownership.
+      findById: vi.fn().mockResolvedValue({
+        id: 'msg_parent00001',
+        role: 'assistant',
+        topicId: 'topic-1',
+      }),
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
+}));
+
+vi.mock('@/database/models/aiModel', () => ({
+  AiModelModel: vi.fn().mockImplementation(function () {
+    return {
+      findByIdAndProvider: vi.fn().mockResolvedValue(undefined),
+      getModelReasoningConfig: vi.fn().mockResolvedValue({ reasoningEffort: 'high' }),
+    };
+  }),
 }));
 
 // Mock AgentModel
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      files: [],
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock AgentService
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      files: [],
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+    };
+  }),
 }));
 
 // Mock PluginModel
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock TopicModel
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    create: mockTopicCreate,
-    findById: vi.fn().mockResolvedValue(undefined),
-    releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
-    tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
-    updateMetadata: vi.fn().mockResolvedValue(undefined),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      armScheduledRun: vi.fn().mockResolvedValue(undefined),
+      create: mockTopicCreate,
+      findById: vi.fn().mockResolvedValue(undefined),
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      updateMetadata: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 // Mock ThreadModel
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 // Mock ChatGroupModel — execAgent resolves the operation's group context when
 // appContext.groupId is set (SubAgent task scenario). An empty roster makes
 // buildGroupAgentContext return undefined, so the run proceeds without a group.
 vi.mock('@/database/models/chatGroup', () => ({
-  ChatGroupModel: vi.fn().mockImplementation(() => ({
-    findById: vi.fn().mockResolvedValue(undefined),
-    getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
-  })),
+  ChatGroupModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: vi.fn().mockResolvedValue(undefined),
+      getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock AgentRuntimeService
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: vi.fn().mockResolvedValue({
-      autoStarted: true,
-      messageId: 'queue-msg-1',
-      operationId: 'op-123',
-      success: true,
-    }),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: vi.fn().mockResolvedValue({
+        autoStarted: true,
+        messageId: 'queue-msg-1',
+        operationId: 'op-123',
+        success: true,
+      }),
+    };
+  }),
 }));
 
 // Mock MarketService (for getLobehubSkillManifests)
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock ComposioService (for getComposioManifests)
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock FileService
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    uploadFromUrl: vi.fn(),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
 }));
 
 // Mock Mecha modules
@@ -197,6 +231,73 @@ describe('AiAgentService.execAgent - client-minted ids', () => {
   afterEach(() => {
     mockMessageCreate.mockClear();
     mockTopicCreate.mockClear();
+  });
+
+  it.each(['scheduled', 'group'] as const)(
+    'snapshots the model and reasoning for a precreated %s topic',
+    async (kind) => {
+      const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser').mockResolvedValue({
+        modelHasReasoningExtendParams: true,
+        modelExtendParams: ['reasoningEffort'],
+      });
+
+      const runSpy = vi
+        .spyOn(service, 'execAgent')
+        .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
+      if (kind === 'scheduled') {
+        await service.scheduleAgentRun({
+          agentId: 'agent-1',
+          prompt: 'Scheduled',
+          runAt: new Date(Date.now() + 60000).toISOString(),
+        });
+      } else {
+        await service.execGroupAgent({ agentId: 'agent-1', groupId: 'group-1', message: 'Group' });
+      }
+      expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({
+        model: 'gpt-4',
+        provider: 'openai',
+        metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+      });
+      hintsSpy.mockRestore();
+      runSpy.mockRestore();
+    },
+  );
+
+  it('snapshots an explicit model override when scheduling', async () => {
+    const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser').mockResolvedValue({
+      modelHasReasoningExtendParams: true,
+      modelExtendParams: ['reasoningEffort'],
+    });
+    await service.scheduleAgentRun({
+      agentId: 'agent-1',
+      model: 'override-model',
+      provider: 'override-provider',
+      prompt: 'Scheduled',
+      runAt: new Date(Date.now() + 60000).toISOString(),
+    });
+    expect(mockTopicCreate.mock.calls[0][0]).toMatchObject({
+      model: 'override-model',
+      provider: 'override-provider',
+      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+    });
+    hintsSpy.mockRestore();
+  });
+
+  it('does not recreate or snapshot an existing group topic', async () => {
+    const runSpy = vi
+      .spyOn(service, 'execAgent')
+      .mockResolvedValue({} as Awaited<ReturnType<AiAgentService['execAgent']>>);
+    const hintsSpy = vi.spyOn(modelHints, 'resolveModelExtendParamsForUser');
+    await service.execGroupAgent({
+      agentId: 'agent-1',
+      groupId: 'group-1',
+      topicId: 'legacy-topic',
+      message: 'Continue',
+    });
+    expect(mockTopicCreate).not.toHaveBeenCalled();
+    expect(hintsSpy).not.toHaveBeenCalled();
+    hintsSpy.mockRestore();
+    runSpy.mockRestore();
   });
 
   it('should forward client-minted ids to topic and message creation on a fresh send', async () => {

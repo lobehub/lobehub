@@ -83,20 +83,19 @@ export const callConnectorToolById = async (
     // Background tool-list refresh is best-effort — never fail the tool call.
   }
 
-  // Fail fast with an actionable message instead of a cryptic spawn/fetch
-  // error: on a cloud deployment (device gateway configured) the server can
-  // never reach a stdio binary or a localhost/LAN endpoint. Those calls run on
-  // the user's device via the gateway-mode tunnel — this path is only hit when
-  // the user manually turned gateway mode off. Gated so a self-hosted server
-  // that shares a LAN with the endpoint keeps working.
-  const isDeviceOnlyEndpoint =
+  // Stdio runs on a desktop device, never in the server process. Private HTTP
+  // endpoints also require a device when a gateway is configured; self-hosted
+  // servers without a gateway can still connect to their own LAN over HTTP.
+  const requiresDevice =
     connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
-    (!!connector.mcpServerUrl && isLocalOrPrivateUrl(connector.mcpServerUrl));
-  if (deviceGateway.isConfigured && isDeviceOnlyEndpoint) {
+    (deviceGateway.isConfigured &&
+      !!connector.mcpServerUrl &&
+      isLocalOrPrivateUrl(connector.mcpServerUrl));
+  if (requiresDevice) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
       `Connector '${connector.name}' points at an MCP endpoint that only your machine can reach (stdio or local network). ` +
-        'These tools run through the agent gateway on desktop — please re-enable gateway mode in settings.',
+        'Run these tools in the desktop app through a configured device gateway.',
     );
   }
 

@@ -1,10 +1,10 @@
 'use client';
 
-import { AccordionItem, Block, Text } from '@lobehub/ui';
+import { Accordion, Block, Text } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 
 import { useChatStore } from '@/store/chat';
-import { displayMessageSelectors } from '@/store/chat/selectors';
+import { displayMessageSelectors, operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type UIChatMessage } from '@/types/index';
 import { ThreadStatus } from '@/types/index';
@@ -60,6 +60,18 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
     [threadId, threadContext],
   );
 
+  // A provider retry is several LLM calls but still one finalized assistant
+  // block, so `blocks.length` under-counts while the task is processing and then
+  // jumps when the completion snapshot arrives. Prefer the live counter the
+  // runtime publishes on this thread's operation metadata.
+  const liveLlmCalls = useChatStore((s) =>
+    threadId
+      ? operationSelectors
+          .getOperationsByContext(threadContext)(s)
+          .reduce((max, op) => Math.max(max, op.metadata.llmCalls ?? 0), 0)
+      : 0,
+  );
+
   // Fetch thread messages (skip when executing - messages come from real-time updates)
   useFetchMessages(threadContext, { skipFetch: isProcessing });
 
@@ -89,14 +101,15 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
         // invoked) rather than the in-thread first assistant's createdAt (when the
         // thread finished initializing) — the latter excludes init / approval wait.
         startTime: item.createdAt,
-        steps: blocks.length,
+        llmCalls: liveLlmCalls || blocks.length,
         toolCalls,
       };
     }
     if (isCompleted || isError) {
       return {
         duration: taskDetail?.duration,
-        steps: taskDetail?.totalSteps,
+        // `totalSteps` is the server's user-facing step metric: actual LLM calls.
+        llmCalls: taskDetail?.totalSteps,
         toolCalls: taskDetail?.totalToolCalls,
       };
     }
@@ -106,6 +119,7 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
     isCompleted,
     isError,
     blocks,
+    liveLlmCalls,
     item.createdAt,
     taskDetail?.duration,
     taskDetail?.totalSteps,
@@ -116,43 +130,49 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
   const hasBlocks = blocks && childrenCount > 0;
 
   return (
-    <AccordionItem
-      expand={expanded}
-      itemKey={id}
-      paddingBlock={4}
-      paddingInline={4}
-      title={<TaskTitle metrics={metrics} status={status} title={title} />}
-      onExpandChange={setExpanded}
-    >
-      <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
-        {instruction && (
-          <Block padding={12}>
-            <Text fontSize={13} type={'secondary'}>
-              {instruction}
-            </Text>
-          </Block>
-        )}
+    <Accordion
+      keepMounted
+      indicatorPlacement="inline"
+      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      value={expanded ? [id] : []}
+      items={[
+        {
+          children: (
+            <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
+              {instruction && (
+                <Block padding={12}>
+                  <Text fontSize={13} type={'secondary'}>
+                    {instruction}
+                  </Text>
+                </Block>
+              )}
 
-        {/* Initializing State - no taskDetail yet or no blocks */}
-        {(isInitializing || (isProcessing && !hasBlocks)) && <InitializingState />}
+              {/* Initializing State - no taskDetail yet or no blocks */}
+              {(isInitializing || (isProcessing && !hasBlocks)) && <InitializingState />}
 
-        {/* Processing or Completed State - show blocks via TaskMessages */}
-        {!isInitializing && (isProcessing || isCompleted) && hasBlocks && threadMessages && (
-          <TaskMessages
-            duration={taskDetail?.duration}
-            isProcessing={isProcessing}
-            messages={threadMessages}
-            model={model ?? undefined}
-            provider={provider ?? undefined}
-            startTime={item.createdAt}
-            totalCost={taskDetail?.totalCost}
-          />
-        )}
+              {/* Processing or Completed State - show blocks via TaskMessages */}
+              {!isInitializing && (isProcessing || isCompleted) && hasBlocks && threadMessages && (
+                <TaskMessages
+                  duration={taskDetail?.duration}
+                  isProcessing={isProcessing}
+                  messages={threadMessages}
+                  model={model ?? undefined}
+                  provider={provider ?? undefined}
+                  startTime={item.createdAt}
+                  totalCost={taskDetail?.totalCost}
+                />
+              )}
 
-        {/* Error State */}
-        {!isInitializing && isError && taskDetail && <ErrorState taskDetail={taskDetail} />}
-      </Block>
-    </AccordionItem>
+              {/* Error State */}
+              {!isInitializing && isError && taskDetail && <ErrorState taskDetail={taskDetail} />}
+            </Block>
+          ),
+          key: id,
+          title: <TaskTitle metrics={metrics} status={status} title={title} />,
+        },
+      ]}
+      onValueChange={(value) => setExpanded(value.includes(id))}
+    />
   );
 }, Object.is);
 

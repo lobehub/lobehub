@@ -8,7 +8,7 @@ import { LobeVertexAI } from './index';
 
 // Mock dependencies
 vi.mock('@google/genai', () => ({
-  GoogleGenAI: vi.fn().mockImplementation((options) => {
+  GoogleGenAI: vi.fn(function (options: { location?: string }) {
     if (options.location === 'error-location') {
       const error = new Error('Illegal argument');
       error.name = 'IllegalArgumentError';
@@ -21,10 +21,12 @@ vi.mock('@google/genai', () => ({
 }));
 
 vi.mock('../google', () => ({
-  LobeGoogleAI: vi.fn().mockImplementation(() => ({
-    chat: vi.fn(),
-    models: vi.fn(),
-  })),
+  LobeGoogleAI: vi.fn(function () {
+    return {
+      chat: vi.fn(),
+      models: vi.fn(),
+    };
+  }),
 }));
 
 describe('LobeVertexAI', () => {

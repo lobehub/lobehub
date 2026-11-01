@@ -1,6 +1,10 @@
 import debug from 'debug';
 
-import { loadAttachmentBuffer, MAX_IN_MEMORY_ATTACHMENT_BYTES } from '../loadAttachmentBuffer';
+import type { AttachmentFailure, AttachmentSendResult } from '../attachmentDelivery';
+import {
+  loadAttachmentBufferWithDetail,
+  MAX_IN_MEMORY_ATTACHMENT_BYTES,
+} from '../loadAttachmentBuffer';
 import type { BotMessageAttachment } from '../types';
 import type { TelegramApi } from './api';
 
@@ -46,14 +50,20 @@ const fallbackFilename = (att: BotMessageAttachment, index: number): string => {
 const uploadSource = async (
   att: BotMessageAttachment,
   index: number,
-): Promise<TelegramMediaSource | undefined> => {
-  const buffer = await loadAttachmentBuffer(att, {
+): Promise<{ error?: undefined; source: TelegramMediaSource } | { error: string }> => {
+  const loaded = await loadAttachmentBufferWithDetail(att, {
     limit: MAX_UPLOAD_SOURCE_BYTES,
     timeoutMs: DOWNLOAD_TIMEOUT_MS,
   });
-  if (!buffer) return undefined;
+  if (!loaded.buffer) return { error: loaded.error };
 
-  return { buffer, filename: fallbackFilename(att, index), mimeType: att.mimeType };
+  return {
+    source: {
+      buffer: loaded.buffer,
+      filename: fallbackFilename(att, index),
+      mimeType: att.mimeType,
+    },
+  };
 };
 
 /**
@@ -73,14 +83,14 @@ const uploadSource = async (
  *   is also what lets Telegram probe duration/dimensions so the message arrives
  *   with a real player rather than a bare blob.
  *
- * Returns `undefined` when no source is usable so the caller can skip the
- * item without aborting the whole batch.
+ * Reports why when no source is usable so the caller can skip the item
+ * without aborting the whole batch, and still say what went wrong.
  */
 const resolveTelegramSource = async (
   att: BotMessageAttachment,
   index: number,
-): Promise<TelegramMediaSource | undefined> => {
-  if (att.type === 'image' && att.fetchUrl) return { url: att.fetchUrl };
+): Promise<{ error?: undefined; source: TelegramMediaSource } | { error: string }> => {
+  if (att.type === 'image' && att.fetchUrl) return { source: { url: att.fetchUrl } };
   return uploadSource(att, index);
 };
 
@@ -151,33 +161,41 @@ const dispatch = async (
  * Deliver each attachment as its own typed Telegram media call. The first
  * attachment carries `caption` (acting as the text leg of the reply); the
  * rest are caption-less so the body isn't repeated. Single-item failures
- * are logged and skipped so the rest still ship.
+ * are skipped so the rest still ship, and reported back so the caller can
+ * tell the user which ones never landed.
  *
- * Returns the number of successfully delivered attachments — callers can
- * use 0 to decide whether to fall back to a plain `sendMessage` for the
- * text leg.
+ * Callers use `delivered === 0` to decide whether to fall back to a plain
+ * `sendMessage` for the text leg.
  */
 export const sendTelegramAttachments = async (
   api: TelegramApi,
   chatId: string | number,
   attachments: BotMessageAttachment[],
   caption?: string,
-): Promise<number> => {
+): Promise<AttachmentSendResult> => {
   let delivered = 0;
+  const failures: AttachmentFailure[] = [];
+  const fail = (att: BotMessageAttachment, reason: AttachmentFailure['reason'], detail?: string) =>
+    failures.push({ detail, name: att.name, reason, type: att.type });
+
   for (const [index, att] of attachments.entries()) {
-    const source = await resolveTelegramSource(att, index);
-    if (!source) {
-      log('sendTelegramAttachments: skipping attachment without resolvable source');
+    const resolved = await resolveTelegramSource(att, index);
+    if (resolved.error !== undefined) {
+      log('sendTelegramAttachments: no resolvable source for "%s": %s', att.name, resolved.error);
+      fail(att, 'source-unavailable', resolved.error);
       continue;
     }
+    const { source } = resolved;
 
     const attemptCaption = delivered === 0 ? caption : undefined;
     const method = methodFor(att);
+    let firstError: unknown;
     try {
       await dispatch(api, method, { caption: attemptCaption, chatId, source });
       delivered += 1;
       continue;
     } catch (error) {
+      firstError = error;
       log(
         'sendTelegramAttachments: %s failed for %s "%s": %O',
         method,
@@ -192,15 +210,27 @@ export const sendTelegramAttachments = async (
     // deliveries and the user got "push unavailable" with no file at all
     // (.md/.csv/.pdf, then .wav, all the same shape). `sendDocument` takes
     // arbitrary bytes, so spend one more call there before giving up.
-    if (method === 'sendDocument') continue;
-    const bytes = 'buffer' in source ? source : await uploadSource(att, index);
-    if (!bytes) continue;
+    const describe = (error: unknown) => (error instanceof Error ? error.message : String(error));
+    if (method === 'sendDocument') {
+      fail(att, 'upload-failed', `${method}: ${describe(firstError)}`);
+      continue;
+    }
+    const bytes = 'buffer' in source ? { source } : await uploadSource(att, index);
+    if (bytes.error !== undefined) {
+      fail(att, 'upload-failed', `${method}: ${describe(firstError)}; ${bytes.error}`);
+      continue;
+    }
     try {
-      await api.sendDocument({ caption: attemptCaption, chatId, source: bytes });
+      await api.sendDocument({ caption: attemptCaption, chatId, source: bytes.source });
       delivered += 1;
     } catch (error) {
       log('sendTelegramAttachments: document fallback failed for "%s": %O', att.name, error);
+      fail(
+        att,
+        'upload-failed',
+        `${method}: ${describe(firstError)}; sendDocument: ${describe(error)}`,
+      );
     }
   }
-  return delivered;
+  return { delivered, failures };
 };

@@ -6,6 +6,8 @@ import debug from 'debug';
 
 const log = debug('lobe-server:qstash');
 
+export { toQStashDeduplicationId } from './deduplicationId';
+
 const headers = {
   ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET && {
     'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,

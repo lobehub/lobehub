@@ -1,113 +1,58 @@
-import { isEqual } from 'es-toolkit';
-import { useEffect } from 'react';
 import { shallow } from 'zustand/shallow';
 
-import {
-  getActiveWorkspaceId,
-  useActiveWorkspaceId,
-} from '@/business/client/hooks/useActiveWorkspaceId';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { resourceKeys } from '@/libs/swr/keys';
-import { resourceService } from '@/services/resource';
-import type { ResourceQueryParams } from '@/types/resource';
+import { revalidateReplica } from '@/libs/replica';
+import { type ResourceQueryParams } from '@/types/resource';
 
 import { useFileStore } from '../../store';
-import { mergeServerResourcesWithOptimistic } from './utils';
+import { resourceListResource } from './projection';
 
-type ResourceSWRKey = [string, ResourceQueryParams, string | null];
-
-const isResourceSWRKey = (
-  key: unknown,
-  queryParams: ResourceQueryParams,
-  workspaceId: string | null,
-) => {
-  if (!Array.isArray(key)) return false;
-
-  return (
-    key[0] === resourceKeys.list.root && isEqual(key[1], queryParams) && key[2] === workspaceId
-  );
-};
+/** Parent identifiers for one folder: its id, its slug, or `null` for the root. */
+export type ResourceParentKey = string | null;
 
 /**
- * Revalidate resources with current or specific query params
- * This can be called from outside React components (e.g., store actions)
+ * The workspace and library a move was issued from. Captured *before* the
+ * request (`prepareResourceMoveCachePatch` on the file store): the user may
+ * switch workspace or library while it is in flight, and the rows to reconcile
+ * belong to the scope that listed them, not the newly active one.
+ */
+export interface ResourceMoveCacheScope {
+  /** Library the explorer was showing, `undefined` outside a library. */
+  libraryId: string | undefined;
+  /** Replica partition (`user:workspace`) the move was issued under. */
+  replicaScope: string;
+  workspaceId: string | null;
+}
+
+export interface ResourceMoveCachePatch {
+  /** Every key the source folder may be addressed by in `queryParams.parentId`. */
+  fromParentKeys: ResourceParentKey[];
+  scope: ResourceMoveCacheScope;
+  /** Every key the destination folder may be addressed by in `queryParams.parentId`. */
+  toParentKeys: ResourceParentKey[];
+}
+
+/**
+ * Revalidate resources with current or specific query params.
+ * This can be called from outside React components (e.g., store actions).
  */
 export const revalidateResources = async (params?: ResourceQueryParams) => {
   const queryParams = params || useFileStore.getState().queryParams;
-  const workspaceId = getActiveWorkspaceId();
-  if (queryParams) {
-    await mutate(
-      (key) => isResourceSWRKey(key, queryParams, workspaceId),
-      async (currentData) => currentData,
-      {
-        revalidate: true,
-      },
-    );
-  }
+  if (!queryParams) return;
+
+  await revalidateReplica(resourceListResource);
 };
 
 /**
- * Custom SWR hook for fetching resources with caching and revalidation
+ * Keep the explorer list in step with a move.
+ *
+ * The explorer list is a local-first replica now: `moveResource` already patches
+ * the in-memory view optimistically and revalidates the mounted query, and a
+ * later visit to either folder hydrates from its persisted head page and then
+ * confirms it over the network. This entry point stays for the sidebar tree's
+ * API-only move path, which does not go through the explorer's own action.
  */
-export const useFetchResources = (params: ResourceQueryParams | null, enable: any = true) => {
-  const workspaceId = useActiveWorkspaceId();
-
-  const swr = useClientDataSWR(
-    enable && params ? resourceKeys.list(params, workspaceId) : null,
-    async ([, queryParams]: ResourceSWRKey) => {
-      const response = await resourceService.queryResources({
-        ...queryParams,
-        limit: queryParams.limit || 50,
-        offset: 0,
-      });
-      return response;
-    },
-    {
-      // Skip background revalidation when a fresh fetch for the same key
-      // happened recently. Cache-hit display still works because the
-      // useEffect below syncs swr.data → store regardless of whether the
-      // fetcher actually ran.
-      dedupingInterval: 30 * 1000,
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true,
-    },
-  );
-
-  // Sync SWR data → store on every data ref change.
-  // Using useEffect (not onSuccess) covers the cache-hit path: when the key
-  // changes to a previously-fetched folder, SWR returns cached data synchronously
-  // without firing onSuccess. Reading the store mirror alone would surface the
-  // previously-written folder's data until revalidation completes.
-  const data = swr.data;
-  useEffect(() => {
-    if (!data || !params) return;
-
-    const { hasMore, queryParams, resourceList, resourceMap, total } = useFileStore.getState();
-    const merged = mergeServerResourcesWithOptimistic(data.items, resourceMap, params);
-
-    if (
-      !isEqual(queryParams, params) ||
-      hasMore !== data.hasMore ||
-      total !== data.total ||
-      !isEqual(merged.resourceList, resourceList) ||
-      !isEqual(merged.resourceMap, resourceMap)
-    ) {
-      useFileStore.setState(
-        {
-          hasMore: data.hasMore,
-          offset: data.items.length,
-          queryParams: params,
-          resourceList: merged.resourceList,
-          resourceMap: merged.resourceMap,
-          total: data.total,
-        },
-        false,
-        'useFetchResources/sync',
-      );
-    }
-  }, [data, params]);
-
-  return swr;
+export const applyResourceMoveToListCaches = async (): Promise<void> => {
+  await revalidateResources();
 };
 
 /**
@@ -125,3 +70,10 @@ export const useResourceStore = () => {
     shallow,
   );
 };
+
+/**
+ * Custom hook for fetching resources: hydrates the persisted head page and
+ * revalidates it. Read the rows from the store, not from this hook's return.
+ */
+export const useFetchResources = (params: ResourceQueryParams | null, enable: boolean = true) =>
+  useFileStore((s) => s.useFetchResources)(params, enable);

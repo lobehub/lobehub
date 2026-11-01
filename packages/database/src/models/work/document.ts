@@ -4,7 +4,13 @@ import { and, eq, isNull } from 'drizzle-orm';
 
 import { agentDocuments } from '../../schemas/agentDocuments';
 import { type DocumentItem, documents } from '../../schemas/file';
-import { agentDocumentOwnership, documentOwnership, type WorkContext } from './context';
+import { documentMatchesAccessScope } from '../../utils/documentVisibility';
+import {
+  agentDocumentOwnership,
+  documentOwnership,
+  resolveWorkAccessScope,
+  type WorkContext,
+} from './context';
 import { createDisplayWorkAdapter } from './displayWork';
 import { truncateSummaryText, type WorkDisplayColumns } from './internal';
 import { registerWorkVersion } from './writes';
@@ -43,7 +49,16 @@ const resolveDocument = async (
   const [doc] = await ctx.db
     .select()
     .from(documents)
-    .where(and(documentOwnership(ctx), eq(documents.id, params.documentId)))
+    .where(
+      and(
+        documentOwnership(ctx),
+        eq(documents.id, params.documentId),
+        // The backing document must sit in the SAME share boundary as the Work
+        // being registered: an ordinary registrar never picks up a visitor's
+        // share document, and a share registrar never picks up the creator's.
+        documentMatchesAccessScope(documents.metadata, resolveWorkAccessScope(ctx)),
+      ),
+    )
     .limit(1);
 
   if (!doc) return null;

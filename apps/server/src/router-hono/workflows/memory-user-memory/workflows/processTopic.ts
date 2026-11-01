@@ -20,12 +20,9 @@ import { runStep } from '@/server/workflows/step';
 import { checkGuard, ensureWorkflowStarted } from './runGuard';
 import { isHourlyMemoryExtractionCancelled } from './utils';
 
-const CEPA_LAYERS: LayersEnum[] = [
-  LayersEnum.Context,
-  LayersEnum.Experience,
-  LayersEnum.Preference,
-  LayersEnum.Activity,
-];
+// Experience extraction is retired: nothing surfaces those rows any more, and what they were
+// reaching for now belongs to skills.
+const CEPA_LAYERS: LayersEnum[] = [LayersEnum.Context, LayersEnum.Preference, LayersEnum.Activity];
 
 const IDENTITY_LAYERS: LayersEnum[] = [LayersEnum.Identity];
 const WORKFLOW_PATH = 'api/workflows/memory-user-memory/pipelines/chat-topic/process-topic';
@@ -118,11 +115,14 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
 
         const executor = await MemoryExtractionExecutor.create();
 
-        {
-          let layers = CEPA_LAYERS;
-          if (payload.layers.length) {
-            layers = payload.layers.filter((layer) => CEPA_LAYERS.includes(layer));
-          }
+        // An explicit request is narrowed to the layers this block owns. When nothing survives
+        // (e.g. a queued request naming only the retired Experience layer) the block is skipped:
+        // the executor treats an empty layer list as "extract everything", not "extract nothing".
+        const cepaLayers = payload.layers.length
+          ? payload.layers.filter((layer) => CEPA_LAYERS.includes(layer))
+          : CEPA_LAYERS;
+        if (cepaLayers.length > 0) {
+          const layers = cepaLayers;
 
           const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:cepa`;
           const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
@@ -199,34 +199,36 @@ export const processTopicHandler = async (context: WorkflowContext<MemoryExtract
             }
           }
 
-          let layers = IDENTITY_LAYERS;
-          if (payload.layers.length) {
-            layers = payload.layers.filter((layer) => IDENTITY_LAYERS.includes(layer));
-          }
+          const identityLayers = payload.layers.length
+            ? payload.layers.filter((layer) => IDENTITY_LAYERS.includes(layer))
+            : IDENTITY_LAYERS;
+          if (identityLayers.length > 0) {
+            const layers = identityLayers;
 
-          const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:identity`;
-          const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
-          if (!guard.result) {
-            span.setStatus({ code: SpanStatusCode.OK });
-            return guard.response;
-          }
+            const stepName = `memory:user-memory:extract:users:${userId}:topics:${topicId}:identity`;
+            const guard = await checkGuard(context, WORKFLOW_PATH, { stepName });
+            if (!guard.result) {
+              span.setStatus({ code: SpanStatusCode.OK });
+              return guard.response;
+            }
 
-          await runStep(context, stepName, () =>
-            executor.extractTopic({
-              asyncTaskId: payload.asyncTaskId,
-              forceAll: payload.forceAll,
-              forceTopics: payload.forceTopics,
-              from: payload.from,
-              layers,
-              reportProgress: false,
-              source: MemorySourceType.ChatTopic,
-              to: payload.to,
-              topicId,
-              userId,
-              userInitiated: payload.userInitiated,
-              workspaceId: payload.workspaceId,
-            }),
-          );
+            await runStep(context, stepName, () =>
+              executor.extractTopic({
+                asyncTaskId: payload.asyncTaskId,
+                forceAll: payload.forceAll,
+                forceTopics: payload.forceTopics,
+                from: payload.from,
+                layers,
+                reportProgress: false,
+                source: MemorySourceType.ChatTopic,
+                to: payload.to,
+                topicId,
+                userId,
+                userInitiated: payload.userInitiated,
+                workspaceId: payload.workspaceId,
+              }),
+            );
+          }
         }
 
         if (payload.asyncTaskId && payload.userInitiated) {

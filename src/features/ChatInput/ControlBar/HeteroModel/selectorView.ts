@@ -2,6 +2,7 @@ import type {
   HeterogeneousProviderConfig,
   HeterogeneousReasoningEffort,
   HeterogeneousSpeedMode,
+  HeterogeneousTopicPin,
   HeteroSelection,
   HeteroSelectorCapability,
 } from '@lobechat/types';
@@ -11,7 +12,8 @@ import {
 } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 
-import { getEffortLabelKeys, getModeLabelKey, getModelLabel, getTriggerText } from './labels';
+import type { TriggerLabel } from './labels';
+import { getEffortLabelKeys, getModeLabelKey, getModelLabel, getTriggerLabel } from './labels';
 import { getStaticModelOptions } from './modelOptions';
 
 type Translate = TFunction<'chat'>;
@@ -30,6 +32,8 @@ export interface SelectorDimension {
   key: 'mode' | 'model' | 'reasoning' | 'speed';
   label: string;
   options: SelectorDimensionOption[];
+  /** Where the current value comes from: the Agent default or this topic. */
+  source: string;
   valueLabel: string;
 }
 
@@ -39,7 +43,9 @@ export interface SelectorView {
   isCatalogModel: boolean;
   isFastSpeed: boolean;
   model: string;
-  triggerText: string;
+  /** Where the current model comes from; shown on the catalog model submenu too. */
+  modelSource: string;
+  triggerLabel: TriggerLabel;
 }
 
 export type SelectorShape =
@@ -104,10 +110,17 @@ export const buildSelectorView = ({
   capability,
   provider,
   t,
+  topicPin,
+  topicScoped = false,
 }: {
   capability: HeteroSelectorCapability;
+  /** The effective config, with any topic pins already applied. */
   provider: HeterogeneousProviderConfig;
   t: Translate;
+  /** The active topic's raw pins, used only to label each value's source. */
+  topicPin?: HeterogeneousTopicPin;
+  /** Whether a topic is active, so picks write to it instead of the Agent. */
+  topicScoped?: boolean;
 }): SelectorView => {
   const model = capability.model?.resolve(provider) ?? HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
   const effort = capability.effort?.resolve(provider);
@@ -127,6 +140,19 @@ export const buildSelectorView = ({
   const isModeOnly =
     !!capability.mode && !capability.model && !capability.effort && !capability.speed;
 
+  const agentSource = t('heteroAgent.modelSelector.source.agent');
+  const getSource = (pinned: boolean) => {
+    if (!topicScoped) return agentSource;
+    return t(
+      pinned
+        ? 'heteroAgent.modelSelector.source.topic'
+        : 'heteroAgent.modelSelector.source.inherited',
+    );
+  };
+
+  // A pin from another runtime or auth mode is ignored, so it is not the source.
+  const modelSource = getSource(topicPin?.model !== undefined && topicPin.model === model);
+
   const dimensions: SelectorDimension[] = [];
 
   if (capability.model && !isCatalogModel) {
@@ -139,6 +165,7 @@ export const buildSelectorView = ({
       current: model,
       key: 'model',
       label: t('heteroAgent.modelSelector.model'),
+      source: modelSource,
       options: baseOptions.some((option) => option.value === model)
         ? baseOptions
         : [{ label: model, value: model }, ...baseOptions],
@@ -151,6 +178,7 @@ export const buildSelectorView = ({
       current: mode,
       key: 'mode',
       label: t('heteroAgent.modelSelector.mode.label'),
+      source: agentSource,
       options: [
         { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
         ...capability.mode.levels.map((level) => ({
@@ -167,6 +195,7 @@ export const buildSelectorView = ({
       current: effort,
       key: 'reasoning',
       label: t('heteroAgent.modelSelector.reasoning'),
+      source: getSource(topicPin?.effort !== undefined),
       options: [
         { label: defaultLabel, value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION },
         ...capability.effort.levels(model).map((level) => ({
@@ -183,10 +212,16 @@ export const buildSelectorView = ({
       current: speed,
       key: 'speed',
       label: t('heteroAgent.modelSelector.speed'),
+      // Only Fast emits a flag. Without it the CLI's own config (Codex
+      // `service_tier`) picks the tier, so neither the Agent nor the topic is
+      // the source, and the value must not be presented as Standard.
+      source: isFastSpeed
+        ? getSource(topicPin?.speed !== undefined)
+        : t('heteroAgent.modelSelector.source.cli'),
       options: [
         {
-          desc: t('heteroAgent.modelSelector.speed.standardDesc'),
-          label: t('heteroAgent.modelSelector.speed.standard'),
+          desc: t('heteroAgent.modelSelector.speed.defaultDesc'),
+          label: defaultLabel,
           value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
         },
         {
@@ -195,11 +230,7 @@ export const buildSelectorView = ({
           value: 'fast',
         },
       ],
-      valueLabel: t(
-        isFastSpeed
-          ? 'heteroAgent.modelSelector.speed.fast'
-          : 'heteroAgent.modelSelector.speed.standard',
-      ),
+      valueLabel: isFastSpeed ? t('heteroAgent.modelSelector.speed.fast') : defaultLabel,
     });
   }
 
@@ -214,11 +245,15 @@ export const buildSelectorView = ({
     isCatalogModel,
     isFastSpeed,
     model,
-    triggerText: isModeOnly
-      ? mode === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-        ? t('heteroAgent.modelSelector.defaultConfig')
-        : (modeLabel ?? defaultLabel)
-      : getTriggerText({
+    modelSource,
+    triggerLabel: isModeOnly
+      ? {
+          text:
+            mode === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+              ? t('heteroAgent.modelSelector.defaultConfig')
+              : (modeLabel ?? defaultLabel),
+        }
+      : getTriggerLabel({
           defaultConfigLabel: t('heteroAgent.modelSelector.defaultConfig'),
           defaultModelLabel: t('heteroAgent.modelSelector.defaultModel'),
           defaultReasoningLabel: t('heteroAgent.modelSelector.defaultReasoning'),

@@ -1,8 +1,10 @@
 export const OVERLAY_COPY = {
   agentSelectLabel: 'Agent',
   agentSelectPlaceholder: 'Default agent',
+  captureLabel: 'Take a screenshot',
   clearSelectionLabel: 'Clear selection',
   closeLabel: 'Close',
+  composePlaceholder: 'Ask anything…',
   customRegionLabel: 'Custom region',
   hintDragRegion: 'Capture a region',
   hintDragTrigger: 'Drag',

@@ -1,4 +1,4 @@
-import { deepseek as deepseekChatModels, ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank';
 
 import {
   createAnthropicCompatibleParams,
@@ -14,6 +14,7 @@ import {
   createDeepSeekAnthropicGenerateObject,
 } from './generateObject';
 import { fetchDeepSeekModels } from './modelFetch';
+import { deepseekRuntimeModels } from './runtimeModels';
 
 const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com/v1';
 const DEFAULT_DEEPSEEK_ANTHROPIC_BASE_URL = 'https://api.deepseek.com/anthropic';
@@ -66,7 +67,7 @@ export const openAIParams = {
     // DeepSeek upstream rejects requests where input alone exceeds the
     // model context window with a 400 carrying `max_completion=0` in the
     // message. Fail fast before round-tripping. See .
-    contextPreFlight: { models: deepseekChatModels },
+    contextPreFlight: { models: deepseekRuntimeModels },
     handlePayload: buildDeepSeekOpenAIPayload,
   },
   debug: {

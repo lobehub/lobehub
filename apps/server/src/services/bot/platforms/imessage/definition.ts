@@ -14,6 +14,12 @@ export const imessage: PlatformDefinition = {
     portalUrl: 'https://bluebubbles.app/',
     setupGuideUrl: channelDocUrl('imessage'),
   },
+  // Both of these are written and read by the user's own desktop bridge, which
+  // holds `webhookSecret` as a shared secret with the cloud side and has no way
+  // to ask for it back. Masking it would make the bridge persist the
+  // placeholder and stop matching the server, so iMessage opts out and its
+  // credentials stay visible to whoever can already read the channel.
+  publicCredentialKeys: ['desktopDeviceId', 'webhookSecret'],
   schema,
   showWebhookUrl: false,
   supportsMarkdown: false,

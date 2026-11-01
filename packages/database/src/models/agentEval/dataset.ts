@@ -101,6 +101,52 @@ export class AgentEvalDatasetModel {
   };
 
   /**
+   * Read-only paginated list (system + user/workspace-owned), without the
+   * test-case join used by `query`
+   */
+  queryList = async (filter?: { benchmarkId?: string; limit?: number; offset?: number }) => {
+    const conditions = [this.ownership()];
+
+    if (filter?.benchmarkId) {
+      conditions.push(eq(agentEvalDatasets.benchmarkId, filter.benchmarkId));
+    }
+
+    const query = this.db
+      .select()
+      .from(agentEvalDatasets)
+      .where(and(...conditions))
+      .orderBy(desc(agentEvalDatasets.createdAt))
+      .$dynamic();
+
+    if (filter?.limit !== undefined) {
+      query.limit(filter.limit);
+    }
+
+    if (filter?.offset !== undefined) {
+      query.offset(filter.offset);
+    }
+
+    return query;
+  };
+
+  /**
+   * Count datasets (system + user/workspace-owned) with the same predicates as `queryList`
+   */
+  count = async (filter?: { benchmarkId?: string }) => {
+    const conditions = [this.ownership()];
+
+    if (filter?.benchmarkId) {
+      conditions.push(eq(agentEvalDatasets.benchmarkId, filter.benchmarkId));
+    }
+
+    const result = await this.db
+      .select({ value: count() })
+      .from(agentEvalDatasets)
+      .where(and(...conditions));
+    return Number(result[0]?.value) || 0;
+  };
+
+  /**
    * Find dataset by id (with test cases)
    */
   findById = async (id: string) => {

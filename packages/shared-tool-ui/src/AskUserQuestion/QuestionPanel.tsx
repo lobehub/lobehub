@@ -1,7 +1,8 @@
 'use client';
 
-import { Flexbox, Text, TextArea } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Flexbox } from '@lobehub/ui';
+import { Text, TextArea } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { OptionCard } from '../components';
@@ -14,8 +15,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   customRow: css`
     margin-block-start: 2px;
 
-    /* Align the chip under the option number chips (OptionCard padding-inline). */
-    padding-inline: 12px;
+    /* Align the chip under the option number chips (OptionCard padding-inline);
+       the input itself runs to the option cards' right edge, flush with the
+       submit button below. */
+    padding-inline-start: 12px;
   `,
   // Mirrors OptionCard's `optionIndex` chip so the free-text row's number reads
   // identically to the numbered options above it.
@@ -39,7 +42,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface QuestionPanelProps {
-  /** The picked option label(s) for this question, if any. */
+  /** The picked option id(s), falling back to labels for legacy options. */
   answer: string | string[] | undefined;
   /** Placeholder for the trailing "write your own" free-text row. */
   customPlaceholder: string;
@@ -63,7 +66,7 @@ interface QuestionPanelProps {
    * falls back to the default newline behavior.
    */
   onPressEnter?: () => void;
-  onToggle: (q: AskUserQuestionItem, label: string) => void;
+  onToggle: (q: AskUserQuestionItem, value: string) => void;
   question: AskUserQuestionItem;
   /** Badge text for options carrying the "(Recommended)" label marker. */
   recommendedTag: string;
@@ -91,8 +94,8 @@ export const QuestionPanel = memo<QuestionPanelProps>(
     onPressEnter,
     recommendedTag,
   }) => {
-    const isOptionSelected = (label: string): boolean =>
-      question.multiSelect ? Array.isArray(answer) && answer.includes(label) : answer === label;
+    const isOptionSelected = (value: string): boolean =>
+      question.multiSelect ? Array.isArray(answer) && answer.includes(value) : answer === value;
 
     return (
       <Flexbox gap={10}>
@@ -104,22 +107,32 @@ export const QuestionPanel = memo<QuestionPanelProps>(
             </Text>
           )}
         </Flexbox>
-        <Text strong>{question.question}</Text>
+        <Flexbox gap={2}>
+          <Text strong>{question.question}</Text>
+          {question.description && (
+            <Text fontSize={12} type="secondary">
+              {question.description}
+            </Text>
+          )}
+        </Flexbox>
 
         <Flexbox gap={4} role="listbox">
-          {question.options.map((opt, optIdx) => (
-            <OptionCard
-              description={opt.description}
-              disabled={disabled}
-              highlighted={highlightedIndex === optIdx}
-              index={optIdx + 1}
-              key={opt.label}
-              label={opt.label}
-              recommendedText={opt.recommended ? recommendedTag : undefined}
-              selected={isOptionSelected(opt.label)}
-              onToggle={() => onToggle(question, opt.label)}
-            />
-          ))}
+          {question.options.map((opt, optIdx) => {
+            const value = opt.id ?? opt.label;
+            return (
+              <OptionCard
+                description={opt.description}
+                disabled={disabled}
+                highlighted={highlightedIndex === optIdx}
+                index={optIdx + 1}
+                key={value}
+                label={opt.label}
+                recommendedText={opt.recommended ? recommendedTag : undefined}
+                selected={isOptionSelected(value)}
+                onToggle={() => onToggle(question, value)}
+              />
+            );
+          })}
           {/* Last item: let the user write their own answer for this question.
               Numbered as the next option so it reads as one more choice. */}
           <Flexbox horizontal align="center" className={styles.customRow} gap={12}>

@@ -1,0 +1,26 @@
+name = "no-unscoped-resource-mutation"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from LobeHub database models or repositories.
+
+Mandatory exclusion gate BEFORE producing any finding (these override the reporting criteria below):
+1. Skip a method explicitly documented as a privileged/cross-scope primitive requiring caller authorization. A comment such as "Call only after authorizing the row" on deleteAcrossScopes is such a contract. Do not report "no caller visible" or "missing local guard" for that primitive.
+2. Skip static background job bookkeeping without an authenticated principal in that method. Instance fields elsewhere in the class do not establish that a static method is a user-facing mutation.
+3. Skip copying existing child relations obtained through a parent whose ownership was checked and failed closed in this method. Do not assume pre-existing authorized relations contain unauthorized targets.
+4. Skip deletion with an ownership predicate on the affected junction rows, including a multiline buildWorkspaceWhere call.
+
+Prevent the IDOR regressions fixed in #13683 and #16586: linking resources to somebody else's knowledge base, and deleting group membership rows without ownership scope.
+
+Report a mutation of user/workspace-owned data when this file visibly has an authenticated principal (such as this.userId/workspaceId) but uses caller-provided resource IDs without an ownership predicate or a prior fail-closed authorization check. Cover update/delete, batches, and inserting/updating junction relations. For relations, authorizing only the source files does not authorize the target knowledge base/group; assigning the caller's userId to a new junction row does not prove ownership of the referenced target. For creating/reassigning relations, check both endpoints unless one is visibly created in the authorized scope. For deletion, an ownership predicate on the junction rows themselves is sufficient: do not additionally require ownership of both referenced resources.
+
+Anchor on the mutation's where(...) call, or values(...)/set(...) for an unauthorized relation. Name the resource and the missing ownership boundary. Suggest the existing buildWorkspaceWhere/ownership helper or an authorized lookup that gates the mutation; preserve workspace/shared-access semantics, rather than mechanically adding userId everywhere.
+
+Do not report:
+- queries containing buildWorkspaceWhere, this.ownership(), or another visibly applicable ownership predicate;
+- mutations using IDs obtained exclusively from an ownership-filtered lookup, or a prior awaited authorization check that throws/returns before the mutation on denial;
+- child/junction mutations gated by authorization of the parent when all affected rows are constrained to that parent;
+- explicitly privileged system maintenance, global catalog data, or new independent resources created for the current principal;
+- an explicitly named cross-scope/privileged primitive whose documented contract requires the caller to authorize the row; absent caller code is not proof that this contract is violated. Do report a visible call that violates it;
+- read-only queries (this rule concerns mutations), or a file with no evidence that the resource is tenant-owned.
+Review all earlier guards in the method. Do not invent missing checks inside unseen helper bodies; a delegated authorized model call is not itself evidence of IDOR. Report only a concrete missing boundary in the visible mutation, not a generic request for more authorization. If callers are not visible, describe the missing local guard and ask to verify caller authorization; do not claim the endpoint is exploitable or every caller is unauthorized.
+"""

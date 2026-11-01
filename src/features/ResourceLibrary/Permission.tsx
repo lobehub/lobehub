@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useKnowledgeBaseItem } from '@/features/ResourceManager/hooks/useKnowledgeItem';
 import ResourceAccessPage from '@/features/ResourcePermission/ResourceAccessPage';
 
@@ -18,9 +19,10 @@ const LibraryPermission = memo(() => {
   const { id } = useParams<{ id: string }>();
   // Managers can always browse, so the name fetch never 403s for a viewer of
   // this page; a transient failure just falls back to the generic title.
-  const { data } = useKnowledgeBaseItem(id || '');
+  const { data, isLoading } = useKnowledgeBaseItem(id || '');
 
   if (!id) return null;
+  if (isLoading) return <RouteLoading />;
 
   return (
     <ResourceAccessPage

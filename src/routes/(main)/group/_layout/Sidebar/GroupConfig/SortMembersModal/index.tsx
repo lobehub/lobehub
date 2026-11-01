@@ -1,8 +1,7 @@
 'use client';
 
 import { type AgentGroupMember } from '@lobechat/types';
-import { Flexbox, SortableList } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, SortableList } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -73,6 +72,7 @@ const SortMembersModal = memo<SortMembersModalProps>(({ groupId, open, onCancel 
               id={item.id}
             >
               <MemberItem
+                agentId={item.id}
                 avatar={item.avatar || undefined}
                 background={item.backgroundColor ?? undefined}
                 disabled={!canEdit}

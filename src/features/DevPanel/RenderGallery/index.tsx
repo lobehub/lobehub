@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { useEffect, useState } from 'react';
 
 import { useAgentStore } from '@/store/agent';
@@ -33,14 +32,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 0;
     min-height: 0;
 
-    background:
-      radial-gradient(circle at top, ${cssVar.colorFillTertiary} 0%, transparent 35%),
-      ${cssVar.colorBgLayout};
+    background: ${cssVar.colorBgContainer};
   `,
   page: css`
     overflow: hidden;
     width: 100%;
     height: 100%;
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 

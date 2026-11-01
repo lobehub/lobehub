@@ -1,24 +1,49 @@
-import { type LobehubSkillServer } from './types';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+import { type ScopedConnectorActionError } from '@/utils/connectorActionError';
+
+import { type LobehubSkillServer, type LobehubSkillTool } from './types';
 
 /**
  * LobeHub Skill Store state interface
  *
- * NOTE: All connection states and tool data are fetched in real-time from Market API, not stored in local database
+ * NOTE: connection states and tool data are a local-first copy of the Market
+ * API — the replica persists them and the network only confirms.
  */
 export interface LobehubSkillStoreState {
+  /**
+   * Last failed connect / disconnect per provider id, so the settings row can
+   * show why it failed in place (local UI state; never persisted).
+   */
+  lobehubSkillErrors: Record<string, ScopedConnectorActionError>;
   /** Set of executing tool call IDs */
   lobehubSkillExecutingToolIds: Set<string>;
   /** Set of loading Provider IDs */
   lobehubSkillLoadingIds: Set<string>;
-  /** List of connected LobeHub Skill Servers */
-  lobehubSkillServers: LobehubSkillServer[];
+  /**
+   * The connected providers of the active scope — the view of the
+   * `lobehubSkillServers` replica. `undefined` until the persisted row hydrates
+   * or the first network response lands, so an un-loaded list never reads as an
+   * empty one (and the empty default never blocks hydration).
+   */
+  lobehubSkillServers?: LobehubSkillServer[];
+  /** Replica bookkeeping of `lobehubSkillServers`. */
+  lobehubSkillServersReplica: ReplicaState<LobehubSkillServer[]>;
+  /** Replica view of the provider tool catalogs, one entry per provider id. */
+  lobehubSkillToolsMap: Record<string, LobehubSkillTool[]>;
+  /** Replica bookkeeping of `lobehubSkillToolsMap`. */
+  lobehubSkillToolsReplica: ReplicaState<LobehubSkillTool[]>;
 }
 
 /**
  * LobeHub Skill Store initial state
  */
 export const initialLobehubSkillStoreState: LobehubSkillStoreState = {
+  lobehubSkillErrors: {},
   lobehubSkillExecutingToolIds: new Set(),
   lobehubSkillLoadingIds: new Set(),
-  lobehubSkillServers: [],
+  // Absent until the persisted row hydrates or the first network response lands.
+  lobehubSkillServers: undefined,
+  lobehubSkillServersReplica: createReplicaState(),
+  lobehubSkillToolsMap: {},
+  lobehubSkillToolsReplica: createReplicaState(),
 };

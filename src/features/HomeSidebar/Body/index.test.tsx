@@ -21,32 +21,40 @@ const mocks = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Accordion: ({
-    children,
-    expandedKeys,
-    onExpandedChange,
-  }: {
-    children: React.ReactNode;
-    expandedKeys?: string[];
-    onExpandedChange?: (keys: string[]) => void;
-  }) => (
-    <div data-expanded-keys={JSON.stringify(expandedKeys)} data-testid="sidebar-accordion">
-      <button aria-label="collapse recents" onClick={() => onExpandedChange?.(['agent'])} />
-      {children}
-    </div>
-  ),
-  ActionIcon: () => <span />,
-  DropdownMenu: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  Flexbox: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="sidebar-body">{children}</div>
-  ),
-  Icon: () => <span />,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Flexbox: ({ children, flex }: { children: React.ReactNode; flex?: number }) => (
+        <div data-testid={flex ? 'sidebar-body' : 'sidebar-sections'}>{children}</div>
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      AccordionRoot: ({
+        children,
+        value,
+        onValueChange,
+      }: {
+        children: React.ReactNode;
+        onValueChange?: (keys: string[]) => void;
+        value?: string[];
+      }) => (
+        <div data-expanded-keys={JSON.stringify(value)} data-testid="sidebar-accordion">
+          <button aria-label="collapse recents" onClick={() => onValueChange?.(['agent'])} />
+          {children}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-router', () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
@@ -73,6 +81,10 @@ vi.mock('@/utils/navigation', () => ({
 
 vi.mock('@/features/Home/Recents', () => ({
   default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
+}));
+
+vi.mock('@/features/Channels/ChannelList', () => ({
+  default: () => <div data-testid="sidebar-channels" />,
 }));
 
 vi.mock('./Agent', () => ({
@@ -161,7 +173,8 @@ describe('Home sidebar body', () => {
 
     expect(spacerIndex).toBe(2);
     expect(children[0]).toHaveTextContent('Pages');
-    expect(children[1]).toHaveAttribute('data-testid', 'sidebar-accordion');
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[1]).toContainElement(screen.getByTestId('sidebar-channels'));
     expect(children[3]).toHaveTextContent('Image');
     expect(children[4]).toHaveTextContent('Tasks');
     expect(children[5]).toHaveTextContent('Resource');
@@ -179,9 +192,22 @@ describe('Home sidebar body', () => {
 
     const children = Array.from(screen.getByTestId('sidebar-body').children);
 
-    expect(children[0]).toHaveAttribute('data-testid', 'sidebar-accordion');
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-channels'));
     expect(children[1]).toHaveAttribute('data-sidebar-bottom-spacer');
     expect(children[2]).toHaveTextContent('Image');
     expect(children[3]).toHaveTextContent('Tasks');
+  });
+
+  it('keeps Channels between adjacent sections in the same spacing group with its own accordion', () => {
+    mocks.globalState.status.sidebarItems = ['agent', 'recents'];
+
+    render(<Body />);
+
+    const children = Array.from(screen.getByTestId('sidebar-sections').children);
+
+    expect(children[0]).toContainElement(screen.getByTestId('sidebar-item-agent'));
+    expect(children[1]).toHaveAttribute('data-testid', 'sidebar-channels');
+    expect(children[2]).toContainElement(screen.getByTestId('sidebar-item-recents'));
   });
 });

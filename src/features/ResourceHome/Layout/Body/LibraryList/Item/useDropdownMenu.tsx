@@ -1,12 +1,12 @@
-import type { MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast } from '@lobehub/ui';
 import { EyeOffIcon, FileText, GlobeIcon, PencilLine, Trash, UsersIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useKnowledgeBaseTransferMenuItem } from '@/business/client/hooks/useKnowledgeBaseTransferMenuItem';
+import { libraryCoverOf } from '@/features/LibraryCover/presets';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -15,7 +15,6 @@ import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface ActionProps {
   description?: string | null;
@@ -36,7 +35,7 @@ export const useDropdownMenu = ({
   toggleEditing,
   userId,
   visibility,
-}: ActionProps): (() => MenuProps['items']) => {
+}: ActionProps): (() => DropdownItem[]) => {
   const { t } = useTranslation(['file', 'common', 'chat', 'setting']);
 
   const removeKnowledgeBase = useKnowledgeBaseStore((s) => s.removeKnowledgeBase);
@@ -85,7 +84,7 @@ export const useDropdownMenu = ({
   );
 
   const handleDelete = useCallback(() => {
-    if (!canEdit || !canManage) return;
+    if (!canEdit) return;
     if (!id) return;
 
     confirmModal({
@@ -96,23 +95,30 @@ export const useDropdownMenu = ({
       onOk: async () => {
         try {
           await removeKnowledgeBase(id);
-        } catch (error) {
-          toast.error(
-            isForbiddenError(error)
-              ? t('manageOnlyCreator', { ns: 'common' })
-              : t('operationFailed', { ns: 'common' }),
-          );
+        } catch {
+          toast.error(t('operationFailed', { ns: 'common' }));
         }
       },
       title: t('header.actions.deleteLibrary'),
     });
-  }, [canEdit, canManage, id, removeKnowledgeBase, t]);
+  }, [canEdit, id, removeKnowledgeBase, t]);
 
   const handleEditDescription = useCallback(() => {
     if (!canEdit) return;
+    // The cover rides on the loaded list row, not on this sidebar item's props.
+    const { knowledgeBaseDetailMap, knowledgeBaseListMap } = useKnowledgeBaseStore.getState();
+    const library =
+      knowledgeBaseDetailMap[id] ??
+      Object.values(knowledgeBaseListMap)
+        .flat()
+        .find((item) => item.id === id);
     open({
       id,
-      initialValues: { description: description || '', name },
+      initialValues: {
+        cover: libraryCoverOf(library?.settings),
+        description: description || '',
+        name,
+      },
     });
   }, [canEdit, description, id, name, open]);
 
@@ -159,7 +165,7 @@ export const useDropdownMenu = ({
     // Assemble the menu as ordered groups and let the dividers fall out of which
     // groups survived. Hand-wiring a divider next to each entry silently drops
     // or duplicates separators as soon as one capability combination changes.
-    const groups: NonNullable<MenuProps['items']>[] = [
+    const groups: NonNullable<DropdownItem[]>[] = [
       // Content edits: gated by the workspace role only. Row ownership no longer
       // gates them — the server accepts any member holding an `edit` grant.
       canEdit
@@ -216,10 +222,10 @@ export const useDropdownMenu = ({
             }
           : null,
         memberPermissionMenuItem,
-      ].filter(Boolean) as NonNullable<MenuProps['items']>,
+      ].filter(Boolean) as NonNullable<DropdownItem[]>,
       // Cross-workspace move / copy: creator-or-owner only.
       canEdit && canManage ? (transferMenuItems ?? []) : [],
-      canEdit && canManage
+      canEdit
         ? [
             {
               danger: true,

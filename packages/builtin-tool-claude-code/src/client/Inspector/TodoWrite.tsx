@@ -3,7 +3,7 @@
 import { TodoInspectorSummary } from '@lobechat/shared-tool-ui/components';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,13 +22,12 @@ export const TodoWriteInspector = memo<BuiltinInspectorProps<TodoWriteArgs>>(
     }
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <TodoInspectorSummary label={label} summary={summary} />
+      <div className={inspectorTextStyles.root}>
+        <TodoInspectorSummary
+          label={label}
+          shiny={isArgumentsStreaming || isLoading}
+          summary={summary}
+        />
       </div>
     );
   },

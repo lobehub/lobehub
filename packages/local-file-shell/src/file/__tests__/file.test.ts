@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, truncate, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -31,18 +31,40 @@ describe('file operations', () => {
   // ─── readLocalFile ───
 
   describe('readLocalFile', () => {
-    it('should read file with default line range (0-200)', async () => {
+    it('should read file with default line range (0-1000)', async () => {
       const filePath = path.join(tmpDir, 'test.txt');
-      const lines = Array.from({ length: 300 }, (_, i) => `line ${i}`);
+      const lines = Array.from({ length: 1200 }, (_, i) => `line ${i}`);
       await writeFile(filePath, lines.join('\n'));
 
       const result = await readLocalFile({ path: filePath });
 
-      expect(result.lineCount).toBe(200);
-      expect(result.totalLineCount).toBe(300);
-      expect(result.loc).toEqual([0, 200]);
+      expect(result.lineCount).toBe(1000);
+      expect(result.totalLineCount).toBe(1200);
+      expect(result.loc).toEqual([0, 1000]);
       expect(result.filename).toBe('test.txt');
       expect(result.fileType).toBe('txt');
+    });
+
+    it('should clamp the reported window at EOF for short files', async () => {
+      const filePath = path.join(tmpDir, 'short.txt');
+      await writeFile(filePath, 'a\nb\nc\nd\ne');
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.lineCount).toBe(5);
+      expect(result.loc).toEqual([0, 5]);
+    });
+
+    it('should clamp an explicit range that extends past EOF', async () => {
+      const filePath = path.join(tmpDir, 'past-eof.txt');
+      const lines = Array.from({ length: 10 }, (_, i) => `line ${i}`);
+      await writeFile(filePath, lines.join('\n'));
+
+      const result = await readLocalFile({ loc: [5, 100], path: filePath });
+
+      expect(result.lineCount).toBe(5);
+      expect(result.content).toBe('line 5\nline 6\nline 7\nline 8\nline 9');
+      expect(result.loc).toEqual([5, 10]);
     });
 
     it('should read full content when fullContent is true', async () => {
@@ -165,6 +187,47 @@ describe('file operations', () => {
       const result = await readLocalFile({ path: filePath });
 
       expect(result.content).toContain('too large');
+      expect(result.charCount).toBe(0);
+    });
+
+    it('should parse PDFs larger than the text file size cap', async () => {
+      const filePath = path.join(tmpDir, 'large.pdf');
+      const objects = [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+        '<< /Length 45 >>\nstream\nBT /F1 12 Tf 72 720 Td (Large PDF works) Tj ET\nendstream',
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        `<< /Length ${10 * 1024 * 1024} >>\nstream\n${' '.repeat(10 * 1024 * 1024)}\nendstream`,
+      ];
+      let pdf = '%PDF-1.4\n';
+      const offsets = objects.map((object, index) => {
+        const offset = Buffer.byteLength(pdf);
+        pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+        return offset;
+      });
+      const xrefOffset = Buffer.byteLength(pdf);
+      pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+      pdf += offsets.map((offset) => `${offset.toString().padStart(10, '0')} 00000 n \n`).join('');
+      pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+      await writeFile(filePath, pdf);
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.content).toContain('Large PDF works');
+      expect(result.content).not.toContain('too large');
+    });
+
+    it('should reject PDFs larger than the PDF size cap before parsing', async () => {
+      const filePath = path.join(tmpDir, 'oversized.pdf');
+      await writeFile(filePath, 'not actually a PDF');
+      await truncate(filePath, 50 * 1024 * 1024 + 1);
+
+      const result = await readLocalFile({ path: filePath });
+
+      expect(result.content).toContain('too large');
+      expect(result.content).toContain(`limit ${50 * 1024 * 1024}`);
+      expect(result.content).toContain('split it into multiple documents');
       expect(result.charCount).toBe(0);
     });
 
@@ -595,6 +658,33 @@ describe('file operations', () => {
       expect(result).toEqual([]);
     });
 
+    it('should refuse to overwrite an existing target file', async () => {
+      const src = path.join(tmpDir, 'src.txt');
+      const dst = path.join(tmpDir, 'dst.txt');
+      await writeFile(src, 'incoming');
+      await writeFile(dst, 'keep me');
+
+      const result = await moveLocalFiles({ items: [{ newPath: dst, oldPath: src }] });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toContain('already exists');
+      expect(fs.readFileSync(dst, 'utf8')).toBe('keep me');
+      expect(fs.readFileSync(src, 'utf8')).toBe('incoming');
+    });
+
+    it('should refuse to move onto an existing directory', async () => {
+      const src = path.join(tmpDir, 'src-dir');
+      const dst = path.join(tmpDir, 'dst-dir');
+      await mkdir(src);
+      await mkdir(dst);
+
+      const result = await moveLocalFiles({ items: [{ newPath: dst, oldPath: src }] });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toContain('already exists');
+      expect(fs.existsSync(src)).toBe(true);
+    });
+
     it('should create target directory if missing', async () => {
       const src = path.join(tmpDir, 'src.txt');
       const dst = path.join(tmpDir, 'new', 'dir', 'dst.txt');
@@ -643,6 +733,31 @@ describe('file operations', () => {
 
       const result = await renameLocalFile({ newName: 'same.txt', path: filePath });
       expect(result.success).toBe(true);
+    });
+
+    it('should refuse to overwrite an existing sibling', async () => {
+      const filePath = path.join(tmpDir, 'old.txt');
+      const taken = path.join(tmpDir, 'taken.txt');
+      await writeFile(filePath, 'incoming');
+      await writeFile(taken, 'keep me');
+
+      const result = await renameLocalFile({ newName: 'taken.txt', path: filePath });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already exists');
+      expect(fs.readFileSync(taken, 'utf8')).toBe('keep me');
+      expect(fs.readFileSync(filePath, 'utf8')).toBe('incoming');
+    });
+
+    it('should allow a case-only rename', async () => {
+      const filePath = path.join(tmpDir, 'readme.md');
+      await writeFile(filePath, 'content');
+
+      const result = await renameLocalFile({ newName: 'README.md', path: filePath });
+
+      expect(result.success).toBe(true);
+      expect(fs.readdirSync(tmpDir)).toContain('README.md');
+      expect(fs.readdirSync(tmpDir)).not.toContain('readme.md');
     });
 
     it('should return error for non-existent file', async () => {

@@ -27,6 +27,35 @@ describe('featureFlagsSelectors', () => {
 });
 
 describe('serverConfigSelectors', () => {
+  describe('enableWorkspace', () => {
+    it('needs both the business deployment and the per-user workspace flag', () => {
+      const state = (enableBusinessFeatures: boolean, enableWorkspace?: boolean) =>
+        initServerConfigStore({
+          featureFlags: { enableWorkspace } as any,
+          serverConfig: { enableBusinessFeatures } as any,
+        }).getState();
+
+      expect(serverConfigSelectors.enableWorkspace(state(true, true))).toBe(true);
+      expect(serverConfigSelectors.enableWorkspace(state(true, false))).toBe(false);
+      expect(serverConfigSelectors.enableWorkspace(state(true))).toBe(false);
+      expect(serverConfigSelectors.enableWorkspace(state(false, true))).toBe(false);
+    });
+  });
+
+  describe('enableDashboard', () => {
+    it('is off by default and on only when the flag resolves to true', () => {
+      expect(serverConfigSelectors.enableDashboard(initServerConfigStore({}).getState())).toBe(
+        false,
+      );
+      const on = initServerConfigStore({
+        featureFlags: {
+          ...mapFeatureFlagsEnvToState({ ...DEFAULT_FEATURE_FLAGS, dashboard: true }),
+        },
+      });
+      expect(serverConfigSelectors.enableDashboard(on.getState())).toBe(true);
+    });
+  });
+
   describe('enableGatewayMode', () => {
     it('should return true when gateway mode is enabled', () => {
       const store = initServerConfigStore({

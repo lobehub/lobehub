@@ -3,7 +3,7 @@
 import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
-import { cx } from 'antd-style';
+import * as stylex from '@stylexjs/stylex';
 import { type CSSProperties, type FC } from 'react';
 import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
@@ -15,6 +15,7 @@ import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import ActiveConversationBridge from '@/features/Electron/ActiveConversationBridge';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
+import HeteroRestartRecovery from '@/features/Electron/HeterogeneousAgent/RestartRecovery';
 import OverlayCaptureUploader from '@/features/Electron/ScreenCapture/OverlayCaptureUploader';
 import OverlayMessageDispatcher from '@/features/Electron/ScreenCapture/OverlayMessageDispatcher';
 import OverlaySnapshotPublisher from '@/features/Electron/ScreenCapture/OverlaySnapshotPublisher';
@@ -23,10 +24,12 @@ import {
   useLastWorkspaceSlugSync,
   useWindowUrlMirror,
 } from '@/features/Electron/shell';
+import LinkHoverStatus from '@/features/Electron/system/LinkHoverStatus';
 import ZoomHUD from '@/features/Electron/system/ZoomHUD';
 import { TabHost, useSeedTabsOnBoot } from '@/features/Electron/TabHost';
 import TabCacheBridges from '@/features/Electron/titlebar/TabBar/TabCacheBridges';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
+import WorkspaceMentionNotifier from '@/features/Electron/WorkspaceMentionNotifier';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanelShell from '@/features/NavPanel/Shell';
 import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
@@ -35,7 +38,9 @@ import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import ClientLlmWaitResume from './ClientLlmWaitResume';
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
+import GatewayMuxWarmup from './GatewayMuxWarmup';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
@@ -55,11 +60,12 @@ const Layout: FC = () => {
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
+      <DesktopAutoOidcOnFirstOpen />
+      <AuthRequiredModal />
       <WorkspaceContextSlot>
         <ActiveConversationBridge />
         <TabCacheBridges />
         <Suspense fallback={null}>
-          <DesktopAutoOidcOnFirstOpen />
           <DesktopNavigationBridge />
           <DesktopFileMenuBridge />
           <DesktopBrowserGatewayBridge />
@@ -68,8 +74,8 @@ const Layout: FC = () => {
           <OverlayMessageDispatcher />
           {showCloudPromotion && <CloudBanner />}
         </Suspense>
-        <AuthRequiredModal />
         <ZoomHUD />
+        <LinkHoverStatus />
 
         <Suspense fallback={null}>
           <TitleBar />
@@ -77,9 +83,11 @@ const Layout: FC = () => {
         <DndContextWrapper>
           <Flexbox
             horizontal
-            className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
             height={`calc(100% - ${TITLE_BAR_HEIGHT}px)`}
             width={'100%'}
+            className={
+              stylex.props(isPWA ? styles.mainContainerPWA : styles.mainContainer).className
+            }
           >
             <NavPanelShell />
             <DesktopLayoutContainer>
@@ -91,9 +99,13 @@ const Layout: FC = () => {
         </DndContextWrapper>
         <Suspense fallback={null}>
           <HotkeyHelperPanel />
+          <GatewayMuxWarmup />
+          <ClientLlmWaitResume />
+          <HeteroRestartRecovery />
           <RegisterHotkeys />
           <CmdkLazy />
           <GlobalApprovalNotification />
+          <WorkspaceMentionNotifier />
         </Suspense>
       </WorkspaceContextSlot>
     </HotkeysProvider>

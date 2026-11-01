@@ -1,4 +1,5 @@
 import { hasApiKeyScope, isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -125,7 +126,7 @@ export const asrRouter = router({
           prompt: input.prompt,
           responseFormat: input.responseFormat,
         },
-        { user: ctx.userId },
+        { metadata: { trigger: RequestTrigger.Asr }, user: ctx.userId },
       );
 
       if (!result) {

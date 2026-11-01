@@ -1,7 +1,8 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { WriteFileParams, WriteFileResult } from '../types';
+import { verifyWrittenContent, withFileLock, writeFileAtomic } from './atomicWrite';
 import { resolveAgainstCwd } from './expandTilde';
 
 export async function writeLocalFile({
@@ -14,12 +15,20 @@ export async function writeLocalFile({
 
   const filePath = resolveAgainstCwd(rawPath, cwd) ?? rawPath;
 
-  try {
-    const dirname = path.dirname(filePath);
-    await mkdir(dirname, { recursive: true });
-    await writeFile(filePath, content, 'utf8');
-    return { success: true };
-  } catch (error) {
-    return { error: `Failed to write file: ${(error as Error).message}`, success: false };
-  }
+  // Shares the per-path queue with editLocalFile, so a write and an edit to the
+  // same file in one batch cannot interleave.
+  return withFileLock(filePath, async () => {
+    try {
+      const dirname = path.dirname(filePath);
+      await mkdir(dirname, { recursive: true });
+      await writeFileAtomic(filePath, content);
+
+      const writeError = await verifyWrittenContent(filePath, content);
+      if (writeError) return { error: writeError, success: false };
+
+      return { success: true };
+    } catch (error) {
+      return { error: `Failed to write file: ${(error as Error).message}`, success: false };
+    }
+  });
 }

@@ -32,24 +32,38 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@/hooks/useIsDark', () => ({ useIsDark: () => false }));
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({}),
-  cssVar: new Proxy({}, { get: () => 'var(--x)' }),
-}));
-vi.mock('@lobehub/const', () => ({ COMPOSIO_APP_TYPES: [], LOBEHUB_SKILL_PROVIDERS: [] }));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      createStaticStyles: () => ({}),
+      cssVar: new Proxy({}, { get: () => 'var(--x)' }),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
+      Tooltip: ({ children, title }: { children: ReactNode; title?: string }) => (
+        <div data-testid="author-tooltip" data-title={title}>
+          {children}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
+vi.mock('@lobechat/const', () => ({ resolveConnectorCatalogItem: () => undefined }));
 vi.mock('@lobehub/ui/icons', () => ({ McpIcon: () => null }));
 vi.mock('@/components/Plugins/PluginAvatar', () => ({ default: () => null }));
-vi.mock('@lobehub/ui', () => ({
-  Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Icon: () => null,
-  Tag: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Tooltip: ({ children, title }: { children: ReactNode; title?: string }) => (
-    <div data-testid="author-tooltip" data-title={title}>
-      {children}
-    </div>
-  ),
-}));
 
 // Run selectors against controlled state (the mocked selectors ignore state).
 vi.mock('@/store/tool', () => ({
@@ -74,7 +88,7 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 vi.mock('@/store/discover', () => ({
   useDiscoverStore: (sel: (s: unknown) => unknown) =>
-    sel({ usePluginDetail: () => ({ data: undefined, isLoading: false }) }),
+    sel({ useFetchPluginDetail: () => ({ isLoading: false, queryKey: undefined }) }),
 }));
 
 describe('PluginTag author attribution', () => {

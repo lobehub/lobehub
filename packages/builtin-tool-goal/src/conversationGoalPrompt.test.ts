@@ -1,0 +1,71 @@
+import { describe, expect, it } from 'vitest';
+
+import { conversationGoalPrompt, withConversationGoalPrompt } from './conversationGoalPrompt';
+import { stripGoalCommand } from './goalPrompt';
+
+describe('stripGoalCommand', () => {
+  it("sends a CLI agent the request without /goal, so Claude Code's own /goal does not take it", () => {
+    expect(stripGoalCommand('/goal ship the report')).toBe('ship the report');
+    expect(stripGoalCommand('  /GOAL\nship the report')).toBe('ship the report');
+  });
+
+  it('leaves every other prompt untouched', () => {
+    expect(stripGoalCommand('fix the build')).toBe('fix the build');
+    expect(stripGoalCommand('/goals are nice')).toBe('/goals are nice');
+    expect(stripGoalCommand(undefined)).toBeUndefined();
+  });
+});
+
+describe('withConversationGoalPrompt', () => {
+  it('leaves an ordinary message context untouched', () => {
+    expect(withConversationGoalPrompt('Repo rules', 'fix the build')).toBe('Repo rules');
+    expect(withConversationGoalPrompt(undefined, 'fix the build')).toBeUndefined();
+  });
+
+  it('appends the /goal instructions after the agent context', () => {
+    expect(withConversationGoalPrompt('Repo rules', '/goal ship the report')).toBe(
+      `Repo rules\n\n${conversationGoalPrompt}`,
+    );
+  });
+
+  it('injects the instructions alone when the agent has no context', () => {
+    expect(withConversationGoalPrompt('  ', '/goal ship the report')).toBe(conversationGoalPrompt);
+  });
+
+  it('tells the agent to create the goal from this conversation and start it in the same run', () => {
+    expect(conversationGoalPrompt).toContain('lh goal create');
+    expect(conversationGoalPrompt).toContain('--conversation');
+    // A bound goal handed back with a turn token is still planned in this run.
+    expect(conversationGoalPrompt).toContain('lh goal plan <goalId> --token <turnToken>');
+  });
+
+  /**
+   * Regression: a conversation goal went live the moment it was created, so
+   * the agent arranged its tasks while they were already dispatching, and a
+   * set of one-recipe tasks could never become a batch.
+   */
+  it('creates the goal as a draft with its tasks, then starts it, as a batch when one recipe', () => {
+    expect(conversationGoalPrompt).toContain('--task-file <tasks.json>');
+    expect(conversationGoalPrompt).toContain('nothing is dispatched until you start it');
+    expect(conversationGoalPrompt).toContain('lh goal start <goalId> --json');
+    expect(conversationGoalPrompt).toContain(
+      'lh goal start <goalId> --rollout canary --recipe-file <recipe.md> --probes',
+    );
+  });
+
+  it('binds a goal the user names instead of creating a duplicate', () => {
+    // `goal:manage` reaches a device or gateway run only through `/goal`, so
+    // these instructions are the only way such a run can bind an existing goal.
+    expect(conversationGoalPrompt).toContain('lh goal bind-topic <goalId> --json');
+    expect(conversationGoalPrompt).toContain('do not create a new goal');
+    expect(conversationGoalPrompt).toContain('only allow creating or binding this goal');
+  });
+
+  it('plans from the create output instead of reading the goal back', () => {
+    // A device run holds an operation token, which the goal read endpoint
+    // refuses; telling the agent to run `lh goal show` made its first command
+    // after create fail and pushed it to work around its own credentials.
+    expect(conversationGoalPrompt).not.toContain('Run lh goal show');
+    expect(conversationGoalPrompt).toContain('do not run lh goal show');
+  });
+});

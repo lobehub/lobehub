@@ -10,7 +10,7 @@ export const lobehubPipelines: PipelineEntry[] = [
   {
     exts: ['.md'],
     tools: [
-      ['remark', '--silent', '--output', '--'],
+      ['remark', '--silent', '--silently-ignore', '--output', '--'],
       ['prettier', '--write'],
     ],
   },

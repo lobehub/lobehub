@@ -2,7 +2,7 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { GitForkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -129,13 +129,10 @@ export const EnterWorktreeInspector = memo<BuiltinInspectorProps<EnterWorktreeAr
     const label = t((path ? ENTER_LABEL_KEYS : CREATE_LABEL_KEYS)[phase]);
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {label}
+        </span>
         {target && <WorktreeTarget target={target} />}
       </div>
     );
@@ -158,14 +155,11 @@ export const ExitWorktreeInspector = memo<BuiltinInspectorProps<ExitWorktreeArgs
     const label = t((action === 'remove' ? REMOVE_LABEL_KEYS : EXIT_LABEL_KEYS)[phase]);
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={inspectorTextStyles.root}>
         <GitForkIcon className={cx(styles.icon, styles.leadingIcon)} size={12} />
-        <span>{label}</span>
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {label}
+        </span>
         {action === 'remove' && discardChanges && (
           <span className={styles.risk}>
             {t('builtins.lobe-claude-code.worktree.discardChanges')}

@@ -1,6 +1,7 @@
 import type { ModelParamsSchema, RuntimeImageGenParams } from 'model-bank';
-import { extractDefaultValues, ModelProvider } from 'model-bank';
 import { nanoBanana2Parameters } from 'model-bank/imageParameters';
+import { ModelProvider } from 'model-bank/modelProvider';
+import { extractDefaultValues } from 'model-bank/standardParameters';
 
 import { DEFAULT_IMAGE_CONFIG } from '@/const/settings';
 

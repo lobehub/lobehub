@@ -4,6 +4,15 @@ import { electronSystemService } from '@/services/electron/system';
 
 import { openTerminalLink } from './links';
 
+// openTerminalLink delegates to openTrustedExternalUrl, which branches on
+// isDesktop — pin it to desktop, the only platform with a terminal panel.
+const { isDesktopRef } = vi.hoisted(() => ({ isDesktopRef: { value: true } }));
+
+vi.mock('@/const/version', () => ({
+  get isDesktop() {
+    return isDesktopRef.value;
+  },
+}));
 vi.mock('@/services/electron/system', () => ({
   electronSystemService: { openExternalLink: vi.fn().mockResolvedValue(undefined) },
 }));

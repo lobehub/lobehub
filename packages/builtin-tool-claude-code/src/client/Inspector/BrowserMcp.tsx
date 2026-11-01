@@ -2,12 +2,13 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   Camera,
   Globe,
   Keyboard,
+  Monitor,
   MousePointerClick,
   MoveVertical,
   ScanText,
@@ -61,10 +62,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface BrowserMcpArgs {
   dx?: number;
   dy?: number;
+  height?: number;
   key?: string;
   ref?: string;
   text?: string;
   url?: string;
+  width?: number;
   x?: number;
   y?: number;
 }
@@ -77,6 +80,7 @@ const API_ICONS: Record<BrowserMcpApi, LucideIcon> = {
   readPage: ScanText,
   screenshot: Camera,
   scroll: MoveVertical,
+  setViewport: Monitor,
   snapshot: ScanText,
 };
 
@@ -115,6 +119,10 @@ const getChipValue = (api: BrowserMcpApi, args: BrowserMcpArgs): string => {
     case 'scroll': {
       return formatScroll(args);
     }
+    case 'setViewport': {
+      const { height, width } = args;
+      return typeof width === 'number' && typeof height === 'number' ? `${width}×${height}` : '';
+    }
     default: {
       return '';
     }
@@ -141,8 +149,10 @@ const BrowserMcpInspector = memo<BuiltinInspectorProps<BrowserMcpArgs>>(
     const isShiny = isArgumentsStreaming || isLoading;
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{value ? `${label}:` : label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>
+          {value ? `${label}:` : label}
+        </span>
         {value && (
           <span className={styles.chip}>
             <Icon className={styles.icon} size={14} />

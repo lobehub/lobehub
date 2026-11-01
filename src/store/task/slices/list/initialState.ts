@@ -1,4 +1,7 @@
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import type { taskService } from '@/services/task';
+
+import type { TaskGroupListValue, TaskListValue } from './projection';
 
 // Derive types from TRPC inference via service
 export type TaskListItem = Awaited<ReturnType<typeof taskService.list>>['data'][number];
@@ -13,49 +16,31 @@ export type TaskGroupItem = Awaited<ReturnType<typeof taskService.groupList>>['d
  * Personal mode hides the chip and treats every entry as 'all'.
  */
 export type TaskListVisibilityFilter = 'all' | 'private' | 'workspace';
-export type TaskKanbanGroupBy = 'assignee' | 'priority' | 'status';
+export type TaskKanbanGroupBy = 'assignee' | 'member' | 'priority' | 'status';
 
 export interface TaskListSliceState {
-  groupListQueryAutomated?: boolean;
-  isTaskGroupListInit: boolean;
-  isTaskListInit: boolean;
-  listAgentId?: string;
-  /** Grouping dimension of the task data currently stored in `taskGroups`. */
-  listGroupBy: TaskKanbanGroupBy;
-  /** Excluded statuses of the current grouped query, as a sorted signature. */
-  listGroupExcludeStatuses?: string;
   /**
-   * Automation filter of the task data currently stored in `tasks` — `false`
-   * for Home's recent block (live schedules excluded server-side), undefined
-   * for the unfiltered Tasks page. Tracked like `listQueryVisibility` so a
-   * scope change resets the shared field instead of rendering the other
-   * surface's filter.
+   * The list the Tasks page is showing (`taskListMap` key) — what the task
+   * manager agent sees as "the viewed list".
    */
-  listQueryAutomated?: boolean;
-  /**
-   * Status narrowing of the data in `tasks`, as an order-insensitive signature
-   * (sorted, comma-joined) — undefined when the query is unnarrowed. Tracked
-   * for the same scope-reset reason as `listQueryAutomated`.
-   */
-  listQueryStatuses?: string;
-  /** Effective visibility of the task data currently stored in `tasks`. */
-  listQueryVisibility: TaskListVisibilityFilter;
+  activeTaskListKey?: string;
   /** Defaults to 'all' so the Tasks top entry shows every visible task
    *  (private + workspace-shared) without narrowing. */
   listVisibility: TaskListVisibilityFilter;
-  taskGroups: TaskGroupItem[];
-  tasks: TaskListItem[];
-  tasksTotal: number;
+  /** Replica view of the kanban groups, one entry per board query (`taskGroupListQueryKey`). */
+  taskGroupListMap: Record<string, TaskGroupListValue>;
+  /** Replica bookkeeping of `taskGroupListMap`. */
+  taskGroupListReplica: ReplicaState<TaskGroupListValue>;
+  /** Replica view of the task lists, one entry per list query (`taskListQueryKey`). */
+  taskListMap: Record<string, TaskListValue>;
+  /** Replica bookkeeping of `taskListMap`. */
+  taskListReplica: ReplicaState<TaskListValue>;
 }
 
 export const initialTaskListSliceState: TaskListSliceState = {
-  groupListQueryAutomated: undefined,
-  isTaskGroupListInit: false,
-  isTaskListInit: false,
-  listGroupBy: 'status',
-  listQueryVisibility: 'all',
   listVisibility: 'all',
-  taskGroups: [],
-  tasks: [],
-  tasksTotal: 0,
+  taskGroupListMap: {},
+  taskGroupListReplica: createReplicaState(),
+  taskListMap: {},
+  taskListReplica: createReplicaState(),
 };

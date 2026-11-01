@@ -1,4 +1,5 @@
 import {
+  AUTH_FAILURE_HEADER,
   AUTH_REQUIRED_HEADER,
   MARKET_AUTH_REQUIRED_MESSAGE,
   TRPC_ERROR_CODE_UNAUTHORIZED,
@@ -110,5 +111,24 @@ describe('createResponseMeta', () => {
 
     expect(result.headers).toBeInstanceOf(Headers);
     expect(result.headers?.get(AUTH_REQUIRED_HEADER)).toBe('true');
+  });
+
+  it('keeps AUTH_FAILURE_HEADER next to an UNAUTHORIZED error', () => {
+    const resHeaders = new Headers({ [AUTH_FAILURE_HEADER]: 'jwt_expired' });
+    const result = createResponseMeta({
+      ctx: { resHeaders },
+      errors: [new TRPCError({ code: TRPC_ERROR_CODE_UNAUTHORIZED })],
+    });
+
+    expect(result.headers?.get(AUTH_REQUIRED_HEADER)).toBe('true');
+    expect(result.headers?.get(AUTH_FAILURE_HEADER)).toBe('jwt_expired');
+  });
+
+  it('drops AUTH_FAILURE_HEADER when the response is not an UNAUTHORIZED error', () => {
+    const resHeaders = new Headers({ [AUTH_FAILURE_HEADER]: 'no_token', 'X-Custom': 'v' });
+    const result = createResponseMeta({ ctx: { resHeaders }, errors: [] });
+
+    expect(result.headers?.get(AUTH_FAILURE_HEADER)).toBeNull();
+    expect(result.headers?.get('X-Custom')).toBe('v');
   });
 });

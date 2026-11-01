@@ -20,12 +20,10 @@ export const finish =
     // re-trigger after completion. Best-effort — the adapter swallows failures.
     await transports.operationStore?.clearRunningMark();
 
-    // Publish the execution-complete stream event. `finalState.messages` +
-    // tool-set fields are stripped centrally inside the sink adapter, so this
-    // call site stays unaware.
+    // State snapshots are opt-in; internal done events always retain the state.
     await transports.stream.publishEvent({
       data: {
-        finalState: { ...state, status: 'done' },
+        ...(state.host?.includeFinalState === true && { finalState: { ...state, status: 'done' } }),
         phase: 'execution_complete',
         reason,
         reasonDetail,

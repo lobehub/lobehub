@@ -1,8 +1,24 @@
+import type { ReadFileState } from '@lobechat/tool-runtime';
 import { describe, expect, it } from 'vitest';
 
-import { buildReadFileState } from './buildReadFileState';
+import {
+  buildReadFileState,
+  getFirstLineNumber,
+  stripFinalLineTerminator,
+} from './buildReadFileState';
 
 describe('buildReadFileState', () => {
+  it('keeps the card for an empty Devin read confirmed by the final result state', () => {
+    const state = buildReadFileState({
+      args: { file_path: '/repo/empty.txt' },
+      identifier: 'devin',
+      parsedContent: { content: '' },
+      pluginState: { content: '' },
+    });
+
+    expect(state).toMatchObject({ charCount: 0, content: '', path: '/repo/empty.txt' });
+  });
+
   it('keeps the card for a successful builtin read of an empty file', () => {
     const state = buildReadFileState({
       args: { path: '/repo/empty.txt' },
@@ -51,6 +67,11 @@ describe('buildReadFileState', () => {
       identifier: 'pi',
       parsedContent: { content: 'const a = 1;' },
     });
+    const fromDevin = buildReadFileState({
+      args: { file_path: '/repo/file.ts' },
+      identifier: 'devin',
+      parsedContent: { content: 'const a = 1;' },
+    });
     const fromBuiltin = buildReadFileState({
       args: { path: '/repo/file.ts' },
       identifier: 'lobe-local-system',
@@ -58,7 +79,24 @@ describe('buildReadFileState', () => {
     });
 
     expect(fromPi).toMatchObject({ content: 'const a = 1;', fileType: 'ts' });
+    expect(fromDevin).toMatchObject({ content: 'const a = 1;', fileType: 'ts' });
     expect(fromBuiltin).toBeUndefined();
+  });
+
+  it('ignores non-string ACP content blocks parked on pluginState', () => {
+    // Devin's tool_state carries the raw session update, whose `content` is a
+    // content-block array — the read text only lives in the result content.
+    const state = buildReadFileState({
+      args: { file_path: '/repo/file.ts' },
+      identifier: 'devin',
+      parsedContent: { content: 'body' },
+      pluginState: {
+        content: [{ text: 'Reading…', type: 'content' }],
+        sessionUpdate: 'tool_call_update',
+      } as unknown as ReadFileState,
+    });
+
+    expect(state?.content).toBe('body');
   });
 
   it('derives loc from offset and limit args', () => {
@@ -69,5 +107,48 @@ describe('buildReadFileState', () => {
     });
 
     expect(state?.loc).toEqual([5, 14]);
+  });
+});
+
+describe('getFirstLineNumber', () => {
+  it('converts the builtin 0-based loc into a 1-based line number', () => {
+    expect(getFirstLineNumber({ pluginState: { loc: [160, 181] } })).toBe(161);
+    expect(getFirstLineNumber({ pluginState: { loc: [0, 200] } })).toBe(1);
+  });
+
+  it('keeps the 1-based offset arg used by OpenCode and Pi', () => {
+    expect(getFirstLineNumber({ args: { offset: 20, path: '/repo/a.ts' } })).toBe(20);
+  });
+
+  it('prefers the reported loc over the requested offset', () => {
+    expect(
+      getFirstLineNumber({
+        args: { offset: 5, path: '/repo/a.ts' },
+        pluginState: { loc: [9, 20] },
+      }),
+    ).toBe(10);
+  });
+
+  it('uses the cloud sandbox 1-based startLine when no loc is reported', () => {
+    expect(getFirstLineNumber({ pluginState: { startLine: 201 } })).toBe(201);
+  });
+
+  it('starts at line 1 when no range is known', () => {
+    expect(getFirstLineNumber({ args: { path: '/repo/a.ts' } })).toBe(1);
+  });
+});
+
+describe('stripFinalLineTerminator', () => {
+  it('drops only the final line terminator', () => {
+    expect(stripFinalLineTerminator('a\nb\n')).toBe('a\nb');
+    expect(stripFinalLineTerminator('a\r\n')).toBe('a');
+  });
+
+  it('keeps intentional trailing blank lines', () => {
+    expect(stripFinalLineTerminator('value\n\n')).toBe('value\n');
+  });
+
+  it('leaves content without a terminator unchanged', () => {
+    expect(stripFinalLineTerminator('value')).toBe('value');
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 type StripRef = (node: HTMLDivElement | null) => void;
 
@@ -17,7 +17,7 @@ export const useStripWidth = (): [number, StripRef] => {
   const [width, setWidth] = useState(0);
   const [node, setNode] = useState<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!node) return;
 
     setWidth(node.clientWidth);

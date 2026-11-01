@@ -9,27 +9,27 @@ Manage conversation topics (threads).
 ### `lh topic list`
 
 ```bash
-lh topic list [--agent-id [-L [--page [--json [fields]] < id > ] < n > ] < n > ]
+lh topic list [--agent-id <id>] [-L <n>] [-P <n>] [--json [fields]]
 ```
 
 | Option            | Description     | Default |
 | ----------------- | --------------- | ------- |
 | `--agent-id <id>` | Filter by agent | -       |
 | `-L, --limit <n>` | Page size       | `30`    |
-| `--page <n>`      | Page number     | `1`     |
+| `-P, --page <n>`  | Page number     | `1`     |
 
 **Table columns**: ID, TITLE, FAV, UPDATED
 
 ### `lh topic search <keywords>`
 
 ```bash
-lh topic search [--json [fields]] < keywords > [--agent-id < id > ]
+lh topic search <keywords> [--agent-id <id>] [--json [fields]]
 ```
 
 ### `lh topic create`
 
 ```bash
-lh topic create -t [--favorite] < title > [--agent-id < id > ]
+lh topic create -t <title> [--agent-id <id>] [--favorite]
 ```
 
 | Option                | Description          | Required |
@@ -41,19 +41,22 @@ lh topic create -t [--favorite] < title > [--agent-id < id > ]
 ### `lh topic edit <id>`
 
 ```bash
-lh topic edit [--favorite] [--no-favorite] < id > [-t < title > ]
+lh topic edit <id> [-t <title>] [--favorite] [--no-favorite]
 ```
 
-### `lh topic delete <ids...>`
+### `lh topic delete [ids...]`
+
+IDs may be passed as arguments, read from a file with `-f, --file <path>` (one per line, or a
+JSON array), or both combined; at least one ID must resolve or the command errors.
 
 ```bash
-lh topic delete [--yes] < id1 > [id2...]
+lh topic delete [id1] [id2...] [-f <path>] [--yes]
 ```
 
 ### `lh topic recent`
 
 ```bash
-lh topic recent [-L [--json [fields]] < n > ]
+lh topic recent [-L <n>] [--json [fields]]
 ```
 
 | Option            | Description     | Default |
@@ -71,25 +74,28 @@ Manage chat messages within topics.
 ### `lh message list`
 
 ```bash
-lh message list [options] [--json [fields]]
+lh message list [--topic-id <id>] [--agent-id <id>] [--role <role>] [--start <date>] [--end <date>] [-L <n>] [-P <n>] [--user] [--json [fields]]
 ```
 
-| Option            | Description             | Default |
-| ----------------- | ----------------------- | ------- |
-| `--topic-id <id>` | Filter by topic         | -       |
-| `--agent-id <id>` | Filter by agent         | -       |
-| `-L, --limit <n>` | Page size               | `30`    |
-| `--page <n>`      | Page number             | `1`     |
-| `--user`          | Only show user messages | -       |
+| Option            | Description                                    | Default |
+| ----------------- | ---------------------------------------------- | ------- |
+| `--topic-id <id>` | Filter by topic                                | -       |
+| `--agent-id <id>` | Filter by agent                                | -       |
+| `--role <role>`   | Filter by role (user, assistant, tool, system) | -       |
+| `--start <date>`  | Only messages created at/after this date       | -       |
+| `--end <date>`    | Only messages created at/before this date      | -       |
+| `-L, --limit <n>` | Page size                                      | `50`    |
+| `-P, --page <n>`  | Page number                                    | `1`     |
+| `--user`          | Shorthand for `--role user`                    | -       |
 
-**Table columns**: ID, ROLE, CONTENT, CREATED
+**Table columns**: ID, ROLE, AGENT, CONTENT, TOPIC/THREAD, CREATED
 
-**Note**: When `--topic-id` or `--agent-id` is provided, uses `message.getMessages`; otherwise uses `message.listAll`.
+**Note**: Always queries via `message.listAll`.
 
 ### `lh message search <keywords>`
 
 ```bash
-lh message search [fields]] < keywords > [--json
+lh message search <keywords> [--json [fields]]
 ```
 
 Full-text search across all messages.
@@ -97,21 +103,26 @@ Full-text search across all messages.
 ### `lh message delete <ids...>`
 
 ```bash
-lh message delete [--yes] < id1 > [id2...]
+lh message delete <id1> [id2...] [--yes]
 ```
 
 ### `lh message count`
 
 ```bash
-lh message count [--start [--end [--json] < date > ] < date > ]
+lh message count [--topic-id <id>] [--agent-id <id>] [--role <role>] [--start <date>] [--end <date>] [--group-by <field>] [--json]
 ```
 
-| Option           | Description                                |
-| ---------------- | ------------------------------------------ |
-| `--start <date>` | Start date (ISO format, e.g. `2024-01-01`) |
-| `--end <date>`   | End date (ISO format)                      |
+| Option               | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `--topic-id <id>`    | Filter by topic                                  |
+| `--agent-id <id>`    | Filter by agent                                  |
+| `--role <role>`      | Filter by role (user, assistant, system)         |
+| `--start <date>`     | Start date (ISO format, e.g. `2024-01-01`)       |
+| `--end <date>`       | End date (ISO format)                            |
+| `--group-by <field>` | Group counts by field; only `topic` is supported |
 
-**Output**: Total message count for the specified period.
+**Output**: Total message count for the specified period, or a per-topic breakdown table with
+`--group-by topic`.
 
 ### `lh message heatmap`
 

@@ -1,38 +1,47 @@
 import { isDesktop } from '@lobechat/const';
 import type { MarkdownProps } from '@lobehub/ui';
-import { ActionIcon, Center, Empty, Flexbox, Icon, Image, Markdown, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { CodeIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
+import {
+  Center,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Image,
+  Markdown,
+  Text,
+  ToggleGroup,
+} from '@lobehub/ui';
+import { CodeIcon, ExternalLinkIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import CodeEditorPane from '@/components/CodeEditorPane';
-import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
+import { applyHtmlPreviewBaseUrl, InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
 import {
   PublishHtmlArtifactLiveBar,
   PublishHtmlArtifactProvider,
   PublishHtmlArtifactTrigger,
 } from '@/features/Portal/LocalFile/PublishHtmlArtifactButton';
-import { useClientDataSWR } from '@/libs/swr';
-import { localFileKeys } from '@/libs/swr/keys';
-import { cloudSandboxService } from '@/services/cloudSandbox';
-import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
+import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
+import { useLocalFilePreview, useLocalFilePreviewStore } from '@/store/localFilePreview';
 import {
   parseSkillMarkdownFrontmatter,
   parseSkillMarkdownMetadata,
   type SkillMarkdownMetadataItem,
 } from '@/utils/skillMarkdown';
 
-import { extensionToLanguage, getFileExtension } from './Body.helpers';
+import { getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
+import PreviewToolbar, { ToolbarActionButton } from './PreviewToolbar';
+import UnsupportedPreview from './UnsupportedPreview';
+import VideoPreview from './VideoPreview';
 
 // Deferred: pulls in react-pdf, only needed once a binary document is opened.
-const DocumentPreview = lazy(() => import('./DocumentPreview'));
+const DocumentPreview = lazy(() => import('@/features/FileViewer/Renderer/Document'));
 
 interface ImagePreviewProps {
   blob: Blob;
@@ -130,31 +139,6 @@ type TextPreviewMode = 'render' | 'raw';
 
 const NO_TOPIC_KEY = '__no_topic__';
 
-const floatingControlsStyles = createStaticStyles(({ css }) => ({
-  container: css`
-    position: absolute;
-    z-index: 2;
-    inset-block-start: 8px;
-    inset-inline-end: 12px;
-
-    padding: 4px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    opacity: 0.55;
-    background: ${cssVar.colorBgElevated};
-    backdrop-filter: blur(8px);
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    transition: opacity 0.15s ease;
-
-    &:hover,
-    &:focus-within {
-      opacity: 1;
-    }
-  `,
-}));
-
 interface TextPreviewPaneProps {
   activeTopicId?: string | null;
   content: string;
@@ -163,7 +147,8 @@ interface TextPreviewPaneProps {
   ext: string;
   filePath: string;
   onReload?: () => Promise<unknown> | void;
-  onSaved?: (savedContent: string) => void;
+  /** Called when a save starts; returns the commit for the saved body. */
+  onSaveStart?: () => (savedContent: string) => void;
   readOnly?: boolean;
   reloading?: boolean;
   resourceBaseUrl?: string;
@@ -180,7 +165,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     ext,
     filePath,
     onReload,
-    onSaved,
+    onSaveStart,
     readOnly = false,
     reloading = false,
     resourceBaseUrl,
@@ -223,12 +208,13 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       if (readOnly) return;
 
       try {
+        const commitSaved = onSaveStart?.();
         const saved = await saveLocalFile({ deviceId, filePath, workingDirectory });
         if (saved === undefined) return;
         // Update SWR cache BEFORE clearing the buffer, otherwise React will
         // briefly render with buffer cleared but content still stale, causing
         // CodeMirror to setValue and reset the cursor.
-        onSaved?.(saved);
+        commitSaved?.(saved);
         setLocalFileBuffer(tabId, undefined);
       } catch {
         /* swallow — surfacing handled elsewhere if needed */
@@ -236,7 +222,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     }, [
       deviceId,
       filePath,
-      onSaved,
+      onSaveStart,
       readOnly,
       saveLocalFile,
       setLocalFileBuffer,
@@ -277,11 +263,32 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       [modeScopeKey],
     );
     const showHtmlPreview = isHtml && mode === 'render';
+    const showSourceView = showHtmlPreview || !(isMarkdown && mode === 'render');
     const [htmlPreviewRevision, setHtmlPreviewRevision] = useState(0);
     const handleReloadPreview = useCallback(async () => {
       await onReload?.();
       setHtmlPreviewRevision((prev) => prev + 1);
     }, [onReload]);
+    // Electron's window-open handler denies blob: URLs, so the blob path only
+    // works on web; desktop hands local files to the system default app instead,
+    // and remote/sandbox files have no external route there.
+    const canOpenExternal = isDesktop ? !deviceId && !sandboxTopicId : true;
+    const handleOpenExternal = useCallback(() => {
+      if (isDesktop) {
+        void localFileService.openLocalFile({ path: filePath });
+        return;
+      }
+
+      // A top-level blob: document inherits this app's origin, so untrusted HTML
+      // must stay inside a sandboxed (no allow-same-origin) iframe wrapper.
+      const html = applyHtmlPreviewBaseUrl(editingValue, resourceBaseUrl);
+      const srcdoc = html.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+      const shell = `<!doctype html><title>${filePath.split(/[/\\]/).at(-1) ?? ''}</title><style>html,body{margin:0;height:100%}iframe{display:block;width:100%;height:100%;border:0}</style><iframe sandbox="allow-scripts allow-modals allow-popups" srcdoc="${srcdoc}"></iframe>`;
+      const url = URL.createObjectURL(new Blob([shell], { type: 'text/html' }));
+      window.open(url, '_blank', 'noopener,noreferrer');
+      // Revoking immediately can abort the new window's document load — defer it.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }, [editingValue, filePath, resourceBaseUrl]);
 
     return (
       <PublishHtmlArtifactProvider
@@ -294,53 +301,59 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       >
         <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
           <PublishHtmlArtifactLiveBar />
-          <Flexbox
-            flex={1}
-            height={'100%'}
-            style={{ minHeight: 0, overflow: 'hidden', position: 'relative' }}
-          >
-            {canRender && (
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={floatingControlsStyles.container}
-                gap={4}
-              >
+          <PreviewToolbar
+            deviceId={deviceId}
+            path={filePath}
+            rootPath={workingDirectory}
+            actions={
+              <>
                 {isHtml && (
-                  <ActionIcon
+                  <ToolbarActionButton
                     icon={RefreshCwIcon}
                     loading={reloading}
-                    size={'small'}
                     title={t('workingPanel.localFile.preview.reload')}
                     onClick={handleReloadPreview}
                   />
                 )}
-
-                <Tabs
-                  activeKey={mode}
-                  size={'small'}
-                  items={[
-                    {
-                      icon: <Icon icon={EyeIcon} />,
-                      key: 'render',
-                      label: t('workingPanel.localFile.preview.render'),
-                    },
-                    {
-                      icon: <Icon icon={CodeIcon} />,
-                      key: 'raw',
-                      label: t(
-                        isHtml
-                          ? 'workingPanel.localFile.preview.source'
-                          : 'workingPanel.localFile.preview.raw',
-                      ),
-                    },
-                  ]}
-                  onChange={(key) => setMode(key as TextPreviewMode)}
-                />
+                {canRender && (
+                  <ToggleGroup
+                    value={mode}
+                    variant={'outlined'}
+                    options={[
+                      {
+                        icon: <EyeIcon size={14} />,
+                        label: t('workingPanel.localFile.preview.render'),
+                        value: 'render',
+                      },
+                      {
+                        icon: <CodeIcon size={14} />,
+                        label: t(
+                          isHtml
+                            ? 'workingPanel.localFile.preview.source'
+                            : 'workingPanel.localFile.preview.raw',
+                        ),
+                        value: 'raw',
+                      },
+                    ]}
+                    onChange={(value) => setMode(value as TextPreviewMode)}
+                  />
+                )}
+                {isHtml && canOpenExternal && (
+                  <ToolbarActionButton
+                    icon={ExternalLinkIcon}
+                    title={t('workingPanel.localFile.preview.openExternal')}
+                    onClick={handleOpenExternal}
+                  />
+                )}
                 <PublishHtmlArtifactTrigger />
-              </Flexbox>
-            )}
-            <div style={{ flex: 1, minHeight: 0, overflow: showHtmlPreview ? 'hidden' : 'auto' }}>
+              </>
+            }
+          />
+          <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
+            {/* The rendered-markdown branch scrolls here; the HTML preview and
+                the code editor each own their scrolling, and the editor needs
+                that so its gutter and status bar stay pinned. */}
+            <div style={{ flex: 1, minHeight: 0, overflow: showSourceView ? 'hidden' : 'auto' }}>
               {isMarkdown && mode === 'render' ? (
                 <>
                   <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
@@ -359,9 +372,9 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                 />
               ) : (
                 <CodeEditorPane
-                  language={extensionToLanguage(ext)}
+                  showStatusBar
+                  filePath={filePath}
                   readOnly={readOnly}
-                  style={{ fontSize: 12, minHeight: '100%' }}
                   value={editingValue}
                   onChange={readOnly ? undefined : handleCodeChange}
                   onSave={readOnly ? undefined : handleSave}
@@ -389,32 +402,6 @@ interface ActiveFileViewProps {
   workingDirectory: string;
 }
 
-/**
- * Live-read a text file from the topic's cloud sandbox via the `readLocalFile`
- * sandbox tool. There is no durable copy anywhere — a recycled sandbox (or any
- * tool failure) rejects, surfacing the sandbox-unavailable empty state.
- */
-const fetchSandboxFilePreview = async (
-  path: string,
-  topicId: string,
-): Promise<LocalFilePreview> => {
-  // `readLocalFile` defaults an omitted range to the first 200 lines — always
-  // request the whole file for previews so long files don't render truncated.
-  const result = await cloudSandboxService.callTool(
-    'readLocalFile',
-    { fullContent: true, path },
-    { topicId },
-  );
-  if (!result.success || typeof result.result?.content !== 'string')
-    throw new Error(result.error?.message || 'Failed to read sandbox file');
-
-  return {
-    content: result.result.content,
-    contentType: result.result.mimeType || 'text/plain',
-    type: 'text',
-  };
-};
-
 const ActiveFileView = memo<ActiveFileViewProps>(
   ({
     activeTopicId,
@@ -428,52 +415,38 @@ const ActiveFileView = memo<ActiveFileViewProps>(
 
     const filename = filePath.split('/').at(-1) ?? '';
     const enabled = sandboxTopicId ? true : Boolean(workingDirectory) && (!!deviceId || isDesktop);
-    const resourceScope =
-      !sandboxTopicId && !deviceId && isHtmlFile({ path: filePath }) ? 'workspace' : undefined;
-    const {
-      data: preview,
-      error,
-      isLoading,
-      isValidating,
-      mutate,
-    } = useClientDataSWR<LocalFilePreview>(
-      enabled
-        ? localFileKeys.preview({
-            allowExternalFile: allowExternalFilePreview,
-            deviceId,
-            filePath,
-            ...(resourceScope && { resourceScope }),
-            ...(sandboxTopicId && { sandboxTopicId }),
-            workingDirectory,
-          })
-        : null,
-      () =>
-        sandboxTopicId
-          ? fetchSandboxFilePreview(filePath, sandboxTopicId)
-          : projectFileService.getLocalFilePreview({
-              allowExternalFile: allowExternalFilePreview,
-              deviceId,
-              path: filePath,
-              ...(resourceScope && { resourceScope }),
-              workingDirectory,
-            }),
-      { revalidateOnFocus: false },
+    const target = useMemo(
+      () => ({
+        allowExternalFile: allowExternalFilePreview,
+        deviceId,
+        filePath,
+        sandboxTopicId,
+        workingDirectory,
+      }),
+      [allowExternalFilePreview, deviceId, filePath, sandboxTopicId, workingDirectory],
     );
+    const [useFetchPreview, beginSave, refreshPreview] = useLocalFilePreviewStore((s) => [
+      s.useFetchPreview,
+      s.beginSave,
+      s.refreshPreview,
+    ]);
+    const { error, isHydrated, isLoading, isValidating } = useFetchPreview(target, enabled);
+    const preview = useLocalFilePreview(enabled ? target : undefined);
 
-    const handleSavedContent = useCallback(
-      (saved: string) => {
-        mutate((prev) => (prev && prev.type === 'text' ? { ...prev, content: saved } : prev), {
-          revalidate: false,
-        });
-      },
-      [mutate],
-    );
+    const handleSaveStart = useCallback(() => beginSave(target), [beginSave, target]);
 
-    const handleReload = useCallback(() => mutate(), [mutate]);
+    const handleReload = useCallback(() => refreshPreview(target), [refreshPreview, target]);
 
-    if (isLoading) return <Loading />;
+    // The persisted preview is still being read: paint nothing rather than a
+    // spinner that the cached text replaces a few frames later.
+    if (isLoading) return isHydrated ? <Loading /> : null;
 
-    if (error || !preview) {
+    // Text previews are persisted (stale-while-revalidate): a transiently failed
+    // background refresh keeps the cached text, while a deleted / denied file
+    // evicts it in the store (so `preview` is gone). Any other preview type surfaces the error
+    // (a deleted file / disconnected device), and so does a sandbox — a recycled
+    // sandbox has no file left to show.
+    if (!preview || (error && (sandboxTopicId || preview.type !== 'text'))) {
       return (
         <Center height={'100%'} width={'100%'}>
           <Empty
@@ -489,6 +462,18 @@ const ActiveFileView = memo<ActiveFileViewProps>(
 
     if (preview.type === 'image') {
       return <ImagePreview blob={preview.blob} filename={filename} />;
+    }
+
+    if (preview.type === 'video') {
+      return (
+        <VideoPreview
+          allowExternalFile={allowExternalFilePreview}
+          filePath={filePath}
+          key={filePath}
+          revision={preview.revision}
+          workingDirectory={workingDirectory}
+        />
+      );
     }
 
     if (preview.type === 'document') {
@@ -511,9 +496,11 @@ const ActiveFileView = memo<ActiveFileViewProps>(
 
     if (preview.type !== 'text') {
       return (
-        <Center height={'100%'} width={'100%'}>
-          <Empty description={t('workingPanel.localFile.binary')} />
-        </Center>
+        <UnsupportedPreview
+          filePath={filePath}
+          isLocalFile={!sandboxTopicId && !deviceId && isDesktop}
+          oversized={preview.type === 'binary' && preview.oversized}
+        />
       );
     }
 
@@ -536,7 +523,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         sandboxTopicId={sandboxTopicId}
         workingDirectory={workingDirectory}
         onReload={handleReload}
-        onSaved={handleSavedContent}
+        onSaveStart={handleSaveStart}
       />
     );
   },

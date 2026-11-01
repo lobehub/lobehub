@@ -41,12 +41,21 @@ fi
 [ -n "$APP_ENV" ] && [ -f "$APP_ENV" ] || { echo "❌ no env file with JWKS_KEY found (set JWKS_SOURCE=<file>, or create .records/env/gateway.env)"; exit 1; }
 echo "ℹ️  reading JWKS_KEY + AGENT_GATEWAY_SERVICE_TOKEN from: $APP_ENV"
 
+# Managed agent-testing env files are shell-escaped `export KEY=value` files.
+# Source them instead of reparsing them as dotenv so JWKS JSON survives intact.
+set -a
+# shellcheck disable=SC1090
+source "$APP_ENV"
+set +a
+# The app env also defines PORT for Next.js; keep the gateway on its own port.
+PORT="${GATEWAY_PORT:-8787}"
+
 node -e '
 const fs = require("fs");
 const env = fs.readFileSync(process.argv[1], "utf8");
 const pick = (k) => { const m = env.match(new RegExp("^"+k+"=(.*)$","m")); return m ? m[1].trim().replace(/^['"'"'"]|['"'"'"]$/g,"") : ""; };
-const jwksRaw = pick("JWKS_KEY");
-const svc = pick("AGENT_GATEWAY_SERVICE_TOKEN");
+const jwksRaw = process.env.JWKS_KEY || "";
+const svc = process.env.AGENT_GATEWAY_SERVICE_TOKEN || "";
 if (!jwksRaw) { console.error("❌ JWKS_KEY missing in .env.local"); process.exit(1); }
 if (!svc)     { console.error("❌ AGENT_GATEWAY_SERVICE_TOKEN missing in .env.local"); process.exit(1); }
 const jwks = JSON.parse(jwksRaw);

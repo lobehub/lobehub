@@ -2,19 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeMistralAI, params } from './index';
-
-testProvider({
-  provider: 'mistral',
-  defaultBaseURL: 'https://api.mistral.ai/v1',
-  chatModel: 'open-mistral-7b',
-  Runtime: LobeMistralAI,
-  chatDebugEnv: 'DEBUG_MISTRAL_CHAT_COMPLETION',
-  test: {
-    skipAPICall: true, // Mistral has custom payload handling (excludeUsage, temperature normalization)
-  },
-});
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});

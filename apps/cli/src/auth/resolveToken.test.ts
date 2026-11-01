@@ -1,13 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getUserIdFromApiKey } from './apiKey';
+import { log } from '../utils/logger';
+import type * as ApiKeyModule from './apiKey';
+import { ApiKeyValidationError, getUserIdFromApiKey } from './apiKey';
+import type * as RefreshModule from './refresh';
 import { getValidToken } from './refresh';
 import { resolveToken } from './resolveToken';
 
-vi.mock('./apiKey', () => ({
+vi.mock('./apiKey', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiKeyModule>()),
   getUserIdFromApiKey: vi.fn(),
 }));
-vi.mock('./refresh', () => ({
+vi.mock('./refresh', async (importOriginal) => ({
+  ...(await importOriginal<typeof RefreshModule>()),
   getValidToken: vi.fn(),
 }));
 vi.mock('../settings', () => ({
@@ -16,15 +21,6 @@ vi.mock('../settings', () => ({
     (process.env.LOBEHUB_SERVER || 'https://app.lobehub.com').replace(/\/$/, ''),
   ),
 }));
-vi.mock('../utils/logger', () => ({
-  log: {
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  },
-}));
-
 // Helper to create a valid JWT with sub claim
 function makeJwt(sub: string): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
@@ -105,6 +101,24 @@ describe('resolveToken', () => {
   });
 
   describe('with environment api key', () => {
+    it.each([
+      { retryable: true, override: 75, expected: 75 },
+      { retryable: false, override: 75, expected: 1 },
+      { retryable: true, override: undefined, expected: 1 },
+    ])(
+      'uses exit $expected with retryable=$retryable and policy=$override',
+      async ({ retryable, override, expected }) => {
+        process.env.LOBEHUB_CLI_API_KEY = 'fixture-key';
+        vi.mocked(getUserIdFromApiKey).mockRejectedValueOnce(
+          new ApiKeyValidationError('controlled failure', retryable),
+        );
+        await expect(resolveToken({ unavailableExitCode: override })).rejects.toThrow(
+          'process.exit',
+        );
+        expect(exitSpy).toHaveBeenCalledWith(expected);
+      },
+    );
+
     it('should return API key from environment', async () => {
       process.env.LOBEHUB_CLI_API_KEY = 'sk-lh-test';
       vi.mocked(getUserIdFromApiKey).mockResolvedValue('user-789');
@@ -136,12 +150,28 @@ describe('resolveToken', () => {
   });
 
   describe('with stored credentials', () => {
+    it.each([
+      { status: 'unavailable', exitCode: 75 },
+      { status: 'spent', exitCode: 1 },
+      { status: 'refused', exitCode: 1 },
+      { status: 'no-login', exitCode: 1 },
+    ] as const)(
+      'uses exit $exitCode for $status with a retry policy',
+      async ({ status, exitCode }) => {
+        vi.mocked(getValidToken).mockResolvedValue({ detail: 'controlled failure', status });
+
+        await expect(resolveToken({ unavailableExitCode: 75 })).rejects.toThrow('process.exit');
+        expect(exitSpy).toHaveBeenCalledWith(exitCode);
+      },
+    );
+
     it('should return stored credentials token', async () => {
       const token = makeJwt('stored-user');
       vi.mocked(getValidToken).mockResolvedValue({
         credentials: {
           accessToken: token,
         },
+        status: 'ok',
       });
 
       const result = await resolveToken({});
@@ -163,6 +193,7 @@ describe('resolveToken', () => {
         credentials: {
           accessToken: token,
         },
+        status: 'ok',
       });
 
       await expect(resolveToken({})).rejects.toThrow('process.exit');
@@ -170,10 +201,30 @@ describe('resolveToken', () => {
     });
 
     it('should exit when no stored credentials', async () => {
-      vi.mocked(getValidToken).mockResolvedValue(null);
+      vi.mocked(getValidToken).mockResolvedValue({ status: 'no-login' });
 
       await expect(resolveToken({})).rejects.toThrow('process.exit');
       expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    /**
+     * An unanswered refresh must not be dressed up as a missing login: the stored credentials are
+     * still good, and telling the user to authenticate again is how a network blip turned into a
+     * re-login.
+     */
+    it('should say the login survived when the refresh went unanswered', async () => {
+      vi.mocked(getValidToken).mockResolvedValue({
+        detail: 'fetch failed',
+        status: 'unavailable',
+      });
+      const logError = vi.spyOn(log, 'error').mockImplementation(() => {});
+
+      await expect(resolveToken({})).rejects.toThrow('process.exit');
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('fetch failed'));
+      expect(logError).toHaveBeenCalledWith(expect.stringContaining('Retry in a moment'));
+      expect(logError).not.toHaveBeenCalledWith(expect.stringContaining('No authentication found'));
+
+      logError.mockRestore();
     });
   });
 });

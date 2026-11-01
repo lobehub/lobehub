@@ -1,10 +1,9 @@
-import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronRightIcon, FlagIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { homeType } from '@/features/Home/components/homeType';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
@@ -75,7 +74,8 @@ const GoalAgentAvatar = memo<{ agentId: string | null }>(({ agentId }) => {
   if (!agent) return null;
 
   return (
-    <Avatar
+    <AgentAvatar
+      agentId={agentId}
       avatar={agent.avatar}
       background={agent.backgroundColor}
       shape={'circle'}
@@ -118,16 +118,16 @@ const GoalRow = memo<GoalRowProps>(({ bare, entry }) => {
           {entry.title}
         </Text>
         <GoalAgentAvatar agentId={entry.agentId} />
-        {/* A goal is measured in rounds, not in time — how far into its budget it
-            is says more at a glance than when it last moved. */}
+        {/* A goal is measured in the tasks it has closed, not in time — how far
+            through its own decomposition it is says more at a glance. */}
         <span className={cx(homeType.meta, styles.rounds)}>
-          {entry.maxRounds
-            ? t('goalList.roundProgress', {
-                current: entry.rounds,
+          {entry.pendingDecisions > 0
+            ? t('goalList.needsYou', { count: entry.pendingDecisions, ns: 'chat' })
+            : t('goalList.taskProgress', {
+                done: entry.taskDone,
                 ns: 'chat',
-                total: entry.maxRounds,
-              })
-            : t('goalList.agentRuns', { count: entry.rounds, ns: 'chat' })}
+                total: entry.taskTotal,
+              })}
         </span>
         <Icon color={cssVar.colorTextQuaternary} icon={ChevronRightIcon} size={14} />
       </Flexbox>

@@ -1,8 +1,6 @@
 'use client';
 
-import { Markdown } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Markdown, Select } from '@lobehub/ui';
 import { VertexAIProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
@@ -94,7 +92,7 @@ const useProviderCard = (): ProviderItem => {
           </Markdown>
         ),
         label: t('vertexai.apiKey.title'),
-        name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
+        name: `${KeyVaultsConfigKey}.${LLMProviderApiTokenKey}`,
       },
       {
         children: isLoading ? (
@@ -115,7 +113,7 @@ const useProviderCard = (): ProviderItem => {
           </Markdown>
         ),
         label: t('vertexai.region.title'),
-        name: [KeyVaultsConfigKey, 'region'],
+        name: `${KeyVaultsConfigKey}.region`,
       },
     ],
   };

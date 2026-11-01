@@ -20,35 +20,10 @@ const permissionMock = vi.hoisted(() => ({
 }));
 const labMock = vi.hoisted(() => ({
   enableSelfLearning: true,
-  enableTopicAcceptance: true,
+  enableGoals: true,
 }));
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({ canEditResource: true, isAccessResolved: true }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
-    <div {...props}>{children}</div>
-  ),
-}));
-
-vi.mock('@lobehub/ui/icons', () => ({
-  BotPromptIcon: () => null,
-}));
-
-vi.mock('lucide-react', () => ({
-  DnaIcon: () => null,
-  ListTodoIcon: () => null,
-  MessageSquarePlusIcon: () => null,
-  MessagesSquareIcon: () => null,
-  SearchIcon: () => null,
-  TargetIcon: () => null,
-}));
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
 }));
 
 vi.mock('react-router', async () => {
@@ -127,25 +102,28 @@ vi.mock('@/store/global', () => ({
     selector({ toggleCommandMenu: toggleCommandMenuMock }),
 }));
 
+interface ServerConfigTestState {
+  featureFlags: { isAgentEditable: boolean };
+  serverConfigInit: boolean;
+}
+
 vi.mock('@/store/serverConfig', () => ({
-  featureFlagsSelectors: (state: { featureFlags: { isAgentEditable: boolean } }) =>
-    state.featureFlags,
-  useServerConfigStore: (
-    selector: (state: { featureFlags: { isAgentEditable: boolean } }) => unknown,
-  ) => selector({ featureFlags: { isAgentEditable: true } }),
+  featureFlagsSelectors: (state: ServerConfigTestState) => state.featureFlags,
+  useServerConfigStore: (selector: (state: ServerConfigTestState) => unknown) =>
+    selector({ featureFlags: { isAgentEditable: true }, serverConfigInit: true }),
 }));
 
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: (state: unknown) => unknown) =>
-    selector({ preference: { lab: labMock } }),
+    selector({ isUserStateInit: true, preference: { lab: labMock } }),
 }));
 
 vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: {
     enableSelfLearning: (state: { preference: { lab?: { enableSelfLearning?: boolean } } }) =>
       state.preference.lab?.enableSelfLearning ?? false,
-    enableTopicAcceptance: (state: { preference: { lab?: { enableTopicAcceptance?: boolean } } }) =>
-      state.preference.lab?.enableTopicAcceptance ?? false,
+    enableGoals: (state: { preference: { lab?: { enableGoals?: boolean } } }) =>
+      state.preference.lab?.enableGoals ?? false,
   },
 }));
 
@@ -161,7 +139,7 @@ describe('Agent sidebar header nav', () => {
     permissionMock.create_content = true;
     permissionMock.edit_own_content = true;
     labMock.enableSelfLearning = true;
-    labMock.enableTopicAcceptance = true;
+    labMock.enableGoals = true;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });

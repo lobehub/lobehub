@@ -56,10 +56,10 @@ export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_LEVELS)[number
 export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 
 /**
- * Non-OpenAI models explicitly supported through a model-specific Codex catalog
- * and the deployment-owned server-default relay. Keep this list explicit: tool
- * support alone does not prove that Codex's request and continuation behavior
- * is compatible.
+ * Non-OpenAI models with hand-tuned Codex catalog metadata (reasoning levels,
+ * truncation). Not an allowlist: any tool-capable relay model is offered to
+ * Codex, and models outside this list get a catalog entry built from their
+ * model card.
  */
 export const CODEX_SERVER_DEFAULT_CUSTOM_MODELS = [
   'deepseek-v4-flash',
@@ -78,7 +78,7 @@ const CODEX_MAX_REASONING_EFFORT_LEVELS = [
 ] as const satisfies readonly CodexReasoningEffort[];
 
 const CODEX_ULTRA_REASONING_MODELS = ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra'] as const;
-const CODEX_MAX_REASONING_MODELS = ['gpt-5.6-luna'] as const;
+const CODEX_MAX_REASONING_MODELS = ['gpt-6-astra', 'gpt-5.6-luna'] as const;
 
 /**
  * Qoder reasoning-effort levels, mirrored 1:1 with the CLI's
@@ -392,7 +392,7 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     model: {
       encodings: [MODEL_FLAGS_ENCODING, { key: 'model', kind: 'config' }],
       resolve: resolveCodexModel,
-      source: 'static',
+      source: 'catalog',
     },
     speed: {
       encodings: [{ key: CODEX_SERVICE_TIER_CONFIG_KEY, kind: 'config' }],
@@ -401,6 +401,16 @@ export const HETERO_SELECTOR_CAPABILITIES = {
     },
   },
   'cursor': {
+    model: {
+      encodings: [{ flags: ['--model'], kind: 'flag' }],
+      resolve: resolvePersistedModel,
+      source: 'catalog',
+    },
+  },
+  'droid': {
+    model: { encodings: [], resolve: resolvePersistedModel, source: 'catalog' },
+  },
+  'devin': {
     model: {
       encodings: [{ flags: ['--model'], kind: 'flag' }],
       resolve: resolvePersistedModel,
@@ -419,7 +429,9 @@ export const HETERO_SELECTOR_CAPABILITIES = {
       source: 'catalog',
     },
   },
-  'kimi-code': {},
+  'kimi-code': {
+    model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
+  },
   'opencode': {
     model: { encodings: [MODEL_FLAGS_ENCODING], resolve: resolvePersistedModel, source: 'catalog' },
   },

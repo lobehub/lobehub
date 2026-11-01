@@ -1,13 +1,11 @@
-import { createModal } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { openEditorModal } from '.';
 
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: () => null,
-  createModal: vi.fn(() => ({ close: vi.fn(), destroy: vi.fn(), update: vi.fn() })),
-  ModalFooter: () => null,
-  useModalContext: () => ({ close: vi.fn() }),
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('./EditorModalContent', () => ({ default: () => null }));

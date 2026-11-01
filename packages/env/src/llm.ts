@@ -68,6 +68,9 @@ export const getLLMConfig = () => {
       ENABLED_OPENROUTER: z.boolean(),
       OPENROUTER_API_KEY: z.string().optional(),
 
+      ENABLED_TYPESAFE: z.boolean(),
+      TYPESAFE_API_KEY: z.string().optional(),
+
       ENABLED_ZEROONE: z.boolean(),
       ZEROONE_API_KEY: z.string().optional(),
 
@@ -98,6 +101,9 @@ export const getLLMConfig = () => {
 
       ENABLED_LMSTUDIO: z.boolean(),
       LMSTUDIO_API_KEY: z.string().optional(),
+
+      ENABLED_UNSLOTH: z.boolean(),
+      UNSLOTH_API_KEY: z.string().optional(),
 
       ENABLED_QINIU: z.boolean(),
       QINIU_API_KEY: z.string().optional(),
@@ -156,6 +162,9 @@ export const getLLMConfig = () => {
 
       ENABLED_XAI: z.boolean(),
       XAI_API_KEY: z.string().optional(),
+
+      ENABLED_META: z.boolean(),
+      META_API_KEY: z.string().optional(),
 
       ENABLED_INTERNLM: z.boolean(),
       INTERNLM_API_KEY: z.string().optional(),
@@ -300,6 +309,9 @@ export const getLLMConfig = () => {
       ENABLED_OPENROUTER: !!process.env.OPENROUTER_API_KEY,
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
 
+      ENABLED_TYPESAFE: !!process.env.TYPESAFE_API_KEY,
+      TYPESAFE_API_KEY: process.env.TYPESAFE_API_KEY,
+
       ENABLED_TOGETHERAI: !!process.env.TOGETHERAI_API_KEY,
       TOGETHERAI_API_KEY: process.env.TOGETHERAI_API_KEY,
 
@@ -354,6 +366,9 @@ export const getLLMConfig = () => {
 
       ENABLED_LMSTUDIO: !!process.env.LMSTUDIO_API_KEY,
       LMSTUDIO_API_KEY: process.env.LMSTUDIO_API_KEY,
+
+      ENABLED_UNSLOTH: !!process.env.UNSLOTH_API_KEY,
+      UNSLOTH_API_KEY: process.env.UNSLOTH_API_KEY,
 
       ENABLED_QINIU: !!process.env.QINIU_API_KEY,
       QINIU_API_KEY: process.env.QINIU_API_KEY,
@@ -410,6 +425,9 @@ export const getLLMConfig = () => {
 
       ENABLED_XAI: !!process.env.XAI_API_KEY,
       XAI_API_KEY: process.env.XAI_API_KEY,
+
+      ENABLED_META: !!process.env.META_API_KEY,
+      META_API_KEY: process.env.META_API_KEY,
 
       ENABLED_INTERNLM: !!process.env.INTERNLM_API_KEY,
       INTERNLM_API_KEY: process.env.INTERNLM_API_KEY,

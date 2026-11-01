@@ -1,12 +1,15 @@
+import { markdownToPlainText } from '@lobechat/agent-address-linq';
 import type { MessengerOversizeImageStrategy } from '@lobechat/const';
 import debug from 'debug';
 
+import { getMessengerLinqConfig } from '@/config/messenger';
 import {
   PLATFORM_ATTACHMENT_BUDGETS,
   prepareAttachmentsForBudget,
   splitFallbackMessages,
   summarizeDegradations,
 } from '@/server/services/bot/platforms/attachmentBudget';
+import { warnAttachmentFailures } from '@/server/services/bot/platforms/attachmentDelivery';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import {
   batchDiscordFiles,
@@ -19,6 +22,8 @@ import { sendTelegramAttachments } from '@/server/services/bot/platforms/telegra
 import type { BotMessageAttachment } from '@/server/services/bot/platforms/types';
 
 import type { InstallationCredentials } from './installations/types';
+import { createLinqApi } from './platforms/linq/client';
+import { pickLinqPoolNumber } from './platforms/linq/pool';
 
 const log = debug('lobe-messenger:outbound');
 
@@ -107,7 +112,9 @@ export const sendOutboundDirectMessage = async (params: {
         // The first attachment carries the text as its caption; if every
         // attachment fails, fall back to a plain message so the text leg
         // still lands.
-        const delivered = await sendTelegramAttachments(api, platformUserId, files, text);
+        const sent = await sendTelegramAttachments(api, platformUserId, files, text);
+        warnAttachmentFailures('messenger:outbound:telegram', sent.failures);
+        const { delivered } = sent;
         textDelivered = delivered > 0;
         if (delivered === 0 && !text && !linkMessages.length)
           throw new Error('All Telegram attachments failed to send');
@@ -123,7 +130,8 @@ export const sendOutboundDirectMessage = async (params: {
       const channel = await api.createDMChannel(platformUserId);
       let textDelivered = false;
       if (files) {
-        const rawFiles = await materializeAttachmentsForDiscord(files);
+        const { failures, files: rawFiles } = await materializeAttachmentsForDiscord(files);
+        warnAttachmentFailures('messenger:outbound:discord', failures);
         if (rawFiles.length > 0) {
           // First batch carries the text leg; follow-up batches are text-less
           // so the message isn't repeated once per batch.
@@ -147,11 +155,13 @@ export const sendOutboundDirectMessage = async (params: {
         // `files.completeUploadExternal` needs a real channel id (unlike
         // `chat.postMessage`, which resolves a user id), so open the DM first.
         const channel = await api.openConversation(platformUserId);
-        const uploaded = await sendSlackAttachments(api, {
+        const sent = await sendSlackAttachments(api, {
           attachments: files,
           channelId: channel.id,
           initialComment: text,
         });
+        warnAttachmentFailures('messenger:outbound:slack', sent.failures);
+        const { delivered: uploaded } = sent;
         textDelivered = uploaded > 0;
         if (uploaded === 0 && !text && !linkMessages.length)
           throw new Error('All Slack attachments failed to upload');
@@ -159,6 +169,29 @@ export const sendOutboundDirectMessage = async (params: {
       // Slack resolves a user id passed as `channel` to that user's DM.
       if (text && !textDelivered) await api.postMessage(platformUserId, text);
       for (const message of linkMessages) await api.postMessage(platformUserId, message);
+      return;
+    }
+    case 'linq': {
+      // Pool numbers are shared, so the "bot token" is the deployment API key
+      // and the handle picks the chat; `sendToHandle` reuses the person's
+      // existing thread with the pool before opening a new one.
+      const config = await getMessengerLinqConfig();
+      if (!config) throw new Error('Linq messenger is not configured');
+      const api = createLinqApi(config, pickLinqPoolNumber(config.numbers, platformUserId));
+      if (text) await api.sendToHandle({ handle: platformUserId, text: markdownToPlainText(text) });
+      for (const file of files ?? []) {
+        await api.sendToHandle({
+          attachment: {
+            data: file.data,
+            fetchUrl: file.fetchUrl,
+            mimeType: file.mimeType,
+            name: file.name,
+          },
+          handle: platformUserId,
+        });
+      }
+      for (const message of linkMessages)
+        await api.sendToHandle({ handle: platformUserId, text: message });
       return;
     }
     default: {

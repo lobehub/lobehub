@@ -23,7 +23,11 @@ let testDB: LobeChatDatabase;
 const notifyTopicCommentActivity = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const notifyTopicCommentModeration = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const publishResourceEvent = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(() => testDB) }));
+vi.mock('@/database/core/db-adaptor', () => ({
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
+}));
 vi.mock('@/business/server/topic-comment/notifyActivity', () => ({
   notifyTopicCommentActivity,
 }));

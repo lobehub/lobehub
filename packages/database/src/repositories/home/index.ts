@@ -12,21 +12,30 @@ import {
   agentLabelAssignments,
   agentLabels,
   agents,
-  agentsToSessions,
   chatGroups,
   sessionGroups,
-  sessions,
   topics,
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
+import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { notShareVisitorTopic } from '../../utils/shareVisitor';
+import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import type { FtsSearchCandidateSource } from '../ftsSearch';
 
 // Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
 // task_manager trigger. These topics are surfaced in their own product surfaces,
 // so counting them here can leave a badge the regular agent topic list cannot clear.
-const HOME_UNREAD_EXCLUDE_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
+const HOME_UNREAD_EXCLUDE_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
+  'cron',
+  'eval',
+  'task_manager',
+  'task',
+  'document',
+];
 
 // Re-export types for backward compatibility
 export type {
@@ -43,11 +52,18 @@ export class HomeRepository {
   private userId: string;
   private workspaceId?: string;
   private db: LobeChatDatabase;
+  private ftsSearchCandidateSource?: FtsSearchCandidateSource;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    db: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    ftsSearchCandidateSource?: FtsSearchCandidateSource,
+  ) {
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.db = db;
+    this.ftsSearchCandidateSource = ftsSearchCandidateSource;
   }
 
   private get scope() {
@@ -72,35 +88,32 @@ export class HomeRepository {
     includeLabels = true,
     includeGroups = true,
   ): Promise<SidebarAgentListResponse> {
-    // 1. Query all agents (non-virtual) with their session info (if exists).
+    // 1. Query all non-virtual agents.
     //    `visibility` is selected so we can later bucket public vs. the
     //    current user's private rows; the WHERE already hides other members'
     //    private rows via the workspace-aware predicate.
     const agentList = await this.db
       .select({
         agencyConfig: agents.agencyConfig,
-        agentSessionGroupId: agents.sessionGroupId,
+        sessionGroupId: agents.sessionGroupId,
         agentUserId: agents.userId,
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
         name: agents.name,
+        model: agents.model,
         pinned: agents.pinned,
-        sessionGroupId: sessions.groupId,
-        sessionId: sessions.id,
-        sessionPinned: sessions.pinned,
         slug: agents.slug,
         title: agents.title,
         updatedAt: agents.updatedAt,
         visibility: agents.visibility,
       })
       .from(agents)
-      .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
-      .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
       .where(
         and(
           buildWorkspaceWhere(this.scope, {
+            isDeleted: agents.isDeleted,
             userId: agents.userId,
             workspaceId: agents.workspaceId,
             visibility: agents.visibility,
@@ -127,6 +140,7 @@ export class HomeRepository {
       .from(chatGroups)
       .where(
         buildWorkspaceWhere(this.scope, {
+          isDeleted: chatGroups.isDeleted,
           userId: chatGroups.userId,
           workspaceId: chatGroups.workspaceId,
           visibility: chatGroups.visibility,
@@ -170,6 +184,7 @@ export class HomeRepository {
           .from(sessionGroups)
           .where(
             buildWorkspaceWhere(this.scope, {
+              isDeleted: sessionGroups.isDeleted,
               userId: sessionGroups.userId,
               workspaceId: sessionGroups.workspaceId,
               visibility: sessionGroups.visibility,
@@ -242,6 +257,9 @@ export class HomeRepository {
         .where(
           and(
             buildWorkspaceWhere(this.scope, topics),
+            // Agent-share visitor topics keep the creator's userId — never bump
+            // the creator's own unread badge for a visitor's conversation.
+            notShareVisitorTopic(),
             isUnread,
             isMainSidebarTopic,
             sql`${topics.agentId} is not null`,
@@ -254,6 +272,7 @@ export class HomeRepository {
         .where(
           and(
             buildWorkspaceWhere(this.scope, topics),
+            notShareVisitorTopic(),
             isUnread,
             isMainSidebarTopic,
             sql`${topics.groupId} is not null`,
@@ -274,17 +293,15 @@ export class HomeRepository {
   private processAgentList(
     agentItems: Array<{
       agencyConfig: { heterogeneousProvider?: { type?: string } } | null;
-      agentSessionGroupId: string | null;
       agentUserId: string;
       avatar: string | null;
       backgroundColor: string | null;
       description: string | null;
       id: string;
       name: string | null;
+      model: string | null;
       pinned: boolean | null;
       sessionGroupId: string | null;
-      sessionId: string | null;
-      sessionPinned: boolean | null;
       slug: string | null;
       title: string | null;
       updatedAt: Date;
@@ -320,8 +337,6 @@ export class HomeRepository {
     // The only per-member layer left is show/hide, applied client-side from
     // `sidebarAgentVisibilityOverrides` / `sidebarHiddenGroupIds`.
     // Convert to unified format
-    // For pinned status: agents.pinned takes priority, fallback to sessions.pinned for backward compatibility
-    // For groupId: agents.sessionGroupId takes priority, fallback to sessions.groupId for backward compatibility
     type EnrichedItem = SidebarAgentItem & {
       groupId: string | null;
       isPrivate: boolean;
@@ -339,24 +354,14 @@ export class HomeRepository {
           avatar: meta.avatar,
           backgroundColor: a.backgroundColor,
           description: a.description,
-          // Legacy fallback, personal scope only. `sessions` are per-user rows
-          // and this join does not filter by the caller, so in a workspace the
-          // fallback would hand one member's old per-session folder to every
-          // member — arbitrarily, since which session wins depends on the join.
-          // That was harmless while folders were per-member; now that the
-          // sidebar is shared it would publish one person's legacy state.
-          groupId: this.workspaceId
-            ? a.agentSessionGroupId
-            : (a.agentSessionGroupId ?? a.sessionGroupId),
+          groupId: a.sessionGroupId,
           heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
           id: a.id,
           isPrivate: visibility === 'private',
           labels: agentLabelsMap.get(a.id),
           name: a.name,
-          // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
-          // member's legacy pin, and pins are shared again.
-          pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),
-          sessionId: a.sessionId,
+          model: a.model,
+          pinned: a.pinned ?? false,
           slug: a.slug,
           title: meta.title,
           type: 'agent' as const,
@@ -379,7 +384,6 @@ export class HomeRepository {
           id: g.id,
           isPrivate: visibility === 'private',
           pinned: g.pinned ?? false,
-          sessionId: null,
           title: g.title,
           type: 'group' as const,
           unreadCount: groupUnread.get(g.id) ?? 0,
@@ -417,19 +421,23 @@ export class HomeRepository {
 
     for (const item of allItems) {
       const { groupId, isPrivate, ...sidebarItem } = item;
-      const cleanedItem = cleanObject(sidebarItem) as SidebarAgentItem;
+      const validGroupIds = isPrivate ? privateGroupIds : groupIds;
+      const categoryId = groupId && validGroupIds.has(groupId) ? groupId : null;
+      const cleanedItem = {
+        ...cleanObject(sidebarItem),
+        groupId: categoryId,
+      } as SidebarAgentItem;
 
       if (item.pinned) {
         (isPrivate ? privatePinned : pinned).push(cleanedItem);
         continue;
       }
 
-      const validGroupIds = isPrivate ? privateGroupIds : groupIds;
-      if (groupId && validGroupIds.has(groupId)) {
+      if (categoryId) {
         const bucket = isPrivate ? privateGroupedMap : groupedMap;
-        const existing = bucket.get(groupId) || [];
+        const existing = bucket.get(categoryId) || [];
         existing.push(cleanedItem);
-        bucket.set(groupId, existing);
+        bucket.set(categoryId, existing);
       } else if (isPrivate) {
         privateUngrouped.push(cleanedItem);
       } else {
@@ -466,6 +474,24 @@ export class HomeRepository {
     if (!keyword.trim()) return [];
 
     const bm25Query = sanitizeBm25Query(keyword);
+    const candidateResults = this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled
+      ? await Promise.all([
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'agents',
+            filters: { excludeVirtual: true },
+            pagination: {},
+            query: { fields: ['title', 'description'], text: keyword },
+          }),
+          this.ftsSearchCandidateSource.ftsSearchCandidates({
+            entity: 'chatGroups',
+            filters: {},
+            pagination: {},
+            query: { fields: ['title', 'description'], text: keyword },
+          }),
+        ])
+      : undefined;
+    const agentCandidateIds = candidateResults?.[0].candidates.map(({ id }) => id);
+    const chatGroupCandidateIds = candidateResults?.[1].candidates.map(({ id }) => id);
 
     // Run agent and chat group searches in parallel
     const [agentResults, chatGroupResults] = await Promise.all([
@@ -478,8 +504,6 @@ export class HomeRepository {
           id: agents.id,
           name: agents.name,
           pinned: agents.pinned,
-          sessionId: sessions.id,
-          sessionPinned: sessions.pinned,
           slug: agents.slug,
           title: agents.title,
           updatedAt: agents.updatedAt,
@@ -487,13 +511,13 @@ export class HomeRepository {
           visibility: agents.visibility,
         })
         .from(agents)
-        .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
-        .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
         .where(
           and(
             buildWorkspaceWhere(this.scope, agents),
             not(eq(agents.virtual, true)),
-            sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
+            agentCandidateIds
+              ? inJsonStringArray(agents.id, agentCandidateIds)
+              : sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
           ),
         )
         .orderBy(desc(agents.updatedAt)),
@@ -514,7 +538,9 @@ export class HomeRepository {
         .where(
           and(
             buildWorkspaceWhere(this.scope, chatGroups),
-            sql`(${chatGroups.title} @@@ ${bm25Query} OR ${chatGroups.description} @@@ ${bm25Query})`,
+            chatGroupCandidateIds
+              ? inJsonStringArray(chatGroups.id, chatGroupCandidateIds)
+              : sql`(${chatGroups.title} @@@ ${bm25Query} OR ${chatGroups.description} @@@ ${bm25Query})`,
           ),
         )
         .orderBy(desc(chatGroups.updatedAt)),
@@ -540,10 +566,7 @@ export class HomeRepository {
           description: a.description,
           id: a.id,
           name: a.name,
-          // Same personal-only reasoning as `groupId`: `sessions.pinned` is one
-          // member's legacy pin, and pins are shared again.
-          pinned: this.workspaceId ? (a.pinned ?? false) : (a.pinned ?? a.sessionPinned ?? false),
-          sessionId: a.sessionId,
+          pinned: a.pinned ?? false,
           title: meta.title,
           type: 'agent' as const,
           updatedAt: a.updatedAt,

@@ -1,18 +1,27 @@
 import type {
   DeleteDocumentWorkParams,
   DeleteTaskWorkParams,
+  DeleteWorkParams,
   WorkDisplayField,
   WorkItem,
+  WorkMetadata,
   WorkResourceType,
   WorkType,
   WorkVisibility,
 } from '@lobechat/types';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import { documents } from '../../schemas/file';
+import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import type { LobeChatDatabase } from '../../type';
-import { documentOwnership, type WorkContext, workOwnership } from './context';
+import { buildWorkspaceWhere } from '../../utils/workspace';
+import {
+  documentOwnership,
+  resolveWorkAccessScope,
+  type WorkContext,
+  workOwnership,
+} from './context';
 import {
   type CreateVersionInput,
   truncateContentText,
@@ -136,6 +145,20 @@ const buildVersionSnapshot = (
  * uniqueness retry. Callers must do their reads through the tx-scoped context
  * `buildInput` receives.
  */
+/** Server-owned `works.metadata` for a fresh identity row under `ctx`'s scope. */
+const buildWorkMetadata = (ctx: WorkContext): WorkMetadata | null => {
+  const scope = resolveWorkAccessScope(ctx);
+  if (scope.type !== 'agentShare') return null;
+
+  return {
+    agentShare: {
+      shareId: scope.shareId,
+      topicId: scope.topicId,
+      visitorUserId: scope.visitorUserId,
+    },
+  };
+};
+
 export const registerWorkVersion = async (
   ctx: WorkContext,
   identity: RegisterWorkIdentity,
@@ -154,6 +177,11 @@ export const registerWorkVersion = async (
           .insert(works)
           .values({
             ...identity,
+            // Share provenance is stamped ONLY here as well: a Work registered
+            // from a visitor's share topic carries that topic's scope for its
+            // whole life, so the creator's ordinary reads (and any other
+            // visitor topic) never resolve it — see `workMatchesAccessScope`.
+            metadata: buildWorkMetadata(ctx),
             // Origin provenance is stamped ONLY here: it records where the Work
             // identity was first registered and stays immutable through every
             // later version (the current-projection UPDATE below never touches it).
@@ -313,4 +341,110 @@ export const deleteTaskWork = async (
     .where(
       and(workOwnership(ctx), eq(works.resourceType, 'task'), eq(works.resourceId, params.taskId)),
     );
+};
+
+/**
+ * Mirror a task subtree's visibility onto its Work rows. Works keep an indexed
+ * copy of the resource visibility so gallery/list queries can filter without a
+ * join; `TaskSubtreeRepository.updateVisibility` calls this in the same
+ * transaction as the task write so lists never observe a stale public row.
+ *
+ * Scoped by user/workspace only (not visibility): a workspace owner demoting
+ * another member's public task must still reach that member's Work row.
+ */
+export const setTaskWorksVisibility = async (
+  ctx: WorkContext,
+  taskIds: string[],
+  visibility: WorkVisibility,
+): Promise<void> => {
+  if (taskIds.length === 0) return;
+
+  await ctx.db
+    .update(works)
+    .set({ visibility })
+    .where(
+      and(
+        eq(works.resourceType, 'task'),
+        inArray(works.resourceId, taskIds),
+        buildWorkspaceWhere(
+          { userId: ctx.userId, workspaceId: ctx.workspaceId },
+          { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
+        ),
+      ),
+    );
+};
+
+/**
+ * Re-home the Work rows of tasks whose creator changed (a member taking a task
+ * over), in the same transaction as the task write. A task Work's `userId` is
+ * the task owner, so a row left on the previous creator would stay theirs and
+ * drop out of the new owner's lists once the task goes private.
+ *
+ * Scoped by workspace only: the caller is authorized on the tasks, not on the
+ * previous creator's Work rows.
+ */
+export const reassignTaskWorksOwner = async (
+  ctx: WorkContext,
+  taskIds: string[],
+  fromUserId: string,
+): Promise<void> => {
+  if (taskIds.length === 0 || !ctx.workspaceId) return;
+
+  await ctx.db
+    .update(works)
+    .set({ userId: ctx.userId })
+    .where(
+      and(
+        eq(works.resourceType, 'task'),
+        inArray(works.resourceId, taskIds),
+        eq(works.userId, fromUserId),
+        eq(works.workspaceId, ctx.workspaceId),
+      ),
+    );
+};
+
+/**
+ * User-initiated removal of one Work card by its own id. Meant for orphaned
+ * Works (the backing task / document is gone — see `resourceDeleted`), where
+ * deleting the resource itself is no longer possible, so this is the only way
+ * the user can clear the card.
+ *
+ * Restricted to the Work's own `userId` (the resource owner stamped at
+ * registration), not every member who can see the row, and to rows whose
+ * backing task / document is actually gone: the endpoint has no scoped RBAC
+ * gate, so without this a caller could wipe a live Work's version history by
+ * id alone. `external` / `file` Works have no backing row and are always
+ * eligible. Cascades `work_versions`, `project_works` and
+ * `goal_node_work_versions` via FK.
+ */
+export const deleteWork = async (
+  ctx: WorkContext,
+  params: DeleteWorkParams,
+): Promise<{ canvasManifestKeys: string[]; resourceId: string | null; resourceType: string }[]> => {
+  const backingResourceGone = sql<boolean>`case ${works.resourceType}
+    when 'task' then not exists (select 1 from ${tasks} where ${tasks.id} = ${works.resourceId})
+    when 'document' then not exists (select 1 from ${documents} where ${documents.id} = ${works.resourceId})
+    else true end`;
+
+  return ctx.db
+    .delete(works)
+    .where(
+      and(
+        workOwnership(ctx),
+        eq(works.id, params.id),
+        eq(works.userId, ctx.userId),
+        backingResourceGone,
+      ),
+    )
+    .returning({
+      // RETURNING reads the version keys before the FK cascade removes their rows.
+      canvasManifestKeys: sql<string[]>`array(
+        select distinct ${workVersions.metadata} -> 'canvas' ->> 'manifestKey'
+        from ${workVersions}
+        where ${workVersions.workId} = ${params.id}
+          and coalesce(${workVersions.metadata} -> 'canvas' ->> 'manifestKey', '') <> ''
+      )`,
+      resourceId: works.resourceId,
+      resourceType: works.resourceType,
+    });
 };

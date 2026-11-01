@@ -51,6 +51,17 @@ describe('useKnowledgeMenuItems', () => {
     expect(result.current).toEqual([]);
   });
 
+  it('omits all agent resource controls for upload-only tasks', () => {
+    mockFiles.current = [{ enabled: true, id: 'file-1', name: 'Brief', type: 'text/plain' }];
+    mockKnowledgeBases.current = [{ enabled: true, id: 'kb-1', name: 'Handbook' }];
+
+    const { result } = renderHook(() =>
+      useKnowledgeMenuItems({ enabled: false, onUpdatingChange: vi.fn() }),
+    );
+
+    expect(result.current).toEqual([]);
+  });
+
   it('offers the picker entry alongside the empty hint when nothing is attached', () => {
     const { result } = renderHook(() => useKnowledgeMenuItems({ onUpdatingChange: vi.fn() }));
 

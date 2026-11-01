@@ -1,0 +1,15 @@
+.icon {
+  border: 1px solid var(--lobe-color-fill-secondary);
+}
+
+.icon svg {
+  fill: var(--lobe-color-text-secondary);
+}
+
+.icon:hover {
+  border: 1px solid var(--lobe-color-border-secondary);
+}
+
+.icon:hover svg {
+  fill: var(--lobe-color-text);
+}
