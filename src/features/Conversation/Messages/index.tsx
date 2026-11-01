@@ -1,5 +1,7 @@
 'use client';
 
+import './index.css';
+
 import { isDesktop } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
@@ -26,7 +28,6 @@ import PendingRetryTurn from './components/PendingRetryTurn';
 import TextSelectionActionLayer from './components/TextSelectionActionLayer';
 import CompressedGroupMessage from './CompressedGroup';
 import GroupTasksMessage from './GroupTasks';
-import cssModule from './index.module.css';
 import { getMessageInteractionState } from './messageInteraction';
 import TaskMessage from './Task';
 import TaskCallbackMessage from './TaskCallback';
@@ -279,7 +280,7 @@ const MessageItem = memo<MessageItemProps>(
         <Flexbox
           {...sx(
             [styles.message, shouldDimCreatingMessage && styles.loading],
-            [cssModule.message, className].filter(Boolean).join(' '),
+            ['lobe-messages-0fc10b22-message', className].filter(Boolean).join(' '),
           )}
           data-index={index}
           onContextMenu={onContextMenu}

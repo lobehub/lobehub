@@ -1,4 +1,4 @@
-.container {
+.lobe-brand-text-loading-15b392f3-container {
   --brand-text-color: var(--colorText, #1f1f1f);
   --brand-muted-color: var(--colorTextSecondary, #8c8c8c);
   --brand-border-color: var(--colorBorder, #d9d9d9);
@@ -15,14 +15,14 @@
   gap: 12px;
 }
 
-[data-theme='dark'] .container {
+[data-theme='dark'] .lobe-brand-text-loading-15b392f3-container {
   --brand-text-color: var(--colorText, #f0f0f0);
   --brand-muted-color: var(--colorTextSecondary, #a6a6a6);
   --brand-border-color: var(--colorBorder, #424242);
   --brand-tag-bg: var(--colorFillTertiary, rgba(255, 255, 255, 0.08));
 }
 
-.brand {
+.lobe-brand-text-loading-15b392f3-brand {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -31,21 +31,12 @@
   color: var(--brand-text-color);
 }
 
-.brand :global(.lobe-brand-loading) {
+.lobe-brand-text-loading-15b392f3-brand .lobe-brand-loading {
   display: block;
   color: inherit;
 }
 
-.debug {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-
-  padding: 16px;
-}
-
-.debugRow {
+.lobe-brand-text-loading-15b392f3-debug-row {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -54,13 +45,13 @@
   color: var(--brand-muted-color);
 }
 
-.debugRow code {
+.lobe-brand-text-loading-15b392f3-debug-row code {
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
 }
 
-.debugTag {
+.lobe-brand-text-loading-15b392f3-debug-tag {
   display: inline-flex;
   align-items: center;
 
@@ -70,11 +61,6 @@
   background: var(--brand-tag-bg);
 }
 
-.debugTag code {
+.lobe-brand-text-loading-15b392f3-debug-tag code {
   color: var(--brand-text-color);
-}
-
-.debugHint {
-  font-size: 12px;
-  color: var(--brand-muted-color);
 }

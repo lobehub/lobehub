@@ -11,7 +11,9 @@ import { runBrowserPipelineSelfTest } from './browserPipelineSelfTest';
 import { runCapturePreparationSelfTest } from './capturePreparationSelfTest';
 import { runCollectorSelfTest } from './collectorSelfTest';
 import { runBoundaryMatrix } from './matrix';
+import { runPortalSelfTest } from './portalSelfTest';
 import { runRuleWitnessSelfTest } from './ruleWitnessSelfTest';
+import { runSurfaceSelfTest } from './surfaceSelfTest';
 
 /** The prototype corpus remains regression evidence, never a whole-PR PASS. */
 export const runSelfTest = async (
@@ -59,6 +61,10 @@ export const runSelfTest = async (
     if (pipeline.summary.failed) regressions.push('BROWSER_PIPELINE_REGRESSION');
     const ruleWitness = await runRuleWitnessSelfTest(browser);
     if (ruleWitness.summary.failed) regressions.push('RULE_WITNESS_REGRESSION');
+    const surfaces = await runSurfaceSelfTest(browser);
+    if (surfaces.summary.failed) regressions.push('CAPTURE_SURFACE_REGRESSION');
+    const portals = await runPortalSelfTest(output, executablePath);
+    if (portals.summary.failed) regressions.push('PORTAL_PIPELINE_REGRESSION');
 
     const parity: Array<{ caseId: string; differences: number; nodes: number; side: string }> = [];
     const page = await browser.newPage();
@@ -102,6 +108,8 @@ export const runSelfTest = async (
       capturePreparation: capturePreparation.summary,
       ruleWitness: ruleWitness.summary,
       pipeline: pipeline.summary,
+      surfaces: surfaces.summary,
+      portals: portals.summary,
       durationMs: performance.now() - started,
       gateEligible: false,
       mode: 'self-test',
@@ -122,6 +130,7 @@ export const runSelfTest = async (
     await writeJson(output, 'capture-preparation.json', capturePreparation);
     await writeJson(output, 'pipeline.json', pipeline);
     await writeJson(output, 'rule-witness.json', ruleWitness);
+    await writeJson(output, 'surfaces.json', surfaces);
     await writeJson(output, 'self-test.json', result);
     await writeHtmlReport(output, result);
     await writeArtifactManifest(output, [
@@ -132,6 +141,9 @@ export const runSelfTest = async (
       'capture-preparation.json',
       'pipeline.json',
       'rule-witness.json',
+      'surfaces.json',
+      'portals.json',
+      ...portals.results.map((result) => `portal-${result.mode}/artifacts.json`),
       'pipeline-equal/artifacts.json',
       'pipeline-difference/artifacts.json',
       'pipeline-supplemental/artifacts.json',

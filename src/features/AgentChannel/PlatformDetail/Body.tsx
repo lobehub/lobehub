@@ -1,5 +1,7 @@
 'use client';
 
+import './Body.css';
+
 import { Button, confirmModal, Flexbox, Text } from '@lobehub/ui';
 import { Form, type FormInstance, useWatch } from '@lobehub/ui/form';
 import { RotateCcw } from 'lucide-react';
@@ -22,7 +24,6 @@ import { getInlineFieldKeys } from '../quickSetup/guides';
 import QuickSetupSection from '../quickSetup/QuickSetupSection';
 import { WakeRecords } from '../WakeRecords';
 import { AccessSection } from './AccessSection';
-import styles from './Body.module.css';
 import type { ChannelTab } from './channelTabs';
 import { extractSettingsDefaults, WAKE_MASTER_KEY } from './formState';
 import type { ChannelFormValues } from './index';
@@ -295,7 +296,7 @@ const Body = memo<BodyProps>(
             fold away; a new bot has nothing else to do but fill them in. */}
               {(groupCredentialFields.length > 0 || showApplicationId || showExtras) && (
                 <Form.Group
-                  className={styles.moduleGroup}
+                  className={'lobe-body-2aeb75a4-module-group'}
                   collapsible={!!hasConfig || inlineKeys.size > 0}
                   defaultActive={!hasConfig && inlineKeys.size === 0}
                   desc={t('channel.group.credentialsDesc')}
@@ -358,7 +359,7 @@ const Body = memo<BodyProps>(
           )}
           {connectGroup && (
             <Form.Group
-              className={styles.moduleGroup}
+              className={'lobe-body-2aeb75a4-module-group'}
               collapsible={false}
               extra={moduleExtra('connection')}
               keyValue={`settings-connect-${platformDef.id}`}
@@ -394,7 +395,7 @@ const Body = memo<BodyProps>(
                 // three separate decisions, so each gets a block (and a Save) of its own.
                 groupAccessFields(group.fields).map((section) => (
                   <Form.Group
-                    className={styles.moduleGroup}
+                    className={'lobe-body-2aeb75a4-module-group'}
                     collapsible={false}
                     extra={moduleExtra(`access-${section.key}`)}
                     key={section.key}
@@ -422,7 +423,7 @@ const Body = memo<BodyProps>(
                 // it is a block of its own with a Save.
                 groupReplyFields(group.fields).map((section) => (
                   <Form.Group
-                    className={styles.moduleGroup}
+                    className={'lobe-body-2aeb75a4-module-group'}
                     collapsible={false}
                     extra={section.key === 'style' ? moduleExtra('reply-style') : undefined}
                     key={section.key}
@@ -446,7 +447,7 @@ const Body = memo<BodyProps>(
                   .filter(wakeSectionShown)
                   .map((section) => (
                     <Form.Group
-                      className={styles.moduleGroup}
+                      className={'lobe-body-2aeb75a4-module-group'}
                       collapsible={false}
                       key={section.key}
                       keyValue={`settings-wake-${section.key}-${platformDef.id}`}
@@ -466,7 +467,7 @@ const Body = memo<BodyProps>(
                   ))
               ) : (
                 <Form.Group
-                  className={styles.moduleGroup}
+                  className={'lobe-body-2aeb75a4-module-group'}
                   collapsible={false}
                   extra={moduleExtra(group.key as SaveModuleId)}
                   keyValue={`settings-${group.key}-${platformDef.id}`}
