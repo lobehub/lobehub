@@ -87,8 +87,16 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
   // keeps the finished state of the run it replied to, `cancelTopic` refuses
   // to stop the live one, and the detail page stops polling for it.
   const topicRunService = new TopicRunService(ctx.db, ctx.userId, ctx.workspaceId ?? undefined);
+  //
+  // A follow-up sent while the Task's run is still live replaces that run, so
+  // it takes the run row over from it rather than reopening a settled one —
+  // the replaced run ends `interrupted`, which never settles the row itself.
   const topicRun = appContext?.topicId
-    ? await topicRunService.resolveOwnableRun(appContext.topicId)
+    ? await topicRunService.resolveOwnableRun(appContext.topicId, {
+        replacesOperationId: input.replacesOperationId,
+        supersedeLiveRun: ctx.supersedeLiveRun ?? true,
+        threadId: appContext.threadId,
+      })
     : undefined;
   // Recorded on the operation-created boundary and acted on once the
   // dispatch has returned.

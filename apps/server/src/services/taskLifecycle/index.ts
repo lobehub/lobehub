@@ -144,6 +144,21 @@ export class TaskLifecycleService {
 
     log('onTopicComplete: task=%s topic=%s reason=%s', taskIdentifier, topicId, reason);
 
+    // A run a follow-up in the same conversation superseded no longer owns the
+    // Task: the follow-up took its run row over and settles it when it ends. A
+    // late report from the old run (its success arriving after the interrupt,
+    // or an error from tearing it down) must not settle the row or move the Task
+    // under the run that is still going.
+    if (topicId && (await this.isSupersededReport(topicId, params.operationId))) {
+      log(
+        'onTopicComplete: op=%s was superseded on topic=%s — ignoring its %s',
+        params.operationId,
+        topicId,
+        reason,
+      );
+      return;
+    }
+
     await this.taskModel.updateHeartbeat(taskId);
 
     const currentTask = await this.taskModel.findById(taskId);
@@ -525,6 +540,20 @@ export class TaskLifecycleService {
     // next tick.
     const finalTask = await this.taskModel.findById(taskId);
     if (finalTask) await this.maybeRearmHeartbeat(finalTask, reason);
+  }
+
+  /**
+   * Whether this report comes from a run that a newer operation has already
+   * taken the run row over from. Fails open: a lookup failure keeps the
+   * lifecycle's previous behaviour rather than dropping a real completion.
+   */
+  private async isSupersededReport(topicId: string, operationId: string): Promise<boolean> {
+    try {
+      return await this.taskTopicModel.isSupersededOperation(topicId, operationId);
+    } catch (error) {
+      log('superseded-run check failed for op=%s (non-fatal): %O', operationId, error);
+      return false;
+    }
   }
 
   /**

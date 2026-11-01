@@ -5,7 +5,9 @@ import {
 } from '@lobechat/const/goal';
 import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
 import { and, count, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
+import { agentOperations } from '../schemas/agentOperations';
 import type { TaskTopicItem } from '../schemas/task';
 import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
@@ -13,6 +15,10 @@ import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 import { topicsOwnership } from './task/context';
 import { countOf } from './utils/rows';
+
+/** The operation a run row names, and the one reporting on it. */
+const current = alias(agentOperations, 'current_operation');
+const reported = alias(agentOperations, 'reported_operation');
 
 export const TERMINAL_TOPIC_STATUSES = new Set([
   'canceled',
@@ -343,6 +349,70 @@ export class TaskTopicModel {
       .returning({ topicId: taskTopics.topicId });
 
     return result.length > 0;
+  }
+
+  /**
+   * Hand a still-`running` run over to the operation that replaced it.
+   *
+   * A user following up in a Task's conversation while its run is still live
+   * interrupts that run (the composer supersedes it). The interrupted run never
+   * settles the row — an interrupt is not an outcome — so unless the follow-up
+   * takes the row over, the Task stays `running` with nothing behind it.
+   *
+   * Compare-and-swap on the replaced operation: the row moves only while it is
+   * still `running` under `fromOperationId`, so a run that settled in between,
+   * or another send that took the row over first, is never overwritten. The
+   * trigger is restamped `'manual'` for the same reason as
+   * {@link reopenSettledRun}.
+   */
+  async takeOverRunningRun(
+    topicId: string,
+    fromOperationId: string,
+    toOperationId: string,
+  ): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ operationId: toOperationId, trigger: 'manual' })
+      .where(
+        and(
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.operationId, fromOperationId),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ topicId: taskTopics.topicId });
+
+    return result.length > 0;
+  }
+
+  /**
+   * Whether `operationId` is an older run of this topic that a newer operation
+   * has already replaced on the run row.
+   *
+   * Ordered by the operations' creation, not by mere inequality: the runner
+   * records a run on the row only after its dispatch returns, so a short run can
+   * report before the row names it. That report comes from the *newer* operation
+   * and must go through; only a report from an operation older than the one the
+   * row names is a superseded run's late delivery.
+   */
+  async isSupersededOperation(topicId: string, operationId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ topicId: taskTopics.topicId })
+      .from(taskTopics)
+      .innerJoin(current, eq(current.id, taskTopics.operationId))
+      .innerJoin(reported, eq(reported.id, operationId))
+      .where(
+        and(
+          eq(taskTopics.topicId, topicId),
+          ne(taskTopics.operationId, operationId),
+          sql`${current.createdAt} > ${reported.createdAt}`,
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+
+    return !!row;
   }
 
   /** Undo {@link markTopicEnded}'s end stamp for a run that is live again. */
