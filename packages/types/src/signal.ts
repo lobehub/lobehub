@@ -174,6 +174,8 @@ export interface BotWakeDecisionPage {
   items: BotWakeDecisionItem[];
   /** Keyset position of the next page; absent on the last one. */
   nextCursor?: { createdAt: string; id: string };
+  /** Decisions matching the filters in the window, across all pages. */
+  total: number;
 }
 
 /** Counts of one bot's wake decisions over the last `days` days. */

@@ -1049,6 +1049,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
                 />
                 <FooterActions
                   connecting={connecting}
+                  connectionActions={activeTab === 'connect'}
                   disabled={readOnly}
                   form={form}
                   hasConfig={!!currentConfig}
