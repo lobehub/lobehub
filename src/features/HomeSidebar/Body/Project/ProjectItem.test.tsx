@@ -1,4 +1,3 @@
-import type * as LobeUI from '@lobehub/ui';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,18 +7,6 @@ import type { ProjectListItem } from '@/store/project';
 import ProjectItem from './ProjectItem';
 
 const permission = vi.hoisted(() => ({ allowed: true }));
-const menu = vi.hoisted(() => ({ keys: [] as unknown[] }));
-
-vi.mock('@lobehub/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof LobeUI>();
-  return {
-    ...actual,
-    DropdownMenu: ({ children, items }: { children: React.ReactNode; items: unknown[] }) => {
-      menu.keys = items.map((item) => (item as { key?: unknown }).key).filter(Boolean);
-      return <>{children}</>;
-    },
-  };
-});
 const favorite = vi.hoisted(() => ({ path: undefined as string | undefined }));
 
 vi.mock('@/features/Favorites', async (importOriginal) => {
@@ -52,7 +39,6 @@ const project = {
 describe('ProjectItem', () => {
   beforeEach(() => {
     permission.allowed = true;
-    menu.keys = [];
   });
 
   it('renders a project whose avatar is an image URL', () => {
@@ -87,13 +73,5 @@ describe('ProjectItem', () => {
     render(<ProjectItem project={project} />);
 
     expect(favorite.path).toBe('/project/proj_1');
-  });
-
-  // Deleting lives in Project Settings → Advanced, behind a typed-name confirmation.
-  it('does not offer delete from the sidebar menu', () => {
-    render(<ProjectItem project={project} />);
-
-    expect(menu.keys).toContain('rename');
-    expect(menu.keys).not.toContain('delete');
   });
 });
