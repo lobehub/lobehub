@@ -44,8 +44,8 @@ importers:
         version: 0.2.8
     devDependencies:
       '@anthropic-ai/sandbox-runtime':
-        specifier: 0.0.78
-        version: 0.0.78
+        specifier: 0.0.81
+        version: 0.0.81
       '@base-ui/react':
         specifier: ^1.8.0
         version: 1.8.0(@types/react@19.3.0)(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -400,8 +400,8 @@ importers:
   ../../packages/device-sandbox:
     dependencies:
       '@anthropic-ai/sandbox-runtime':
-        specifier: 0.0.66
-        version: 0.0.66
+        specifier: 0.0.81
+        version: 0.0.81
     devDependencies:
       vitest:
         specifier: 5.0.3
@@ -971,14 +971,9 @@ packages:
       '@modelcontextprotocol/sdk': ^1.29.0
       zod: 4.6.5
 
-  '@anthropic-ai/sandbox-runtime@0.0.66':
-    resolution: {integrity: sha512-OE7QiGZJXe7ZshP47U2vk2z9FGSyiSN4ca9krVrE28LS2Qj0AHRWZz+gAce6FzG3gx/4OjNFwIhDuHXnI0WWwA==}
-    engines: {node: '>=20.11.0'}
-    hasBin: true
-
-  '@anthropic-ai/sandbox-runtime@0.0.78':
-    resolution: {integrity: sha512-YAIcybXTp7MZkBjasnkR1E3yxnf7u6kUkyW0vZrtsAZ9tyJGMaugWETmquPZs0YvW0sR0VnZeMfS0gsN/wQiVQ==}
-    engines: {node: '>=20.11.0'}
+  '@anthropic-ai/sandbox-runtime@0.0.81':
+    resolution: {integrity: sha512-bjHDu87gjIR7+Oxy9jPiK3v8CvSELCzfpXa3fjqfSKdvlZET2iF51xcXILWPayTpowB3xtZeQVf2JR916nVW/w==}
+    engines: {node: '>=22.12.0'}
     hasBin: true
 
   '@anthropic-ai/sdk@0.93.0':
@@ -2462,6 +2457,7 @@ packages:
   '@opentelemetry/sdk-trace-base@2.11.0':
     resolution: {integrity: sha512-H19x/TX/LZdqiYOjM7fqtSxwlplC5pgelavqbQdHbhdq0q/AI/TGkM2dfGuuynTXmJPeF2HoZVoPDu+TGoW78A==}
     engines: {node: ^18.19.0 || >=20.6.0}
+    deprecated: Use @opentelemetry/sdk-trace package
     peerDependencies:
       '@opentelemetry/api': '>=1.3.0 <1.10.0'
 
@@ -3769,6 +3765,11 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
+    peerDependencies:
+      ajv: ^8.0.0
+    peerDependenciesMeta:
+      ajv:
+        optional: true
 
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
@@ -8441,14 +8442,7 @@ snapshots:
       '@anthropic-ai/claude-agent-sdk-win32-arm64': 0.3.204
       '@anthropic-ai/claude-agent-sdk-win32-x64': 0.3.204
 
-  '@anthropic-ai/sandbox-runtime@0.0.66':
-    dependencies:
-      '@pondwader/socks5-server': 1.0.10
-      commander: 12.1.0
-      node-forge: 1.4.0
-      zod: 3.25.76
-
-  '@anthropic-ai/sandbox-runtime@0.0.78':
+  '@anthropic-ai/sandbox-runtime@0.0.81':
     dependencies:
       '@pondwader/socks5-server': 1.0.10
       commander: 12.1.0

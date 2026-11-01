@@ -62,7 +62,7 @@
     "node-screenshots": "^0.2.8"
   },
   "devDependencies": {
-    "@anthropic-ai/sandbox-runtime": "0.0.78",
+    "@anthropic-ai/sandbox-runtime": "0.0.81",
     "@base-ui/react": "^1.8.0",
     "@electron-toolkit/eslint-config-prettier": "^3.0.1",
     "@electron-toolkit/eslint-config-ts": "^4.0.0",
