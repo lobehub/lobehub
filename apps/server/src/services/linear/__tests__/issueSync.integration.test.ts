@@ -365,6 +365,40 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
     for (const item of many) expect(await linkedTask(item.id)).not.toBeNull();
   }, 60_000);
 
+  it('reconciles every page without creating when told not to create', async () => {
+    const many = Array.from({ length: 150 }, (_, index) => issue({ id: `nc-${index}` }));
+    const reads: (string | undefined)[] = [];
+    linear.listLinearIssues.mockImplementation(
+      async (_token: string, _filter: unknown, { after }: { after?: string } = {}) => {
+        reads.push(after);
+        const start = after ? Number(after) : 0;
+        const end = start + 50;
+        return {
+          cursor: end < many.length ? String(end) : undefined,
+          hasMore: end < many.length,
+          issues: many.slice(start, end),
+        };
+      },
+    );
+    linear.getLinearIssuesByIds.mockImplementation(async (_token: string, ids: string[]) =>
+      many.filter((item) => ids.includes(item.id)),
+    );
+    const service = new LinearIssueSyncService(db, userId);
+    await service.importIssues(TOKEN, ['nc-149']);
+    many[149] = { ...many[149], title: 'Renamed in Linear' };
+
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: [...filter.stateTypes] },
+      { noCreate: true },
+    );
+
+    expect(reads).toEqual([undefined, '50', '100']);
+    expect(result).toMatchObject({ created: 0, truncated: true, updated: 1 });
+    expect(await linkedTask('nc-0')).toBeNull();
+    expect((await linkedTask('nc-149'))?.name).toBe('Renamed in Linear');
+  }, 60_000);
+
   it('keeps a LobeHub edit made after the batch was loaded', async () => {
     serve([issue({ id: '1' })]);
     const service = new LinearIssueSyncService(db, userId);

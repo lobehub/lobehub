@@ -170,6 +170,11 @@ export interface LinearSyncJobMetadata {
   issueIds?: string[];
   kind: 'issues' | 'rule';
   projectId: string;
+  /**
+   * This round reconciles linked tasks but creates none: the closing pass of
+   * a run that used up its creating rounds.
+   */
+  reconcileOnly?: boolean;
   /** The outcome so far; while a rule run continues, the total of its finished rounds. */
   result?: LinearSyncResult;
   /** Rounds a rule run has finished; each creates at most a fixed number of tasks. */

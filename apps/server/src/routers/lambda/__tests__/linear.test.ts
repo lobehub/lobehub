@@ -379,6 +379,9 @@ describe('linearRouter', () => {
 
         expect(mocks.syncByFilter).toHaveBeenCalledTimes(LINEAR_SYNC_MAX_ROUNDS + 1);
         expect(startAfterOfCalls().at(-1)).toBeUndefined();
+        // Past the cap the closing pass creates nothing.
+        expect(mocks.syncByFilter.mock.calls.at(-1)![2]).toMatchObject({ noCreate: true });
+        expect(mocks.syncByFilter.mock.calls.at(-2)![2].noCreate).toBeUndefined();
         // Issues remain, so the run asks to be run again.
         expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
           {
@@ -411,6 +414,37 @@ describe('linearRouter', () => {
             status: 'success',
           },
         ]);
+      });
+
+      it("keeps the rule's last finished run until this one finishes", async () => {
+        mocks.syncByFilter
+          .mockResolvedValueOnce(round(100, true, '100'))
+          .mockResolvedValueOnce(round(5, false))
+          .mockResolvedValueOnce(round(0, false));
+        const { id, rule } = await startRule();
+
+        await routerService().run(id);
+        await settle();
+        const [during] = await caller({ userId }).listSyncRules({ projectId });
+        expect(during).toMatchObject({ lastResult: null, lastRunAt: null });
+
+        await drainHandOffs();
+        const [after] = await caller({ userId }).listSyncRules({ projectId });
+        expect(after).toMatchObject({
+          id: rule.id,
+          lastResult: { created: 105, truncated: false },
+        });
+      });
+
+      it("does not record a stopped run as the rule's last run", async () => {
+        mocks.syncByFilter.mockResolvedValue(round(100, true, '100'));
+        const { id } = await startRule();
+        await routerService().run(id);
+        await settle();
+        await caller({ userId }).cancelSync({ jobId: id, projectId });
+
+        const [rule] = await caller({ userId }).listSyncRules({ projectId });
+        expect(rule).toMatchObject({ lastResult: null, lastRunAt: null });
       });
 
       it('fails the run when the next round cannot be handed off', async () => {

@@ -60,6 +60,8 @@ interface SyncOptions {
   createClosed?: boolean;
   /** Collects issues left uncreated because the run reached its task cap. */
   deferred?: Set<string>;
+  /** Update and close linked tasks, but create none (a run past its task cap). */
+  noCreate?: boolean;
   /** LobeHub project new tasks land in. */
   targetProjectId?: string | null;
 }
@@ -229,12 +231,14 @@ export class LinearIssueSyncService {
    *
    * With `startAfter`, reading resumes at that cursor (a continuing run), and
    * the closing pass is left to a run that reads from the start, since this
-   * one does not see the issues before the cursor.
+   * one does not see the issues before the cursor. With `noCreate`, every
+   * matching issue is read and linked tasks are reconciled, but no task is
+   * created; an unimported issue only marks the result `truncated`.
    */
   async syncByFilter(
     accessToken: string,
     filter: LinearIssueFilter,
-    options: { startAfter?: string; targetProjectId?: string | null } = {},
+    options: { noCreate?: boolean; startAfter?: string; targetProjectId?: string | null } = {},
   ): Promise<LinearFilterSyncResult> {
     const result: LinearFilterSyncResult = emptyResult();
     const issues: LinearIssue[] = [];
@@ -257,7 +261,11 @@ export class LinearIssueSyncService {
         page.issues.map((issue) => issue.id),
       );
       unlinked += page.issues.length - linked.length;
-    } while (after && issues.length < MAX_ISSUES_PER_SYNC && unlinked < MAX_TASKS_CREATED_PER_SYNC);
+    } while (
+      after &&
+      issues.length < MAX_ISSUES_PER_SYNC &&
+      (options.noCreate || unlinked < MAX_TASKS_CREATED_PER_SYNC)
+    );
     result.truncated = !!after;
 
     const deferred = new Set<string>();
@@ -266,6 +274,7 @@ export class LinearIssueSyncService {
       {
         createClosed: filter.stateTypes.some((type) => CLOSED_STATE_TYPES.has(type)),
         deferred,
+        noCreate: options.noCreate,
         targetProjectId: options.targetProjectId,
       },
       result,
@@ -355,7 +364,7 @@ export class LinearIssueSyncService {
       skip(result, issue.identifier, 'closed');
       return;
     }
-    if (result.created >= MAX_TASKS_CREATED_PER_SYNC) {
+    if (options.noCreate || result.created >= MAX_TASKS_CREATED_PER_SYNC) {
       result.truncated = true;
       options.deferred?.add(issue.id);
       return;

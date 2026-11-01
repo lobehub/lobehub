@@ -185,6 +185,7 @@ export class LinearSyncJobService {
           ...(outcome ? { metadata: outcome } : {}),
         });
       }
+      return done;
     };
     try {
       const round = await this.execute(metadata);
@@ -193,9 +194,6 @@ export class LinearSyncJobService {
       const result = mergeLinearSyncResults(metadata.result, roundResult, {
         resumed: metadata.cursor !== undefined,
       });
-      if (metadata.kind === 'rule' && metadata.ruleId) {
-        await LinearSyncRuleModel.recordRun(this.db, metadata.ruleId, this.scope, result);
-      }
       // A rule run that hit its per-round cap goes on by itself, so the user
       // does not have to press Sync once per hundred issues.
       const proposed =
@@ -203,14 +201,34 @@ export class LinearSyncJobService {
           ? nextLinearSyncRound(metadata.cursor, round)
           : undefined;
       const next = withinRoundCap(proposed, rounds, metadata.cursor !== undefined);
-      const outcome = { ...metadata, cursor: undefined, result, rounds };
+      const outcome = {
+        ...metadata,
+        cursor: undefined,
+        reconcileOnly: undefined,
+        result,
+        rounds,
+      };
       if (next) {
         log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
-        if (await this.continueJob!(taskId, { ...metadata, cursor: next.cursor, result, rounds })) {
-          return;
-        }
+        const queued = await this.continueJob!(taskId, {
+          ...metadata,
+          cursor: next.cursor,
+          // Past the cap, the closing pass creates nothing, so the cap holds.
+          reconcileOnly: rounds >= LINEAR_SYNC_MAX_ROUNDS || undefined,
+          result,
+          rounds,
+        });
+        if (queued) return;
       }
-      await finish({ metadata: outcome, status: AsyncTaskStatus.Success }, outcome);
+      const succeeded = await finish(
+        { metadata: outcome, status: AsyncTaskStatus.Success },
+        outcome,
+      );
+      // The rule shows its last finished run; a round in between, or a run
+      // stopped part-way, leaves the previous one in place.
+      if (succeeded && metadata.kind === 'rule' && metadata.ruleId) {
+        await LinearSyncRuleModel.recordRun(this.db, metadata.ruleId, this.scope, result);
+      }
     } catch (error) {
       const code = toErrorCode(error);
       log('sync %s failed (%s): %O', taskId, code, error);
@@ -250,7 +268,7 @@ export class LinearSyncJobService {
     return sync.syncByFilter(
       token,
       { linearProjectId: rule.linearProjectId, stateTypes: rule.stateTypes, teamId: rule.teamId },
-      { ...options, startAfter: metadata.cursor },
+      { ...options, noCreate: metadata.reconcileOnly, startAfter: metadata.cursor },
     );
   }
 }
