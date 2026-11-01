@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ModelProvider } from '../../const/modelProvider';
+import { resolveReasoningEffortSettings } from '../../types/reasoningEffort';
 import { loadModels, LOBE_DEFAULT_MODEL_LIST } from '../index';
+
+/** The effort default a card runs at, resolved like the runtime does. */
+const resolvedEffortDefault = (providerId: string, id: string) => {
+  const own = LOBE_DEFAULT_MODEL_LIST.find(
+    (entry) => entry.providerId === providerId && entry.id === id,
+  );
+  const sameModel = LOBE_DEFAULT_MODEL_LIST.filter((entry) => entry.id === id && entry !== own).map(
+    (entry) => entry.settings?.reasoningEffort,
+  );
+  return resolveReasoningEffortSettings(own?.settings?.reasoningEffort, sameModel)?.default;
+};
 
 describe('loadModels', () => {
   it('returns the static model list by default', async () => {
@@ -180,11 +192,12 @@ describe('Hunyuan models', () => {
         enabled: true,
         maxOutput: 128_000,
         settings: {
-          reasoningEffort: { default: 'low', levels: ['no_think', 'low', 'high'] },
+          reasoningEffort: { levels: ['no_think', 'low', 'high'] },
         },
         type: 'chat',
       }),
     );
+    expect(resolvedEffortDefault(ModelProvider.Hunyuan, 'hy3')).toBe('low');
   });
 });
 
@@ -349,9 +362,9 @@ describe('recent direct-provider models', () => {
       expect(models[0].settings?.extendParams).toEqual(['preserveThinking']);
       expect(models[0].settings?.reasoningEffort).toEqual({
         controlsThinking: true,
-        default: 'medium',
         levels: ['none', 'low', 'medium', 'xhigh'],
       });
+      expect(resolvedEffortDefault('qwen', id)).toBe('medium');
     },
   );
 
@@ -372,7 +385,7 @@ describe('recent direct-provider models', () => {
       enabled: true,
       type: 'chat',
     });
-    expect(model?.settings?.reasoningEffort?.default).toBe(defaultEffort);
+    expect(resolvedEffortDefault(providerId, id)).toBe(defaultEffort);
   });
 });
 
@@ -496,10 +509,13 @@ describe('Google context-caching pricing', () => {
 });
 
 describe('reasoning effort declarations', () => {
-  it('declares a default that is one of its levels on every card', () => {
+  it('declares levels on every card and only a default those levels offer', () => {
     const invalid = LOBE_DEFAULT_MODEL_LIST.filter((model) => {
       const spec = model.settings?.reasoningEffort;
-      return spec && (spec.levels.length === 0 || !spec.levels.includes(spec.default));
+      return (
+        spec &&
+        (spec.levels.length === 0 || (!!spec.default && !spec.levels.includes(spec.default)))
+      );
     }).map((model) => `${model.providerId}/${model.id}`);
 
     expect(invalid).toEqual([]);

@@ -22,7 +22,7 @@ const perplexityChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-02-14',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'internal',
     },
     type: 'chat',

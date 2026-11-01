@@ -119,7 +119,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -145,7 +145,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -171,7 +171,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -292,7 +292,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -318,7 +318,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     },
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -341,7 +341,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -364,7 +364,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -389,7 +389,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -414,7 +414,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },

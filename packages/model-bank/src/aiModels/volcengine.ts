@@ -109,7 +109,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-23',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -150,7 +150,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-23',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -191,7 +191,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-23',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -231,7 +231,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     settings: {
       reasoningEffort: {
         controlsThinking: true,
-        default: 'high',
         levels: ['none', 'low', 'high', 'max'],
       },
       searchImpl: 'params',
@@ -274,7 +273,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     settings: {
       reasoningEffort: {
         controlsThinking: true,
-        default: 'high',
         levels: ['none', 'low', 'high', 'max'],
       },
       searchImpl: 'params',
@@ -316,7 +314,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-06-17',
     settings: {
-      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
+      reasoningEffort: { controlsThinking: true, levels: ['none', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -349,7 +347,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
+      reasoningEffort: { controlsThinking: true, levels: ['none', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -382,7 +380,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-24',
     settings: {
-      reasoningEffort: { controlsThinking: true, default: 'high', levels: ['none', 'high', 'max'] },
+      reasoningEffort: { controlsThinking: true, levels: ['none', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -446,7 +444,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-15',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -510,7 +508,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-15',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -574,7 +572,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-15',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -638,7 +636,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-15',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -703,7 +701,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-18',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -998,7 +996,7 @@ const doubaoChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',

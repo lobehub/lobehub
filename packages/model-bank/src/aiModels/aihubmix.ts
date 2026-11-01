@@ -189,7 +189,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2026-04-23',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -245,7 +245,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-05',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -278,7 +278,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-17',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -310,7 +310,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-17',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -355,7 +355,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-05',
     settings: {
-      reasoningEffort: { default: 'high', levels: ['medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -412,7 +412,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2025-12-11',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -442,7 +442,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2025-12-11',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'high', levels: ['medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -498,7 +498,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2025-11-13',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -552,7 +552,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-13',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -583,7 +583,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-13',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -643,7 +643,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2024-09-15',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -675,7 +675,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2025-08-07',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -707,7 +707,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2025-08-07',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -737,7 +737,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2025-08-07',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -791,7 +791,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-17',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -821,7 +821,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-06-26',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -850,7 +850,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-06-10',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -880,7 +880,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-16',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -910,7 +910,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-06-26',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1150,7 +1150,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-03-09',
     settings: {
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1198,7 +1198,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-04-03',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -1334,7 +1334,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2026-04-16',
     settings: {
       extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1372,7 +1372,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-05',
     settings: {
       extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1452,7 +1452,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
         'enableReasoning',
         'reasoningBudgetToken',
       ],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1909,7 +1909,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     releasedAt: '2025-11-18',
     settings: {
       extendParams: ['urlContext'],
-      reasoningEffort: { default: 'high', levels: ['low', 'high'] },
+      reasoningEffort: { levels: ['low', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },

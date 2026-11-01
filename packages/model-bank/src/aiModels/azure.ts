@@ -267,7 +267,7 @@ const azureChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-05',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -316,7 +316,7 @@ const azureChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-05',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'high', levels: ['medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -352,7 +352,7 @@ const azureChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-18',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -388,7 +388,7 @@ const azureChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-18',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -423,7 +423,7 @@ const azureChatModels: AIChatModelCard[] = [
     releasedAt: '2025-12-11',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -457,7 +457,7 @@ const azureChatModels: AIChatModelCard[] = [
     releasedAt: '2025-11-13',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',

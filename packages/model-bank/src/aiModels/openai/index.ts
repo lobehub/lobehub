@@ -578,7 +578,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-04-23',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -626,7 +626,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-04-23',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'high', levels: ['medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -683,7 +683,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-05',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -730,7 +730,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-05',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'high', levels: ['medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -763,7 +763,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-18',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -796,7 +796,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-18',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -852,7 +852,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-05',
     settings: {
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -885,7 +885,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2025-12-11',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -914,7 +914,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-11',
     settings: {
-      reasoningEffort: { default: 'high', levels: ['medium', 'high', 'xhigh'] },
+      reasoningEffort: { levels: ['medium', 'high', 'xhigh'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -970,7 +970,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2025-11-13',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1032,7 +1032,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2025-08-07',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1065,7 +1065,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2025-08-07',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -1096,7 +1096,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     releasedAt: '2025-08-07',
     settings: {
       extendParams: ['textVerbosity'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },

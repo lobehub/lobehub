@@ -65,7 +65,6 @@ const deepseekChatModels: AIChatModelCard[] = [
     settings: {
       reasoningEffort: {
         controlsThinking: true,
-        default: 'high',
         levels: ['none', 'low', 'high', 'max'],
       },
     },
@@ -99,7 +98,6 @@ const deepseekChatModels: AIChatModelCard[] = [
     settings: {
       reasoningEffort: {
         controlsThinking: true,
-        default: 'high',
         levels: ['none', 'low', 'high', 'max'],
       },
     },
@@ -134,7 +132,6 @@ const deepseekChatModels: AIChatModelCard[] = [
     settings: {
       reasoningEffort: {
         controlsThinking: true,
-        default: 'high',
         levels: ['none', 'low', 'high', 'max'],
       },
     },

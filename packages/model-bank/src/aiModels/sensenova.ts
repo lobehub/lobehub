@@ -26,7 +26,7 @@ const sensenovaChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-05-08',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },
@@ -51,7 +51,7 @@ const sensenovaChatModels: AIChatModelCard[] = [
       ],
     },
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['none', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['none', 'low', 'medium', 'high'] },
     },
     type: 'chat',
   },

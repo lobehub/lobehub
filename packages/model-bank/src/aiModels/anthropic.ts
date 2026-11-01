@@ -370,7 +370,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     settings: {
       disabledParams: ['temperature', 'top_p'],
       extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -411,7 +411,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     settings: {
       disabledParams: ['temperature', 'top_p'],
       extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -450,7 +450,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-05',
     settings: {
       extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',
@@ -494,7 +494,7 @@ const anthropicChatModels: AIChatModelCard[] = [
         'enableReasoning',
         'reasoningBudgetToken',
       ],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'max'] },
       searchImpl: 'params',
     },
     type: 'chat',

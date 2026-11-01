@@ -143,7 +143,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     settings: {
       disabledParams: ['temperature', 'top_p'],
       extendParams: ['urlContext'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -187,7 +187,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-05-19',
     settings: {
       extendParams: ['urlContext'],
-      reasoningEffort: { default: 'medium', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -268,7 +268,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-26',
     settings: {
       extendParams: ['imageAspectRatio2', 'imageResolution2'],
-      reasoningEffort: { default: 'minimal', levels: ['minimal', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -401,7 +401,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-05-07',
     settings: {
       extendParams: ['urlContext'],
-      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -439,7 +439,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2026-03-04',
     settings: {
       extendParams: ['urlContext'],
-      reasoningEffort: { default: 'minimal', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -503,7 +503,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2025-11-18',
     settings: {
       extendParams: ['urlContext'],
-      reasoningEffort: { default: 'high', levels: ['low', 'high'] },
+      reasoningEffort: { levels: ['low', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },
@@ -546,7 +546,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     releasedAt: '2025-12-17',
     settings: {
       extendParams: ['urlContext'],
-      reasoningEffort: { default: 'high', levels: ['minimal', 'low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['minimal', 'low', 'medium', 'high'] },
       searchImpl: 'params',
       searchProvider: 'google',
     },

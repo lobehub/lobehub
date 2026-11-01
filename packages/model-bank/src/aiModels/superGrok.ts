@@ -73,7 +73,7 @@ const superGrokChatModels: AIChatModelCard[] = [
     id: 'grok-4.5',
     releasedAt: '2026-07-08',
     settings: {
-      reasoningEffort: { default: 'medium', levels: ['low', 'medium', 'high'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high'] },
       searchImpl: 'params',
     },
     type: 'chat',

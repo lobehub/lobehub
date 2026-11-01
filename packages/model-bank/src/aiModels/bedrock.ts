@@ -63,7 +63,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     settings: {
       disabledParams: ['temperature', 'top_p'],
       extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
     },
     type: 'chat',
   },
@@ -97,7 +97,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     settings: {
       disabledParams: ['temperature', 'top_p'],
       extendParams: ['disableContextCaching'],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
     },
     type: 'chat',
   },
@@ -130,7 +130,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     settings: {
       disabledParams: ['temperature', 'top_p'],
       extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'xhigh', 'max'] },
     },
     type: 'chat',
   },
@@ -166,7 +166,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     releasedAt: '2026-02-05',
     settings: {
       extendParams: ['disableContextCaching', 'enableAdaptiveThinking'],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'max'] },
     },
     type: 'chat',
   },
@@ -207,7 +207,7 @@ const bedrockChatModels: AIChatModelCard[] = [
         'enableReasoning',
         'reasoningBudgetToken',
       ],
-      reasoningEffort: { default: 'high', levels: ['low', 'medium', 'high', 'max'] },
+      reasoningEffort: { levels: ['low', 'medium', 'high', 'max'] },
     },
     type: 'chat',
   },
