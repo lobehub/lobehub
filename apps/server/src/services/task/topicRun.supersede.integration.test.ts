@@ -13,7 +13,7 @@ import { reconcileInterruptedTaskRuns } from '@/server/services/taskLifecycle/re
 import { TopicRunService } from './topicRun';
 
 /**
- * T-1278's topic: a Task run finished its last reply, the user followed up a few
+ * The incident: a Task run finished its last reply, the user followed up a few
  * seconds later, and the follow-up superseded the run before it had settled. The
  * superseded run ended `interrupted`, which never settles the run row, and the
  * follow-up did not take the row over because it was still `running` — so the
