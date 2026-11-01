@@ -80,6 +80,8 @@ export interface TaskListFilter {
 
 /** Longest `content` the filter keeps; anything past it is trimmed. */
 export const TASK_LIST_FILTER_CONTENT_MAX_LENGTH = 200;
+/** Most values one field may hold; `task.list` / `task.groupList` reject more. */
+export const TASK_LIST_FILTER_MAX_VALUES = 100;
 
 const sortValues = <T extends number | string>(values: T[]): T[] =>
   [...new Set(values)].sort((a, b) =>

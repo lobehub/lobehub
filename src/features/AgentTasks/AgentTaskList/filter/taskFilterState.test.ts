@@ -1,3 +1,4 @@
+import { TASK_LIST_FILTER_MAX_VALUES } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -65,6 +66,15 @@ describe('filter editing', () => {
     expect(
       toggleTaskFilterValue(toggleTaskFilterValue(two, 'status', 'backlog'), 'status', 'running'),
     ).toBeUndefined();
+  });
+
+  it('stops adding values at the list query limit but still removes them', () => {
+    const values = Array.from({ length: TASK_LIST_FILTER_MAX_VALUES }, (_, i) => `agt_${i}`);
+    const full = { agent: { operator: 'is' as const, values } };
+    expect(toggleTaskFilterValue(full, 'agent', 'agt_extra')).toBe(full);
+    expect(toggleTaskFilterValue(full, 'agent', 'agt_0')?.agent?.values).toHaveLength(
+      TASK_LIST_FILTER_MAX_VALUES - 1,
+    );
   });
 
   it('keeps the operator when values change', () => {

@@ -1,5 +1,6 @@
 import {
   normalizeTaskListFilter,
+  TASK_LIST_FILTER_MAX_VALUES,
   type TaskListFilter,
   type TaskListFilterDate,
   type TaskListFilterDateField,
@@ -68,7 +69,10 @@ export const isTaskFilterValueSelected = (
   value: TaskFilterValue,
 ): boolean => !!getSet(filter, field)?.values.includes(value);
 
-/** Add or remove one value; a new condition starts as "is". */
+/**
+ * Add or remove one value; a new condition starts as "is". Adding past
+ * `TASK_LIST_FILTER_MAX_VALUES` is ignored, since the list query would reject it.
+ */
 export const toggleTaskFilterValue = (
   filter: TaskListFilter | undefined,
   field: TaskListFilterSetField,
@@ -76,6 +80,7 @@ export const toggleTaskFilterValue = (
 ): TaskListFilter | undefined => {
   const current = getSet(filter, field);
   const values = current?.values ?? [];
+  if (!values.includes(value) && values.length >= TASK_LIST_FILTER_MAX_VALUES) return filter;
   const nextValues = values.includes(value)
     ? values.filter((item) => item !== value)
     : [...values, value];

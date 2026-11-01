@@ -8,6 +8,7 @@ import {
   TASK_LIST_FILTER_CONTENT_MAX_LENGTH,
   TASK_LIST_FILTER_DATE_OPERATORS,
   TASK_LIST_FILTER_DATE_WINDOWS,
+  TASK_LIST_FILTER_MAX_VALUES,
   TASK_LIST_FILTER_NONE,
   TASK_LIST_FILTER_OPERATORS,
 } from '@lobechat/types';
@@ -16,7 +17,7 @@ import { z } from 'zod';
 const filterSet = <T extends z.ZodTypeAny>(value: T) =>
   z.object({
     operator: z.enum(TASK_LIST_FILTER_OPERATORS),
-    values: z.array(value).min(1).max(100),
+    values: z.array(value).min(1).max(TASK_LIST_FILTER_MAX_VALUES),
   });
 
 const filterDate = z.object({
