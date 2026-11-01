@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { type AssistantContentBlock } from '@/types/index';
+import type { AssistantContentBlock } from '@/types/index';
 
 import {
-  getPostToolAnswerSplitIndex,
+  formatReasoningDuration,
   getToolDisplayName,
   getWorkflowStreamingHeadlineState,
   getWorkflowSummaryText,
-  isFoldableStatusLine,
   shapeProseForWorkflowHeadline,
 } from './toolDisplayNames';
 
@@ -15,6 +14,63 @@ const blk = (p: Partial<AssistantContentBlock> & { id: string }): AssistantConte
   ({ content: '', ...p }) as AssistantContentBlock;
 
 describe('tool display names', () => {
+  it('reads a running lh goal step as the goal step, not a raw command', () => {
+    const goalCall = (
+      command: string,
+      result?: { content: string; error?: unknown; state?: unknown },
+    ) =>
+      blk({
+        id: 'goal',
+        tools: [
+          {
+            apiName: 'Bash',
+            arguments: JSON.stringify({ command, description: 'Create LobeHub goal' }),
+            id: 'toolu_goal',
+            identifier: 'claude-code',
+            result,
+          } as any,
+        ],
+      });
+
+    // The plugin namespace is not loaded here, so labels resolve to their keys.
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal create "Fog report" --conversation --json'),
+      ]),
+    ).toMatchObject({
+      fallbackTool: 'builtins.goalCommand.create.loading Fog report',
+      kind: 'tool',
+    });
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal create "Fog report" --conversation --json', { content: '{}' }),
+      ]),
+    ).toMatchObject({ fallbackTool: 'builtins.goalCommand.create.completed Fog report' });
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal create "Fog report" --conversation --json', {
+          content: 'Error: An operation-bound token is required',
+          error: { message: 'exit 1' },
+        }),
+      ]),
+    ).toMatchObject({ fallbackTool: 'builtins.goalCommand.create.failed Fog report' });
+    // A shell step can report failure only through its run state; the headline
+    // used to read "completed" then.
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal create "Fog report" --conversation --json', {
+          content: 'error: unknown option',
+          state: { exitCode: 1, success: false },
+        }),
+      ]),
+    ).toMatchObject({ fallbackTool: 'builtins.goalCommand.create.failed Fog report' });
+    expect(
+      getWorkflowStreamingHeadlineState([
+        goalCall('lh goal plan goal_1 --token t --file plan.json --json'),
+      ]),
+    ).toMatchObject({ fallbackTool: 'builtins.goalCommand.plan.loading' });
+  });
+
   it('uses friendly labels for Codex tool api names', () => {
     expect(getToolDisplayName('command_execution')).toBe('Ran a command');
     expect(getToolDisplayName('file_change')).toBe('Edited a file');
@@ -23,7 +79,7 @@ describe('tool display names', () => {
     expect(getToolDisplayName('web_search')).toBe('Searched the web');
   });
 
-  it('uses friendly Codex labels in workflow summaries', () => {
+  it('summarises a workflow as the total call count only', () => {
     const summary = getWorkflowSummaryText([
       blk({
         id: '0',
@@ -31,58 +87,52 @@ describe('tool display names', () => {
           { apiName: 'command_execution', id: 'tool-1', result: { content: 'ok' } } as any,
           { apiName: 'command_execution', id: 'tool-2', result: { content: 'ok' } } as any,
           { apiName: 'file_change', id: 'tool-3', result: { content: 'ok' } } as any,
-          { apiName: 'mcp_tool_call', id: 'tool-4', result: { content: 'ok' } } as any,
-          { apiName: 'web_search', id: 'tool-5', result: { content: 'ok' } } as any,
         ],
       }),
-    ]);
-
-    expect(summary).toContain('Ran a command (2)');
-    expect(summary).toContain('Edited a file');
-    expect(summary).toContain('Called MCP tool');
-    expect(summary).toContain('Searched the web');
-    expect(summary).not.toContain('Command_execution');
-    expect(summary).not.toContain('File_change');
-    expect(summary).not.toContain('Mcp_tool_call');
-    expect(summary).not.toContain('Web_search');
-  });
-
-  it('leads the summary with the total call count and appends the tool-kind count when truncated', () => {
-    const tools = [
-      ...Array.from({ length: 6 }, (_, i) => ({ apiName: 'a', id: `a-${i}` })),
-      ...Array.from({ length: 4 }, (_, i) => ({ apiName: 'b', id: `b-${i}` })),
-      ...Array.from({ length: 2 }, (_, i) => ({ apiName: 'c', id: `c-${i}` })),
-      { apiName: 'd', id: 'd-0' },
-      { apiName: 'e', id: 'e-0', result: { error: { message: 'boom' } } },
-      { apiName: 'f', id: 'f-0' },
-    ];
-    const summary = getWorkflowSummaryText([blk({ id: '0', tools: tools as any })]);
-
-    // total calls (15) leads, "calls total" / "共" wording is gone
-    expect(summary.startsWith('15 calls:')).toBe(true);
-    expect(summary).not.toContain('calls total');
-    // truncated tool list is followed by the kind count, then the failure count
-    expect(summary).toContain('across 6 tools');
-    expect(summary).toContain('1 failed');
-  });
-
-  it('omits the total call count when each tool is called once', () => {
-    const summary = getWorkflowSummaryText([
       blk({
-        id: '0',
-        tools: [
-          { apiName: 'a', id: 'a-0' },
-          { apiName: 'b', id: 'b-0' },
-        ] as any,
+        id: '1',
+        tools: [{ apiName: 'web_search', id: 'tool-4', result: { content: 'ok' } } as any],
       }),
     ]);
 
-    expect(summary).not.toContain('calls:');
+    // No per-tool breakdown in the fold — the expanded list already has it.
+    expect(summary).toBe('4 calls');
+  });
+
+  it('counts a single call too, instead of naming the tool', () => {
+    const summary = getWorkflowSummaryText([
+      blk({ id: '0', tools: [{ apiName: 'command_execution', id: 'tool-1' }] as any }),
+    ]);
+
+    // Plural form depends on the active language (the test i18n runs zh rules).
+    expect(summary).toMatch(/^1 calls?$/);
+  });
+
+  it('falls back to reasoning time when a workflow has no tool calls', () => {
+    const summary = getWorkflowSummaryText([
+      blk({ id: '0', reasoning: { content: '', duration: 21_000 } as any }),
+    ]);
+
+    expect(summary).toBe('Thought for 21s');
   });
 
   it('uses friendly labels for Linear MCP tool names', () => {
     expect(getToolDisplayName('mcp__claude_ai_Linear__save_issue')).toBe('Linear · Save issue');
     expect(getToolDisplayName('mcp__linear-server__get_issue')).toBe('Linear · Get issue');
+  });
+
+  it('uses friendly labels for the in-app browser MCP tool names', () => {
+    // Title-casing the wire name yields "Mcp  lobe cc  browser navigate".
+    // Past tense: the summary reports what already ran, not an offer to run it.
+    expect(getToolDisplayName('mcp__lobe_cc__browser_navigate')).toBe('Opened page');
+    expect(getToolDisplayName('mcp__lobe_cc__browser_screenshot')).toBe('Captured screenshot');
+    expect(getToolDisplayName('mcp__lobe_cc__browser_read_page')).toBe('Read page text');
+    // `snapshot` returns the a11y tree — say what the agent got, not the wire name.
+    expect(getToolDisplayName('mcp__lobe_cc__browser_snapshot')).toBe('Read page elements');
+  });
+
+  it('leaves unknown MCP tools on the title-case fallback', () => {
+    expect(getToolDisplayName('mcp__lobe_cc__something_else')).toBe('Mcp__lobe_cc__something_else');
   });
 });
 
@@ -102,59 +152,6 @@ describe('shapeProseForWorkflowHeadline', () => {
     expect(out).toContain('Node.js 24');
     expect(out).toContain('release notes');
     expect(out).not.toContain('Then crawl');
-  });
-});
-
-describe('isFoldableStatusLine', () => {
-  it('keeps a single short status line folded', () => {
-    expect(isFoldableStatusLine(blk({ id: '0', content: '先重建 worktree:' }))).toBe(true);
-    expect(isFoldableStatusLine(blk({ id: '1', content: '现在我来搜索资料。' }))).toBe(true);
-  });
-
-  it('keeps a single sentence with a dotted token folded', () => {
-    // "src/a.ts" and "Node.js" must not be counted as extra sentence boundaries.
-    expect(isFoldableStatusLine(blk({ id: '0', content: '已更新 src/a.ts 完成。' }))).toBe(true);
-    expect(isFoldableStatusLine(blk({ id: '1', content: '升级到 Node.js 24。' }))).toBe(true);
-  });
-
-  it('treats multi-sentence, multi-line, markdown or long lines as prose', () => {
-    expect(isFoldableStatusLine(blk({ id: '0', content: '第一句话。第二句话。' }))).toBe(false);
-    expect(isFoldableStatusLine(blk({ id: '1', content: '先总结。\n\n## 下一步' }))).toBe(false);
-    expect(isFoldableStatusLine(blk({ id: '2', content: '- 对比方案 A' }))).toBe(false);
-    expect(isFoldableStatusLine(blk({ id: '3', content: 'x'.repeat(120) }))).toBe(false);
-  });
-
-  it('treats empty / loading content as foldable (nothing to lift out)', () => {
-    expect(isFoldableStatusLine(blk({ id: '0', content: '' }))).toBe(true);
-  });
-});
-
-describe('post-tool answer split', () => {
-  it('returns split index for real prose block after last tool', () => {
-    const long =
-      'Direct summary - Node.js 24 (released May 6, 2025) is a major platform update that upgrades V8 to a newer track, ships notable HTTP and fetch-related changes, and introduces practical migration items for native addons and tooling.\n\n## Checklist\n\n- Rebuild native modules';
-    const blocks = [
-      blk({ id: '0', content: 'intro', tools: [{ apiName: 'search', id: 't1' } as any] }),
-      blk({ id: '1', content: long }),
-    ];
-    const ix = getPostToolAnswerSplitIndex(blocks, 0, true, true);
-    expect(ix).toBe(1);
-  });
-
-  it('splits on a multi-sentence prose block after tools', () => {
-    const blocks = [
-      blk({ id: '0', content: 'x', tools: [{ apiName: 'search', id: 't1' } as any] }),
-      blk({ id: '1', content: '先跑测试。全部通过了。' }),
-    ];
-    expect(getPostToolAnswerSplitIndex(blocks, 0, true, true)).toBe(1);
-  });
-
-  it('does not split a short single-line step after tools', () => {
-    const blocks = [
-      blk({ id: '0', content: 'x', tools: [{ apiName: 'search', id: 't1' } as any] }),
-      blk({ id: '1', content: '现在我来搜索资料。' }),
-    ];
-    expect(getPostToolAnswerSplitIndex(blocks, 0, true, true)).toBeNull();
   });
 });
 
@@ -201,9 +198,33 @@ describe('reasoning headline extraction', () => {
 
     expect(state).toEqual({
       explicitStep: 'Searched the web: Searching release notes',
-      fallbackTool: 'Searched the web: Node.js 24',
+      fallbackTool: 'Searched the web Node.js 24',
       kind: 'tool',
     });
+  });
+
+  it('renders the running headline as action label + keyword, never the raw args', () => {
+    const state = getWorkflowStreamingHeadlineState([
+      blk({
+        id: '0',
+        tools: [
+          {
+            apiName: 'Bash',
+            arguments: JSON.stringify({
+              command: 'set -a && source .env && set +a && npx tsx scripts/gross-margin/monthly.ts',
+            }),
+            id: 't1',
+            identifier: 'claude-code',
+          } as any,
+        ],
+      }),
+    ]);
+
+    // the plugin i18n namespace is not registered in the test harness, so the
+    // label falls back to the apiName; the shape under test is label + keyword.
+    expect(state.kind).toBe('tool');
+    expect((state as any).fallbackTool).toMatch(/ monthly\.ts$/);
+    expect((state as any).fallbackTool).not.toContain('set -a');
   });
 
   it('uses prose state when the trailing block is prose', () => {
@@ -251,7 +272,7 @@ describe('reasoning headline extraction', () => {
 
     expect(state).toEqual({
       explicitStep: 'Searched the web: Searching release notes',
-      fallbackTool: 'Searched the web: Node.js 24',
+      fallbackTool: 'Searched the web Node.js 24',
       kind: 'tool',
     });
   });
@@ -274,5 +295,24 @@ describe('reasoning headline extraction', () => {
       kind: 'thinking',
       reasoningTitle: 'Search release notes',
     });
+  });
+});
+
+describe('formatReasoningDuration', () => {
+  it('formats sub-minute durations in seconds', () => {
+    expect(formatReasoningDuration(49_000)).toBe('49s');
+  });
+
+  it('formats sub-hour durations in minutes and seconds', () => {
+    expect(formatReasoningDuration(217_000)).toBe('3m 37s');
+    expect(formatReasoningDuration(180_000)).toBe('3m');
+  });
+
+  it('rolls minutes up to hours past the hour mark', () => {
+    // The row used to read "251m 49s" for this turn.
+    expect(formatReasoningDuration(15_109_000)).toBe('4h 11m');
+    expect(formatReasoningDuration(3_600_000)).toBe('1h');
+    expect(formatReasoningDuration(3_660_000)).toBe('1h 1m');
+    expect(formatReasoningDuration(3_599_000)).toBe('59m 59s');
   });
 });

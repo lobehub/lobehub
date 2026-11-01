@@ -1,8 +1,13 @@
 import { z } from 'zod';
 
+import { type ClientAllocatableEntity, entityIdPattern } from './entityId';
 import type { UIChatMessage } from './message';
 import type { MessageMetadata } from './message/common';
-import { ChatToolPayloadSchema, MessageMetadataSchema } from './message/common';
+import {
+  ChatToolPayloadSchema,
+  ClientMessageMetadataSchema,
+  omitServerOwnedMessageMetadata,
+} from './message/common';
 import type { ContextSelection, CreateMessageParams, PageSelection } from './message/ui/params';
 import { ContextSelectionSchema, PageSelectionSchema } from './message/ui/params';
 import type { OpenAIChatMessage } from './openai/chat';
@@ -20,6 +25,12 @@ export interface SendNewMessage {
   editorData?: Record<string, any>;
   // if message has attached with files, then add files to message and the agent
   files?: string[];
+  /**
+   * Id the client already rendered this message under. Honoured verbatim by the
+   * server, so the optimistic row never has to be re-keyed. Omit to let the
+   * server mint one (the pre-client-id behaviour).
+   */
+  id?: string;
   metadata?: MessageMetadata;
   /** Page selections attached to this message (for Ask AI functionality) */
   pageSelections?: PageSelection[];
@@ -56,6 +67,14 @@ export interface SendMessageServerParams {
    */
   groupId?: string;
   newAssistantMessage: {
+    /** Agent that authored the assistant turn when it differs from the conversation owner. */
+    agentId?: string;
+    /**
+     * Id the client already rendered this message under. Honoured verbatim by
+     * the server, so the optimistic row never has to be re-keyed. Omit to let
+     * the server mint one (the pre-client-id behaviour).
+     */
+    id?: string;
     /**
      * Message metadata (e.g., isSupervisor for group orchestration)
      */
@@ -70,6 +89,12 @@ export interface SendMessageServerParams {
   newThread?: CreateThreadWithMessageParams;
   newTopic?: {
     /**
+     * Id the client already rendered this topic under (sidebar row, message
+     * bucket, active-topic pointer). Honoured verbatim by the server so the
+     * topic never changes id mid-flight. Omit to let the server mint one.
+     */
+    id?: string;
+    /**
      * Topic metadata persisted at creation time. For CC/heterogeneous
      * agents this carries `workingDirectory` so the topic is bound to a
      * project from the moment it's created (used by By-Project grouping
@@ -77,6 +102,11 @@ export interface SendMessageServerParams {
      * post-execution metadata write which can be skipped on cancel/error.
      */
     metadata?: ChatTopicMetadata;
+    /** Pinned model snapshot for the new topic (top-level `topics.model` column). */
+    model?: string;
+    /** Project the topic is born in, conversation-only (a project "+" with no directory). */
+    projectId?: string;
+    provider?: string;
     title?: string;
     topicMessageIds?: string[];
     trigger?: string;
@@ -95,6 +125,7 @@ export interface SendMessageServerParams {
     excludeStatuses?: string[];
     excludeTriggers?: string[];
     includeTriggers?: string[];
+    onlyMine?: boolean;
   };
   // if there is activeTopicId, then add topicId to message
   topicId?: string;
@@ -113,7 +144,7 @@ export const CreateThreadWithMessageSchema = z.object({
 
 const SendPreloadMessageSchema = z.object({
   content: z.string(),
-  metadata: MessageMetadataSchema.optional(),
+  metadata: ClientMessageMetadataSchema.optional(),
   plugin: z
     .object({
       apiName: z.string(),
@@ -127,18 +158,42 @@ const SendPreloadMessageSchema = z.object({
   tools: z.array(ChatToolPayloadSchema).optional(),
 });
 
+/**
+ * A client-minted primary key for a row this request creates.
+ *
+ * Optional on purpose: an older client that sends nothing keeps the previous
+ * behaviour (the server mints the id), so the two can be deployed independently.
+ * When present it is honoured verbatim, which is what removes the
+ * placeholder-id → real-id swap from the whole send flow.
+ *
+ * The pattern is the gate: an unvalidated client primary key would let a caller
+ * submit arbitrary strings — look-alike ids, oversized values, or content that
+ * leaks into logs and URLs.
+ */
+const clientEntityId = (entity: ClientAllocatableEntity) =>
+  z.string().regex(entityIdPattern(entity)).optional();
+
 export const AiSendMessageServerSchema = z.object({
   agentId: z.string().optional(),
   groupId: z.string().optional(),
   newAssistantMessage: z.object({
-    metadata: z.record(z.unknown()).optional(),
+    agentId: z.string().optional(),
+    id: clientEntityId('messages'),
+    metadata: z
+      .record(z.string(), z.unknown())
+      .optional()
+      .transform(omitServerOwnedMessageMetadata),
     model: z.string().optional(),
     provider: z.string().optional(),
   }),
   newThread: CreateThreadWithMessageSchema.optional(),
   newTopic: z
     .object({
+      id: clientEntityId('topics'),
       metadata: z.custom<ChatTopicMetadata>().optional(),
+      model: z.string().optional(),
+      projectId: z.string().optional(),
+      provider: z.string().optional(),
       title: z.string().optional(),
       topicMessageIds: z.array(z.string()).optional(),
       trigger: z.string().optional(),
@@ -148,9 +203,10 @@ export const AiSendMessageServerSchema = z.object({
   newUserMessage: z.object({
     content: z.string(),
     contextSelections: z.array(ContextSelectionSchema).optional(),
-    editorData: z.record(z.unknown()).optional(),
+    editorData: z.record(z.string(), z.unknown()).optional(),
     files: z.array(z.string()).optional(),
-    metadata: MessageMetadataSchema.optional(),
+    id: clientEntityId('messages'),
+    metadata: ClientMessageMetadataSchema.optional(),
     pageSelections: z.array(PageSelectionSchema).optional(),
     parentId: z.string().optional(),
   }),
@@ -161,6 +217,7 @@ export const AiSendMessageServerSchema = z.object({
       excludeStatuses: z.array(z.string()).optional(),
       excludeTriggers: z.array(z.string()).optional(),
       includeTriggers: z.array(z.string()).optional(),
+      onlyMine: z.boolean().optional(),
     })
     .optional(),
   topicPageSize: z.number().int().min(1).max(100).optional(),
@@ -222,6 +279,51 @@ export const StructureOutputSchema = z.object({
    */
   tracing: z.object({ tracingId: z.string().uuid().optional() }).catchall(z.unknown()).optional(),
 });
+
+/** Plain text or structured JSON, as a decision model accepts for `state`, `instructions` and criteria. */
+const DecisionContentSchema = z.union([
+  z.string(),
+  z.array(z.unknown()),
+  z.record(z.string(), z.unknown()),
+]);
+
+/** One typed question for a decision model; mirrors `DecisionQuestion` in `@lobechat/model-runtime`. */
+export const DecisionQuestionSchema = z.discriminatedUnion('type', [
+  z.object({
+    criteria: z.object({ false: DecisionContentSchema, true: DecisionContentSchema }).optional(),
+    instructions: DecisionContentSchema,
+    type: z.literal('boolean'),
+  }),
+  z.object({
+    criteria: z.record(z.string(), DecisionContentSchema.nullable()),
+    instructions: DecisionContentSchema,
+    type: z.literal('choice'),
+  }),
+  z.object({
+    criteria: z.array(DecisionContentSchema).min(1),
+    instructions: DecisionContentSchema,
+    type: z.literal('score'),
+  }),
+]);
+
+export const DecisionOutputSchema = z.object({
+  /** Free-form context forwarded to non-tracing hooks (e.g. billing), as on `outputJSON`. */
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  model: z.string(),
+  provider: z.string(),
+  /** Question name → question. The names come back as the keys of `answers`. */
+  questions: z
+    .record(z.string(), DecisionQuestionSchema)
+    .refine((questions) => Object.keys(questions).length > 0, {
+      message: 'A decision request needs at least one question',
+    }),
+  /** The content every question is evaluated against. */
+  state: DecisionContentSchema,
+  /** Structured tracing config, validated like `StructureOutputSchema.tracing`. */
+  tracing: z.object({ tracingId: z.string().uuid().optional() }).catchall(z.unknown()).optional(),
+});
+
+export type DecisionOutputParams = z.infer<typeof DecisionOutputSchema>;
 
 interface IStructureSchema {
   description?: string;

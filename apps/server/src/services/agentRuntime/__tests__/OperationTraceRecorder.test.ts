@@ -49,7 +49,7 @@ describe('OperationTraceRecorder', () => {
         afterStepSignalEvents: [],
         agentState: {
           messages: [],
-          metadata: { agentConfig: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
+          world: { agent: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
         },
         beforeStepSignalEvents: [],
         currentContext: { phase: 'user_input' },
@@ -76,12 +76,22 @@ describe('OperationTraceRecorder', () => {
         {
           finalState: {
             activatedStepTools: [{ id: 'kept' }],
+            expertise: {
+              contentHash: 'hash',
+              domains: [{ id: 'product-design', lessonIds: ['lesson-1'] }],
+              renderedContext: '<expertise>heavy learned context</expertise>',
+              schemaVersion: 1,
+            },
             messages: ['heavy'],
             operationToolSet: { manifestMap: {} },
             otherStateField: 'kept',
             toolManifestMap: {},
             toolSourceMap: {},
             tools: [],
+            world: {
+              agent: { systemRole: 'kept' },
+              expertise: { contentHash: 'hash', renderedContext: '<expertise/>' },
+            },
           },
           reason: 'done',
           type: 'done',
@@ -108,11 +118,14 @@ describe('OperationTraceRecorder', () => {
       const doneEvent = step.events.find((e: any) => e.type === 'done');
       expect(doneEvent.finalState.activatedStepTools).toEqual([{ id: 'kept' }]);
       expect(doneEvent.finalState.otherStateField).toBe('kept');
+      expect(doneEvent.finalState.expertise).toBeUndefined();
       expect(doneEvent.finalState.messages).toBeUndefined();
       expect(doneEvent.finalState.operationToolSet).toBeUndefined();
       expect(doneEvent.finalState.toolManifestMap).toBeUndefined();
       expect(doneEvent.finalState.toolSourceMap).toBeUndefined();
       expect(doneEvent.finalState.tools).toBeUndefined();
+      // Only the expertise snapshot leaves `world`; the rest of it is kept.
+      expect(doneEvent.finalState.world).toEqual({ agent: { systemRole: 'kept' } });
     });
 
     it('emits messagesDelta-only beyond step 0 and only stores messagesBaseline when isCompression', async () => {
@@ -250,7 +263,7 @@ describe('OperationTraceRecorder', () => {
         completionReason: 'done',
         state: {
           cost: { total: 0.5 },
-          metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
+          origin: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
           stepCount: 1,
           usage: { llm: { tokens: { total: 200 } } },
         },
@@ -307,17 +320,13 @@ describe('OperationTraceRecorder', () => {
         error: {
           body: {
             diagnostics: {
-              attempt: 3,
-              maxAttempts: 3,
-              outputTokens: 1,
-              retryEvents: [
-                { attempt: 2, delayMs: 1000, maxAttempts: 3, type: 'stream_retry' },
-                { attempt: 3, delayMs: 2000, maxAttempts: 3, type: 'stream_retry' },
-              ],
+              attempt: 1,
+              maxAttempts: 1,
+              outputTokens: 25_617,
             },
           },
           message: 'Model returned an empty completion',
-          retryable: true,
+          retryable: false,
           type: 'ModelEmptyCompletion',
         },
         failedStep: { startedAt: 5000, stepIndex: 1, stepType: 'call_llm' },
@@ -331,18 +340,16 @@ describe('OperationTraceRecorder', () => {
         error: {
           body: {
             diagnostics: {
-              attempt: 3,
-              retryEvents: [
-                expect.objectContaining({ attempt: 2 }),
-                expect.objectContaining({ attempt: 3 }),
-              ],
+              attempt: 1,
+              maxAttempts: 1,
+              outputTokens: 25_617,
             },
           },
           type: 'ModelEmptyCompletion',
         },
         type: 'error',
       });
-      expect(saved.error.body.diagnostics).toMatchObject({ attempt: 3, maxAttempts: 3 });
+      expect(saved.error.body.diagnostics).toMatchObject({ attempt: 1, maxAttempts: 1 });
     });
 
     it('merges the error event into an existing step when stepIndex collides (success-path append landed before later failure)', async () => {
@@ -561,6 +568,42 @@ describe('OperationTraceRecorder', () => {
       const step = getSavedStep(2);
       expect(step.contextEngine.input).toBeUndefined();
       expect(step.contextEngine.output).toBeUndefined();
+    });
+
+    it('stores CE pipeline metadata and dedupes it independently', async () => {
+      const withMeta = {
+        input: { messages: ['hello'] },
+        metadata: { staleToolResultTrim: { savedChars: 100, trimmedMessages: 2 } },
+        output: { tokens: 42 },
+      };
+      // NB: the recorder caches the partial in memory between appendStep calls,
+      // so each call appends to the same running partial — read the last step.
+      const lastStep = () => {
+        const saved = store.savePartial.mock.calls.at(-1)![1];
+        return saved.steps.at(-1);
+      };
+
+      await appendStepWithCe(withMeta, []);
+      expect(lastStep().contextEngine.metadata).toEqual({
+        staleToolResultTrim: { savedChars: 100, trimmedMessages: 2 },
+      });
+
+      // identical metadata on the next step is stripped like input/output
+      await appendStepWithCe(withMeta, []);
+      expect(lastStep().contextEngine.metadata).toBeUndefined();
+
+      // changed metadata is kept while identical input/output are stripped
+      const changedMeta = {
+        ...withMeta,
+        metadata: { staleToolResultTrim: { savedChars: 250, trimmedMessages: 5 } },
+      };
+      await appendStepWithCe(changedMeta, []);
+      const step = lastStep();
+      expect(step.contextEngine.input).toBeUndefined();
+      expect(step.contextEngine.output).toBeUndefined();
+      expect(step.contextEngine.metadata).toEqual({
+        staleToolResultTrim: { savedChars: 250, trimmedMessages: 5 },
+      });
     });
 
     it('resolves input and output independently from different previous steps', async () => {

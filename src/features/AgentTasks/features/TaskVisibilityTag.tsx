@@ -1,6 +1,6 @@
 import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2Icon, LockIcon, UsersIcon } from 'lucide-react';
+import { createStaticStyles, cssVar, Spin } from '@lobehub/ui';
+import { LockIcon, UsersIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 
-import { renderMenuExtra } from './menuExtra';
+import { renderMenuCheck } from './menuExtra';
 import { getTaskVisibilityDefaultLabel, getTaskVisibilityLabelKey } from './taskVisibilityLabel';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -101,11 +101,11 @@ const TaskVisibilityTag = memo<TaskVisibilityTagProps>(
 
     const menuItems = useMemo<DropdownItem[]>(
       () =>
-        VISIBILITY_OPTIONS.map((option, index) => {
+        VISIBILITY_OPTIONS.map((option) => {
           const OptionIcon = option === 'private' ? LockIcon : UsersIcon;
           const isCurrent = option === visibility;
           return {
-            extra: renderMenuExtra(String(index + 1), isCurrent),
+            extra: renderMenuCheck(isCurrent),
             icon: <Icon color={cssVar.colorTextSecondary} icon={OptionIcon} size={16} />,
             key: option,
             label: t(getTaskVisibilityLabelKey(option) as never, {
@@ -128,7 +128,7 @@ const TaskVisibilityTag = memo<TaskVisibilityTagProps>(
     const triggerNode = children ? (
       children
     ) : loading ? (
-      <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
+      <Spin size={size} style={{ color: cssVar.colorTextDescription }} />
     ) : (
       <Tooltip title={label}>
         <span className={styles.trigger} onClick={(e) => e.stopPropagation()}>

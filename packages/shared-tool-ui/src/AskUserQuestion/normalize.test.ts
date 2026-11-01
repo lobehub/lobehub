@@ -31,6 +31,26 @@ describe('normalizeAskUserQuestions', () => {
     ]);
   });
 
+  it('preserves stable option ids while stripping unknown option fields', () => {
+    const questions = normalizeAskUserQuestions({
+      questions: [
+        {
+          header: 'Permission',
+          options: [
+            { id: 'allow-once', ignored: 'raw', label: 'Continue' },
+            { id: 'reject-once', label: 'Continue' },
+          ],
+          question: 'Edit README?',
+        },
+      ],
+    });
+
+    expect(questions[0].options).toEqual([
+      { id: 'allow-once', label: 'Continue' },
+      { id: 'reject-once', label: 'Continue' },
+    ]);
+  });
+
   it('accepts a single question object for stale payloads', () => {
     const questions = normalizeAskUserQuestions({
       questions: {
@@ -74,6 +94,38 @@ describe('normalizeAskUserQuestions', () => {
     expect(normalizeAskUserQuestions({ questions: JSON.stringify(expected) })).toEqual(expected);
   });
 
+  it('strips the "(Recommended)" label marker into the recommended flag', () => {
+    const questions = normalizeAskUserQuestions({
+      questions: [
+        {
+          header: 'Scope',
+          options: [
+            { label: 'Narrow (Recommended)' },
+            { label: 'Full（推荐）' },
+            { label: 'recommended (recommended)' },
+            { label: 'Plain' },
+          ],
+          question: 'How broad?',
+        },
+      ],
+    });
+
+    expect(questions[0].options).toEqual([
+      { label: 'Narrow', recommended: true },
+      { label: 'Full', recommended: true },
+      { label: 'recommended', recommended: true },
+      { label: 'Plain' },
+    ]);
+  });
+
+  it('keeps a label that IS the marker instead of collapsing it to empty', () => {
+    const questions = normalizeAskUserQuestions({
+      questions: [{ options: [{ label: '(Recommended)' }], question: 'Pick' }],
+    });
+
+    expect(questions[0].options).toEqual([{ label: '(Recommended)' }]);
+  });
+
   it('normalizes malformed options so renderers can map safely', () => {
     const questions = normalizeAskUserQuestions({
       questions: [
@@ -93,5 +145,32 @@ describe('normalizeAskUserQuestions', () => {
         question: 'Pick one',
       },
     ]);
+  });
+
+  it('keeps a question description a host supplies', () => {
+    expect(
+      normalizeAskUserQuestions({
+        questions: [
+          { description: 'Decides the tone', header: 'Q1', options: [], question: 'Who?' },
+        ],
+      }),
+    ).toEqual([{ description: 'Decides the tone', header: 'Q1', options: [], question: 'Who?' }]);
+  });
+
+  it('keeps an explicit recommended flag from a host-built option', () => {
+    const [question] = normalizeAskUserQuestions({
+      questions: [
+        {
+          header: '',
+          options: [
+            { id: 'retry', label: 'Retry', recommended: true },
+            { id: 'retire', label: 'Retire' },
+          ],
+          question: 'What next?',
+        },
+      ],
+    });
+    expect(question.options[0]).toMatchObject({ id: 'retry', label: 'Retry', recommended: true });
+    expect(question.options[1].recommended).toBeUndefined();
   });
 });

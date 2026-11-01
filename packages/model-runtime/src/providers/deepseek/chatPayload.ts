@@ -1,18 +1,23 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { deepseek as deepseekChatModels, ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { isDeepSeekV4FamilyModel } from '../../utils/modelParse';
-import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { assertContextWithinWindow, resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
+import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
+import { deepseekRuntimeModels } from './runtimeModels';
 import { sanitizeDeepSeekJsonPayload } from './sanitizePayload';
 
 export const isDeepSeekV4Model = (model: string | undefined) => isDeepSeekV4FamilyModel(model);
 const isEmptyContent = (content: unknown) =>
   content === '' || content === null || content === undefined;
-const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
+// Require non-empty text: an empty-string `thinking` has never been validated
+// against DeepSeek — empty reasoning falls back to the proven `' '` placeholder.
+const hasReasoningContent = (reasoning: any) =>
+  typeof reasoning?.content === 'string' && reasoning.content !== '';
 
 const buildThinkingBlock = (reasoning: any) =>
   hasReasoningContent(reasoning)
@@ -78,9 +83,31 @@ const normalizeMessagesForAnthropic = (
     if (message.role !== 'assistant') return message;
 
     const { reasoning, ...rest } = message;
-    const thinkingBlock = buildThinkingBlock(reasoning);
+    // Array content may already carry thinking parts built by the context
+    // engine (possibly Claude-signed or signature-only) — sanitize them for
+    // DeepSeek's thinking contract instead of stacking another block on top.
+    const existingParts = Array.isArray(message.content)
+      ? sanitizeAnthropicThinkingParts(message.content)
+      : undefined;
+    const hasThinkingPart = existingParts?.some((part: any) => part.type === 'thinking');
+
+    const thinkingBlock = hasThinkingPart ? undefined : buildThinkingBlock(reasoning);
     const effectiveThinkingBlock =
-      thinkingBlock || (forceThinking ? { thinking: ' ', type: 'thinking' as const } : undefined);
+      thinkingBlock ||
+      (!hasThinkingPart && forceThinking
+        ? { thinking: ' ', type: 'thinking' as const }
+        : undefined);
+
+    if (existingParts) {
+      const contentParts = effectiveThinkingBlock
+        ? [effectiveThinkingBlock, ...existingParts]
+        : existingParts;
+
+      return {
+        ...rest,
+        content: contentParts.length > 0 ? contentParts : [{ text: ' ', type: 'text' as const }],
+      };
+    }
 
     if (!effectiveThinkingBlock) return rest;
 
@@ -101,6 +128,12 @@ export const buildDeepSeekAnthropicPayload = async (
     shouldEnableDeepSeekThinking(payload),
   );
 
+  // resolveSafeMaxTokens skips explicit completion budgets, but the input must
+  // still fit the model's context window before the upstream request is sent.
+  if (payload.max_tokens !== undefined) {
+    assertContextWithinWindow({ ...payload, messages: anthropicMessages }, deepseekRuntimeModels);
+  }
+
   const resolvedMaxTokens =
     payload.max_tokens ??
     // Cap the completion budget against the actual input size instead of always
@@ -114,7 +147,7 @@ export const buildDeepSeekAnthropicPayload = async (
     // is more actionable (fork_topic / larger-ctx suggestions) than either a
     // doomed upstream 400 or a truncated stub completion. Estimate against the
     // messages we actually send (anthropic-normalized).
-    resolveSafeMaxTokens({ ...payload, messages: anthropicMessages }, deepseekChatModels) ??
+    resolveSafeMaxTokens({ ...payload, messages: anthropicMessages }, deepseekRuntimeModels) ??
     (await getModelPropertyWithFallback<number | undefined>(
       payload.model,
       'maxOutput',

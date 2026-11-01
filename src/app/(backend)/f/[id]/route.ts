@@ -22,7 +22,7 @@ type Params = Promise<{ id: string }>;
  * of which can attach auth headers/cookies. Adding `checkAuth` here would break
  * every previously-shared `/f/:id` link, so access stays public by id.
  */
-export const GET = async (_req: Request, segmentData: { params: Params }) => {
+export const GET = async (req: Request, segmentData: { params: Params }) => {
   try {
     const params = await segmentData.params;
     const { id } = params;
@@ -45,9 +45,11 @@ export const GET = async (_req: Request, segmentData: { params: Params }) => {
     // Create file service with file owner's userId
     const fileService = new FileService(db, file.userId);
 
-    // Web: Generate a cached S3 presigned URL, normalizing legacy full S3 URLs.
-    const redirectUrl = await fileService.createCachedPreSignedUrlForPreview(file.url);
-    log('Web S3 presigned URL generated');
+    const isDownload = new URL(req.url).searchParams.get('download') === '1';
+    const redirectUrl = isDownload
+      ? await fileService.createDownloadUrl(file.url, file.name)
+      : await fileService.createCachedPreSignedUrlForPreview(file.url);
+    log('Web S3 presigned URL generated (%s)', isDownload ? 'download' : 'preview');
 
     // Return 302 redirect
     return Response.redirect(redirectUrl, 302);

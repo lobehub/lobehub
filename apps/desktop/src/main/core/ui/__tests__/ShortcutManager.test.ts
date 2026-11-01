@@ -15,16 +15,6 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock Logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock desktop global shortcut defaults
 vi.mock('@lobechat/const/desktopGlobalShortcuts', () => ({
   DEFAULT_ELECTRON_DESKTOP_SHORTCUTS: {
@@ -266,8 +256,22 @@ describe('ShortcutManager', () => {
       const result = shortcutManager.registerShortcut('Ctrl+T', callback);
 
       expect(result).toBe(true);
-      expect(globalShortcut.register).toHaveBeenCalledWith('Ctrl+T', callback);
+      expect(globalShortcut.register).toHaveBeenCalledWith('Ctrl+T', expect.any(Function));
       expect(shortcutManager['shortcuts'].has('Ctrl+T')).toBe(true);
+    });
+
+    it('should defer the callback to a task so await continuations run immediately', async () => {
+      const callback = vi.fn();
+      vi.mocked(globalShortcut.register).mockReturnValue(true);
+
+      shortcutManager.registerShortcut('Ctrl+T', callback);
+
+      const registeredCallback = vi.mocked(globalShortcut.register).mock.calls[0][1];
+      registeredCallback();
+      expect(callback).not.toHaveBeenCalled();
+
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(callback).toHaveBeenCalledTimes(1);
     });
 
     it('should unregister existing shortcut before registering new one', () => {
@@ -281,7 +285,7 @@ describe('ShortcutManager', () => {
       shortcutManager.registerShortcut('Ctrl+T', callback2);
 
       expect(globalShortcut.unregister).toHaveBeenCalledWith('Ctrl+T');
-      expect(globalShortcut.register).toHaveBeenCalledWith('Ctrl+T', callback2);
+      expect(globalShortcut.register).toHaveBeenCalledWith('Ctrl+T', expect.any(Function));
     });
 
     it('should handle registration failure', () => {

@@ -1,7 +1,7 @@
 'use client';
 
 import debug from 'debug';
-import { memo } from 'react';
+import { memo, Suspense } from 'react';
 
 import { SafeBoundary } from '@/components/ErrorBoundary';
 import { type DynamicRouteMetaProps, type RouteMeta } from '@/spa/router/routeMeta';
@@ -19,7 +19,9 @@ const DynamicMetaRunner = memo<DynamicMetaRunnerProps>(({ DynamicMeta, onResolve
       onResolve({});
     }}
   >
-    <DynamicMeta params={params} onResolve={onResolve} />
+    <Suspense fallback={null}>
+      <DynamicMeta params={params} onResolve={onResolve} />
+    </Suspense>
   </SafeBoundary>
 ));
 

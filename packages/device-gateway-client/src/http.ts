@@ -1,54 +1,127 @@
+import type { DeviceClient, DeviceMetricSample } from '@lobechat/types';
+
+import {
+  describeGatewayRequestFailure,
+  describeGatewayResponseFailure,
+  type DeviceTransportFailure,
+  type DeviceUnavailableErrorData,
+} from './deviceTransportError';
 import type {
+  AgentRunRequestMessage,
   DeviceSystemInfo,
   GatewayDevice,
-  GatewayMcpStdioParams,
+  GatewayMcpParams,
   GatewayToolCallType,
+  GatewayTunnelRegistration,
 } from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
+/**
+ * Device *reads* are on the critical path of every routing decision, and `post`
+ * has no deadline of its own — an unanswered read would otherwise hang for as
+ * long as the socket stays open.
+ */
+const DEVICE_QUERY_TIMEOUT_MS = 10_000;
 const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
+/**
+ * The gateway holds an undelivered tool call for `timeout` plus a recovery
+ * window (45s) waiting for the device to reconnect, then answers 503
+ * `DEVICE_OFFLINE` — "never ran, safe to retry". A client deadline shorter than
+ * that window aborts first, so an offline device always read as "timed out, the
+ * work may still be running". Keep this above the gateway's window.
+ */
+const TOOL_CALL_HTTP_TIMEOUT_PADDING_MS = 60_000;
+/**
+ * The padding must not stretch a call past the agent function window (800s,
+ * the server's tool-timeout ceiling): an invocation killed mid-wait normalizes
+ * nothing at all. Near the ceiling the offline answer is given up instead.
+ */
+const TOOL_CALL_HTTP_DEADLINE_CAP_MS = 800_000;
 
 export interface DeviceStatusResult {
   deviceCount: number;
   online: boolean;
 }
 
+/** Result envelope returned by a tunneled device tool call. */
 export interface DeviceToolCallResult {
   content: string;
   error?: string;
+  /** Structured availability context for callers that can choose whether to retry. */
+  errorData?: DeviceUnavailableErrorData;
   state?: unknown;
   success: boolean;
 }
 
+/** Result envelope returned by a tunneled device messaging call. */
 export interface DeviceMessageApiResult {
   content: string;
   error?: string;
+  /** Structured availability context for callers that can choose whether to retry. */
+  errorData?: DeviceUnavailableErrorData;
   success: boolean;
 }
 
+/**
+ * Result envelope returned by a generic device RPC.
+ *
+ * @param T Successful RPC payload type.
+ */
 export interface DeviceRpcResult<T = unknown> {
   data?: T;
   error?: string;
+  /** Structured availability context for callers that can choose whether to retry. */
+  errorData?: DeviceUnavailableErrorData;
   success: boolean;
 }
 
+/** Shape a described transport failure into the LLM-facing tool result. */
+const toFailedToolCallResult = (failure: DeviceTransportFailure): DeviceToolCallResult => ({
+  content: failure.content,
+  error: failure.error,
+  ...(failure.data ? { errorData: failure.data } : {}),
+  success: false,
+});
+
+/** What a request asks a device to do, for choosing which client may serve it. */
+export type GatewayDispatchTarget =
+  | { identifier: string; kind: 'tool'; type: GatewayToolCallType }
+  | { kind: 'messageApi'; platform: string }
+  | { kind: 'rpc'; method: string };
+
 export interface GatewayHttpClientOptions {
   gatewayUrl: string;
+  /**
+   * Which device clients can serve a request, sent to the gateway as
+   * `clientKinds` so it skips connections of other clients (one device can
+   * hold the desktop app and `lh connect` at once). Return `undefined` when
+   * any client can. A gateway that predates `clientKinds` ignores it.
+   */
+  resolveClientKinds?: (target: GatewayDispatchTarget) => DeviceClient[] | undefined;
   serviceToken: string;
 }
 
 export class GatewayHttpClient {
   private gatewayUrl: string;
+  private resolveClientKinds?: GatewayHttpClientOptions['resolveClientKinds'];
   private serviceToken: string;
 
   constructor(options: GatewayHttpClientOptions) {
     this.gatewayUrl = options.gatewayUrl;
+    this.resolveClientKinds = options.resolveClientKinds;
     this.serviceToken = options.serviceToken;
   }
 
   async queryDeviceStatus(userId: string, workspaceId?: string): Promise<DeviceStatusResult> {
-    const res = await this.post('/api/device/status', { userId, workspaceId });
-    if (!res.ok) return { deviceCount: 0, online: false };
+    const res = await this.post(
+      '/api/device/status',
+      { userId, workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    // A gateway that answered with an error did not tell us "nothing is
+    // online" — it told us nothing. Reporting the two as the same value is how
+    // a transient 5xx became an authoritative "all devices offline" downstream.
+    if (!res.ok) throw new Error(`Device gateway /api/device/status responded ${res.status}`);
 
     const data = await res.json();
     return {
@@ -58,8 +131,14 @@ export class GatewayHttpClient {
   }
 
   async queryDeviceList(userId: string, workspaceId?: string): Promise<GatewayDevice[]> {
-    const res = await this.post('/api/device/devices', { userId, workspaceId });
-    if (!res.ok) return [];
+    const res = await this.post(
+      '/api/device/devices',
+      { userId, workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    // See `queryDeviceStatus`: an errored read is an UNKNOWN online set, and
+    // only the caller can decide what to do about that.
+    if (!res.ok) throw new Error(`Device gateway /api/device/devices responded ${res.status}`);
 
     const data = await res.json();
     return Array.isArray(data.devices) ? data.devices : [];
@@ -67,6 +146,11 @@ export class GatewayHttpClient {
 
   async executeToolCall(
     params: {
+      /**
+       * The device clients that may serve this call, when the caller already
+       * knows; otherwise `resolveClientKinds` decides from the tool identifier.
+       */
+      clientKinds?: DeviceClient[];
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -79,20 +163,20 @@ export class GatewayHttpClient {
   }
 
   /**
-   * Tunnel a stdio MCP tool call to the device. Rides the same
+   * Tunnel an MCP tool call to the device. Rides the same
    * `/api/device/tool-call` relay as {@link executeToolCall} — the gateway
-   * forwards `toolCall` opaquely — but carries `params` (the stdio connection
-   * params) so the device routes it to its local MCP client (spawning the
-   * stdio server) rather than the builtin local-system tool switch. The cloud
-   * server can't spawn the user's binary, so execution must happen on the
-   * device.
+   * forwards `toolCall` opaquely — but carries `params` (the MCP connection
+   * params) so the device routes it to its local MCP client rather than the
+   * builtin local-system tool switch. Used when only the device can reach the
+   * MCP server: stdio (the cloud can't spawn the user's binary) and
+   * localhost / LAN HTTP endpoints (the cloud's fetch can't reach them).
    */
   async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
     deviceId?: string;
     identifier: string;
-    params: GatewayMcpStdioParams;
+    params: GatewayMcpParams;
     timeout?: number;
     userId: string;
     workspaceId?: string;
@@ -106,6 +190,7 @@ export class GatewayHttpClient {
 
   private async postToolCall(
     params: {
+      clientKinds?: DeviceClient[];
       deviceId?: string;
       operationId?: string;
       timeout?: number;
@@ -116,7 +201,7 @@ export class GatewayHttpClient {
       apiName: string;
       arguments: string;
       identifier: string;
-      params?: GatewayMcpStdioParams;
+      params?: GatewayMcpParams;
       type?: GatewayToolCallType;
     },
   ): Promise<DeviceToolCallResult> {
@@ -124,44 +209,70 @@ export class GatewayHttpClient {
       typeof params.timeout === 'number' && Number.isFinite(params.timeout)
         ? Math.max(Math.trunc(params.timeout), 0)
         : DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS;
-    const res = await this.post(
-      '/api/device/tool-call',
-      {
-        deviceId: params.deviceId,
-        operationId: params.operationId,
-        timeout: params.timeout,
-        toolCall,
-        userId: params.userId,
-        workspaceId: params.workspaceId,
-      },
-      { timeout: timeout + HTTP_CALL_TIMEOUT_PADDING_MS },
-    );
+    let res: Response;
+    try {
+      res = await this.post(
+        '/api/device/tool-call',
+        {
+          clientKinds: params.clientKinds?.length
+            ? params.clientKinds
+            : this.clientKindsFor({
+                identifier: toolCall.identifier,
+                kind: 'tool',
+                type: toolCall.type ?? 'tool',
+              }),
+          deviceId: params.deviceId,
+          operationId: params.operationId,
+          timeout: params.timeout,
+          toolCall,
+          userId: params.userId,
+          workspaceId: params.workspaceId,
+        },
+        {
+          timeout: Math.min(
+            timeout + TOOL_CALL_HTTP_TIMEOUT_PADDING_MS,
+            Math.max(timeout, TOOL_CALL_HTTP_DEADLINE_CAP_MS),
+          ),
+        },
+      );
+    } catch (error) {
+      // A client-side deadline or an unreachable gateway host used to escape as
+      // a raw `TimeoutError` / `fetch failed`, which reads to the model as if
+      // the tool itself blew up. Describe the hop that actually failed instead.
+      return toFailedToolCallResult(describeGatewayRequestFailure(error, 'tool call'));
+    }
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return {
-        content: `Device tool call failed (HTTP ${res.status})`,
-        error: text || `HTTP ${res.status}`,
-        success: false,
-      };
+      return toFailedToolCallResult(
+        describeGatewayResponseFailure(res.status, text, 'tool call', params),
+      );
     }
 
     const data = await res.json();
+
+    // Device sends a typed envelope ({ content, state, success }). The legacy
+    // fallback used to JSON.stringify `data.content ?? data` — when content was
+    // missing it would stringify the *entire response body* including `success`
+    // and any other top-level fields, which leaked the structured payload into
+    // the LLM-facing content string. Only stringify the `content` field itself;
+    // never fall back to the whole body.
+    const deviceContent =
+      typeof data.content === 'string'
+        ? data.content
+        : data.content === undefined || data.content === null
+          ? ''
+          : JSON.stringify(data.content);
+
     return {
-      // Device sends a typed envelope ({ content, state, success }). The legacy
-      // fallback used to JSON.stringify `data.content ?? data` — when content
-      // was missing it would stringify the *entire response body* including
-      // `success` and any other top-level fields, which leaked the structured
-      // payload into the LLM-facing content string. Only stringify the
-      // `content` field itself; never fall back to the whole body.
-      content:
-        typeof data.content === 'string'
-          ? data.content
-          : data.content !== undefined && data.content !== null
-            ? JSON.stringify(data.content)
-            : typeof data.error === 'string'
-              ? data.error
-              : '',
+      // A device that fails with nothing to say — an api it has no handler for,
+      // a handler that threw before writing output — reported `content: ''`,
+      // and `typeof '' === 'string'` short-circuited the error fallback below.
+      // The failure then reached the model as an empty, successful-looking
+      // result: observed live as a builder calling `screenshot` fifteen times
+      // against a device with no browser handler and reading nothing back each
+      // time. Every other failure path here puts the failure text in `content`.
+      content: deviceContent || (typeof data.error === 'string' ? data.error : ''),
       error: data.error,
       state: data.state,
       success: data.success ?? true,
@@ -174,6 +285,7 @@ export class GatewayHttpClient {
   ): Promise<DeviceMessageApiResult> {
     const res = await this.post('/api/device/message-api', {
       api,
+      clientKinds: this.clientKindsFor({ kind: 'messageApi', platform: api.platform }),
       deviceId: params.deviceId,
       timeout: params.timeout,
       userId: params.userId,
@@ -182,9 +294,11 @@ export class GatewayHttpClient {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
+      const failure = describeGatewayResponseFailure(res.status, text, 'message API call', params);
       return {
-        content: `Device message API call failed (HTTP ${res.status})`,
-        error: text || `HTTP ${res.status}`,
+        content: failure.content,
+        error: failure.error,
+        ...(failure.data ? { errorData: failure.data } : {}),
         success: false,
       };
     }
@@ -199,9 +313,14 @@ export class GatewayHttpClient {
   }
 
   async dispatchAgentRun(params: {
+    agentId?: string;
     agentType: string;
+    assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
     args?: string[];
+    claudeAccountRouting?: AgentRunRequestMessage['claudeAccountRouting'];
+    /** Restricts the run to connections of these clients; omitted means any client. */
+    clientKinds?: DeviceClient[];
     cwd?: string;
     deviceId?: string;
     /** Image attachments forwarded into the `agent_run_request` message. */
@@ -209,17 +328,30 @@ export class GatewayHttpClient {
     jwt: string;
     operationId: string;
     prompt: string;
+    resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
     systemContext?: string;
     timeout?: number;
     topicId: string;
     userId: string;
     workspaceId?: string;
-  }): Promise<{ success: boolean; error?: string }> {
+    /**
+     * Topic/run workspace for device-side ingest. Distinct from
+     * {@link workspaceId}, which routes the request to a device pool. A
+     * workspace topic dispatched to a personal device still needs this so
+     * `lh hetero exec` can write back under the topic's scope.
+     */
+    ingestWorkspaceId?: string;
+  }): Promise<{ success: boolean; error?: string; errorData?: DeviceUnavailableErrorData }> {
     const res = await this.post('/api/device/agent/run', params);
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return { error: text || `HTTP ${res.status}`, success: false };
+      const failure = describeGatewayResponseFailure(res.status, text, 'agent run', params);
+      return {
+        error: failure.error,
+        ...(failure.data ? { errorData: failure.data } : {}),
+        success: false,
+      };
     }
     const data = await res.json().catch(() => null);
     if (data && (data.success === false || data.status === 'rejected')) {
@@ -238,9 +370,20 @@ export class GatewayHttpClient {
    * dispatcher and correlates the response by `requestId`, so new methods need
    * no per-method gateway route. Distinct from {@link executeToolCall}, which is
    * the LLM-facing tool channel.
+   *
+   * `channel` names the connection to prefer when one device holds several
+   * (e.g. `desktop` alongside `cli`). A gateway that predates the hint ignores
+   * it and picks by its own channel priority, so callers must still handle an
+   * answer from another channel.
    */
   async invokeRpc<T = unknown>(
-    params: { deviceId?: string; timeout?: number; userId: string; workspaceId?: string },
+    params: {
+      channel?: string;
+      deviceId?: string;
+      timeout?: number;
+      userId: string;
+      workspaceId?: string;
+    },
     rpc: { method: string; params?: unknown },
   ): Promise<DeviceRpcResult<T>> {
     const timeout =
@@ -250,6 +393,8 @@ export class GatewayHttpClient {
     const res = await this.post(
       '/api/device/rpc',
       {
+        channel: params.channel,
+        clientKinds: this.clientKindsFor({ kind: 'rpc', method: rpc.method }),
         deviceId: params.deviceId,
         method: rpc.method,
         params: rpc.params,
@@ -262,28 +407,134 @@ export class GatewayHttpClient {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      return { error: text || `HTTP ${res.status}`, success: false };
+      const failure = describeGatewayResponseFailure(res.status, text, 'RPC call', params);
+      return {
+        error: failure.error,
+        ...(failure.data ? { errorData: failure.data } : {}),
+        success: false,
+      };
     }
 
     const data = await res.json();
     return { data: data.data, error: data.error, success: data.success ?? false };
   }
 
+  /**
+   * `options.clientKinds` asks for the info of a connection of those clients —
+   * e.g. the desktop app's `supportedTools` when `lh connect` is up as well.
+   */
   async getDeviceSystemInfo(
     userId: string,
     deviceId: string,
     workspaceId?: string,
-  ): Promise<{ success: boolean; systemInfo?: DeviceSystemInfo }> {
-    const res = await this.post('/api/device/system-info', { deviceId, userId, workspaceId });
+    options?: { clientKinds?: DeviceClient[] },
+  ): Promise<{ error?: string; success: boolean; systemInfo?: DeviceSystemInfo }> {
+    const res = await this.post(
+      '/api/device/system-info',
+      { clientKinds: options?.clientKinds, deviceId, userId, workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
     if (!res.ok) {
-      return { success: false };
+      // Keep the gateway's reason (`TIMEOUT`, `DEVICE_OFFLINE`, `DEVICE_NOT_FOUND`):
+      // a device that did not answer is not a device that lacks a capability.
+      const data = (await res.json().catch(() => undefined)) as { error?: string } | undefined;
+      return { error: data?.error, success: false };
     }
 
     const data = await res.json();
     return {
+      error: data.error,
       success: data.success ?? false,
       systemInfo: data.systemInfo,
     };
+  }
+
+  /**
+   * Health samples the gateway holds for a device (it keeps two days), observed
+   * at or after `since`. Served from gateway storage, so an offline device
+   * still has its history.
+   */
+  async getDeviceMetrics(
+    userId: string,
+    deviceId: string,
+    options: { since?: number; workspaceId?: string } = {},
+  ): Promise<DeviceMetricSample[]> {
+    const res = await this.post(
+      '/api/device/metrics',
+      { deviceId, since: options.since, userId, workspaceId: options.workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    if (!res.ok) throw new Error(`device metrics read failed: HTTP ${res.status}`);
+    const data = (await res.json()) as { samples?: DeviceMetricSample[] };
+    return data.samples ?? [];
+  }
+
+  // ─── Tunnel registry (gateway admin API) ───
+  //
+  // These do NOT reach the device: they manage the slug → { device, port }
+  // mapping that gives a tunnel its public hostname. Ownership is enforced
+  // here, on the server — the gateway's admin API trusts the service token.
+
+  /** Register a tunnel and return it with its public hostname. */
+  async createTunnel(params: {
+    createdBy: string;
+    deviceId: string;
+    port: number;
+    principal: string;
+    ttlSeconds?: number;
+  }): Promise<GatewayTunnelRegistration> {
+    const res = await this.post('/api/admin/tunnels', params, {
+      timeout: DEVICE_QUERY_TIMEOUT_MS,
+    });
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '');
+      throw new Error(`Device gateway /api/admin/tunnels responded ${res.status} ${detail}`.trim());
+    }
+
+    const data = (await res.json()) as {
+      hostname: string;
+      registration: GatewayTunnelRegistration;
+    };
+    return { ...data.registration, hostname: data.hostname };
+  }
+
+  /** Every live tunnel owned by one principal. */
+  async listTunnels(principal: string): Promise<GatewayTunnelRegistration[]> {
+    const res = await this.request(
+      `/api/admin/tunnels?principal=${encodeURIComponent(principal)}`,
+      'GET',
+    );
+    if (!res.ok) {
+      throw new Error(`Device gateway /api/admin/tunnels responded ${res.status}`);
+    }
+
+    const data = (await res.json()) as { tunnels?: GatewayTunnelRegistration[] };
+    return data.tunnels ?? [];
+  }
+
+  /** The registration behind a slug, or undefined when it is unknown or expired. */
+  async resolveTunnel(slug: string): Promise<GatewayTunnelRegistration | undefined> {
+    const res = await this.request(`/api/admin/tunnels/resolve/${encodeURIComponent(slug)}`, 'GET');
+    if (res.status === 404) return undefined;
+    if (!res.ok) {
+      throw new Error(`Device gateway /api/admin/tunnels/resolve responded ${res.status}`);
+    }
+    return (await res.json()) as GatewayTunnelRegistration;
+  }
+
+  /** Revoke a tunnel. Returns false when the slug was already gone. */
+  async revokeTunnel(slug: string): Promise<boolean> {
+    const res = await this.request(`/api/admin/tunnels/${encodeURIComponent(slug)}`, 'DELETE');
+    if (res.status === 404) return false;
+    if (!res.ok) {
+      throw new Error(`Device gateway /api/admin/tunnels responded ${res.status}`);
+    }
+    return true;
+  }
+
+  private clientKindsFor(target: GatewayDispatchTarget): DeviceClient[] | undefined {
+    const kinds = this.resolveClientKinds?.(target);
+    return kinds && kinds.length > 0 ? kinds : undefined;
   }
 
   private post(path: string, body: unknown, options?: { timeout?: number }): Promise<Response> {
@@ -295,6 +546,15 @@ export class GatewayHttpClient {
       },
       method: 'POST',
       ...(options?.timeout ? { signal: AbortSignal.timeout(options.timeout) } : {}),
+    });
+  }
+
+  /** Bodyless service-authenticated call, for the registry's GET/DELETE routes. */
+  private request(path: string, method: 'DELETE' | 'GET'): Promise<Response> {
+    return fetch(`${this.gatewayUrl}${path}`, {
+      headers: { Authorization: `Bearer ${this.serviceToken}` },
+      method,
+      signal: AbortSignal.timeout(DEVICE_QUERY_TIMEOUT_MS),
     });
   }
 }

@@ -1,17 +1,27 @@
-import { Avatar, Center, Checkbox, ContextMenuTrigger, Flexbox, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Center,
+  Checkbox,
+  ContextMenuTrigger,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Tooltip,
+} from '@lobehub/ui';
 import { isEqual } from 'es-toolkit';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { isExplorerItemSelected } from '@/routes/(main)/resource/features/store/selectors';
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import UserAvatar from '@/components/UserAvatar';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { isExplorerItemSelected } from '@/features/ResourceManager/store/selectors';
 import { fileManagerSelectors, getChunkTargetId, useFileStore } from '@/store/file';
 import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
-import { useFileItemClick } from '../../hooks/useFileItemClick';
+import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
@@ -125,6 +135,7 @@ interface FileListItemProps extends FileListItemType {
   };
   index: number;
   onSelectedChange: (id: string, selected: boolean, shiftKey: boolean, index: number) => void;
+  selectable?: boolean;
   selected?: boolean;
   showUploader?: boolean;
   slug?: string | null;
@@ -143,20 +154,21 @@ const FileListItem = ({
   finishEmbedding,
   id,
   index,
+  knowledgeBaseIds,
   metadata,
   name,
   onSelectedChange,
+  selectable = true,
   selected,
   showUploader = true,
   size,
-  slug,
   sourceType,
   uploader,
   url,
   userId,
   visibility,
 }: FileListItemProps) => {
-  const { t } = useTranslation(['components', 'file']);
+  const { t } = useTranslation(['components', 'file', 'chat']);
   const uploaderName =
     uploader?.fullName || uploader?.username || (uploader?.id ? uploader.id.slice(0, 8) : '');
   const chunkTargetId = getChunkTargetId({ fileId, id });
@@ -191,6 +203,11 @@ const FileListItem = ({
     name,
     sourceType,
   });
+
+  // Personal mode has no second audience, so `visibility` carries no meaning
+  // there and every row would wear a lock for nothing.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const isPrivate = Boolean(activeWorkspaceId) && visibility === 'private';
   const {
     handleDragEnd,
     handleDragLeave,
@@ -231,14 +248,21 @@ const FileListItem = ({
     isFolder,
     isPage,
     libraryId: resourceManagerState.libraryId,
-    slug,
+    openInPanel: true,
+  });
+  const handleItemDoubleClick = useFileItemDoubleClick({
+    id,
+    isPage,
+    libraryId: resourceManagerState.libraryId,
   });
   const { menuItems } = useFileItemDropdown({
+    fileId,
     fileType,
     filename: name,
     id,
     libraryId: resourceManagerState.libraryId,
     onRenameStart: isFolder ? handleRenameStart : undefined,
+    size,
     sourceType,
     url,
     userId,
@@ -248,9 +272,10 @@ const FileListItem = ({
   const handleCheckboxClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (!selectable) return;
       onSelectedChange(id, !isSelected, e.shiftKey, index);
     },
-    [id, index, isSelected, onSelectedChange],
+    [id, index, isSelected, onSelectedChange, selectable],
   );
 
   const handleCheckboxPointerDown = useCallback((e: React.PointerEvent) => {
@@ -285,6 +310,7 @@ const FileListItem = ({
           userSelect: 'none',
         }}
         onClick={handleItemClick}
+        onDoubleClick={handleItemDoubleClick}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -293,11 +319,12 @@ const FileListItem = ({
       >
         <Center
           height={40}
-          style={{ paddingInline: 4 }}
+          style={{ cursor: selectable ? 'pointer' : 'not-allowed', paddingInline: 4 }}
+          title={selectable ? undefined : t('FileManager.selection.onlyOwn')}
           onClick={handleCheckboxClick}
           onPointerDown={handleCheckboxPointerDown}
         >
-          <Checkbox checked={isSelected} />
+          <Checkbox checked={isSelected} disabled={!selectable} />
         </Center>
         <Flexbox
           horizontal
@@ -319,8 +346,11 @@ const FileListItem = ({
             inputRef={inputRef}
             isFolder={isFolder}
             isPage={isPage}
+            isPrivate={isPrivate}
             isRenaming={isRenaming}
+            knowledgeBaseIds={resourceManagerState.libraryId ? undefined : knowledgeBaseIds}
             name={name}
+            privateTooltip={t('resources.visibility.privateTooltip', { ns: 'chat' })}
             renamingValue={renamingValue}
             onRenameCancel={handleRenameCancel}
             onRenameConfirm={handleRenameConfirm}
@@ -368,9 +398,9 @@ const FileListItem = ({
                 {uploaderName ? (
                   <Tooltip title={t('file:listView.uploadedBy', { name: uploaderName })}>
                     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-                      <Avatar
-                        alt={uploaderName}
-                        avatar={uploader?.avatar || uploaderName}
+                      <UserAvatar
+                        avatar={uploader?.avatar}
+                        name={uploaderName}
                         shape={'circle'}
                         size={20}
                         style={{ flexShrink: 0 }}

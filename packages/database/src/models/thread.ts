@@ -1,6 +1,6 @@
-import type { CreateThreadParams } from '@lobechat/types';
+import type { CreateThreadParams, ThreadMetadata } from '@lobechat/types';
 import { RequestTrigger, ThreadStatus } from '@lobechat/types';
-import { and, desc, eq, notExists, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, notExists, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
 import { agentOperations, messages, threads } from '../schemas';
@@ -79,6 +79,14 @@ export class ThreadModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
 
+  /**
+   * In workspace mode `ownership()` matches every member's threads, so a bulk
+   * "clear all" would wipe teammates' rows. Destructive sweeps must
+   * additionally pin `user_id` to the caller (personal mode is unchanged —
+   * ownership already scopes to the user there).
+   */
+  private mine = () => and(this.ownership(), eq(threads.userId, this.userId));
+
   create = async (params: CreateThreadParams) => {
     // @ts-ignore
     const [result] = await this.db
@@ -100,7 +108,7 @@ export class ThreadModel {
   };
 
   deleteAll = async () => {
-    return this.db.delete(threads).where(this.ownership());
+    return this.db.delete(threads).where(this.mine());
   };
 
   query = async () => {
@@ -125,12 +133,11 @@ export class ThreadModel {
         and(
           eq(threads.topicId, topicId),
           this.ownership(),
+          sql`COALESCE(${threads.metadata} ->> 'onboardingUnderstanding', '') = ''`,
           // NOTICE:
-          // Agent Signal self-iteration runs create isolation threads to keep
-          // internal memory/skill traces out of the main chat transcript.
-          // Those traces are persisted for audit/debugging through
-          // `agent_operations.trigger = agent_signal`, but should not appear as
-          // user-facing sub-agent attachments in the topic thread list.
+          // Internal Agent Signal and onboarding Understanding runs create
+          // isolation threads that must stay out of the user-facing sub-agent
+          // attachment list. Ordinary onboarding threads remain visible.
           notExists(
             this.db
               .select({ id: agentOperations.id })
@@ -154,6 +161,41 @@ export class ThreadModel {
     return this.db.query.threads.findFirst({
       where: and(eq(threads.id, id), this.ownership()),
     });
+  };
+
+  /**
+   * Compare-and-set an existing thread into `processing` for a new run.
+   *
+   * Succeeds only while the row still carries the `status` and
+   * `metadata.operationId` the caller validated, so two concurrent follow-ups
+   * to the same sub-agent thread cannot both start a run on it.
+   *
+   * @returns whether this caller won the claim
+   */
+  claimForRun = async (
+    id: string,
+    expected: { operationId?: string | null; status?: ThreadItem['status'] },
+    metadata: ThreadMetadata,
+  ): Promise<boolean> => {
+    const rows = await this.db
+      .update(threads)
+      .set({ metadata, status: ThreadStatus.Processing, updatedAt: new Date() })
+      .where(
+        and(
+          eq(threads.id, id),
+          this.ownership(),
+          expected.status ? eq(threads.status, expected.status) : isNull(threads.status),
+          // COALESCE instead of `IS NULL` on the extracted path: a bare jsonb null
+          // test breaks the planner once the table carries a pg_search index (see
+          // `__tests__/jsonbNullTest.test.ts`).
+          expected.operationId
+            ? sql`${threads.metadata} ->> 'operationId' = ${expected.operationId}`
+            : sql`COALESCE(${threads.metadata} ->> 'operationId', '') = ''`,
+        ),
+      )
+      .returning({ id: threads.id });
+
+    return rows.length > 0;
   };
 
   update = async (id: string, value: Partial<ThreadItem>) => {

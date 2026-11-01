@@ -8,18 +8,39 @@ tagged with the design value(s) it serves.
 
 ## 4.1 Loading visuals・Natural
 
-**Never use antd `Spin`** — it doesn't match the product's loading visual. Use a project
-loader:
+This section is the single source for **which loading form fits which scenario**; other
+skills link here instead of restating it. Pick by scenario, top to bottom — the first row
+that matches wins:
 
-| Need                        | Component                                                                     |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| Default loading (in-flight) | `NeuralNetworkLoading` from `@/components/NeuralNetworkLoading` (`size` prop) |
-| Inline dots                 | `DotsLoading` / `BubblesLoading` from `@/components`                          |
-| Branded full-page           | `Loading` from `@/components/Loading/BrandTextLoading`                        |
-| List / card placeholder     | a skeleton (e.g. `SkeletonList`)                                              |
+| Scenario                                                    | Form                                                                       |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------- |
+| App boot / full-screen blocking wait                        | `BrandTextLoading` from `@/components/Loading/BrandTextLoading`            |
+| Route / page first paint (layout known)                     | route skeleton from `@/components/Skeleton/*` mirroring the page structure |
+| Known-shape content (list, card, detail)                    | in-place `Skeleton` / `ListSkeleton` — keep the chrome, swap only the text |
+| Unknown-shape content region (file preview, QR, modal body) | `Spin size="large"` centred                                                |
+| Inline / button / background refresh (revalidate, saving)   | `Spin size="small"`, or `Button`'s `loading` prop for the button itself    |
+| AI thinking, generating or running a tool                   | `Spin variant="network"`                                                   |
+| Sidebar nav loading (section header revalidate, nav item)   | `Spin variant="network"` in place of the title suffix or item icon         |
+| Waiting for a streamed reply's first token                  | `BubblesLoading` from `@/components/BubblesLoading`                        |
+| Long job with a known progress value                        | `Progress` + persisted elapsed readout (see below)                         |
 
-When in doubt, reach for `NeuralNetworkLoading` — the default in-flight indicator (e.g.
-modal "in progress" states). Minimise layout shift (CLS): the strongest loading state
+`Spin` and `Progress` come from `@lobehub/ui/base-ui`; never antd `Spin` / `Progress`.
+Sizes: `small` for 14–20 px contexts (inline, rows, buttons), `middle` for 24–32 px (card
+body, panel), `large` for 36–48 px (centred region). A pixel number is fine when the loader
+must replace an icon of an exact size.
+
+**`variant="network"` means "the AI is working" — plus the sidebar nav loading
+indicator above, which keeps the product's signature glyph.** A settings save or a list
+fetch uses the default variant; using `network` for plain I/O dilutes the one signal that
+tells the user the agent is busy.
+
+**Running-status glyphs are not loaders.** `RingLoading` (a row's running status),
+`StopLoading` (a running action that can be stopped) and `DotsLoading` (a topic row still
+generating) mark an item's _state_ inside a list; keep them there and don't use them as
+region loaders. `CircleLoading` and `ContentLoading` are legacy wrappers — new code uses
+`Spin` directly.
+
+Minimise layout shift (CLS): the strongest loading state
 changes as little of the final layout as possible. When a surface already knows its shape
 (card, row, list item), keep the layout elements — container, border, radius, padding,
 icon — and replace only the text/data with a skeleton sized like the text it stands in
@@ -51,11 +72,64 @@ doesn't leak a stale start onto a later one that reuses the slot.
 
 **Checklist**
 
-- [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders. _(Natural)_
+- [ ] Loading form picked from the §4.1 scenario table; base-ui `Spin`, never antd `Spin`. _(Natural)_
+- [ ] `Spin variant="network"` only while the AI is thinking / generating / running a tool. _(Certainty)_
 - [ ] Skeleton reuses the loaded component's chrome — content swap, not relayout. _(Certainty・Natural)_
 - [ ] Skeleton lines match the real text's **height and typical width proportion** (long title line over a shorter subtitle, not equal full-width bars). _(Certainty)_
 - [ ] Known-shape surface not downgraded to a bare block / spinner. _(Natural)_
 - [ ] A long-op elapsed / progress readout derives from a **persisted start timestamp keyed by job id** (survives remount, shows true duration) and clears the key when the job ends — never a local counter that resets to 0 on remount. _(Certainty・Natural)_
+
+### Whole-surface skeletons: match the layout's structure, not just its rows
+
+The rules above size one row against one row. A skeleton that stands in for a **whole
+surface** — a route-level `Suspense` fallback, a sidebar panel, a page shell — is judged by
+something else: its **structural anchors**. Header height, any fixed nav block sitting above
+the scroll area, where the body starts, where the first group title lands. Get every row
+right and the header wrong, and the real content still arrives \~100 px from where the
+skeleton drew it — the exact relayout the skeleton existed to prevent.
+
+**Measure the settled DOM; never derive the numbers from the source.** Reading the JSX and
+adding up paddings is the fast way to be confidently wrong, because the rendered height is
+decided by things the source doesn't show: a conditionally-hidden sibling, a component's own
+default size, a layout primitive's padding shorthand. Three such assumptions were wrong in
+one sidebar — a header read as 44 was really 36, a search box read as 32 was 36, an accordion
+title read as 28 was 26.9 — and each error propagated into every anchor below it. Open the
+real surface, read `getBoundingClientRect()` on each anchor, and build the skeleton from
+those values. (To hold a route's pending state on screen long enough to measure, see the
+acceptance skill's probe pattern for parking a lazy chunk.)
+
+**Branch the skeleton wherever the real chrome branches.** Platform and feature conditions
+that remove an element change the container's height: on macOS desktop
+`ToggleLeftPanelButton` renders `null`, so the nav header's content box collapses from the
+28 px icon to the 22 px breadcrumb and the header goes 44 → 36. A hard-coded height is
+correct on exactly one platform. Reuse the same condition (import the flag, don't re-derive
+it) so both branches stay in step.
+
+**Many variants of one surface → a shape table, not one generic skeleton.** When a shell
+renders a different panel per route, a single "8 generic rows" placeholder is wrong nearly
+everywhere: some panels open with a fixed nav list, some have accordion groups, and some
+have **no body at all** — for those the generic skeleton invents a list that never appears.
+Model the surface as data (header variant, fixed nav rows, body gap, group title height,
+rows per group) and key it by route, so adding a panel is one row in the table.
+
+**Know which parts can be pixel-exact.** A statically enumerated menu (settings categories,
+a fixed nav list) has a known row count — align it exactly. A data-driven list (topics,
+documents, search results) cannot be predicted, so guarantee alignment only **up to the
+first group title** and treat the rows below as a plausible fill. That boundary is where
+users' eyes settle first anyway; pretending to know the row count buys nothing.
+
+> ✅ `NavSideBarSkeleton` + `NAV_SKELETON_SHAPES` (`src/features/NavPanel/components/SideBarSkeleton.tsx`)
+> — one component driven by a per-navKey shape measured against each settled sidebar; memory
+> and discover render header + nav list and **no body**, matching panels that genuinely have
+> none. ❌ The generic 8-row list it replaced: no header placeholder at all, so every settings
+> row landed \~102 px below where the skeleton had drawn it.
+
+**Checklist**
+
+- [ ] A whole-surface skeleton's **structural anchors** (header height, fixed nav block, body start, first group title) match the settled surface — verified by measuring, not by reading the JSX. _(Certainty)_
+- [ ] Any conditional chrome that changes height (platform flags, feature gates) is branched in the skeleton with the **same** condition, not hard-coded. _(Certainty)_
+- [ ] A shell that renders per-route panels drives its skeleton from a **per-route shape**, and a panel with no body gets a skeleton with no body. _(Certainty・Natural)_
+- [ ] Static menus align exactly; data-driven lists align **to the first group title** and stop claiming to know the row count. _(Certainty)_
 
 ## 4.2 Loading must be able to fail — timeout → error + retry・Certainty・Meaningful
 
@@ -68,6 +142,13 @@ whole app, and can't even tell whether anything is still happening. A failed-wit
 state hands control back and restores certainty. Retry re-runs the _same_ fetch (SWR
 `mutate` / query refetch), shows loading again while it re-runs, and stays available if it
 fails again; keep any already-loaded context rather than blowing the surface away.
+
+When an upstream lifecycle event can settle an interaction, consume that event and
+close the obsolete form automatically. Reconcile missed events internally on reconnect
+or a bounded acknowledgement wait; do not require a “check runtime status” action.
+A submit/cancel racing completion should report that the operation ended and preserve
+its terminal state, rather than restore the obsolete form or invent a successful answer.
+Verify both completion before the click and completion while delivery is in flight.
 
 **But not every failure should offer Retry — gate it on whether a retry could plausibly
 succeed.** A `401` (auth expired / invalid) or `403` (no permission) wall will just fail
@@ -181,7 +262,7 @@ flag in `finally`, and on `catch` surface the error + a retry; a failed write mu
 permanently disable the only way forward.
 
 > ✅ A panel whose data request errors or exceeds its timeout shows "加载失败" with a
-> **Reload** button that refetches. ❌ A `NeuralNetworkLoading` that spins indefinitely when
+> **Reload** button that refetches. ❌ A `Spin` that spins indefinitely when
 > the request hangs. ❌ `isInit` set only in the success handler, so a failed fetch leaves
 > the skeleton up forever. ❌ The onboarding language step `await setSettings(...)` — the write
 > that gates `commonStepsCompleted` — with no try/catch/finally, so a failed write leaves
@@ -278,6 +359,7 @@ tail, kept distinct from the genuine end-of-list.
 - [ ] An awaited write that gates navigation resets its in-progress flag in `finally` and offers retry on `catch` — a failed write never permanently disables the advance / Back control. _(Certainty)_
 - [ ] The failed state names the failure and offers a **Reload / Retry** action. _(Meaningful)_
 - [ ] Retry is **gated on retryability**, not shown unconditionally — a `401` / `403` (or `meta.shouldRetry === false`) failure renders the reason but **omits Retry** (a retry there just fails again); derive it from the normalized error status, not per-surface. `401` session-expiry is assumed handled by a **global** redirect to sign-in, so a surface does not add its own redirect layer. _(Certainty・Meaningful)_
+- [ ] A **deterministic-cause** failure whose fix lives elsewhere (budget / quota exceeded → top-up・upgrade; permission denied → request access; config invalid → open settings) leads with the **remedy action**, not a bare **Retry** — retrying the same run reproduces the same failure, so an unqualified Retry is a false promise. Map the known terminal error type to its action; keep Retry only as the secondary for genuinely transient causes. _(Meaningful・Certainty)_
 - [ ] Retry re-runs the same fetch, shows loading while re-running, and stays available on repeat failure. _(Certainty)_
 - [ ] Already-loaded context is preserved on failure — don't wipe the surface. _(Meaningful)_
 - [ ] In an auto-dismissing surface (upload dock / progress toast), auto-dismiss fires on **success only** — a failed item persists with a Retry, never cleared by the countdown. _(Certainty・Meaningful)_
@@ -295,6 +377,13 @@ Stay reactive — the reminder clears the moment the user switches to a capable 
 (an unresolved capability looks "unsupported" — a false alarm); warn only on a _resolved_
 unsupported state. Scope to the mode that needs it — one reminder per root cause — and
 state both the problem and the remedy.
+
+When several guardrails collapse behind one summary control, keep that control subordinate
+to the action surface. Semantic warning color may identify the icon or label, but it must not
+turn a toolbar affordance into a raised warning card through a strong outline, tinted depth,
+or decorative stacking shadow. The expanded rows still carry the complete warning treatment.
+For wrapped messages, align the status icon to the first line of copy rather than centering it
+against the whole text block; the icon identifies the message, not its bounding box.
 
 **Soft-inline is right only when the user can fix it _in context_.** The "never a hard block"
 rule above assumes a **model / config** capability — the user switches the model dropdown and
@@ -322,6 +411,8 @@ with a path out. Both still owe the remedy.
 - [ ] No warning while config is still loading; only on resolved-unsupported. _(Certainty)_
 - [ ] Scoped to the dependent mode; one reminder per root cause. _(Natural・Certainty)_
 - [ ] Copy states the problem and the remedy. _(Meaningful)_
+- [ ] A collapsed guardrail summary stays visually subordinate to its action surface — semantic color can identify it, but no strong warning outline or decorative colored elevation turns it into a competing card. _(Natural・Certainty)_
+- [ ] In a wrapped guardrail row, the status icon aligns with the first line of copy, not the vertical center of the complete text block. _(Natural)_
 
 ## 4.4 Autosave needs a persistent save-state, and one convention per surface・Certainty・Meaningful
 
@@ -389,3 +480,44 @@ just moves it onto the button.
 - [ ] The save-state enum can **represent** failure — a `failed` variant exists and the write's `catch` drives it, not a reset to `idle` / neutral. _(Certainty)_
 - [ ] A failed autosave shows an inline error **with retry** and keeps the edited value. _(Meaningful)_
 - [ ] One save-feedback convention across a multi-field surface — ideally baked into the shared form wrapper, not re-invented per tab. _(Certainty)_
+
+## 4.5 Error copy is written for a human, not a log line・Meaningful・Certainty
+
+An error surfaced to the user is **product copy**, held to the same bar as any other string
+in the UI — yet error paths are where raw internals leak, because the text is often
+assembled far from the view (a server lifecycle hook, a `catch` that interpolates the thrown
+message) and never passes an i18n file. Three smells mark a message that escaped that bar:
+
+- **Internal ids in the headline** — a raw `tpc_…` / `msg_…` / uuid, a `#N` sequence, an
+  operation id. The id is for a **log or an inspect link**, never the sentence the user reads;
+  it belongs on a **structured field** (`topicId`, `taskId`) that powers a "View run" affordance,
+  not baked into the title. A human reading "topic #1 (tpc_5UBuAjUU4z6B)" learns nothing and
+  distrusts the whole card.
+- **Log / stack framing** — `Execution failed: …`, `Error: …`, `[TaskLifecycle]`, a
+  prefixed severity. Framing that reads like a console line signals "this wasn't meant for
+  you". State what happened in a plain clause; drop the engineering prefix.
+- **Redundancy with the surface** — repeating identity the card's meta row already shows
+  (the task ref, the agent name). If the row says `T-1 · 标题灵感`, the body headline restating
+  `T-1 … error` is noise; the body should carry the _new_ information (what failed, why).
+
+And because the copy is human-facing, it must be **localized** — a server-assembled error
+string is English-only and reaches a zh user untranslated. Push the **framing** through
+i18n at the view (`t('…error.title')`), keep the stored string a clean English fallback free
+of the smells above, and localize the _cause_ too where it maps to a known error type
+(don't hand-translate an arbitrary provider message — surface it as honest detail).
+
+> ✅ The HomeInbox error brief headline is localized at the card (`t('inbox.error.title')` →
+> "运行失败"), the cause shows as a clean clause, and the topic id rides the structured
+> `topicId` field that lights up "View run" (`InboxBriefCard.tsx`,
+> `taskLifecycle/index.ts` error brief). ❌ Its prior form baked the lot into the stored
+> string — title `` `${taskIdentifier} topic #${seq} (${topicId}) error` `` → **"T-1 topic #1
+> (tpc_5UBuAjUU4z6B) error"**, summary `` `Execution failed: ${raw}` `` — internal id in the
+> headline, log framing, task ref duplicated from the meta row, and English-only for every
+> locale.
+
+**Checklist**
+
+- [ ] No internal id (`tpc_…` / uuid / `#N` seq / operation id) in the user-facing headline or body — it rides a **structured field** powering an inspect / "View run" link, never the sentence. _(Meaningful)_
+- [ ] No log / stack framing in the copy — drop `Execution failed:` / `Error:` / `[Module]` prefixes; state what happened as a plain clause. _(Meaningful)_
+- [ ] The message doesn't repeat identity the surface's meta row already shows (task ref, agent name) — the body carries the _new_ info (what failed, why). _(Certainty)_
+- [ ] Error framing is **localized** through i18n at the view; any server-assembled stored string is a clean English fallback (no id / no log prefix), and a known error _cause_ is localized too. _(Meaningful・Certainty)_

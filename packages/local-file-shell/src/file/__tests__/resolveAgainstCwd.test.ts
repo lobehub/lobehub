@@ -17,6 +17,17 @@ describe('resolveAgainstCwd', () => {
     expect(resolveAgainstCwd('/etc/hosts', cwd)).toBe('/etc/hosts');
   });
 
+  it('[R5] leaves a Windows absolute path untouched regardless of the host platform', () => {
+    expect(
+      resolveAgainstCwd(
+        'E:\\androidproject\\vrplayer\\app\\build.gradle',
+        'E:\\androidproject\\vrplayer',
+      ),
+    ).toBe('E:\\androidproject\\vrplayer\\app\\build.gradle');
+    expect(resolveAgainstCwd('C:/Users/me/a.txt', cwd)).toBe('C:/Users/me/a.txt');
+    expect(resolveAgainstCwd('\\\\server\\share\\a.txt', cwd)).toBe('\\\\server\\share\\a.txt');
+  });
+
   it('expands ~ before considering cwd', () => {
     expect(resolveAgainstCwd('~/notes.md', cwd)).toBe(path.join(os.homedir(), 'notes.md'));
   });

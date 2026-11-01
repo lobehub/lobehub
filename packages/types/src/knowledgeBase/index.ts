@@ -31,6 +31,8 @@ export interface KnowledgeBaseItem {
 
 export interface CreateKnowledgeBaseParams {
   avatar?: string;
+  /** Cover image: a preset key (`preset:<id>`) or an uploaded image URL. */
+  cover?: string;
   description?: string;
   name: string;
   /** Workspace-scoped visibility for a newly created KB. Derived from the current resource-mode. */
@@ -49,6 +51,12 @@ export interface KnowledgeItem {
   enabled?: boolean;
   fileType?: string;
   id: string;
+  /**
+   * KB only: carries a `use`-level (No-access) resource-permission row, so
+   * plain members cannot see or open it. The picker badges the icon with a
+   * lock for managers.
+   */
+  memberRestricted?: boolean;
   name: string;
   /** Creator's user id — used by the picker to gate creator-only actions and identify ownership. */
   ownerUserId?: string;

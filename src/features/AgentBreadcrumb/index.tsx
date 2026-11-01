@@ -1,70 +1,96 @@
 'use client';
 
-import { Icon, Text } from '@lobehub/ui';
-import { Breadcrumb as AntBreadcrumb } from 'antd';
+import { agentDisplayName } from '@lobechat/types';
+import { Breadcrumb, createStaticStyles, Icon, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
-import { memo, type ReactNode, useMemo } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation } from 'react-router';
-import urlJoin from 'url-join';
+import { Link } from 'react-router';
 
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import {
-  buildPrefixedAgentRoutePath,
-  parseAgentPathname,
-} from '@/routes/(main)/agent/_layout/Sidebar/utils/agentPathname';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 
+import { useAgentRoutePath } from './useAgentRoutePath';
+
+const styles = createStaticStyles(({ css }) => ({
+  breadcrumb: css`
+    a {
+      display: flex;
+      align-items: center;
+    }
+  `,
+}));
+
 interface AgentBreadcrumbProps {
   agentId: string;
+  /** Additional breadcrumb items appended after the current section. */
+  extraItems?: ReactNode[];
   /**
    * The current section under the agent, e.g. 话题 / 助理档案 / 用量与成本.
+   * Omit it where the page already names its own section — the profile group
+   * carries a Segmented switcher, so repeating the active tab here would render
+   * the same word twice in one 44px bar.
    */
-  title: ReactNode;
+  title?: ReactNode;
 }
 
 /**
  * Breadcrumb for pages that live under an agent: `<AgentName> › <Section>`.
  * The agent name links back to the agent home; the section is the current page.
  */
-const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, title }) => {
+const AgentBreadcrumb = memo<AgentBreadcrumbProps>(({ agentId, extraItems, title }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const { pathname } = useLocation();
-  const activeWorkspaceSlug = useActiveWorkspaceSlug();
-  const agentTitle = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s).title);
+  const buildAgentPath = useAgentRoutePath(agentId);
+  const agentTitle = useAgentStore((s) =>
+    agentDisplayName(agentSelectors.getAgentMetaById(agentId)(s)),
+  );
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isInbox = !!inboxAgentId && agentId === inboxAgentId;
   const displayTitle = isInbox
     ? agentTitle || t('inbox.title', { ns: 'chat' })
     : agentTitle || t('defaultSession', { ns: 'common' });
-  const agentRoute = useMemo(() => parseAgentPathname(pathname), [pathname]);
-  const agentHomePath = useMemo(() => {
-    const targetPath = buildWorkspaceAwarePath(urlJoin('/agent', agentId), activeWorkspaceSlug);
-    return buildPrefixedAgentRoutePath(targetPath, agentRoute, activeWorkspaceSlug);
-  }, [activeWorkspaceSlug, agentId, agentRoute]);
+  const agentHomePath = buildAgentPath();
 
   return (
-    <AntBreadcrumb
+    <Breadcrumb
+      className={styles.breadcrumb}
       separator={<Icon icon={ChevronRight} size={14} />}
       items={[
         {
           title: (
             <Link to={agentHomePath}>
-              <Text ellipsis color={'inherit'} style={{ maxWidth: 200 }} weight={500}>
+              {/* Viewport-capped so the section crumb keeps its line on a phone. */}
+              <Text
+                ellipsis
+                as={'span'}
+                color={'inherit'}
+                style={{ maxWidth: 'min(200px, 30vw)' }}
+                weight={500}
+              >
                 {displayTitle}
               </Text>
             </Link>
           ),
         },
-        {
+        ...(title === undefined || title === null
+          ? []
+          : [
+              {
+                title: (
+                  <Text as={'span'} color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
+                    {title}
+                  </Text>
+                ),
+              },
+            ]),
+        ...(extraItems ?? []).map((item, index) => ({
+          key: `extra-${index}`,
           title: (
-            <Text color={'inherit'} weight={500}>
-              {title}
+            <Text as={'span'} color={'inherit'} weight={500}>
+              {item}
             </Text>
           ),
-        },
+        })),
       ]}
     />
   );

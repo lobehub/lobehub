@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { LOADING_FLAT } from '@/const/message';
 
 import {
-  countFoldedProcessSteps,
+  countAssistantLlmCalls,
   hasRenderableFinalAnswer,
+  resolveWorkflowExpandLevel,
   shouldFoldProcess,
-  splitFinalAnswer,
 } from './segments';
 
 const a = (id: string, content = 'answer') => ({
@@ -20,68 +20,17 @@ const w = (id: string, toolCount = 0) => ({
   kind: 'workflow' as const,
 });
 
-describe('splitFinalAnswer', () => {
-  it('treats the trailing run of answer segments as the final answer', () => {
-    const segments = [w('t1'), a('intro'), w('t2'), a('final')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    // intro prose + both tool segments fold into the process
-    expect(processSegments).toEqual([w('t1'), a('intro'), w('t2')]);
-    expect(finalSegments).toEqual([a('final')]);
-  });
-
-  it('keeps multiple trailing answer segments together as the final answer', () => {
-    const segments = [w('t1'), a('a1'), a('a2')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([w('t1')]);
-    expect(finalSegments).toEqual([a('a1'), a('a2')]);
-  });
-
-  it('keeps the final answer visible when a trailing bookkeeping tool follows it', () => {
-    // The agent writes its summary, then ends the turn on a "mark task done" tool
-    // call. The answer must stay out of the fold; only the trailing tool folds.
-    const segments = [w('t1'), a('intro'), w('t2'), a('summary'), w('mark-done')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([w('t1'), a('intro'), w('t2'), w('mark-done')]);
-    expect(finalSegments).toEqual([a('summary')]);
-  });
-
-  it('surfaces the lone answer even when the turn ends on a workflow segment', () => {
-    const segments = [a('intro'), w('t1')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([w('t1')]);
-    expect(finalSegments).toEqual([a('intro')]);
-  });
-
-  it('folds everything when the turn has no answer segment at all', () => {
-    const segments = [w('t1'), w('t2')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([w('t1'), w('t2')]);
-    expect(finalSegments).toEqual([]);
-  });
-
-  it('treats a pure-answer turn as all final, nothing to fold', () => {
-    const segments = [a('only')];
-    const { processSegments, finalSegments } = splitFinalAnswer(segments);
-    expect(processSegments).toEqual([]);
-    expect(finalSegments).toEqual([a('only')]);
-  });
-});
-
-describe('countFoldedProcessSteps', () => {
-  it('counts folded assistant blocks and tool calls', () => {
+describe('countAssistantLlmCalls', () => {
+  it('counts assistant blocks without counting tool calls', () => {
     const segments = [w('b1', 2), a('b2'), w('b3', 1)];
 
-    expect(countFoldedProcessSteps(segments)).toBe(6);
+    expect(countAssistantLlmCalls(segments)).toBe(3);
   });
 
   it('does not double-count a mixed block split into answer and workflow segments', () => {
-    const segments = [
-      a('mixed-block'),
-      w('mixed-block', 2),
-      w('next-block', 1),
-    ];
+    const segments = [a('mixed-block'), w('mixed-block', 2), w('next-block', 1)];
 
-    expect(countFoldedProcessSteps(segments)).toBe(5);
+    expect(countAssistantLlmCalls(segments)).toBe(2);
   });
 });
 
@@ -105,7 +54,61 @@ describe('hasRenderableFinalAnswer', () => {
 });
 
 describe('shouldFoldProcess', () => {
+  it.each([undefined, { images: [{ url: 'https://x/image.png' }] }])(
+    'keeps Codex image outputs visible, including upload failures',
+    (state) => {
+      const output = {
+        id: 'image',
+        apiName: 'image_output',
+        identifier: 'codex',
+        result: { state },
+      };
+      expect(
+        shouldFoldProcess({
+          enabled: true,
+          hasFinalAnswer: true,
+          isGenerating: false,
+          isLatestItem: true,
+          operationEnded: true,
+          processSegments: [
+            w('commands', 2),
+            {
+              kind: 'workflow',
+              blocks: [{ id: 'image', tools: [output] } as any],
+              standalone: true,
+            },
+          ],
+        }),
+      ).toBe(false);
+    },
+  );
   const proc = [w('t1')];
+
+  it('folds a finished turn whose process only READ an image', () => {
+    const readImage = {
+      apiName: 'Read',
+      id: 'read-image',
+      identifier: 'claude-code',
+      result: { content: 'ok', id: 'r', state: { images: [{ url: 'https://x/a.png' }] } },
+    };
+    expect(
+      shouldFoldProcess({
+        enabled: true,
+        hasFinalAnswer: true,
+        isGenerating: false,
+        isLatestItem: true,
+        operationEnded: true,
+        processSegments: [
+          w('commands', 2),
+          {
+            kind: 'workflow',
+            blocks: [{ id: 'read-image', tools: [readImage] } as any],
+            standalone: true,
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
 
   it('folds a finished, non-latest turn that has a workflow when enabled', () => {
     expect(
@@ -191,5 +194,31 @@ describe('shouldFoldProcess', () => {
         processSegments: [a('p1')],
       }),
     ).toBe(false);
+  });
+});
+
+describe('resolveWorkflowExpandLevel', () => {
+  it('uses the setting when no override is given', () => {
+    expect(resolveWorkflowExpandLevel(undefined, 'collapsed')).toEqual({ streaming: 'collapsed' });
+  });
+
+  it('lets an explicit streaming override win over the setting', () => {
+    expect(resolveWorkflowExpandLevel({ streaming: 'full' }, 'collapsed')).toEqual({
+      streaming: 'full',
+    });
+  });
+
+  it('expands a string override into both phases and still wins', () => {
+    expect(resolveWorkflowExpandLevel('full', 'collapsed')).toEqual({
+      completion: 'full',
+      streaming: 'full',
+    });
+  });
+
+  it('keeps a completion-only override and fills streaming from the setting', () => {
+    expect(resolveWorkflowExpandLevel({ completion: 'full' }, 'semi')).toEqual({
+      completion: 'full',
+      streaming: 'semi',
+    });
   });
 });

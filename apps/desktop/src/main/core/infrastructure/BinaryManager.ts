@@ -6,6 +6,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
+import { invalidateLoginShellPathCache } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import { app } from 'electron';
 
 import type { App } from '@/core/App';
@@ -14,6 +15,9 @@ import { createLogger } from '@/utils/logger';
 const execPromise = promisify(exec);
 const execFilePromise = promisify(execFile);
 const logger = createLogger('core:BinaryManager');
+
+/** How long an "unavailable" verdict is trusted before it is probed again. */
+const UNAVAILABLE_STATUS_TTL = 60_000;
 
 /**
  * Where on the host a binary resolution came from. Lets the UI tell the user
@@ -220,12 +224,35 @@ export class BinaryManager {
   }
 
   /**
+   * Whether a cached status must be re-detected.
+   *
+   * Only negatives expire. A binary that resolved once stays cached for the
+   * session, but "not available" is frequently a transient verdict — the CLI
+   * printed an upgrade banner that failed validation, or it was installed
+   * after this scan — and caching it forever pins the UI to "not installed"
+   * until the user finds the rescan button.
+   */
+  private isStaleStatus(status: BinaryStatus): boolean {
+    if (status.available) return false;
+
+    const checkedAt = status.lastChecked?.getTime();
+    return checkedAt === undefined || Date.now() - checkedAt >= UNAVAILABLE_STATUS_TTL;
+  }
+
+  /**
    * Detect a single binary. Checks the manager's own cache first so a
    * previously-installed managed copy wins over a stale `which` result.
    * @param name Binary name
    * @param force Force detection, bypass cache
    */
   async detect(name: string, force = false): Promise<BinaryStatus> {
+    // `force` is what Rescan means: the user just installed something, so the
+    // login-shell PATH cached for this process may predate the edit. Hooked
+    // here because this is the one method `detectAll` and `detectCategory`
+    // both route through — wiring the callers individually is how the first
+    // version of this fix missed the path that actually mattered.
+    if (force) invalidateLoginShellPathCache();
+
     const spec = this.specs.get(name);
     if (!spec) {
       return {
@@ -234,8 +261,9 @@ export class BinaryManager {
       };
     }
 
-    if (!force && this.statusCache.has(name)) {
-      return this.statusCache.get(name)!;
+    const cached = this.statusCache.get(name);
+    if (!force && cached && !this.isStaleStatus(cached)) {
+      return cached;
     }
 
     const manageable = Boolean(spec.manage);
@@ -294,6 +322,11 @@ export class BinaryManager {
    * @param force Force detection, bypass cache
    */
   async detectAll(force = false): Promise<Map<string, BinaryStatus>> {
+    // Dropped once for the whole sweep rather than per binary, so one Rescan
+    // pays for one shell probe instead of one per spec. `detect` invalidates
+    // too, but by then the first spec has already refreshed it.
+    if (force) invalidateLoginShellPathCache();
+
     const results = new Map<string, BinaryStatus>();
 
     await Promise.all(
@@ -315,6 +348,8 @@ export class BinaryManager {
     category: BinaryCategory,
     force = false,
   ): Promise<Map<string, BinaryStatus>> {
+    if (force) invalidateLoginShellPathCache();
+
     const names = this.categoryMap.get(category);
     if (!names) {
       return new Map();

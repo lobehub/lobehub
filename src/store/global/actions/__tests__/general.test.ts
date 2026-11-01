@@ -1,12 +1,30 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as activeWorkspaceSlugModule from '@/business/client/hooks/useActiveWorkspaceSlug';
+import type * as VersionConstants from '@/const/version';
 import { CURRENT_VERSION } from '@/const/version';
 import { globalService } from '@/services/global';
 import { useGlobalStore } from '@/store/global';
 import { initialState } from '@/store/global/initialState';
 import { switchLang } from '@/utils/client/switchLang';
 import { withSWR } from '~test-utils';
+
+const versionContext = vi.hoisted(() => ({ desktop: false, webVersion: '2.2.14' }));
+
+vi.mock('@/const/version', async (importOriginal) => ({
+  ...(await importOriginal<typeof VersionConstants>()),
+  CURRENT_VERSION: '2.2.14',
+  get isDesktop() {
+    return versionContext.desktop;
+  },
+}));
+
+vi.mock('@/const/appVersion', () => ({
+  get WEB_APP_VERSION() {
+    return versionContext.webVersion;
+  },
+}));
 
 vi.mock('@/utils/client/switchLang', () => ({
   switchLang: vi.fn(),
@@ -21,6 +39,8 @@ vi.mock('@/services/global', () => ({
 describe('generalActionSlice', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    versionContext.desktop = false;
+    versionContext.webVersion = '2.2.14';
     useGlobalStore.setState(initialState);
   });
 
@@ -76,6 +96,21 @@ describe('generalActionSlice', () => {
       );
     });
 
+    it('should persist the selected task list view mode', () => {
+      const { result } = renderHook(() => useGlobalStore());
+      const saveToLocalStorageSpy = vi.spyOn(result.current.statusStorage, 'saveToLocalStorage');
+
+      act(() => {
+        useGlobalStore.setState({ isStatusInit: true });
+        result.current.updateSystemStatus({ taskListViewMode: 'kanban' });
+      });
+
+      expect(result.current.status.taskListViewMode).toBe('kanban');
+      expect(saveToLocalStorageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ taskListViewMode: 'kanban' }),
+      );
+    });
+
     it('should merge nested objects correctly', () => {
       const { result } = renderHook(() => useGlobalStore());
 
@@ -116,6 +151,36 @@ describe('generalActionSlice', () => {
     });
   });
 
+  describe('browser popup routes', () => {
+    it('keeps the active workspace in agent and topic popups', async () => {
+      vi.spyOn(activeWorkspaceSlugModule, 'getActiveWorkspaceSlug').mockReturnValue('team');
+      const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+      await useGlobalStore.getState().openAgentInNewWindow('agent-1');
+      await useGlobalStore.getState().openTopicInNewWindow('agent-1', 'topic-1');
+      await useGlobalStore.getState().openGroupTopicInNewWindow('group-1', 'topic-1');
+
+      expect(open).toHaveBeenNthCalledWith(
+        1,
+        '/team/agent/agent-1',
+        'agent_agent-1',
+        expect.any(String),
+      );
+      expect(open).toHaveBeenNthCalledWith(
+        2,
+        '/team/agent/agent-1/topic-1',
+        'agent_agent-1_topic_topic-1',
+        expect.any(String),
+      );
+      expect(open).toHaveBeenNthCalledWith(
+        3,
+        '/team/group/group-1/topic-1',
+        'group_group-1_topic_topic-1',
+        expect.any(String),
+      );
+    });
+  });
+
   describe('useInitSystemStatus', () => {
     it('should reset transient UI states when loading from localStorage', async () => {
       const mockStatus = {
@@ -147,6 +212,28 @@ describe('generalActionSlice', () => {
   });
 
   describe('useCheckLatestVersion', () => {
+    it.each([
+      { desktop: false, expected: undefined, latest: '2.3.0' },
+      { desktop: false, expected: true, latest: '2.4.0' },
+      { desktop: true, expected: true, latest: '2.3.0' },
+    ])(
+      'compares $latest against the platform version (desktop: $desktop)',
+      async ({ desktop, expected, latest }) => {
+        versionContext.desktop = desktop;
+        versionContext.webVersion = '2.3.0';
+        vi.mocked(globalService.getLatestVersion).mockResolvedValueOnce(latest);
+
+        const { result } = renderHook(() => useGlobalStore().useCheckLatestVersion(), {
+          wrapper: withSWR,
+        });
+
+        await waitFor(() => expect(result.current.data).toBe(latest));
+
+        expect(useGlobalStore.getState().hasNewVersion).toBe(expected);
+        expect(useGlobalStore.getState().latestVersion).toBe(expected ? latest : undefined);
+      },
+    );
+
     it('should not fetch version when check is disabled', () => {
       const getLatestVersionSpy = vi.spyOn(globalService, 'getLatestVersion');
 

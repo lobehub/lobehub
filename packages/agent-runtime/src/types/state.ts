@@ -1,17 +1,354 @@
 import type {
   ActivatedStepSkill,
   ActivatedStepTool,
+  AgentGroupConfig,
+  BotPlatformContext,
+  DiscordContext,
+  EvalContext,
+  OperationSkillSet,
   OperationToolSet,
+  ProjectInstructionFile,
   ToolExecutor,
   ToolSource,
+  UserMemoryConfig,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
+  AgentShareVisitorContext,
+  AgentSignalOperationMarker,
   ChatToolPayload,
+  ChatTopicBotContext,
+  EvalToolForwardingConfig,
+  ExecutionPlan,
+  ExpertiseContextSnapshot,
+  FrozenCredentialFacts,
+  FrozenModelFacts,
+  LobeAgentChatConfig,
+  LobeAgentConfig,
   SecurityBlacklistConfig,
+  SerializedAgentHook,
   UserInterventionConfig,
 } from '@lobechat/types';
 
+import type { AgentInstructionRequestHumanApprove, AgentRuntimeContext } from './instruction';
 import type { Cost, CostLimit, Usage } from './usage';
+
+/**
+ * The run's position in the run tree.
+ */
+export interface AgentRunLineage {
+  /** True for any child run (callSubAgent child or isolated group member). */
+  isSubAgent?: boolean;
+  /**
+   * Group orchestration role. Tells an isolated group member (`'member'`,
+   * resumed via the group K=N bridge) apart from a genuine callSubAgent child,
+   * which also carries `isSubAgent: true`.
+   */
+  orchestrationRole?: 'supervisor' | 'member';
+  /** Operation that spawned this run, when it is a child. */
+  parentOperationId?: string;
+  /**
+   * Live-progress anchor for a callSubAgent child. The child runs on its own
+   * operation, but the client only subscribes to the parent's channel, so the
+   * child's step loop publishes its running totals there, addressed at the
+   * placeholder tool message.
+   */
+  progressAnchor?: { parentOperationId: string; toolMessageId: string };
+}
+
+/**
+ * Server-authored provenance for a continuation created from a durable human
+ * intervention claim. Lets a retry tell this exact continuation apart from an
+ * unrelated operation that happens to reuse an id.
+ */
+export interface InterventionContinuation {
+  resolutionRequestId: string;
+  sourceOperationId: string;
+  sourceToolMessageIds: string[];
+}
+
+/**
+ * Where this run came from: who asked for it, on which conversation node,
+ * and where it sits in the run tree.
+ *
+ * Written by the caller and the orchestrator when the run is requested and
+ * frozen from then on. Mirrors the durable operation row (which stays the
+ * authority) so the runtime can hang its output on the right conversation
+ * node without a lookup.
+ */
+export interface AgentRunOrigin {
+  // --- Conversation node ---
+  /** Effective message owner for this run (the group member when applicable). */
+  agentId?: string;
+  /** Assistant row the run streams into: its spinner anchor and error sink. */
+  assistantMessageId?: string;
+  /** Set when this run continues a durable human-intervention claim. */
+  continuation?: InterventionContinuation;
+  // --- Trigger ---
+  /** Default assignee for tasks the run creates. */
+  defaultTaskAssigneeAgentId?: string;
+  documentId?: string;
+  /** Agent a builder run configures; the run itself is owned by the builtin builder. */
+  editingAgentId?: string;
+  /** Group a group-builder run configures. */
+  editingGroupId?: string;
+  groupId?: string;
+  // --- Run tree ---
+  lineage?: AgentRunLineage;
+  /** Project the conversation (or the run's task) belongs to. */
+  projectId?: string;
+  scope?: string;
+  sessionId?: string;
+  /** Run-scoped Agent Signal marker for background self-iteration / memory runs. */
+  signal?: AgentSignalOperationMarker;
+  /** Source user message that started the turn. */
+  sourceMessageId?: string;
+
+  taskId?: string;
+  threadId?: string;
+  topicId?: string;
+  /** Request trigger (chat, eval, bot, …). */
+  trigger?: string;
+  userId?: string;
+
+  workspaceId?: string;
+}
+
+/**
+ * Under whose authority the run acts and what it is allowed to do.
+ *
+ * Decided by the host when the operation is created and frozen from then on;
+ * each dispatch boundary only re-presents these facts (share-visitor grants,
+ * device access) instead of re-deriving them.
+ */
+export interface AgentRunPrincipal {
+  /** Who the run acts as. */
+  actor?: {
+    /** Sender / owner identity for bot-originated runs. */
+    bot?: ChatTopicBotContext;
+    /**
+     * Principal pool the routed device lives in: `personal` when a workspace
+     * run was routed to the caller's own device via a per-user `local` override.
+     */
+    deviceScope?: 'personal' | 'workspace';
+    /** Shared-agent visitor marker. Present only for a share-visitor run. */
+    shareVisitor?: AgentShareVisitorContext;
+  };
+  /** Request provenance kept for auditing and spend attribution. */
+  audit?: {
+    clientIp?: string;
+    userAgent?: string;
+  };
+  /** Decisions about what the run may do, made once per turn. */
+  policy?: {
+    /** Device-access decision; `reason` names the branch that granted or denied it. */
+    deviceAccess?: { canUseDevice: boolean; reason: string };
+    /** Tool-call patterns that always need a human. Unset falls back to the runtime default. */
+    securityBlacklist?: SecurityBlacklistConfig;
+    /** Approval mode for this run — `headless` for background and sub-agent runs. */
+    userIntervention?: UserInterventionConfig;
+  };
+}
+
+/**
+ * How the run executes: the resolved execution plan plus the controls the
+ * caller fixed for it. Frozen at creation. The model itself lives on
+ * `AgentState.modelRuntimeConfig`; the tool set on `operationToolSet`.
+ */
+export interface AgentRunPlan {
+  /** Evaluation execution controls (tool forwarding) for eval runs. */
+  eval?: { caseId?: string; toolForwarding?: EvalToolForwardingConfig };
+  /** Where (and whether) the run executes, resolved once at the entry point. */
+  execution?: ExecutionPlan;
+  /** Operation-level skill set for the skill resolver. */
+  skills?: OperationSkillSet;
+  /** Whether LLM calls stream. Defaults to true. */
+  stream?: boolean;
+  /** Working directory the run executes in. */
+  workingDirectory?: string;
+}
+
+/**
+ * What the host needs to deliver and retry the run. Written by the host,
+ * carried by the runtime without interpretation.
+ */
+export interface AgentRunHostEnvelope {
+  /**
+   * The client that started this run renders `file` Works, so the pushed
+   * `uiMessages` snapshots and `message_patch` revisions may carry them.
+   * Declared by the client, like `clientProtocol`; absent keeps them out, which
+   * is what a released desktop build without the `file` descriptor needs.
+   */
+  acceptsFileWorks?: boolean;
+  /**
+   * Wire protocol the client that started this run asked for. `2` means that
+   * client reconciles its message list from `message_patch` revisions, so the
+   * host may stop pushing whole `uiMessages` snapshots with the step and
+   * terminal events.
+   *
+   * Absent means `1`: an older bundle that only learns the settled list from
+   * what the server pushes, or a client the rollout has not reached.
+   * Deliberately declared by the client rather than derived from a preference
+   * or a transport check — a desktop build months behind the server reads the
+   * same events over the same socket, and guessing on its behalf is how it ends
+   * up rendering a run it cannot reconstruct.
+   */
+  clientProtocol?: 1 | 2;
+  /** Serialized lifecycle hook configs (webhook mode), so a queue worker can rebuild the dispatcher. */
+  hooks?: SerializedAgentHook[];
+  /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
+  includeFinalState?: boolean;
+  /**
+   * The client that started this run can execute single LLM attempts the
+   * server relays to it (`llm_execute`), for model providers only the user's
+   * device can reach (a local Ollama, a private-network endpoint). Declared by
+   * the client, like `clientProtocol`; absent means no client will pick up a
+   * relayed call, so such a provider fails fast instead of waiting.
+   */
+  llmExecutor?: AgentRunLlmExecutor;
+  /** Queue retry policy for step scheduling. */
+  queue?: { retries?: number; retryDelay?: string };
+}
+
+/**
+ * A run parked because the LLM call of its next step can only run on the
+ * user's device, and no client was there to take it (U4c). The step is
+ * replayed from `resume` once a client that can execute `provider` asks to
+ * continue; past `expiresAt` the run ends with an actionable error instead.
+ */
+export interface AgentRunClientLlmWait {
+  /** The step's assistant row; the resumed call fills it instead of a new one. */
+  assistantMessageId?: string;
+  /**
+   * The context the parked step ran with (minus per-step data), replayed on
+   * resume so the call is rebuilt exactly — some phases add prompt content the
+   * state does not hold. Absent on parks recorded before it existed.
+   */
+  context?: Pick<AgentRuntimeContext, 'initialContext' | 'metadata' | 'payload' | 'phase'>;
+  expiresAt: string;
+  /** Parent of the parked call's assistant row, for the replayed step. */
+  parentMessageId?: string;
+  /** Identifies this park, so a stale expiry check of an earlier one is a no-op. */
+  parkedAt: string;
+  provider: string;
+  /** Why nobody executed the call (`no_executor`, `claim_timeout`, `not_delivered`). */
+  reason: string;
+}
+
+/** A client's declaration that it can run relayed LLM attempts. */
+export interface AgentRunLlmExecutor {
+  /** Relay protocol versions the client speaks, e.g. `llm_relay@1`. */
+  capabilities: string[];
+  /**
+   * Operation whose gateway channel the client listens on, when it is not the
+   * run's own: a sub-agent inherits its parent's executor, but the tab only
+   * subscribed to the parent's run, so the sub-agent's `llm_execute` rides that
+   * channel. Set by the server, never by the client.
+   */
+  channelOperationId?: string;
+  /** Stable id of the declaring client (tab / desktop window), preferred as the executor. */
+  clientId: string;
+  /** Provider ids this client confirmed it can reach directly. */
+  providers: string[];
+}
+
+/**
+ * Search route resolved once before the run starts. Declared here rather than
+ * imported so the runtime package does not depend on the model catalog;
+ * structurally identical to the resolver output in `model-bank`.
+ */
+export interface SearchDecisionSnapshot {
+  enabledSearch: boolean;
+  isModelHasBuiltinSearch: boolean;
+  isProviderHasBuiltinSearch: boolean;
+  useApplicationBuiltinSearchTool: boolean;
+  useModelSearch: boolean;
+}
+
+/**
+ * The agent definition as the host resolved it for this run.
+ *
+ * `Partial` because hosts snapshot only what the run needs; the identity
+ * fields and the sub-agent override are run-level facts the host stamps on
+ * top of the stored agent config.
+ */
+export interface RunAgentSnapshot extends Partial<LobeAgentConfig> {
+  /** Agent-row description; surfaces in tracing spans and skill placeholders. */
+  description?: string | null;
+  id?: string;
+  slug?: string | null;
+  /**
+   * Raw callSubAgent chatConfig override, stamped alongside the merged
+   * chatConfig so explicit sub-agent reasoning choices can be re-applied over
+   * the user's model-instance defaults.
+   */
+  subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
+}
+
+/**
+ * What the model is told about the run's world.
+ *
+ * Frozen when the operation is created: every field is a fact the host
+ * resolved once (agent definition, group roster, project instructions, user
+ * memory, channel facts) and the context engine only reads it back on each
+ * step to assemble the system message. Nothing in here changes while the run
+ * executes — a run that needs a different world is a different operation.
+ */
+export interface AgentWorldSnapshot {
+  /** Agent definition snapshot: systemRole, chatConfig, agencyConfig … */
+  agent?: RunAgentSnapshot;
+  /** Channel-specific facts the model should know (bot platform, Discord …). */
+  channel?: {
+    botPlatform?: BotPlatformContext;
+    discord?: DiscordContext;
+  };
+  /** Borrowed-connector attribution rendered into the system message. */
+  connectorOwnershipNote?: string;
+  /**
+   * Plugin identifiers the agent explicitly disabled (tri-state entries).
+   * `agent.plugins` is already collapsed to pinned ids, so the disabled set
+   * is kept apart for the rules that must hide those tools from the model.
+   */
+  disabledPluginIds?: string[];
+  /** Whether the context engine may inject {@link AgentWorldSnapshot.expertise}. */
+  enableExpertise?: boolean;
+  /** Evaluation prompt data for eval runs. */
+  eval?: EvalContext;
+  /** Expertise snapshot resolved once when this operation started. */
+  expertise?: ExpertiseContextSnapshot;
+  /** Multi-agent group roster (or bot-conversation fallback). */
+  group?: AgentGroupConfig;
+  /** Root instruction files of the bound project. */
+  projectInstructions?: ProjectInstructionFile[];
+  /** Search route resolved before the run started. */
+  searchDecision?: SearchDecisionSnapshot;
+  /** User memory the model may recall from. */
+  userMemory?: UserMemoryConfig;
+  /** IANA timezone used to render "now" for the model. */
+  userTimezone?: string;
+}
+
+/**
+ * Execution facts that are bound late.
+ *
+ * Unlike {@link AgentWorldSnapshot} and the execution plan, this is the one
+ * business slot the runtime host may rewrite at a step boundary: a device
+ * that was unrouted at creation can be bound once a tool result names it
+ * (`computeDeviceContext`), and the bound device's system info feeds both
+ * prompt placeholders and tool cwd resolution.
+ */
+export interface AgentRunBinding {
+  /**
+   * Device routed for this run. `id` stays absent until a device is bound;
+   * `systemInfo` may already carry a working directory for runs whose cwd was
+   * resolved from a persisted device row.
+   */
+  device?: {
+    id?: string;
+    platform?: string;
+    systemInfo?: Record<string, string>;
+  };
+}
 
 /**
  * Agent's serializable state.
@@ -22,12 +359,23 @@ export interface AgentState {
   activatedStepSkills?: ActivatedStepSkill[];
   /** Cumulative record of tools activated at step level */
   activatedStepTools?: ActivatedStepTool[];
+  // --- Late-bound execution facts ---
+  /**
+   * Execution facts bound at a step boundary (device routing). The only
+   * business slot the host may write after creation.
+   */
+  binding?: AgentRunBinding;
+
   /**
    * Current calculated cost for this session.
    * Updated after each billable operation.
    */
+  /**
+   * Set while the run is parked in `waiting_for_client`: the step's LLM call
+   * needs the user's device and no client was there to run it.
+   */
+  clientLlmWait?: AgentRunClientLlmWait;
   cost: Cost;
-
   /**
    * Optional cost limits configuration.
    * If set, execution will stop when limits are exceeded.
@@ -35,13 +383,27 @@ export interface AgentState {
   costLimit?: CostLimit;
   // --- Metadata ---
   createdAt: string;
+  /**
+   * Approval request the same LLM turn emitted after a tool that parked the
+   * operation (`waiting_for_async_tool`). The step loop stops at the park, so
+   * the request is held here and issued by the step that resumes the
+   * operation — before the LLM runs again — instead of being dropped.
+   */
+  deferredHumanApproval?: AgentInstructionRequestHumanApprove;
+  /** @deprecated Use `world.enableExpertise`. */
+  enableExpertise?: boolean;
   error?: any;
+  /** @deprecated Use `world.expertise`. */
+  expertise?: ExpertiseContextSnapshot;
   /**
    * When true, the agent is in force-finish mode (maxSteps exceeded).
    * Tools are allowed to complete, but the next LLM call will have tools stripped
    * and a summary prompt injected to produce a final text response.
    */
   forceFinish?: boolean;
+  // --- Host envelope ---
+  /** What the host needs to deliver and retry the run. Opaque to the runtime. */
+  host?: AgentRunHostEnvelope;
   // --- Interruption Handling ---
   /**
    * When status is 'interrupted', this stores the interruption context
@@ -60,6 +422,14 @@ export interface AgentState {
   lastModified: string;
 
   /**
+   * User-facing count of LLM calls made by this operation.
+   *
+   * Kept in sync with `usage.llm.apiCalls` at every step boundary. Unlike
+   * {@link stepCount}, tool-only runtime iterations do not increase it.
+   */
+  llmCalls?: number;
+
+  /**
    * Optional maximum number of steps allowed.
    * If set, execution will stop with error when exceeded.
    */
@@ -68,7 +438,13 @@ export interface AgentState {
   // --- Core Context ---
   messages: any[];
 
-  // --- Extensible metadata ---
+  /**
+   * Run ledger the runtime and host write while the operation executes
+   * (step tracking, work anchors, intervention preparation …). Facts that are
+   * fixed at creation live in the typed slots (`origin`, `principal`, `plan`,
+   * `world`, `binding`, `host`); `normalizeAgentState` lifts legacy keys out
+   * of here on load.
+   */
   metadata?: Record<string, any>;
 
   /**
@@ -76,6 +452,24 @@ export interface AgentState {
    * Used as fallback when call_llm instruction doesn't specify model/provider
    */
   modelRuntimeConfig?: {
+    /**
+     * Immutable operation snapshot shared by tool discovery and context processing.
+     * Optional for operations created before this snapshot was introduced.
+     */
+    mediaCapabilities?: {
+      audio?: boolean;
+      video?: boolean;
+      vision?: boolean;
+    };
+    /**
+     * Every model fact the host read once when the operation was created (cards,
+     * the user's model row, the reasoning config that won the topic pin). Every
+     * LLM attempt of the run resolves its parameters from this snapshot, so an
+     * edit the user makes mid-run lands on the next turn instead of changing the
+     * payload between two steps. Absent on operations created before it existed,
+     * and for an attempt on another model — those resolve live.
+     */
+    modelFacts?: FrozenModelFacts;
     model: string;
     provider: string;
     /**
@@ -87,10 +481,41 @@ export interface AgentState {
       provider: string;
     };
   };
+  /**
+   * Credentials this run listed once when it was created. A step renders
+   * `{{CREDS_LIST}}` from here instead of asking the Market API again; absent
+   * when the run has changed its own credentials since, and the steps after
+   * that read the list live.
+   */
+  operationCredentials?: FrozenCredentialFacts;
   operationId: string;
-
   /** Operation-level tool set snapshot (immutable after creation) */
   operationToolSet?: OperationToolSet;
+
+  // --- Origin ---
+  /**
+   * Where this run came from and where it sits in the run tree. Frozen when
+   * the operation is created.
+   */
+  origin?: AgentRunOrigin;
+  pendingApprovalBatch?: {
+    assistantMessageId: string;
+    id: string;
+    sealed: true;
+    stepIndex: number;
+    /**
+     * Previous durable batch whose still-pending rows were rebound into this
+     * parked operation. The server notification adapter turns this into an
+     * atomic generic-store supersession; keeping only authoritative source
+     * identities here avoids coupling the runtime package to ActivityKit or a
+     * Cloud database model.
+     */
+    supersedes?: {
+      batchId: string;
+      operationId: string;
+      toolCallIds: string[];
+    };
+  };
   // --- HIL ---
   /**
    * Assistant placeholder seeded for a resume that starts by executing a tool
@@ -100,32 +525,51 @@ export interface AgentState {
    * Cleared once consumed.
    */
   pendingAssistantMessageId?: string;
-  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
 
+  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
   pendingHumanSelect?: {
     metadata?: Record<string, unknown>;
     multi?: boolean;
     options: Array<{ label: string; value: string }>;
     prompt?: string;
   };
+  /** toolCallId -> durable pending tool-message id for the current sealed batch. */
+  pendingToolMessageIds?: Record<string, string>;
   /**
    * When status is 'waiting_for_human', this stores pending requests
    * for human-in-the-loop operations.
    */
   pendingToolsCalling?: ChatToolPayload[];
+  // --- Plan ---
+  /** How the run executes. Frozen at creation. */
+  plan?: AgentRunPlan;
+  // --- Principal ---
+  /** Under whose authority the run acts and what it may do. Frozen at creation. */
+  principal?: AgentRunPrincipal;
   /**
-   * Security blacklist configuration
-   * These rules will ALWAYS block execution and require human intervention,
-   * regardless of user settings (even in auto-run mode).
-   * If not provided, DEFAULT_SECURITY_BLACKLIST will be used.
+   * The turn's raw ask, kept ONLY while the run still owes its init.
+   *
+   * A run can be created before tool discovery and the context assembly have
+   * happened; the step-0 worker does them and clears this in the same write that
+   * saves what they produced. Its presence is therefore the signal:
+   * a state carrying a request has not been initialized yet.
+   *
+   * Everything else the init needs is already on the other slots (`world.agent`,
+   * `world.channel`, `principal.policy`, `host.hooks`, `modelRuntimeConfig` …) —
+   * this is the residue those slots have no claim on.
    */
+  request?: AgentRunInitRequest;
+
+  /** @deprecated Use `principal.policy.securityBlacklist`. */
   securityBlacklist?: SecurityBlacklistConfig;
+
   // --- State Machine ---
   status:
     | 'idle'
     | 'running'
     | 'waiting_for_human'
     | 'waiting_for_async_tool'
+    | 'waiting_for_client'
     | 'done'
     | 'error'
     | 'interrupted';
@@ -134,19 +578,60 @@ export interface AgentState {
   /**
    * Number of execution steps in this session.
    * Incremented on each runtime.step() call.
+   *
+   * This is the scheduling/idempotency counter (QStash `stepIndex`, stale
+   * delivery guards, resume). It intentionally keeps its original meaning so
+   * workers from the previous build can keep scheduling during a rolling
+   * deploy.
    */
   stepCount: number;
 
   systemRole?: string;
-  /** Tool executor map for routing tool execution between server and client */
+  /**
+   * Consecutive LLM turns that emitted the same normalized tool calls.
+   * Only signatures present in the latest tool-calling turn are retained.
+   */
+  toolCallRepeatGuard?: {
+    counts: Record<string, number>;
+    /**
+     * Set on the turn the guard cut short. The run still lands in `status:
+     * 'done'` — the turn was finalized without tool calls, which is what
+     * finishing looks like — so without this marker a loop-death is
+     * indistinguishable from a real answer, and nothing downstream can count
+     * how often the guard fires.
+     */
+    stoppedByRepeatLimit?: boolean;
+  };
+
+  /**
+   * Legacy mirrors of {@link OperationToolSet}, kept only so operations that
+   * started before `operationToolSet` existed still resolve their tools. Nothing
+   * writes them: the maps are the heaviest thing on the state and it is
+   * re-serialized at every step boundary. Read through `selectToolManifestMap`
+   * and friends, which prefer the slot; `normalizeAgentState` lifts these into it
+   * on load.
+   *
+   * @deprecated Use `operationToolSet`.
+   */
   toolExecutorMap?: Record<string, ToolExecutor>;
 
-  toolManifestMap: Record<string, any>;
+  /** @deprecated Use `operationToolSet.manifestMap`. */
+  toolManifestMap?: Record<string, any>;
 
+  /** @deprecated Use `operationToolSet.tools`. */
   tools?: any[];
 
-  /** Tool source map for routing tool execution to correct handler */
+  /** @deprecated Use `operationToolSet.sourceMap`. */
   toolSourceMap?: Record<string, ToolSource>;
+
+  /**
+   * How many times this operation has answered unresolvable tool calls with a
+   * rejected tool result. Operation-scoped on purpose: the same rejection rows
+   * are also readable from the message history, but that history is rehydrated
+   * from the DB on every step and carries earlier operations' rejections, so
+   * counting rows there would spend a new operation's budget before it starts.
+   */
+  unresolvedToolFeedbackRounds?: number;
   // --- Usage and Cost Tracking ---
   /**
    * Accumulated usage statistics for this session.
@@ -154,11 +639,15 @@ export interface AgentState {
    */
   usage: Usage;
 
-  /**
-   * User's global intervention configuration
-   * Controls how tools requiring approval are handled
-   */
+  /** @deprecated Use `principal.policy.userIntervention`. */
   userInterventionConfig?: UserInterventionConfig;
+
+  // --- World snapshot ---
+  /**
+   * What the model is told about the run's world. Frozen at creation and
+   * read by the context engine on every step.
+   */
+  world?: AgentWorldSnapshot;
 }
 
 /**

@@ -1,27 +1,29 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo, useLayoutEffect } from 'react';
+import { memo } from 'react';
 import { Outlet } from 'react-router';
 
 import AgentTaskManager from '@/features/AgentTaskManager';
-import { resetNavPanel } from '@/features/NavPanel';
+import MobilePortal from '@/features/Portal/Mobile';
+import { WorkspaceSidePanelProvider } from '@/features/RightPanel/WorkspaceSidePanel';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 const TaskWorkspaceLayout = memo(() => {
   const isMobile = useIsMobile();
 
-  useLayoutEffect(() => {
-    resetNavPanel();
-  }, []);
-
+  // This layout owns the side panel: the task manager or the mobile portal is
+  // the one host for every route under it, so the routed page must not mount a
+  // second one (see WorkspaceSidePanel).
   return (
-    <Flexbox flex={1} height={'100%'} horizontal={!isMobile} width={'100%'}>
-      <Flexbox flex={1} style={{ minWidth: 0 }}>
-        <Outlet />
+    <WorkspaceSidePanelProvider>
+      <Flexbox flex={1} height={'100%'} horizontal={!isMobile} width={'100%'}>
+        <Flexbox flex={1} style={{ minWidth: 0 }}>
+          <Outlet />
+        </Flexbox>
+        {isMobile ? <MobilePortal /> : <AgentTaskManager />}
       </Flexbox>
-      {!isMobile && <AgentTaskManager />}
-    </Flexbox>
+    </WorkspaceSidePanelProvider>
   );
 });
 

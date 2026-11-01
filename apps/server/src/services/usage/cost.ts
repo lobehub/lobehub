@@ -33,6 +33,7 @@ const toUsdRate = (rate: number | undefined, currency?: string): number | undefi
   rate === undefined ? undefined : currency === 'CNY' ? rate / USD_TO_CNY : rate;
 
 export interface MessageCostSplit {
+  cachedInputCost: number;
   /** Input tokens that missed the cache and were freshly processed. */
   cacheMissTokens: number;
   /** Cached input tokens that were read (cache hits). */
@@ -41,7 +42,7 @@ export interface MessageCostSplit {
   cacheSavings: number;
   cacheWriteCost: number;
   cacheWriteTokens: number;
-  /** Input cost incl. the cache-read portion (USD). */
+  /** Input cost for tokens that missed the cache (USD). */
   inputCost: number;
   inputTokens: number;
   outputCost: number;
@@ -109,9 +110,10 @@ export const computeMessageCostSplit = (
     cacheMissTokens,
     cacheReadTokens,
     cacheSavings,
+    cachedInputCost: cacheReadCost,
     cacheWriteCost,
     cacheWriteTokens,
-    inputCost: freshInputCost + cacheReadCost,
+    inputCost: freshInputCost,
     inputTokens: totalInputTokens,
     outputCost,
     outputTokens,

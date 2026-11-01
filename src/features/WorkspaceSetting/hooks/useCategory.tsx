@@ -1,32 +1,59 @@
+import { isDesktop } from '@lobechat/const';
+import { Avatar } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
+  AppWindowIcon,
+  BellIcon,
   Blocks,
+  BlocksIcon,
   Brain,
   Building2,
   ChartColumnBigIcon,
   Coins,
+  ContainerIcon,
   CreditCard,
   Database,
+  EllipsisIcon,
+  FlaskConical,
+  GaugeIcon,
+  HandCoins,
+  HardDriveIcon,
+  Info,
+  KeyboardIcon,
   KeyIcon,
   KeyRound,
   Map,
+  MessageCircleIcon,
+  MessagesSquareIcon,
   MonitorSmartphoneIcon,
+  PaletteIcon,
   ScrollText,
   Sparkles,
+  TagIcon,
+  Trash2,
   Users,
+  UsersRound,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
-import { useShowWorkspaceApiKey } from '@/business/client/hooks/useShowWorkspaceApiKey';
+import { usePermission } from '@/hooks/usePermission';
+import { useElectronStore } from '@/store/electron';
+import { electronSyncSelectors } from '@/store/electron/selectors';
+import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 
 export enum WorkspaceSettingsGroupKey {
+  Account = 'account',
   Admin = 'admin',
   Agent = 'agent',
+  Developer = 'developer',
   General = 'general',
+  Resource = 'resource',
   Subscription = 'subscription',
+  System = 'system',
 }
 
 export interface WorkspaceSettingCategoryItem {
@@ -44,13 +71,86 @@ export interface WorkspaceSettingCategoryGroup {
 export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] => {
   const { t } = useTranslation('setting');
   const { t: tAuth } = useTranslation('auth');
+  const { t: tLabs } = useTranslation('labs');
   const { t: tSubscription } = useTranslation('subscription');
-  const showApiKey = useShowWorkspaceApiKey();
-  const isOwner = useIsWorkspaceOwner();
+  const { allowed: canManageWorkspace } = usePermission('manage_settings');
+  const { allowed: canViewBilling } = usePermission('view_billing');
+  // API keys act as the member who issued them, so the tab follows the same
+  // member-level gate the server enforces: `API_KEY_*` is granted from Member
+  // up, never to Viewer. Without this the tab leads to a list request that
+  // immediately 403s.
+  const { allowed: canCreateContent } = usePermission('create_content');
+  const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
+  const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
+  const [avatar, username] = useUserStore((s) => [
+    userProfileSelectors.userAvatar(s),
+    userProfileSelectors.nickName(s),
+  ]);
+  const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
+
+  const avatarUrl = useMemo(() => {
+    if (!avatar) return undefined;
+    if (isDesktop && avatar.startsWith('/') && remoteServerUrl) {
+      return remoteServerUrl + avatar;
+    }
+    return avatar;
+  }, [avatar, remoteServerUrl]);
 
   return useMemo(
     () =>
       [
+        // Account-level settings (profile / appearance / hotkeys / messenger)
+        // follow the user, not the workspace. They are mirrored here so members
+        // can reach them without leaving the workspace; the pages are the
+        // personal ones.
+        // Leads the sidebar so the user's own identity stays on top, like the
+        // personal settings sidebar.
+        {
+          items: [
+            {
+              icon: avatarUrl ? (
+                <Avatar avatar={avatarUrl} shape={'square'} size={26} />
+              ) : undefined,
+              key: WorkspaceSettingsTabs.Profile,
+              label: username || tAuth('tab.profile'),
+            },
+            {
+              icon: PaletteIcon,
+              key: WorkspaceSettingsTabs.Appearance,
+              label: t('tab.appearance'),
+            },
+            {
+              icon: KeyboardIcon,
+              key: WorkspaceSettingsTabs.Hotkey,
+              label: t('tab.hotkey'),
+            },
+            // Follow-up chips / input completion act on the member's own chat
+            // surface, so every role configures them here — the workspace
+            // Service Model page stays admin-only.
+            {
+              icon: MessagesSquareIcon,
+              key: WorkspaceSettingsTabs.ChatPreference,
+              label: t('tab.chatPreference'),
+            },
+            // The System Bot binding is a per-user identity (owned by userId,
+            // not the workspace); reaching a workspace's agents happens via the
+            // scope selector on the page itself.
+            {
+              icon: MessageCircleIcon,
+              key: WorkspaceSettingsTabs.Messenger,
+              label: t('tab.messenger'),
+            },
+            // An installation connected here belongs to the workspace, so
+            // every member sees the same one.
+            {
+              icon: BlocksIcon,
+              key: WorkspaceSettingsTabs.Integrations,
+              label: t('tab.integrations'),
+            },
+          ],
+          key: WorkspaceSettingsGroupKey.Account,
+          title: t('group.profile'),
+        },
         {
           items: [
             {
@@ -64,18 +164,57 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               label: t('workspaceSetting.tab.members'),
             },
             {
-              icon: MonitorSmartphoneIcon,
-              key: WorkspaceSettingsTabs.Devices,
-              label: t('tab.devices'),
+              icon: UsersRound,
+              key: WorkspaceSettingsTabs.Teams,
+              label: t('workspaceSetting.tab.teams'),
+            },
+            {
+              icon: BellIcon,
+              key: WorkspaceSettingsTabs.Notification,
+              label: t('tab.notification'),
             },
             {
               icon: ChartColumnBigIcon,
               key: WorkspaceSettingsTabs.Stats,
               label: tAuth('tab.stats'),
             },
-          ],
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.General,
-          title: t('workspaceSetting.group.general'),
+          title: t('workspaceSetting.group.workspace'),
+        },
+        // What the workspace's agents run on and spend: machines, coding-agent
+        // subscriptions, code environments and the drive. Each item keeps its
+        // own gate; the group only puts the shared capacity in one place.
+        {
+          items: [
+            {
+              icon: MonitorSmartphoneIcon,
+              key: WorkspaceSettingsTabs.Devices,
+              label: t('tab.devices'),
+            },
+            // The coding-agent accounts are shared capacity every agent routes
+            // onto, so taking one in or out of rotation is an admin decision.
+            canManageWorkspace && {
+              icon: GaugeIcon,
+              key: WorkspaceSettingsTabs.SubscriptionAccounts,
+              label: t('tab.subscriptionAccounts'),
+            },
+            // Always there: a code environment is a definition, written down before
+            // anything runs it, and useful with or without a drive to run it on.
+            {
+              icon: ContainerIcon,
+              key: WorkspaceSettingsTabs.Environments,
+              label: t('tab.environments'),
+            },
+            // The public drive and the member's own, with the pool's usage.
+            {
+              icon: HardDriveIcon,
+              key: WorkspaceSettingsTabs.Drive,
+              label: t('tab.drive'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          key: WorkspaceSettingsGroupKey.Resource,
+          title: t('workspaceSetting.group.resource'),
         },
         {
           items: [
@@ -89,28 +228,42 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Usage,
               label: t('tab.usage'),
             },
-            {
+            // Credits / Billing are readable by Admin-or-higher; the pages
+            // themselves keep the money-moving controls (top-up, payment
+            // methods, plan changes) behind the narrower subscription gate.
+            canViewBilling && {
               icon: Coins,
               key: WorkspaceSettingsTabs.Credits,
               label: tSubscription('tab.credits'),
             },
-            {
+            // Spend governance (budget pools + member caps) — admin task,
+            // same visibility gate as the other money pages.
+            canViewBilling && {
+              icon: HandCoins,
+              key: WorkspaceSettingsTabs.Budget,
+              label: tSubscription('tab.budget'),
+            },
+            canViewBilling && {
               icon: CreditCard,
               key: WorkspaceSettingsTabs.Billing,
               label: tSubscription('tab.billing'),
             },
-          ],
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Subscription,
           title: t('group.subscription'),
         },
         {
           items: [
-            {
+            // AI provider config (keys/endpoints) is shared workspace infra —
+            // Admin-or-higher, hidden from members entirely.
+            canManageWorkspace && {
               icon: Brain,
               key: WorkspaceSettingsTabs.Provider,
               label: t('tab.provider'),
             },
-            {
+            // Service-model preferences steer the shared workspace model
+            // policy — Admin-or-higher, hidden from members like Provider.
+            canManageWorkspace && {
               icon: Sparkles,
               key: WorkspaceSettingsTabs.ServiceModel,
               label: t('tab.serviceModel'),
@@ -119,6 +272,13 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               icon: SkillsIcon,
               key: WorkspaceSettingsTabs.Skill,
               label: t('workspaceSetting.tab.skill'),
+            },
+            // Label registry is readable by everyone; the page itself keeps
+            // management actions behind the admin gate (disabled, not hidden).
+            {
+              icon: TagIcon,
+              key: WorkspaceSettingsTabs.Labels,
+              label: t('workspaceSetting.tab.labels'),
             },
             {
               icon: Blocks,
@@ -130,28 +290,19 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
               key: WorkspaceSettingsTabs.Creds,
               label: t('tab.creds'),
             },
-            // Messenger (chat platform) is intentionally omitted from workspace
-            // settings: the System Bot binding is a per-user/personal identity
-            // (the link is owned by `userId`, not the workspace), and reaching a
-            // workspace's agents happens via the scope selector on the *personal*
-            // Messenger page. There is nothing workspace-level to configure here.
-          ],
+            // Messenger lives in the Account group above — it is a per-user
+            // binding, not workspace configuration.
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
           key: WorkspaceSettingsGroupKey.Agent,
           title: t('workspaceSetting.group.agent'),
         },
-        // The Admin group is owner-only — managing shared infra and audit
-        // surfaces is an owner action.
-        isOwner && {
+        // The Admin group is available to Admin and Owner.
+        canManageWorkspace && {
           items: [
             {
               icon: Database,
               key: WorkspaceSettingsTabs.Storage,
               label: t('tab.storage'),
-            },
-            showApiKey && {
-              icon: KeyIcon,
-              key: WorkspaceSettingsTabs.APIKey,
-              label: tAuth('tab.apikey'),
             },
             {
               icon: ScrollText,
@@ -162,7 +313,67 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
           key: WorkspaceSettingsGroupKey.Admin,
           title: t('workspaceSetting.group.admin'),
         },
+        // System group: Storage stays in Admin because it is workspace-scoped
+        // there. Trash is visible to every role — the server shows owners the
+        // whole bin and members only what they deleted. About is informational.
+        {
+          items: [
+            {
+              icon: Trash2,
+              key: WorkspaceSettingsTabs.Trash,
+              label: t('tab.trash'),
+            },
+            !hideDocs && {
+              icon: Info,
+              key: WorkspaceSettingsTabs.About,
+              label: t('tab.about'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          key: WorkspaceSettingsGroupKey.System,
+          title: t('group.system'),
+        },
+        // Developer group sits last, mirroring the personal sidebar: Advanced
+        // and Labs are user preferences (always shown), API Key / OAuth apps
+        // keep their gates.
+        {
+          items: [
+            {
+              icon: EllipsisIcon,
+              key: WorkspaceSettingsTabs.Advanced,
+              label: t('tab.advanced'),
+            },
+            canCreateContent && {
+              icon: KeyIcon,
+              key: WorkspaceSettingsTabs.APIKey,
+              label: tAuth('tab.apikey'),
+            },
+            enableOAuthApps && {
+              icon: AppWindowIcon,
+              key: WorkspaceSettingsTabs.OAuthApps,
+              label: tAuth('tab.oauthApps'),
+            },
+            {
+              icon: FlaskConical,
+              key: WorkspaceSettingsTabs.Labs,
+              label: tLabs('title'),
+            },
+          ].filter(Boolean) as WorkspaceSettingCategoryItem[],
+          key: WorkspaceSettingsGroupKey.Developer,
+          title: t('group.developer'),
+        },
       ].filter(Boolean) as WorkspaceSettingCategoryGroup[],
-    [t, tAuth, tSubscription, showApiKey, isOwner],
+    [
+      t,
+      tAuth,
+      tLabs,
+      tSubscription,
+      enableOAuthApps,
+      canManageWorkspace,
+      canViewBilling,
+      canCreateContent,
+      hideDocs,
+      avatarUrl,
+      username,
+    ],
   );
 };

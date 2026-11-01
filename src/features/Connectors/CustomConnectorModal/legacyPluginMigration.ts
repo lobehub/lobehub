@@ -8,8 +8,7 @@ import { ConnectorSourceType } from '@/database/schemas';
  */
 export interface MigrationCreatePayload {
   credentials?:
-    | { token: string; type: 'bearer' }
-    | { headers: Record<string, string>; type: 'header' };
+    { token: string; type: 'bearer' } | { headers: Record<string, string>; type: 'header' };
   identifier: string;
   isEnabled: true;
   mcpConnectionType: 'http' | 'stdio' | 'cloud';
@@ -45,9 +44,7 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
  * the legacy form lets users set both independently, and dropping either side
  * silently would break tool calls for the 38 rows in that combo.
  */
-export const buildConnectorPayloadFromLegacy = (
-  legacy: LobeToolCustomPlugin,
-): MigrationResult => {
+export const buildConnectorPayloadFromLegacy = (legacy: LobeToolCustomPlugin): MigrationResult => {
   const mcp = legacy.customParams?.mcp;
   if (!mcp) return { ok: false, reason: 'no-mcp' };
 
@@ -60,9 +57,7 @@ export const buildConnectorPayloadFromLegacy = (
 
   const identifier = legacy.identifier;
   const displayName =
-    legacy.manifest?.meta?.title ||
-    legacy.customParams?.description ||
-    identifier;
+    legacy.manifest?.meta?.title || legacy.customParams?.description || identifier;
 
   const metadata: Record<string, unknown> = {};
   if (legacy.customParams?.description) metadata.description = legacy.customParams.description;
@@ -142,9 +137,17 @@ export const buildConnectorPayloadFromLegacy = (
  *   2. `createConnector` — server is idempotent on `(user_id, identifier)` so
  *      a half-baked marketplace connector from the old `syncPluginTools` path
  *      becomes an UPDATE, no client-side collision branch needed.
- *   3. `syncConnectorTools` — fail-loud. A throw here BAILS BEFORE step 4, so
- *      the legacy plugin row survives and the user keeps a working agent.
- *      Re-opening "Configure" later re-runs the same steps (all idempotent).
+ *   3. `syncConnectorTools` — fail-loud. On failure (the MCP endpoint is
+ *      unreachable / 500s), ROLL BACK the connector — but only when step 2
+ *      actually CREATED it (see `hasExistingConnector`), never when it merely
+ *      updated a pre-existing row. Leaving a freshly-created one behind would
+ *      strand the user: the tool-less
+ *      connector now shadows the legacy row, so it renders as a duplicate in
+ *      the connector list AND `connectorByIdentifier` starts resolving it,
+ *      which removes the "Configure to migrate" entry point (that only shows
+ *      when no connector exists). Rolling back returns us atomically to the
+ *      pre-migration state — legacy row only — so the user can retry once the
+ *      endpoint is healthy (create is rebuilt from the untouched legacy shape).
  *   4. `uninstallCustomPlugin` — best-effort. A throw is logged but swallowed;
  *      the runtime's `connectorIdentifierSet` filter in
  *      `aiAgent/index.ts:1717` dedupes by identifier (connector wins), so a
@@ -155,6 +158,13 @@ export const buildConnectorPayloadFromLegacy = (
  */
 export interface MigrationSaveDeps {
   createConnector: (payload: MigrationCreatePayload) => Promise<string>;
+  deleteConnector: (id: string) => Promise<void>;
+  /**
+   * Whether a `user_connectors` row already exists for this identifier BEFORE
+   * the create call. `createConnector` is an idempotent upsert, so on the sync
+   * failure path we must NOT delete a row we merely updated — only one we created.
+   */
+  hasExistingConnector: (identifier: string) => boolean;
   syncConnectorTools: (id: string) => Promise<void>;
   uninstallCustomPlugin: (id: string) => Promise<void>;
 }
@@ -183,8 +193,33 @@ export const executeLegacyMigrationSave = async (
     identifier: legacyPlugin.identifier,
   };
 
+  // Capture pre-existence BEFORE the upsert so the rollback below only ever
+  // deletes a connector THIS migration created (see MigrationSaveDeps).
+  const connectorAlreadyExisted = deps.hasExistingConnector(payload.identifier);
+
   const newConnectorId = await deps.createConnector(payload);
-  await deps.syncConnectorTools(newConnectorId);
+
+  try {
+    await deps.syncConnectorTools(newConnectorId);
+  } catch (syncError) {
+    // Endpoint unreachable / manifest fetch failed. Roll the just-created
+    // connector back so we don't leave a tool-less duplicate alongside the
+    // surviving legacy plugin (see step 3 above), then rethrow so the modal
+    // surfaces the failure and the legacy row stays as the single source.
+    //
+    // Skip rollback when a connector already existed for this identifier: the
+    // upsert UPDATED that row (it did not create one), so deleting it would
+    // destroy a working connector's synced tools/credentials — e.g. a prior
+    // successful migration whose best-effort legacy uninstall had failed.
+    if (!connectorAlreadyExisted) {
+      try {
+        await deps.deleteConnector(newConnectorId);
+      } catch (rollbackError) {
+        console.error('[connector-migration] rollback after failed sync failed', rollbackError);
+      }
+    }
+    throw syncError;
+  }
 
   try {
     await deps.uninstallCustomPlugin(legacyPlugin.identifier);

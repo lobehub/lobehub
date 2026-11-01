@@ -27,6 +27,7 @@ interface TestResourceRuntime {
   replaceSkillContentCAS: (input: ReplaceSkillContentCASInput) => Promise<{
     agentDocumentId?: string;
     documentId?: string;
+    expectedCurrentDocumentUpdatedAt?: string;
     historyId?: string;
     resourceId?: string;
     summary?: string;
@@ -65,6 +66,7 @@ const createSkillDocumentService = (
         agentDocumentId: 'adoc_index_1',
         documentId: 'doc_index_1',
       },
+      expectedCurrentDocumentUpdatedAt: '2026-06-29T00:00:00.000Z',
       name: 'support-skill',
       preMutationHistoryId: 'history_1',
       title: 'Support Skill',
@@ -177,6 +179,7 @@ describe('createResourceRuntimePrimitives', () => {
     expect(result).toMatchObject({
       agentDocumentId: 'adoc_1',
       documentId: 'doc_index_1',
+      expectedCurrentDocumentUpdatedAt: '2026-06-29T00:00:00.000Z',
       historyId: 'history_1',
       resourceId: 'adoc_1',
       summary: 'Refined managed skill support-skill.',

@@ -1,4 +1,4 @@
-export { CredsExecutionRuntime, type ICredsService } from './ExecutionRuntime';
+export type { ICredsService } from './ExecutionRuntime';
 export {
   checkCredsSatisfied,
   type ComposioAppTypeLike,
@@ -24,6 +24,6 @@ export {
   type InitiateOAuthConnectParams,
   type InjectCredsToSandboxParams,
   type InjectCredsToSandboxState,
-  type SaveCredsParams,
-  type SaveCredsState,
+  type RequestCredsInputParams,
+  type RequestCredsInputState,
 } from './types';

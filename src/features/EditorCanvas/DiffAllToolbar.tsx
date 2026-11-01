@@ -2,10 +2,7 @@
 
 import type { IEditor } from '@lobehub/editor';
 import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
-import { Block, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { Space } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Block, Button, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { Check, X } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -112,7 +109,7 @@ interface DiffAllToolbarProps {
 const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
   const { t } = useTranslation('editor');
   const isDarkMode = useIsDark();
-  const [performSave, markDirty] = useDocumentStore((s) => [s.performSave, s.markDirty]);
+  const [saveVersion, markDirty] = useDocumentStore((s) => [s.saveVersion, s.markDirty]);
 
   const hasPendingDiffs = useEditorHasPendingDiffs(editor);
 
@@ -120,7 +117,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
 
   const handleSave = async () => {
     markDirty(documentId);
-    await performSave(documentId, undefined, { saveSource: 'manual' });
+    await saveVersion(documentId);
   };
 
   return (
@@ -133,7 +130,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
         padding={4}
         variant="outlined"
       >
-        <Space>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Button
             size={'small'}
             type="text"
@@ -148,7 +145,6 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
             {t('modifier.rejectAll')}
           </Button>
           <Button
-            color={'default'}
             size={'small'}
             type="fill"
             onClick={async () => {
@@ -161,7 +157,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor }) => {
             <Icon color={'green'} icon={Check} size={16} />
             {t('modifier.acceptAll')}
           </Button>
-        </Space>
+        </Flexbox>
       </Block>
     </div>
   );

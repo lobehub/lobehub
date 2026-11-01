@@ -1,26 +1,43 @@
 import react from '@vitejs/plugin-react';
 import { codeInspectorPlugin } from 'code-inspector-plugin';
-import type { ModulePreloadOptions } from 'vite';
+import type { ModulePreloadOptions, Plugin } from 'vite';
 
-import { viteEmotionSpeedy } from './emotionSpeedy';
+import { canvasRuntime } from './canvasRuntime';
+import { viteCompletionSounds } from './completionSounds';
+import { lobeIconImports } from './lobeIconImports';
+import { lobeUiImports } from './lobeUiImports';
 import { viteMarkdownImport } from './markdownImport';
 import { viteNodeModuleStub } from './nodeModuleStub';
 import { vitePlatformResolve } from './platformResolve';
-import { routeChunkPreload } from './routeChunkPreload';
+import { stylexPlugin, stylexTokenModules } from './stylex';
 
 /**
  * Shared manual chunk naming — groups leaf-node modules to reduce chunk file count.
  * Only targets pure data modules (no downstream dependents) to avoid facade chunk issues.
  */
-/** Large i18n namespaces that get their own per-locale chunk instead of merging into the locale bundle */
+/** Large i18n namespaces that stay on demand instead of merging into the locale bundle. */
 const HEAVY_NS = new Set(['models', 'modelProvider']);
 
-/**
- * Namespaces loaded by the auth SPA (see createAuthI18n). They get their own
- * per-locale chunk so the auth page never pulls the merged locale bundle of the
- * main app, and both SPAs share the same chunk URLs for these namespaces.
- */
+/** Namespaces shared with the independently built auth SPA. */
 const AUTH_NS = new Set(['auth', 'authError', 'common', 'error', 'marketAuth', 'oauth']);
+
+/** Namespaces synchronously bundled by the main SPA shell. */
+const APP_SHELL_NS = new Set(['chat', 'home']);
+
+/** Default-language metadata imported directly by an eager route component. */
+const EAGER_DEFAULT_NS = new Set(['hotkey']);
+
+const MODEL_RUNTIME_CLIENT_MODULES = [
+  '/core/usageConverters/utils/resolveImageSinglePrice.ts',
+  '/core/usageConverters/utils/resolveVideoSinglePrice.ts',
+  '/helpers/parseToolCalls.ts',
+  '/providers/openai/modelId.ts',
+  '/types/error.ts',
+  '/types/toolsCalling.ts',
+  '/utils/createError.ts',
+  '/utils/modelExtendParams.ts',
+  '/utils/uriParser.ts',
+];
 
 /** antd locale filename → app locale */
 const ANTD_LOCALE: Record<string, string> = {
@@ -72,13 +89,38 @@ const isNodePackage = (id: string, packageName: string) => {
   return normalized.includes(`/node_modules/${packageName}/`);
 };
 
+const DEVTOOLS_SOURCE_SEGMENTS = [
+  '/src/business/client/registerDevDockItems.ts',
+  '/src/features/AgentMockDevtools/',
+  '/src/features/Conversation/ChatList/components/AutoScroll/DebugInspector.tsx',
+  '/src/features/DevDock/',
+  '/src/features/DevFeatureFlagPanel/',
+  '/src/features/DevPanel/',
+  '/src/features/DevWorkspaceRole/',
+  '/src/services/electron/devtools.ts',
+];
+
+const isDeferredDevtoolsSource = (id: string) => {
+  const normalized = id.replaceAll('\\', '/');
+
+  return DEVTOOLS_SOURCE_SEGMENTS.some((segment) => normalized.includes(segment));
+};
+
 function sharedManualChunks(id: string): string | undefined {
-  // default locale sources live in packages/locales/src/default — their chunk
-  // has historically been named i18n-src by the generic locale match below
+  // Only dedicated DevDock packages are manually grouped. Grouping DevDock
+  // source modules themselves would absorb their large shared dependency
+  // closure; their existing dynamic-import boundaries must remain intact.
+  if (isNodePackage(id, 'react-scan')) return 'devtools-react-scan';
+
+  // Default locale sources live in packages/locales/src/default. Keep shell
+  // and heavy namespaces isolated; the remaining on-demand namespaces share a
+  // coarse fallback chunk to avoid creating hundreds of tiny files.
   const defaultLocaleMatch = id.match(/\/locales\/src\/default\/([^/.]+)/);
   if (defaultLocaleMatch) {
     const ns = defaultLocaleMatch[1];
-    if (AUTH_NS.has(ns)) return `i18n-default-${ns}`;
+    if (APP_SHELL_NS.has(ns)) return 'i18n-default-app-shell';
+    if (AUTH_NS.has(ns) || EAGER_DEFAULT_NS.has(ns) || HEAVY_NS.has(ns))
+      return `i18n-default-${ns}`;
     return 'i18n-src';
   }
 
@@ -91,36 +133,69 @@ function sharedManualChunks(id: string): string | undefined {
   const localeMatch = id.match(/\/locales\/([^/]+)\/([^/.]+)/);
   if (localeMatch) {
     const [, locale, ns] = localeMatch;
-    if (AUTH_NS.has(ns)) return `i18n-${locale}-${ns}`;
+    if (APP_SHELL_NS.has(ns)) return `i18n-${locale}-app-shell`;
+    if (AUTH_NS.has(ns) || HEAVY_NS.has(ns)) return `i18n-${locale}-${ns}`;
     if (locale === 'default') return 'i18n-default';
-    if (HEAVY_NS.has(ns)) return `i18n-${locale}-${ns}`;
     return `i18n-${locale}`;
   }
 
-  if (id.includes('/packages/model-runtime/') || isNodePackage(id, 'openai'))
-    return 'vendor-ai-runtime';
+  // These small contracts are used by the eager app shell and the deferred
+  // composer. Without an explicit boundary, Rolldown captures them inside the
+  // large ChatInput chunk and turns that otherwise-lazy chunk into an eager
+  // dependency of the home layout.
+  if (
+    id.includes('/src/business/client/hooks/useBusinessAgentMode.ts') ||
+    id.includes('/src/features/ChatInput/utils/contextSelections.ts') ||
+    id.includes('/src/routes/(main)/_layout/DesktopLayoutContainer/LayoutContainerContext.ts')
+  ) {
+    return 'chat-input-contracts';
+  }
+
+  if (isNodePackage(id, 'openai')) return 'vendor-ai-runtime';
 
   // shared constants would otherwise be captured into vendor-ai-runtime,
   // dragging the whole AI chunk into the auth SPA's static graph
   if (id.includes('/packages/const/src/')) return 'app-const';
 
-  // model-bank (monorepo package — split before node_modules guard)
-  if (id.includes('model-bank')) return 'providerConfig';
+  if (
+    id.includes('/packages/model-runtime/src/') &&
+    (id.includes('/packages/model-runtime/src/errors/') ||
+      MODEL_RUNTIME_CLIENT_MODULES.some((moduleId) => id.endsWith(moduleId)))
+  ) {
+    return 'model-runtime-client';
+  }
 
   if (!id.includes('node_modules')) return;
 
-  // antd locale → merge into i18n-{locale}
+  // UI/date locale modules are loaded during shell initialization. They must
+  // not share the coarse i18n-{locale} data chunk, or loading antd/dayjs pulls
+  // every deferred namespace for that locale into the bootstrap graph.
   const antdMatch = id.match(/antd\/es\/locale\/([^/.]+)\.js/);
   if (antdMatch) {
     const locale = ANTD_LOCALE[antdMatch[1]];
-    if (locale) return `i18n-${locale}`;
+    if (locale) return `i18n-${locale}-ui-runtime`;
   }
 
-  // dayjs locale → merge into i18n-{locale}
+  // The antd locale above imports per-component locales (calendar, date-picker,
+  // time-picker, rc pagination/picker) and is itself re-exported by the
+  // `antd/locale/*` entry. Lazy groups capture only matched modules, so left
+  // unmatched these land in an entry-set chunk that imports the ui-runtime chunk
+  // while ui-runtime imports it back. That cycle breaks rolldown's lazy init
+  // ("r is not a function") and every non-English locale silently falls back to
+  // English. en_US stays out: antd components import it statically as their
+  // default locale, so it belongs with the antd vendor graph.
+  const antdPartMatch = id.match(
+    /[\\/](?:antd|@rc-component[\\/][^\\/]+)[\\/](?:[^\\/]+[\\/])*locale[\\/]([A-Za-z]{2}_[A-Z]{2})\.js$/,
+  );
+  if (antdPartMatch && antdPartMatch[1] !== 'en_US') {
+    const locale = ANTD_LOCALE[antdPartMatch[1]];
+    if (locale) return `i18n-${locale}-ui-runtime`;
+  }
+
   const dayjsMatch = id.match(/dayjs\/locale\/([^/.]+)\.js/);
   if (dayjsMatch) {
     const locale = DAYJS_LOCALE[dayjsMatch[1]];
-    if (locale) return `i18n-${locale}`;
+    if (locale) return `i18n-${locale}-ui-runtime`;
   }
 
   if (
@@ -155,10 +230,42 @@ function sharedManualChunks(id: string): string | undefined {
   if (id.includes('lucide-react')) return 'vendor-icons';
 }
 
-const sharedChunkFileNames = (chunkInfo: { name: string }) => {
-  const { name } = chunkInfo;
+interface SharedChunkInfo {
+  moduleIds?: string[];
+  name: string;
+}
+
+const isOnDemandShikiModule = (moduleId: string) => {
+  const normalized = moduleId.replaceAll('\\', '/');
+
+  return (
+    normalized.includes('/node_modules/@shikijs/langs/') ||
+    normalized.includes('/node_modules/@shikijs/themes/') ||
+    normalized.includes('/node_modules/@shikijs/engine-oniguruma/dist/wasm') ||
+    normalized.includes('/node_modules/shiki/dist/wasm.mjs')
+  );
+};
+
+const isModelBankModule = (moduleId: string) =>
+  moduleId.replaceAll('\\', '/').includes('/packages/model-bank/src/');
+
+const isOnDemandModelBankCatalog = (moduleIds: string[]) =>
+  moduleIds.length > 0 &&
+  moduleIds.every(isModelBankModule) &&
+  moduleIds.some((moduleId) =>
+    moduleId.replaceAll('\\', '/').endsWith('/packages/model-bank/src/aiModels/index.ts'),
+  );
+
+const sharedChunkFileNames = (chunkInfo: SharedChunkInfo) => {
+  const { moduleIds = [], name } = chunkInfo;
+  if (name.startsWith('devtools-') || moduleIds.some(isDeferredDevtoolsSource))
+    return 'devtools/[name]-[hash].js';
   if (name.startsWith('i18n-')) return 'i18n/[name]-[hash].js';
   if (name.startsWith('vendor-')) return 'vendor/[name]-[hash].js';
+  if (chunkInfo.moduleIds && isOnDemandModelBankCatalog(chunkInfo.moduleIds))
+    return 'model-bank/[name]-[hash].js';
+  if (chunkInfo.moduleIds?.length && chunkInfo.moduleIds.every(isOnDemandShikiModule))
+    return 'shiki/[name]-[hash].js';
   return 'assets/[name]-[hash].js';
 };
 
@@ -169,8 +276,56 @@ const isI18nChunkFileName = (fileName: string) => {
   return normalized.startsWith('i18n/') || basename.startsWith('i18n-');
 };
 
+const isDevtoolsChunkFileName = (fileName: string) => {
+  const normalized = fileName.split('?')[0].replaceAll('\\', '/');
+  const basename = normalized.split('/').at(-1) ?? normalized;
+
+  return (
+    normalized.includes('/devtools/') ||
+    normalized.startsWith('devtools/') ||
+    basename.startsWith('devtools-')
+  );
+};
+
+/** Deferred assets must remain demand-loaded rather than entering the service-worker precache. */
+export const sharedPwaGlobIgnores = [
+  'devtools/**',
+  'i18n/**/*.js',
+  'model-bank/**/*.js',
+  'shiki/**/*.js',
+];
+
+/** Runtime caching for deferred assets excluded from the service-worker precache. */
+export const sharedPwaRuntimeCaching = [
+  {
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'on-demand-i18n',
+      expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 50 },
+    },
+    urlPattern: ({ url }: { url: URL }) => /\/i18n\/.*\.js$/i.test(url.pathname),
+  },
+  {
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'on-demand-shiki',
+      expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 150 },
+    },
+    urlPattern: ({ url }: { url: URL }) => /\/shiki\/.*\.js$/i.test(url.pathname),
+  },
+  {
+    handler: 'CacheFirst',
+    options: {
+      cacheName: 'on-demand-model-bank',
+      expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 5 },
+    },
+    urlPattern: ({ url }: { url: URL }) => /\/model-bank\/.*\.js$/i.test(url.pathname),
+  },
+] as const;
+
 export const sharedModulePreload = {
-  resolveDependencies: (_filename, deps) => deps.filter((dep) => !isI18nChunkFileName(dep)),
+  resolveDependencies: (_filename, deps) =>
+    deps.filter((dep) => !isI18nChunkFileName(dep) && !isDevtoolsChunkFileName(dep)),
 } satisfies ModulePreloadOptions;
 
 export const sharedRollupOutput = {
@@ -179,38 +334,190 @@ export const sharedRollupOutput = {
 };
 
 interface SharedRolldownOutputOptions {
+  // Multi-entry builds (the desktop renderer's main/overlay/popup) pass their
+  // entry modules so the first-screen catch-all is split per entry set instead
+  // of merging every entry's static graph into one chunk.
+  initialEntries?: Record<string, string>;
+  // Without initialEntries, multi-entry builds must opt out: a constant-name
+  // catch-all would merge every entry's static graph.
+  splitInitial?: boolean;
   strictExecutionOrder?: boolean;
 }
 
-export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => ({
-  chunkFileNames: sharedChunkFileNames,
-  strictExecutionOrder: options.strictExecutionOrder ?? true,
-  codeSplitting: {
-    groups: [
-      {
-        name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
+interface ModuleGraph {
+  getModuleInfo: (id: string) => { importedIds: readonly string[] } | null;
+}
+
+// Rolldown's entry-set chunking can park a small module a first-screen chunk
+// needs inside a heavy lazy chunk, which the entry then preloads whole
+// (rolldown/rolldown#10787). Naming every first-screen chunk, vendor groups
+// included, by the set of entries that statically reach its modules rules that
+// out, and an entry still loads only the chunks whose set contains it.
+export const createEntrySetLabeler = (entries: Record<string, string>) => {
+  let reach: [label: string, ids: Set<string>][] | undefined;
+
+  const collect = (ctx: ModuleGraph, entry: string) => {
+    if (!ctx.getModuleInfo(entry))
+      throw new Error(`initial entry ${entry} is not in the module graph`);
+    const ids = new Set<string>();
+    const stack = [entry];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
+      if (ids.has(id)) continue;
+      const info = ctx.getModuleInfo(id);
+      if (!info) continue;
+      ids.add(id);
+      stack.push(...info.importedIds);
+    }
+    return ids;
+  };
+
+  return (id: string, ctx: ModuleGraph) => {
+    reach ??= Object.entries(entries).map(([label, entry]) => [
+      label,
+      collect(ctx, entry.replaceAll('\\', '/')),
+    ]);
+    const labels = reach.filter(([, ids]) => ids.has(id)).map(([label]) => label);
+    return labels.length > 0 ? labels.join('+') : null;
+  };
+};
+
+// @lobehub/ui members on the first-screen path of dist/desktop, measured with
+// bundle-size-gate --type entry-graph. lobeUiImports splits the barrel into one
+// module per member; folding the eager ones back into one chunk keeps the heavy
+// members (Markdown, Mermaid, EmojiPicker, Highlighter, Image) on lazy routes.
+const UI_CORE_MEMBER_RE =
+  /^(?:Accordion|ActionIcon|Block|Collapse|ConfigProvider|Flex|FluentEmoji|Grid|Hotkey|Icon|Img|Modal|MotionProvider|Skeleton|Text|ThemeProvider|color|styles|utils|hooks\/use(?:IsClient|NativeButton|TextOverflow)|icons\/lucideExtra|base-ui\/(?:ActionIcon|Avatar|Button|Checkbox|ContextMenu|Modal|Popover|Switch|Text|Toast|Tooltip|controlSize|focusRing|zIndex))(?:\/|\.)/;
+
+const isUiCoreModule = (id: string) => {
+  const member = id.replaceAll('\\', '/').split('/node_modules/@lobehub/ui/es/')[1];
+
+  return Boolean(member && UI_CORE_MEMBER_RE.test(member));
+};
+
+interface Group {
+  name: string | ((id: string, ctx: ModuleGraph) => string | null);
+  priority: number;
+  test?: RegExp | ((id: string) => boolean);
+}
+
+// Groups apply to the entry's static graph only. Off the first screen, a
+// monolithic vendor chunk makes every route pay for members it never renders,
+// so lazy modules fall back to entry-set chunking. Named lazy chunks survive
+// only where the file name is a routing contract (i18n/, devtools/).
+const isNamedLazyChunk = (name: string) => name.startsWith('i18n-') || name.startsWith('devtools-');
+
+// Every module left over in the entry's static graph is needed for the first
+// paint anyway, so folding them into one chunk costs nothing on first load and
+// stops the entry-set splitter from fanning them out into dozens of small files.
+const splitByInitial = (
+  groups: Group[],
+  label?: (id: string, ctx: ModuleGraph) => string | null,
+) => {
+  // Rolldown's $initial tag skips re-export targets the first screen never
+  // uses, yet with strictExecutionOrder their barrel's init still calls them,
+  // so the chunks holding them get preloaded anyway. The labeler's static walk
+  // covers those modules, so entry-set mode selects by label instead of tag.
+  const initial = label ? {} : { tags: ['$initial' as const] };
+  const withEntrySet =
+    (base: Group['name']): Group['name'] =>
+    (id, ctx) => {
+      const name = typeof base === 'string' ? base : base(id, ctx);
+      const set = name && label!(id, ctx);
+      return set ? `${name}-${set}` : null;
+    };
+
+  return [
+    ...groups.map((g) => ({
+      ...g,
+      name: label ? withEntrySet(g.name) : g.name,
+      priority: g.priority + 10,
+      ...initial,
+    })),
+    {
+      name: (id: string) => {
+        const name = sharedManualChunks(id);
+        return name && isNamedLazyChunk(name) ? name : null;
       },
-    ],
-  },
-});
+      priority: 3,
+    },
+    {
+      name: label ? withEntrySet('initial') : 'app-initial',
+      priority: 0,
+      ...initial,
+    },
+  ];
+};
+
+// Recursive dependency capture ignores the $initial tag: a lazy group would
+// drag first-screen modules into its chunk and the entry would then preload it.
+// Groups capture only matched modules; dependencies fall back to automatic
+// entry-set chunking. Requires preserveEntrySignatures: 'allow-extension'.
+export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions = {}) => {
+  const groups: Group[] = [
+    // The canvas runtime's own modules carry page-level CSS (base.css styles
+    // body). App chunks also reuse modules the runtime pulls in, so without a
+    // chunk of its own that CSS would ride along and restyle the App's body.
+    {
+      name: 'canvas-runtime',
+      priority: 4,
+      test: /[\\/]packages[\\/]canvas-runtime[\\/]src[\\/]/,
+    },
+    {
+      name: (moduleId: string) => sharedManualChunks(moduleId) ?? null,
+      priority: 3,
+    },
+    {
+      name: 'vendor-antd',
+      priority: 2,
+      test: /[\\/]node_modules[\\/](?:antd|@ant-design|@rc-component)[\\/]/,
+    },
+    { name: 'vendor-ui-core', priority: 1, test: isUiCoreModule },
+  ];
+  const { initialEntries } = options;
+  const splitInitial = Boolean(initialEntries) || (options.splitInitial ?? true);
+  const label = initialEntries && createEntrySetLabeler(initialEntries);
+
+  return {
+    chunkFileNames: sharedChunkFileNames,
+    strictExecutionOrder: options.strictExecutionOrder ?? true,
+    codeSplitting: splitInitial
+      ? { groups: splitByInitial(groups, label), includeDependenciesRecursively: false }
+      : { groups },
+  };
+};
 
 type Platform = 'web' | 'mobile' | 'desktop' | 'auth';
 
 const isDev = process.env.NODE_ENV !== 'production';
-const enableRouteChunkPreload = process.env.LOBE_ROUTE_CHUNK_PRELOAD !== 'false';
 
 interface SharedRendererOptions {
   platform: Platform;
+  stylexOverlaySrcDirs?: string[];
   tsconfigPaths?: boolean;
 }
 
 export function sharedRendererPlugins(options: SharedRendererOptions) {
   return [
-    viteEmotionSpeedy(),
+    canvasRuntime(),
+    viteCompletionSounds(),
     viteMarkdownImport(),
     viteNodeModuleStub(),
     vitePlatformResolve(options.platform),
-    enableRouteChunkPreload && routeChunkPreload(),
+
+    // Editor.tsx takes the provider-only entry so the editor runtime stays off
+    // the first screen. In dev that entry is prebundled separately from
+    // @lobehub/editor/react, which the editors use, giving the app a second
+    // EditorContext; point the dev import back at the one bundle.
+    isDev &&
+      ({
+        enforce: 'pre',
+        name: 'lobe-dev-editor-provider',
+        resolveId(source, importer) {
+          if (source !== '@lobehub/editor/react/EditorProvider') return null;
+          return this.resolve('@lobehub/editor/react', importer, { skipSelf: true });
+        },
+      } satisfies Plugin),
 
     isDev && {
       name: 'lobe-dev-strip-manifest',
@@ -226,7 +533,9 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
         exclude: [/\.(css|json|html)$/],
         hotKeys: ['altKey', 'ctrlKey'],
       }),
+    stylexPlugin({ overlaySrcDirs: options.stylexOverlaySrcDirs }),
     react(),
+    ...(options.platform === 'desktop' ? [] : [...lobeIconImports(), ...lobeUiImports()]),
   ];
 }
 
@@ -251,17 +560,15 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
 }
 
 export const sharedOptimizeDeps = {
+  exclude: [...stylexTokenModules],
   include: [
     'react',
     'react-dom',
     'react-dom/client',
     'react-router',
     'react-router/dom',
-    'antd',
-    '@ant-design/icons',
     '@lobehub/ui',
     '@lobehub/ui > @emotion/react',
-    'antd-style',
     'zustand',
     'zustand/middleware',
     'swr',
@@ -292,6 +599,8 @@ export const sharedOptimizeDeps = {
   ],
 };
 
-export const __testing = {
-  sharedManualChunks,
-};
+// Workspace packages can resolve @lobehub/editor through different peer-dependency
+// snapshots. They must still share one LexicalComposerContext at runtime.
+export const sharedRendererDedupe = ['@lobehub/editor', 'react', 'react-dom'];
+
+export const __testing = { isUiCoreModule, sharedChunkFileNames, sharedManualChunks };

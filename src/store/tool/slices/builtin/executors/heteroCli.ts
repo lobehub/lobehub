@@ -9,7 +9,8 @@ import {
 
 /**
  * Hook-only executor for a heterogeneous CLI agent's tool identifier
- * (`claude-code` / `codex` — set by the adapters in
+ * (`amp` / `claude-code` / `codebuddy` / `codex` / `cursor` / `droid` / `grok-build` /
+ * `kimi-code` / `opencode` / `pi` / `qoder` / `trae` — set by the adapters in
  * `packages/heterogeneous-agents/src/adapters/*`). These agents run their OWN
  * tools, so this executor is NEVER invoked: `apiEnum` is empty → `hasApi()` is
  * always false → the client-tool dispatch (`hasExecutor`) never routes to
@@ -52,7 +53,7 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
   protected readonly apiEnum = EMPTY_API_ENUM;
 
   /**
-   * @param identifier   The CLI adapter's tool identifier (`claude-code` / `codex`).
+   * @param identifier The CLI adapter's tool identifier.
    * @param shellApiNames The adapter's shell / run-command tool api name(s). Side
    *   effects are constrained to THIS tool first, then handled uniformly — we don't
    *   sniff every tool call's params.
@@ -95,9 +96,24 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
   };
 }
 
-// CC's shell tool is `Bash`; Codex's is `command_execution`.
+// AMP's shell tool is `shell_command`; CC, CodeBuddy, and Qoder use `Bash`; Codex's is
+// `command_execution`; Cursor's is `shellToolCall`; Grok Build uses ACP's stable `execute`
+// kind; Kimi Code uses `Shell`; OpenCode and Pi both use `bash`.
+export const ampExecutor = new HeteroCliExecutor('amp', new Set(['shell_command']));
 export const claudeCodeExecutor = new HeteroCliExecutor('claude-code', new Set(['Bash']), {
   enter: 'EnterWorktree',
   exit: 'ExitWorktree',
 });
+export const codeBuddyExecutor = new HeteroCliExecutor('codebuddy', new Set(['Bash']));
 export const codexExecutor = new HeteroCliExecutor('codex', new Set(['command_execution']));
+export const cursorExecutor = new HeteroCliExecutor('cursor', new Set(['shellToolCall']));
+// Droid's ACP shell tool name is not a documented protocol guarantee. Keep this
+// hook inert rather than guessing and recording unrelated tool calls.
+export const droidExecutor = new HeteroCliExecutor('droid', new Set());
+export const devinExecutor = new HeteroCliExecutor('devin', new Set(['exec']));
+export const grokBuildExecutor = new HeteroCliExecutor('grok-build', new Set(['execute']));
+export const kimiCodeExecutor = new HeteroCliExecutor('kimi-code', new Set(['Shell']));
+export const openCodeExecutor = new HeteroCliExecutor('opencode', new Set(['bash']));
+export const piExecutor = new HeteroCliExecutor('pi', new Set(['bash']));
+export const qoderExecutor = new HeteroCliExecutor('qoder', new Set(['Bash']));
+export const traeExecutor = new HeteroCliExecutor('trae', new Set());

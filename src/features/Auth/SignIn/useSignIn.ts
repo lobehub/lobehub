@@ -1,4 +1,5 @@
-import { Form } from 'antd';
+import { toast } from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -6,12 +7,16 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
-import { message } from '@/components/AntdStaticMethods';
-import { useAuthServerConfigStore } from '@/features/AuthShell';
+import { useAuthAgreement } from '@/features/AuthShell/AuthAgreement';
+import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
-import { buildOnboardingRedirectUrl, sanitizeRedirectPath } from '@/utils/onboardingRedirect';
+import {
+  buildOnboardingRedirectUrl,
+  sanitizeRedirectPath,
+  toAbsoluteAuthCallbackUrl,
+} from '@/utils/onboardingRedirect';
 
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
@@ -40,6 +45,7 @@ export const useSignIn = () => {
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get('reason') === 'sessionExpired';
   const enableMagicLink = useAuthServerConfigStore((s) => s.serverConfig.enableMagicLink || false);
   const disableEmailPassword = useAuthServerConfigStore(
     (s) => s.serverConfig.disableEmailPassword || false,
@@ -47,7 +53,19 @@ export const useSignIn = () => {
   const enableBusinessFeatures = useAuthServerConfigStore(
     (s) => s.serverConfig.enableBusinessFeatures || false,
   );
-  const [form] = Form.useForm<SignInFormValues>();
+  const { agreementChecked, continueWithAgreement, setAgreementChecked } = useAuthAgreement();
+  const form = useForm<SignInFormValues>({
+    initialValues: { email: '', password: '' },
+    onSubmit: (values) => {
+      if (step === 'password') {
+        void handleSignIn(values);
+        return;
+      }
+      continueWithAgreement(() => {
+        void handleCheckUser(values);
+      });
+    },
+  });
   const [loading, setLoading] = useState(false);
   // Locks the email-dispatch actions (magic link / password reset / resend) so a
   // slow network can't be double-clicked into multiple emails.
@@ -57,20 +75,24 @@ export const useSignIn = () => {
   const [email, setEmail] = useState('');
   const [sentInfo, setSentInfo] = useState<SentEmailInfo | null>(null);
   const [isSocialOnly, setIsSocialOnly] = useState(false);
-  const [lastAuthProvider] = useState(() => {
-    try {
-      return localStorage.getItem(LAST_AUTH_PROVIDER_KEY);
-    } catch {
-      return null;
-    }
-  });
+  // Read after mount, not during render: this page is prerendered, and a stored
+  // provider would make the first client render disagree with the document.
+  const [lastAuthProvider, setLastAuthProvider] = useState<string | null>(null);
   const serverConfigInit = useAuthServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useAuthServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
   const { getAdditionalData, preSocialSigninCheck, ssoProviders } = useBusinessSignin();
 
   useEffect(() => {
+    try {
+      setLastAuthProvider(localStorage.getItem(LAST_AUTH_PROVIDER_KEY));
+    } catch {
+      // Private mode and blocked storage both just mean "no last provider".
+    }
+  }, []);
+
+  useEffect(() => {
     const emailParam = searchParams.get('email');
-    if (emailParam) form.setFieldValue('email', emailParam);
+    if (emailParam) form.setValue('email', emailParam);
   }, [searchParams, form]);
 
   const handleSendMagicLink = async (targetEmail?: string): Promise<boolean> => {
@@ -79,21 +101,24 @@ export const useSignIn = () => {
       const emailValue =
         targetEmail ||
         (await form
-          .validateFields(['email'])
-          .then((v) => v.email as string)
-          .catch(() => null));
+          .validate(['email'])
+          .then(({ valid }) => (valid ? form.getValue('email') : null)));
       if (!emailValue) return false;
 
       setSending(true);
       const callbackUrl = searchParams.get('callbackUrl') || '/';
+      const authOrigin = window.location.origin;
       const { error } = await signIn.magicLink({
-        callbackURL: callbackUrl,
+        callbackURL: toAbsoluteAuthCallbackUrl(callbackUrl, authOrigin),
         email: emailValue,
         // First-time magic-link users are signups — land them on onboarding first
-        newUserCallbackURL: buildOnboardingRedirectUrl(callbackUrl),
+        newUserCallbackURL: toAbsoluteAuthCallbackUrl(
+          buildOnboardingRedirectUrl(callbackUrl),
+          authOrigin,
+        ),
       });
       if (error) {
-        message.error(error.message || t('betterAuth.signin.magicLinkError'));
+        toast.error(error.message || t('betterAuth.signin.magicLinkError'));
         return false;
       }
       // Success is a forward step, not a fleeting toast: land on a persistent
@@ -102,10 +127,8 @@ export const useSignIn = () => {
       setStep('emailSent');
       return true;
     } catch (error) {
-      if (!(error as any)?.errorFields) {
-        console.error('Magic link error:', error);
-        message.error(t('betterAuth.signin.magicLinkError'));
-      }
+      console.error('Magic link error:', error);
+      toast.error(t('betterAuth.signin.magicLinkError'));
       return false;
     } finally {
       setSending(false);
@@ -123,7 +146,7 @@ export const useSignIn = () => {
       return { email: trimmedIdentifier.toLowerCase(), identifierType: 'email' };
 
     if (!USERNAME_REGEX.test(trimmedIdentifier)) {
-      message.error(t('betterAuth.errors.emailInvalid'));
+      toast.error(t('betterAuth.errors.emailInvalid'));
       return null;
     }
 
@@ -135,13 +158,13 @@ export const useSignIn = () => {
       });
       const data: ResolveUsernameResponseData = await response.json();
       if (!response.ok || !data.exists || !data.email) {
-        message.error(t('betterAuth.errors.usernameNotRegistered'));
+        toast.error(t('betterAuth.errors.usernameNotRegistered'));
         return null;
       }
       return { email: data.email, identifierType: 'username' };
     } catch (error) {
       console.error('Error resolving username:', error);
-      message.error(t('betterAuth.signin.error'));
+      toast.error(t('betterAuth.signin.error'));
       return null;
     }
   };
@@ -164,7 +187,7 @@ export const useSignIn = () => {
 
       if (!data.exists) {
         if (identifierType === 'username') {
-          message.error(t('betterAuth.errors.usernameNotRegistered'));
+          toast.error(t('betterAuth.errors.usernameNotRegistered'));
           return;
         }
         const callbackUrl = searchParams.get('callbackUrl') || '/';
@@ -194,7 +217,7 @@ export const useSignIn = () => {
       setIsSocialOnly(true);
     } catch (error) {
       console.error('Error checking user:', error);
-      message.error(t('betterAuth.signin.error'));
+      toast.error(t('betterAuth.signin.error'));
     } finally {
       setLoading(false);
     }
@@ -207,7 +230,11 @@ export const useSignIn = () => {
     try {
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       const result = await signIn.email(
-        { callbackURL: callbackUrl, email, password: values.password },
+        {
+          callbackURL: toAbsoluteAuthCallbackUrl(callbackUrl, window.location.origin),
+          email,
+          password: values.password,
+        },
         {
           onError: (ctx) => {
             console.error('Sign in error:', ctx.error);
@@ -228,16 +255,11 @@ export const useSignIn = () => {
         // Wrong password is the most common sign-in failure. Keep the error
         // pinned inline on the field (persistent, with retry context) rather
         // than a toast that vanishes in 3s (ux Read §1.1 / Same-Page Error).
-        form.setFields([
-          {
-            errors: [result.error.message || t('betterAuth.signin.error')],
-            name: 'password',
-          },
-        ]);
+        form.setErrors({ password: result.error.message || t('betterAuth.signin.error') });
       }
     } catch (error) {
       console.error('Sign in error:', error);
-      message.error(t('betterAuth.signin.error'));
+      toast.error(t('betterAuth.signin.error'));
     } finally {
       setLoading(false);
     }
@@ -265,19 +287,24 @@ export const useSignIn = () => {
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
       // First-time OAuth users are signups — land them on onboarding first
-      const newUserCallbackURL = buildOnboardingRedirectUrl(callbackUrl);
+      const authOrigin = window.location.origin;
+      const callbackURL = toAbsoluteAuthCallbackUrl(callbackUrl, authOrigin);
+      const newUserCallbackURL = toAbsoluteAuthCallbackUrl(
+        buildOnboardingRedirectUrl(callbackUrl),
+        authOrigin,
+      );
       const additionalData = await getAdditionalData();
       const signInWithAdditionalData = async () =>
         isBuiltinProvider(normalizedProvider)
           ? await signIn.social({
               additionalData,
-              callbackURL: callbackUrl,
+              callbackURL,
               newUserCallbackURL,
               provider: normalizedProvider,
             })
           : await signIn.oauth2({
               additionalData,
-              callbackURL: callbackUrl,
+              callbackURL,
               newUserCallbackURL,
               providerId: normalizedProvider,
             });
@@ -287,7 +314,7 @@ export const useSignIn = () => {
       if (result && 'error' in result && result.error) throw result.error;
     } catch (error) {
       console.error(`${normalizedProvider} sign in error:`, error);
-      message.error(t('betterAuth.signin.socialError'));
+      toast.error(t('betterAuth.signin.socialError'));
     } finally {
       setSocialLoading(null);
     }
@@ -300,11 +327,11 @@ export const useSignIn = () => {
     // Drop the previous account's password + any inline error. The form
     // instance is shared across steps and defaults to preserve, so without this
     // the next email's password step remounts pre-filled with the stale value.
-    form.resetFields(['password']);
+    form.reset({ ...form.getValues(), password: '' });
   };
 
   const handleGoToSignup = () => {
-    const currentEmail = form.getFieldValue('email');
+    const currentEmail = form.getValue('email');
     const callbackUrl = searchParams.get('callbackUrl') || '/';
     const params = new URLSearchParams();
     if (currentEmail) params.set('email', currentEmail);
@@ -324,13 +351,19 @@ export const useSignIn = () => {
     if (sending) return false;
     setSending(true);
     try {
-      await requestPasswordReset({
+      // The better-auth client resolves with `{ data, error }` instead of
+      // throwing, so a failed send would otherwise land on the "email sent" screen.
+      const { error } = await requestPasswordReset({
         email: targetEmail,
-        redirectTo: `/reset-password?email=${encodeURIComponent(targetEmail)}`,
+        redirectTo: toAbsoluteAuthCallbackUrl(
+          `/reset-password?email=${encodeURIComponent(targetEmail)}`,
+          window.location.origin,
+        ),
       });
+      if (error) throw error;
       return true;
     } catch {
-      message.error(t('betterAuth.signin.forgotPasswordError'));
+      toast.error(t('betterAuth.signin.forgotPasswordError'));
       return false;
     } finally {
       setSending(false);
@@ -351,7 +384,7 @@ export const useSignIn = () => {
       sentInfo.type === 'magicLink'
         ? await handleSendMagicLink(sentInfo.email)
         : await dispatchPasswordReset(sentInfo.email);
-    if (ok) message.success(t('betterAuth.signin.emailSent.resent'));
+    if (ok) toast.success(t('betterAuth.signin.emailSent.resent'));
   };
 
   // "Use a different email" — always drop back to the email entry so the label
@@ -371,6 +404,8 @@ export const useSignIn = () => {
     : resolvedProviders;
 
   return {
+    agreementChecked,
+    continueWithAgreement,
     disableEmailPassword,
     email,
     form,
@@ -387,8 +422,10 @@ export const useSignIn = () => {
     loading,
     oAuthSSOProviders: sortedProviders,
     sending,
+    sessionExpired,
     sentInfo,
     serverConfigInit: enableBusinessFeatures ? true : serverConfigInit,
+    setAgreementChecked,
     socialLoading,
     step,
   };

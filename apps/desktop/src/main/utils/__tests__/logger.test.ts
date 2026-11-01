@@ -6,6 +6,10 @@ import { getDesktopEnv } from '@/env';
 
 import { createLogger } from '../logger';
 
+// This suite exercises the real logger, so opt out of the global stub in
+// `__mocks__/setup.ts`.
+vi.unmock('@/utils/logger');
+
 vi.mock('debug');
 
 vi.mock('electron-log', () => ({
@@ -20,6 +24,9 @@ vi.mock('electron-log', () => ({
     warn: vi.fn(),
   },
 }));
+
+const mockApp = vi.hoisted(() => ({ isPackaged: false }));
+vi.mock('electron', () => ({ app: mockApp }));
 
 vi.mock('@/env', () => ({
   getDesktopEnv: vi.fn().mockReturnValue({
@@ -115,7 +122,9 @@ describe('logger', () => {
       const logger = createLogger('test:error');
       logger.error('error message', { error: 'details' });
 
-      expect(electronLog.error).toHaveBeenCalledWith('error message', { error: 'details' });
+      expect(electronLog.error).toHaveBeenCalledWith('[test:error]', 'error message', {
+        error: 'details',
+      });
       expect(mockDebugLogger).not.toHaveBeenCalled();
     });
 
@@ -137,8 +146,13 @@ describe('logger', () => {
 
       consoleErrorSpy.mockRestore();
     });
+  });
 
-    it('should default to console.error when NODE_ENV is not set', () => {
+  describe('packaged build detection', () => {
+    // The released app carries no NODE_ENV, so gating on it dropped every log from
+    // the production log file. `app.isPackaged` is what must gate persistence.
+    it('should persist error/info/warn in a packaged build with no NODE_ENV', () => {
+      mockApp.isPackaged = true;
       mockGetDesktopEnv.mockReturnValue({
         NODE_ENV: undefined,
         DEBUG_VERBOSE: false,
@@ -147,8 +161,24 @@ describe('logger', () => {
         MCP_TOOL_TIMEOUT: 60000,
         OFFICIAL_CLOUD_SERVER: 'https://lobechat.com',
       });
+
+      const logger = createLogger('test:packaged');
+      logger.error('error message');
+      logger.info('info message');
+      logger.warn('warn message');
+
+      expect(electronLog.error).toHaveBeenCalledWith('[test:packaged]', 'error message');
+      expect(electronLog.info).toHaveBeenCalledWith('[test:packaged]', 'info message');
+      expect(electronLog.warn).toHaveBeenCalledWith('[test:packaged]', 'warn message');
+
+      mockApp.isPackaged = false;
+    });
+
+    // The unpackaged case that used to be silent: NODE_ENV unset (a dev run) keeps
+    // the console, and nothing is written to the log file.
+    it('should use console.error and skip the log file when not packaged', () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const logger = createLogger('test:error');
+      const logger = createLogger('test:unpackaged');
       logger.error('error message');
 
       expect(consoleErrorSpy).toHaveBeenCalledWith('error message');
@@ -247,7 +277,9 @@ describe('logger', () => {
       const logger = createLogger('test:warn');
       logger.warn('warn message', { warning: 'details' });
 
-      expect(electronLog.warn).toHaveBeenCalledWith('warn message', { warning: 'details' });
+      expect(electronLog.warn).toHaveBeenCalledWith('[test:warn]', 'warn message', {
+        warning: 'details',
+      });
       expect(mockDebugLogger).toHaveBeenCalledWith('WARN: warn message', { warning: 'details' });
     });
 
@@ -298,16 +330,15 @@ describe('logger', () => {
 
       // debug method
       expect(mockDebugLogger).toHaveBeenCalledWith('message');
-      // error method uses console.error (not debug logger) in non-production
+      // error method uses console.error (not the debug logger) when not packaged
       expect(consoleErrorSpy).toHaveBeenCalledWith('message');
+      consoleErrorSpy.mockRestore();
       // info method
       expect(mockDebugLogger).toHaveBeenCalledWith('INFO: message');
       // verbose method uses electronLog.verbose (not debug logger)
       expect(electronLog.verbose).toHaveBeenCalledWith('message');
       // warn method
       expect(mockDebugLogger).toHaveBeenCalledWith('WARN: message');
-
-      consoleErrorSpy.mockRestore();
     });
 
     it('should format messages consistently across different log levels', () => {

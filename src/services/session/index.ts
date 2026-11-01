@@ -1,12 +1,7 @@
-import { type PartialDeep } from 'type-fest';
-
 import { lambdaClient } from '@/libs/trpc/client';
-import { type LobeAgentChatConfig, type LobeAgentConfig } from '@/types/agent';
-import { type MetaData } from '@/types/meta';
+import { type LobeAgentConfig } from '@/types/agent';
 import {
-  type ChatSessionList,
   type LobeAgentSession,
-  type LobeSessions,
   type LobeSessionType,
   type SessionGroupItem,
   type UpdateSessionParams,
@@ -14,14 +9,9 @@ import {
 
 /**
  * @deprecated Session service is legacy. Use agentService for agent CRUD operations.
- * Mobile still uses this, but should migrate to agentService.
+ * Retains session-shell compatibility and independent session-group operations.
  */
 export class SessionService {
-  hasSessions = async (): Promise<boolean> => {
-    const result = await this.countSessions();
-    return result === 0;
-  };
-
   /** @deprecated Use agentService.createAgent instead */
   createSession = async (
     type: LobeSessionType,
@@ -33,22 +23,6 @@ export class SessionService {
       session: { ...session, groupId: group },
       type,
     });
-  };
-
-  cloneSession = (id: string, newTitle: string): Promise<string | undefined> => {
-    return lambdaClient.session.cloneSession.mutate({ id, newTitle });
-  };
-
-  getGroupedSessions = (): Promise<ChatSessionList> => {
-    return lambdaClient.session.getGroupedSessions.query();
-  };
-
-  countSessions = async (params?: {
-    endDate?: string;
-    range?: [string, string];
-    startDate?: string;
-  }): Promise<number> => {
-    return lambdaClient.session.countSessions.query(params);
   };
 
   updateSession = (id: string, data: Partial<UpdateSessionParams>) => {
@@ -63,40 +37,6 @@ export class SessionService {
   getSessionConfig = async (id: string): Promise<LobeAgentConfig> => {
     // @ts-ignore
     return lambdaClient.agent.getAgentConfig.query({ sessionId: id });
-  };
-
-  updateSessionConfig = (
-    id: string,
-    config: PartialDeep<LobeAgentConfig>,
-    signal?: AbortSignal,
-  ) => {
-    return lambdaClient.session.updateSessionConfig.mutate(
-      { id, value: config },
-      {
-        context: { showNotification: false },
-        signal,
-      },
-    );
-  };
-
-  updateSessionMeta = (id: string, meta: Partial<MetaData>, signal?: AbortSignal) => {
-    return lambdaClient.session.updateSessionConfig.mutate({ id, value: meta }, { signal });
-  };
-
-  updateSessionChatConfig = (
-    id: string,
-    value: Partial<LobeAgentChatConfig>,
-    signal?: AbortSignal,
-  ) => {
-    return lambdaClient.session.updateSessionChatConfig.mutate({ id, value }, { signal });
-  };
-
-  searchSessions = (keywords: string): Promise<LobeSessions> => {
-    return lambdaClient.session.searchSessions.query({ keywords });
-  };
-
-  removeSession = (id: string) => {
-    return lambdaClient.session.removeSession.mutate({ id });
   };
 
   // ************************************** //
@@ -115,7 +55,8 @@ export class SessionService {
     return lambdaClient.sessionGroup.removeSessionGroup.mutate({ id, removeChildren });
   };
 
-  updateSessionGroup = (id: string, value: Partial<SessionGroupItem>) => {
+  /** Rename / reorder only — scope fields are rejected server-side. */
+  updateSessionGroup = (id: string, value: Partial<Pick<SessionGroupItem, 'name' | 'sort'>>) => {
     return lambdaClient.sessionGroup.updateSessionGroup.mutate({ id, value });
   };
 

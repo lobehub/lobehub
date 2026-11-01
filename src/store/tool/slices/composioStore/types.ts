@@ -15,11 +15,15 @@ export interface ComposioTool {
 }
 
 export interface ComposioServer {
+  /** Bind this connection to an agent (Agent-exclusive connection). */
+  agentId?: string;
   appSlug: string;
   authConfigId: string;
   connectedAccountId: string;
   createdAt: number;
   errorMessage?: string;
+  /** Whether the active Gmail account granted a scope that permits reading messages. */
+  gmailReadPermission?: boolean;
   icon?: string;
   identifier: string;
   label: string;
@@ -29,6 +33,8 @@ export interface ComposioServer {
 }
 
 export interface CreateComposioServerParams {
+  /** Bind this connection to an agent (Agent-exclusive connection). */
+  agentId?: string;
   appSlug: string;
   identifier: string;
   label: string;

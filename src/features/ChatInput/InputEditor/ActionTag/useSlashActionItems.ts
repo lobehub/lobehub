@@ -5,25 +5,27 @@ import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import Fuse from 'fuse.js';
 import { $getSelection, $isRangeSelection } from 'lexical';
-import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
+import { ArchiveIcon, MessageSquarePlusIcon, TargetIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
-import { agentDocumentSkillsSelectors } from '@/store/tool/selectors';
+import { agentDocumentSkillsSelectors, projectSkillsSelectors } from '@/store/tool/selectors';
 import type { AgentDocumentSkillItem } from '@/store/tool/slices/agentDocumentSkills/initialState';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useTopicId } from '../../hooks/useTopicId';
 import { useChatInputStore } from '../../store';
 import { INSERT_ACTION_TAG_COMMAND, type InsertActionTagPayload } from './command';
-import { type ActionTagData, BUILTIN_COMMANDS } from './types';
+import { insertGoalTag } from './goalTag';
+import { type ActionTagData, BUILTIN_COMMANDS, GOAL_COMMAND_TYPE } from './types';
 import { useInstalledSkillsAndTools } from './useInstalledSkillsAndTools';
 
 type SlashItem = NonNullable<SlashOptions['items'] extends (infer U)[] ? U : never>;
@@ -54,7 +56,9 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // Unified cwd: topic > agent's per-device choice > device default > home.
   // This is what makes project skills load even when only a device default is
   // set (and for local-device runs), not just an explicit agent/topic pick.
-  const workingDirectory = useEffectiveWorkingDirectory(agentId);
+  // Scoped to this composer's topic (see `useTopicId`), not the global one.
+  const topicId = useTopicId();
+  const workingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
 
   // Device-bound (remote) runs scan filesystem skills on that device over the
   // `device.listProjectSkills` RPC; the local desktop reads over Electron IPC.
@@ -63,22 +67,19 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // effective target matters because a hetero agent saved as desktop "This
   // device" (`local` + boundDeviceId) coerces to `device` when opened on web —
   // reading the raw stored target would miss that and leave the menu empty even
-  // though the sidebar lists the skills.
-  const agencyConfig = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
-  );
+  // though the sidebar lists the skills. The config is the same effective one
+  // the working directory above resolved against (member override + this
+  // topic's device binding), so the path is read on the machine it lives on.
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
   const isHetero = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
   );
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
-  const isWorkspaceAgent = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
-  );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
     isHetero,
-    workspaceScoped: isWorkspaceAgent,
+    workspaceScoped,
   });
   const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
   const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
@@ -87,17 +88,19 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // makes filesystem skills reachable even when this client isn't the desktop app
   // (previously gated on `isDesktop` alone, so remote/web runs got nothing).
   const projectSkillsEnabled = (isDesktop || !!remoteDeviceId) && !!workingDirectory;
-  const { data: projectSkillsData } = useFetchProjectSkills(
-    projectSkillsEnabled ? workingDirectory : undefined,
-    remoteDeviceId,
+  const projectSkillsDirectory = projectSkillsEnabled ? workingDirectory : undefined;
+  useToolStore((s) => s.useFetchProjectSkills)(projectSkillsDirectory, remoteDeviceId);
+  const projectSkills = useToolStore(
+    (s) =>
+      projectSkillsSelectors.getProjectSkills(projectSkillsDirectory, remoteDeviceId)(s)?.skills,
   );
-  const projectSkills = projectSkillsData?.skills;
 
   // Agent-document skill bundles (the "Agent skills" group in the working
-  // sidebar). Share the SWR key with the sidebar fetch so we don't double-fetch.
+  // sidebar). The registry is a per-agent replica, so a switch paints the
+  // cached bundles at once.
   useToolStore((s) => s.useFetchAgentDocumentSkills)(agentId);
   const agentDocumentSkills = useToolStore(
-    agentDocumentSkillsSelectors.getAgentDocumentSkills,
+    agentDocumentSkillsSelectors.getAgentDocumentSkills(agentId),
     isEqual,
   );
 
@@ -232,6 +235,19 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
       // Built-in commands — line-start only
       if (isAtLineStart) {
+        allItems.push({
+          icon: TargetIcon,
+          key: GOAL_COMMAND_TYPE,
+          label: t('slash.goal' as any),
+          metadata: {
+            category: 'command',
+            description: t('slash.goal.desc' as any, { defaultValue: '' }),
+            type: GOAL_COMMAND_TYPE,
+          },
+          // Unlike the other commands this one is not inserted at the caret —
+          // the chip has to lead the message. See `insertGoalTag`.
+          onSelect: (editor: IEditor) => insertGoalTag(editor, t('slash.goal' as any) as string),
+        } as SlashItem);
         for (const action of BUILTIN_COMMANDS) {
           if (action.type === 'newTopic' && !activeTopicId) continue;
           allItems.push(makeCommandItem(action) as SlashItem);

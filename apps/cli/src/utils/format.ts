@@ -15,6 +15,35 @@ export function timeAgo(date: Date | string): string {
   return `${seconds}s ago`;
 }
 
+/** Absolute local time (`2026-10-15 14:03`) for history listings, where "3d ago" loses the day. */
+export function formatTimestamp(date: Date | string): string {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return '-';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}`;
+}
+
+/**
+ * Counterpart to `timeAgo` for deadlines. `timeAgo` only formats the past, so
+ * feeding it a future timestamp (an invitation expiry, a lease) renders a
+ * negative "-604800s ago".
+ */
+export function timeUntil(date: Date | string): string {
+  const diff = new Date(date).getTime() - Date.now();
+  if (Number.isNaN(diff)) return '-';
+  if (diff <= 0) return 'expired';
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `in ${days}d`;
+  if (hours > 0) return `in ${hours}h`;
+  if (minutes > 0) return `in ${minutes}m`;
+  return `in ${seconds}s`;
+}
+
 export function truncate(str: string, maxWidth: number): string {
   let width = 0;
   let i = 0;
@@ -44,7 +73,11 @@ export function truncate(str: string, maxWidth: number): string {
   return str;
 }
 
-export function printTable(rows: string[][], header: string[]) {
+/** A line break inside a cell (multi-line topic titles) would split its table row. */
+const singleLine = (cell: string) => cell.replaceAll(/\s*[\r\n]\s*/g, ' ');
+
+export function printTable(rawRows: string[][], header: string[]) {
+  const rows = rawRows.map((row) => row.map((cell) => singleLine(cell || '')));
   const allRows = [header, ...rows];
   const colWidths = header.map((_, i) => Math.max(...allRows.map((r) => displayWidth(r[i] || ''))));
 
@@ -239,8 +272,8 @@ export function pickFields(obj: Record<string, any>, fields: string[]): Record<s
   return result;
 }
 
-export function outputJson(data: unknown, fields?: string) {
-  if (fields) {
+export function outputJson(data: unknown, fields?: boolean | string) {
+  if (typeof fields === 'string' && fields.trim()) {
     const fieldList = fields.split(',').map((f) => f.trim());
     if (Array.isArray(data)) {
       console.log(

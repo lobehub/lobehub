@@ -1,9 +1,15 @@
 'use client';
 
-import { Flexbox, Input, Text } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { Checkbox, Table } from 'antd';
-import { cssVar } from 'antd-style';
+import {
+  Checkbox,
+  cssVar,
+  Flexbox,
+  Input,
+  Select,
+  Table,
+  type TableColumn,
+  Text,
+} from '@lobehub/ui';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,13 +41,7 @@ const CATEGORY_CANDIDATES = new Set(['category', 'topic', 'type', 'subject', 'cl
 const CHOICES_CANDIDATES = new Set(['choices', 'options', 'alternatives', 'candidates']);
 
 type MappingTarget =
-  | 'choices'
-  | 'category'
-  | 'expected'
-  | 'ignore'
-  | 'input'
-  | 'metadata'
-  | 'sortOrder';
+  'choices' | 'category' | 'expected' | 'ignore' | 'input' | 'metadata' | 'sortOrder';
 
 export interface FieldMappingValue {
   category?: string;
@@ -198,7 +198,7 @@ const MappingStep = memo<MappingStepProps>(
       onMappingChange(newMapping);
     };
 
-    const columns = useMemo(
+    const columns = useMemo<TableColumn<Record<string, any>>[]>(
       () =>
         visibleHeaders.map((h) => {
           const role = mapping[h];
@@ -287,7 +287,7 @@ const MappingStep = memo<MappingStepProps>(
               </Flexbox>
             )}
             {hasIgnored && (
-              <Checkbox checked={hideSkipped} onChange={(e) => setHideSkipped(e.target.checked)}>
+              <Checkbox checked={hideSkipped} onChange={setHideSkipped}>
                 <Text fontSize={12} type="secondary">
                   {t('dataset.import.hideSkipped')}
                 </Text>
@@ -298,13 +298,13 @@ const MappingStep = memo<MappingStepProps>(
 
         {/* Data preview table */}
         <Table
-          bordered
           columns={columns}
           dataSource={preview.map((row, i) => ({ ...row, _key: i }))}
           pagination={false}
           rowKey="_key"
           scroll={{ x: scrollX, y: 'calc(95vh - 280px)' }}
           size="small"
+          variant="outlined"
         />
       </Flexbox>
     );

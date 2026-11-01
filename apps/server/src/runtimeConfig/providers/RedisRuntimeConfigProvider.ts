@@ -1,7 +1,7 @@
 import debug from 'debug';
 
 import { getRedisConfig } from '@/envs/redis';
-import { initializeRedis } from '@/libs/redis';
+import { initializeRedis } from '@/server/modules/Redis';
 
 import type {
   RuntimeConfigDomain,
@@ -142,7 +142,9 @@ export class RedisRuntimeConfigProvider<T> implements RuntimeConfigProvider<T> {
       const raw = await redis.get(key);
 
       if (!raw) {
-        this.setCacheRecord(null, selector);
+        if (this.domain.cacheNullSnapshots !== false) {
+          this.setCacheRecord(null, selector);
+        }
         return null;
       }
 

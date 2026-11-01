@@ -35,9 +35,10 @@ describe('GenerationTopic ServerService', () => {
     expect(lambdaClient.generationTopic.createTopic.mutate).toBeCalledWith(undefined);
   });
 
-  it('createTopic should pass type and visibility to lambdaClient', async () => {
-    await service.createTopic('image', 'public');
+  it('createTopic should pass type, visibility, and title to lambdaClient', async () => {
+    await service.createTopic('image', 'public', 'A mountain lake at sunrise');
     expect(lambdaClient.generationTopic.createTopic.mutate).toBeCalledWith({
+      title: 'A mountain lake at sunrise',
       type: 'image',
       visibility: 'public',
     });
@@ -47,7 +48,6 @@ describe('GenerationTopic ServerService', () => {
     const id = 'test-topic-id';
     const data: UpdateTopicValue = {
       title: 'Updated Topic',
-      coverUrl: 'https://example.com/cover.jpg',
     };
 
     await service.updateTopic(id, data);

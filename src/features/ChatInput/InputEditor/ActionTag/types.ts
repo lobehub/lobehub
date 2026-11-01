@@ -13,8 +13,24 @@
  */
 export type ActionTagCategory = 'command' | 'skill' | 'tool' | 'projectSkill' | 'agentSkill';
 
-// Built-in commands: client-side intercepted, never sent to AI
-export type CommandType = 'compact' | 'newTopic';
+// Built-in commands: client-side intercepted, never sent to AI.
+// `goal` is the exception — it has no client handler; it serializes back to the
+// literal `/goal ` prefix the runtime keys off (see `isGoalPrompt`), and exists
+// as a tag so the marker is structured in `editorData` instead of being a
+// hidden send-time string.
+export type CommandType = 'compact' | 'newTopic' | 'goal';
+
+/**
+ * The action-tag type carrying the "this message opens a goal" marker.
+ *
+ * It lives here, in the leaf module of this folder, rather than next to
+ * `insertGoalTag`: the chip renderer, the node, the markdown writer and the
+ * slash menu all need it, and importing it from `goalTag` closed the cycle
+ * `ActionMention → goalTag → ActionTagNode → ActionMention`, which crashed the
+ * SPA at boot with a TDZ `Cannot access 'GOAL_COMMAND_TYPE' before
+ * initialization`.
+ */
+export const GOAL_COMMAND_TYPE = 'goal';
 
 // Skills use dynamic identifiers from agent config (plugin/tool identifiers)
 export type SkillType = string & {};

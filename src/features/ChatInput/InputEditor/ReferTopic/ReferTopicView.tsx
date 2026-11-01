@@ -1,5 +1,5 @@
 import { Tag } from '@lobehub/ui';
-import { MessageSquarePlusIcon } from 'lucide-react';
+import { MessageSquareQuoteIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,6 +7,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import { TAG_MARGIN_INLINE_END } from '../constants';
+import { usePinnedTopic } from './pinnedTopic';
 
 export interface ReferTopicViewProps {
   fallbackTitle?: string;
@@ -16,16 +17,25 @@ export interface ReferTopicViewProps {
 export const ReferTopicView = memo<ReferTopicViewProps>(({ topicId, fallbackTitle }) => {
   const { t } = useTranslation('topic');
   const title = useChatStore(topicSelectors.getTopicById(topicId))?.title || fallbackTitle;
-  const switchTopic = useChatStore((s) => s.switchTopic);
+  const [switchTopic, openTopicInPortal] = useChatStore((s) => [
+    s.switchTopic,
+    s.openTopicInPortal,
+  ]);
+  const pinnedTopicId = usePinnedTopic();
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (topicId) {
-        switchTopic(topicId);
+      if (!topicId) return;
+      // A surface bound to one topic must not be switched away from it: show
+      // the referenced topic in the portal, which closes back onto that topic.
+      if (pinnedTopicId) {
+        if (topicId !== pinnedTopicId) openTopicInPortal(topicId);
+        return;
       }
+      switchTopic(topicId);
     },
-    [switchTopic, topicId],
+    [openTopicInPortal, pinnedTopicId, switchTopic, topicId],
   );
 
   return (
@@ -38,7 +48,7 @@ export const ReferTopicView = memo<ReferTopicViewProps>(({ topicId, fallbackTitl
       }}
       onClick={handleClick}
     >
-      <Tag color="green" icon={<MessageSquarePlusIcon size={12} />} variant="filled">
+      <Tag color="blue" icon={<MessageSquareQuoteIcon size={12} />} variant="borderless">
         {title || t('defaultTitle')}
       </Tag>
     </span>

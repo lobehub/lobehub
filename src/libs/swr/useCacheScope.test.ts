@@ -1,4 +1,7 @@
+import { cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { resetCacheScopeBroadcast, subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 
 import {
   buildCacheScope,
@@ -6,11 +9,12 @@ import {
   getCacheScope,
   isAnonymousScope,
   isScopeTrusted,
+  useCacheScope,
 } from './useCacheScope';
 
 let mockUserId: string | null | undefined = undefined;
 let mockIsAuthLoaded = false;
-let mockIsUserStateInit = false;
+let mockIsIdentityResolved = false;
 let mockWorkspaceId: string | null = null;
 let mockIsDesktop = false;
 
@@ -19,12 +23,14 @@ vi.mock('@lobechat/const', () => ({
     return mockIsDesktop;
   },
 }));
+const mockUserState = () => ({
+  isLoaded: mockIsAuthLoaded,
+  isIdentityResolved: mockIsIdentityResolved,
+  user: { id: mockUserId },
+});
 vi.mock('@/store/user', () => ({
-  getUserStoreState: () => ({
-    isLoaded: mockIsAuthLoaded,
-    isUserStateInit: mockIsUserStateInit,
-    user: { id: mockUserId },
-  }),
+  getUserStoreState: () => mockUserState(),
+  useUserStore: (selector: (state: unknown) => unknown) => selector(mockUserState()),
 }));
 vi.mock('@/store/user/selectors', () => ({
   authSelectors: { isLoaded: (s: any) => s.isLoaded },
@@ -64,7 +70,7 @@ describe('activeScopeKey + optimistic scope', () => {
     localStorage.clear();
     mockUserId = undefined;
     mockIsAuthLoaded = false;
-    mockIsUserStateInit = false;
+    mockIsIdentityResolved = false;
     mockWorkspaceId = null;
     mockIsDesktop = false;
   });
@@ -97,13 +103,20 @@ describe('activeScopeKey + optimistic scope', () => {
     expect(getCacheScope()).toBe('anon:personal');
   });
 
-  it('getCacheScope keeps the persisted scope on desktop until user state initializes', () => {
-    // desktop hardcodes isLoaded=true on mount; userId lands with useInitUserState
+  it('getCacheScope keeps the persisted scope on desktop until bootstrap identity resolves', () => {
     localStorage.setItem('lobehub:active-scope', 'user_abc:w1');
     mockIsDesktop = true;
     mockIsAuthLoaded = true;
-    mockIsUserStateInit = false;
+    mockIsIdentityResolved = false;
     expect(getCacheScope()).toBe('user_abc:w1');
+  });
+
+  it('getCacheScope uses the bootstrap user before full user-state initialization', () => {
+    localStorage.setItem('lobehub:active-scope', 'stale_user:w1');
+    mockIsDesktop = true;
+    mockIsIdentityResolved = true;
+    mockUserId = 'bootstrap_user';
+    expect(getCacheScope()).toBe('bootstrap_user:personal');
   });
 
   it('clearActiveScopeKey removes the persisted scope (logout)', () => {
@@ -118,7 +131,7 @@ describe('activeScopeKey + optimistic scope', () => {
 describe('isScopeTrusted', () => {
   beforeEach(() => {
     mockIsAuthLoaded = false;
-    mockIsUserStateInit = false;
+    mockIsIdentityResolved = false;
     mockIsDesktop = false;
   });
 
@@ -132,17 +145,57 @@ describe('isScopeTrusted', () => {
     expect(isScopeTrusted()).toBe(true);
   });
 
-  it('on desktop, is untrusted until user state initializes even though isLoaded is true', () => {
+  it('on desktop, is untrusted until the preload identity resolves', () => {
     mockIsDesktop = true;
     mockIsAuthLoaded = true;
-    mockIsUserStateInit = false;
+    mockIsIdentityResolved = false;
     expect(isScopeTrusted()).toBe(false);
   });
 
-  it('on desktop, is trusted once user state initializes', () => {
+  it('on desktop, is trusted from bootstrap without waiting for full user state', () => {
     mockIsDesktop = true;
     mockIsAuthLoaded = true;
-    mockIsUserStateInit = true;
+    mockIsIdentityResolved = true;
     expect(isScopeTrusted()).toBe(true);
+  });
+});
+
+describe('useCacheScope broadcast', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    mockUserId = 'user_a';
+    mockIsAuthLoaded = true;
+    mockIsIdentityResolved = false;
+    mockWorkspaceId = null;
+    mockIsDesktop = false;
+    resetCacheScopeBroadcast();
+  });
+
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
+
+  // Imperative replicas (the connector slice) live in zustand stores that
+  // nothing re-renders on a scope switch; this broadcast is how they learn the
+  // scope moved and drop the previous identity's views.
+  it('broadcasts the active scope, once per change', () => {
+    const seen: string[] = [];
+    const unsubscribe = subscribeCacheScope((scope) => seen.push(scope));
+
+    const { rerender } = renderHook(() => useCacheScope());
+    expect(seen).toEqual(['user_a:personal']);
+
+    // The URL→workspace sync resolves the slug.
+    mockWorkspaceId = 'ws-1';
+    rerender();
+    expect(seen).toEqual(['user_a:personal', 'user_a:ws-1']);
+
+    // A re-render — or a second mounted observer — reporting the same scope
+    // must not re-broadcast it.
+    rerender();
+    expect(seen).toEqual(['user_a:personal', 'user_a:ws-1']);
+
+    unsubscribe();
   });
 });

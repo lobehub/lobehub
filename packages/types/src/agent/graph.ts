@@ -4,7 +4,9 @@ import { z } from 'zod';
 export const AGENT_GRAPH_ROOT_NODE_ID = '__root__';
 
 /**
- * Serializable reasoning graph snapshot stored on agent config.
+ * Serializable Agent Graph snapshot stored on agent config.
+ * One graph is one Graph Agent: the behavior body (node policies, routing
+ * conditions and data contracts) that the graph runtime executes.
  * Kept package-local so shared config types don't depend on runtime packages.
  */
 export type AgentGraphNode =
@@ -53,7 +55,7 @@ export interface AgentGraphEdge {
   to: string;
 }
 
-export interface ReasoningGraph {
+export interface AgentGraph {
   description?: string;
   edges: AgentGraphEdge[];
   fields: Record<string, AgentGraphField>;
@@ -76,7 +78,7 @@ const AgentGraphNodeSchema = z.discriminatedUnion('type', [
 
 const AgentGraphFieldSchema = z.object({
   desc: z.string().min(1),
-  schema: z.record(z.unknown()),
+  schema: z.record(z.string(), z.unknown()),
 });
 
 const AgentGraphFieldRefSchema = z.object({
@@ -92,7 +94,7 @@ const AgentGraphInputFieldSchema = AgentGraphFieldRefSchema.extend({
 const AgentGraphOutputFieldSchema = AgentGraphFieldRefSchema;
 
 const AgentGraphEdgeSchema = z.object({
-  condition: z.record(z.unknown()).optional(),
+  condition: z.record(z.string(), z.unknown()).optional(),
   from: z.string(),
   input: z
     .object({
@@ -136,13 +138,13 @@ const findSchemaDescriptionPath = (
   }
 };
 
-export const ReasoningGraphSchema: z.ZodType<ReasoningGraph> = z
+export const AgentGraphSchema: z.ZodType<AgentGraph> = z
   .object({
     description: z.string().optional(),
-    fields: z.record(AgentGraphFieldSchema),
+    fields: z.record(z.string(), AgentGraphFieldSchema),
     maxInstructionCount: z.number().int().positive().optional(),
     name: z.string().min(1),
-    nodes: z.record(AgentGraphNodeSchema),
+    nodes: z.record(z.string(), AgentGraphNodeSchema),
     terminal: z.string().min(1),
     edges: z.array(AgentGraphEdgeSchema),
   })

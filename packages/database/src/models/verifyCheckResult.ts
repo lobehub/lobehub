@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import type { NewVerifyCheckResult, VerifyCheckResultItem } from '../schemas/verify';
 import { verifyCheckResults, verifyRuns } from '../schemas/verify';
@@ -34,9 +34,22 @@ export class VerifyCheckResultModel {
     }
   };
 
+  private sourceCriterion = async (verifyRunId: string | null | undefined, checkItemId: string) => {
+    if (!verifyRunId) return null;
+    const [run] = await this.db
+      .select({ plan: verifyRuns.plan })
+      .from(verifyRuns)
+      .where(and(eq(verifyRuns.id, verifyRunId), this.runOwnership()));
+    return run?.plan?.find((item) => item.id === checkItemId)?.sourceCriterionId ?? null;
+  };
+
   create = async (params: Omit<NewVerifyCheckResult, 'userId' | 'workspaceId'>) => {
     if (typeof params.verifyRunId === 'string') await this.assertRunOwned(params.verifyRunId);
 
+    params = {
+      ...params,
+      sourceCriterionId: await this.sourceCriterion(params.verifyRunId, params.checkItemId),
+    };
     const [result] = await this.db
       .insert(verifyCheckResults)
       .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
@@ -55,6 +68,12 @@ export class VerifyCheckResultModel {
     ];
     await Promise.all(verifyRunIds.map((verifyRunId) => this.assertRunOwned(verifyRunId)));
 
+    rows = await Promise.all(
+      rows.map(async (r) => ({
+        ...r,
+        sourceCriterionId: await this.sourceCriterion(r.verifyRunId, r.checkItemId),
+      })),
+    );
     return this.db
       .insert(verifyCheckResults)
       .values(
@@ -79,6 +98,10 @@ export class VerifyCheckResultModel {
   ): Promise<VerifyCheckResultItem> => {
     await this.assertRunOwned(params.verifyRunId);
 
+    params = {
+      ...params,
+      sourceCriterionId: await this.sourceCriterion(params.verifyRunId, params.checkItemId),
+    };
     const values = buildWorkspacePayload(
       { userId: this.userId, workspaceId: this.workspaceId },
       params,
@@ -105,6 +128,15 @@ export class VerifyCheckResultModel {
     return row;
   };
 
+  listByCriterion = async (criterionId: string, limit = 50) => {
+    return this.db
+      .select()
+      .from(verifyCheckResults)
+      .where(and(eq(verifyCheckResults.sourceCriterionId, criterionId), this.ownership()))
+      .orderBy(desc(verifyCheckResults.createdAt))
+      .limit(Math.min(Math.max(limit, 1), 100));
+  };
+
   findById = async (id: string) => {
     return this.db.query.verifyCheckResults.findFirst({
       where: and(eq(verifyCheckResults.id, id), this.ownership()),
@@ -117,6 +149,20 @@ export class VerifyCheckResultModel {
       .select()
       .from(verifyCheckResults)
       .where(and(eq(verifyCheckResults.verifyRunId, verifyRunId), this.ownership()))
+      .orderBy(asc(verifyCheckResults.checkItemIndex));
+  };
+
+  /**
+   * All results across several verification rounds in one query — the
+   * acceptance union reads a whole round chain, so it must not fan out into a
+   * per-run query. Ordered by display index for stable downstream grouping.
+   */
+  listByRuns = async (verifyRunIds: string[]): Promise<VerifyCheckResultItem[]> => {
+    if (verifyRunIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(verifyCheckResults)
+      .where(and(inArray(verifyCheckResults.verifyRunId, verifyRunIds), this.ownership()))
       .orderBy(asc(verifyCheckResults.checkItemIndex));
   };
 

@@ -1,0 +1,3 @@
+DROP INDEX IF EXISTS "agent_provider_accounts_identity_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "agent_provider_accounts_identity_workspace_unique" ON "agent_provider_accounts" USING btree ("provider","external_account_id","workspace_id") WHERE "agent_provider_accounts"."external_account_id" IS NOT NULL and "agent_provider_accounts"."workspace_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "agent_provider_accounts_identity_unique" ON "agent_provider_accounts" USING btree ("user_id","provider","external_account_id") WHERE "agent_provider_accounts"."external_account_id" IS NOT NULL and "agent_provider_accounts"."workspace_id" is null;

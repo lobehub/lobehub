@@ -9,17 +9,13 @@ import {
 } from './runtimeRetry';
 
 describe('runtimeRetry', () => {
-  it('resolves LLM retry policy with provider disables and empty completion floor', () => {
-    const emptyError = new Error('empty');
-    const options = {
-      isEmptyCompletionError: (error: unknown) => error === emptyError,
-      noRetryProviders: ['lobehub'],
-    };
+  it('resolves LLM retry policy from provider-level configuration only', () => {
+    const options = { noRetryProviders: ['lobehub'] };
 
-    expect(resolveLLMRetryBudget('openai', new Error('rate limit'), options)).toBe(5);
-    expect(resolveLLMRetryBudget('lobehub', new Error('upstream failed'), options)).toBe(0);
-    expect(resolveLLMRetryBudget('lobehub', emptyError, options)).toBe(2);
-    expect(resolveLLMMaxAttempts('lobehub', options)).toBe(3);
+    expect(resolveLLMRetryBudget('openai', options)).toBe(5);
+    expect(resolveLLMRetryBudget('lobehub', options)).toBe(0);
+    expect(resolveLLMMaxAttempts('openai', options)).toBe(6);
+    expect(resolveLLMMaxAttempts('lobehub', options)).toBe(1);
   });
 
   it('calculates exponential LLM retry delay with a cap', () => {

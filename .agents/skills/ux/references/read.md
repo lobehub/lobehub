@@ -16,8 +16,8 @@ clear next action (CTA + value props); distinguish "no data yet" (onboarding CTA
 "no match for filters" (clear-filters affordance) — they are different screens. When a
 surface keeps its toolbar/header mounted with no data (so a create / `+` affordance
 stays reachable), the **body** below must still render an empty placeholder —
-persistent chrome is no excuse for dead space. Loading uses a skeleton /
-`NeuralNetworkLoading`, never a flash of blank or a layout shift; error surfaces the
+persistent chrome is no excuse for dead space. Loading follows the
+[feedback §4.1](./feedback.md) scenario table, never a flash of blank or a layout shift; error surfaces the
 reason and a retry/back path.
 
 The single most common way this breaks: the fetch reads only `{ data, isLoading }`, never
@@ -104,12 +104,13 @@ Distinguish `error` (transient → reason + retry, keep the URL) from a resolved
 
 - [ ] Empty state is a real page with explanation + CTA, not a blank screen. _(Meaningful)_
 - [ ] Empty variants distinguished: "no data yet" vs "no filter match". _(Certainty)_
+- [ ] An empty state that replaces a list sits in place **unframed** (not inside the list's bordered container), its title states the outcome ("Create your first OAuth app", not "No apps yet"), and it owns the page's one primary action — the header hides its duplicate Create while empty. ❌ OAuth Apps, first pass: the empty state rendered inside the list frame with "No OAuth apps yet" next to a header Create button. _(Meaningful・Certainty)_
 - [ ] Error is checked **before** the empty branch — a failed fetch never renders as empty (`!error && length === 0` gates empty); read `error`, don't coerce `data ?? []`. _(Certainty・Meaningful)_
 - [ ] On a **metrics / aggregate** surface (dashboard, stats, cost), a failed fetch never falls through to a **zero-valued default** (`data?.summary ?? {…:0}`, `?? 0`) — a confident `$0` reads as real data, not "empty"; branch `error` before rendering any aggregate. _(Certainty・Meaningful)_
 - [ ] A list merged from a fetched set + a **static/frontend set** (`[...fetched, ...placeholders]`, a catalog padded with "coming soon" rows) branches `error` **before** merging — a failed fetch there keeps `length > 0` via the static entries, so neither the empty guard nor an error-unread call site catches it (a plausible partial catalog); `fallbackData: []` makes it automatic. _(Certainty・Meaningful)_
 - [ ] A detail page reads `error` before falling to `NotFound` — a failed fetch shows a reload state, not a "doesn't exist" 404 (deleted vs failed-to-load are different screens). _(Certainty・Meaningful)_
 - [ ] Always-rendered chrome still renders a body empty placeholder. _(Meaningful)_
-- [ ] Loading designed (skeleton / NeuralNetworkLoading), no layout shift — a detail page's "record not loaded yet" is a skeleton, never a bare `return null` / blank. _(Natural)_
+- [ ] Loading designed per feedback §4.1 (skeleton / `Spin`), no layout shift — a detail page's "record not loaded yet" is a skeleton, never a bare `return null` / blank. _(Natural)_
 - [ ] Error designed with reason + retry/back path. _(Meaningful)_
 
 ## 1.2 Lists at scale・Certainty・Natural
@@ -175,15 +176,6 @@ _each_ against the full set, not just the search input.
 > deep-linkable — none of the client-over-partial-page traps that bit the other list audits
 > can occur here. (This is why the surface's only read-side gap is failure handling, not
 > query correctness.)
-
-> ❌ The Pages "all pages" drawer filters `displayDocuments` with a client-side
-> `title/content.includes(keyword)` over the loaded set **and disables load-more while
-> searching**, so searching for a page past the loaded window returns "no results" though it
-> exists (`AllPagesDrawer/Content.tsx`). ✅ Send the keyword to the server query and page
-> through matches.
-> ✅ **Memory** (记忆) does it right: each list tab passes `q` straight into the paginated
-> `queryMemories` server call (`memory/contexts/index.tsx:57-62`, mirrored per tab), so search spans
-> the whole set — no false "no results" for unfetched rows.
 
 **Checklist**
 
@@ -283,6 +275,16 @@ resolved-empty. Once the user manually picks a tab, that choice wins and sticks 
 them off it. Pairs with §1.1: the empty state is the fallback _within_ a view; this rule
 is about not landing on that empty view when a better one exists.
 
+A data-aware shortcut must not erase the stable **hub** behind it. Auto-opening the only
+record can save one click, but if every visit to the collection URL redirects into that record,
+the user loses collection-level actions (create the second item, compare, search, manage) and a
+breadcrumb back becomes a loop. Keep the hub reachable, or preserve every collection-level
+action in the detail surface.
+
+> ❌ **Self-evolving expertise** redirects `/self-learning` to the sole expertise on every
+> visit, while Create exists only on the empty hub. After the first expertise is created, the
+> user cannot return to the hub or create a second one (`SelfLearning/index.tsx`).
+
 > ✅ Opening a document page by clicking a **skill** lands the right panel on the **Skills** tab; a plain document lands on **Documents**.
 > ✅ An agent with only skills (no documents) opens the panel on **Skills** instead of an empty **Documents** tab.
 
@@ -292,6 +294,7 @@ is about not landing on that empty view when a better one exists.
 - [ ] Falls back to a populated view when the default would be empty. _(Certainty)_
 - [ ] Default decided from resolved state, not mid-load. _(Certainty)_
 - [ ] A manual pick is tracked separately and sticks. _(Natural)_
+- [ ] A data-aware shortcut never makes the collection hub or its collection-level actions unreachable. _(Meaningful・Growth)_
 
 ## 1.7 Live / polling streams・Certainty・Natural
 
@@ -446,7 +449,7 @@ UX consequence — a bespoke row is a visible consistency + craft regression.)
 > inside `Accordion` groups via one shared `GroupedAccordion` engine (by-project / by-status /
 > by-time), `Block variant='filled'` for the active row, and spacing as `Flexbox` / `Block`
 > props — every row aligns to its highlight and matches every other panel in the app.
-> ❌ **Verify report sidebar** (`features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
+> ❌ **Verify report sidebar** (the since-removed `features/Verify/Workspace/ReportListPanel.tsx`) hand-rolls the
 > entire panel: a raw grid `<div className={styles.item}>` row with `data-active` +
 > `colorFillSecondary` (instead of `NavItem` / `Block variant`), a bordered `<label>` + `<input>`
 > search box, a raw `<input>` inline-rename, an `opacity`-toggled action reveal re-implemented in
@@ -460,6 +463,7 @@ UX consequence — a bespoke row is a visible consistency + craft regression.)
 - [ ] Grouping at scale reuses `Accordion` / `GroupedAccordion` (by-project / status / time), not a flat ungrouped dump once the list grows past a screen. _(Natural)_
 - [ ] Search box, inline-rename, and row actions reuse the shared input / editing / action-reveal patterns, not raw `<input>` / `<label>` + hand CSS. _(Certainty)_
 - [ ] Spacing/padding expressed as `Flexbox` / `Block` `gap` / `padding` props (inherits the sidebar rhythm), not hand-picked px constants. _(Natural)_
+
 ## 1.11 A persistent composer above a list must not bury the records・Meaningful・Natural
 
 A list surface with an **always-visible create / compose affordance above the records** (an
@@ -519,3 +523,63 @@ label** (ranked where it belongs), or relabel the shared group so it's true for 
 
 - [ ] A status group/label is true for **every** member — no folding a distinct lifecycle state (scheduled/queued/snoozed) under a label that asserts a different one (running/in-progress). _(Certainty)_
 - [ ] The distinct state gets its own group/label (ranked appropriately), or the shared label is neutral enough to be true for both. _(Meaningful)_
+
+## 1.13 Quoted documents fold to a titled row, not a height-cropped preview・Natural・Meaningful
+
+When a surface embeds **someone else's document** as material (an evidence write-up, a log,
+an attached report, a quoted spec), two things go wrong if it renders inline like the page's
+own prose. First, **disclosure**: a "show the first N px + expand" fold assumes the opening
+lines are a summary — true for chat prose, false for structured documents, which open with
+headings and environment metadata. The cropped preview then spends a card of vertical space
+on the document's _least_ informative part, cut mid-sentence behind a fade — pure noise. The
+reader's real choice is binary: read this artifact now, or skip it. Serve that choice with a
+**one-line titled row (first meaningful line, markdown-stripped, as the label) that expands
+to the full text** — never a partial bleed. Second, **subordination**: quoted material must
+not share the host page's typographic scale. Un-contained, the document's own `##` headings
+render larger than the host's section titles and masquerade as page structure. Give it a
+quiet container and a capped heading scale (`headerMultiple` near 0) so it reads as quoted
+material, not as the page.
+
+> ✅ Each prose evidence folds to one quiet row labeled by its first line (" 声明 — 验收页的音
+> 频证据应复用对话播放器 "); expanding shows the full text in a contained block whose headings
+> stay body-sized. Two artifacts = two rows; need it → expand, don't → one line each.
+> ❌ Acceptance check evidence rendered bare `Markdown` folded at 180px behind a `MaskShadow`
+> (`MarkdownEvidence.tsx`, pre-fix): the preview showed only the document's opening headings
+> ("环境: worktree…") cut by a fade whose `size={32}` was actually **32%** (the prop is a
+> percentage, not px), masking a third of the window to blank; the evidence's `#` headings
+> rendered bigger than the check's own title, so quoted content read as page structure.
+
+**Checklist**
+
+- [ ] An embedded document folds to a **titled row** (first meaningful line as label) that expands to full text — no first-N-px cropped preview with a fade. _(Natural)_
+- [ ] Quoted/embedded content is visually subordinated: a quiet container + capped heading scale, never sharing the host page's typographic hierarchy. _(Meaningful)_
+- [ ] A mask/fade helper's `size` unit is verified against its implementation (px vs %) before shipping — a wrong unit blanks real content. _(Certainty)_
+
+## 1.14 An entity without an image falls back to its type glyph, not a letter avatar・Certainty・Natural
+
+Entities that carry an optional image — an app logo, an agent avatar, a workspace icon — need
+a **no-image** rendering, and the generic letter-avatar (`<Avatar title={name} />` with no
+`avatar`) is the wrong default for most of them. It renders the first characters of the
+name at half the avatar's size: Latin names become a shouting "LO" monogram, CJK names
+become **two oversized glyphs** that overflow the tile, and the slot reads as an unfinished
+state rather than "no logo set". Worse, the `title` that feeds it is easy to wire to the
+wrong string: a **field label** passed as `title` makes every empty logo slot render that
+label ("名称") as its avatar. Fall back to a **type-semantic glyph** (an app-window icon for
+an OAuth app, the product's agent glyph for an agent) on a quiet fill, shared by every surface
+that shows the entity — list row, detail header, edit form, create form — so "no logo" looks
+the same everywhere. Where the same slot is also an **upload target**, the same glyph with a
+dashed outline and no fill signals "you can set one" without a second placeholder style.
+
+> ✅ OAuth apps: one `AppLogoPlaceholder` (app-window glyph, quiet fill) renders in the list
+> row, the detail header and — outlined, unfilled — in the create / edit logo uploaders
+> (`features/Settings/oauth-apps/features/AppLogo`).
+> ❌ OAuth apps, pre-fix: the create modal passed the **name field's label** as the uploader's
+> `title`, so the empty logo rendered "名称" as two giant glyphs; the detail header rendered a
+> 72px "LO" monogram from the app name, and the list row fed `app.logoUri || app.name` straight
+> into `Avatar` (`AppItem.tsx`).
+
+**Checklist**
+
+- [ ] An entity with no image renders a shared type glyph placeholder, not a letter avatar of its name — check a CJK name. _(Certainty)_
+- [ ] A fallback `title` is the entity's own data, never a form label or other UI string. _(Certainty)_
+- [ ] The placeholder is identical across list, detail, create and edit; upload slots differ only by an outline. _(Natural)_

@@ -17,6 +17,8 @@
   "desktop.showApp.title": "Mostrar/Ocultar Janela Principal",
   "editMessage.desc": "Entre no modo de edição segurando Alt e clicando duas vezes na mensagem",
   "editMessage.title": "Editar Mensagem",
+  "findInTopic.desc": "Pesquise todas as mensagens do tópico atual no painel direito",
+  "findInTopic.title": "Buscar no Tópico",
   "navigateToChat.desc": "Ir para a aba de Chat e entrar no Lobe AI",
   "navigateToChat.title": "Ir para o Chat Padrão",
   "nextTab.desc": "Alternar para a próxima aba no estilo do navegador no aplicativo Desktop; retorna para a primeira aba ao chegar ao final",
@@ -41,8 +43,12 @@
   "switchAgent.title": "Trocar Agente Rapidamente",
   "switchTab.desc": "Ir para uma aba específica pela sua posição (1–9) na barra de abas do aplicativo Desktop",
   "switchTab.title": "Alternar para Aba por Número",
+  "toggleFavorite.desc": "Adicione a página aberta à seção Favoritos da barra lateral ou remova-a",
+  "toggleFavorite.title": "Adicionar aos / Remover dos Favoritos",
   "toggleLeftPanel.desc": "Mostrar ou ocultar o painel esquerdo",
   "toggleLeftPanel.title": "Alternar Painel Esquerdo",
   "toggleRightPanel.desc": "Mostrar ou ocultar o painel direito",
-  "toggleRightPanel.title": "Alternar Painel Direito"
+  "toggleRightPanel.title": "Alternar Painel Direito",
+  "toggleTerminalPanel.desc": "Exibir ou ocultar o painel de terminal inferior",
+  "toggleTerminalPanel.title": "Alternar Painel de Terminal"
 }

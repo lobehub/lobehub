@@ -18,23 +18,39 @@ interface FileItemProps extends UploadFileItem {
 }
 
 const FileItem = memo<FileItemProps>((props) => {
-  const { file, id, previewUrl, status } = props;
-  const [removeFile] = useFileStore((s) => [s.removeChatUploadFile]);
+  const { errorCode, file, id, previewUrl, status } = props;
+  const [removeFile, retryFile] = useFileStore((s) => [
+    s.removeChatUploadFile,
+    s.retryChatUploadFile,
+  ]);
 
   if (file.type.startsWith('image')) {
     return (
       <Image
         alt={file.name}
+        error={status === 'error'}
+        errorCode={errorCode}
         loading={status === 'pending'}
         src={previewUrl}
         onRemove={() => {
           removeFile(id);
         }}
+        onRetry={() => {
+          void retryFile(id);
+        }}
       />
     );
   }
 
-  return <File onRemove={() => removeFile(id)} {...props} />;
+  return (
+    <File
+      {...props}
+      onRemove={() => removeFile(id)}
+      onRetry={() => {
+        void retryFile(id);
+      }}
+    />
+  );
 });
 
 export default FileItem;

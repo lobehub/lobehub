@@ -1,8 +1,7 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
-import { copyToClipboard, createRawModal, Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { type ItemType } from 'antd/es/menu/interface';
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
+import type { ItemType } from '@lobehub/ui';
+import { confirmModal, copyToClipboard, Icon, toast } from '@lobehub/ui';
 import {
   BookMinusIcon,
   BookPlusIcon,
@@ -18,13 +17,19 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import RepoIcon from '@/components/LibIcon';
+import { useSendToMessengerMenuItem } from '@/features/Messenger/PushResourceModal/useSendToMessengerMenuItem';
 import { useKnowledgeBaseListContext } from '@/features/ResourceManager/components/KnowledgeBaseListProvider';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { buildPagePath } from '@/features/ResourceManager/utils/resourcePath';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { documentService } from '@/services/document';
+import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useTreeStore } from '@/store/tree';
@@ -32,44 +37,83 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { downloadFile } from '@/utils/client/downloadFile';
 
-import MoveToFolderModal from '../MoveToFolderModal';
+import { openMoveToFolderModal } from '../MoveToFolderModal';
 
 interface UseFileItemDropdownParams {
   enabled?: boolean;
+  /**
+   * The underlying `files.id` when the row is a file. The unified resource
+   * list addresses a file that backs a derived page by the PAGE id
+   * (`COALESCE(d.id, f.id)` in KnowledgeRepo), so `id` alone cannot be used
+   * for file-table lookups such as the messenger push.
+   */
+  fileId?: string | null;
   filename: string;
   fileType: string;
   id: string;
   libraryId?: string;
+  /**
+   * Runs once the row is gone, so a caller can leave a route that pointed at
+   * it. Fires before the sidebar tree forgets the subtree, so a caller may
+   * still inspect what is about to be removed.
+   */
+  onDeleted?: () => void;
   onRenameStart?: () => void;
+  /**
+   * Folder id the row hangs off in the sidebar tree, when the caller knows it.
+   * The explorer's current folder is not a substitute: the sidebar navigates
+   * into a folder on click, so deleting it from its own context menu would
+   * refresh the deleted folder rather than the list it was listed in.
+   */
+  parentId?: string;
+  /** Byte size when available — powers the push modal's oversize pre-warning. */
+  size?: number;
   sourceType?: string;
   url: string;
   userId?: string | null;
   visibility?: 'private' | 'public' | null;
 }
 
+type FileMenuItem = ItemType & { sfSymbol?: SFSymbol };
+
 interface UseFileItemDropdownReturn {
-  menuItems: () => ItemType[];
+  menuItems: () => FileMenuItem[];
 }
 
 /**
- * Shared with folder tree and explorer
+ * Builds resource actions shared by the folder tree and explorer.
+ *
+ * Use when:
+ * - Rendering an explorer or folder-tree resource menu.
+ *
+ * Expects:
+ * - Parsed file rows carry their backing files.id in fileId.
+ *
+ * Returns:
+ * - Available actions with file visibility changes targeting the backing file.
  */
 export const useFileItemDropdown = ({
+  fileId,
   id,
   libraryId,
   url,
   filename,
   fileType,
+  size,
   sourceType,
+  onDeleted,
   onRenameStart,
+  parentId,
   userId,
   visibility,
 }: UseFileItemDropdownParams): UseFileItemDropdownReturn => {
   const { t } = useTranslation(['components', 'common', 'knowledgeBase', 'chat']);
-  const { message } = App.useApp();
+
   const appOrigin = useAppOrigin();
   const { allowed: canEditResources } = usePermission('edit_own_content');
   const currentUserId = useUserStore(userProfileSelectors.userId);
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   const {
     deleteResource,
@@ -111,7 +155,24 @@ export const useFileItemDropdown = ({
     !isOfficeFile &&
     (sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || fileType === PAGE_FILE_TYPE);
 
+  // Pages/documents have no storage URL to attach, so only real files get the
+  // "Send to chat platform" entry. It is gated on the file type, not on `url`:
+  // a row restored from the persisted tree has none, and the server needs only
+  // the id. The server resolves the attachment by
+  // `files.id`, but a file that backs a derived page is listed under the PAGE
+  // id — always prefer the row's underlying `fileId` when it carries one.
+  const sendToMessengerItem = useSendToMessengerMenuItem({
+    enabled: !isFolder && !isPage,
+    file: { fileType, id: fileId ?? id, name: filename, size },
+  });
+
   const menuItems = useCallback(() => {
+    // A sidebar row restored from the persisted tree carries no storage URL (a
+    // signed link never reaches storage) until its folder refreshes; fetch it on
+    // demand so Copy URL / Download never act on an empty string.
+    const resolveFileUrl = async (): Promise<string> =>
+      url || (await fileService.getFile(fileId ?? id)).url;
+
     // Filter out current knowledge base and constrain by visibility scope:
     // a private file can only join a private KB, a workspace-public file can
     // only join a public KB. Personal-mode files (visibility null/undefined)
@@ -133,7 +194,7 @@ export const useFileItemDropdown = ({
         domEvent.stopPropagation();
         try {
           await addFilesToKnowledgeBase(kb.id, [id]);
-          message.success(
+          toast.success(
             t('addToKnowledgeBase.addSuccess', {
               count: 1,
               ns: 'knowledgeBase',
@@ -146,9 +207,9 @@ export const useFileItemDropdown = ({
           const isDuplicateError =
             e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE';
           if (isDuplicateError) {
-            message.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
+            toast.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
           } else {
-            message.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+            toast.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
           }
         }
       },
@@ -171,15 +232,15 @@ export const useFileItemDropdown = ({
           await moveResource(id, null);
           // Then add to target library
           await addFilesToKnowledgeBase(kb.id, [id]);
-          message.success(t('moveToKnowledgeBase.success', { ns: 'knowledgeBase' }));
+          toast.success(t('moveToKnowledgeBase.success', { ns: 'knowledgeBase' }));
         } catch (e: any) {
           console.error(e);
           const isDuplicateError =
             e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE';
           if (isDuplicateError) {
-            message.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
+            toast.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
           } else {
-            message.error(t('moveToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+            toast.error(t('moveToKnowledgeBase.error', { ns: 'knowledgeBase' }));
           }
         }
       },
@@ -215,7 +276,7 @@ export const useFileItemDropdown = ({
                     onOk: async () => {
                       await removeFilesFromKnowledgeBase(libraryId, [id]);
 
-                      message.success(t('FileManager.actions.removeFromLibrarySuccess'));
+                      toast.success(t('FileManager.actions.removeFromLibrarySuccess'));
                     },
                     title: t('FileManager.actions.removeFromLibrary'),
                   });
@@ -234,23 +295,23 @@ export const useFileItemDropdown = ({
 
     const hasKnowledgeBaseActions = libraryRelatedActions.some(Boolean);
 
+    // Visibility is a workspace concept: `files.visibility` defaults to
+    // `'public'` even for personal-mode rows (`workspace_id IS NULL`), where it
+    // is meaningless. Without this gate every personal file would offer
+    // "Make private" (and, once flipped, "Publish to workspace").
+    const isOwnWorkspaceFile =
+      !!activeWorkspaceId &&
+      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
+      !isFolder &&
+      !!currentUserId &&
+      userId === currentUserId;
     // Only the creator of a still-private file (not a folder, since folders
     // live in the `documents` table and have their own publish flow) sees the
     // "Publish to workspace" entry. Mirrors the agent / task one-way publish.
-    const isOwnPrivateFile =
-      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
-      !isFolder &&
-      visibility === 'private' &&
-      !!currentUserId &&
-      userId === currentUserId;
+    const isOwnPrivateFile = isOwnWorkspaceFile && visibility === 'private';
     // Bidirectional counterpart: workspace-public files owned by the caller
     // can be pulled back to private via the same guarded server path.
-    const isOwnPublicFile =
-      sourceType !== DERIVED_DOCUMENT_SOURCE_TYPE &&
-      !isFolder &&
-      visibility === 'public' &&
-      !!currentUserId &&
-      userId === currentUserId;
+    const isOwnPublicFile = isOwnWorkspaceFile && visibility === 'public';
 
     return (
       [
@@ -268,11 +329,12 @@ export const useFileItemDropdown = ({
                 title: t('resources.publishToWorkspace.menu', { ns: 'chat' }),
                 onOk: async () => {
                   try {
-                    await publishFileToWorkspace(id);
-                    message.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
+                    // Parsed file rows use a document ID; file endpoints require the backing file ID.
+                    await publishFileToWorkspace(fileId ?? id);
+                    toast.success(t('resources.publishToWorkspace.success', { ns: 'chat' }));
                   } catch (error) {
                     console.error(error);
-                    message.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
+                    toast.error(t('resources.publishToWorkspace.error', { ns: 'chat' }));
                   }
                 },
               });
@@ -288,51 +350,23 @@ export const useFileItemDropdown = ({
               domEvent.stopPropagation();
               confirmModal({
                 cancelText: t('cancel', { ns: 'common' }),
-                content: <VisibilityConfirmContent variant="makePrivate" />,
+                content: <VisibilityConfirmContent inLibrary={isInLibrary} variant="makePrivate" />,
                 okButtonProps: { danger: true },
                 okText: t('continue', { ns: 'common' }),
                 title: t('makePrivate.confirm.title', { ns: 'common' }),
                 onOk: async () => {
                   try {
-                    await setFileVisibility(id, 'private');
-                    message.success(t('makePrivate.success', { ns: 'common' }));
+                    await setFileVisibility(fileId ?? id, 'private');
+                    toast.success(t('makePrivate.success', { ns: 'common' }));
                   } catch (error) {
                     console.error(error);
-                    message.error(t('makePrivate.error', { ns: 'common' }));
+                    toast.error(t('makePrivate.error', { ns: 'common' }));
                   }
                 },
               });
             },
           },
         canEditResources && isOwnPublicFile && { type: 'divider' },
-        ...libraryRelatedActions,
-        hasKnowledgeBaseActions && {
-          type: 'divider',
-        },
-        canEditResources &&
-          isInLibrary && {
-            icon: <Icon icon={FolderInputIcon} />,
-            key: 'moveToFolder',
-            label: t('FileManager.actions.moveToFolder'),
-            onClick: async ({ domEvent }) => {
-              domEvent.stopPropagation();
-
-              createRawModal(MoveToFolderModal, {
-                fileId: id,
-                knowledgeBaseId: libraryId,
-              });
-            },
-          },
-        canEditResources &&
-          isFolder && {
-            icon: <Icon icon={PencilIcon} />,
-            key: 'rename',
-            label: t('FileManager.actions.rename'),
-            onClick: async ({ domEvent }) => {
-              domEvent.stopPropagation();
-              onRenameStart?.();
-            },
-          },
         {
           icon: <Icon icon={LinkIcon} />,
           key: 'copyUrl',
@@ -340,32 +374,32 @@ export const useFileItemDropdown = ({
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
 
-            // For pages, use the route path instead of the storage URL
-            let urlToCopy = url;
-            if (isPage) {
-              if (libraryId) {
-                urlToCopy = `${appOrigin}/resource/library/${libraryId}?file=${id}`;
-              } else {
-                urlToCopy = `${appOrigin}/resource?file=${id}`;
-              }
-            }
+            // For pages, use the route path instead of the storage URL. Workspace
+            // routes are mounted under `/:workspaceSlug`, so the shared link must
+            // carry the active slug or recipients land in the personal scope
+            // where the page does not resolve.
+            try {
+              const urlToCopy = isPage
+                ? `${appOrigin}${buildPagePath(id, activeWorkspaceSlug, libraryId)}`
+                : await resolveFileUrl();
 
-            await copyToClipboard(urlToCopy);
-            message.success(t('FileManager.actions.copyUrlSuccess'));
+              await copyToClipboard(urlToCopy);
+              toast.success(t('FileManager.actions.copyUrlSuccess'));
+            } catch (error) {
+              console.error('Failed to copy file url:', error);
+              toast.error(t('FileManager.actions.copyUrlError'));
+            }
           },
+          sfSymbol: 'doc.on.doc',
         },
         !isFolder && {
           icon: <Icon icon={DownloadIcon} />,
           key: 'download',
           label: t('download', { ns: 'common' }),
+          sfSymbol: 'square.and.arrow.down',
           onClick: async ({ domEvent }) => {
             domEvent.stopPropagation();
-            const key = 'file-downloading';
-            message.loading({
-              content: t('FileManager.actions.downloading'),
-              duration: 0,
-              key,
-            });
+            const downloadingToast = toast.loading(t('FileManager.actions.downloading'));
 
             if (isPage) {
               // For pages, download as markdown
@@ -386,20 +420,56 @@ export const useFileItemDropdown = ({
                   await downloadFile(blobUrl, mdFilename);
                   URL.revokeObjectURL(blobUrl);
                 } else {
-                  message.error('Failed to download page: no content available');
+                  toast.error(t('FileManager.actions.downloadPageEmpty'));
                 }
               } catch (error) {
                 console.error('Failed to download page:', error);
-                message.error('Failed to download page');
+                toast.error(t('FileManager.actions.downloadPageError'));
               }
             } else {
-              // For regular files, download from URL
-              await downloadFile(url, filename);
+              // For regular files, download from URL (resolved first for a row
+              // restored without one, which can fail offline or once deleted).
+              try {
+                await downloadFile(await resolveFileUrl(), filename);
+              } catch (error) {
+                console.error('Failed to download file:', error);
+                toast.error(t('FileManager.actions.downloadError'));
+              }
             }
 
-            message.destroy(key);
+            downloadingToast.close();
           },
         },
+        sendToMessengerItem,
+        (hasKnowledgeBaseActions || (canEditResources && (isInLibrary || isFolder))) && {
+          type: 'divider',
+        },
+        ...libraryRelatedActions,
+        canEditResources &&
+          isInLibrary && {
+            icon: <Icon icon={FolderInputIcon} />,
+            key: 'moveToFolder',
+            label: t('FileManager.actions.moveToFolder'),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
+
+              openMoveToFolderModal({
+                fileId: id,
+                knowledgeBaseId: libraryId,
+              });
+            },
+          },
+        canEditResources &&
+          isFolder && {
+            icon: <Icon icon={PencilIcon} />,
+            key: 'rename',
+            label: t('FileManager.actions.rename'),
+            onClick: async ({ domEvent }) => {
+              domEvent.stopPropagation();
+              onRenameStart?.();
+            },
+            sfSymbol: 'pencil',
+          },
         canEditResources && {
           type: 'divider',
         },
@@ -416,29 +486,52 @@ export const useFileItemDropdown = ({
                 : t('FileManager.actions.confirmDelete'),
               okButtonProps: { danger: true },
               title: t('delete', { ns: 'common' }),
-              onOk: async () => {
-                // Use optimistic delete - instant UI update, sync in background
-                await deleteResource(id);
+              onOk: () => {
+                // The store removes the row optimistically. Do not hold the
+                // confirmation dialog open while the network mutation and
+                // reconciliation finish; failures roll back and surface a toast.
+                void (async () => {
+                  try {
+                    await deleteResource(id);
 
-                // Revalidate tree for the parent folder
-                const { queryParams } = useFileStore.getState();
-                const parentId = queryParams?.parentId ?? '';
-                void useTreeStore.getState().revalidate(parentId);
-                await refreshFileList({ revalidateResources: false });
+                    // Drop the row from the sidebar tree and refresh the folder
+                    // that actually held it. The explorer's current folder is
+                    // only the fallback, for rows the tree never loaded.
+                    const treeParentKey =
+                      parentId ?? useFileStore.getState().queryParams?.parentId ?? '';
 
-                message.success(t('FileManager.actions.deleteSuccess'));
+                    // Before the purge, not after: a caller leaving a route
+                    // that pointed into this subtree still has to walk it, and
+                    // `dropNodes` forgets the whole subtree synchronously.
+                    onDeleted?.();
+                    void useTreeStore.getState().dropNodes([id], treeParentKey);
+                    // The search overlays persist their hits per query, so the
+                    // deleted row must leave those too or it repaints there.
+                    useResourceManagerStore.getState().removeSearchHits([id]);
+                    await refreshFileList({ revalidateResources: false });
+
+                    toast.success(t('FileManager.actions.deleteSuccess'));
+                  } catch (error) {
+                    console.error('Failed to delete resource:', error);
+                    toast.error(t('operationFailed', { ns: 'common' }));
+                  }
+                })();
               },
             });
           },
+          sfSymbol: 'trash',
         },
-      ] as ItemType[]
+      ] as FileMenuItem[]
     ).filter(Boolean);
   }, [
     addFilesToKnowledgeBase,
     appOrigin,
+    activeWorkspaceId,
+    activeWorkspaceSlug,
     canEditResources,
     currentUserId,
     deleteResource,
+    fileId,
     filename,
     id,
     isFolder,
@@ -446,13 +539,15 @@ export const useFileItemDropdown = ({
     isPage,
     libraries,
     libraryId,
-    message,
     moveResource,
+    onDeleted,
     onRenameStart,
+    parentId,
     publishFileToWorkspace,
     setFileVisibility,
     refreshFileList,
     removeFilesFromKnowledgeBase,
+    sendToMessengerItem,
     sourceType,
     t,
     url,

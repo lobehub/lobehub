@@ -1,10 +1,13 @@
 import { isDesktop } from '@lobechat/const';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 import {
   getActiveWorkspaceId,
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
+// Leaf import on purpose: `@/libs/replica` imports this module, so going
+// through its index would be a cycle.
+import { broadcastCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { getUserStoreState, type UserStore, useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -25,7 +28,8 @@ const ACTIVE_SCOPE_STORAGE_KEY = 'lobehub:active-scope';
 
 const isBrowser = () => typeof localStorage !== 'undefined';
 
-const readActiveScope = (): string | null => {
+/** The last-known resolved cache scope, or `null` when none is persisted. */
+export const readActiveScope = (): string | null => {
   if (!isBrowser()) return null;
   try {
     return localStorage.getItem(ACTIVE_SCOPE_STORAGE_KEY);
@@ -34,7 +38,7 @@ const readActiveScope = (): string | null => {
   }
 };
 
-const writeActiveScope = (scope: string): void => {
+export const writeActiveScope = (scope: string): void => {
   if (!isBrowser()) return;
   try {
     localStorage.setItem(ACTIVE_SCOPE_STORAGE_KEY, scope);
@@ -85,17 +89,15 @@ export const isAnonymousScope = (scope: string): boolean => scope.startsWith(`${
  *
  * - Web (Better-Auth): `isLoaded` flips when the session request settles, at
  *   which point `user` is populated (or confirmed empty). It is the signal.
- * - Desktop: `DesktopAuthProvider` hardcodes `isLoaded` to `true` on mount
- *   because the server trusts `DESKTOP_USER_ID`, but `userId` only lands when
- *   the async `useInitUserState` fetch resolves. `isUserStateInit` is the
- *   signal there; using `isLoaded` would declare the anonymous boot scope
- *   trustworthy and let that window's writes orphan into the `anon` partition.
+ * - Desktop: preload derives the OIDC subject from safe storage before React
+ *   mounts. `isIdentityResolved` therefore selects the trusted cache partition
+ *   without serializing first paint behind the full `getUserState()` request.
  * - No-auth self-host: `isLoaded` is `true` on mount and `useInitUserState`
  *   never runs, so `userId` stays undefined forever and `anon` is the real,
  *   durable scope. `isDesktop` is false there, so `isLoaded` applies.
  */
 const isIdentityResolved = (s: UserStore): boolean =>
-  isDesktop ? s.isUserStateInit : Boolean(authSelectors.isLoaded(s));
+  isDesktop ? Boolean(s.isIdentityResolved) : Boolean(authSelectors.isLoaded(s));
 
 /**
  * The effective cache scope for the *current* moment.
@@ -134,6 +136,13 @@ export const useCacheScope = (): string => {
 
   const scope = resolveScope(userId, workspaceId, persisted, identityResolved);
 
+  // Before paint, so an imperative replica can drop the previous identity's
+  // views in the same frame the switch commits — a passive effect would leave
+  // one paintable frame of the old scope on screen.
+  useLayoutEffect(() => {
+    broadcastCacheScope(scope);
+  }, [scope]);
+
   useEffect(() => {
     if (userId && !isAnonymousScope(scope)) writeActiveScope(scope);
     // The identity round-trip landed on "nobody": the persisted scope belongs to
@@ -171,3 +180,9 @@ export const getCacheScope = (): string => {
  * anonymous scope is a legitimate durable context there).
  */
 export const isScopeTrusted = (): boolean => isIdentityResolved(getUserStoreState());
+
+/**
+ * Reactive form of {@link isScopeTrusted}: re-renders the caller when the
+ * identity round-trip lands, even if the scope string itself did not change.
+ */
+export const useIsScopeTrusted = (): boolean => useUserStore(isIdentityResolved);

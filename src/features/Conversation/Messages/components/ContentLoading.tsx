@@ -1,16 +1,16 @@
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Spin } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BubblesLoading from '@/components/BubblesLoading';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import { type OperationType } from '@/store/chat/slices/operation/types';
+import { type OperationType, type StreamRetryMetadata } from '@/store/chat/slices/operation/types';
 import { elapsedTimeStyles, shinyTextStyles } from '@/styles/loading';
 
 import { resolveOperationActivity } from '../../utils/operationActivity';
+import { useShowBackgroundRunHint } from '../Contexts/BackgroundRunHintContext';
 
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
@@ -41,6 +41,7 @@ interface ContentLoadingProps {
 const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOverride }) => {
   const { t } = useTranslation('chat');
   const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
+  const showBackgroundRunHint = useShowBackgroundRunHint();
 
   const startTime =
     startTimeOverride !== undefined && Number.isFinite(startTimeOverride)
@@ -70,16 +71,54 @@ const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOver
 
   // Heterogeneous agents interpolate their display name (e.g. "Claude Code is running")
   // so the user can tell which external agent is working.
+  const getHeterogeneousAgentName = () => {
+    const heterogeneousType = runningOp?.metadata?.heterogeneousType as string | undefined;
+    return heterogeneousType
+      ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+      : t('operation.heterogeneousAgentFallback');
+  };
+
+  const getRetryStatusText = (retry: StreamRetryMetadata) => {
+    const parts = [
+      typeof retry.errorStatus === 'number' ? String(retry.errorStatus) : undefined,
+      retry.error,
+    ].filter(Boolean);
+    return parts.join(' ') || t('operation.streamRetry.unknownStatus');
+  };
+
+  const getStreamRetryLabel = () => {
+    const retry = runningOp?.metadata?.streamRetry;
+    if (!retry) return undefined;
+
+    const name = getHeterogeneousAgentName();
+    const status = getRetryStatusText(retry);
+
+    if (
+      typeof retry.attempt === 'number' &&
+      Number.isFinite(retry.attempt) &&
+      typeof retry.maxAttempts === 'number' &&
+      Number.isFinite(retry.maxAttempts)
+    ) {
+      return t('operation.streamRetry.withAttempt', {
+        attempt: retry.attempt,
+        maxAttempts: retry.maxAttempts,
+        name,
+        status,
+      });
+    }
+
+    return t('operation.streamRetry', { name, status });
+  };
+
   const getOperationLabel = () => {
     if (!operationType) return undefined;
 
     if (operationType === 'execHeterogeneousAgent') {
-      const heterogeneousType = runningOp?.metadata?.heterogeneousType as string | undefined;
-      const name = heterogeneousType
-        ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
-        : t('operation.heterogeneousAgentFallback');
-      return t('operation.execHeterogeneousAgent', { name });
+      return t('operation.execHeterogeneousAgent', { name: getHeterogeneousAgentName() });
     }
+
+    // Surfaces that turned the hint off fall back to the plain dot loader.
+    if (operationType === 'execServerAgentRuntime' && !showBackgroundRunHint) return undefined;
 
     if (DEDICATED_OPERATION_LABELS.has(operationType)) {
       return t(`operation.${operationType}` as any) as string;
@@ -94,7 +133,11 @@ const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOver
 
     return undefined;
   };
-  const operationLabel = getOperationLabel();
+  const streamRetryLabel = getStreamRetryLabel();
+  const operationLabel = streamRetryLabel ?? getOperationLabel();
+  const operationLabelClassName = streamRetryLabel
+    ? shinyTextStyles.errorText
+    : shinyTextStyles.shinyText;
 
   const showElapsedTime = elapsedSeconds >= ELAPSED_TIME_THRESHOLD / 1000;
 
@@ -105,7 +148,7 @@ const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOver
   if (operationType === 'contextCompression') {
     return (
       <Flexbox horizontal align={'center'} gap={8}>
-        <NeuralNetworkLoading size={16} />
+        <Spin size="small" variant="network" />
         <span className={shinyTextStyles.shinyText}>{t('operation.contextCompression')}</span>
       </Flexbox>
     );
@@ -114,7 +157,7 @@ const ContentLoading = memo<ContentLoadingProps>(({ id, startTime: startTimeOver
   if (operationLabel) {
     return (
       <Flexbox horizontal align={'center'} gap={4}>
-        <span className={shinyTextStyles.shinyText}>{operationLabel}...</span>
+        <span className={operationLabelClassName}>{operationLabel}...</span>
         {showElapsedTime && (
           <span className={elapsedTimeStyles.elapsedTime}>({elapsedSeconds}s)</span>
         )}

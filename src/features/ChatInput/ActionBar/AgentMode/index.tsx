@@ -1,5 +1,4 @@
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import {
   ChevronDownIcon,
   FolderIcon,
@@ -13,7 +12,9 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBusinessAgentModeSync } from '@/business/client/hooks/useBusinessAgentMode';
+import { SkeletonBar } from '@/components/Skeleton';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
+import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 import { useEffectiveAgentMode } from '@/features/ChatInput/hooks/useEffectiveAgentMode';
 import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
 import { usePermission } from '@/hooks/usePermission';
@@ -138,29 +139,34 @@ const AgentMode = memo(() => {
   useBusinessAgentModeSync(agentId);
   const [open, setOpen] = useState(false);
   const { allowed: canCreateContent, reason } = usePermission('create_content');
+  const { canUseResource, isAccessLoading, isGroupContext } = useChatInputResourceAccess();
 
-  const { canSelectAgentMode, currentMode, isAgentModeUnavailable } =
+  const { canSelectAgentMode, currentMode, isAgentModeUnavailable, isPreferenceLoading } =
     useEffectiveAgentMode(agentId);
+  const disabled = !canCreateContent || !canUseResource;
+  const disabledReason = !canCreateContent
+    ? reason
+    : t(isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent');
   const CurrentIcon = currentMode === 'agent' ? InfinityIcon : MessageCircleIcon;
 
   const handleSelect = useCallback(
     async (mode: 'chat' | 'agent') => {
-      if (!canCreateContent) return;
+      if (disabled) return;
       if (mode === 'agent' && !canSelectAgentMode) return;
 
       setOpen(false);
       await toggleAgentMode(mode === 'agent');
     },
-    [canCreateContent, canSelectAgentMode, toggleAgentMode],
+    [canSelectAgentMode, disabled, toggleAgentMode],
   );
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      if (!canCreateContent) return;
+      if (disabled) return;
 
       setOpen(nextOpen);
     },
-    [canCreateContent],
+    [disabled],
   );
 
   const agentTooltip = (
@@ -236,16 +242,20 @@ const AgentMode = memo(() => {
   );
 
   const button = (
-    <div className={cx(styles.button, !canCreateContent && styles.buttonDisabled)}>
+    <div className={cx(styles.button, disabled && styles.buttonDisabled)}>
       <Icon icon={CurrentIcon} size={14} />
       <span>{t(`chatMode.${currentMode}`)}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
 
-  if (!canCreateContent)
+  // Hold the 28px pill's footprint so the action bar does not shift when it resolves.
+  if (isAccessLoading || isPreferenceLoading)
+    return <SkeletonBar height={28} radius={999} width={84} />;
+
+  if (disabled)
     return (
-      <Tooltip title={reason}>
+      <Tooltip title={disabledReason}>
         <div>{button}</div>
       </Tooltip>
     );
@@ -254,7 +264,7 @@ const AgentMode = memo(() => {
     <Popover
       className={styles.popoverPopup}
       content={popoverContent}
-      open={canCreateContent && open}
+      open={!disabled && open}
       placement="bottomLeft"
       trigger="click"
       styles={{

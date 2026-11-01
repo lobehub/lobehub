@@ -1,9 +1,6 @@
 import { isDesktop } from '@lobechat/const';
-import { type DropdownItem } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { cssVar, useResponsive } from 'antd-style';
+import type { DropdownItem } from '@lobehub/ui';
+import { confirmModal, cssVar, Icon, toast, useResponsive } from '@lobehub/ui';
 import {
   Clock3Icon,
   CopyPlus,
@@ -12,7 +9,6 @@ import {
   Link2,
   Maximize2,
   Trash2,
-  UserRound,
   UsersIcon,
 } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -21,31 +17,63 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
+import { useFavoriteMenuItem } from '@/features/Favorites';
+import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { pageSelectors, usePageStore } from '@/store/page';
+import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+import { exportHtmlDocument } from '@/utils/exportTextFile';
 
 import { formatPageEditorInfoTime } from '../formatPageEditorInfoTime';
+import { useIsHtmlPage } from '../HtmlPageBody';
 import { usePageEditorStore, useStoreApi } from '../store';
 
 /**
  * Action menu for the page editor.
  */
-export const useMenu = (): { menuItems: any[] } => {
-  const { i18n, t } = useTranslation(['file', 'common', 'chat']);
-  const { message } = App.useApp();
+interface UseMenuOptions {
+  onCopyLink?: () => void;
+  onDeleted?: () => void;
+  onOpenHistory?: () => void;
+}
+
+export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
+  const { onCopyLink, onDeleted, onOpenHistory } = options;
+  const { i18n, t } = useTranslation(['file', 'common', 'chat', 'setting']);
+
   const storeApi = useStoreApi();
   const { lg = true } = useResponsive();
   const dateLocale = i18n.resolvedLanguage || i18n.language;
 
-  const documentId = usePageEditorStore((s) => s.documentId);
+  const [documentId, pageTitle, pageEmoji] = usePageEditorStore((s) => [
+    s.documentId,
+    s.title,
+    s.emoji,
+  ]);
+  const favoriteMenuItem = useFavoriteMenuItem(
+    documentId
+      ? {
+          icon: pageEmoji ?? null,
+          // The canonical link: this menu also opens in the document modal,
+          // which leaves the location on whatever page is underneath.
+          path: `/page/${documentId}`,
+          targetId: documentId,
+          snapshotReady: pageTitle !== undefined,
+          title: pageTitle || t('pageEditor.titlePlaceholder'),
+          type: 'page',
+        }
+      : undefined,
+  );
+  // An HTML page has no rich-text body: it exports as HTML and has no editor history.
+  const isHtmlPage = useIsHtmlPage(documentId);
   const { allowed: canCreatePage } = usePermission('create_content');
   const { allowed: canEditPage } = usePermission('edit_own_content');
 
@@ -62,20 +90,49 @@ export const useMenu = (): { menuItems: any[] } => {
 
   const duplicateDocument = useFileStore((s) => s.duplicateDocument);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
-  const transferMenuItems = useDocumentTransferMenuItem(documentId) as DropdownItem[] | null;
-
-  const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
-  const setPageVisibility = usePageStore((s) => s.setPageVisibility);
   const activeWorkspaceId = useActiveWorkspaceId();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   // Visibility toggles are creator-only — the backend rejects non-owner writes,
   // but the menu entry itself is the wrong affordance on someone else's page.
   const isOwnPage = Boolean(currentUserId && pageDocument?.userId === currentUserId);
+  const transferMenuItems = useDocumentTransferMenuItem(documentId, {
+    defaultTargetVisibility: pageDocument?.visibility === 'public' ? 'public' : 'private',
+    preferCurrentWorkspace: Boolean(activeWorkspaceId && isOwnPage && canEditPage),
+    transferLabel: t('pageEditor.menu.move'),
+  }) as DropdownItem[] | null;
+
+  // Set when the page is open from the library overlay; the metadata stamp
+  // covers the same page reached from the Pages route.
+  const openedFromLibraryId = usePageEditorStore((s) => s.knowledgeBaseId);
+  const isInLibrary = Boolean(openedFromLibraryId || pageDocument?.metadata?.knowledgeBaseId);
+
   const canPublish = Boolean(
     activeWorkspaceId && isOwnPage && pageDocument?.visibility === 'private' && canEditPage,
   );
   const canMakePrivate = Boolean(
     activeWorkspaceId && isOwnPage && pageDocument?.visibility === 'public' && canEditPage,
+  );
+  // Member Permissions moved to its own page (same shape as Agent's). Private
+  // pages are included — the creator configures what members get the moment
+  // the page is published; the server stores the level ahead of publishing.
+  const wsNavigate = useWorkspaceAwareNavigate();
+  const { data: pagePermission } = useResourcePermission(
+    'document',
+    activeWorkspaceId ? documentId : undefined,
+  );
+  const memberPermissionMenuItem: DropdownItem | null = useMemo(
+    () =>
+      activeWorkspaceId && pagePermission?.canManage && documentId
+        ? {
+            icon: <Icon icon={UsersIcon} />,
+            key: 'member-permissions',
+            label: t('permission.page.entry', { ns: 'setting' }),
+            onClick: () => {
+              wsNavigate(`/page/${documentId}/permission`);
+            },
+          }
+        : null,
+    [activeWorkspaceId, pagePermission?.canManage, documentId, t, wsNavigate],
   );
 
   const [togglePageAgentPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
@@ -92,12 +149,12 @@ export const useMenu = (): { menuItems: any[] } => {
     if (!documentId) return;
     try {
       await duplicateDocument(documentId);
-      message.success(t('pageEditor.duplicateSuccess'));
+      toast.success(t('pageEditor.duplicateSuccess'));
     } catch (error) {
       console.error('Failed to duplicate page:', error);
-      message.error(t('pageEditor.duplicateError'));
+      toast.error(t('pageEditor.duplicateError'));
     }
-  }, [canCreatePage, documentId, duplicateDocument, message, t]);
+  }, [canCreatePage, documentId, duplicateDocument, t]);
 
   const handlePublish = useCallback(() => {
     if (!canPublish || !documentId) return;
@@ -107,36 +164,36 @@ export const useMenu = (): { menuItems: any[] } => {
       okText: t('continue', { ns: 'common' }),
       onOk: async () => {
         try {
-          await publishPageToWorkspace(documentId);
-          message.success(t('pageList.publishSuccess'));
+          await pageActions.publishPageToWorkspace(documentId);
+          toast.success(t('pageList.publishSuccess'));
         } catch (error) {
           console.error('Failed to publish page:', error);
-          message.error(t('pageList.publishError'));
+          toast.error(t('pageList.publishError'));
         }
       },
       title: t('pageList.publishConfirm.title'),
     });
-  }, [canPublish, documentId, publishPageToWorkspace, message, t]);
+  }, [canPublish, documentId, t]);
 
   const handleMakePrivate = useCallback(() => {
     if (!canMakePrivate || !documentId) return;
     confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
-      content: <VisibilityConfirmContent variant="makePrivate" />,
+      content: <VisibilityConfirmContent inLibrary={isInLibrary} variant="makePrivate" />,
       okButtonProps: { danger: true },
       okText: t('continue', { ns: 'common' }),
       onOk: async () => {
         try {
-          await setPageVisibility(documentId, 'private');
-          message.success(t('makePrivate.success', { ns: 'common' }));
+          await pageActions.setPageVisibility(documentId, 'private');
+          toast.success(t('makePrivate.success', { ns: 'common' }));
         } catch (error) {
           console.error('Failed to make page private:', error);
-          message.error(t('makePrivate.error', { ns: 'common' }));
+          toast.error(t('makePrivate.error', { ns: 'common' }));
         }
       },
       title: t('makePrivate.confirm.title', { ns: 'common' }),
     });
-  }, [canMakePrivate, documentId, setPageVisibility, message, t]);
+  }, [canMakePrivate, documentId, isInLibrary, t]);
 
   const handleExportMarkdown = useCallback(async () => {
     const state = storeApi.getState();
@@ -164,13 +221,26 @@ export const useMenu = (): { menuItems: any[] } => {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-        message.success(t('pageEditor.exportSuccess'));
+        toast.success(t('pageEditor.exportSuccess'));
       }
     } catch (error) {
       console.error('Failed to export markdown:', error);
-      message.error(t('pageEditor.exportError'));
+      toast.error(t('pageEditor.exportError'));
     }
-  }, [storeApi, message, t]);
+  }, [storeApi, t]);
+
+  const htmlContent = useDocumentStore((s) =>
+    isHtmlPage && documentId ? s.documentDetailMap[documentId]?.document?.content : undefined,
+  );
+  const handleExportHtml = useCallback(async () => {
+    try {
+      const result = await exportHtmlDocument(htmlContent ?? '', storeApi.getState().title);
+      if (result === 'downloaded') toast.success(t('pageEditor.exportSuccess'));
+    } catch (error) {
+      console.error('Failed to export HTML:', error);
+      toast.error(t('pageEditor.exportError'));
+    }
+  }, [htmlContent, storeApi, t]);
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     const items: DropdownItem[] = [
@@ -189,6 +259,23 @@ export const useMenu = (): { menuItems: any[] } => {
             },
           ]
         : []),
+      ...(memberPermissionMenuItem || canMakePrivate
+        ? [
+            ...(memberPermissionMenuItem ? [memberPermissionMenuItem] : []),
+            ...(canMakePrivate
+              ? [
+                  {
+                    icon: <Icon icon={EyeOffIcon} />,
+                    key: 'make-private',
+                    label: t('makePrivate', { ns: 'common' }),
+                    onClick: handleMakePrivate,
+                  } as DropdownItem,
+                ]
+              : []),
+            { type: 'divider' as const },
+          ]
+        : []),
+      ...(favoriteMenuItem ? [favoriteMenuItem] : []),
       {
         disabled: !canCreatePage,
         icon: <Icon icon={CopyPlus} />,
@@ -201,19 +288,31 @@ export const useMenu = (): { menuItems: any[] } => {
         key: 'copy-link',
         label: t('pageEditor.menu.copyLink'),
         onClick: () => {
+          if (onCopyLink) {
+            onCopyLink();
+            return;
+          }
           const state = storeApi.getState();
-          state.handleCopyLink(t as any, message);
+          state.handleCopyLink(t as any);
         },
       },
-      {
-        icon: <Icon icon={Clock3Icon} />,
-        key: 'version-history',
-        label: t('pageEditor.history.title'),
-        onClick: () => {
-          setRightPanelMode('history');
-          togglePageAgentPanel(true);
-        },
-      },
+      ...(isHtmlPage
+        ? []
+        : [
+            {
+              icon: <Icon icon={Clock3Icon} />,
+              key: 'version-history',
+              label: t('pageEditor.history.title'),
+              onClick: () => {
+                setRightPanelMode('history');
+                if (onOpenHistory) {
+                  onOpenHistory();
+                } else {
+                  togglePageAgentPanel(true);
+                }
+              },
+            } as DropdownItem,
+          ]),
       {
         danger: true,
         disabled: !canEditPage,
@@ -223,7 +322,7 @@ export const useMenu = (): { menuItems: any[] } => {
         onClick: async () => {
           if (!canEditPage) return;
           const state = storeApi.getState();
-          await state.handleDelete(t as any, message, state.onDelete);
+          await state.handleDelete(t as any, onDeleted ?? state.onDelete);
         },
       },
       {
@@ -240,24 +339,23 @@ export const useMenu = (): { menuItems: any[] } => {
             } as DropdownItem,
           ]
         : []),
-      ...(canMakePrivate
-        ? [
-            {
-              icon: <Icon icon={EyeOffIcon} />,
-              key: 'make-private',
-              label: t('makePrivate', { ns: 'common' }),
-              onClick: handleMakePrivate,
-            } as DropdownItem,
-          ]
-        : []),
       {
-        children: [
-          {
-            key: 'export-markdown',
-            label: t('pageEditor.menu.export.markdown'),
-            onClick: handleExportMarkdown,
-          },
-        ],
+        // An HTML page has no Markdown to export: it downloads as the page itself.
+        children: isHtmlPage
+          ? [
+              {
+                key: 'export-html',
+                label: t('pageEditor.menu.export.html'),
+                onClick: handleExportHtml,
+              },
+            ]
+          : [
+              {
+                key: 'export-markdown',
+                label: t('pageEditor.menu.export.markdown'),
+                onClick: handleExportMarkdown,
+              },
+            ],
         icon: <Icon icon={Download} />,
         key: 'export',
         label: t('pageEditor.menu.export'),
@@ -271,20 +369,19 @@ export const useMenu = (): { menuItems: any[] } => {
         },
         {
           disabled: true,
-          icon: authorName ? <Icon icon={UserRound} /> : undefined,
           key: 'page-info',
           label: (
             <span style={{ color: cssVar.colorTextTertiary, fontSize: 12, lineHeight: 1.6 }}>
-              {[
-                authorName,
-                lastUpdatedTime
+              {authorName && lastUpdatedTime
+                ? t('pageEditor.editedAtBy', {
+                    name: authorName,
+                    time: formatPageEditorInfoTime(lastUpdatedTime, dateLocale),
+                  })
+                : lastUpdatedTime
                   ? t('pageEditor.editedAt', {
                       time: formatPageEditorInfoTime(lastUpdatedTime, dateLocale),
                     })
-                  : '',
-              ]
-                .filter(Boolean)
-                .join(' · ')}
+                  : t('pageEditor.editedBy', { name: authorName })}
             </span>
           ),
         },
@@ -292,26 +389,32 @@ export const useMenu = (): { menuItems: any[] } => {
     }
     return items;
   }, [
+    favoriteMenuItem,
+    isHtmlPage,
     lastUpdatedTime,
     authorName,
     canCreatePage,
     canEditPage,
-    canPublish,
     canMakePrivate,
     storeApi,
     t,
-    message,
     setRightPanelMode,
     wideScreen,
     dateLocale,
     toggleWideScreen,
     togglePageAgentPanel,
     showViewModeSwitch,
+    canPublish,
     handleDuplicate,
-    handlePublish,
     handleMakePrivate,
+    handlePublish,
+    handleExportHtml,
     handleExportMarkdown,
+    memberPermissionMenuItem,
     transferMenuItems,
+    onCopyLink,
+    onDeleted,
+    onOpenHistory,
   ]);
 
   return { menuItems };

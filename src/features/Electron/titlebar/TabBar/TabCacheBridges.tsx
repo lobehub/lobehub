@@ -3,7 +3,7 @@
 import { memo, useCallback } from 'react';
 
 import DynamicMetaRunner from '@/features/RouteMeta/DynamicMetaRunner';
-import { desktopRoutes } from '@/spa/router/desktopRouter.config';
+import { mainAreaMetaRoutes } from '@/spa/router/desktopRouter.config';
 import type { DynamicRouteMeta } from '@/spa/router/routeMeta';
 import { useElectronStore } from '@/store/electron';
 
@@ -16,7 +16,7 @@ interface TabCacheBridgeProps {
 
 const TabCacheBridge = memo<TabCacheBridgeProps>(({ tab }) => {
   const updateTabCache = useElectronStore((s) => s.updateTabCache);
-  const matched = matchRouteMeta(desktopRoutes, tab.url);
+  const matched = matchRouteMeta(mainAreaMetaRoutes, tab.url);
   const DynamicMeta = matched.meta?.DynamicMeta;
 
   const handleResolve = useCallback(
@@ -30,8 +30,8 @@ const TabCacheBridge = memo<TabCacheBridgeProps>(({ tab }) => {
 
   return (
     <DynamicMetaRunner
-      key={tab.url}
       DynamicMeta={DynamicMeta}
+      key={tab.url}
       params={matched.params}
       onResolve={handleResolve}
     />

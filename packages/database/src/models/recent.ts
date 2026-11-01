@@ -1,33 +1,86 @@
-import type { TaskStatus } from '@lobechat/types';
+import type { ChatTopicStatus, TaskStatus } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
-import { unionAll } from 'drizzle-orm/pg-core';
+import { type AnyPgColumn, unionAll } from 'drizzle-orm/pg-core';
+import removeMarkdown from 'remove-markdown';
 
-import { agents, DOCUMENT_FOLDER_TYPE, documents, tasks, topics } from '../schemas';
+import {
+  agents,
+  chatGroups,
+  DOCUMENT_FOLDER_TYPE,
+  documents,
+  messages,
+  tasks,
+  topics,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notShareVisitorTopic } from '../utils/shareVisitor';
+import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface RecentDbItem {
+  description?: string | null;
   id: string;
+  lastAssistantMessage?: string | null;
   metadata?: any;
   routeGroupId: string | null;
   routeId: string | null;
+  /**
+   * Slug source for a task link — the deliberate `tasks.name`, never the
+   * instruction. `title` coalesces the two for display, but a prompt body must
+   * not reach a URL, where it would land in history, analytics page views,
+   * access logs and anything pasted from the clipboard.
+   */
+  slugTitle?: string | null;
   /** Task lifecycle status when `type === 'task'`; null for topic/document. */
   status: TaskStatus | null;
+  taskIdentifier?: string | null;
   title: string;
   type: 'topic' | 'document' | 'task';
   updatedAt: Date;
+  /** The member who owns (created) this item — for author attribution in team views. */
+  userId: string;
 }
 
 // Mirrors `MAIN_SIDEBAR_EXCLUDE_TRIGGERS` in `src/const/topic.ts` plus the
 // legacy `task_manager` trigger from the previous Task Manager panel.
 // System-trigger topics live in their own surfaces and would clutter Recent.
-const SYSTEM_TOPIC_TRIGGERS = ['cron', 'eval', 'task_manager', 'task', 'document'];
+const SYSTEM_TOPIC_TRIGGERS = [
+  CHANNEL_TOPIC_TRIGGER,
+  'cron',
+  'eval',
+  'task_manager',
+  'task',
+  'document',
+  'goal_supervision',
+];
 
 // Excluded so tool-owned document rows don't surface as generic recent docs;
 // only user-authored pages ('api') and legacy 'topic' rows remain.
 const TOOL_DOCUMENT_SOURCE_TYPES = ['agent', 'agent-signal', 'file', 'web'] as const;
 
 const TASK_FINAL_STATUSES = ['completed', 'canceled'];
+const TOPIC_INBOX_STATUSES: ChatTopicStatus[] = ['running', 'unread'];
+const TOPIC_ARCHIVED_STATUSES: ChatTopicStatus[] = ['completed', 'archived'];
+const LAST_MESSAGE_PREVIEW_LENGTH = 2000;
+
+// A shared feed answers "what is the workspace working on", so a conversation
+// owned by a PRIVATE agent/group never belongs in it — not even the viewer's
+// own. `buildWorkspaceWhere` deliberately keeps a member's own private rows
+// visible (correct for the "mine" feed), which is exactly what let a private
+// agent's topic surface under the team tab. NULL counts as shared for rows
+// that pre-date the column, matching `buildWorkspaceWhere`.
+const sharedParentWhere = (visibility: AnyPgColumn) =>
+  or(isNull(visibility), eq(visibility, 'public'));
+
+// Best-effort markdown → plain text; previews render in a plain-text row, so
+// syntax noise (**, #, []() …) would show up literally.
+const toPlainTextPreview = (markdown: string): string => {
+  try {
+    return removeMarkdown(markdown).trimEnd();
+  } catch {
+    return markdown;
+  }
+};
 
 export class RecentModel {
   private userId: string;
@@ -40,8 +93,27 @@ export class RecentModel {
     this.workspaceId = workspaceId;
   }
 
-  queryRecent = async (limit: number = 10): Promise<RecentDbItem[]> => {
+  queryRecent = async (
+    limit: number = 10,
+    types?: RecentDbItem['type'][],
+    withTopicPreview?: boolean,
+    mineOnly?: boolean,
+    /**
+     * Restrict a workspace feed to conversations the whole team can see, i.e.
+     * drop topics whose owning agent/group is `visibility: 'private'`. Set by
+     * the home "team" tab; the sidebar feed and the "mine" tab leave it off so
+     * a member keeps their own private conversations. A no-op in personal mode,
+     * where every row is the owner's already.
+     */
+    sharedOnly?: boolean,
+    // "Archive" in the UI writes `status: 'completed'`; off by default so Home keeps listing them.
+    excludeArchived?: boolean,
+  ): Promise<RecentDbItem[]> => {
     const scope = { userId: this.userId, workspaceId: this.workspaceId };
+    const excludedTopicStatuses = excludeArchived
+      ? [...TOPIC_INBOX_STATUSES, ...TOPIC_ARCHIVED_STATUSES]
+      : TOPIC_INBOX_STATUSES;
+    const requestedTypes = types ? new Set(types) : undefined;
 
     // `tasks` uses `createdByUserId` instead of `userId`, so apply the
     // workspace-aware predicate inline.
@@ -49,37 +121,72 @@ export class RecentModel {
       ? eq(tasks.workspaceId, this.workspaceId)
       : and(eq(tasks.createdByUserId, this.userId), isNull(tasks.workspaceId));
 
+    // Workspace rows are shared across members; `mineOnly` narrows a workspace
+    // feed back to the viewer's own items. A no-op in personal mode, where the
+    // scope predicate already pins the user.
+    const mineTopicWhere = mineOnly ? eq(topics.userId, this.userId) : undefined;
+    const mineDocumentWhere = mineOnly ? eq(documents.userId, this.userId) : undefined;
+    const mineTaskWhere = mineOnly ? eq(tasks.createdByUserId, this.userId) : undefined;
+
     const topicArm = this.db
       .select({
+        description: withTopicPreview
+          ? topics.description
+          : sql<string | null>`NULL`.as('description'),
         id: topics.id,
+        taskIdentifier: sql<string | null>`NULL`.as('task_identifier'),
         metadata: sql<any>`${topics.metadata}`.as('metadata'),
         routeGroupId: sql<string | null>`${topics.groupId}`.as('route_group_id'),
         routeId: sql<string | null>`${topics.agentId}`.as('route_id'),
+        slugTitle: sql<string | null>`NULL`.as('slug_title'),
         status: sql<TaskStatus | null>`NULL`.as('status'),
         title: sql<string>`COALESCE(${topics.title}, 'Untitled Topic')`.as('title'),
         type: sql<RecentDbItem['type']>`'topic'`.as('type'),
         updatedAt: topics.updatedAt,
+        userId: topics.userId,
       })
       .from(topics)
       .leftJoin(agents, eq(topics.agentId, agents.id))
+      .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
       .where(
-        and(
-          buildWorkspaceWhere(scope, topics),
-          or(
-            isNotNull(topics.groupId),
-            eq(agents.slug, 'inbox'),
-            and(isNull(topics.groupId), ne(agents.virtual, true)),
-          ),
-          or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
-        ),
+        requestedTypes && !requestedTypes.has('topic')
+          ? sql`false`
+          : and(
+              buildWorkspaceWhere(scope, topics),
+              // Agent-share visitor topics keep the creator's userId — never
+              // surface a visitor's conversation in the creator's own Recent feed.
+              notShareVisitorTopic(),
+              mineTopicWhere,
+              // Topic scope alone is insufficient: stale/mismatched rows can
+              // point at a personal or foreign-workspace agent/group. Check
+              // the parent scope before returning titles or loading previews.
+              or(
+                and(
+                  isNotNull(topics.groupId),
+                  buildWorkspaceWhere(scope, chatGroups),
+                  sharedOnly ? sharedParentWhere(chatGroups.visibility) : undefined,
+                ),
+                and(
+                  isNull(topics.groupId),
+                  buildWorkspaceWhere(scope, agents),
+                  sharedOnly ? sharedParentWhere(agents.visibility) : undefined,
+                  or(eq(agents.slug, 'inbox'), ne(agents.virtual, true)),
+                ),
+              ),
+              or(isNull(topics.trigger), not(inArray(topics.trigger, SYSTEM_TOPIC_TRIGGERS))),
+              or(isNull(topics.status), not(inArray(topics.status, excludedTopicStatuses))),
+            ),
       );
 
     const documentArm = this.db
       .select({
+        description: sql<string | null>`NULL`.as('description'),
         id: documents.id,
+        taskIdentifier: sql<string | null>`NULL`.as('task_identifier'),
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`NULL`.as('route_id'),
+        slugTitle: sql<string | null>`NULL`.as('slug_title'),
         status: sql<TaskStatus | null>`NULL`.as('status'),
         title:
           sql<string>`COALESCE(${documents.title}, ${documents.filename}, 'Untitled Document')`.as(
@@ -87,46 +194,108 @@ export class RecentModel {
           ),
         type: sql<RecentDbItem['type']>`'document'`.as('type'),
         updatedAt: documents.updatedAt,
+        userId: documents.userId,
       })
       .from(documents)
       .where(
-        and(
-          buildWorkspaceWhere(scope, documents),
-          not(inArray(documents.sourceType, TOOL_DOCUMENT_SOURCE_TYPES)),
-          isNull(documents.knowledgeBaseId),
-          ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
-        ),
+        requestedTypes && !requestedTypes.has('document')
+          ? sql`false`
+          : and(
+              buildWorkspaceWhere(scope, documents),
+              mineDocumentWhere,
+              not(inArray(documents.sourceType, TOOL_DOCUMENT_SOURCE_TYPES)),
+              isNull(documents.knowledgeBaseId),
+              ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
+            ),
       );
 
     const taskArm = this.db
       .select({
+        description: sql<string | null>`NULL`.as('description'),
         id: tasks.id,
+        taskIdentifier: sql<string | null>`${tasks.identifier}`.as('task_identifier'),
         metadata: sql<any>`NULL`.as('metadata'),
         routeGroupId: sql<string | null>`NULL`.as('route_group_id'),
         routeId: sql<string | null>`${tasks.assigneeAgentId}`.as('route_id'),
+        // Display title falls back to the instruction so a nameless task still
+        // reads as something; `slugTitle` deliberately does not, so the link
+        // this row builds carries only what the task was actually named.
+        slugTitle: sql<string | null>`${tasks.name}`.as('slug_title'),
         status: sql<TaskStatus | null>`${tasks.status}`.as('status'),
         title: sql<string>`COALESCE(${tasks.name}, ${tasks.instruction}, 'Untitled Task')`.as(
           'title',
         ),
         type: sql<RecentDbItem['type']>`'task'`.as('type'),
         updatedAt: tasks.updatedAt,
+        userId: sql<string>`${tasks.createdByUserId}`.as('user_id'),
       })
       .from(tasks)
-      .where(and(taskScopeWhere, not(inArray(tasks.status, TASK_FINAL_STATUSES))));
+      .where(
+        requestedTypes && !requestedTypes.has('task')
+          ? sql`false`
+          : and(taskScopeWhere, mineTaskWhere, not(inArray(tasks.status, TASK_FINAL_STATUSES))),
+      );
 
     const rows = await unionAll(topicArm, documentArm, taskArm)
       .orderBy(desc(sql`updated_at`))
       .limit(limit);
 
-    return rows.map((row) => ({
-      id: row.id,
-      metadata: row.metadata ?? undefined,
-      routeGroupId: row.routeGroupId,
-      routeId: row.routeId,
-      status: row.status,
-      title: row.title,
-      type: row.type,
-      updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
-    }));
+    // Previews are fetched in a second batched query scoped to the final page
+    // — inlining a correlated subquery in the topic arm would evaluate it for
+    // every topic the user owns before the sort/limit prunes to `limit` rows.
+    const previewByTopicId = withTopicPreview
+      ? await this.queryLastAssistantPreviews(
+          rows.filter((row) => row.type === 'topic').map((row) => row.id),
+        )
+      : new Map<string, string>();
+
+    return rows.map((row) => {
+      const preview = previewByTopicId.get(row.id) ?? null;
+      return {
+        description: row.description,
+        id: row.id,
+        lastAssistantMessage:
+          preview && preview.length > LAST_MESSAGE_PREVIEW_LENGTH
+            ? `${preview.slice(0, LAST_MESSAGE_PREVIEW_LENGTH)}…`
+            : preview,
+        metadata: row.metadata ?? undefined,
+        taskIdentifier: row.taskIdentifier,
+        routeGroupId: row.routeGroupId,
+        routeId: row.routeId,
+        slugTitle: row.slugTitle,
+        status: row.status,
+        title: row.title,
+        type: row.type,
+        // Fallback for a driver or decoder that stops handing timestamps back as Date.
+        updatedAt: row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt as any),
+        userId: row.userId,
+      };
+    });
+  };
+
+  private queryLastAssistantPreviews = async (topicIds: string[]): Promise<Map<string, string>> => {
+    if (topicIds.length === 0) return new Map();
+
+    const rows = await this.db
+      .selectDistinctOn([messages.topicId], {
+        topicId: messages.topicId,
+        value: sql<string>`left(${messages.content}, ${LAST_MESSAGE_PREVIEW_LENGTH + 1})`,
+      })
+      .from(messages)
+      .where(
+        and(
+          inArray(messages.topicId, topicIds),
+          eq(messages.role, 'assistant'),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages),
+          ne(messages.content, ''),
+        ),
+      )
+      .orderBy(messages.topicId, desc(messages.createdAt));
+
+    return new Map(
+      rows
+        .filter((row) => row.topicId !== null)
+        .map((row) => [row.topicId!, toPlainTextPreview(row.value)]),
+    );
   };
 }

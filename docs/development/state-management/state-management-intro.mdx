@@ -126,104 +126,110 @@ In the LobeHub application, session management is a complex functional module, s
 ```bash
 src/store/session
 ├── helpers.ts                         # Helper functions
-├── hooks                              # Custom React hooks
-│   ├── index.ts                       # Export file for hooks
-│   ├── useEffectAfterHydrated.ts      # Hook for effects after session hydration
-│   ├── useOnFinishHydrationSession.ts # Hook for session hydration completion
-│   ├── useSessionChatInit.ts          # Hook for session chat initialization
-│   └── useSessionHydrated.ts          # Hook for session hydration status
 ├── index.ts                           # Aggregated export file for SessionStore
 ├── initialState.ts                    # Aggregated initialState for all slices
 ├── selectors.ts                       # Selectors exported from various slices
 ├── slices                             # Separated functional modules
-│   ├── agent                          # State and operations related to agents
-│   │   ├── action.ts                  # Action definitions related to agents
-│   │   ├── index.ts                   # Entry file for agent slice
-│   │   ├── selectors.test.ts          # Tests for agent-related selectors
-│   │   └── selectors.ts               # Selector definitions related to agents
-│   └── session                        # State and operations related to sessions
-│   ├── action.test.ts                 # Tests for session-related actions
-│   ├── action.ts                      # Action definitions related to sessions
-│   ├── helpers.ts                     # Helper functions related to sessions
-│   ├── initialState.ts                # Initial state for session slice
-│   └── selectors                      # Session-related selectors and their tests
-│   ├── export.ts                      # Aggregated export for session selectors
-│   ├── index.ts                       # Entry file for session selectors
-│   ├── list.test.ts                   # Tests for list selectors
-│   └── list.ts                        # Definitions for list-related selectors
+│   ├── session                        # State and operations related to sessions
+│   │   ├── action.test.ts             # Tests for session-related actions
+│   │   ├── action.ts                  # Action definitions related to sessions
+│   │   ├── helpers.ts                 # Helper functions related to sessions
+│   │   ├── initialState.ts            # Initial state for session slice
+│   │   ├── reducers.test.ts           # Tests for session reducers
+│   │   ├── reducers.ts                # Reducer definitions for session state
+│   │   └── selectors                  # Session-related selectors and their tests
+│   │       ├── index.ts               # Entry file for session selectors
+│   │       ├── list.test.ts           # Tests for list selectors
+│   │       ├── list.ts                # Definitions for list-related selectors
+│   │       ├── meta.test.ts           # Tests for meta selectors
+│   │       └── meta.ts                # Definitions for meta-related selectors
+│   └── sessionGroup                   # State and operations related to session groups
+│       ├── action.test.ts             # Tests for session group actions
+│       ├── action.ts                  # Action definitions related to session groups
+│       ├── initialState.ts            # Initial state for session group slice
+│       ├── reducer.test.ts            # Tests for the session group reducer
+│       ├── reducer.ts                 # Reducer definitions for session group state
+│       └── selectors.ts               # Selector definitions related to session groups
 └── store.ts                           # Creation and usage of SessionStore
 ```
 
 ## Implementation of SessionStore
 
-In LobeHub, the SessionStore is designed as the core module for managing session state and logic. It consists of multiple Slices, with each Slice managing a relevant portion of state and logic. Below is a simplified example of the SessionStore implementation:
+The legacy SessionStore retains selection/UI state and compatibility actions. Its slices group related behavior. The following simplified example shows how action classes are composed into the store:
 
 ### store.ts
 
 ```ts
-import { PersistOptions, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
+import { subscribeWithSelector } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
-import { devtools } from 'zustand/middleware';
 import { createWithEqualityFn } from 'zustand/traditional';
+import { type StateCreator } from 'zustand/vanilla';
 
-import { SessionStoreState, initialState } from './initialState';
-import { AgentAction, createAgentSlice } from './slices/agent/action';
-import { SessionAction, createSessionSlice } from './slices/session/action';
+import { isDev } from '@/utils/env';
+
+import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
+import { type SessionStoreState, initialState } from './initialState';
+import { type SessionAction, createSessionSlice } from './slices/session/action';
+import { type SessionGroupAction, createSessionGroupSlice } from './slices/sessionGroup/action';
 
 //  ===============  Aggregate createStoreFn ============ //
 
-export type SessionStore = SessionAction & AgentAction & SessionStoreState;
+export interface SessionStore extends SessionAction, SessionGroupAction, SessionStoreState {}
+
 const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (...parameters) => ({
   ...initialState,
-  ...createAgentSlice(...parameters),
-  ...createSessionSlice(...parameters),
+  ...flattenActions([createSessionSlice(...parameters), createSessionGroupSlice(...parameters)]),
 });
 
 //  ===============  Implement useStore ============ //
+const devtools = createDevtools('session');
 
 export const useSessionStore = createWithEqualityFn<SessionStore>()(
-  persist(
-    subscribeWithSelector(
-      devtools(createStore, {
-        name: 'LobeHub_Session' + (isDev ? '_DEV' : ''),
-      }),
-    ),
-    persistOptions,
+  subscribeWithSelector(
+    devtools(createStore, {
+      name: 'LobeChat_Session' + (isDev ? '_DEV' : ''),
+    }),
   ),
   shallow,
 );
-
 ```
 
-In this `store.ts` file, we create a `useSessionStore` hook that uses the `zustand` library to create a global state manager. We merge the initialState with the actions from each Slice to create a complete SessionStore.
+In this `store.ts` file, we create a `useSessionStore` hook that uses the `zustand` library to create a global state manager. We merge the initialState with the actions from each Slice — via the shared `flattenActions` helper — to create a complete SessionStore. The legacy SessionStore manages session selection and UI state. Agent/sidebar lists are loaded and cached by [HomeStore’s replica-backed Agent list](https://github.com/lobehub/lobehub/blob/canary/src/store/home/slices/agentList/action.ts).
 
 ### slices/session/action.ts
 
+The action slice below shows the existing `switchSession` action. It checks the active Agent ID and updates `activeAgentId` through a labeled state write.
+
 ```ts
-import { StateCreator } from 'zustand';
+import { type SessionStore } from '@/store/session';
+import { type StoreSetter } from '@/store/types';
+import { setNamespace } from '@/utils/storeDebug';
 
-import { SessionStore } from '@/store/session';
+const n = setNamespace('session');
 
-export interface SessionActions {
-  /**
-   * A custom hook that uses SWR to fetch sessions data.
-   */
-  useFetchSessions: () => SWRResponse<any>;
+type Setter = StoreSetter<SessionStore>;
+export const createSessionSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
+  new SessionActionImpl(set, get, _api);
+
+export class SessionActionImpl {
+  readonly #get: () => SessionStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => SessionStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  switchSession = (sessionId: string): void => {
+    if (this.#get().activeAgentId === sessionId) return;
+
+    this.#set({ activeAgentId: sessionId }, false, n(`activeSession/${sessionId}`));
+  };
 }
 
-export const createSessionSlice: StateCreator<
-  SessionStore,
-  [['zustand/devtools', never]],
-  [],
-  SessionAction
-> = (set, get) => ({
-  useFetchSessions: () => {
-    // ...logic for initializing sessions
-  },
-  // ...implementation of other actions
-});
+export type SessionAction = Pick<SessionActionImpl, keyof SessionActionImpl>;
 ```
 
-In the `action.ts` file, we define a `SessionActions` interface to describe session-related actions and implement a `useFetchSessions` function to create these actions. Then, we merge these actions with the initial state to form the session-related Slice.
-
-Through this layered and modular approach, we can ensure that LobeHub's SessionStore is clear, maintainable, and easy to extend and test.
+`createSessionSlice` returns an action-class instance. `flattenActions` exposes its public methods on the legacy store, and `SessionAction` is inferred from those methods. List loading and persistence belong to the owning list resource; this selection action only changes UI state.

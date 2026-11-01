@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import type { ViewMode } from '@/routes/(main)/resource/features/store/initialState';
+import type { ViewMode } from '@/features/ResourceManager/store/initialState';
 
 interface UseMasonryViewStateOptions {
   dataLength: number;

@@ -1,4 +1,3 @@
-import type { EvalRunTopicResult, EvalThreadResult } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
@@ -16,7 +15,14 @@ import { messages } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { AgentEvalRunService } from '@/server/services/agentEvalRun';
+import { AgentEvalRunService, RUN_CREATE_ID_CONFLICT } from '@/server/services/agentEvalRun';
+import {
+  applyReportResult,
+  recomputeRunAggregation,
+  resolveExpectedTotalCases,
+} from '@/server/services/agentEvalRun/reportResults';
+
+import { evalRunInputConfigSchema } from './evalRunConfig.schema';
 
 const runStatusSchema = z.enum([
   'idle',
@@ -28,9 +34,20 @@ const runStatusSchema = z.enum([
   'external',
 ]);
 
+const runCreateInputSchema = z.object({
+  config: evalRunInputConfigSchema.optional(),
+  datasetId: z.string(),
+  experimentId: z.string().optional(),
+  // Caller-supplied id for idempotent cross-server creation.
+  id: z.string().optional(),
+  name: z.string().optional(),
+  parentRunId: z.string().optional(),
+  targetAgentId: z.string().optional(),
+});
+
 const reportResultItemSchema = z.object({
   correct: z.boolean(),
-  result: z.record(z.unknown()).optional(),
+  result: z.record(z.string(), z.unknown()).optional(),
   score: z.number(),
   threadId: z.string().optional(),
   topicId: z.string(),
@@ -57,240 +74,81 @@ const agentEvalExternalWriteProcedure = agentEvalExternalProcedure.use(
   withScopedPermission('agent:update'),
 );
 
-type ReportResultInput = z.infer<typeof reportResultItemSchema> & { runId: string };
-
-const recomputeRunAggregation = async (
-  ctx: {
-    runModel: AgentEvalRunModel;
-    runService: AgentEvalRunService;
-    runTopicModel: AgentEvalRunTopicModel;
-  },
-  runId: string,
-) => {
-  const refreshedRun = await ctx.runModel.findById(runId);
-  if (!refreshedRun) return undefined;
-
-  const refreshedTopics = await ctx.runTopicModel.findByRunId(runId);
-  const metrics = await ctx.runService.evaluateAndFinalizeRun({
-    run: {
-      config: refreshedRun.config,
-      id: refreshedRun.id,
-      metrics: refreshedRun.metrics,
-      startedAt: refreshedRun.startedAt,
-    },
-    runTopics: refreshedTopics,
-  });
-
-  const hasAwaitingExternal = refreshedTopics.some(
-    (topic) =>
-      topic.status === 'external' ||
-      (topic.evalResult as Record<string, unknown> | null)?.awaitingExternalEval === true,
-  );
-  const nonSuccessCases = (metrics.errorCases || 0) + (metrics.timeoutCases || 0);
-  const status = hasAwaitingExternal
-    ? 'external'
-    : nonSuccessCases >= metrics.totalCases
-      ? 'failed'
-      : 'completed';
-
-  await ctx.runModel.update(runId, { metrics, status });
-
-  return status;
-};
-
-const applyReportResult = async (
-  ctx: {
-    runModel: AgentEvalRunModel;
-    runTopicModel: AgentEvalRunTopicModel;
-    runService: AgentEvalRunService;
-    threadModel: ThreadModel;
-  },
-  input: ReportResultInput,
-  recomputeRun: boolean,
-) => {
-  const run = await ctx.runModel.findById(input.runId);
-  if (!run) {
-    throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
-  }
-
-  const runTopics = await ctx.runTopicModel.findByRunId(input.runId);
-  const runTopic = runTopics.find((item) => item.topicId === input.topicId);
-  if (!runTopic) {
-    throw new TRPCError({ code: 'NOT_FOUND', message: 'Run topic not found' });
-  }
-
-  const runK = run.config?.k ?? 1;
-  const rubricScores = [{ rubricId: 'external', score: input.score }];
-  const existingEvalResult = (runTopic.evalResult ?? {}) as EvalRunTopicResult &
-    Record<string, unknown>;
-  const externalResult = input.result ?? {};
-
-  let idempotent = false;
-  let reportedThreads: number;
-  let totalThreads: number;
-  let topicFinalized: boolean;
-
-  if (runK > 1) {
-    if (!input.threadId) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'threadId is required when k > 1',
-      });
-    }
-
-    const allThreads = await ctx.threadModel.queryByTopicId(input.topicId);
-    const evalThreads = allThreads.filter((thread) => thread.type === 'eval');
-    const sourceThreads = evalThreads.length > 0 ? evalThreads : allThreads;
-    if (sourceThreads.length === 0) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'No threads found for this topic',
-      });
-    }
-
-    const threads: EvalThreadResult[] =
-      (existingEvalResult.threads as EvalThreadResult[] | undefined)?.map((thread) => ({
-        ...thread,
-      })) ??
-      sourceThreads.map((thread) => ({
-        status: 'external',
-        threadId: thread.id,
-      }));
-
-    let targetIndex = threads.findIndex((thread) => thread.threadId === input.threadId);
-    if (targetIndex < 0) {
-      const existsInTopic = sourceThreads.some((thread) => thread.id === input.threadId);
-      if (!existsInTopic) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Thread not found for this topic',
-        });
-      }
-
-      threads.push({ status: 'external', threadId: input.threadId });
-      targetIndex = threads.length - 1;
-    }
-
-    totalThreads = threads.length;
-    const targetThread = threads[targetIndex];
-    const alreadyReported =
-      targetThread.status === 'completed' &&
-      targetThread.score === input.score &&
-      targetThread.passed === input.correct;
-    if (alreadyReported) {
-      idempotent = true;
-    } else {
-      threads[targetIndex] = {
-        ...targetThread,
-        passed: input.correct,
-        rubricScores,
-        score: input.score,
-        status: 'completed',
-      };
-
-      const existingThreadResults = (existingEvalResult.externalThreadResults ?? {}) as Record<
-        string,
-        unknown
-      >;
-      const nextEvalResult = {
-        ...existingEvalResult,
-        awaitingExternalEval: true,
-        externalThreadResults: {
-          ...existingThreadResults,
-          [input.threadId]: externalResult,
-        },
-        threads,
-      } satisfies EvalRunTopicResult & Record<string, unknown>;
-
-      await ctx.runTopicModel.updateByRunAndTopic(input.runId, input.topicId, {
-        evalResult: nextEvalResult,
-        status: 'external',
-      });
-    }
-
-    reportedThreads = threads.filter(
-      (thread) => thread.status === 'completed' && typeof thread.score === 'number',
-    ).length;
-    topicFinalized = reportedThreads >= totalThreads;
-
-    if (topicFinalized) {
-      const finalThreads = threads;
-      const totalScore = finalThreads.reduce((acc, thread) => acc + (thread.score ?? 0), 0);
-      const avgScore = totalScore / finalThreads.length;
-      const passAtK = finalThreads.some((thread) => thread.passed === true);
-      const passAllK = finalThreads.every((thread) => thread.passed === true);
-
-      const existingThreadResults = (existingEvalResult.externalThreadResults ?? {}) as Record<
-        string,
-        unknown
-      >;
-      const nextEvalResult = {
-        ...existingEvalResult,
-        awaitingExternalEval: false,
-        externalThreadResults: {
-          ...existingThreadResults,
-          [input.threadId]: externalResult,
-        },
-        passAllK,
-        passAtK,
-        rubricScores: [{ rubricId: 'external', score: avgScore }],
-        threads: finalThreads,
-      } satisfies EvalRunTopicResult & Record<string, unknown>;
-
-      await ctx.runTopicModel.updateByRunAndTopic(input.runId, input.topicId, {
-        evalResult: nextEvalResult,
-        passed: passAtK,
-        score: avgScore,
-        status: passAtK ? 'passed' : 'failed',
-      });
-    }
-  } else {
-    const alreadyReported =
-      runTopic.status === (input.correct ? 'passed' : 'failed') &&
-      runTopic.score === input.score &&
-      runTopic.passed === input.correct;
-    if (alreadyReported) {
-      idempotent = true;
-    } else {
-      const nextEvalResult = {
-        ...existingEvalResult,
-        awaitingExternalEval: false,
-        externalResult,
-        rubricScores,
-      } satisfies EvalRunTopicResult & Record<string, unknown>;
-
-      await ctx.runTopicModel.updateByRunAndTopic(input.runId, input.topicId, {
-        evalResult: nextEvalResult,
-        passed: input.correct,
-        score: input.score,
-        status: input.correct ? 'passed' : 'failed',
-      });
-    }
-
-    reportedThreads = 1;
-    totalThreads = 1;
-    topicFinalized = true;
-  }
-
-  let runStatus: string | undefined;
-  if (recomputeRun) {
-    runStatus = await recomputeRunAggregation(ctx, input.runId);
-  }
-
-  return {
-    idempotent,
-    reportedThreads,
-    runId: input.runId,
-    runStatus,
-    success: true,
-    threadId: input.threadId,
-    topicFinalized,
-    topicId: input.topicId,
-    totalThreads,
-  };
-};
+export {
+  resolveExpectedTotalCases,
+  resolveRunStatus,
+} from '@/server/services/agentEvalRun/reportResults';
 
 export const agentEvalExternalRouter = router({
+  /**
+   * Create an external run: immediately claimable (`pending`), no pre-created
+   * Topics/RunTopics, no workflow triggered. k=1 only.
+   */
+  runCreate: agentEvalExternalWriteProcedure
+    .input(runCreateInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const run = await ctx.runService.createRun({ ...input, mode: 'external' });
+        return {
+          datasetId: run.datasetId,
+          experimentId: run.experimentId ?? undefined,
+          id: run.id,
+          status: run.status,
+          success: true,
+          targetAgentId: run.targetAgentId ?? undefined,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create run';
+        if (message === RUN_CREATE_ID_CONFLICT) {
+          throw new TRPCError({ code: 'CONFLICT', message });
+        }
+        throw new TRPCError({ code: 'BAD_REQUEST', message });
+      }
+    }),
+
+  /**
+   * Atomically claim a pending run (pending -> running) and return everything
+   * the worker needs: run, dataset, all test cases, and the agent snapshot.
+   */
+  runClaim: agentEvalExternalWriteProcedure
+    .input(z.object({ runId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const payload = await ctx.runService.claimRun(input.runId);
+        return { ...payload, success: true };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Run is not claimable';
+        throw new TRPCError({ code: 'CONFLICT', message });
+      }
+    }),
+
+  /**
+   * Execute a single case of a claimed run by dataset-native caseId. Creates
+   * the Topic/RunTopic on demand, then starts the agent trajectory.
+   */
+  runExecuteCase: agentEvalExternalWriteProcedure
+    .input(
+      z.object({
+        caseId: z.string(),
+        /** Route execution to an enrolled device (native AgentRuntime). */
+        deviceId: z.string().optional(),
+        prompt: z.string().optional(),
+        runId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const result = await ctx.runService.executeTrajectoryOnDemand(input);
+        if ('error' in result && result.error) {
+          return { status: 'error' as const, success: false, ...result };
+        }
+        return { status: 'started' as const, success: true, ...result };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to execute case';
+        throw new TRPCError({ code: 'BAD_REQUEST', message });
+      }
+    }),
+
   datasetGet: agentEvalExternalProcedure
     .input(z.object({ datasetId: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -303,6 +161,8 @@ export const agentEvalExternalRouter = router({
 
       return {
         benchmarkId: dataset.benchmarkId,
+        evalConfig: dataset.evalConfig,
+        evalMode: dataset.evalMode,
         id: dataset.id,
         identifier: dataset.identifier,
         metadata,
@@ -350,7 +210,7 @@ export const agentEvalExternalRouter = router({
     .input(
       z.object({
         correct: z.boolean(),
-        result: z.record(z.unknown()).optional(),
+        result: z.record(z.string(), z.unknown()).optional(),
         runId: z.string(),
         score: z.number(),
         threadId: z.string().optional(),
@@ -408,10 +268,51 @@ export const agentEvalExternalRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
       }
 
+      if (input.status === 'running') {
+        const updated = await ctx.runModel.update(input.runId, { status: 'running' });
+        return { runId: input.runId, status: updated?.status ?? 'running', success: true };
+      }
+
+      // Worker-driven terminal failure/abort: allowed from any non-terminal
+      // state. Marks remaining non-terminal RunTopics aborted and finalizes.
+      if (input.status === 'failed' || input.status === 'aborted') {
+        if (['completed', 'failed', 'aborted'].includes(run.status)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Run is already in a terminal state: ${run.status}`,
+          });
+        }
+
+        await ctx.runTopicModel.batchMarkAborted(input.runId);
+
+        if (input.status === 'failed') {
+          const runTopics = await ctx.runTopicModel.findByRunId(input.runId);
+          const metrics = await ctx.runService.evaluateAndFinalizeRun({
+            expectedTotalCases: resolveExpectedTotalCases(
+              run.config?.caseSelection,
+              await ctx.testCaseModel.countByDatasetId(run.datasetId),
+            ),
+            run: { config: run.config, id: run.id, metrics: run.metrics, startedAt: run.startedAt },
+            runTopics,
+          });
+          const updated = await ctx.runModel.update(input.runId, { metrics, status: 'failed' });
+          return {
+            metrics,
+            runId: input.runId,
+            status: updated?.status ?? 'failed',
+            success: true,
+          };
+        }
+
+        const updated = await ctx.runModel.update(input.runId, { status: 'aborted' });
+        return { runId: input.runId, status: updated?.status ?? 'aborted', success: true };
+      }
+
       if (input.status !== 'completed' && input.status !== 'external') {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          message: 'External endpoint only supports setting status to completed or external',
+          message:
+            'External endpoint only supports setting status to completed, external, failed, or aborted',
         });
       }
 
@@ -437,6 +338,10 @@ export const agentEvalExternalRouter = router({
         }
 
         const metrics = await ctx.runService.evaluateAndFinalizeRun({
+          expectedTotalCases: resolveExpectedTotalCases(
+            run.config?.caseSelection,
+            await ctx.testCaseModel.countByDatasetId(run.datasetId),
+          ),
           run: { config: run.config, id: run.id, metrics: run.metrics, startedAt: run.startedAt },
           runTopics,
         });
@@ -463,7 +368,7 @@ export const agentEvalExternalRouter = router({
     .input(
       z.object({
         correct: z.boolean(),
-        result: z.record(z.unknown()).optional(),
+        result: z.record(z.string(), z.unknown()).optional(),
         runId: z.string(),
         score: z.number(),
         threadId: z.string().optional(),

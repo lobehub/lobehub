@@ -10,6 +10,7 @@ import {
   sessions,
   topics,
   users,
+  workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
@@ -325,6 +326,167 @@ describe('TopicModel - Delete', () => {
 
       expect(await serverDB.select().from(topics).where(eq(topics.userId, userId))).toHaveLength(0);
       expect(await serverDB.select().from(topics)).toHaveLength(1);
+    });
+  });
+
+  describe('agent-share visitor topics', () => {
+    // Visitor topics carry the creator's userId plus a non-null senderId, and
+    // are hidden from every creator-facing listing — so the creator's id-less
+    // sweeps must not destroy them.
+    beforeEach(async () => {
+      await serverDB.insert(agents).values({ id: 'share-agent', title: 'Shared', userId });
+      await serverDB.insert(topics).values([
+        { agentId: 'share-agent', id: 'creator-topic', userId },
+        { agentId: 'share-agent', id: 'visitor-topic', senderId: 'visitor-a', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        { id: 'creator-msg', role: 'user', topicId: 'creator-topic', userId },
+        { id: 'visitor-msg', role: 'user', topicId: 'visitor-topic', userId },
+      ]);
+    });
+
+    const remainingTopicIds = async () =>
+      (await serverDB.select().from(topics).where(eq(topics.userId, userId))).map((t) => t.id);
+
+    it('deleteAll should keep visitor topics and their messages', async () => {
+      await topicModel.deleteAll();
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+      expect(
+        await serverDB.select().from(messages).where(eq(messages.userId, userId)),
+      ).toHaveLength(1);
+    });
+
+    it('batchDeleteByAgentId should keep visitor topics', async () => {
+      await topicModel.batchDeleteByAgentId('share-agent');
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('batchDeleteBySessionId with no session should keep visitor topics', async () => {
+      await topicModel.batchDeleteBySessionId();
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('batchDeleteByGroupId with no group should keep visitor topics', async () => {
+      await topicModel.batchDeleteByGroupId();
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('delete should keep a visitor topic even when its id is named', async () => {
+      // A creator can obtain a raw visitor topic id out of band (data export),
+      // so `topic.removeTopic` must not cascade-delete the conversation.
+      await topicModel.delete('visitor-topic');
+
+      expect((await remainingTopicIds()).sort()).toEqual(['creator-topic', 'visitor-topic']);
+      expect(
+        await serverDB.select().from(messages).where(eq(messages.userId, userId)),
+      ).toHaveLength(2);
+    });
+
+    it('delete should still remove the creator own topic', async () => {
+      await topicModel.delete('creator-topic');
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('batchDelete should drop only the non-visitor ids of a mixed batch', async () => {
+      await topicModel.batchDelete(['creator-topic', 'visitor-topic']);
+
+      expect(await remainingTopicIds()).toEqual(['visitor-topic']);
+    });
+
+    it('deleting the agent still cascades visitor topics away', async () => {
+      await serverDB.delete(agents).where(eq(agents.id, 'share-agent'));
+
+      expect(await remainingTopicIds()).toEqual([]);
+    });
+  });
+
+  describe('workspace mode', () => {
+    const workspaceId = 'topic-delete-workspace';
+    const workspaceTopicModel = new TopicModel(serverDB, userId, workspaceId);
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Topic Delete Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(agents).values({ id: 'ws-agent', userId, workspaceId });
+      await serverDB.insert(topics).values([
+        { id: 'ws-topic-mine', agentId: 'ws-agent', userId, workspaceId },
+        { id: 'ws-topic-other', agentId: 'ws-agent', userId: userId2, workspaceId },
+      ]);
+    });
+
+    it('deleteAll should only clear the caller own topics', async () => {
+      await workspaceTopicModel.deleteAll();
+
+      const remaining = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.workspaceId, workspaceId));
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].userId).toBe(userId2);
+    });
+
+    it('batchDeleteByAgentId should scope to the caller when restrictToCreator is set', async () => {
+      await workspaceTopicModel.batchDeleteByAgentId('ws-agent', { restrictToCreator: true });
+
+      const remaining = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.workspaceId, workspaceId));
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].userId).toBe(userId2);
+    });
+
+    it('batchDeleteByGroupId should scope to the caller when restrictToCreator is set', async () => {
+      await serverDB.insert(chatGroups).values({
+        id: 'ws-group',
+        title: 'Workspace Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(topics).values([
+        { groupId: 'ws-group', id: 'ws-g-topic-mine', userId, workspaceId },
+        { groupId: 'ws-group', id: 'ws-g-topic-other', userId: userId2, workspaceId },
+      ]);
+
+      await workspaceTopicModel.batchDeleteByGroupId('ws-group', { restrictToCreator: true });
+
+      const remaining = await serverDB.select().from(topics).where(eq(topics.groupId, 'ws-group'));
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].userId).toBe(userId2);
+    });
+
+    it('batchDeleteByAgentId should keep workspace-wide scope by default', async () => {
+      await workspaceTopicModel.batchDeleteByAgentId('ws-agent');
+
+      expect(
+        await serverDB.select().from(topics).where(eq(topics.workspaceId, workspaceId)),
+      ).toHaveLength(0);
+    });
+
+    it('batchDeleteBySessionId should scope to the caller when restrictToCreator is set', async () => {
+      await serverDB.insert(sessions).values({ id: 'ws-session', userId, workspaceId });
+      await serverDB.insert(topics).values([
+        { id: 'ws-s-topic-mine', sessionId: 'ws-session', userId, workspaceId },
+        { id: 'ws-s-topic-other', sessionId: 'ws-session', userId: userId2, workspaceId },
+      ]);
+
+      await workspaceTopicModel.batchDeleteBySessionId('ws-session', { restrictToCreator: true });
+
+      const remaining = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.sessionId, 'ws-session'));
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].userId).toBe(userId2);
     });
   });
 });

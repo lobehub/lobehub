@@ -1,0 +1,26 @@
+import {
+  CreateGoalInspector,
+  CreateGoalRender,
+  TaskInterventions,
+} from '@lobechat/builtin-tool-task/client';
+import type { BuiltinInspector, BuiltinIntervention, BuiltinRender } from '@lobechat/types';
+
+import { GoalIdentifier, GoalManifest, LegacyGoalIdentifier } from '../manifest';
+import { GoalApiName } from '../types';
+
+export const GoalInspectors: Record<string, BuiltinInspector> = {
+  [GoalApiName.createGoal]: CreateGoalInspector as BuiltinInspector,
+};
+
+export const GoalInterventions: Record<string, BuiltinIntervention> = {
+  [GoalApiName.createGoal]: TaskInterventions.createGoal as BuiltinIntervention,
+};
+
+export const GoalRenders: Record<string, BuiltinRender> = {
+  [GoalApiName.createGoal]: CreateGoalRender as BuiltinRender,
+};
+
+export { GoalIdentifier, GoalManifest, LegacyGoalIdentifier };
+export { GoalSupervisorManifest } from '../supervisor';
+export * from '../types';
+export { GoalSupervisorInspectors } from './supervisorInspector';

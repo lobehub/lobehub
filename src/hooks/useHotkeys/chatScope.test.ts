@@ -1,0 +1,120 @@
+import { HotkeyEnum, HotkeyGroupEnum, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
+import type { HotkeyId } from '@lobechat/types';
+import { act, renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
+
+import { useFindInTopicHotkey, useToggleTerminalPanelHotkey } from './chatScope';
+
+const mocks = vi.hoisted(() => ({
+  hotkeyCallback: undefined as (() => void) | undefined,
+  openWorkingSidebar: vi.fn(),
+  toggleTerminalPanel: vi.fn(),
+  useHotkeyById: vi.fn(),
+}));
+
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal()),
+  isDesktop: true,
+}));
+
+vi.mock('@/store/global', () => ({
+  useGlobalStore: (
+    selector: (state: {
+      openWorkingSidebar: (tab?: string) => void;
+      toggleTerminalPanel: () => void;
+    }) => unknown,
+  ) =>
+    selector({
+      openWorkingSidebar: mocks.openWorkingSidebar,
+      toggleTerminalPanel: mocks.toggleTerminalPanel,
+    }),
+}));
+
+vi.mock('./useHotkeyById', () => ({
+  useHotkeyById: (id: HotkeyId, callback: () => void, options?: unknown) => {
+    mocks.hotkeyCallback = callback;
+    mocks.useHotkeyById(id, callback, options);
+    return { id };
+  },
+}));
+
+describe('useToggleTerminalPanelHotkey', () => {
+  beforeEach(() => {
+    mocks.hotkeyCallback = undefined;
+    mocks.toggleTerminalPanel.mockReset();
+    mocks.useHotkeyById.mockReset();
+  });
+
+  it('toggles the terminal panel when its hotkey is invoked', () => {
+    renderHook(() => useToggleTerminalPanelHotkey());
+
+    act(() => {
+      mocks.hotkeyCallback?.();
+    });
+
+    expect(mocks.useHotkeyById).toHaveBeenCalledWith(
+      HotkeyEnum.ToggleTerminalPanel,
+      expect.any(Function),
+      {
+        enableOnContentEditable: true,
+        enabled: true,
+      },
+    );
+    expect(mocks.toggleTerminalPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the VS Code Ctrl+` binding in the chat scope', () => {
+    expect(HOTKEYS_REGISTRATION).toContainEqual({
+      group: HotkeyGroupEnum.Conversation,
+      id: HotkeyEnum.ToggleTerminalPanel,
+      keys: 'ctrl+backquote',
+      scopes: [HotkeyScopeEnum.Chat],
+    });
+  });
+
+  it('leaves the binding off when the caller has no shell to open', () => {
+    renderHook(() => useToggleTerminalPanelHotkey(false));
+
+    expect(mocks.useHotkeyById).toHaveBeenCalledWith(
+      HotkeyEnum.ToggleTerminalPanel,
+      expect.any(Function),
+      {
+        enableOnContentEditable: true,
+        enabled: false,
+      },
+    );
+  });
+});
+
+describe('useFindInTopicHotkey', () => {
+  beforeEach(() => {
+    mocks.hotkeyCallback = undefined;
+    mocks.openWorkingSidebar.mockReset();
+    mocks.useHotkeyById.mockReset();
+  });
+
+  it('opens the search tab of the working sidebar', () => {
+    renderHook(() => useFindInTopicHotkey(true));
+
+    act(() => {
+      mocks.hotkeyCallback?.();
+    });
+
+    expect(mocks.useHotkeyById).toHaveBeenCalledWith(HotkeyEnum.FindInTopic, expect.any(Function), {
+      enableOnContentEditable: true,
+      enabled: true,
+    });
+    expect(mocks.openWorkingSidebar).toHaveBeenCalledWith('search');
+  });
+
+  it('takes over Mod+F in the chat scope', () => {
+    expect(HOTKEYS_REGISTRATION).toContainEqual({
+      group: HotkeyGroupEnum.Conversation,
+      id: HotkeyEnum.FindInTopic,
+      keys: 'mod+f',
+      scopes: [HotkeyScopeEnum.Chat],
+    });
+  });
+});

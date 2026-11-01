@@ -1,87 +1,38 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
-import { memo, useId, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { createModal } from '@lobehub/ui';
+import { t } from 'i18next';
+import { lazy, Suspense } from 'react';
 
-import ImperativeModal from '@/components/ImperativeModal';
-import ShareDataProvider from '@/features/ShareModal/ShareDataProvider';
-import SharePdf from '@/features/ShareModal/SharePdf';
-import { useIsMobile } from '@/hooks/useIsMobile';
+import SafeBoundary from '@/components/ErrorBoundary';
+import ContentLoading from '@/components/Loading/ContentLoading';
+import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
-import { useConversationStore } from '../../store';
-import ShareImage from './ShareImage';
-import ShareText from './ShareText';
+import type { createStore } from '../../store';
 
-enum Tab {
-  PDF = 'pdf',
-  Screenshot = 'screenshot',
-  Text = 'text',
-}
+// The modal renders a message as an image, text and PDF, so the screenshot
+// library and pdf.js come with it. Every surface that lists messages reaches
+// this entry through its action bar; the modal opens on click and its content
+// loads inside it.
+const ShareMessageModal = lazy(() => import('./Content'));
 
-export interface ShareModalProps {
-  message: UIChatMessage;
-  onCancel: () => void;
-  open: boolean;
-}
+const handleContentError = (error: unknown) => {
+  if (isChunkLoadError(error)) notifyChunkError(error);
+};
 
-const ShareModal = memo<ShareModalProps>(({ onCancel, open, message }) => {
-  const [tab, setTab] = useState<Tab>(Tab.Screenshot);
-  const { t } = useTranslation('chat');
-  const uniqueId = useId();
-  const isMobile = useIsMobile();
-  const context = useConversationStore((s) => s.context);
-
-  const tabItems = useMemo(() => {
-    const items = [
-      {
-        children: <ShareImage message={message} mobile={isMobile} uniqueId={uniqueId} />,
-        key: Tab.Screenshot,
-        label: t('shareModal.screenshot'),
-      },
-      {
-        children: <ShareText item={message} />,
-        key: Tab.Text,
-        label: t('shareModal.text'),
-      },
-      {
-        children: (
-          <ShareDataProvider context={context}>
-            <SharePdf message={message} />
-          </ShareDataProvider>
-        ),
-        key: Tab.PDF,
-        label: t('shareModal.pdf'),
-      },
-    ];
-
-    return items;
-  }, [context, isMobile, message, uniqueId, t]);
-
-  return (
-    <ImperativeModal
-      allowFullscreen
-      centered={false}
-      destroyOnHidden={true}
-      footer={null}
-      open={open}
-      title={t('share', { ns: 'common' })}
-      width={1440}
-      onCancel={onCancel}
-    >
-      <Flexbox gap={isMobile ? 8 : 24}>
-        <Tabs
-          activeKey={tab}
-          items={tabItems}
-          styles={{
-            list: { display: 'flex', width: '100%' },
-            tab: { flex: 1 },
-          }}
-          onChange={(key) => setTab(key as Tab)}
-        />
-      </Flexbox>
-    </ImperativeModal>
-  );
-});
-
-export default ShareModal;
+export const openShareMessageModal = (
+  message: UIChatMessage,
+  createConversationStore: () => ReturnType<typeof createStore>,
+) =>
+  createModal({
+    content: (
+      <SafeBoundary variant="alert" onError={handleContentError}>
+        <Suspense fallback={<ContentLoading />}>
+          <ShareMessageModal createConversationStore={createConversationStore} message={message} />
+        </Suspense>
+      </SafeBoundary>
+    ),
+    footer: null,
+    maskClosable: true,
+    title: t('share', { ns: 'common' }),
+    width: 'min(95vw, 1440px)',
+  });

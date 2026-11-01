@@ -136,6 +136,30 @@ describe('AgentModel — private/public cross-user isolation', () => {
       expect(await callerB.existsById('a-shared-public')).toBe(true);
       expect(await callerB.getAgentConfig('a-shared-public')).not.toBeNull();
     });
+
+    it('publishes only the creator own still-private agent', async () => {
+      await insertAgent({ id: 'a-to-publish', userId: userA, visibility: 'private', workspaceId });
+
+      const callerA = new AgentModel(serverDB, userA, workspaceId);
+      const result = await callerA.publishToWorkspace('a-to-publish');
+
+      expect(result.visibility).toBe('public');
+    });
+
+    it('rejects a zero-row publish of another member public agent', async () => {
+      await insertAgent({
+        id: 'a-already-shared',
+        userId: userA,
+        visibility: 'public',
+        workspaceId,
+      });
+
+      const callerB = new AgentModel(serverDB, userB, workspaceId);
+
+      await expect(callerB.publishToWorkspace('a-already-shared')).rejects.toThrow(
+        'Agent not found, already published, or access denied',
+      );
+    });
   });
 
   describe('setVisibility group rehoming', () => {

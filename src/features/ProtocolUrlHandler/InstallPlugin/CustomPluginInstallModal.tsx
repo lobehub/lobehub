@@ -1,7 +1,6 @@
 'use client';
 
-import { Alert, Block, Flexbox, Text } from '@lobehub/ui';
-import { App } from 'antd';
+import { Alert, Block, Flexbox, Text, toast } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,7 +25,6 @@ interface CustomPluginInstallModalProps {
 
 const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
   ({ installRequest, isMarketplace = false, onComplete }) => {
-    const { message } = App.useApp();
     const { t } = useTranslation('plugin');
     const [loading, setLoading] = useState(false);
     const { allowed: canCreate } = usePermission('create_content');
@@ -107,12 +105,12 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
 
         await installCustomPlugin(customPlugin);
         await togglePlugin(schema.identifier);
-        message.success(t('protocolInstall.messages.installSuccess', { name: schema.name }));
+        toast.success(t('protocolInstall.messages.installSuccess', { name: schema.name }));
 
         onComplete?.();
       } catch (error) {
         console.error('Plugin installation error:', error);
-        message.error(t('protocolInstall.messages.installError'));
+        toast.error(t('protocolInstall.messages.installError'));
         setLoading(false);
       }
     }, [
@@ -125,7 +123,6 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       installCustomPlugin,
       testMcpConnection,
       togglePlugin,
-      message,
       t,
       identifier,
     ]);

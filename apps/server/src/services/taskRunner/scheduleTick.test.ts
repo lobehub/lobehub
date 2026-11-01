@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { TRPCError } from '@trpc/server';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BriefModel } from '@/database/models/brief';
@@ -10,14 +12,15 @@ import { TaskRunnerService } from './index';
 import { runScheduleTick } from './scheduleTick';
 
 const mockSelectTask = vi.fn();
+const mockWhereTask = vi.fn((_condition: SQL) => ({
+  limit: () => mockSelectTask(),
+}));
 
 vi.mock('@/database/server', () => ({
   getServerDB: vi.fn().mockResolvedValue({
     select: () => ({
       from: () => ({
-        where: () => ({
-          limit: () => mockSelectTask(),
-        }),
+        where: mockWhereTask,
       }),
     }),
   }),
@@ -71,10 +74,18 @@ describe('runScheduleTick', () => {
     vi.clearAllMocks();
     mockSelectTask.mockResolvedValue([]);
     mockBriefModel.hasUnresolvedUrgentByTask.mockResolvedValue(false);
-    (TaskModel as any).mockImplementation(() => mockTaskModel);
-    (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
-    (BriefModel as any).mockImplementation(() => mockBriefModel);
-    (TaskRunnerService as any).mockImplementation(() => mockRunner);
+    (TaskModel as any).mockImplementation(function () {
+      return mockTaskModel;
+    });
+    (TaskTopicModel as any).mockImplementation(function () {
+      return mockTaskTopicModel;
+    });
+    (BriefModel as any).mockImplementation(function () {
+      return mockBriefModel;
+    });
+    (TaskRunnerService as any).mockImplementation(function () {
+      return mockRunner;
+    });
   });
 
   it('skips not-found tasks', async () => {
@@ -86,12 +97,29 @@ describe('runScheduleTick', () => {
     expect(mockRunner.runTask).not.toHaveBeenCalled();
   });
 
+  it('excludes trashed tasks from the queued tick lookup', async () => {
+    const outcome = await runScheduleTick(taskId, userId);
+
+    const condition = mockWhereTask.mock.calls[0][0];
+    expect(new PgDialect().sqlToQuery(condition).sql).toContain('"tasks"."is_deleted" IS NOT TRUE');
+    expect(outcome).toEqual({ ran: false, reason: 'not-found' });
+  });
+
   it('skips when automationMode has been changed away from schedule', async () => {
     mockSelectTask.mockResolvedValue([baseTask({ automationMode: 'heartbeat' })]);
 
     const outcome = await runScheduleTick(taskId, userId);
 
     expect(outcome).toEqual({ ran: false, reason: 'mode-changed' });
+    expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
+  it('skips an archived task without running it', async () => {
+    mockSelectTask.mockResolvedValue([baseTask({ archivedAt: new Date() })]);
+
+    const outcome = await runScheduleTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: false, reason: 'archived' });
     expect(mockRunner.runTask).not.toHaveBeenCalled();
   });
 
@@ -126,7 +154,7 @@ describe('runScheduleTick', () => {
     const outcome = await runScheduleTick(taskId, userId);
 
     expect(outcome).toEqual({ ran: true, taskIdentifier: 'T-1' });
-    // Quota counts only scheduled ticks, not ad-hoc manual runs (LOBE-11391).
+    // Quota counts only scheduled ticks, not ad-hoc manual runs.
     expect(mockTaskTopicModel.countByTask).toHaveBeenCalledWith(taskId, {
       since: new Date('2026-05-01T00:00:00Z'),
       triggers: ['schedule'],

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { desktopRoutes } from '@/spa/router/desktopRouter.config';
+import { mainAreaMetaRoutes } from '@/spa/router/desktopRouter.config';
 import { useElectronStore } from '@/store/electron';
 
 import { type ResolvedTab, resolveTab } from '../../TabBar/hooks/useResolvedTabs';
@@ -24,12 +24,12 @@ export const useResolvedPages = (): UseResolvedPagesResult => {
   const translate = t as unknown as Translate;
 
   const pinnedPages = useMemo(
-    () => pinnedRefs.map((tab) => resolveTab(desktopRoutes, tab, false, translate)),
+    () => pinnedRefs.map((tab) => resolveTab(mainAreaMetaRoutes, tab, false, translate)),
     [pinnedRefs, translate],
   );
 
   const recentPages = useMemo(
-    () => recentRefs.map((tab) => resolveTab(desktopRoutes, tab, false, translate)),
+    () => recentRefs.map((tab) => resolveTab(mainAreaMetaRoutes, tab, false, translate)),
     [recentRefs, translate],
   );
 

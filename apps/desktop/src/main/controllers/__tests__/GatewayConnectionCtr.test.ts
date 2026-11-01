@@ -1,8 +1,14 @@
-import type { execSync as ExecSyncType } from 'node:child_process';
+import type * as ChildProcessModule from 'node:child_process';
+import type * as CryptoModule from 'node:crypto';
+import { EventEmitter } from 'node:events';
 
+import type * as DeviceMetricsModule from '@lobechat/device-control/metrics';
+import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import type * as DesktopEnvModule from '@/env';
+import AuvService from '@/services/auvSrv';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 
@@ -20,8 +26,11 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
 
   // Must be defined inside vi.hoisted so it's available when vi.mock factories run
   class _MockGatewayClient extends EventEmitter {
+    static instances: _MockGatewayClient[] = [];
     static lastInstance: _MockGatewayClient | null = null;
     static lastOptions: any = null;
+
+    options: any;
 
     connectionStatus = 'disconnected' as string;
     currentDeviceId: string;
@@ -41,10 +50,15 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
 
     constructor(options: any) {
       super();
+      this.options = options;
       this.currentDeviceId = options.deviceId || 'mock-device-id';
+      _MockGatewayClient.instances.push(this);
       _MockGatewayClient.lastInstance = this;
       _MockGatewayClient.lastOptions = options;
     }
+
+    updateToken = vi.fn();
+    reconnect = vi.fn(async () => {});
 
     // Test helpers
     simulateConnected() {
@@ -58,13 +72,18 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
       this.emit('status_changed', status);
     }
 
-    simulateToolCallRequest(apiName: string, args: object, requestId = 'req-1') {
+    simulateToolCallRequest(
+      apiName: string,
+      args: object,
+      requestId = 'req-1',
+      identifier = 'test-tool',
+    ) {
       this.emit('tool_call_request', {
         requestId,
         toolCall: {
           apiName,
           arguments: JSON.stringify(args),
-          identifier: 'test-tool',
+          identifier,
         },
         type: 'tool_call_request',
       });
@@ -165,7 +184,7 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-vi.mock('electron-is', () => ({
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => false),
   windows: vi.fn(() => false),
   linux: vi.fn(() => false),
@@ -179,33 +198,84 @@ vi.mock('@/const/env', () => ({
   isDev: false,
 }));
 
-vi.mock('node:crypto', () => ({
+vi.mock('node:crypto', async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoModule>()),
   randomUUID: vi.fn(() => 'mock-device-uuid'),
 }));
 
-const execSyncMock = vi.hoisted(() => vi.fn());
 const execFileSyncMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
+const executeRemotePlatformMock = vi.hoisted(() => vi.fn());
+const prepareRemotePlatformSpawnMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformCommandMock = vi.hoisted(() => vi.fn());
+const resolveRemotePlatformRuntimeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<{ execSync: typeof ExecSyncType }>();
-  return { ...actual, execFileSync: execFileSyncMock, execSync: execSyncMock, spawn: spawnMock };
+  const actual = await importOriginal<typeof ChildProcessModule>();
+  return { ...actual, execFileSync: execFileSyncMock, spawn: spawnMock };
 });
 
+const findHeteroExecProcessesMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/utils/heteroExecProcess', () => ({
+  findHeteroExecProcesses: findHeteroExecProcessesMock,
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/scanHost', () => ({
+  resolveRemotePlatformCommand: resolveRemotePlatformCommandMock,
+  resolveRemotePlatformRuntime: resolveRemotePlatformRuntimeMock,
+}));
+
 vi.mock('node:os', () => ({
-  default: { hostname: vi.fn(() => 'mock-hostname'), tmpdir: vi.fn(() => '/tmp') },
+  default: {
+    arch: vi.fn(() => 'arm64'),
+    hostname: vi.fn(() => 'mock-hostname'),
+    release: vi.fn(() => '24.0.0'),
+    tmpdir: vi.fn(() => '/tmp'),
+  },
 }));
 
 vi.mock('@lobechat/device-gateway-client', () => ({
   GatewayClient: MockGatewayClient,
 }));
 
-vi.mock('@/services/imessageBridgeSrv', () => ({
-  default: class ImessageBridgeService {},
+// Logged-in sessions (a JWT with `sub`) start the metrics sampler; keep it inert.
+vi.mock('@lobechat/device-control/metrics', async (importOriginal) => ({
+  ...(await importOriginal<typeof DeviceMetricsModule>()),
+  DeviceMetricsSampler: vi.fn().mockImplementation(function () {
+    return {
+      flush: vi.fn().mockResolvedValue(undefined),
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
-vi.mock('execa', () => ({
-  execa: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+// `getDesktopEnv` is memoized; read the override per call so a test can stub it.
+vi.mock('@/env', async (importOriginal) => {
+  const actual = await importOriginal<typeof DesktopEnvModule>();
+  return {
+    ...actual,
+    getDesktopEnv: () => ({
+      ...actual.getDesktopEnv(),
+      DEVICE_GATEWAY_URL: process.env.DEVICE_GATEWAY_URL || undefined,
+    }),
+  };
+});
+
+// Device gateway discovery goes through Electron's network stack.
+const netFetchMock = vi.hoisted(() => vi.fn());
+vi.mock('@/utils/net-fetch', () => ({ netFetch: netFetchMock }));
+
+const SERVER_URL = 'https://server.example.com';
+const SERVER_GATEWAY_URL = 'https://device-gateway.server.example.com';
+
+/** Answer `config.getGlobalConfig` the way the tRPC lambda router does. */
+const globalConfigResponse = (serverConfig: Record<string, unknown>) =>
+  Response.json({ result: { data: { json: { serverConfig } } } });
+
+vi.mock('@/services/imessageBridgeSrv', () => ({
+  default: class ImessageBridgeService {},
 }));
 
 vi.mock('fast-glob', () => ({ default: vi.fn().mockResolvedValue([]) }));
@@ -214,6 +284,11 @@ vi.mock('fflate', () => ({ unzipSync: vi.fn() }));
 // ─── Mock Controllers ───
 
 const mockLocalFileCtr = {
+  getSkillDirectoryDeps: vi.fn(() => ({})),
+  trashLocalFiles: vi.fn().mockResolvedValue({
+    items: [{ path: '/proj/a.txt', success: true }],
+    success: true,
+  }),
   handleEditFile: vi.fn().mockResolvedValue({ success: true }),
   handleGlobFiles: vi.fn().mockResolvedValue({ files: [] }),
   handleGrepContent: vi.fn().mockResolvedValue({ matches: [] }),
@@ -243,8 +318,9 @@ const mockShellCommandCtr = {
 } as unknown as ShellCommandCtr;
 
 const mockHeterogeneousAgentCtr = {
+  cancelLhHeteroExec: vi.fn().mockResolvedValue(undefined),
   sendPrompt: vi.fn().mockResolvedValue(undefined),
-  spawnLhHeteroExec: vi.fn(),
+  spawnLhHeteroExec: vi.fn().mockResolvedValue({ status: 'accepted' }),
   startSession: vi.fn().mockResolvedValue({ sessionId: 'mock-session-id' }),
 } as unknown as HeterogeneousAgentCtr;
 
@@ -252,12 +328,25 @@ const mockImessageBridgeSrv = {
   handleGatewayMessageApi: vi.fn().mockResolvedValue({ ok: true }),
 } as unknown as ImessageBridgeService;
 
+const mockAuvSrv = {
+  runCommand: vi.fn().mockResolvedValue({
+    argv: ['invoke', 'display.capture'],
+    exitCode: 0,
+    output: { artifacts: [{ file_path: '/tmp/capture.png' }] },
+  }),
+} as unknown as AuvService;
+
 const mockMcpCtr = {
   runStdioMcpTool: vi.fn().mockResolvedValue({ content: 'mcp result', state: {}, success: true }),
 } as unknown as McpCtr;
 
 const mockRemoteServerConfigCtr = {
   getAccessToken: vi.fn().mockResolvedValue('mock-access-token'),
+  getRemoteServerConfig: vi.fn().mockResolvedValue({
+    active: true,
+    remoteServerUrl: 'https://server.example.com',
+    storageMode: 'selfHost',
+  }),
   getRemoteServerUrl: vi.fn().mockResolvedValue('https://server.example.com'),
   isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
   refreshAccessToken: vi.fn().mockResolvedValue({ success: true }),
@@ -266,6 +355,7 @@ const mockRemoteServerConfigCtr = {
 const mockBroadcast = vi.fn();
 const mockStoreGet = vi.fn();
 const mockStoreSet = vi.fn();
+const mockStoreDelete = vi.fn();
 
 const mockApp = {
   browserManager: { broadcastToAllWindows: mockBroadcast },
@@ -278,11 +368,12 @@ const mockApp = {
     return null;
   }),
   getService: vi.fn((Cls) => {
+    if (Cls === AuvService) return mockAuvSrv;
     if (Cls === GatewayConnectionService) return mockGatewayConnectionSrv;
     if (Cls === ImessageBridgeService) return mockImessageBridgeSrv;
     return null;
   }),
-  storeManager: { get: mockStoreGet, set: mockStoreSet },
+  storeManager: { delete: mockStoreDelete, get: mockStoreGet, set: mockStoreSet },
 } as unknown as App;
 
 // Lazily initialized — created in beforeEach so it uses the current mockApp
@@ -295,9 +386,35 @@ describe('GatewayConnectionCtr', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(Response.json({ result: { data: { json: [] } } })),
+    );
     vi.useFakeTimers();
+    resolveRemotePlatformRuntimeMock.mockImplementation(
+      async (type: 'hermes' | 'openclaw', baseEnv: NodeJS.ProcessEnv = process.env) => ({
+        available: true,
+        execute: executeRemotePlatformMock,
+        prepareSpawn: (args: string[]) => prepareRemotePlatformSpawnMock(type, args, baseEnv),
+      }),
+    );
+    prepareRemotePlatformSpawnMock.mockImplementation(
+      async (type: 'hermes' | 'openclaw', args: string[], baseEnv: NodeJS.ProcessEnv) => ({
+        args,
+        command: `/resolved/bin/${type}`,
+        env: { ...baseEnv, PATH: '/resolved/bin:/usr/bin' },
+      }),
+    );
+    executeRemotePlatformMock.mockResolvedValue({ stderr: '', stdout: '' });
+    MockGatewayClient.instances = [];
     MockGatewayClient.lastInstance = null;
     MockGatewayClient.lastOptions = null;
+    netFetchMock.mockImplementation(async () =>
+      globalConfigResponse({ deviceGatewayUrl: SERVER_GATEWAY_URL }),
+    );
+    vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(SERVER_URL);
+    vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue('mock-access-token');
+    vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockResolvedValue({ success: true });
     mockStoreGet.mockImplementation((key: string) => {
       if (key === 'gatewayEnabled') return true;
       return undefined;
@@ -309,6 +426,8 @@ describe('GatewayConnectionCtr', () => {
 
   afterEach(() => {
     ctr.disconnect();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -324,48 +443,62 @@ describe('GatewayConnectionCtr', () => {
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       const options = MockGatewayClient.lastOptions;
       expect(options).not.toBeNull();
       expect(options.token).toBe('mock-access-token');
+      expect(options.serverUrl).toBe(SERVER_URL);
       expect(options.deviceId).toBe('stored-device-id');
-      expect(options.gatewayUrl).toBe('https://device-gateway.lobehub.com');
+      expect(options.gatewayUrl).toBe(SERVER_GATEWAY_URL);
       expect(options.logger).toBeDefined();
       expect(options.userAgent).toBe('LobeHub Desktop/1.2.3');
     });
 
-    it('should use custom gateway URL from store when set', async () => {
+    it('uses the address the server advertises over the official gateway older installs saved', async () => {
       mockStoreGet.mockImplementation((key: string) => {
         if (key === 'gatewayEnabled') return true;
-        if (key === 'gatewayUrl') return 'http://localhost:8787';
+        // Older installs persisted the default itself; it is not a choice.
+        if (key === 'gatewayUrl') return 'https://device-gateway.lobehub.com';
         return undefined;
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8787');
+      expect(netFetchMock).toHaveBeenCalledWith(
+        `${SERVER_URL}/trpc/lambda/config.getGlobalConfig`,
+        expect.objectContaining({ method: 'GET' }),
+      );
+      // Discovery is public: the login's token is never sent with it.
+      expect(JSON.stringify(netFetchMock.mock.calls[0][1].headers)).not.toContain(
+        'mock-access-token',
+      );
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
     });
 
     it('should return success:false when no access token', async () => {
       // Prevent auto-connect, then set up providers manually
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
 
       const result = await ctr.connect();
-      expect(result).toEqual({ error: 'No access token available', success: false });
+      expect(result).toEqual({
+        error: 'No access token available',
+        errorCode: 'not_signed_in',
+        success: false,
+      });
       expect(MockGatewayClient.lastInstance).toBeNull();
     });
 
     it('should persist gatewayEnabled=true on connect', async () => {
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       mockStoreSet.mockClear();
 
@@ -373,8 +506,68 @@ describe('GatewayConnectionCtr', () => {
       expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
     });
 
+    it('should reconnect the matching device from a protocol link', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+      mockStoreSet.mockClear();
+
+      const { deviceId } = await ctr.getDeviceInfo();
+      const result = await ctr.reconnectFromProtocol({ deviceId });
+
+      expect(result).toBe(true);
+      expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
+    });
+
+    it('should wait for gateway initialization on a cold-start protocol reconnect', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+
+      const reconnect = ctr.reconnectFromProtocol({ deviceId: 'mock-device-uuid' });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mockStoreSet).not.toHaveBeenCalledWith('gatewayEnabled', true);
+
+      ctr.afterFirstFrame();
+      await expect(reconnect).resolves.toBe(true);
+      expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
+    });
+
+    it('should reject a protocol reconnect intended for another device', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+      mockStoreSet.mockClear();
+
+      const result = await ctr.reconnectFromProtocol({ deviceId: 'another-device' });
+
+      expect(result).toBe(false);
+      expect(mockStoreSet).not.toHaveBeenCalled();
+    });
+
+    it('should reconnect a persisted workspace identity for this machine', async () => {
+      const workspaceId = 'workspace-1';
+      const fallbackId = 'mock-device-uuid';
+      mockStoreGet.mockImplementation((key: string) => {
+        if (key === 'gatewayEnabled') return true;
+        if (key === 'gatewayDeviceId') return fallbackId;
+        if (key === 'gatewayWorkspaceEnrollments') return [workspaceId];
+        return undefined;
+      });
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+      mockStoreSet.mockClear();
+
+      const workspaceDevice = deriveDeviceId(`workspace:${workspaceId}`, {
+        fallbackId: deriveScopedFallbackId(fallbackId, `workspace:${workspaceId}`),
+      });
+      const result = await ctr.reconnectFromProtocol({ deviceId: workspaceDevice.deviceId });
+
+      expect(result).toBe(true);
+      expect(mockStoreSet).toHaveBeenCalledWith('gatewayEnabled', true);
+    });
+
     it('should no-op when already connected', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const firstClient = MockGatewayClient.lastInstance;
       firstClient!.simulateConnected();
@@ -386,7 +579,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should broadcast status changes: disconnected → connecting → connected', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
         status: 'connecting',
@@ -399,11 +592,506 @@ describe('GatewayConnectionCtr', () => {
     });
   });
 
+  // ─── Device Gateway Discovery ───
+
+  describe('device gateway discovery', () => {
+    const OFFICIAL_SERVER_URL = 'https://lobehub.com';
+    const OFFICIAL_GATEWAY_URL = 'https://device-gateway.lobehub.com';
+
+    /** Unsigned JWT: the desktop only reads `sub` from it. */
+    const jwtFor = (sub: string) =>
+      [
+        Buffer.from('{"alg":"none"}').toString('base64url'),
+        Buffer.from(JSON.stringify({ sub })).toString('base64url'),
+        'sig',
+      ].join('.');
+
+    let store: Record<string, unknown>;
+
+    /** A store that remembers writes, seeded with `initial`. */
+    const useStore = (initial: Record<string, unknown>) => {
+      store = { gatewayDeviceId: 'mock-device-uuid', gatewayEnabled: true, ...initial };
+      mockStoreGet.mockImplementation((key: string) => store[key]);
+      mockStoreSet.mockImplementation((key: string, value: unknown) => {
+        store[key] = value;
+      });
+      mockStoreDelete.mockImplementation((key: string) => {
+        delete store[key];
+      });
+    };
+
+    const deferred = <T>() => {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    };
+
+    const startCtr = async () => {
+      ctr = new GatewayConnectionCtr(mockApp);
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+    };
+
+    const lastBroadcast = () => {
+      const calls = mockBroadcast.mock.calls.filter(
+        ([event]) => event === 'gatewayConnectionStatusChanged',
+      );
+      return calls.at(-1)?.[1];
+    };
+
+    const workspaceDeviceId = (workspaceId: string) =>
+      deriveDeviceId(`workspace:${workspaceId}`, {
+        fallbackId: deriveScopedFallbackId('mock-device-uuid', `workspace:${workspaceId}`),
+      }).deviceId;
+
+    beforeEach(() => {
+      useStore({});
+    });
+
+    it('prefers a custom saved address over the advertised one, without asking', async () => {
+      useStore({ gatewayUrl: 'https://gw.self.example' });
+
+      await startCtr();
+
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('https://gw.self.example');
+      expect(await ctr.getGatewayEndpoint()).toEqual({
+        endpoint: { source: 'manual', url: 'https://gw.self.example' },
+        manualUrl: 'https://gw.self.example',
+        serverUrl: SERVER_URL,
+      });
+    });
+
+    it.each([
+      ['an older custom address', 'https://gw.self.example'],
+      ['an older official default', OFFICIAL_GATEWAY_URL],
+      ['an unusable older address', 'wss://gw.self.example'],
+    ])('reads %s without rewriting or deleting it on retries', async (_label, gatewayUrl) => {
+      useStore({ gatewayUrl });
+      await startCtr();
+      await ctr.getGatewayEndpoint();
+      await ctr.disconnect();
+      await ctr.connect();
+      expect(store.gatewayUrl).toBe(gatewayUrl);
+      expect(mockStoreSet.mock.calls.map(([key]) => key)).not.toContain('gatewayUrl');
+      expect(mockStoreDelete.mock.calls.map(([key]) => key)).not.toContain('gatewayUrl');
+    });
+
+    it('keeps using a custom saved address on official cloud too', async () => {
+      useStore({ gatewayUrl: 'http://localhost:8788' });
+      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(
+        OFFICIAL_SERVER_URL,
+      );
+
+      await startCtr();
+
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8788');
+    });
+
+    it('connects with the saved address while the server config is unreachable', async () => {
+      useStore({ gatewayUrl: 'https://gw.self.example' });
+      netFetchMock.mockImplementation(async () => {
+        throw new TypeError('fetch failed');
+      });
+
+      await startCtr();
+
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('https://gw.self.example');
+      expect(lastBroadcast()).toEqual({ status: 'connecting' });
+    });
+
+    it.each([
+      ['nothing saved', {}],
+      ['the official gateway saved by an older install', { gatewayUrl: OFFICIAL_GATEWAY_URL }],
+    ])("uses this self-hosted server's advertised address with %s", async (_label, saved) => {
+      useStore(saved);
+
+      await startCtr();
+
+      expect(netFetchMock).toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+      expect((await ctr.getGatewayEndpoint()).endpoint).toEqual({
+        source: 'server',
+        url: SERVER_GATEWAY_URL,
+      });
+    });
+
+    it.each([
+      ['official cloud', 'https://lobehub.com'],
+      ['a self-hosted server', SERVER_URL],
+    ])(
+      'uses the official gateway for %s when it answers without an address',
+      async (_label, serverUrl) => {
+        useStore({ gatewayUrl: OFFICIAL_GATEWAY_URL });
+        vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(serverUrl);
+        netFetchMock.mockImplementation(async () => globalConfigResponse({}));
+
+        await startCtr();
+
+        expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(OFFICIAL_GATEWAY_URL);
+        expect((await ctr.getGatewayEndpoint()).endpoint).toEqual({
+          source: 'official',
+          url: OFFICIAL_GATEWAY_URL,
+        });
+      },
+    );
+
+    it('reports an unusable saved address instead of discovering around it', async () => {
+      useStore({ gatewayUrl: 'wss://gw.self.example' });
+
+      await startCtr();
+
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.instances).toHaveLength(0);
+      expect(lastBroadcast()).toMatchObject({
+        error: { code: 'invalid_gateway_url' },
+        status: 'disconnected',
+      });
+      expect(await ctr.getConnectionStatus()).toEqual(lastBroadcast());
+    });
+
+    it.each([
+      ['an HTTP error', async () => new Response('boom', { status: 500 })],
+      ['a tRPC 404', async () => Response.json({ error: { code: -32_004 } }, { status: 404 })],
+      ['an HTML page', async () => new Response('<html>login</html>', { status: 200 })],
+      [
+        'a network failure',
+        async () => {
+          throw new TypeError('fetch failed');
+        },
+      ],
+    ])(
+      'reports %s while loading the config instead of using the default',
+      async (_label, respond) => {
+        useStore({ gatewayUrl: OFFICIAL_GATEWAY_URL });
+        netFetchMock.mockImplementation(respond);
+
+        await startCtr();
+
+        expect(MockGatewayClient.instances).toHaveLength(0);
+        expect(lastBroadcast()).toMatchObject({
+          error: { code: 'config_unavailable' },
+          status: 'disconnected',
+        });
+      },
+    );
+
+    it('does not fall back to the official gateway for official cloud when the config read fails', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(
+        OFFICIAL_SERVER_URL,
+      );
+      netFetchMock.mockImplementation(async () => new Response('down', { status: 503 }));
+
+      await startCtr();
+
+      expect(MockGatewayClient.instances).toHaveLength(0);
+      expect(lastBroadcast()?.error?.code).toBe('config_unavailable');
+    });
+
+    it.each([
+      ['an advertised', { deviceGatewayUrl: SERVER_GATEWAY_URL }, SERVER_GATEWAY_URL],
+      ['the default', {}, OFFICIAL_GATEWAY_URL],
+    ])(
+      'never writes %s address into the saved setting',
+      async (_label, serverConfig, expectedUrl) => {
+        netFetchMock.mockImplementation(async () => globalConfigResponse(serverConfig));
+
+        await startCtr();
+
+        expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(expectedUrl);
+        expect(mockStoreSet.mock.calls.map(([key]) => key)).not.toContain('gatewayUrl');
+        expect(store).not.toHaveProperty('gatewayUrl');
+      },
+    );
+
+    it('rejects an advertised value that is not a gateway URL', async () => {
+      netFetchMock.mockImplementation(async () => globalConfigResponse({ deviceGatewayUrl: null }));
+
+      await startCtr();
+
+      expect(MockGatewayClient.instances).toHaveLength(0);
+      expect(lastBroadcast()?.error?.code).toBe('invalid_gateway_url');
+    });
+
+    it('keeps the path prefix of an advertised public address', async () => {
+      netFetchMock.mockImplementation(async () =>
+        globalConfigResponse({ deviceGatewayUrl: 'https://edge.example.com/device-gateway/' }),
+      );
+
+      await startCtr();
+
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(
+        'https://edge.example.com/device-gateway',
+      );
+    });
+
+    it('lets DEVICE_GATEWAY_URL win without depending on the config read', async () => {
+      vi.stubEnv('DEVICE_GATEWAY_URL', 'http://localhost:8787');
+      useStore({ gatewayUrl: 'https://gw.self.example' });
+      netFetchMock.mockImplementation(async () => {
+        throw new TypeError('fetch failed');
+      });
+
+      await startCtr();
+
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8787');
+    });
+
+    it('keeps DEVICE_GATEWAY_URL explicit even when it is the official gateway', async () => {
+      vi.stubEnv('DEVICE_GATEWAY_URL', OFFICIAL_GATEWAY_URL);
+
+      await startCtr();
+
+      // The server advertises its own gateway, but the env choice stands.
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(OFFICIAL_GATEWAY_URL);
+      expect((await ctr.getGatewayEndpoint()).endpoint).toEqual({
+        source: 'override',
+        url: OFFICIAL_GATEWAY_URL,
+      });
+    });
+
+    it('discovers the gateway for a deep-link reconnect as well', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      await startCtr();
+
+      await ctr.reconnectFromProtocol({ deviceId: 'mock-device-uuid' });
+
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+    });
+
+    it('surfaces a gateway auth rejection as a retryable error once the refresh did not help', async () => {
+      await startCtr();
+      const first = MockGatewayClient.lastInstance!;
+
+      // The first rejection refreshes the token and reconnects to the same gateway.
+      first.emit('auth_failed', 'crypto/rsa: verification error');
+      first.simulateStatusChanged('disconnected');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalledTimes(1);
+      expect(MockGatewayClient.instances).toHaveLength(2);
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+      expect(lastBroadcast()?.error).toBeUndefined();
+
+      // The refreshed token is rejected too: that is what the user sees.
+      const second = MockGatewayClient.lastInstance!;
+      second.emit('auth_failed', 'crypto/rsa: verification error');
+      second.simulateStatusChanged('disconnected');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalledTimes(1);
+      expect(MockGatewayClient.instances).toHaveLength(2);
+      expect(lastBroadcast()).toEqual({
+        error: { code: 'auth_failed', detail: 'crypto/rsa: verification error' },
+        status: 'disconnected',
+      });
+
+      // Retrying clears the reason while it connects again.
+      await ctr.connect();
+      expect(lastBroadcast()).toEqual({ status: 'connecting' });
+    });
+
+    describe('races', () => {
+      it('never opens a socket for a config answer that lands after sign-out', async () => {
+        const answer = deferred<Response>();
+        netFetchMock.mockImplementation(() => answer.promise);
+
+        await startCtr();
+        expect(lastBroadcast()).toEqual({ status: 'connecting' });
+        const { signal } = netFetchMock.mock.calls[0][1];
+
+        // `clearTokens` on sign-out
+        await mockGatewayConnectionSrv.disconnect();
+        expect(signal.aborted).toBe(true);
+
+        answer.resolve(globalConfigResponse({ deviceGatewayUrl: SERVER_GATEWAY_URL }));
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(MockGatewayClient.instances).toHaveLength(0);
+        expect(lastBroadcast()).toEqual({ status: 'disconnected' });
+      });
+
+      it("never sends the new login's token to the previous server's gateway", async () => {
+        const answerFromA = deferred<Response>();
+        netFetchMock.mockImplementationOnce(() => answerFromA.promise);
+        vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(
+          'https://a.example.com',
+        );
+        vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue(jwtFor('user-a'));
+        await startCtr();
+
+        // Sign in to server B while A's config read is still in flight.
+        vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(
+          'https://b.example.com',
+        );
+        vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue(jwtFor('user-b'));
+        netFetchMock.mockImplementation(async () =>
+          globalConfigResponse({ deviceGatewayUrl: 'https://gw.b.example.com' }),
+        );
+        await mockGatewayConnectionSrv.restart();
+
+        answerFromA.resolve(globalConfigResponse({ deviceGatewayUrl: 'https://gw.a.example.com' }));
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(MockGatewayClient.instances.map((c) => c.options.gatewayUrl)).toEqual([
+          'https://gw.b.example.com',
+        ]);
+        expect(MockGatewayClient.lastOptions.token).toBe(jwtFor('user-b'));
+      });
+
+      it('does not reconnect when signed out during an auth refresh', async () => {
+        await startCtr();
+        const client = MockGatewayClient.lastInstance!;
+        client.simulateConnected();
+        const refresh = deferred<{ success: boolean }>();
+        vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockReturnValueOnce(
+          refresh.promise,
+        );
+
+        client.simulateAuthExpired();
+        await vi.advanceTimersByTimeAsync(0);
+        await mockGatewayConnectionSrv.disconnect();
+        refresh.resolve({ success: true });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(MockGatewayClient.instances).toEqual([client]);
+      });
+
+      it('reconnects an auth refresh to the same gateway without re-reading the config', async () => {
+        await startCtr();
+        const client = MockGatewayClient.lastInstance!;
+        client.simulateConnected();
+
+        client.simulateAuthExpired();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(netFetchMock).toHaveBeenCalledTimes(1);
+        expect(MockGatewayClient.instances).toHaveLength(2);
+        expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+      });
+    });
+
+    describe('workspace shares', () => {
+      const ACCOUNT = `${SERVER_URL}#user-1`;
+
+      /** `device.listDevices` / `device.mintWorkspaceConnectToken` on the server. */
+      const serveWorkspaceApi = (enrollers: Record<string, string>) => {
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+          const url = String(input);
+          const workspaceId = (init?.headers as Record<string, string>)?.['X-Workspace-Id'];
+          if (url.endsWith('/device.listDevices')) {
+            const enroller = enrollers[workspaceId];
+            return Response.json({
+              result: {
+                data: {
+                  json: enroller
+                    ? [
+                        {
+                          deviceId: workspaceDeviceId(workspaceId),
+                          enroller: { userId: enroller },
+                          registered: true,
+                        },
+                      ]
+                    : [],
+                },
+              },
+            });
+          }
+          if (url.endsWith('/device.mintWorkspaceConnectToken')) {
+            return Response.json({
+              result: { data: { json: { token: `ws-token-${workspaceId}` } } },
+            });
+          }
+          return Response.json({ result: { data: { json: null } } });
+        });
+      };
+
+      const workspaceClients = () =>
+        MockGatewayClient.instances.filter((client) => client.options.workspaceId);
+
+      beforeEach(() => {
+        vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue(jwtFor('user-1'));
+      });
+
+      it("opens a share on the personal connection's gateway and keeps it for this account", async () => {
+        await startCtr();
+
+        await mockGatewayConnectionSrv.enrollWorkspace({ token: 'ws-token', workspaceId: 'ws-1' });
+
+        expect(MockGatewayClient.lastOptions).toMatchObject({
+          gatewayUrl: SERVER_GATEWAY_URL,
+          serverUrl: SERVER_URL,
+          token: 'ws-token',
+          workspaceId: 'ws-1',
+        });
+        expect(store.gatewayWorkspaceEnrollmentsByAccount).toEqual({ [ACCOUNT]: ['ws-1'] });
+      });
+
+      it("restores only this account's shares, on the same gateway and server", async () => {
+        useStore({
+          gatewayWorkspaceEnrollmentsByAccount: {
+            [ACCOUNT]: ['ws-own'],
+            [`${SERVER_URL}#user-2`]: ['ws-other-account'],
+            ['https://other.example.com#user-1']: ['ws-other-server'],
+          },
+        });
+        serveWorkspaceApi({
+          'ws-other-account': 'user-2',
+          'ws-other-server': 'user-1',
+          'ws-own': 'user-1',
+        });
+
+        await startCtr();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(workspaceClients().map((c) => c.options)).toEqual([
+          expect.objectContaining({
+            gatewayUrl: SERVER_GATEWAY_URL,
+            token: 'ws-token-ws-own',
+            workspaceId: 'ws-own',
+          }),
+        ]);
+        expect(
+          vi.mocked(fetch).mock.calls.every(([url]) => String(url).startsWith(SERVER_URL)),
+        ).toBe(true);
+      });
+
+      it('adopts a pre-scoping share only when the server shows this account enrolled it', async () => {
+        useStore({ gatewayWorkspaceEnrollments: ['ws-mine', 'ws-theirs'] });
+        serveWorkspaceApi({ 'ws-mine': 'user-1', 'ws-theirs': 'user-2' });
+
+        await startCtr();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(workspaceClients().map((c) => c.options.workspaceId)).toEqual(['ws-mine']);
+        expect(store.gatewayWorkspaceEnrollmentsByAccount).toEqual({ [ACCOUNT]: ['ws-mine'] });
+        // Not ours to restore, and not ours to delete either.
+        expect(store.gatewayWorkspaceEnrollments).toEqual(['ws-theirs']);
+      });
+
+      it('closes the previous login’s shares when another account signs in', async () => {
+        await startCtr();
+        await mockGatewayConnectionSrv.enrollWorkspace({ token: 'ws-token', workspaceId: 'ws-1' });
+        const [share] = workspaceClients();
+
+        vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue(jwtFor('user-2'));
+        await mockGatewayConnectionSrv.restart();
+
+        expect(share.disconnect).toHaveBeenCalled();
+        expect(workspaceClients()).toEqual([share]);
+      });
+    });
+  });
+
   // ─── Disconnect ───
 
   describe('disconnect', () => {
     it('should disconnect client and set status to disconnected', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -418,7 +1106,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should persist gatewayEnabled=false on disconnect', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       MockGatewayClient.lastInstance!.simulateConnected();
       mockStoreSet.mockClear();
@@ -428,7 +1116,7 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('should not trigger reconnect after intentional disconnect', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -446,9 +1134,9 @@ describe('GatewayConnectionCtr', () => {
 
   // ─── Auto-Connect ───
 
-  describe('afterAppReady (auto-connect)', () => {
+  describe('afterFirstFrame (auto-connect)', () => {
     it('should auto-connect when server is configured and token exists', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).not.toBeNull();
@@ -462,7 +1150,7 @@ describe('GatewayConnectionCtr', () => {
       });
 
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).toBeNull();
@@ -471,7 +1159,7 @@ describe('GatewayConnectionCtr', () => {
     it('should skip auto-connect when remote server not configured', async () => {
       vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).toBeNull();
@@ -480,7 +1168,7 @@ describe('GatewayConnectionCtr', () => {
     it('should skip auto-connect when no access token', async () => {
       vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(MockGatewayClient.lastInstance).toBeNull();
@@ -488,7 +1176,7 @@ describe('GatewayConnectionCtr', () => {
 
     it('should create device ID on first launch and persist it', () => {
       mockStoreGet.mockReturnValue(undefined);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
 
       expect(mockStoreSet).toHaveBeenCalledWith('gatewayDeviceId', 'mock-device-uuid');
     });
@@ -500,7 +1188,7 @@ describe('GatewayConnectionCtr', () => {
         return undefined;
       });
       ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
 
       expect(mockStoreSet).not.toHaveBeenCalledWith('gatewayDeviceId', expect.anything());
     });
@@ -509,15 +1197,19 @@ describe('GatewayConnectionCtr', () => {
   // ─── Reconnection ───
 
   describe('reconnection', () => {
-    it('should broadcast reconnecting status when client emits reconnecting', async () => {
-      ctr.afterAppReady();
+    it('should broadcast reconnecting status once the reconnect outlasts the grace period', async () => {
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
       mockBroadcast.mockClear();
 
       client.simulateReconnecting(1000);
+      expect(mockBroadcast).not.toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
+        status: 'reconnecting',
+      });
 
+      vi.advanceTimersByTime(5000);
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
         status: 'reconnecting',
       });
@@ -528,7 +1220,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('tool call routing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -564,6 +1256,59 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect((controller as any)[methodName]).toHaveBeenCalled();
+    });
+
+    it('should route AUV CLI commands to the app-owned runtime', async () => {
+      const client = await connectAndOpen();
+
+      client.simulateToolCallRequest(
+        'runCommand',
+        { argv: ['invoke', 'display.capture'] },
+        'auv-command',
+        'lobe-computer-use',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockAuvSrv.runCommand).toHaveBeenCalledWith({
+        argv: ['invoke', 'display.capture'],
+      });
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'auv-command',
+        result: expect.objectContaining({
+          content: JSON.stringify({
+            argv: ['invoke', 'display.capture'],
+            exitCode: 0,
+            output: { artifacts: [{ file_path: '/tmp/capture.png' }] },
+          }),
+          success: true,
+        }),
+      });
+    });
+
+    it('preserves AUV failure details in the gateway response', async () => {
+      const client = await connectAndOpen();
+      const result = {
+        argv: ['invoke', 'input.typeText'],
+        exitCode: 1,
+        output: { command_id: 'input.typeText', failure: { kind: 'target_resolution' } },
+        stderr: 'target not found',
+      };
+      vi.mocked(mockAuvSrv.runCommand).mockResolvedValueOnce(result);
+      client.simulateToolCallRequest(
+        'runCommand',
+        { argv: result.argv },
+        'auv-failure',
+        'lobe-computer-use',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'auv-failure',
+        result: expect.objectContaining({
+          content: JSON.stringify(result),
+          state: result,
+          success: false,
+        }),
+      });
     });
 
     it('should send tool_call_response with content + state envelope on success', async () => {
@@ -611,6 +1356,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-err',
         result: {
+          executionTimeMs: expect.any(Number),
           content: 'File not found',
           error: 'File not found',
           success: false,
@@ -629,6 +1375,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-unknown',
         result: {
+          executionTimeMs: expect.any(Number),
           content: errorMsg,
           error: errorMsg,
           success: false,
@@ -697,8 +1444,32 @@ describe('GatewayConnectionCtr', () => {
 
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'mcp-ok',
-        result: { content: 'stock: 100', state: { rows: 1 }, success: true },
+        result: {
+          content: 'stock: 100',
+          executionTimeMs: expect.any(Number),
+          state: { rows: 1 },
+          success: true,
+        },
       });
+    });
+
+    it('reports how long the tool took on this device', async () => {
+      vi.mocked(mockLocalFileCtr.readFile).mockResolvedValueOnce({
+        content: 'ok',
+        success: true,
+      } as never);
+      const client = await connectAndOpen();
+
+      client.simulateToolCallRequest('readFile', { path: '/x' }, 'req-timed');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The server can only observe the whole dispatch round trip, so this
+      // number is the only way to tell a slow tool from slow transport. Desktop
+      // is where most device tool calls happen — omitting it here would bias
+      // the measurement toward calls made through `lh connect`.
+      const { result } = client.sendToolCallResponse.mock.calls.at(-1)![0];
+      expect(typeof result.executionTimeMs).toBe('number');
+      expect(result.executionTimeMs).toBeGreaterThanOrEqual(0);
     });
 
     it('should send error response when the MCP call throws', async () => {
@@ -715,14 +1486,31 @@ describe('GatewayConnectionCtr', () => {
 
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'mcp-err',
-        result: { content: 'spawn ENOENT', error: 'spawn ENOENT', success: false },
+        result: {
+          content: 'spawn ENOENT',
+          error: 'spawn ENOENT',
+          executionTimeMs: expect.any(Number),
+          success: false,
+        },
       });
+    });
+  });
+
+  describe('device RPC host deps', () => {
+    it('hands the device-control dispatcher an OS-trash handler backed by LocalFileCtr', async () => {
+      const deps = (ctr as any).deviceControlDeps;
+
+      await expect(deps.trashLocalFiles({ paths: ['/proj/a.txt'] })).resolves.toEqual({
+        items: [{ path: '/proj/a.txt', success: true }],
+        success: true,
+      });
+      expect(mockLocalFileCtr.trashLocalFiles).toHaveBeenCalledWith({ paths: ['/proj/a.txt'] });
     });
   });
 
   describe('message API routing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -784,7 +1572,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('auth_expired handling', () => {
     it('should refresh token and reconnect on auth_expired', async () => {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client1 = MockGatewayClient.lastInstance!;
       client1.simulateConnected();
@@ -804,7 +1592,7 @@ describe('GatewayConnectionCtr', () => {
         success: false,
       });
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -814,6 +1602,7 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
+        error: { code: 'auth_failed', detail: 'invalid_grant' },
         status: 'disconnected',
       });
     });
@@ -823,7 +1612,7 @@ describe('GatewayConnectionCtr', () => {
 
   describe('agent run routing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -831,26 +1620,34 @@ describe('GatewayConnectionCtr', () => {
     }
 
     beforeEach(() => {
+      vi.mocked(mockHeterogeneousAgentCtr.cancelLhHeteroExec).mockClear();
       vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockClear();
     });
 
-    it.each(['openclaw', 'hermes', 'codex', 'claude-code'] as const)(
-      'forwards agentType "%s" to spawnLhHeteroExec',
-      async (agentType) => {
-        const client = await connectAndOpen();
-        client.simulateAgentRunRequest(agentType);
-        await vi.advanceTimersByTimeAsync(0);
+    it.each([
+      'openclaw',
+      'hermes',
+      'codex',
+      'claude-code',
+      'codebuddy',
+      'cursor',
+      'kimi-code',
+      'opencode',
+    ] as const)('forwards agentType "%s" to spawnLhHeteroExec', async (agentType) => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest(agentType);
+      await vi.advanceTimersByTimeAsync(0);
 
-        expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-          expect.objectContaining({ agentType }),
-        );
-      },
-    );
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ agentType }),
+      );
+    });
 
-    it('forwards cwd and systemContext from the request to spawnLhHeteroExec', async () => {
+    it('forwards cwd and primary/fallback context from the request to spawnLhHeteroExec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('claude-code', 'op-ctx', 'hi', 'mock-jwt', {
         cwd: '/Users/alice/repo',
+        resumeFallbackSystemContext: 'RECOVERY CONTEXT',
         systemContext: 'WORKSPACE CONTEXT',
       });
       await vi.advanceTimersByTimeAsync(0);
@@ -858,8 +1655,21 @@ describe('GatewayConnectionCtr', () => {
       expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/Users/alice/repo',
+          resumeFallbackSystemContext: 'RECOVERY CONTEXT',
           systemContext: 'WORKSPACE CONTEXT',
         }),
+      );
+    });
+
+    it('forwards the seeded assistant message id to the hetero launcher', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('claude-code', 'op-assistant', 'hi', 'mock-jwt', {
+        assistantMessageId: 'asst-1',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ assistantMessageId: 'asst-1' }),
       );
     });
 
@@ -877,6 +1687,18 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
+    it('forwards ingestWorkspaceId to spawnLhHeteroExec as workspaceId', async () => {
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('grok-build', 'op-ws', 'hi', 'mock-jwt', {
+        ingestWorkspaceId: 'ws-lobehub',
+      });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'ws-lobehub' }),
+      );
+    });
+
     it('sends accepted ack and spawns lh hetero exec', async () => {
       const client = await connectAndOpen();
       client.simulateAgentRunRequest('openclaw', 'op-xyz');
@@ -889,9 +1711,7 @@ describe('GatewayConnectionCtr', () => {
       expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
         expect.objectContaining({
           agentType: 'openclaw',
-          // Reuses the device's own session token as the run identity, not the
-          // dispatched operation jwt.
-          jwt: 'mock-access-token',
+          jwt: 'mock-jwt',
           operationId: 'op-xyz',
           prompt: 'hello',
           serverUrl: 'https://server.example.com',
@@ -900,38 +1720,35 @@ describe('GatewayConnectionCtr', () => {
       );
     });
 
-    it('reuses the device access token as the run jwt instead of request.jwt', async () => {
-      const client = await connectAndOpen();
-      client.simulateAgentRunRequest('claude-code', 'op-auth', 'hi', 'dispatched-operation-jwt');
-      await vi.advanceTimersByTimeAsync(0);
+    describe.each(['pi', 'codex', 'claude-code', 'openclaw', 'hermes'])(
+      '%s run identity',
+      (agentType) => {
+        it.each(['same-account-login', 'another-account-login', null])(
+          'preserves the operation token with device login %s',
+          async (accessToken) => {
+            const client = await connectAndOpen();
+            const getAccessToken = vi.mocked(mockRemoteServerConfigCtr.getAccessToken);
+            getAccessToken.mockClear().mockResolvedValue(accessToken);
+            client.simulateAgentRunRequest(agentType, 'op-auth', 'hi', 'dispatched-operation-jwt');
+            await vi.advanceTimersByTimeAsync(0);
 
-      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-        expect.objectContaining({ jwt: 'mock-access-token' }),
-      );
-    });
-
-    it('falls back to request.jwt when the device has no access token', async () => {
-      const client = await connectAndOpen();
-      // Set after connect so the auto-connect getAccessToken call isn't the one
-      // that returns null — only the executeAgentRun lookup should see no token.
-      vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
-      client.simulateAgentRunRequest(
-        'claude-code',
-        'op-fallback',
-        'hi',
-        'dispatched-operation-jwt',
-      );
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
-        expect.objectContaining({ jwt: 'dispatched-operation-jwt' }),
-      );
-    });
+            expect(client.sendAgentRunAck).toHaveBeenCalledWith({
+              operationId: 'op-auth',
+              status: 'accepted',
+            });
+            expect(mockHeterogeneousAgentCtr.spawnLhHeteroExec).toHaveBeenCalledWith(
+              expect.objectContaining({ jwt: 'dispatched-operation-jwt' }),
+            );
+            expect(getAccessToken).not.toHaveBeenCalled();
+          },
+        );
+      },
+    );
 
     it('sends rejected ack when remote server URL is not configured', async () => {
-      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValueOnce('');
-
       const client = await connectAndOpen();
+      // After connect, which resolves the server URL for discovery itself.
+      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValueOnce('');
       client.simulateAgentRunRequest('openclaw', 'op-fail');
       await vi.advanceTimersByTimeAsync(0);
 
@@ -958,11 +1775,135 @@ describe('GatewayConnectionCtr', () => {
         status: 'rejected',
       });
     });
+
+    it('forwards an asynchronous spawn rejection instead of acknowledging accepted', async () => {
+      vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockResolvedValueOnce({
+        reason: 'spawn EACCES',
+        status: 'rejected',
+      });
+
+      const client = await connectAndOpen();
+      client.simulateAgentRunRequest('opencode', 'op-spawn-fail');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(client.sendAgentRunAck).toHaveBeenCalledWith({
+        operationId: 'op-spawn-fail',
+        reason: 'spawn EACCES',
+        status: 'rejected',
+      });
+    });
+
+    // Regression: spawnLhHeteroExec must register its child process into
+    // platformTasks so cancelHeteroTask (sent by the server's interruptTask
+    // when the user clicks Stop) can find and kill it by operationId.
+    // Without this the CLI keeps running after the user cancels.
+    describe('agent run process registration', () => {
+      it('registers the spawned child in platformTasks via onChildSpawned', async () => {
+        let capturedOnChildSpawned: ((child: any) => void) | undefined;
+        vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockImplementationOnce(
+          (params: any) => {
+            capturedOnChildSpawned = params.onChildSpawned;
+            return Promise.resolve({ status: 'accepted' });
+          },
+        );
+
+        const client = await connectAndOpen();
+        client.simulateAgentRunRequest('devin', 'op-register');
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Simulate the child process spawning — onChildSpawned is called by
+        // HeterogeneousAgentImpl once the real child emits 'spawn'.
+        const mockChild = new EventEmitter() as any;
+        mockChild.pid = 12345;
+        capturedOnChildSpawned?.(mockChild);
+
+        // The process should now be registered under its operationId.
+        const cancelResult = await ctr['cancelHeteroTask']({
+          signal: 'SIGINT',
+          taskId: 'op-register',
+        });
+
+        const parsed = JSON.parse(cancelResult);
+        expect(parsed.pid).toBe(12345);
+        expect(parsed.signal).toBe('SIGINT');
+        expect(parsed.taskId).toBe('op-register');
+      });
+
+      it('cleans up platformTasks when the child exits', async () => {
+        let capturedOnChildSpawned: ((child: any) => void) | undefined;
+        vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockImplementationOnce(
+          (params: any) => {
+            capturedOnChildSpawned = params.onChildSpawned;
+            return Promise.resolve({ status: 'accepted' });
+          },
+        );
+
+        const client = await connectAndOpen();
+        client.simulateAgentRunRequest('claude-code', 'op-cleanup');
+        await vi.advanceTimersByTimeAsync(0);
+
+        const mockChild = new EventEmitter() as any;
+        mockChild.pid = 67890;
+        capturedOnChildSpawned?.(mockChild);
+
+        // Simulate the child exiting normally.
+        mockChild.emit('exit', 0, null);
+        findHeteroExecProcessesMock.mockResolvedValueOnce([]);
+
+        // After exit, the registry no longer holds the task, so cancellation
+        // falls back to the OS process table and confirms nothing is running.
+        const cancelResult = await ctr['cancelHeteroTask']({
+          signal: 'SIGINT',
+          taskId: 'op-cleanup',
+        });
+        const parsed = JSON.parse(cancelResult);
+        expect(findHeteroExecProcessesMock).toHaveBeenCalledWith('op-cleanup');
+        expect(parsed).toMatchObject({ exited: true, reason: 'not_found', success: true });
+      });
+
+      it('keeps the process-group escalation after the wrapper exits', async () => {
+        const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+        let capturedOnChildSpawned: ((child: any) => void) | undefined;
+        vi.mocked(mockHeterogeneousAgentCtr.spawnLhHeteroExec).mockImplementationOnce(
+          (params: any) => {
+            capturedOnChildSpawned = params.onChildSpawned;
+            return Promise.resolve({ status: 'accepted' });
+          },
+        );
+
+        const client = await connectAndOpen();
+        client.simulateAgentRunRequest('devin', 'op-orphan');
+        await vi.advanceTimersByTimeAsync(0);
+
+        const mockChild = new EventEmitter() as any;
+        mockChild.pid = 67900;
+        capturedOnChildSpawned?.(mockChild);
+        await ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-orphan' });
+
+        // The wrapper honors SIGINT, while process.kill(-pid, 0) still reports
+        // that a detached descendant remains in the process group.
+        mockChild.emit('exit', null, 'SIGINT');
+        await vi.advanceTimersByTimeAsync(2_000);
+
+        expect(killSpy).toHaveBeenCalledWith(-67900, 'SIGINT');
+        expect(killSpy).toHaveBeenCalledWith(-67900, 'SIGKILL');
+        killSpy.mockRestore();
+      });
+    });
   });
 
   // ─── runHeteroTask ───
 
   describe('runHeteroTask', () => {
+    function makeMockStream() {
+      const listeners: Array<(chunk: Buffer) => void> = [];
+
+      return {
+        on: vi.fn((_event: string, cb: (chunk: Buffer) => void) => listeners.push(cb)),
+        _emit: (content: string) => listeners.forEach((cb) => cb(Buffer.from(content))),
+      };
+    }
+
     /** Creates a minimal mock child process returned by spawn(). */
     function makeMockChild(pid = 9999) {
       const listeners: Record<string, Array<(...a: any[]) => void>> = {};
@@ -972,13 +1913,15 @@ describe('GatewayConnectionCtr', () => {
           listeners[event].push(cb);
         }),
         pid,
+        stderr: makeMockStream(),
+        stdout: makeMockStream(),
         unref: vi.fn(),
         _emit: (event: string, ...args: any[]) => listeners[event]?.forEach((cb) => cb(...args)),
       };
     }
 
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -988,6 +1931,50 @@ describe('GatewayConnectionCtr', () => {
     beforeEach(() => {
       execFileSyncMock.mockReturnValue('/usr/local/bin/lh\n');
       spawnMock.mockReset();
+    });
+
+    describe.each(['openclaw', 'hermes'])('%s identity', (agentType) => {
+      it.each([
+        { agentId: 'agent-current', inherited: false, workspaceId: 'workspace-current' },
+        { agentId: 'agent-current', inherited: true, workspaceId: 'workspace-current' },
+        { agentId: undefined, inherited: true, workspaceId: undefined },
+      ])('isolates dispatched identity ($agentId, inherited=$inherited)', async (params) => {
+        for (const key of [
+          'AGENT_ID',
+          'TOPIC_ID',
+          'OPERATION_ID',
+          'ASSISTANT_MESSAGE_ID',
+          'TASK_ID',
+          'WORKSPACE_ID',
+        ]) {
+          vi.stubEnv(`LOBEHUB_${key}`, params.inherited ? `ancestor-${key}` : undefined);
+        }
+        spawnMock.mockReturnValue(makeMockChild());
+        const client = await connectAndOpen();
+        client.simulateToolCallRequest(
+          'runHeteroTask',
+          {
+            agentId: params.agentId,
+            agentType,
+            operationId: 'operation-current',
+            prompt: 'hello',
+            taskId: 'device-task-current',
+            topicId: 'topic-current',
+            workspaceId: params.workspaceId,
+          },
+          'req-identity',
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(spawnMock).toHaveBeenCalledTimes(1);
+        const env = spawnMock.mock.calls[0][2].env;
+        expect(env.LOBEHUB_AGENT_ID).toBe(params.agentId);
+        expect(env.LOBEHUB_TOPIC_ID).toBe('topic-current');
+        expect(env.LOBEHUB_OPERATION_ID).toBe('operation-current');
+        expect(env.LOBEHUB_WORKSPACE_ID).toBe(params.workspaceId);
+        expect(env.LOBEHUB_ASSISTANT_MESSAGE_ID).toBeUndefined();
+        expect(env.LOBEHUB_TASK_ID).toBeUndefined();
+      });
     });
 
     it('always injects buildNotifyProtocol into the prompt', async () => {
@@ -1009,14 +1996,114 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(spawnMock).toHaveBeenCalledTimes(1);
-      const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+      const [spawnCommand, spawnArgs, spawnOptions] = spawnMock.mock.calls[0] as [
+        string,
+        string[],
+        { env: NodeJS.ProcessEnv },
+      ];
+      expect(spawnCommand).toBe('/resolved/bin/openclaw');
+      expect(spawnOptions.env.PATH).toBe('/resolved/bin:/usr/bin');
+      expect(spawnOptions.env.LOBEHUB_OPERATION_ID).toBe('op-1');
       const messageArg = spawnArgs[spawnArgs.indexOf('--message') + 1];
       expect(messageArg).toContain('hello');
       expect(messageArg).toContain('lh notify');
     });
 
+    it('reports a failed child process as a terminal error', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-failed-child',
+        prompt: 'hello',
+        taskId: 'task-failed-child',
+        topicId: 'topic-failed-child',
+      });
+      child._emit('close', 1, null);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          done: true,
+          error: { message: 'Task failed (exit code: 1)', type: 'HeteroProcessError' },
+          operationId: 'op-failed-child',
+        }),
+      );
+    });
+
+    it('reports a signal exit as a cancelled terminal signal', async () => {
+      const child = makeMockChild();
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+      spawnMock.mockReturnValue(child);
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-cancelled-child',
+        prompt: 'hello',
+        taskId: 'task-cancelled-child',
+        topicId: 'topic-cancelled-child',
+      });
+      child._emit('close', null, 'SIGINT');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(notifySpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cancelled: true,
+          done: true,
+          error: undefined,
+          operationId: 'op-cancelled-child',
+        }),
+      );
+    });
+
+    it.each([
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'researcher',
+        platformAgentId: ' researcher ',
+      },
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'ops-default',
+        platformAgentId: undefined,
+      },
+      {
+        environmentAgentId: 'ops-default',
+        expectedAgentId: 'ops-default',
+        platformAgentId: '   ',
+      },
+      { environmentAgentId: '', expectedAgentId: 'main', platformAgentId: undefined },
+    ])(
+      'selects OpenClaw agent $expectedAgentId from platform config before environment fallback',
+      async ({ environmentAgentId, expectedAgentId, platformAgentId }) => {
+        vi.stubEnv('OPENCLAW_AGENT_ID', environmentAgentId);
+        spawnMock.mockReturnValue(makeMockChild());
+
+        const client = await connectAndOpen();
+        client.simulateToolCallRequest(
+          'runHeteroTask',
+          {
+            agentType: 'openclaw',
+            operationId: 'op-agent-selection',
+            platformAgentId,
+            prompt: 'hello',
+            taskId: 'task-agent-selection',
+            topicId: 'topic-agent-selection',
+          },
+          'req-agent-selection',
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        const [, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]];
+        expect(spawnArgs[spawnArgs.indexOf('--agent') + 1]).toBe(expectedAgentId);
+      },
+    );
+
     it('kills an existing concurrent openclaw process for the same topicId before spawning', async () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const notifySpy = vi.spyOn(ctr as any, 'sendNotify');
 
       // First task
       const child1 = makeMockChild(1111);
@@ -1051,10 +2138,324 @@ describe('GatewayConnectionCtr', () => {
       );
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(killSpy).toHaveBeenCalledWith(1111, 'SIGTERM');
+      expect(killSpy).toHaveBeenCalledWith(-1111, 'SIGTERM');
       expect(spawnMock).toHaveBeenCalledTimes(2);
 
+      // The replaced child may close after the new operation has started. It must
+      // neither send a terminal notify for the new operation nor remove its task.
+      child1._emit('close', null, 'SIGTERM');
+      expect(notifySpy).not.toHaveBeenCalled();
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-2' },
+        'req-cancel-2',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(killSpy).toHaveBeenCalledWith(-2222, 'SIGINT');
+
       killSpy.mockRestore();
+    });
+
+    it('isolates concurrent group members that share a topic', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      spawnMock.mockReturnValueOnce(makeMockChild(1111)).mockReturnValueOnce(makeMockChild(2222));
+
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-1',
+        parentOperationId: 'op-parent',
+        prompt: 'member one',
+        taskId: 'task-child-1',
+        topicId: 'topic-shared',
+      });
+      await (ctr as any).runHeteroTask({
+        agentType: 'openclaw',
+        operationId: 'op-child-2',
+        parentOperationId: 'op-parent',
+        prompt: 'member two',
+        taskId: 'task-child-2',
+        topicId: 'topic-shared',
+      });
+
+      expect(killSpy).not.toHaveBeenCalled();
+      const firstArgs = spawnMock.mock.calls[0][1] as string[];
+      const secondArgs = spawnMock.mock.calls[1][1] as string[];
+      expect(firstArgs[firstArgs.indexOf('--session-id') + 1]).toBe('op-child-1');
+      expect(secondArgs[secondArgs.indexOf('--session-id') + 1]).toBe('op-child-2');
+      expect((ctr as any).platformTasks.get('task-child-2')).toMatchObject({
+        parentOperationId: 'op-parent',
+      });
+
+      killSpy.mockRestore();
+    });
+
+    it('kills the complete detached process group when cancelling a task', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const child = makeMockChild(5555);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel',
+          prompt: 'work',
+          taskId: 'task-cancel',
+          topicId: 'topic-cancel',
+        },
+        'req-run-cancel',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel' },
+        'req-cancel',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(killSpy).toHaveBeenCalledWith(-5555, 'SIGINT');
+
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(killSpy).toHaveBeenCalledWith(-5555, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    /**
+     * @example Cancelling `op-codex` reaches the registered `lh hetero exec` wrapper.
+     */
+    it('cancels a device local hetero wrapper before checking platform tasks', async () => {
+      vi.mocked(mockHeterogeneousAgentCtr.cancelLhHeteroExec).mockResolvedValueOnce({
+        exited: true,
+        pid: 7777,
+        signal: 'SIGINT',
+      });
+      const client = await connectAndOpen();
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'op-codex' },
+        'req-cancel-codex',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockHeterogeneousAgentCtr.cancelLhHeteroExec).toHaveBeenCalledWith({
+        operationId: 'op-codex',
+        signal: 'SIGINT',
+      });
+      expect(findHeteroExecProcessesMock).not.toHaveBeenCalled();
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: 'req-cancel-codex',
+          result: expect.objectContaining({
+            state: { exited: true, pid: 7777, signal: 'SIGINT', taskId: 'op-codex' },
+            success: true,
+          }),
+        }),
+      );
+    });
+
+    /**
+     * Regression: after a desktop restart both in-memory registries are empty.
+     * The server keeps the task stuck until the device confirms `exited: true`,
+     * so the device must ask the OS instead of answering "No task found".
+     */
+    describe('when neither registry knows the operation (app restarted)', () => {
+      it('confirms the exit when no hetero exec process is alive', async () => {
+        findHeteroExecProcessesMock.mockResolvedValueOnce([]);
+        const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+        const parsed = JSON.parse(
+          await ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-restarted' }),
+        );
+
+        expect(findHeteroExecProcessesMock).toHaveBeenCalledWith('op-restarted');
+        expect(parsed).toEqual({
+          exited: true,
+          reason: 'not_found',
+          success: true,
+          taskId: 'op-restarted',
+        });
+        expect(killSpy).not.toHaveBeenCalled();
+        killSpy.mockRestore();
+      });
+
+      it('terminates an orphaned wrapper group and confirms only after it exits', async () => {
+        findHeteroExecProcessesMock.mockResolvedValueOnce([{ pid: 4242 }]);
+        const alive = new Set([4242]);
+        const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal?) => {
+          const target = Math.abs(Number(pid));
+          if (signal === 0) {
+            if (!alive.has(target)) throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' });
+            return true;
+          }
+          return true;
+        });
+
+        const pending = ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-orphaned' });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(killSpy).toHaveBeenCalledWith(-4242, 'SIGINT');
+
+        // Still alive: the device must not confirm yet.
+        let settled = false;
+        void pending.then(() => {
+          settled = true;
+        });
+        await vi.advanceTimersByTimeAsync(500);
+        expect(settled).toBe(false);
+
+        alive.delete(4242);
+        await vi.advanceTimersByTimeAsync(100);
+        const parsed = JSON.parse(await pending);
+
+        expect(parsed).toEqual({
+          exited: true,
+          pids: [4242],
+          reason: 'orphan_terminated',
+          signal: 'SIGINT',
+          success: true,
+          taskId: 'op-orphaned',
+        });
+        expect(killSpy).not.toHaveBeenCalledWith(-4242, 'SIGKILL');
+        killSpy.mockRestore();
+      });
+
+      it('escalates and reports unconfirmed when the orphan will not die', async () => {
+        findHeteroExecProcessesMock.mockResolvedValueOnce([{ pid: 4343 }]);
+        const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+        const pending = ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-stubborn' });
+        await vi.advanceTimersByTimeAsync(6000);
+        const parsed = JSON.parse(await pending);
+
+        expect(killSpy).toHaveBeenCalledWith(-4343, 'SIGINT');
+        expect(killSpy).toHaveBeenCalledWith(-4343, 'SIGKILL');
+        expect(parsed).toMatchObject({
+          exited: false,
+          pids: [4343],
+          reason: 'orphan_alive',
+          success: false,
+          taskId: 'op-stubborn',
+        });
+        killSpy.mockRestore();
+      });
+
+      it('does not claim an exit when the process table cannot be read', async () => {
+        findHeteroExecProcessesMock.mockRejectedValueOnce(new Error('spawn ps ENOENT'));
+
+        const parsed = JSON.parse(
+          await ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-no-ps' }),
+        );
+
+        expect(parsed).toMatchObject({ exited: false, reason: 'lookup_failed', success: false });
+      });
+
+      it('keeps the previous unconfirmed answer on Windows', async () => {
+        const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+
+        const parsed = JSON.parse(
+          await ctr['cancelHeteroTask']({ signal: 'SIGINT', taskId: 'op-win' }),
+        );
+
+        expect(findHeteroExecProcessesMock).not.toHaveBeenCalled();
+        expect(parsed.success).toBe(false);
+        expect(parsed.exited).toBeUndefined();
+        platformSpy.mockRestore();
+      });
+    });
+
+    it('does not escalate cancellation after the process group is gone', async () => {
+      const alive = new Set([5556]);
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal?) => {
+        const target = typeof pid === 'number' ? Math.abs(pid) : Number(pid);
+        if (signal === 0) {
+          if (!alive.has(target)) throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' });
+          return true;
+        }
+        if (signal === 'SIGINT' || signal === 'SIGTERM') {
+          // Leader exits, but leave group membership to the close handler's cleanup
+          // simulation below so the escalation probe can see "gone".
+        }
+        if (signal === 'SIGKILL') {
+          alive.delete(target);
+        }
+        return true;
+      });
+      const child = makeMockChild(5556);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel-exit',
+          prompt: 'work',
+          taskId: 'task-cancel-exit',
+          topicId: 'topic-cancel-exit',
+        },
+        'req-run-cancel-exit',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel-exit' },
+        'req-cancel-exit',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      // Whole tree is gone with the leader — escalation must not fire SIGKILL.
+      alive.delete(5556);
+      child._emit('close', 0, null);
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(killSpy).toHaveBeenCalledWith(-5556, 'SIGINT');
+      expect(killSpy).not.toHaveBeenCalledWith(-5556, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('still escalates when the group leader exits but detached children remain', async () => {
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const child = makeMockChild(5557);
+      spawnMock.mockReturnValue(child);
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest(
+        'runHeteroTask',
+        {
+          agentType: 'openclaw',
+          operationId: 'op-cancel-orphan',
+          prompt: 'work',
+          taskId: 'task-cancel-orphan',
+          topicId: 'topic-cancel-orphan',
+        },
+        'req-run-cancel-orphan',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      client.simulateToolCallRequest(
+        'cancelHeteroTask',
+        { signal: 'SIGINT', taskId: 'task-cancel-orphan' },
+        'req-cancel-orphan',
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      // Leader closed, but process.kill(-pid, 0) still succeeds → orphans remain.
+      child._emit('close', null, 'SIGINT');
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(killSpy).toHaveBeenCalledWith(-5557, 'SIGINT');
+      expect(killSpy).toHaveBeenCalledWith(-5557, 'SIGKILL');
+      killSpy.mockRestore();
+    });
+
+    it('uses taskkill to terminate the full Windows wrapper process tree', () => {
+      const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+
+      (ctr as any).killPlatformProcessTree(6666, 'SIGINT');
+
+      expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '6666', '/T', '/F'], {
+        stdio: 'ignore',
+      });
+      platformSpy.mockRestore();
     });
 
     it('does not kill processes for a different topicId', async () => {
@@ -1095,13 +2496,126 @@ describe('GatewayConnectionCtr', () => {
 
       killSpy.mockRestore();
     });
+
+    describe('hermes', () => {
+      it('relays stdout intact and saves the final session id from stderr', async () => {
+        const child = makeMockChild();
+        const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+        spawnMock.mockReturnValue(child);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-hermes-1',
+          prompt: 'hello',
+          taskId: 'task-hermes-1',
+          topicId: 'topic-hermes',
+        });
+
+        const [command, , spawnOptions] = spawnMock.mock.calls[0] as [
+          string,
+          string[],
+          { stdio: string[] },
+        ];
+        expect(command).toBe('/resolved/bin/hermes');
+        expect(spawnOptions.stdio).toEqual(['ignore', 'pipe', 'pipe']);
+
+        child.stdout._emit('session_id: part of the final answer\nHello from Hermes\n');
+        child.stderr._emit(
+          'Restored working directory: /repo\r\nsession_id: session-before-compaction\r\n' +
+            'Context compacted\r\nsession_id: session-continuation\r\n',
+        );
+        child._emit('close', 0, null);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(notifySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content: 'session_id: part of the final answer\nHello from Hermes',
+            operationId: 'op-hermes-1',
+            topicId: 'topic-hermes',
+          }),
+        );
+        expect((ctr as any).hermesSessionMap.get('topic-hermes')).toBe('session-continuation');
+      });
+
+      it('resumes the saved session and replaces it with a continuation id', async () => {
+        const firstChild = makeMockChild(1001);
+        const secondChild = makeMockChild(1002);
+        const thirdChild = makeMockChild(1003);
+        spawnMock
+          .mockReturnValueOnce(firstChild)
+          .mockReturnValueOnce(secondChild)
+          .mockReturnValueOnce(thirdChild);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-1',
+          prompt: 'remember this',
+          taskId: 'task-1',
+          topicId: 'topic-multi-turn',
+        });
+        firstChild.stderr._emit('session_id: session-a\n');
+        firstChild._emit('close', 0, null);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-2',
+          prompt: 'what did I say?',
+          taskId: 'task-2',
+          topicId: 'topic-multi-turn',
+        });
+        expect(spawnMock.mock.calls[1][1]).toEqual([
+          'chat',
+          '--query',
+          'what did I say?',
+          '--quiet',
+          '--accept-hooks',
+          '--resume',
+          'session-a',
+        ]);
+
+        secondChild.stderr._emit('session_id: session-continuation\n');
+        secondChild._emit('close', 0, null);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-3',
+          prompt: 'continue',
+          taskId: 'task-3',
+          topicId: 'topic-multi-turn',
+        });
+        expect(spawnMock.mock.calls[2][1]).toContain('session-continuation');
+      });
+
+      it('still relays a successful response when stderr has no session id', async () => {
+        const child = makeMockChild();
+        const notifySpy = vi.spyOn(ctr as any, 'sendNotify').mockResolvedValue(undefined);
+        spawnMock.mockReturnValue(child);
+
+        await (ctr as any).runHeteroTask({
+          agentType: 'hermes',
+          operationId: 'op-no-session',
+          prompt: 'hello',
+          taskId: 'task-no-session',
+          topicId: 'topic-no-session',
+        });
+        child.stdout._emit('Successful response\n');
+        child.stderr._emit('Provider diagnostic only\n');
+        child._emit('close', 0, null);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(notifySpy).toHaveBeenCalledWith(
+          expect.objectContaining({ content: 'Successful response' }),
+        );
+        expect((ctr as any).hermesSessionMap.has('topic-no-session')).toBe(false);
+      });
+    });
   });
 
   // ─── Platform Capability Probing ───
 
   describe('platform capability probing', () => {
     async function connectAndOpen() {
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       const client = MockGatewayClient.lastInstance!;
       client.simulateConnected();
@@ -1109,15 +2623,15 @@ describe('GatewayConnectionCtr', () => {
     }
 
     beforeEach(() => {
-      execSyncMock.mockReset();
+      resolveRemotePlatformCommandMock.mockReset();
     });
 
-    it('returns available:true with version when binary is installed', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd.startsWith('which ') || cmd.startsWith('where '))
-          return '/usr/local/bin/openclaw\n';
-        if (cmd.includes('--version')) return 'openclaw 1.2.3\n';
-        return '';
+    it('uses the shared login-shell resolver for capability checks', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/login-shell/bin/openclaw',
+        resolvedPathEnv: '/login-shell/bin:/usr/bin',
+        version: '1.2.3',
       });
 
       const client = await connectAndOpen();
@@ -1131,18 +2645,19 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-cap',
         result: {
-          content: JSON.stringify({ available: true, version: 'openclaw 1.2.3' }),
-          state: { available: true, version: 'openclaw 1.2.3' },
+          executionTimeMs: expect.any(Number),
+          content: JSON.stringify({ available: true, version: '1.2.3' }),
+          state: { available: true, version: '1.2.3' },
           success: true,
         },
       });
+      expect(resolveRemotePlatformCommandMock).toHaveBeenCalledWith('openclaw');
     });
 
-    it('returns available:true without version when --version command fails', async () => {
-      execSyncMock.mockImplementation((cmd: string) => {
-        if (cmd.startsWith('which ') || cmd.startsWith('where '))
-          return '/usr/local/bin/openclaw\n';
-        throw new Error('version command failed');
+    it('returns available:true when the shared resolver has no version', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: true,
+        path: '/login-shell/bin/openclaw',
       });
 
       const client = await connectAndOpen();
@@ -1156,6 +2671,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-cap-nover',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({ available: true }),
           state: { available: true },
           success: true,
@@ -1164,8 +2680,8 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('returns available:false when binary is not installed', async () => {
-      execSyncMock.mockImplementation(() => {
-        throw new Error('command not found');
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: false,
       });
 
       const client = await connectAndOpen();
@@ -1179,6 +2695,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-missing',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({
             available: false,
             reason: 'openclaw is not installed on this device',
@@ -1193,6 +2710,11 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('returns available:false for unknown platform', async () => {
+      resolveRemotePlatformCommandMock.mockResolvedValue({
+        available: false,
+        error: 'Unknown platform: unknownBot',
+      });
+
       const client = await connectAndOpen();
       client.simulateToolCallRequest(
         'checkPlatformCapability',
@@ -1204,6 +2726,7 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-unknown-plat',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({ available: false, reason: 'Unknown platform: unknownBot' }),
           state: { available: false, reason: 'Unknown platform: unknownBot' },
           success: true,
@@ -1212,6 +2735,11 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('getAgentProfile returns empty object', async () => {
+      resolveRemotePlatformRuntimeMock.mockResolvedValue({
+        available: false,
+        error: 'openclaw was not found or failed validation',
+      });
+
       const client = await connectAndOpen();
       client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-profile');
       await vi.advanceTimersByTimeAsync(0);
@@ -1219,8 +2747,71 @@ describe('GatewayConnectionCtr', () => {
       expect(client.sendToolCallResponse).toHaveBeenCalledWith({
         requestId: 'req-profile',
         result: {
+          executionTimeMs: expect.any(Number),
           content: JSON.stringify({}),
           state: {},
+          success: true,
+        },
+      });
+      expect(executeRemotePlatformMock).not.toHaveBeenCalled();
+    });
+
+    it('uses the shared OpenClaw runtime to load its profile', async () => {
+      executeRemotePlatformMock.mockResolvedValueOnce({
+        stderr: '',
+        stdout: JSON.stringify([
+          {
+            id: 'main',
+            identityEmoji: '🦞',
+            identityName: 'Clawd',
+            isDefault: true,
+          },
+        ]),
+      });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'openclaw' }, 'req-openclaw');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith('openclaw');
+      expect(executeRemotePlatformMock).toHaveBeenCalledWith(['agents', 'list', '--json'], {
+        timeout: 5000,
+      });
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-openclaw',
+        result: {
+          executionTimeMs: expect.any(Number),
+          content: JSON.stringify({ avatar: '🦞', title: 'Clawd' }),
+          state: { avatar: '🦞', description: undefined, title: 'Clawd' },
+          success: true,
+        },
+      });
+    });
+
+    it('uses one shared Hermes runtime to load its profile', async () => {
+      executeRemotePlatformMock
+        .mockResolvedValueOnce({ stderr: '', stdout: '◆research\n' })
+        .mockResolvedValueOnce({ stderr: '', stdout: 'Path: /profiles/research\n' });
+
+      const client = await connectAndOpen();
+      client.simulateToolCallRequest('getAgentProfile', { platform: 'hermes' }, 'req-hermes');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(resolveRemotePlatformRuntimeMock).toHaveBeenCalledWith('hermes');
+      expect(executeRemotePlatformMock).toHaveBeenNthCalledWith(1, ['profile', 'list'], {
+        timeout: 5000,
+      });
+      expect(executeRemotePlatformMock).toHaveBeenNthCalledWith(
+        2,
+        ['profile', 'show', 'research'],
+        { timeout: 5000 },
+      );
+      expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+        requestId: 'req-hermes',
+        result: {
+          executionTimeMs: expect.any(Number),
+          content: JSON.stringify({ avatar: '⚡', title: 'research' }),
+          state: { avatar: '⚡', description: undefined, title: 'research' },
           success: true,
         },
       });
@@ -1233,7 +2824,7 @@ describe('GatewayConnectionCtr', () => {
     it('should return current status', async () => {
       expect(await ctr.getConnectionStatus()).toEqual({ status: 'disconnected' });
 
-      ctr.afterAppReady();
+      ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
       expect(await ctr.getConnectionStatus()).toEqual({ status: 'connecting' });
 
@@ -1243,21 +2834,62 @@ describe('GatewayConnectionCtr', () => {
   });
 
   describe('getDeviceInfo', () => {
-    it('should return device information', async () => {
-      mockStoreGet.mockImplementation((key: string) => {
-        if (key === 'gatewayEnabled') return true;
-        if (key === 'gatewayDeviceId') return 'my-device';
-        return undefined;
-      });
-      ctr = new GatewayConnectionCtr(mockApp);
-      ctr.afterAppReady();
+    it('backfills the registered local device when reading its info without reconnecting', async () => {
+      mockStoreGet.mockImplementation((key: string) =>
+        key === 'gatewayDeviceId' ? 'my-device' : false,
+      );
+      mockGatewayConnectionSrv.loadOrCreateDeviceId();
+      const fetchMock = vi.mocked(fetch);
+      fetchMock.mockResolvedValueOnce(
+        Response.json({
+          result: {
+            data: {
+              json: [
+                {
+                  architecture: null,
+                  deviceId: 'my-device',
+                  identitySource: 'machine-id',
+                  registered: true,
+                  scope: 'personal',
+                },
+              ],
+            },
+          },
+        }),
+      );
 
       const info = await ctr.getDeviceInfo();
-      expect(info).toEqual({
-        description: '',
-        deviceId: 'my-device',
+
+      expect(info.deviceId).toBe('my-device');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(fetchMock.mock.calls[1][1]!.body as string)).toEqual({
+        json: {
+          architecture: 'arm64',
+          deviceId: 'my-device',
+        },
+      });
+      expect(MockGatewayClient.lastInstance).toBeNull();
+    });
+
+    it('still returns local info if the registry cannot be reached', async () => {
+      mockGatewayConnectionSrv.loadOrCreateDeviceId();
+      vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'));
+      await expect(ctr.getDeviceInfo()).resolves.toMatchObject({ hostname: 'mock-hostname' });
+    });
+
+    // Regression: pre-connect it reported the fallback UUID while pins stored the stable id.
+    it('reports the stable device id once signed in, even before connecting', async () => {
+      mockStoreGet.mockImplementation((key: string) =>
+        key === 'gatewayDeviceId' ? 'my-device' : undefined,
+      );
+      const sub = Buffer.from(JSON.stringify({ sub: 'user-1' })).toString('base64url');
+      vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(`h.${sub}.s`);
+      ctr = new GatewayConnectionCtr(mockApp);
+      ctr.afterFirstFrame();
+      const stable = deriveDeviceId('user-1', { fallbackId: 'my-device' }).deviceId;
+      await expect(ctr.getDeviceInfo()).resolves.toEqual({
+        deviceId: stable,
         hostname: 'mock-hostname',
-        name: 'mock-hostname',
         platform: process.platform,
       });
     });

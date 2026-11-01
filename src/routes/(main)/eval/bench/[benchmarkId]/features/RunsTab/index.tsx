@@ -1,8 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Text } from '@lobehub/ui';
-import { Select } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Select, Text } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,10 +17,10 @@ const styles = createStaticStyles(({ css }) => ({
   // column on narrow viewports.
   grid: css`
     display: grid;
-    gap: 12px;
     grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+    gap: 12px;
 
-    @media (max-width: 640px) {
+    @media (width <= 640px) {
       grid-template-columns: 1fr;
     }
   `,
@@ -47,7 +45,7 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
   const { t } = useTranslation('eval');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
-  const runList = useEvalStore(runSelectors.runList);
+  const runList = useEvalStore(runSelectors.runList(benchmarkId));
   const refreshRuns = useEvalStore((s) => s.refreshRuns);
   useFetchRuns(benchmarkId);
 

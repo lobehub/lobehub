@@ -1,15 +1,22 @@
 'use client';
 
-import { Button, Flexbox, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Card, Skeleton } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Skeleton,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
-import { useEvalStore } from '@/store/eval';
+import { testCaseSelectors, useEvalStore } from '@/store/eval';
 
 import { createDatasetCreateModal } from '../../../../features/DatasetCreateModal';
 import { createDatasetEditModal } from '../../../../features/DatasetEditModal';
@@ -21,9 +28,7 @@ import EmptyState from './EmptyState';
 
 const loadingStyles = createStaticStyles(({ css }) => ({
   card: css`
-    .ant-card-body {
-      padding: 0;
-    }
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   header: css`
     display: flex;
@@ -53,7 +58,7 @@ interface DatasetsTabProps {
 const DatasetsTab = memo<DatasetsTabProps>(
   ({ benchmarkId, datasets, loading: datasetsLoading, onImport, onRefresh }) => {
     const { t } = useTranslation('eval');
-    const { message } = App.useApp();
+
     const [expandedDs, setExpandedDs] = useState<string | null>(null);
     const [pagination, setPagination] = useState({ current: 1, pageSize: 5 });
     const [search, setSearch] = useState('');
@@ -62,27 +67,25 @@ const DatasetsTab = memo<DatasetsTabProps>(
     const useFetchTestCases = useEvalStore((s) => s.useFetchTestCases);
     const refreshTestCases = useEvalStore((s) => s.refreshTestCases);
 
-    // Fetch test cases for expanded dataset - use SWR return value directly
-    const { data: testCaseData, isLoading: loading } = useFetchTestCases(
-      expandedDs
-        ? {
-            datasetId: expandedDs,
-            limit: pagination.pageSize,
-            offset: (pagination.current - 1) * pagination.pageSize,
-          }
-        : { datasetId: '', limit: 0, offset: 0 },
-    );
+    // Fetch the expanded dataset's case page; the rows are read from the replica.
+    // One query for the fetch and the reads: the rows only show for this exact page.
+    const caseQuery = expandedDs
+      ? {
+          datasetId: expandedDs,
+          limit: pagination.pageSize,
+          offset: (pagination.current - 1) * pagination.pageSize,
+        }
+      : null;
+    useFetchTestCases(caseQuery);
 
-    const testCases = testCaseData?.data || [];
-    const total = testCaseData?.total || 0;
+    const testCases = useEvalStore(testCaseSelectors.testCases(caseQuery));
+    const total = useEvalStore(testCaseSelectors.testCaseTotal(caseQuery));
+    const loading = useEvalStore(testCaseSelectors.isLoadingTestCases(caseQuery));
 
-    const handleRefreshTestCases = useCallback(
-      async (datasetId: string) => {
-        await refreshTestCases(datasetId);
-        onRefresh();
-      },
-      [refreshTestCases, onRefresh],
-    );
+    const handleRefreshTestCases = useCallback(async () => {
+      await refreshTestCases();
+      onRefresh();
+    }, [refreshTestCases, onRefresh]);
 
     const filteredCases = testCases.filter((c: any) => {
       if (diffFilter !== 'all' && c.metadata?.difficulty !== diffFilter) return false;
@@ -160,17 +163,17 @@ const DatasetsTab = memo<DatasetsTabProps>(
           onOk: async () => {
             try {
               await agentEvalService.deleteTestCase(testCase.id);
-              message.success(t('testCase.delete.success'));
-              if (expandedDs) await refreshTestCases(expandedDs);
+              toast.success(t('testCase.delete.success'));
+              if (expandedDs) await refreshTestCases();
               onRefresh();
             } catch {
-              message.error(t('testCase.delete.error'));
+              toast.error(t('testCase.delete.error'));
             }
           },
           title: t('common.delete'),
         });
       },
-      [expandedDs, message, onRefresh, refreshTestCases, t],
+      [expandedDs, onRefresh, refreshTestCases, t],
     );
 
     return (
@@ -190,17 +193,17 @@ const DatasetsTab = memo<DatasetsTabProps>(
           {datasetsLoading && datasets.length === 0 ? (
             <Flexbox gap={12}>
               {[1, 2, 3].map((i) => (
-                <Card className={loadingStyles.card} key={i}>
+                <Block className={loadingStyles.card} key={i} variant={'outlined'}>
                   <div className={loadingStyles.header}>
                     <div className={loadingStyles.icon} />
                     <Flexbox flex={1} gap={8}>
-                      <Skeleton.Input active size="small" style={{ height: 16, width: 120 }} />
-                      <Skeleton.Input active size="small" style={{ height: 12, width: 200 }} />
+                      <Skeleton height={16} width={120} />
+                      <Skeleton height={12} width={200} />
                     </Flexbox>
-                    <Skeleton.Button active size="small" style={{ height: 36, width: 64 }} />
-                    <Skeleton.Button active size="small" style={{ height: 28, width: 64 }} />
+                    <Skeleton height={36} width={64} />
+                    <Skeleton height={28} width={64} />
                   </div>
-                </Card>
+                </Block>
               ))}
             </Flexbox>
           ) : datasets.length === 0 ? (
@@ -223,6 +226,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
                     total={isExpanded ? total : 0}
                     onDeleteCase={handleDeleteCase}
                     onDiffFilterChange={handleDiffFilterChange}
+                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                     onExpand={() => handleExpand(ds.id)}
                     onImport={() => handleImportDataset(ds)}
                     onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
@@ -235,7 +239,6 @@ const DatasetsTab = memo<DatasetsTabProps>(
                         onSuccess: handleRefreshTestCases,
                       })
                     }
-                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                   />
                 );
               })}

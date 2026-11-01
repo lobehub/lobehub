@@ -13,7 +13,6 @@ import type { GenerationLayoutCommonProps } from '../../types';
 import GridSkeletonList from './SkeletonList';
 import { GenerationTopicStoreProvider } from './StoreContext';
 import TopicList from './TopicList';
-import TopicUrlSync from './TopicUrlSync';
 
 const List = memo<
   Pick<GenerationLayoutCommonProps, 'namespace' | 'useStore' | 'viewModeStatusKey'> & {
@@ -34,7 +33,6 @@ const List = memo<
     <GenerationTopicStoreProvider value={{ namespace, useStore: useStore as any }}>
       <Flexbox gap={4} paddingBlock={1}>
         <TopicList viewMode={viewMode} visibility={visibility} />
-        <TopicUrlSync />
       </Flexbox>
     </GenerationTopicStoreProvider>
   );

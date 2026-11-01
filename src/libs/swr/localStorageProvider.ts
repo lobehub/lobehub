@@ -26,6 +26,7 @@
 import { bootTiming } from '@/libs/bootTiming';
 
 import { buildLocalDataKey, localDataCache } from './localDataCache';
+import { migrateMessageListCache } from './migrations/messageListCache';
 import { isScopeTrusted } from './useCacheScope';
 
 interface CacheEntry<T = unknown> {
@@ -259,6 +260,12 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     let succeeded = false;
     try {
       const entries = await localDataCache.entriesByScope(scope);
+      const migratedEntries = await migrateMessageListCache({
+        entries,
+        onError,
+        providerVersion: version,
+        scope,
+      });
       // The IndexedDB tier holds read-heavy / write-light business entities
       // (messages, topics, …): once written, a row rarely changes. We never drop
       // these by age — a stale row hydrates for an instant first paint and SWR's
@@ -267,7 +274,7 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
       // so legacy/unversioned rows (which the age check used to bound) are dropped
       // and a version bump still evicts everyone. TTL governs the localStorage
       // tier only (see `loadLocal`).
-      const valid = entries.filter((e) => e.version === version);
+      const valid = migratedEntries.filter((e) => e.version === version);
       // Map may have changed scope while we awaited; only apply if still current.
       if (cacheMapInstance && getScope() === scope && hydrationEpoch === epoch) {
         cacheMapInstance.hydrate(valid.map((e) => [e.key, e.data]));
@@ -476,7 +483,6 @@ export const CACHE_TIERS = {
     'message:', // chat messages (conversation + legacy stores)
     'topic:', // topic lists / agent view / search
     'agent:', // sidebar agent list + agent documents
-    'group:detail', // group detail (group list stays in localStorage)
     'task:', // task lists + detail
     'document:', // editor document content
     'page:', // page detail / list / meta
@@ -485,11 +491,13 @@ export const CACHE_TIERS = {
   ],
   /** Small, frequently-changing list shells → localStorage (sync first paint). */
   local: [
-    'recent:list',
+    // Home's chat-mode recents still uses the SWR persistence tier. The mixed
+    // Recent projection is persisted by its Zustand localStorage snapshot.
+    'recent:topicList',
     'fetchRecentTopics',
     'fetchRecentResources',
     'fetchRecentPages',
-    'group:list',
+    'agentBuilder:suggestions', // builder opening-suggestion chips (skip LLM regen on revisit)
     'taskTemplate:', // home task-template recommendations
     'modelConfig:', // small remote model config shells used by home starter chips
   ],

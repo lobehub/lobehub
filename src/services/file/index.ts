@@ -19,6 +19,8 @@ interface CreateFileParams extends Omit<UploadFileParams, 'url'> {
 }
 
 export class FileService {
+  rehostImage = async (url: string) => lambdaClient.file.rehostImage.mutate({ url });
+
   createFile = async (
     params: UploadFileParams & {
       parentId?: string;
@@ -53,8 +55,18 @@ export class FileService {
     };
   };
 
+  /** Storage URL a canvas can read (no `/f/:id` redirect); see the router for why. */
+  getReadableUrl = async (id: string): Promise<string> => {
+    const { url } = await lambdaClient.file.getReadableUrl.query({ id });
+    return url;
+  };
+
   removeFile = async (id: string): Promise<void> => {
     await lambdaClient.file.removeFile.mutate({ id });
+  };
+
+  removeUnreferencedFile = async (id: string): Promise<void> => {
+    await lambdaClient.file.removeUnreferencedFile.mutate({ id });
   };
 
   removeFiles = async (ids: string[]): Promise<void> => {
@@ -74,8 +86,12 @@ export class FileService {
     return lambdaClient.file.resolveKnowledgeItemIds.query(params as QueryFileListSchemaType);
   };
 
-  deleteKnowledgeItemsByQuery = async (params: QueryFileListParams) => {
-    return lambdaClient.file.deleteKnowledgeItemsByQuery.mutate(params as QueryFileListSchemaType);
+  deleteKnowledgeItemsByQuery = async (
+    params: QueryFileListParams & { excludedIds?: string[] },
+  ) => {
+    return lambdaClient.file.deleteKnowledgeItemsByQuery.mutate(
+      params as QueryFileListSchemaType & { excludedIds?: string[] },
+    );
   };
 
   // V2.0 Migrate from getFileItem to getKnowledgeItem
@@ -86,6 +102,10 @@ export class FileService {
       // Document (including folders) - use document endpoint
       const doc = await lambdaClient.document.getDocumentById.query({ id });
       if (!doc) return null;
+
+      const backingFile = doc.fileId
+        ? await lambdaClient.file.getFileItemById.query({ id: doc.fileId })
+        : undefined;
 
       // Convert document to FileListItem format
       return {
@@ -98,17 +118,17 @@ export class FileService {
         embeddingError: null,
         embeddingStatus: null,
         fileId: doc.fileId,
-        fileType: doc.fileType || CUSTOM_DOCUMENT_FILE_TYPE,
+        fileType: backingFile?.fileType || doc.fileType || CUSTOM_DOCUMENT_FILE_TYPE,
         finishEmbedding: false,
         id: doc.id,
         metadata: doc.metadata,
-        name: doc.title || doc.filename || 'Untitled',
+        name: backingFile?.name || doc.title || doc.filename || 'Untitled',
         parentId: doc.parentId,
-        size: doc.totalCharCount || 0,
+        size: backingFile?.size || doc.totalCharCount || 0,
         slug: doc.slug,
         sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
         updatedAt: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
-        url: doc.source || '',
+        url: backingFile?.url || doc.source || '',
       } as FileListItem;
     } else {
       // File - use dedicated file endpoint
@@ -139,12 +159,17 @@ export class FileService {
     return lambdaClient.file.updateFile.mutate({ id, ...data });
   };
 
-  getRecentFiles = async (limit?: number) => {
-    return lambdaClient.file.recentFiles.query({ limit });
+  /** The Docs home list: pages and files mixed, newest update first. */
+  getDocsHomeItems = async (tab: 'mine' | 'recent' | 'shared', limit?: number) => {
+    return lambdaClient.file.homeItems.query({ limit, tab });
   };
 
-  getRecentPages = async (limit?: number) => {
-    return lambdaClient.file.recentPages.query({ limit });
+  getRecentFiles = async (limit?: number, visibility?: QueryFileListParams['visibility']) => {
+    return lambdaClient.file.recentFiles.query({ limit, visibility });
+  };
+
+  getRecentPages = async (limit?: number, visibility?: QueryFileListParams['visibility']) => {
+    return lambdaClient.file.recentPages.query({ limit, visibility });
   };
 
   transferEntity = async (

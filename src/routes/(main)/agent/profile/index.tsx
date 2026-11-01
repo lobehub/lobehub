@@ -3,10 +3,13 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { memo, Suspense } from 'react';
+import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import Loading from '@/components/Loading/BrandTextLoading';
+import { delayed } from '@/components/Skeleton/Delayed';
+import ProfileSkeleton from '@/components/Skeleton/Profile';
 import AgentBuilder from '@/features/AgentBuilder';
+import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -19,9 +22,17 @@ import ProfileEditor from './features/ProfileEditor';
 import ProfileHydration from './features/ProfileHydration';
 import ProfileProvider from './features/ProfileProvider';
 import { selectors as profileSelectors, useProfileStore } from './features/store';
+import { useClickToFocusEditor } from './features/useClickToFocusEditor';
 
 const styles = StyleSheet.create({
   contentWrapper: {
+    /**
+     * Do not stretch the column to this scroller's height. A stretched column
+     * stays viewport-tall while the editor overflows it, so CodeMirror picks it
+     * as the nearest scrollable ancestor (`scrollHeight > clientHeight`) and
+     * drag-selecting past the bottom edge scrolls nothing.
+     */
+    alignItems: 'flex-start',
     cursor: 'text',
     display: 'flex',
     overflowY: 'auto',
@@ -42,6 +53,7 @@ const ProfileArea = memo(() => {
   const configError = useAgentStore(agentSelectors.currentAgentConfigError);
   const retryAgentConfigFetch = useAgentStore((s) => s.retryAgentConfigFetch);
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const handleContentClick = useClickToFocusEditor(editor, canEdit);
 
   return (
     <>
@@ -58,7 +70,7 @@ const ProfileArea = memo(() => {
           // gate on `!configError` so under loading→error precedence the loading
           // branch yields to the error state instead of spinning forever.
           isLoading={isAgentConfigLoading && !configError}
-          loading={<Loading debugId="ProfileArea" />}
+          loading={<ProfileSkeleton />}
           onRetry={() => retryAgentConfigFetch()}
         >
           <Header />
@@ -67,14 +79,7 @@ const ProfileArea = memo(() => {
             height={'100%'}
             style={{ ...styles.contentWrapper, cursor: canEdit ? 'text' : 'default' }}
             width={'100%'}
-            onClick={(e) => {
-              if (!canEdit) return;
-              // Only focus editor for clicks within this DOM element,
-              // not from React portal (e.g. Modal) whose DOM is outside this tree
-              if (e.currentTarget.contains(e.target as Node)) {
-                editor?.focus();
-              }
-            }}
+            onClick={handleContentClick}
           >
             <WideScreenContainer>
               <ProfileEditor />
@@ -103,14 +108,23 @@ const AgentBuilderSlot = memo(() => {
 });
 
 const AgentProfile: FC = () => {
+  const { aid } = useParams<{ aid: string }>();
+
   return (
-    <Suspense fallback={<Loading debugId="AgentProfile" />}>
-      <ProfileProvider>
-        <Flexbox horizontal height={'100%'} width={'100%'}>
-          <ProfileArea />
-          <AgentBuilderSlot />
-        </Flexbox>
-      </ProfileProvider>
+    <Suspense fallback={delayed(<ProfileSkeleton />)}>
+      <ResourceConfigAccessGate
+        loading={<ProfileSkeleton />}
+        redirectPath={`/agent/${aid ?? ''}`}
+        resourceId={aid}
+        resourceType="agent"
+      >
+        <ProfileProvider>
+          <Flexbox horizontal height={'100%'} width={'100%'}>
+            <ProfileArea />
+            <AgentBuilderSlot />
+          </Flexbox>
+        </ProfileProvider>
+      </ResourceConfigAccessGate>
     </Suspense>
   );
 };

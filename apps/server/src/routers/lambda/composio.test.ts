@@ -8,10 +8,12 @@ const mocks = vi.hoisted(() => ({
   authConfigsCreate: vi.fn(),
   authConfigsList: vi.fn(),
   connectedAccountsDelete: vi.fn(),
+  connectedAccountsGet: vi.fn(),
   connectedAccountsLink: vi.fn(),
+  connectedAccountsList: vi.fn(),
   connectorCreate: vi.fn(),
   connectorDelete: vi.fn(),
-  connectorQueryByIdentifiers: vi.fn(),
+  connectorFindScopedByIdentifier: vi.fn(),
   connectorToolDeleteToolsNotIn: vi.fn(),
   connectorToolUpsertMany: vi.fn(),
   connectorUpdate: vi.fn(),
@@ -32,34 +34,45 @@ vi.mock('@/config/composio', () => ({
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    create: mocks.pluginCreate,
-    delete: mocks.pluginDelete,
-    findById: mocks.pluginFindById,
-    update: mocks.pluginUpdate,
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mocks.pluginCreate,
+      delete: mocks.pluginDelete,
+      findById: mocks.pluginFindById,
+      update: mocks.pluginUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn().mockImplementation(() => ({
-    create: mocks.connectorCreate,
-    delete: mocks.connectorDelete,
-    queryByIdentifiers: mocks.connectorQueryByIdentifiers,
-    update: mocks.connectorUpdate,
-  })),
+  ConnectorModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mocks.connectorCreate,
+      delete: mocks.connectorDelete,
+      findScopedByIdentifier: mocks.connectorFindScopedByIdentifier,
+      update: mocks.connectorUpdate,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/connectorTool', () => ({
-  ConnectorToolModel: vi.fn().mockImplementation(() => ({
-    deleteToolsNotIn: mocks.connectorToolDeleteToolsNotIn,
-    upsertMany: mocks.connectorToolUpsertMany,
-  })),
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {
+      deleteToolsNotIn: mocks.connectorToolDeleteToolsNotIn,
+      upsertMany: mocks.connectorToolUpsertMany,
+    };
+  }),
 }));
 
 vi.mock('@/libs/composio', () => ({
   getComposioClient: () => ({
     authConfigs: { create: mocks.authConfigsCreate, list: mocks.authConfigsList },
-    connectedAccounts: { delete: mocks.connectedAccountsDelete, link: mocks.connectedAccountsLink },
+    connectedAccounts: {
+      delete: mocks.connectedAccountsDelete,
+      get: mocks.connectedAccountsGet,
+      link: mocks.connectedAccountsLink,
+      list: mocks.connectedAccountsList,
+    },
     tools: { getRawComposioTools: mocks.getRawComposioTools },
   }),
 }));
@@ -68,12 +81,67 @@ const caller = () => composioRouter.createCaller({ userId: 'user-1' } as any);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+  mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
   mocks.connectorCreate.mockResolvedValue({ id: 'conn-new' });
   mocks.pluginFindById.mockResolvedValue(undefined);
 });
 
+/** @example OAuth callback polling reports whether Gmail can be read. */
+describe('composioRouter.getConnection', () => {
+  /** @example An ACTIVE Gmail account with read-only scope is marked readable. */
+  it('returns confirmed Gmail read permission', async () => {
+    const account = {
+      data: {
+        email: 'ada@example.com',
+        scopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+      },
+      id: 'ca-1',
+      status: 'ACTIVE',
+      toolkit: { slug: 'gmail' },
+    };
+    mocks.connectedAccountsGet.mockResolvedValue(account);
+    mocks.connectedAccountsList.mockResolvedValue({ items: [account] });
+
+    await expect(caller().getConnection({ connectedAccountId: 'ca-1' })).resolves.toMatchObject({
+      connectedAccountId: 'ca-1',
+      gmailReadPermission: true,
+      status: 'ACTIVE',
+    });
+  });
+
+  /** @example An ACTIVE Gmail account with identity-only scopes triggers the recovery UI. */
+  it('returns missing Gmail read permission', async () => {
+    const account = {
+      data: {
+        email: 'ada@example.com',
+        scopes: ['openid', 'https://www.googleapis.com/auth/userinfo.email'],
+      },
+      id: 'ca-1',
+      status: 'ACTIVE',
+      toolkit: { slug: 'gmail' },
+    };
+    mocks.connectedAccountsGet.mockResolvedValue(account);
+    mocks.connectedAccountsList.mockResolvedValue({ items: [account] });
+
+    await expect(caller().getConnection({ connectedAccountId: 'ca-1' })).resolves.toMatchObject({
+      gmailReadPermission: false,
+      status: 'ACTIVE',
+    });
+  });
+});
+
 describe('composioRouter.createConnection dual-write', () => {
+  /** @example GitHub cannot create a legacy Composio account after moving to Market OAuth. */
+  it('rejects apps removed from the Composio catalog before remote side effects', async () => {
+    await expect(
+      caller().createConnection({ appSlug: 'GITHUB', identifier: 'github', label: 'GitHub' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(mocks.authConfigsList).not.toHaveBeenCalled();
+    expect(mocks.connectedAccountsLink).not.toHaveBeenCalled();
+    expect(mocks.connectorCreate).not.toHaveBeenCalled();
+  });
+
   it('mirrors a pending connection into user_connectors + tools', async () => {
     mocks.getServerComposioAuthConfigId.mockReturnValue('ac_env');
     mocks.connectedAccountsLink.mockResolvedValue({ id: 'ca-1', redirectUrl: 'https://auth' });
@@ -113,7 +181,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
   };
 
   it('creates the connector projection (ACTIVE) + tools when none exists', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
 
     const res = await caller().updateComposioPlugin(input);
 
@@ -131,7 +199,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
   });
 
   it('updates an existing connector projection instead of duplicating it', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([{ id: 'conn-existing' }]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().updateComposioPlugin(input);
 
@@ -152,7 +220,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
   });
 
   it('prunes all connector tools when the refreshed list is empty', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([{ id: 'conn-existing' }]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().updateComposioPlugin({ ...input, tools: [] });
 
@@ -164,7 +232,7 @@ describe('composioRouter.updateComposioPlugin dual-write', () => {
 
 describe('composioRouter delete paths clean up the connector projection', () => {
   it('removeComposioPlugin deletes the connector row when present', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([{ id: 'conn-existing' }]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().removeComposioPlugin({ identifier: 'gmail' });
 
@@ -174,7 +242,7 @@ describe('composioRouter delete paths clean up the connector projection', () => 
 
   it('deleteConnection deletes both plugin and connector', async () => {
     mocks.connectedAccountsDelete.mockResolvedValue(undefined);
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([{ id: 'conn-existing' }]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue({ id: 'conn-existing' });
 
     await caller().deleteConnection({ connectedAccountId: 'ca-1', identifier: 'gmail' });
 
@@ -183,7 +251,7 @@ describe('composioRouter delete paths clean up the connector projection', () => 
   });
 
   it('does not call connector delete when no projection exists', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+    mocks.connectorFindScopedByIdentifier.mockResolvedValue(null);
 
     await caller().removeComposioPlugin({ identifier: 'gmail' });
 

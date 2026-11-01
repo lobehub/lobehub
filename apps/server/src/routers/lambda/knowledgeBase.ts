@@ -5,14 +5,89 @@ import { businessFileTransferStorageCheck } from '@/business/server/lambda-route
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { serverDBEnv } from '@/config/db';
+import { DocumentModel } from '@/database/models/document';
+import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
-import { insertKnowledgeBasesSchema } from '@/database/schemas';
+import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
+import {
+  getWorkspaceScopedPermissionMatches,
+  hasWorkspaceScopedPermission,
+} from '@/server/services/workspacePermission';
 import { type KnowledgeBaseItem } from '@/types/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
+
+import {
+  assertWorkspaceRowManageable,
+  isWorkspaceNonOwner,
+} from './_helpers/assertWorkspaceRowManageable';
+import {
+  assertContentsNotInRestrictedKnowledgeBase,
+  assertKnowledgeBaseBrowsable,
+  filterRestrictedKnowledgeBases,
+  getUseLevelKnowledgeBaseIds,
+} from './_helpers/knowledgeBaseAccess';
+
+/**
+ * Presentation metadata only. Deliberately NOT `insertKnowledgeBasesSchema.partial()`:
+ * that carries `id`, `userId`, `workspaceId` and `visibility`, and a shared
+ * knowledge base is now editable by any member holding `edit` access rather than
+ * only by its creator. Without this narrowing such a member could reassign the
+ * row, move it to another workspace, or take it private — bypassing the
+ * creator-only transfer and publish/make-private procedures and putting the
+ * library out of its own creator's reach. Mirrors the OpenAPI
+ * `UpdateKnowledgeBaseSchema` surface.
+ */
+const updatableKnowledgeBaseFields = z.object({
+  avatar: z.string().nullish(),
+  /** Cover image (preset key or uploaded URL); `null` restores the generated default. */
+  cover: z.string().nullish(),
+  description: z.string().nullish(),
+  name: z.string().optional(),
+});
+
+/**
+ * The cover lives in the `settings` jsonb next to other library settings, so an
+ * edit merges into the stored object instead of replacing it.
+ */
+export const mergeKnowledgeBaseCover = (
+  settings: unknown,
+  cover: string | null | undefined,
+): Record<string, unknown> => {
+  const { cover: _previous, ...rest } = (settings as Record<string, unknown> | null) ?? {};
+  return cover ? { ...rest, cover } : rest;
+};
+
+const assertKnowledgeItemsAccessible = async (
+  ctx: {
+    documentModel: DocumentModel;
+    fileModel: FileModel;
+    serverDB: ConstructorParameters<typeof DocumentModel>[0];
+    userId: string;
+    workspaceId?: string | null;
+  },
+  ids: string[],
+): Promise<void> => {
+  const uniqueIds = [...new Set(ids)];
+  const documentIds = uniqueIds.filter((id) => id.startsWith('docs_'));
+  const fileIds = uniqueIds.filter((id) => !id.startsWith('docs_'));
+  const [documents, files] = await Promise.all([
+    ctx.documentModel.findByIds(documentIds),
+    ctx.fileModel.findByIds(fileIds),
+  ]);
+
+  if (documents.length + files.length !== uniqueIds.length) {
+    throw new TRPCError({
+      code: 'NOT_FOUND',
+      message: 'One or more resources were not found or are not accessible',
+    });
+  }
+
+  await assertContentsNotInRestrictedKnowledgeBase(ctx, uniqueIds);
+};
 
 const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -20,6 +95,8 @@ const knowledgeBaseProcedure = wsCompatProcedure.use(serverDatabase).use(async (
 
   return opts.next({
     ctx: {
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
@@ -30,6 +107,22 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:update'))
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+      // A library is a directory of references, not a container that makes its
+      // contents uniform: who can see a row is decided by the row's own
+      // `visibility`, which is what every listing already filters on. This
+      // entry used to additionally demand `item.visibility === kb.visibility`,
+      // which blocked the ordinary "file the draft now, share it when it's
+      // ready" move while doing nothing to stop the same state being reached by
+      // adding first and flipping visibility afterwards.
+      await assertKnowledgeItemsAccessible(ctx, input.ids);
+
       try {
         return await ctx.knowledgeBaseModel.addFilesToKnowledgeBase(
           input.knowledgeBaseId,
@@ -53,6 +146,7 @@ export const knowledgeBaseRouter = router({
     .input(
       z.object({
         avatar: z.string().optional(),
+        cover: z.string().optional(),
         description: z.string().optional(),
         name: z.string(),
         visibility: z.enum(['private', 'public']).optional(),
@@ -63,6 +157,7 @@ export const knowledgeBaseRouter = router({
         avatar: input.avatar,
         description: input.description,
         name: input.name,
+        settings: input.cover ? { cover: input.cover } : undefined,
         visibility: input.visibility,
       });
 
@@ -87,6 +182,7 @@ export const knowledgeBaseRouter = router({
           message: 'Knowledge base not found',
         });
       }
+      assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
 
       if (input.targetWorkspaceId) {
         const canWriteTarget = await hasWorkspaceScopedPermission({
@@ -122,7 +218,18 @@ export const knowledgeBaseRouter = router({
   getKnowledgeBaseById: knowledgeBaseProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ ctx, input }): Promise<KnowledgeBaseItem | undefined> => {
-      return ctx.knowledgeBaseModel.findById(input.id);
+      const kb = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!kb) return kb;
+
+      // Restricted KBs (resource-permission `use` level) stay mountable but
+      // their detail/content view is manager-only.
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+
+      return kb;
     }),
 
   getKnowledgeBases: knowledgeBaseProcedure
@@ -133,9 +240,40 @@ export const knowledgeBaseRouter = router({
         })
         .optional(),
     )
-    .query(async ({ ctx, input }): Promise<KnowledgeBaseItem[]> => {
-      return ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
-    }),
+    .query(
+      async ({
+        ctx,
+        input,
+      }): Promise<
+        (KnowledgeBaseItem & { memberRestricted?: boolean; permissionManageable?: boolean })[]
+      > => {
+        const list = await ctx.knowledgeBaseModel.query({ visibility: input?.visibility });
+
+        // Restricted KBs are fully hidden from non-privileged members here; the
+        // agent knowledge picker lists them through `agent.getKnowledgeBasesAndFiles`.
+        const visible = await filterRestrictedKnowledgeBases(ctx, list);
+
+        // Managers keep seeing restricted KBs — flag them (and who may manage
+        // permissions) so the client renders the lock badge and the
+        // permission-page entry without a per-row permission request.
+        if (!ctx.workspaceId) return visible;
+        const [useLevelIds, { hasAllScope }] = await Promise.all([
+          getUseLevelKnowledgeBaseIds(ctx.serverDB, ctx.workspaceId),
+          getWorkspaceScopedPermissionMatches({
+            action: 'KNOWLEDGE_BASE_UPDATE',
+            db: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+        ]);
+        const useLevelSet = new Set(useLevelIds);
+        return visible.map((kb) => ({
+          ...kb,
+          memberRestricted: useLevelSet.has(kb.id),
+          permissionManageable: hasAllScope || kb.userId === ctx.userId,
+        }));
+      },
+    ),
 
   publishKnowledgeBaseToWorkspace: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:update'))
@@ -157,8 +295,6 @@ export const knowledgeBaseRouter = router({
           message: 'Only the creator can publish a private knowledge base to the workspace',
         });
       }
-
-      if (kb.visibility === 'public') return { success: true };
 
       await ctx.knowledgeBaseModel.publishToWorkspace(input.id);
       return { success: true };
@@ -194,8 +330,6 @@ export const knowledgeBaseRouter = router({
         });
       }
 
-      if (kb.visibility === input.visibility) return { success: true };
-
       await ctx.knowledgeBaseModel.setVisibility(input.id, input.visibility);
       return { success: true };
     }),
@@ -203,16 +337,29 @@ export const knowledgeBaseRouter = router({
   removeAllKnowledgeBases: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:delete'))
     .mutation(async ({ ctx }) => {
-      const result = await ctx.knowledgeBaseModel.deleteAllWithFiles(
-        serverDBEnv.REMOVE_GLOBAL_FILE,
+      const knowledgeBases = await filterRestrictedKnowledgeBases(
+        ctx,
+        await ctx.knowledgeBaseModel.query(),
       );
-
-      if (result.deletedFiles.length > 0) {
+      // Delete sequentially so a file shared by multiple target libraries is
+      // re-evaluated after each membership disappears. Parallel preflights can
+      // classify it as shared in every call and leave it orphaned.
+      const results = [];
+      for (const knowledgeBase of knowledgeBases) {
+        results.push(
+          await ctx.knowledgeBaseModel.deleteWithFiles(
+            knowledgeBase.id,
+            serverDBEnv.REMOVE_GLOBAL_FILE,
+          ),
+        );
+      }
+      const urls = results
+        .flatMap((result) => result.deletedFiles)
+        .map((file) => file.url)
+        .filter(Boolean) as string[];
+      if (urls.length > 0) {
         const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const urls = result.deletedFiles.map((f) => f.url).filter(Boolean) as string[];
-        if (urls.length > 0) {
-          await fileService.deleteFiles(urls);
-        }
+        await fileService.deleteFiles(urls);
       }
     }),
 
@@ -220,6 +367,15 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:update'))
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const kb = await ctx.knowledgeBaseModel.findById(input.knowledgeBaseId);
+      if (!kb) throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      await assertKnowledgeBaseBrowsable(ctx, input.knowledgeBaseId, {
+        userId: kb.userId,
+        visibility: kb.visibility ?? null,
+        workspaceId: kb.workspaceId ?? null,
+      });
+      await assertKnowledgeItemsAccessible(ctx, input.ids);
+
       return ctx.knowledgeBaseModel.removeFilesFromKnowledgeBase(input.knowledgeBaseId, input.ids);
     }),
 
@@ -227,6 +383,15 @@ export const knowledgeBaseRouter = router({
     .use(withScopedPermission('knowledge_base:delete'))
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
+      const existing = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!existing)
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Knowledge base not found' });
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: existing.userId,
+        visibility: existing.visibility ?? null,
+        workspaceId: existing.workspaceId ?? null,
+      });
+
       const result = await ctx.knowledgeBaseModel.deleteWithFiles(
         input.id,
         serverDBEnv.REMOVE_GLOBAL_FILE,
@@ -267,6 +432,19 @@ export const knowledgeBaseRouter = router({
           message: 'Knowledge base not found',
         });
       }
+      assertWorkspaceRowManageable(ctx, knowledgeBase.userId, 'knowledge base');
+      // The transfer rehomes every linked file/document — a non-owner member
+      // must not move teammates' rows along with their own KB.
+      if (
+        isWorkspaceNonOwner(ctx) &&
+        (await ctx.knowledgeBaseModel.hasForeignLinkedRows(input.id))
+      ) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.OwnerOnly } },
+          code: 'FORBIDDEN',
+          message: "Only workspace owners can transfer a knowledge base containing others' files",
+        });
+      }
 
       if (input.targetWorkspaceId) {
         const canWriteTarget = await hasWorkspaceScopedPermission({
@@ -291,12 +469,30 @@ export const knowledgeBaseRouter = router({
         targetWorkspaceId: input.targetWorkspaceId,
       });
 
-      return ctx.knowledgeBaseModel.transferTo(
+      const result = await ctx.knowledgeBaseModel.transferTo(
         input.id,
         input.targetWorkspaceId,
         ctx.userId,
         input.targetVisibility,
       );
+      // Mirror the agent/document transfer paths: the source workspace's
+      // permission row must not survive the move, and a public arrival gets
+      // the default level in the destination.
+      if (ctx.workspaceId) {
+        await new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId).removeAll(
+          'knowledgeBase',
+          input.id,
+        );
+      }
+      if (input.targetWorkspaceId && input.targetVisibility === 'public') {
+        await new ResourcePermissionModel(ctx.serverDB, input.targetWorkspaceId).setAccessLevel(
+          'knowledgeBase',
+          input.id,
+          DEFAULT_RESOURCE_ACCESS_LEVELS.knowledgeBase,
+          ctx.userId,
+        );
+      }
+      return result;
     }),
 
   updateKnowledgeBase: knowledgeBaseProcedure
@@ -304,10 +500,24 @@ export const knowledgeBaseRouter = router({
     .input(
       z.object({
         id: z.string(),
-        value: insertKnowledgeBasesSchema.partial(),
+        value: updatableKnowledgeBaseFields,
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.knowledgeBaseModel.update(input.id, input.value);
+      const existing = await ctx.knowledgeBaseModel.findById(input.id);
+      if (!existing) return;
+      await assertKnowledgeBaseBrowsable(ctx, input.id, {
+        userId: existing.userId,
+        visibility: existing.visibility ?? null,
+        workspaceId: existing.workspaceId ?? null,
+      });
+
+      const { cover, ...value } = input.value;
+      return ctx.knowledgeBaseModel.update(
+        input.id,
+        cover === undefined
+          ? value
+          : { ...value, settings: mergeKnowledgeBaseCover(existing.settings, cover) },
+      );
     }),
 });

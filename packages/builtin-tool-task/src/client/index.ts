@@ -1,12 +1,14 @@
 // Inspector components (customized tool call headers)
 export {
   AddTaskCommentInspector,
+  CreateGoalInspector,
   CreateTaskInspector,
   CreateTasksInspector,
   DeleteTaskCommentInspector,
   DeleteTaskInspector,
   EditTaskInspector,
   ListTasksInspector,
+  ListWorkspaceMembersInspector,
   RunTaskInspector,
   RunTasksInspector,
   TaskInspectors,
@@ -14,9 +16,11 @@ export {
   UpdateTaskStatusInspector,
   ViewTaskInspector,
 } from './Inspector';
+export { TaskInterventions } from './Intervention';
 
 // Render components (read-only snapshots)
 export {
+  CreateGoalRender,
   CreateTaskRender,
   CreateTasksRender,
   EditTaskRender,

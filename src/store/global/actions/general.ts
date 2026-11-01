@@ -4,7 +4,10 @@ import { gt, parse, valid } from 'semver';
 import type { SWRResponse } from 'swr';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { WEB_APP_VERSION } from '@/const/appVersion';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalKeys } from '@/libs/swr/keys';
 import { globalService } from '@/services/global';
@@ -45,8 +48,6 @@ export class GlobalGeneralActionImpl {
   }
 
   openAgentInNewWindow = async (agentId: string): Promise<void> => {
-    const url = `/agent/${agentId}${isDesktop ? '?mode=single' : ''}`;
-
     if (isDesktop) {
       try {
         const { ensureElectronIpc } = await import('@/utils/electron/ipc');
@@ -66,18 +67,18 @@ export class GlobalGeneralActionImpl {
       }
     } else {
       // Open in popup window for browser
+      const browserUrl = buildWorkspaceAwarePath(`/agent/${agentId}`, getActiveWorkspaceSlug());
       const width = 1200;
       const height = 800;
       const left = (window.screen.width - width) / 2;
       const top = (window.screen.height - height) / 2;
       const features = `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`;
-      window.open(url, `agent_${agentId}`, features);
+      window.open(browserUrl, `agent_${agentId}`, features);
     }
   };
 
   openTopicInNewWindow = async (agentId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/agent/${agentId}/${topicId}`;
-    const browserUrl = AGENT_CHAT_TOPIC_URL(agentId, topicId);
 
     if (isDesktop) {
       try {
@@ -97,6 +98,10 @@ export class GlobalGeneralActionImpl {
       }
     } else {
       // Open in popup window for browser
+      const browserUrl = buildWorkspaceAwarePath(
+        AGENT_CHAT_TOPIC_URL(agentId, topicId),
+        getActiveWorkspaceSlug(),
+      );
       const width = 1200;
       const height = 800;
       const left = (window.screen.width - width) / 2;
@@ -108,7 +113,6 @@ export class GlobalGeneralActionImpl {
 
   openGroupTopicInNewWindow = async (groupId: string, topicId: string): Promise<void> => {
     const popupPath = `/popup/group/${groupId}/${topicId}`;
-    const browserUrl = GROUP_CHAT_TOPIC_URL(groupId, topicId);
 
     if (isDesktop) {
       try {
@@ -127,6 +131,10 @@ export class GlobalGeneralActionImpl {
         console.error('Error opening group topic in new window:', error);
       }
     } else {
+      const browserUrl = buildWorkspaceAwarePath(
+        GROUP_CHAT_TOPIC_URL(groupId, topicId),
+        getActiveWorkspaceSlug(),
+      );
       const width = 1200;
       const height = 800;
       const left = (window.screen.width - width) / 2;
@@ -174,6 +182,36 @@ export class GlobalGeneralActionImpl {
     });
   };
 
+  /**
+   * Replace the workspace overlay's sidebar-layout fields wholesale. An
+   * absent field is DELETED from the overlay (falling back to "untouched"
+   * defaults) — `updateSystemStatus` deep-merges and can neither delete keys
+   * nor drop a field the incoming server preference no longer carries.
+   */
+  setWorkspaceSidebarOverlay = (layout: {
+    hiddenSidebarSections?: string[];
+    sidebarItems?: string[];
+  }): void => {
+    if (!this.#get().isStatusInit) return;
+    const status = this.#get().status;
+    const {
+      hiddenSidebarSections: _hidden,
+      sidebarItems: _items,
+      ...rest
+    } = status.workspace ?? {};
+    const workspace = {
+      ...rest,
+      ...(layout.hiddenSidebarSections
+        ? { hiddenSidebarSections: layout.hiddenSidebarSections }
+        : {}),
+      ...(layout.sidebarItems ? { sidebarItems: layout.sidebarItems } : {}),
+    };
+    if (isEqual(status.workspace ?? {}, workspace)) return;
+    const nextStatus = { ...status, workspace };
+    this.#set({ status: nextStatus }, false, n('setWorkspaceSidebarOverlay'));
+    this.#get().statusStorage.saveToLocalStorage(nextStatus);
+  };
+
   resetSidebarCustomization = (): void => {
     this.#get().updateSystemStatus(
       {
@@ -183,6 +221,12 @@ export class GlobalGeneralActionImpl {
       },
       n('resetSidebarCustomization'),
     );
+  };
+
+  setNavPanelResizing = (resizing: boolean): void => {
+    if (!!this.#get().isNavPanelResizing === resizing) return;
+
+    this.#set({ isNavPanelResizing: resizing }, false, n('setNavPanelResizing'));
   };
 
   updateSystemStatus = (
@@ -213,9 +257,10 @@ export class GlobalGeneralActionImpl {
       {
         focusThrottleInterval: 1000 * 60 * 30,
         onSuccess: (data: string) => {
-          if (!valid(CURRENT_VERSION) || !valid(data)) return;
+          const version = isDesktop ? CURRENT_VERSION : WEB_APP_VERSION;
+          if (!valid(version) || !valid(data)) return;
 
-          const currentVersion = parse(CURRENT_VERSION);
+          const currentVersion = parse(version);
           const latestVersion = parse(data);
 
           if (!currentVersion || !latestVersion) return;
@@ -233,9 +278,7 @@ export class GlobalGeneralActionImpl {
 
   useCheckServerVersion = (): SWRResponse<string | null> => {
     return useOnlyFetchOnceSWR(
-      isDesktop &&
-        // only check server version for self-hosted remote server
-        electronSyncSelectors.storageMode(getElectronStoreState()) !== 'cloud'
+      isDesktop && !electronSyncSelectors.isOfficialServer(getElectronStoreState())
         ? globalKeys.serverVersion()
         : null,
       async () => globalService.getServerVersion(),

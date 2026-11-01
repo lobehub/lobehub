@@ -14,8 +14,10 @@ import { createStore, Provider } from './store';
 import StoreUpdater from './StoreUpdater';
 import {
   type ActionsBarConfig,
+  type ComposerTarget,
   type ConversationContext,
   type ConversationHooks,
+  createComposerTarget,
   type OperationState,
 } from './types';
 
@@ -26,7 +28,7 @@ interface ConversationContextPrefetcherProps {
 }
 
 const ConversationContextPrefetcher = memo<ConversationContextPrefetcherProps>(({ context }) => {
-  useFetchAvailableAgents(!context.topicShareId && !!context.agentId);
+  useFetchAvailableAgents(!context.topicShareId && !context.agentShareId && !!context.agentId);
 
   return null;
 });
@@ -40,31 +42,24 @@ export interface ConversationProviderProps {
   actionsBar?: ActionsBarConfig;
   children: ReactNode;
   /**
+   * Explicit composer capability for this surface. Defaults to this
+   * conversation's own context key.
+   */
+  composerTarget?: ComposerTarget;
+  /**
    * Conversation context (data coordinates)
    */
   context: ConversationContext;
-  /**
-   * Whether external messages have been initialized
-   * When false, ChatList will show skeleton loading state
-   */
-  hasInitMessages?: boolean;
   /**
    * Lifecycle hooks for external behavior injection
    */
   hooks?: ConversationHooks;
   /**
-   * External messages to sync into the store
-   * When provided, these messages will be used as the source of truth
+   * A static transcript to render (a render gallery, a share snapshot). It is
+   * held by this conversation and never synced. Without it the conversation
+   * shows — and syncs — the chat store bucket of `context`.
    */
   messages?: UIChatMessage[];
-  /**
-   * Callback when messages are fetched or changed internally
-   * Use this to sync messages back to external state (e.g., ChatStore)
-   *
-   * @param messages - The updated messages array
-   * @param context - The context that this data belongs to (prevents race conditions)
-   */
-  onMessagesChange?: (messages: UIChatMessage[], context: ConversationContext) => void;
   /**
    * External operation state (from ChatStore)
    *
@@ -74,6 +69,9 @@ export interface ConversationProviderProps {
    * When provided, this will be synced into the store for reactive updates.
    */
   operationState?: OperationState;
+  /**
+   * Do not sync the transcript, e.g. while another flow owns its rows
+   */
   skipFetch?: boolean;
 }
 
@@ -87,38 +85,46 @@ export const ConversationProvider = memo<ConversationProviderProps>(
   ({
     actionsBar,
     children,
+    composerTarget,
     context,
     hooks = {},
-    hasInitMessages,
     messages,
-    onMessagesChange,
     operationState,
     skipFetch,
   }) => {
     const contextKey = useMemo(() => messageMapKey(context), [context]);
+    const resolvedComposerTarget = useMemo(
+      () => composerTarget ?? createComposerTarget(contextKey),
+      [composerTarget, contextKey],
+    );
 
     log(
-      '[Provider] render | contextKey=%s | messagesCount=%d | hasInitMessages=%s | skipFetch=%s',
+      '[Provider] render | contextKey=%s | static=%s | skipFetch=%s',
       contextKey,
-      messages?.length ?? 0,
-      hasInitMessages,
+      !!messages,
       skipFetch,
     );
 
     return (
       <Provider
-        createStore={() => createStore({ context, hooks, initialMessages: messages, skipFetch })}
-        key={contextKey}
+        createStore={() =>
+          createStore({
+            composerTarget: resolvedComposerTarget,
+            context,
+            hooks,
+            messages,
+            skipFetch,
+          })
+        }
       >
         <StoreUpdater
           actionsBar={actionsBar}
+          composerTarget={resolvedComposerTarget}
           context={context}
-          hasInitMessages={hasInitMessages}
           hooks={hooks}
           messages={messages}
           operationState={operationState}
           skipFetch={skipFetch}
-          onMessagesChange={onMessagesChange}
         />
         <AssistantTurnSettledWatcher />
         <ConversationContextPrefetcher context={context} />

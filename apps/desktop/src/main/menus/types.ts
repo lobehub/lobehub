@@ -1,3 +1,4 @@
+import type { TrayNavigationSnapshot } from '@lobechat/electron-client-ipc';
 import type { Menu } from 'electron';
 
 export interface MenuOptions {
@@ -10,6 +11,8 @@ export interface MenuOptions {
  * Based on Electron's ContextMenuParams
  */
 export interface ContextMenuData {
+  /** Whether the right-clicked element has a decoded image to copy (false for broken/loading images) */
+  hasImageContents?: boolean;
   /** Whether the context is editable (input, textarea, contenteditable) */
   isEditable?: boolean;
   /** URL of the link if right-clicked on a link */
@@ -40,10 +43,12 @@ export interface IMenuPlatform {
   /**
    * Build tray menu
    */
-  buildTrayMenu: () => Menu;
+  buildTrayMenu: (snapshot?: TrayNavigationSnapshot) => Menu;
 
   /**
    * Refresh menu
    */
   refresh: (options?: MenuOptions) => void;
+
+  updateDockMenu?: (snapshot: TrayNavigationSnapshot) => void;
 }

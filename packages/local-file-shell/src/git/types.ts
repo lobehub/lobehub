@@ -1,7 +1,23 @@
+/**
+ * The remote ref a local branch publishes to. Stored instead of (not as well as)
+ * relying on the local branch name, which is a device-local label — a worktree's
+ * generated name or an explicit-refspec push makes it differ from the branch that
+ * actually exists on the remote, and only the remote ref means anything off this
+ * machine.
+ */
+export interface GitUpstreamRef {
+  /** Branch name ON the remote (`feat/x`), never the local name. */
+  branch: string;
+  /** Remote name (`origin`). */
+  remote: string;
+}
+
 /** Branch short name (or short SHA when detached). */
 export interface GitBranchInfo {
   branch?: string;
   detached?: boolean;
+  /** Remote ref the branch publishes to. Absent when unpushed or unresolvable. */
+  upstream?: GitUpstreamRef;
 }
 
 export type GitPullRequestCiStatus = 'failure' | 'pending' | 'success' | 'unknown';
@@ -28,6 +44,118 @@ export interface GitLinkedPullRequestResult {
   pullRequest: GitLinkedPullRequest | null;
   /** 'ok' — succeeded; 'gh-missing' — gh CLI unavailable / not authed; 'error' — other. */
   status: GitLinkedPullRequestLookupStatus;
+  /**
+   * Remote ref the lookup actually queried under. Reported back so a caller can
+   * persist it — the PR's own head ref is the most authoritative answer available,
+   * and it is the only one that survives a commit→PR recovery on a machine with no
+   * local trace of the push.
+   */
+  upstream?: GitUpstreamRef;
+}
+
+export interface GitPullRequestCheck {
+  completedAt?: string;
+  detailsUrl?: string;
+  name: string;
+  required: boolean;
+  startedAt?: string;
+  status: 'cancelled' | 'failure' | 'neutral' | 'pending' | 'skipped' | 'success';
+}
+
+export interface GitPullRequestComment {
+  author: string;
+  body: string;
+  createdAt: string;
+  id: string;
+}
+
+export interface GitPullRequestReview {
+  author: string;
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING';
+  submittedAt: string;
+}
+
+export interface GitPullRequestCommit {
+  author: string;
+  committedAt: string;
+  message: string;
+  sha: string;
+}
+
+export interface GitPullRequestDetail {
+  additions: number;
+  author: string;
+  autoMerge?: { method: 'merge' | 'rebase' | 'squash' } | null;
+  baseBehindBy: number;
+  baseRefName: string;
+  body: string;
+  changedFiles: number;
+  checks: GitPullRequestCheck[];
+  comments: GitPullRequestComment[];
+  commits: GitPullRequestCommit[];
+  deletions: number;
+  headRefName: string;
+  headRefOid: string;
+  isCrossRepository: boolean;
+  isDraft: boolean;
+  mergeable: 'CONFLICTING' | 'MERGEABLE' | 'UNKNOWN';
+  mergedAt?: string;
+  mergeStateStatus:
+    'BEHIND' | 'BLOCKED' | 'CLEAN' | 'DIRTY' | 'DRAFT' | 'HAS_HOOKS' | 'UNKNOWN' | 'UNSTABLE';
+  number: number;
+  repo: { name: string; owner: string };
+  reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
+  reviews: GitPullRequestReview[];
+  state: 'closed' | 'merged' | 'open';
+  title: string;
+  url: string;
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+export type GitPullRequestActivity = Pick<GitPullRequestDetail, 'comments' | 'commits' | 'reviews'>;
+
+export interface GitPullRequestDetailResult {
+  detail: GitPullRequestDetail | null;
+  status: GitLinkedPullRequestLookupStatus;
+}
+
+export type GitPullRequestMergeMethod = 'merge' | 'rebase' | 'squash';
+
+/**
+ * Slow, permission-dependent merge context resolved separately from the PR
+ * detail so the pane can paint before branch protection / compare calls land.
+ */
+export interface GitPullRequestMergeContext {
+  /** Commits the base branch has that the PR head does not. */
+  baseBehindBy: number;
+  /** Status-check contexts required by branch protection on the base branch. */
+  requiredChecks: string[];
+  viewerCanBypass: boolean;
+  viewerCanWrite: boolean;
+}
+
+export type GitPullRequestAction =
+  | {
+      admin?: boolean;
+      deleteBranch?: boolean;
+      headRefOid: string;
+      method: GitPullRequestMergeMethod;
+      type: 'merge';
+    }
+  | { headRefOid: string; method: GitPullRequestMergeMethod; type: 'autoMerge' }
+  | { type: 'disableAutoMerge' }
+  | { method: 'merge' | 'rebase'; type: 'updateBranch' }
+  | { type: 'ready' }
+  | { body: string; type: 'comment' }
+  | { type: 'close' }
+  | { type: 'reopen' }
+  | { head: string; type: 'deleteBranch' }
+  | { base: string; type: 'changeBase' };
+
+export interface GitPullRequestActionResult {
+  error?: string;
+  success: boolean;
 }
 
 export interface GitWorkingTreeStatus {
@@ -74,6 +202,7 @@ export interface DeviceGitInfo {
     extraCount?: number;
     ghMissing?: boolean;
     pullRequest?: GitLinkedPullRequest | null;
+    upstream?: GitUpstreamRef;
   };
   workingStatus: GitWorkingTreeStatus;
 }

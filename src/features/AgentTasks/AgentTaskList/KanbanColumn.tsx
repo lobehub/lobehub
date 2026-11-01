@@ -1,16 +1,24 @@
 import { useDndContext, useDraggable, useDroppable } from '@dnd-kit/core';
 import type { TaskStatus } from '@lobechat/types';
-import { ActionIcon, type DropdownItem, DropdownMenu, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cx, Skeleton, Text } from '@lobehub/ui';
 import { EyeOff, MoreHorizontal, Plus } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { TaskListItem } from '@/store/task/slices/list/initialState';
+import type { TaskKanbanGroupBy, TaskListItem } from '@/store/task/slices/list/initialState';
 
+import { createTaskModal } from '../CreateTaskModal';
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
 import TaskStatusIcon from '../features/TaskStatusIcon';
+import {
+  getKanbanColumnHeaderVariant,
+  getKanbanCreateTaskModalProps,
+  type KanbanColumnCreateDefaults,
+} from './kanbanBoardModel';
+import type { TaskGroupMeta } from './listViewOptions';
+import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
 
 export const COLUMN_WIDTH = 300;
@@ -63,9 +71,15 @@ const DraggableTaskCard = memo<{ routeScope?: TaskItemRouteScope; task: TaskList
 );
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  // The empty-column add pill stays hidden until the column is hovered, or
+  // keyboard focus lands inside it.
   action: css`
     opacity: 0;
     transition: opacity 0.2s;
+
+    &:focus-within {
+      opacity: 1;
+    }
   `,
   addPill: css`
     cursor: pointer;
@@ -170,18 +184,37 @@ export const COLUMN_STATUS_ICON: Record<string, TaskStatus> = {
 };
 
 interface KanbanColumnProps {
+  /** Board scope agent, inherited by tasks created from this column. */
+  agentId?: string;
   columnKey: string;
+  /** Offers the in-column create entry, pinning these fields on the new task. */
+  createDefaults?: KanbanColumnCreateDefaults;
   droppable: boolean;
+  groupBy: TaskKanbanGroupBy;
+  groupMeta?: TaskGroupMeta;
   loading?: boolean;
-  onCreate?: () => void;
   onHide?: () => void;
+  projectId?: string;
   routeScope?: TaskItemRouteScope;
   tasks: TaskListItem[];
   total: number;
 }
 
 const KanbanColumn = memo<KanbanColumnProps>(
-  ({ columnKey, droppable, loading, onCreate, onHide, routeScope, tasks, total }) => {
+  ({
+    agentId,
+    columnKey,
+    createDefaults,
+    droppable,
+    groupBy,
+    groupMeta,
+    loading,
+    onHide,
+    projectId,
+    routeScope,
+    tasks,
+    total,
+  }) => {
     const { t } = useTranslation('chat');
     const { active } = useDndContext();
     const { isOver, setNodeRef } = useDroppable({
@@ -191,8 +224,18 @@ const KanbanColumn = memo<KanbanColumnProps>(
 
     const statusIcon = COLUMN_STATUS_ICON[columnKey];
     const i18nKey = COLUMN_I18N_KEYS[columnKey];
-    const label = i18nKey ? t(i18nKey as any) : columnKey;
+    const label = i18nKey ? t(i18nKey as any) : t(`taskList.groupBy.${groupBy}` as any);
+    const headerVariant = getKanbanColumnHeaderVariant({
+      hasGroupMeta: !!groupMeta,
+      loading,
+    });
     const isDragActive = !!active;
+
+    const canCreate = !!createDefaults;
+    const openCreate = useCallback(() => {
+      if (!createDefaults) return;
+      createTaskModal(getKanbanCreateTaskModalProps(createDefaults, { agentId, projectId }));
+    }, [agentId, createDefaults, projectId]);
 
     // Don't highlight if dragging a card that's already in this column
     const activeTask = active?.data.current?.task as TaskListItem | undefined;
@@ -226,12 +269,31 @@ const KanbanColumn = memo<KanbanColumnProps>(
         )}
       >
         <div className={styles.header}>
-          {statusIcon && <TaskStatusIcon size={18} status={statusIcon} />}
-          <Text weight={500}>{label}</Text>
-          {!loading && (
-            <Text fontSize={12} type={'secondary'}>
-              {total}
-            </Text>
+          {headerVariant === 'loading' ? (
+            <>
+              <Skeleton.Avatar
+                shape={'square'}
+                size={16}
+                style={{ borderRadius: 4, flex: 'none' }}
+              />
+              <Skeleton height={14} style={{ minWidth: 64 }} width={64} />
+              <Skeleton height={12} style={{ minWidth: 20 }} width={20} />
+            </>
+          ) : headerVariant === 'group' && groupMeta ? (
+            <>
+              <TaskGroupLabel group={groupMeta} />
+              <Text fontSize={12} type={'secondary'}>
+                {total}
+              </Text>
+            </>
+          ) : (
+            <>
+              {statusIcon && <TaskStatusIcon size={18} status={statusIcon} />}
+              <Text weight={500}>{label}</Text>
+              <Text fontSize={12} type={'secondary'}>
+                {total}
+              </Text>
+            </>
           )}
           <div className={cx(styles.headerActions, 'kanban-col-action')}>
             {menuItems.length > 0 && (
@@ -239,12 +301,12 @@ const KanbanColumn = memo<KanbanColumnProps>(
                 <ActionIcon icon={MoreHorizontal} size={'small'} />
               </DropdownMenu>
             )}
-            {onCreate && (
+            {canCreate && (
               <ActionIcon
                 icon={Plus}
                 size={'small'}
                 title={t('taskList.kanban.addTask')}
-                onClick={onCreate}
+                onClick={openCreate}
               />
             )}
           </div>
@@ -260,8 +322,12 @@ const KanbanColumn = memo<KanbanColumnProps>(
             tasks.map((task) => (
               <DraggableTaskCard key={task.identifier} routeScope={routeScope} task={task} />
             ))
-          ) : onCreate ? (
-            <div className={styles.addPill} title={t('taskList.kanban.addTask')} onClick={onCreate}>
+          ) : canCreate ? (
+            <div
+              className={cx(styles.addPill, styles.action, 'kanban-col-action')}
+              title={t('taskList.kanban.addTask')}
+              onClick={openCreate}
+            >
               <Icon icon={Plus} size={16} />
             </div>
           ) : (

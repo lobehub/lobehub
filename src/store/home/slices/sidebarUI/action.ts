@@ -1,6 +1,6 @@
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
@@ -28,58 +28,52 @@ export class SidebarUIActionImpl {
     this.#get = get;
   }
 
-  duplicateAgent = async (agentId: string, newTitle?: string): Promise<void> => {
-    const messageLoadingKey = 'duplicateAgent.loading';
-
-    message.loading({
-      content: t('duplicateSession.loading', { ns: 'chat' }),
-      duration: 0,
-      key: messageLoadingKey,
-    });
+  duplicateAgent = async (agentId: string, newTitle?: string): Promise<string | undefined> => {
+    const loadingToast = toast.loading(t('duplicateSession.loading', { ns: 'chat' }));
 
     const result = await agentService.duplicateAgent(agentId, newTitle);
 
     if (!result) {
-      message.destroy(messageLoadingKey);
-      message.error(t('copyFail', { ns: 'common' }));
+      loadingToast.close();
+      toast.error(t('copyFail', { ns: 'common' }));
       return;
     }
 
     await this.#get().refreshAgentList();
-    message.destroy(messageLoadingKey);
-    message.success(t('duplicateSession.success', { ns: 'chat' }));
+    loadingToast.close();
+    toast.success(t('duplicateSession.success', { ns: 'chat' }));
 
     // Switch to the new agent
     const agentStore = getAgentStoreState();
     agentStore.setActiveAgentId(result.agentId);
+    return result.agentId;
   };
 
-  duplicateAgentGroup = async (groupId: string, newTitle?: string): Promise<void> => {
-    const messageLoadingKey = 'duplicateAgentGroup.loading';
-
-    message.loading({
-      content: t('duplicateSession.loading', { ns: 'chat' }),
-      duration: 0,
-      key: messageLoadingKey,
-    });
+  duplicateAgentGroup = async (groupId: string, newTitle?: string): Promise<string | undefined> => {
+    const loadingToast = toast.loading(t('duplicateSession.loading', { ns: 'chat' }));
 
     const result = await chatGroupService.duplicateGroup(groupId, newTitle);
 
     if (!result) {
-      message.destroy(messageLoadingKey);
-      message.error(t('copyFail', { ns: 'common' }));
+      loadingToast.close();
+      toast.error(t('copyFail', { ns: 'common' }));
       return;
     }
 
     await this.#get().refreshAgentList();
-    message.destroy(messageLoadingKey);
-    message.success(t('duplicateSession.success', { ns: 'chat' }));
+    loadingToast.close();
+    toast.success(t('duplicateSession.success', { ns: 'chat' }));
 
     // Switch to the new group (using supervisor agent id)
     const agentStore = getAgentStoreState();
     agentStore.setActiveAgentId(result.supervisorAgentId);
+    return result.groupId;
   };
 
+  // Pinning is part of the SHARED sidebar arrangement in workspace mode — it
+  // writes the same `agents.pinned` / `chat_groups.pinned` columns as personal
+  // mode, so every member sees the same pinned section. A member who doesn't
+  // want an item in their own sidebar hides it instead (personal layer).
   pinAgent = async (agentId: string, pinned: boolean): Promise<void> => {
     await agentService.updateAgentPinned(agentId, pinned);
     await this.#get().refreshAgentList();
@@ -116,8 +110,12 @@ export class SidebarUIActionImpl {
     await this.#get().refreshAgentList();
   };
 
+  // Folder membership is shared: moving an item writes the shared
+  // `agents.sessionGroupId` column in both scopes, so the workspace sidebar
+  // stays one collectively-curated structure.
   updateAgentGroup = async (agentId: string, groupId: string | null): Promise<void> => {
-    await homeService.updateAgentSessionGroupId(agentId, groupId === 'default' ? null : groupId);
+    const normalized = groupId === 'default' ? null : groupId;
+    await homeService.updateAgentSessionGroupId(agentId, normalized);
     await this.#get().refreshAgentList();
   };
 
@@ -140,15 +138,11 @@ export class SidebarUIActionImpl {
   updateGroupSort = async (items: SessionGroupItemBase[]): Promise<void> => {
     const sortMap = items.map((item, index) => ({ id: item.id, sort: index }));
 
-    message.loading({
-      content: t('sessionGroup.sorting', { ns: 'chat' }),
-      duration: 0,
-      key: 'updateGroupSort',
-    });
+    const loadingToast = toast.loading(t('sessionGroup.sorting', { ns: 'chat' }));
 
     await sessionService.updateSessionGroupOrder(sortMap);
-    message.destroy('updateGroupSort');
-    message.success(t('sessionGroup.sortSuccess', { ns: 'chat' }));
+    loadingToast.close();
+    toast.success(t('sessionGroup.sortSuccess', { ns: 'chat' }));
 
     await this.#get().refreshAgentList();
   };

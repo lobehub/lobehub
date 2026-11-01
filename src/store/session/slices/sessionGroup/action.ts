@@ -1,6 +1,6 @@
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
-import { message } from '@/components/AntdStaticMethods';
 import { sessionService } from '@/services/session';
 import { type SessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
@@ -25,19 +25,15 @@ export class SessionGroupActionImpl {
   addSessionGroup = async (name: string): Promise<string> => {
     const id = await sessionService.createSessionGroup(name);
 
-    await this.#get().refreshSessions();
-
     return id;
   };
 
   removeSessionGroup = async (id: string): Promise<void> => {
     await sessionService.removeSessionGroup(id);
-    await this.#get().refreshSessions();
   };
 
   updateSessionGroupName = async (id: string, name: string): Promise<void> => {
     await sessionService.updateSessionGroup(id, { name });
-    await this.#get().refreshSessions();
   };
 
   updateSessionGroupSort = async (items: SessionGroupItem[]): Promise<void> => {
@@ -45,17 +41,11 @@ export class SessionGroupActionImpl {
 
     this.#get().internal_dispatchSessionGroups({ sortMap, type: 'updateSessionGroupOrder' });
 
-    message.loading({
-      content: t('sessionGroup.sorting', { ns: 'chat' }),
-      duration: 0,
-      key: 'updateSessionGroupSort',
-    });
+    const loadingToast = toast.loading(t('sessionGroup.sorting', { ns: 'chat' }));
 
     await sessionService.updateSessionGroupOrder(sortMap);
-    message.destroy('updateSessionGroupSort');
-    message.success(t('sessionGroup.sortSuccess', { ns: 'chat' }));
-
-    await this.#get().refreshSessions();
+    loadingToast.close();
+    toast.success(t('sessionGroup.sortSuccess', { ns: 'chat' }));
   };
 
   internal_dispatchSessionGroups = (payload: SessionGroupsDispatch): void => {

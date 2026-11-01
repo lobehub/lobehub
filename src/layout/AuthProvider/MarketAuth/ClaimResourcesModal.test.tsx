@@ -2,13 +2,10 @@
  * @vitest-environment happy-dom
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { HTMLAttributes, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ClaimResourcesModal from './ClaimResourcesModal';
-
-const messageErrorMock = vi.hoisted(() => vi.fn());
-const messageSuccessMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -42,48 +39,6 @@ vi.mock('@/components/ImperativeModal', () => ({
     ) : null,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children, ...props }: HTMLAttributes<HTMLDivElement>) => (
-    <div {...props}>{children}</div>
-  ),
-  Text: ({ children, ...props }: HTMLAttributes<HTMLSpanElement>) => (
-    <span {...props}>{children}</span>
-  ),
-}));
-
-vi.mock('antd', () => {
-  const ListItem = ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <div role="listitem" onClick={onClick}>
-      {children}
-    </div>
-  );
-
-  const List = ({
-    dataSource,
-    renderItem,
-  }: {
-    dataSource: any[];
-    renderItem: (item: any) => ReactNode;
-  }) => <div>{dataSource.map((item) => renderItem(item))}</div>;
-
-  List.Item = ListItem;
-
-  return {
-    App: {
-      useApp: () => ({
-        message: {
-          error: messageErrorMock,
-          success: messageSuccessMock,
-        },
-      }),
-    },
-    Checkbox: ({ checked }: { checked?: boolean }) => (
-      <input readOnly checked={checked} role="checkbox" type="checkbox" />
-    ),
-    List,
-  };
-});
-
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     market: {
@@ -112,19 +67,19 @@ describe('ClaimResourcesModal', () => {
     );
 
     await waitFor(() => {
-      const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
+      const checkboxes = screen.getAllByRole('checkbox');
 
-      expect(checkboxes[0].checked).toBe(true);
-      expect(checkboxes[1].checked).toBe(true);
+      expect(checkboxes[0]).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxes[1]).toHaveAttribute('aria-checked', 'true');
     });
 
     fireEvent.click(screen.getByText('plugin-a'));
 
     await waitFor(() => {
-      const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
+      const checkboxes = screen.getAllByRole('checkbox');
 
-      expect(checkboxes[0].checked).toBe(false);
-      expect(checkboxes[1].checked).toBe(true);
+      expect(checkboxes[0]).toHaveAttribute('aria-checked', 'false');
+      expect(checkboxes[1]).toHaveAttribute('aria-checked', 'true');
     });
 
     rerender(
@@ -139,12 +94,12 @@ describe('ClaimResourcesModal', () => {
     );
 
     await waitFor(() => {
-      const checkboxes = screen.getAllByRole('checkbox') as HTMLInputElement[];
+      const checkboxes = screen.getAllByRole('checkbox');
 
       expect(screen.queryByText('plugin-a')).toBeNull();
       expect(screen.getByText('plugin-b')).toBeTruthy();
-      expect(checkboxes[0].checked).toBe(true);
-      expect(checkboxes[1].checked).toBe(true);
+      expect(checkboxes[0]).toHaveAttribute('aria-checked', 'true');
+      expect(checkboxes[1]).toHaveAttribute('aria-checked', 'true');
     });
   });
 });

@@ -15,7 +15,7 @@ import { settingsSelectors } from '@/store/user/selectors';
  * default agent config) must not opt out via `disableGatewayMode`. When any of
  * these is false, sends fall back to the non-gateway client path, so a bound
  * `local` target cannot actually reach the device — the display must keep it as
- * `sandbox` rather than surfacing `device` (LOBE-11473 follow-up).
+ * `sandbox` rather than surfacing `device` ( follow-up).
  *
  * This intentionally mirrors dispatch's own gate,
  * `GatewayActionImpl.isGatewayModeEnabled` in the gateway transport
@@ -78,7 +78,7 @@ export const resolveGatewayModeEnabled = (
  * resource/skill panels). Subscribes to the live-mutable `disableGatewayMode`
  * (agent chatConfig + user default) so toggling Gateway Mode from the chat
  * ActionBar re-renders the display and it stops surfacing a `device` target
- * once sends have fallen back to sandbox (LOBE-11473 follow-up). `serverConfig`
+ * once sends have fallen back to sandbox ( follow-up). `serverConfig`
  * stays a non-reactive read — see `resolveGatewayModeEnabled`'s note.
  */
 export const useIsGatewayModeEnabled = (agentId?: string): boolean => {

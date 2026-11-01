@@ -2,10 +2,19 @@
 
 import { AGENT_PROFILE_URL } from '@lobechat/const';
 import type { AgentEvalRunDetail } from '@lobechat/types';
-import { ActionIcon, Avatar, copyToClipboard, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { App, Tag } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  confirmModal,
+  copyToClipboard,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Highlighter,
+  Markdown,
+  Tag,
+  toast,
+} from '@lobehub/ui';
 import {
   ArrowLeft,
   ChevronDown,
@@ -19,7 +28,10 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { createRunEditModal } from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
 import StatusBadge from '@/routes/(main)/eval/features/StatusBadge';
@@ -178,8 +190,9 @@ interface RunHeaderProps {
 
 const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const { t } = useTranslation('eval');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const abortRun = useEvalStore((s) => s.abortRun);
   const deleteRun = useEvalStore((s) => s.deleteRun);
   const startRun = useEvalStore((s) => s.startRun);
@@ -226,7 +239,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
           setStarting(true);
           await startRun(run.id, run.status !== 'idle');
         } catch (error: any) {
-          message.error(error?.message || 'Failed to start run');
+          toast.error(error?.message || 'Failed to start run');
         } finally {
           setStarting(false);
         }
@@ -237,15 +250,18 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
 
   const handleOpenAgent = () => {
     if (run.targetAgentId) {
-      window.open(AGENT_PROFILE_URL(run.targetAgentId), '_blank');
+      window.open(
+        buildWorkspaceAwarePath(AGENT_PROFILE_URL(run.targetAgentId), activeWorkspaceSlug),
+        '_blank',
+      );
     }
   };
   const handleCopyRunId = async () => {
     try {
       await copyToClipboard(run.id);
-      message.success(t('run.detail.copyRunIdSuccess'));
+      toast.success(t('run.detail.copyRunIdSuccess'));
     } catch {
-      message.error(t('run.detail.copyRunIdFailed'));
+      toast.error(t('run.detail.copyRunIdFailed'));
     }
   };
 
@@ -305,7 +321,13 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
                   }}
                 >
                   <span className={styles.metaItem}>
-                    <Avatar avatar={agentAvatar} size={16} />
+                    <AgentAvatar
+                      agentId={run.targetAgentId}
+                      avatar={agentAvatar}
+                      name={agentTitle}
+                      shape={'circle'}
+                      size={16}
+                    />
                     {agentTitle}
                   </span>
                 </Flexbox>

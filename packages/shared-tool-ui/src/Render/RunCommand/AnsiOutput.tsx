@@ -1,7 +1,7 @@
 'use client';
 
 import Anser from 'anser';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({

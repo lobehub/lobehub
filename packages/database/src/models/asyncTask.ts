@@ -1,5 +1,9 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
-import type { UserMemoryExtractionMetadata } from '@lobechat/types';
+import type {
+  HourlyUserMemoryExtractionMetadata,
+  HourlyUserMemoryExtractionProgress,
+  UserMemoryExtractionMetadata,
+} from '@lobechat/types';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -59,6 +63,57 @@ export class AsyncTaskModel {
     });
   };
 
+  /**
+   * Atomically claims the right to finalize a video task (store the asset, charge, notify).
+   *
+   * Webhook retries (the handler answers 503 while the provider file is still processing) and the
+   * background polling fallback can both reach completion for the same task. The claim is a single
+   * compare-and-set UPDATE — still active AND no `completionClaimedAt` yet — so exactly one caller
+   * wins; do not split it into a read followed by a write, or completion may run twice.
+   * @returns `true` when this caller owns the completion, `false` when it was already claimed or finalized
+   */
+  static claimVideoCompletion = async (
+    db: LobeChatDatabase,
+    taskId: string,
+    completionEventId?: string,
+  ) => {
+    const claimedAt = new Date().toISOString();
+    const metadataWithClaim = sql`
+      jsonb_set(
+        COALESCE(${asyncTasks.metadata}, '{}'::jsonb),
+        '{completionClaimedAt}',
+        to_jsonb(${claimedAt}::text),
+        true
+      )
+    `;
+
+    const [claimed] = await db
+      .update(asyncTasks)
+      .set({
+        metadata: completionEventId
+          ? sql`
+              jsonb_set(
+                ${metadataWithClaim},
+                '{completionEventId}',
+                to_jsonb(${completionEventId}::text),
+                true
+              )
+            `
+          : metadataWithClaim,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+          sql`NOT (COALESCE(${asyncTasks.metadata}, '{}'::jsonb) ? 'completionClaimedAt')`,
+        ),
+      )
+      .returning({ id: asyncTasks.id });
+
+    return Boolean(claimed);
+  };
+
   update(taskId: string, value: Partial<AsyncTaskSelectItem>) {
     return this.db
       .update(asyncTasks)
@@ -98,6 +153,11 @@ export class AsyncTaskModel {
             true
           )
         `,
+        // Verified on pg_search 0.15.26: `UPDATE … SET`, SELECT lists and ORDER
+        // BY all survive a null test over an extracted jsonb value; only quals
+        // (WHERE / JOIN ON / HAVING) crash the planner. `async_tasks` carries no
+        // bm25 index either. See the block comment above `TopicModel`.
+        // jsonb-null-test-safe: SET target list, not a qual
         status: sql`
           CASE
             WHEN ${asyncTasks.status} = ${AsyncTaskStatus.Error} OR ${asyncTasks.error} IS NOT NULL
@@ -136,6 +196,105 @@ export class AsyncTaskModel {
     if (task.type !== AsyncTaskType.UserMemoryExtractionWithChatTopic) return false;
 
     const metadata = task.metadata as UserMemoryExtractionMetadata | undefined;
+    return Boolean(metadata?.control?.cancelRequestedAt);
+  };
+
+  appendUserMemoryWorkflowRunIds = async (taskId: string, workflowRunIds: string[]) => {
+    const uniqueIds = Array.from(new Set(workflowRunIds.filter(Boolean)));
+    if (uniqueIds.length === 0) return;
+
+    const incomingIdsJson = JSON.stringify(uniqueIds);
+    const mergedIdsExpr = sql`
+      (
+        SELECT COALESCE(jsonb_agg(value ORDER BY first_ordinal), '[]'::jsonb)
+        FROM (
+          SELECT value, MIN(ordinality) AS first_ordinal
+          FROM jsonb_array_elements_text(
+            COALESCE(
+              ${asyncTasks.metadata} #> '{control,upstash,workflowRunIds}',
+              '[]'::jsonb
+            ) || ${incomingIdsJson}::jsonb
+          ) WITH ORDINALITY AS ids(value, ordinality)
+          GROUP BY value
+        ) AS deduped_ids
+      )
+    `;
+
+    await this.db
+      .update(asyncTasks)
+      .set({
+        metadata: sql`
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                ${asyncTasks.metadata},
+                '{control}',
+                COALESCE(${asyncTasks.metadata} -> 'control', '{}'::jsonb),
+                true
+              ),
+              '{control,upstash}',
+              COALESCE(${asyncTasks.metadata} #> '{control,upstash}', '{}'::jsonb),
+              true
+            ),
+            '{control,upstash,workflowRunIds}',
+            ${mergedIdsExpr},
+            true
+          )
+        `,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(asyncTasks.id, taskId), this.ownership()));
+  };
+
+  markHourlyMemoryExtractionSuccess = async (
+    taskId: string,
+    progress: HourlyUserMemoryExtractionProgress & { status: AsyncTaskStatus.Success },
+  ) => {
+    await this.db
+      .update(asyncTasks)
+      .set({
+        metadata: sql`
+          jsonb_set(
+            jsonb_set(
+              jsonb_set(
+                ${asyncTasks.metadata},
+                '{progress,processedUsers}',
+                to_jsonb(${progress.processedUsers}::int),
+                true
+              ),
+              '{progress,scheduledBatches}',
+              to_jsonb(${progress.scheduledBatches}::int),
+              true
+            ),
+            '{progress,scheduledChildRuns}',
+            to_jsonb(${progress.scheduledChildRuns}::int),
+            true
+          )
+        `,
+        status: sql`
+          CASE
+            WHEN ${asyncTasks.status} = ${AsyncTaskStatus.Error} OR ${asyncTasks.error} IS NOT NULL
+              THEN ${AsyncTaskStatus.Error}
+            ELSE ${progress.status}
+          END
+        `,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(asyncTasks.id, taskId),
+          eq(asyncTasks.type, AsyncTaskType.UserMemoryExtractionHourly),
+          this.ownership(),
+        ),
+      );
+  };
+
+  isHourlyMemoryExtractionCancellationRequested = async (taskId: string) => {
+    const task = await this.findById(taskId);
+    if (!task || task.userId !== this.userId) return false;
+    if (task.type !== AsyncTaskType.UserMemoryExtractionHourly) return false;
+
+    const metadata = task.metadata as HourlyUserMemoryExtractionMetadata | undefined;
     return Boolean(metadata?.control?.cancelRequestedAt);
   };
 
@@ -191,6 +350,7 @@ export const initUserMemoryExtractionMetadata = (
         cancelledBy: metadata.control.cancelledBy,
         upstash: metadata.control.upstash
           ? {
+              entryWorkflowRunId: metadata.control.upstash.entryWorkflowRunId,
               workflowRunIds: metadata.control.upstash.workflowRunIds || [],
             }
           : undefined,
@@ -202,4 +362,43 @@ export const initUserMemoryExtractionMetadata = (
   },
   range: metadata?.range,
   source: metadata?.source ?? 'chat_topic',
+});
+
+/**
+ * Initializes hourly user memory extraction metadata.
+ *
+ * Use when:
+ * - Creating the batch-level hourly extraction async task
+ * - Normalizing persisted hourly extraction metadata before updates
+ *
+ * Expects:
+ * - `startedAt` is the ISO timestamp for the hourly scheduler run
+ *
+ * Returns:
+ * - Hourly metadata with progress counters defaulted to zero
+ */
+export const initHourlyUserMemoryExtractionMetadata = (
+  metadata: Partial<HourlyUserMemoryExtractionMetadata> & { startedAt: string },
+): HourlyUserMemoryExtractionMetadata => ({
+  control: metadata.control
+    ? {
+        cancelReason: metadata.control.cancelReason,
+        cancelRequestedAt: metadata.control.cancelRequestedAt,
+        cancelledBy: metadata.control.cancelledBy,
+        upstash: metadata.control.upstash
+          ? {
+              entryWorkflowRunId: metadata.control.upstash.entryWorkflowRunId,
+              workflowRunIds: metadata.control.upstash.workflowRunIds || [],
+            }
+          : undefined,
+      }
+    : undefined,
+  cursor: metadata.cursor,
+  progress: {
+    processedUsers: metadata.progress?.processedUsers ?? 0,
+    scheduledBatches: metadata.progress?.scheduledBatches ?? 0,
+    scheduledChildRuns: metadata.progress?.scheduledChildRuns ?? 0,
+  },
+  source: 'hourly_chat_topic',
+  startedAt: metadata.startedAt,
 });

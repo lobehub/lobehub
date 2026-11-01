@@ -5,6 +5,7 @@ import type {
   GenerationAsset,
   ImageGenerationAsset,
   VideoGenerationAsset,
+  VideoGenerationTaskMetadata,
 } from '@lobechat/types';
 import { FileSource } from '@lobechat/types';
 import debug from 'debug';
@@ -227,7 +228,10 @@ export class GenerationModel {
     const asset = generation.asset as ImageGenerationAsset | VideoGenerationAsset | null;
     if (asset && asset.url && asset.thumbnailUrl) {
       const urlPromises: Promise<string>[] = [
-        this.fileService.getFullFileUrl(asset.url),
+        this.fileService.getFileAccessUrl({
+          fileId: generation.fileId ?? undefined,
+          url: asset.url,
+        }),
         this.fileService.getFullFileUrl(asset.thumbnailUrl),
       ];
 
@@ -246,12 +250,18 @@ export class GenerationModel {
       }
     }
 
+    const previousGenerationId = (
+      generation.asyncTask?.metadata as VideoGenerationTaskMetadata | null | undefined
+    )?.previousGenerationId;
+
     // Build the Generation object following the same structure as in generationBatch.ts
     const result: Generation = {
       asset,
       asyncTaskId: generation.asyncTaskId || null,
       createdAt: generation.createdAt,
+      ...(generation.fileId ? { fileId: generation.fileId } : {}),
       id: generation.id,
+      ...(previousGenerationId ? { previousGenerationId } : {}),
       seed: generation.seed,
       task: {
         error: generation.asyncTask?.error

@@ -31,7 +31,7 @@ export const useCreateHeteroAgent = () => {
         config: {
           agencyConfig: {
             heterogeneousProvider: {
-              command: definition.command,
+              command: definition.defaultCommand,
               type: definition.type,
             },
           },

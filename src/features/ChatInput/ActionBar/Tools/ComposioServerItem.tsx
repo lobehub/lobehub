@@ -1,5 +1,6 @@
-import { Checkbox, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
+import { Checkbox, Flexbox, Icon, Spin, stopPropagation } from '@lobehub/ui';
+import { SquareArrowOutUpRight } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +13,8 @@ import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { SKILL_ICON_GAP } from './constants';
+
 // Polling configuration
 const POLL_INTERVAL_MS = 1000; // Poll once per second
 const POLL_TIMEOUT_MS = 15_000; // 15-second timeout
@@ -23,19 +26,31 @@ interface ComposioServerItemProps {
    */
   agentId?: string;
   /**
+   * When true, a fresh connection is bound to the agent (Agent-exclusive
+   * "Connect new tool" flow); the resulting account lands on an agent-scoped
+   * connector row. Default false keeps composio connects user-scoped.
+   */
+  agentScoped?: boolean;
+  /**
    * Identifier used for storage (e.g., 'google-calendar')
    */
   /**
    * Composio toolkit slug used to call the Composio API (e.g., 'GOOGLECALENDAR')
    */
   appSlug: string;
+  /**
+   * Rendered inside the label so the row lines up with the managed skill rows;
+   * passing it through the menu's own icon slot would size and space it
+   * differently.
+   */
+  icon?: ReactNode;
   identifier: string;
   label: string;
   server?: ComposioServer;
 }
 
 const ComposioServerItem = memo<ComposioServerItemProps>(
-  ({ appSlug, identifier, label, server, agentId }) => {
+  ({ appSlug, icon, identifier, label, server, agentId, agentScoped = false }) => {
     const { t } = useTranslation('setting');
     const [isConnecting, setIsConnecting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
@@ -207,6 +222,9 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
       setIsConnecting(true);
       try {
         const newServer = await createComposioConnection({
+          // When invoked from an Agent's "Connect new tool" flow, bind the
+          // connection to that agent so the account lands on an agent-scoped row.
+          agentId: agentScoped ? effectiveAgentId : undefined,
           appSlug,
           identifier,
           label,
@@ -260,7 +278,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
       if (isConnecting) {
         return (
           <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
-            <Icon spin icon={Loader2} />
+            <Spin size="small" />
           </Flexbox>
         );
       }
@@ -290,7 +308,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
         case ComposioServerStatus.ACTIVE: {
           // Toggling state
           if (isToggling) {
-            return <Icon spin icon={Loader2} />;
+            return <Spin size="small" />;
           }
           return (
             <Checkbox
@@ -310,7 +328,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           if (isWaitingAuth) {
             return (
               <Flexbox horizontal align="center" gap={4} onClick={stopPropagation}>
-                <Icon spin icon={Loader2} />
+                <Spin size="small" />
               </Flexbox>
             );
           }
@@ -354,7 +372,8 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           }
         }}
       >
-        <Flexbox horizontal align={'center'} gap={8}>
+        <Flexbox horizontal align={'center'} gap={SKILL_ICON_GAP}>
+          {icon}
           {label}
         </Flexbox>
         {renderRightControl()}

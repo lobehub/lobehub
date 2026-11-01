@@ -1,8 +1,15 @@
-import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
+/**
+ * Feature-scoped capabilities that can be gated independently of the
+ * platform itself. `messageMonitoring` covers passive channel listening
+ * (e.g. watch-keyword wakes on ordinary, non-addressed channel messages).
+ */
+export type BotGatedFeature = 'messageMonitoring';
 
 export interface BotFeatureAccessParams {
   action?: 'manage' | 'runtime';
   applicationId?: string;
+  /** When set, checks access to a specific feature instead of the platform as a whole. */
+  feature?: BotGatedFeature;
   platform: string;
   userId: string;
   workspaceId?: string;
@@ -11,6 +18,8 @@ export interface BotFeatureAccessParams {
 export interface BotPlatformAccessMeta {
   allowed?: boolean;
   blockedMessage?: string;
+  /** Per-feature access flags (platform-level `allowed` stays authoritative for the channel itself). */
+  features?: Partial<Record<BotGatedFeature, { allowed: boolean }>>;
   requiredPlan?: 'paid';
   rolloutMode?: 'enforce' | 'notice';
 }
@@ -53,7 +62,7 @@ export function getBotFeatureBlockedMessage(
   return 'This bot channel is not available for your current plan.';
 }
 
-export async function withBotPlatformAccessMeta<T extends SerializedPlatformDefinition>(
+export async function withBotPlatformAccessMeta<T extends { id: string }>(
   platform: T,
   _params: { userId: string; workspaceId?: string },
 ): Promise<T & { access?: BotPlatformAccessMeta }> {

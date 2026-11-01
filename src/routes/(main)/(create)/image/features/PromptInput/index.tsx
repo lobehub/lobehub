@@ -1,14 +1,12 @@
 'use client';
 
-import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
-import { Divider, Switch } from 'antd';
+import { ActionIcon, Divider, Flexbox, Switch, Tabs, Text } from '@lobehub/ui';
 import { Images } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
+import { ModelIcon } from '@/components/LobeIcons';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
@@ -19,9 +17,12 @@ import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
   GenerationMediaModeSegment,
+  GenerationModelNotice,
+  GenerationPromptBlockedNotice,
   GenerationPromptInput,
   GenerationVisibilitySelector,
   InlineImageReference,
+  useImageGenerationModelNotice,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import {
   CfgSliderInput,
@@ -92,7 +93,7 @@ const PromptExtendItem = memo(() => {
     const options = enumValues.map((item) => ({
       disabled: !canCreate,
       key: item,
-      label: item,
+      label: t(`config.promptExtend.options.${item}`, { defaultValue: item }),
     }));
 
     return (
@@ -149,6 +150,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   } = useImageReferenceUpload();
   const isCreating = useImageStore(createImageSelectors.isCreating);
   const createImage = useImageStore((s) => s.createImage);
+  const blockedPrompt = useImageStore(createImageSelectors.blockedPrompt);
+  const dismissBlockedPrompt = useImageStore((s) => s.dismissBlockedPrompt);
+  // Editing the prompt dismisses the notice: it only describes the submitted text.
+  const isPromptBlocked = blockedPrompt !== undefined && blockedPrompt === value;
   const setModelAndProviderOnSelect = useImageStore((s) => s.setModelAndProviderOnSelect);
   const activeGenerationTopicId = useImageStore(generationTopicSelectors.activeGenerationTopicId);
   const activeGenerationTopic = useImageStore((s) =>
@@ -174,6 +179,10 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isSupportWebSearch = useImageStore(isSupportedParamSelector('webSearch'));
   const isLogin = useUserStore(authSelectors.isLogin);
   const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
+  const isModelConfigReady = useAiInfraStore((s) =>
+    aiProviderSelectors.isInitAiProviderRuntimeState(s),
+  );
+  const { notice: modelNotice, isModelUnavailable } = useImageGenerationModelNotice();
   const { showDimensionControl } = useDimensionControl();
 
   useFetchAiImageConfig();
@@ -187,7 +196,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     if (!canCreate) return;
 
     if (!isLogin) {
-      loginRequired.redirect({ timeout: 2000 });
+      loginRequired.redirect();
       return;
     }
 
@@ -213,10 +222,31 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
   useEffect(() => {
     if (promptParam && !hasProcessedPrompt.current && isLogin && canCreate) {
+      // Bail WITHOUT consuming the param while the model deep-link is still settling
+      // or the provider runtime config isn't ready — otherwise a valid deep link
+      // permanently skips auto-generate (see lobehub/lobehub#17400):
+      // 1. `?model=` still present: the model effect hasn't applied it yet, so
+      //    `isModelUnavailable` in this closure is stale (from the pre-model render).
+      //    Consuming now would set `hasProcessedPrompt` / clear the param before the
+      //    model resolves. Instead we wait; once the model effect clears `modelParam`
+      //    this effect re-runs with a fresh `isModelUnavailable` for the applied model.
+      // 2. Config not ready: the resolver returns undefined (so `isModelUnavailable`
+      //    is `false`) while the aiProvider runtime state is still loading, which would
+      //    auto-fire against a possibly-disabled provider. Wait until it settles.
+      // 3. Generation config not initialized: before `initializeImageConfig` finishes,
+      //    the selection is still the hard-coded default, so availability would be
+      //    evaluated against a model the init step is about to replace.
+      if (modelParam || !isModelConfigReady || !isInit) return;
+
       const decodedPrompt = decodeURIComponent(promptParam);
       setValue(decodedPrompt);
       hasProcessedPrompt.current = true;
       setPromptParam(null);
+
+      // Config is ready and the selected model is genuinely unavailable — this path
+      // bypasses the generate button, so without the guard it would fire a request
+      // against a disabled provider (see lobehub/lobehub#17400).
+      if (isModelUnavailable) return;
 
       const timeoutId = window.setTimeout(async () => {
         await createImage();
@@ -226,7 +256,18 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, canCreate, setValue, setPromptParam, createImage]);
+  }, [
+    promptParam,
+    modelParam,
+    isLogin,
+    canCreate,
+    isModelConfigReady,
+    isInit,
+    isModelUnavailable,
+    setValue,
+    setPromptParam,
+    createImage,
+  ]);
 
   const showInlineRef = canDropImage;
   const hasRefImages = imagePreviewUrls.length > 0;
@@ -242,14 +283,20 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   return (
     <Flexbox gap={32} width={'100%'}>
       {showTitle && <PromptTitle />}
+      <GenerationModelNotice notice={modelNotice} ns={'image'} />
       <GenerationPromptInput
-        disableGenerate={!isInit}
+        disableGenerate={!isInit || isModelUnavailable}
         disabled={!canCreate}
         generateLabel={t('generation.actions.generate')}
         generatingLabel={t('generation.status.generating')}
         isCreating={isCreating}
         isDarkMode={isDarkMode}
         value={value}
+        header={
+          isPromptBlocked ? (
+            <GenerationPromptBlockedNotice onClose={dismissBlockedPrompt} />
+          ) : undefined
+        }
         inlineContent={
           showInlineRef ? (
             <InlineImageReference
@@ -271,11 +318,6 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
           >
             <GenerationMediaModeSegment mode={'image'} />
-            <GenerationVisibilitySelector
-              disabledReason={visibilityLockedReason}
-              visibility={displayVisibility}
-              onChange={setNewGenerationTopicVisibility}
-            />
             <ModelSwitchPanel
               ModelItemComponent={ImageModelItem}
               enabledList={enabledImageModelList}
@@ -368,15 +410,22 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
           hasRefImages ? t('config.prompt.placeholderWithRef') : t('config.prompt.placeholder')
         }
         rightActions={
-          <PromptTransformAction
-            mode={'image'}
-            prompt={value}
-            onPromptChange={(next) => {
-              if (!canCreate) return;
+          <>
+            <PromptTransformAction
+              mode={'image'}
+              prompt={value}
+              onPromptChange={(next) => {
+                if (!canCreate) return;
 
-              setValue(next as any);
-            }}
-          />
+                setValue(next as any);
+              }}
+            />
+            <GenerationVisibilitySelector
+              disabledReason={visibilityLockedReason}
+              visibility={displayVisibility}
+              onChange={setNewGenerationTopicVisibility}
+            />
+          </>
         }
         onGenerate={handleGenerate}
         onValueChange={setValue}

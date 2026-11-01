@@ -6,10 +6,14 @@ import { UserService, userService } from './index';
 
 const mockLambdaClient = vi.hoisted(() => ({
   user: {
+    confirmOnboardingUnderstanding: { mutate: vi.fn() },
+    getOnboardingUnderstanding: { query: vi.fn() },
     getUserRegistrationDuration: { query: vi.fn() },
     getUserState: { query: vi.fn() },
     getUserSSOProviders: { query: vi.fn() },
-    makeUserOnboarded: { mutate: vi.fn() },
+    retryOnboardingUnderstandingSource: { mutate: vi.fn() },
+    reviseOnboardingUnderstanding: { mutate: vi.fn() },
+    startOnboardingUnderstanding: { mutate: vi.fn() },
     updateAvatar: { mutate: vi.fn() },
     updateFullName: { mutate: vi.fn() },
     updatePreference: { mutate: vi.fn() },
@@ -38,6 +42,68 @@ describe('UserService', () => {
     });
   });
 
+  /**
+   * @example
+   * expect(result.id).toBe('session-1');
+   */
+  it('exposes the onboarding Understanding lifecycle', async () => {
+    const pollingResult = { id: 'session-1', sources: {}, status: 'pending' };
+    mockLambdaClient.user.startOnboardingUnderstanding.mutate.mockResolvedValueOnce(pollingResult);
+    mockLambdaClient.user.getOnboardingUnderstanding.query.mockResolvedValueOnce(pollingResult);
+    mockLambdaClient.user.reviseOnboardingUnderstanding.mutate.mockResolvedValueOnce(pollingResult);
+    mockLambdaClient.user.retryOnboardingUnderstandingSource.mutate.mockResolvedValueOnce(
+      pollingResult,
+    );
+    mockLambdaClient.user.confirmOnboardingUnderstanding.mutate.mockResolvedValueOnce({
+      confirmed: true,
+    });
+
+    await userService.startOnboardingUnderstanding({
+      providerIds: ['github'],
+      responseLanguage: 'en-US',
+      topicId: 'topic-1',
+    });
+    await userService.getOnboardingUnderstanding('topic-1');
+    await userService.reviseOnboardingUnderstanding({
+      expectedFeedbackRevision: 0,
+      feedback: 'Focus on infrastructure.',
+      providerIds: ['gmail'],
+      responseLanguage: 'en-US',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+    await userService.retryOnboardingUnderstandingSource({
+      providerId: 'gmail',
+      responseLanguage: 'en-US',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+    await userService.confirmOnboardingUnderstanding({
+      resultId: 'result-1',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+
+    expect(mockLambdaClient.user.startOnboardingUnderstanding.mutate).toHaveBeenCalledWith({
+      providerIds: ['github'],
+      responseLanguage: 'en-US',
+      topicId: 'topic-1',
+    });
+    expect(mockLambdaClient.user.getOnboardingUnderstanding.query).toHaveBeenCalledWith({
+      topicId: 'topic-1',
+    });
+    expect(mockLambdaClient.user.reviseOnboardingUnderstanding.mutate).toHaveBeenCalledWith({
+      expectedFeedbackRevision: 0,
+      feedback: 'Focus on infrastructure.',
+      providerIds: ['gmail'],
+      responseLanguage: 'en-US',
+      sessionId: 'session-1',
+      topicId: 'topic-1',
+    });
+    expect(mockLambdaClient.user.retryOnboardingUnderstandingSource.mutate).toHaveBeenCalled();
+    expect(mockLambdaClient.user.confirmOnboardingUnderstanding.mutate).toHaveBeenCalled();
+  });
+
   describe('getUserState', () => {
     it('should call lambdaClient.user.getUserState.query', async () => {
       const mockState = { isOnboarded: true, preference: {}, settings: {} };
@@ -61,16 +127,6 @@ describe('UserService', () => {
 
       expect(mockLambdaClient.user.getUserSSOProviders.query).toHaveBeenCalled();
       expect(result).toEqual(mockProviders);
-    });
-  });
-
-  describe('makeUserOnboarded', () => {
-    it('should call lambdaClient.user.makeUserOnboarded.mutate', async () => {
-      mockLambdaClient.user.makeUserOnboarded.mutate.mockResolvedValueOnce({ success: true });
-
-      await userService.makeUserOnboarded();
-
-      expect(mockLambdaClient.user.makeUserOnboarded.mutate).toHaveBeenCalled();
     });
   });
 

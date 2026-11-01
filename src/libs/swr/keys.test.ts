@@ -1,26 +1,153 @@
+import { replicaKeys } from 'local-replica';
+import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
-import { recentKeys } from './keys';
+import {
+  documentCommentKeys,
+  isAcceptanceListKey,
+  isDocumentCommentKeyForEvent,
+  recentKeys,
+  verifyKeys,
+  workKeys,
+} from './keys';
+import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
-  it('keys the Home recent list by identity cache scope', () => {
-    expect(recentKeys.list(true, 10, 'user-1:workspace-1')).toEqual([
-      'recent:list',
-      true,
-      10,
+  it('keys the Home topic-only list independently from mixed recents', () => {
+    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).toEqual([
+      'recent:topicList',
+      9,
       'user-1:workspace-1',
+      'mine',
     ]);
   });
 
-  it('keeps users isolated in the same workspace', () => {
-    expect(recentKeys.list(true, 10, 'user-1:workspace-1')).not.toEqual(
-      recentKeys.list(true, 10, 'user-2:workspace-1'),
+  it('keeps the mine and team views of the Home topic list isolated', () => {
+    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).not.toEqual(
+      recentKeys.topicList(9, 'user-1:workspace-1', 'team'),
     );
   });
 
-  it('keeps workspaces isolated for the same user', () => {
-    expect(recentKeys.allDrawer(true, 'user-1:workspace-1')).not.toEqual(
-      recentKeys.allDrawer(true, 'user-1:workspace-2'),
+  // Regression: `recent:topicList` had no CACHE_TIERS entry of its own, and the
+  // provider matches patterns as substrings — so `recent:list` never covered it.
+  // The Home recents list was memory-only and flashed a skeleton on every boot.
+  it('routes the Home topic-only recents key to a persisted cache tier', () => {
+    const serialized = unstable_serialize(recentKeys.topicList(9, 'user-1:workspace-1', 'mine'));
+    const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
+      serialized.includes(pattern),
     );
+
+    expect(persisted).toBe(true);
+  });
+});
+
+describe('replica sync keys', () => {
+  it('keeps SWR orchestration entries out of the persistence tiers', () => {
+    for (const key of [
+      // Replicas persist through their own storage, never through the SWR tiers.
+      replicaKeys.sync('agentList', 1, 'user-1:personal', 'sidebar', {}),
+      replicaKeys.sync('agentConfig', 1, 'user-1:personal', 'agent-1', { agentId: 'agent-1' }),
+    ]) {
+      const serialized = unstable_serialize(key);
+      expect(
+        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+      ).toBe(false);
+    }
+  });
+});
+
+describe('isAcceptanceListKey', () => {
+  it('matches every Acceptance list variant without matching detail keys', () => {
+    expect(isAcceptanceListKey(['verify:acceptances', '', '', 'active'])).toBe(true);
+    expect(isAcceptanceListKey(['verify:acceptances', '100', 'needle', 'all', 'workspace-1'])).toBe(
+      true,
+    );
+    expect(isAcceptanceListKey(['verify:acceptancePurgePreview', 'acceptance-1'])).toBe(false);
+  });
+
+  it('keeps project-scoped acceptance feeds in separate cache entries', () => {
+    expect(
+      verifyKeys.acceptances(undefined, undefined, { filter: 'all', projectId: 'project-1' }),
+    ).not.toEqual(
+      verifyKeys.acceptances(undefined, undefined, { filter: 'all', projectId: 'project-2' }),
+    );
+    expect(
+      verifyKeys.acceptancePage('workspace-1', { filter: 'all', projectId: 'project-1' }),
+    ).not.toEqual(
+      verifyKeys.acceptancePage('workspace-1', { filter: 'all', projectId: 'project-2' }),
+    );
+  });
+
+  it('keeps the unfiled, scope and source narrowings in separate cache entries', () => {
+    const base = { filter: 'all' };
+    const page = (query: Parameters<typeof verifyKeys.acceptancePage>[1]) =>
+      verifyKeys.acceptancePage('workspace-1', query);
+
+    expect(page({ ...base, projectId: null })).not.toEqual(page(base));
+    expect(page({ ...base, scope: 'participated' })).not.toEqual(page(base));
+    expect(page({ ...base, source: 'goal' })).not.toEqual(page({ ...base, source: 'task' }));
+  });
+});
+
+describe('workKeys', () => {
+  it('keeps the Resources Private and Workspace galleries in separate cache entries', () => {
+    expect(workKeys.workspace('workspace-1', 'all', null, 'private')).not.toEqual(
+      workKeys.workspace('workspace-1', 'all', null, 'public'),
+    );
+  });
+
+  it('keeps non-Resources callers on the unfiltered cache entry', () => {
+    expect(workKeys.workspace('workspace-1', 'project:project-1')).toEqual([
+      'work:workspace',
+      'workspace-1',
+      'project:project-1',
+      null,
+      null,
+    ]);
+  });
+});
+
+describe('isDocumentCommentKeyForEvent', () => {
+  const event = {
+    documentId: 'document-1',
+    rootCommentId: 'root-1',
+    workspaceId: 'workspace-1',
+  };
+
+  it('matches the affected summary, thread pages, and reply thread', () => {
+    expect(isDocumentCommentKeyForEvent(documentCommentKeys.summary('document-1'), event)).toBe(
+      true,
+    );
+    expect(
+      isDocumentCommentKeyForEvent(
+        documentCommentKeys.threads('workspace-1', 'document-1', 'cursor'),
+        event,
+      ),
+    ).toBe(true);
+    expect(
+      isDocumentCommentKeyForEvent(
+        documentCommentKeys.replies('workspace-1', 'root-1', 'cursor'),
+        event,
+      ),
+    ).toBe(true);
+    // Pinned deep-link details revalidate on any comment event in the workspace.
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.detail('workspace-1', 'reply-9'), event),
+    ).toBe(true);
+  });
+
+  it('does not invalidate other documents, workspaces, or reply threads', () => {
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.detail('workspace-2', 'root-1'), event),
+    ).toBe(false);
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.threads('workspace-2', 'document-1'), event),
+    ).toBe(false);
+    expect(isDocumentCommentKeyForEvent(documentCommentKeys.summary('document-2'), event)).toBe(
+      false,
+    );
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.replies('workspace-1', 'root-2'), event),
+    ).toBe(false);
   });
 });

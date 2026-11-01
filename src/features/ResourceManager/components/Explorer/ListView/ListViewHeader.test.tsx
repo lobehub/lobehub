@@ -1,14 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import ListViewHeader from './ListViewHeader';
 
 const mockUpdateColumnWidth = vi.fn();
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
+const selectionMocks = vi.hoisted(() => ({
+  handleSelectAll: vi.fn(),
+  handleSelectAllResources: vi.fn(),
 }));
 
 vi.mock('@/store/global', () => ({
@@ -21,12 +19,14 @@ vi.mock('@/store/global', () => ({
 
 vi.mock('../hooks/useExplorerSelection', () => ({
   useExplorerSelectionActions: () => ({
-    handleSelectAll: vi.fn(),
-    handleSelectAllResources: vi.fn(),
+    handleSelectAll: selectionMocks.handleSelectAll,
+    handleSelectAllResources: selectionMocks.handleSelectAllResources,
   }),
   useExplorerSelectionSummary: () => ({
     allSelected: false,
+    hasSelectableItems: true,
     indeterminate: false,
+    selectableCount: 1,
     selectAllState: 'loaded',
     selectedCount: 0,
     showSelectAllHint: false,
@@ -79,5 +79,20 @@ describe('ListViewHeader', () => {
     expect(screen.queryByText('FileManager.title.uploader')).not.toBeInTheDocument();
     expect(screen.queryByTestId('resize-uploader')).not.toBeInTheDocument();
     expect(screen.getByText('FileManager.title.size')).toBeInTheDocument();
+  });
+
+  it('promotes a single-page header selection to the full role-scoped result set', () => {
+    render(
+      <ListViewHeader
+        columnWidths={{ date: 160, name: 400, size: 140, uploader: 180 }}
+        data={[{ id: 'file-1' } as any]}
+        hasMore={false}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    expect(selectionMocks.handleSelectAllResources).toHaveBeenCalledOnce();
+    expect(selectionMocks.handleSelectAll).not.toHaveBeenCalled();
   });
 });

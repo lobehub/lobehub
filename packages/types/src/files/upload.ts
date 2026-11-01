@@ -15,16 +15,21 @@ export interface FileUploadState {
 }
 
 export type FileUploadStatus =
-  | 'pending'
-  | 'uploading'
-  | 'processing'
-  | 'success'
-  | 'error'
-  | 'cancelled';
+  'pending' | 'uploading' | 'processing' | 'success' | 'error' | 'cancelled';
+
+export type FileUploadSessionStatus = 'active' | 'cleaning' | 'settled' | 'released' | 'expired';
 
 export type FileProcessStatus = 'pending' | 'chunking' | 'embedding' | 'success' | 'error';
 
 export const UPLOAD_STATUS_SET = new Set(['uploading', 'pending', 'processing']);
+
+export interface VoiceMessageRecording {
+  codec?: string;
+  durationMs: number;
+  file: File;
+  mimeType: string;
+  waveform: number[];
+}
 
 // the file that is upload at chat page
 export interface UploadFileItem {
@@ -32,10 +37,32 @@ export interface UploadFileItem {
    * AbortController to cancel the upload
    */
   abortController?: AbortController;
+  /** Agent that owns the draft upload, used to retry in the same conversation context. */
+  agentId?: string;
+  /**
+   * Metadata captured by the voice-message recorder. Kept on the upload item so
+   * optimistic and queued messages can render duration/codec before the
+   * persisted file relation is fetched.
+   */
+  audioMetadata?: {
+    codec?: string;
+    durationMs: number;
+    mimeType: string;
+  };
   /**
    * base64 data, it will use in other data
    */
   base64Url?: string;
+  /** Intrinsic dimensions captured for image uploads. */
+  dimensions?: {
+    height: number;
+    ratio: number;
+    width: number;
+  };
+  /** Human-readable reason retained on the originating upload surface. */
+  error?: string;
+  /** Stable business reason used to render an in-context remedy action. */
+  errorCode?: string;
   file: File;
   /**
    * the file url after upload,it will be s3 url
@@ -43,11 +70,19 @@ export interface UploadFileItem {
    */
   fileUrl?: string;
   id: string;
+  knowledgeBaseId?: string;
+  parentId?: string;
   /**
    * blob url for local preview
    * it will use in the file preview before send the message
    */
   previewUrl?: string;
+  /**
+   * Set when the draft was uploaded as an agent-share VISITOR: the file lives
+   * under the creator's account, so remove/retry must go through the
+   * share-scoped endpoints instead of the visitor's own file API.
+   */
+  shareId?: string;
   /**
    * marks a draft entry that references an already-persisted file still backing
    * an existing message (e.g. restored via "restore to input"). Removing such
@@ -58,9 +93,57 @@ export interface UploadFileItem {
   status: FileUploadStatus;
   tasks?: FileParsingTask;
   uploadState?: FileUploadState;
+  visibility?: 'private' | 'public';
 }
 
+export const AgentShareFileProvenanceSchema = z.object({
+  shareId: z.string(),
+  visitorUserId: z.string(),
+});
+
+export type AgentShareFileProvenance = z.infer<typeof AgentShareFileProvenanceSchema>;
+
+export type FileAccessScope =
+  ({ type: 'agentShare' } & AgentShareFileProvenance) | { type: 'ordinary' };
+
+export const ordinaryFileAccessScope = { type: 'ordinary' } as const satisfies FileAccessScope;
+
+export const agentShareFileAccessScope = (
+  provenance: AgentShareFileProvenance,
+): FileAccessScope => ({
+  shareId: provenance.shareId,
+  type: 'agentShare',
+  visitorUserId: provenance.visitorUserId,
+});
+
+/** Remove server-owned Agent Share provenance from caller-supplied metadata. */
+export const stripAgentShareFileProvenance = <T>(metadata: T): T => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+
+  return Object.fromEntries(
+    Object.entries(metadata as Record<string, unknown>).filter(([key]) => key !== 'agentShare'),
+  ) as T;
+};
+
+/** Read server-written agent-share provenance without trusting the rest of the JSON metadata. */
+export const getAgentShareFileProvenance = (
+  metadata: unknown,
+): AgentShareFileProvenance | undefined => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined;
+
+  const result = AgentShareFileProvenanceSchema.safeParse(
+    (metadata as { agentShare?: unknown }).agentShare,
+  );
+  return result.success ? result.data : undefined;
+};
+
 export const FileMetadataSchema = z.object({
+  /**
+   * Provenance of an agent-share visitor upload. The file row sits under the
+   * creator for storage accounting, while this records the share and visitor
+   * that may access it. Server-written only.
+   */
+  agentShare: AgentShareFileProvenanceSchema.optional(),
   date: z.string(),
   dirname: z.string(),
   filename: z.string(),

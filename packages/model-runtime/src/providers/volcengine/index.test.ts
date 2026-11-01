@@ -121,5 +121,137 @@ describe('LobeVolcengineAI - custom features', () => {
       expect(calledPayload.thinking).toEqual({ type: 'enabled' });
       expect(calledPayload.reasoning.effort).toBe('high');
     });
+
+    /**
+     * `adaptive` is in the runtime's own `thinking.type` union — it is Anthropic's
+     * "let the model decide" — and Ark answers it with
+     * `invalid value adaptive`, failing the whole request.
+     *
+     * It is not a synthetic input: `/api/v1/anthropic` relays an Anthropic
+     * client's body, and Claude Code sends `thinking: {type: 'adaptive'}` on
+     * every request whatever model it has been pointed at. Both model families
+     * are covered because they take different branches here — the reasoning-effort
+     * family used to fall past its `disabled` / `enabled` cases, and everything
+     * else skipped the branch entirely.
+     */
+    it.each(['doubao-seed-2-1-pro-260628', 'deepseek-v4-pro-260425'])(
+      'drops a thinking type Ark does not accept, for %s',
+      async (model) => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model,
+          thinking: { type: 'adaptive' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload).not.toHaveProperty('thinking');
+      },
+    );
+
+    describe('deploymentName resolution', () => {
+      it('sends the builtin card deployment name instead of the logical id on the chat path', async () => {
+        // The builtin card: id `deepseek-v4-pro-ga`, Ark name
+        // `deepseek-v4-pro-ga-260813`. Sending the bare id 404s with
+        // InvalidEndpointOrModel.NotFound (vent 2026-10-09).
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'deepseek-v4-pro-ga',
+          deploymentName: 'deepseek-v4-pro-ga-260813',
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.model).toBe('deepseek-v4-pro-ga-260813');
+      });
+
+      it('falls back to the payload model when no deploymentName is given', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'deepseek-v4-pro-ga',
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.model).toBe('deepseek-v4-pro-ga');
+      });
+
+      it('keeps the reasoning-effort mapping on the resolved (deployment) model name', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'deepseek-v4-pro-ga',
+          deploymentName: 'deepseek-v4-pro-ga-260813',
+          thinking: { type: 'enabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.model).toBe('deepseek-v4-pro-ga-260813');
+        expect(calledPayload.reasoning_effort).toBe('high');
+      });
+
+      // deploymentName can be a custom alias (e.g. `prod-endpoint`) that hides
+      // the deepseek-v4 / glm-5-2 family. Family detection must run on the
+      // logical model, or the reasoning-effort mapping silently disappears
+      // (Codex P2 on PR #20645).
+      it('maps reasoning params for a deepseek-v4 card even when deploymentName is a custom alias (chat path)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'deepseek-v4-pro-ga',
+          deploymentName: 'prod-endpoint',
+          thinking: { type: 'enabled' },
+        });
+
+        const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+        expect(calledPayload.model).toBe('prod-endpoint');
+        expect(calledPayload.reasoning_effort).toBe('high');
+      });
+
+      it('maps reasoning params for a deepseek-v4 card even when deploymentName is a custom alias (responses path)', async () => {
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(
+          new ReadableStream() as any,
+        );
+
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'deepseek-v4-pro-ga',
+          deploymentName: 'prod-endpoint',
+          reasoning_effort: 'max',
+          enabledSearch: true,
+          thinking: { type: 'enabled' },
+        });
+
+        const calledPayload = (instance['client'].responses.create as any).mock.calls[0][0];
+        expect(calledPayload.model).toBe('prod-endpoint');
+        // Responses path converts effort `max` to `high` for the deepseek-v4 family.
+        expect(calledPayload.reasoning.effort).toBe('high');
+      });
+
+      it('sends the deployment name on the responses path', async () => {
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(
+          new ReadableStream() as any,
+        );
+
+        // enabledSearch switches the provider onto the Responses API.
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'deepseek-v4-pro-ga',
+          deploymentName: 'deepseek-v4-pro-ga-260813',
+          enabledSearch: true,
+        });
+
+        const calledPayload = (instance['client'].responses.create as any).mock.calls[0][0];
+        expect(calledPayload.model).toBe('deepseek-v4-pro-ga-260813');
+      });
+    });
+
+    it('still honours reasoning_effort when the thinking type was dropped', async () => {
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'deepseek-v4-pro-260425',
+        reasoning_effort: 'low',
+        thinking: { type: 'adaptive' },
+      });
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+      expect(calledPayload.thinking).toEqual({ type: 'enabled' });
+      expect(calledPayload.reasoning_effort).toBe('low');
+    });
   });
 });

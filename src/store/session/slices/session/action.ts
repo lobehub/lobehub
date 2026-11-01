@@ -1,24 +1,14 @@
-import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
-import isEqual from 'fast-deep-equal';
-import { t } from 'i18next';
-import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 import { type PartialDeep } from 'type-fest';
 
-import { message } from '@/components/AntdStaticMethods';
-import { DEFAULT_AGENT_LOBE_SESSION, INBOX_SESSION_ID } from '@/const/session';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { sessionKeys } from '@/libs/swr/keys';
+import { DEFAULT_AGENT_LOBE_SESSION } from '@/const/session';
+import { analyticsClient } from '@/libs/analytics/client';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
-import { getChatGroupStoreState } from '@/store/agentGroup';
-import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type SessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import { settingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 import {
-  type ChatSessionList,
   type LobeAgentSession,
   type LobeSessionGroups,
   type LobeSessions,
@@ -31,7 +21,6 @@ import { setNamespace } from '@/utils/storeDebug';
 import { type SessionDispatch } from './reducers';
 import { sessionsReducer } from './reducers';
 import { sessionSelectors } from './selectors';
-import { sessionMetaSelectors } from './selectors/meta';
 
 const n = setNamespace('session');
 
@@ -58,7 +47,7 @@ export class SessionActionImpl {
     agent?: PartialDeep<LobeAgentSession>,
     isSwitchSession: boolean = true,
   ): Promise<string> => {
-    const { switchSession, refreshSessions } = this.#get();
+    const { switchSession } = this.#get();
 
     // merge the defaultAgent in settings
     const defaultAgent = merge(
@@ -69,62 +58,23 @@ export class SessionActionImpl {
     const newSession: LobeAgentSession = merge(defaultAgent, agent);
 
     const id = await sessionService.createSession(LobeSessionType.Agent, newSession);
-    await refreshSessions();
 
-    // Track new agent creation analytics
-    const analytics = getSingletonAnalyticsOptional();
-    if (analytics) {
-      const userStore = getUserStoreState();
-      const userId = userProfileSelectors.userId(userStore);
+    const userId = userProfileSelectors.userId(getUserStoreState());
 
-      analytics.track({
-        name: 'new_agent_created',
-        properties: {
-          assistant_name: newSession.meta?.title || 'Untitled Agent',
-          assistant_tags: newSession.meta?.tags || [],
-          session_id: id,
-          user_id: userId || 'anonymous',
-        },
-      });
-    }
+    void analyticsClient.track({
+      name: 'new_agent_created',
+      properties: {
+        assistant_name: newSession.meta?.title || 'Untitled Agent',
+        assistant_tags: newSession.meta?.tags || [],
+        session_id: id,
+        user_id: userId || 'anonymous',
+      },
+    });
 
     // Whether to goto  to the new session after creation, the default is to switch to
     if (isSwitchSession) switchSession(id);
 
     return id;
-  };
-
-  duplicateSession = async (id: string): Promise<void> => {
-    const { switchSession, refreshSessions } = this.#get();
-    const session = sessionSelectors.getSessionById(id)(this.#get());
-
-    if (!session) return;
-    const title = sessionMetaSelectors.getTitle(session.meta);
-
-    const newTitle = t('duplicateSession.title', { ns: 'chat', title });
-
-    const messageLoadingKey = 'duplicateSession.loading';
-
-    message.loading({
-      content: t('duplicateSession.loading', { ns: 'chat' }),
-      duration: 0,
-      key: messageLoadingKey,
-    });
-
-    const newId = await sessionService.cloneSession(id, newTitle);
-
-    // duplicate Session Error
-    if (!newId) {
-      message.destroy(messageLoadingKey);
-      message.error(t('copyFail', { ns: 'common' }));
-      return;
-    }
-
-    await refreshSessions();
-    message.destroy(messageLoadingKey);
-    message.success(t('duplicateSession.success', { ns: 'chat' }));
-
-    switchSession(newId);
   };
 
   openAllAgentsDrawer = (): void => {
@@ -133,28 +83,6 @@ export class SessionActionImpl {
 
   pinSession = async (id: string, pinned: boolean): Promise<void> => {
     await this.#get().internal_updateSession(id, { pinned });
-  };
-
-  /**
-   * @deprecated Legacy session-store delete path, kept only for the mobile
-   * session list (`(mobile)/.../SessionListContent/List/Item/Actions.tsx`).
-   * Desktop already deletes via `HomeStore.removeAgent`. New call sites must use
-   * `HomeStore.removeAgent` (agents) / `HomeStore.removeAgentGroup` (groups) —
-   * all three evict the message cache, so behaviour is equivalent apart from this
-   * path also switching to the inbox when the active session is removed. Remove
-   * once the mobile session list migrates to the agent store.
-   */
-  removeSession = async (sessionId: string): Promise<void> => {
-    await sessionService.removeSession(sessionId);
-    await this.#get().refreshSessions();
-    // deleting an agent cascade-deletes its topics + messages on the server; drop
-    // their message cache too so it doesn't orphan in IndexedDB (never expires)
-    void evictMessageCache((ctx) => ctx.agentId === sessionId);
-
-    // If the active session deleted, switch to the inbox session
-    if (sessionId === this.#get().activeId) {
-      this.#get().switchSession(INBOX_SESSION_ID);
-    }
   };
 
   setAgentPinned = (value: boolean | ((prev: boolean) => boolean)): void => {
@@ -197,93 +125,10 @@ export class SessionActionImpl {
       await chatGroupService.updateGroup(sessionId, {
         groupId: group === 'default' ? null : group,
       });
-      await this.#get().refreshSessions();
     } else {
       // For regular agent sessions, use the existing session service
       await this.#get().internal_updateSession(sessionId, { group });
     }
-  };
-
-  useFetchSessions = (
-    enabled: boolean,
-    isLogin: boolean | undefined,
-  ): SWRResponse<ChatSessionList> => {
-    return useClientDataSWR<ChatSessionList>(
-      enabled ? sessionKeys.list(isLogin) : null,
-      () => sessionService.getGroupedSessions(),
-      {
-        fallbackData: {
-          sessionGroups: [],
-          sessions: [],
-        },
-        onSuccess: (data) => {
-          if (
-            this.#get().isSessionsFirstFetchFinished &&
-            isEqual(this.#get().sessions, data.sessions) &&
-            isEqual(this.#get().sessionGroups, data.sessionGroups)
-          )
-            return;
-
-          this.#get().internal_processSessions(data.sessions, data.sessionGroups);
-
-          // Sync chat groups from group sessions to chat store
-          const groupSessions = data.sessions.filter((session) => session.type === 'group');
-          if (groupSessions.length > 0) {
-            // For group sessions, we need to transform them to ChatGroupItem format
-            // The session ID is the chat group ID, and we can extract basic group info
-            const chatGroupStore = getChatGroupStoreState();
-            const chatGroups = groupSessions.map((session) => ({
-              accessedAt: session.updatedAt,
-              avatar: null,
-              backgroundColor: null,
-              clientId: null,
-              config: null,
-              content: null,
-              createdAt: session.createdAt,
-              description: session.meta?.description || '',
-              editorData: null,
-
-              groupId: session.group || null,
-              id: session.id, // Add the missing groupId property
-
-              marketIdentifier: null,
-
-              // Will be set by the backend
-              pinned: session.pinned || false,
-
-              // Session ID is the chat group ID
-              slug: null,
-
-              title: session.meta?.title || 'Untitled Group',
-              updatedAt: session.updatedAt,
-              userId: '', // Use updatedAt as accessedAt fallback
-              visibility: 'public' as const,
-              workspaceId: null,
-            }));
-
-            chatGroupStore.internal_updateGroupMaps(chatGroups);
-          }
-
-          this.#set(
-            { isSessionsFirstFetchFinished: true },
-            false,
-            n('useFetchSessions/onSuccess', data),
-          );
-        },
-      },
-    );
-  };
-
-  useSearchSessions = (keyword?: string): SWRResponse<any> => {
-    return useSWR<LobeSessions>(
-      sessionKeys.search(keyword),
-      async () => {
-        if (!keyword) return [];
-
-        return sessionService.searchSessions(keyword);
-      },
-      { revalidateOnFocus: false, revalidateOnMount: false },
-    );
   };
 
   internal_dispatchSessions = (payload: SessionDispatch): void => {
@@ -298,7 +143,6 @@ export class SessionActionImpl {
     this.#get().internal_dispatchSessions({ id, type: 'updateSession', value: data });
 
     await sessionService.updateSession(id, data);
-    await this.#get().refreshSessions();
   };
 
   internal_processSessions = (sessions: LobeSessions, sessionGroups: LobeSessionGroups): void => {
@@ -323,10 +167,6 @@ export class SessionActionImpl {
       false,
       n('processSessions'),
     );
-  };
-
-  refreshSessions = async (): Promise<void> => {
-    await mutate(sessionKeys.list(true));
   };
 }
 

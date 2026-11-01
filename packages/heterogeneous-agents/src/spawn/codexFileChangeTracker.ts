@@ -149,16 +149,16 @@ const computeFileChangeDiff = async (
     return buildFileChangeDiff(filePath, previousContent, '');
   }
 
-  if (!snapshot) {
+  // An update diff is only trustworthy when the pre-change file was read successfully.
+  // Treating a missing or unreadable snapshot as empty content turns a small edit into a
+  // synthetic whole-file addition (for example, +5 lines can be reported as +1205).
+  if (!snapshot?.exists || snapshot.content === undefined) {
     return {
       linesAdded: change.linesAdded ?? 0,
       linesDeleted: change.linesDeleted ?? 0,
     };
   }
 
-  if (!snapshot?.exists && !current.exists) return { linesAdded: 0, linesDeleted: 0 };
-
-  if (snapshot?.exists && snapshot.content === undefined) return { linesAdded: 0, linesDeleted: 0 };
   if (current.exists && current.content === undefined) return { linesAdded: 0, linesDeleted: 0 };
 
   return buildFileChangeDiff(filePath, previousContent, nextContent);

@@ -3,7 +3,7 @@
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 
@@ -67,9 +67,9 @@ const GithubRunCommandInspector = memo<
   const hasResult = !pulse && pluginState && pluginState.success !== undefined;
 
   return (
-    <div className={cx(inspectorTextStyles.root, pulse && shinyTextStyles.shinyText)}>
+    <div className={inspectorTextStyles.root}>
       <Github className={styles.icon} size={14} />
-      <span className={styles.ghPrefix}>gh</span>
+      <span className={cx(styles.ghPrefix, pulse && shinyTextStyles.shinyText)}>gh</span>
       {label && (
         <span className={styles.chip}>
           <span className={styles.command}>{label}</span>

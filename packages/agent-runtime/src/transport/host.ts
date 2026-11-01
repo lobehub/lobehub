@@ -37,7 +37,7 @@ export interface RuntimeTransports {
 }
 
 /**
- * Single argument to the (future) package-hosted executor factories. The server
+ * Single argument to the package-hosted executor factories. The server
  * builds this once per operation — wiring its adapters + lifecycle dispatcher +
  * operation context — and the package owns the executor logic. This is the seam
  * that lets the same executors run on server and client (target end-state of the

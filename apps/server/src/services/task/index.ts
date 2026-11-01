@@ -1,52 +1,68 @@
-import type {
-  TaskContext,
-  TaskDetailActivity,
-  TaskDetailActivityAuthor,
-  TaskDetailData,
-  TaskDetailSubtask,
-  TaskDetailWorkspaceNode,
-  TaskItem,
-  TaskStatus,
-  TaskTopicHandoff,
-  WorkspaceData,
-} from '@lobechat/types';
+import { TASK_ASSIGNEE_PERMISSION_CODES } from '@lobechat/const/rbac';
+import type { TaskContext, TaskDetailData, TaskItem, TaskStatus } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
-import { TaskModel } from '@/database/models/task';
+import { ProjectModel } from '@/database/models/project';
+import { RbacModel } from '@/database/models/rbac';
+import { isTaskIdentifierUniqueViolation, TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
-import { UserModel } from '@/database/models/user';
+import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
-import { extractFileIdsFromEditorData } from '../file/extractFileIdsFromEditorData';
-import { resolveAttachmentMetadata } from '../file/resolveAttachments';
-import { type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
+import { displaySubtaskPlan, type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
+import { writeKeepingArchivedIdle } from './archiveGuard';
+import { armScheduleOnColumnWrite } from './armScheduleOnColumnWrite';
+import { armScheduleOnCreate } from './armScheduleOnCreate';
+import type { TaskServiceDeps } from './deps';
+import { TaskDetailService } from './detail';
+import { resolveMissingTaskModelConfig } from './modelSnapshot';
+import {
+  updateStatus,
+  updateStatusCascade,
+  type UpdateStatusCascadeResult,
+  type UpdateStatusResult,
+} from './statusTransitions';
+import { findTaskOrThrow, interruptTaskOperation } from './utils';
 
-const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
-const UNTITLED_TOPIC_TITLE = 'Untitled';
-const TASK_DETAIL_DIRECT_TOPIC_LIMIT = 100;
-const TASK_DETAIL_DESCENDANT_TOPIC_LIMIT = 300;
+export type { UpdateStatusCascadeResult, UpdateStatusResult } from './statusTransitions';
 
-type DirectTaskTopicActivityRow = Awaited<ReturnType<TaskTopicModel['findWithHandoff']>>[number];
-type DescendantTaskTopicActivityRow = Awaited<
-  ReturnType<TaskTopicModel['findWithHandoffByTaskIds']>
->[number];
-type TaskTopicActivityRow = DirectTaskTopicActivityRow &
-  Partial<
-    Pick<
-      DescendantTaskTopicActivityRow,
-      'sourceTaskAssigneeAgentId' | 'sourceTaskId' | 'sourceTaskIdentifier' | 'sourceTaskName'
-    >
-  >;
+/** Subtask runs started at once when kicking off a ready layer. */
+const SUBTASK_KICKOFF_CONCURRENCY = 5;
+
+/** How long after a run starts a task may have no recorded operation yet. */
+const TASK_RUN_STARTING_GRACE_MS = 2 * 60 * 1000;
+
+/**
+ * The runner marks a task `running` before it dispatches the agent and records
+ * the topic / operation only after dispatch returns. Inside that window there
+ * is nothing to interrupt yet, so a write that stops the task would orphan the
+ * run about to start. Past the grace window a missing operation means the
+ * start died.
+ */
+export const isTaskRunStarting = (
+  task: { startedAt?: Date | string | null; status: string },
+  runningTopics: { operationId?: string | null }[],
+  now = Date.now(),
+): boolean => {
+  if (task.status !== 'running') return false;
+  const startedAt = task.startedAt ? new Date(task.startedAt).getTime() : 0;
+  return (
+    now - startedAt < TASK_RUN_STARTING_GRACE_MS &&
+    (runningTopics.length === 0 || runningTopics.some((topic) => !topic.operationId))
+  );
+};
 
 export interface CreateTaskInput {
   assigneeAgentId?: string;
   assigneeUserId?: string;
   automationMode?: 'heartbeat' | 'schedule';
+  config?: Record<string, unknown>;
   // Runtime-state pockets stored on the task row (tasks.context JSONB). Used at
   // creation to record `context.origin` — the creator conversation pointer.
   context?: TaskContext;
@@ -54,11 +70,11 @@ export interface CreateTaskInput {
   description?: string;
   editorData?: unknown;
   fileIds?: string[];
-  identifierPrefix?: string;
   instruction: string;
   name?: string;
   parentTaskId?: string;
   priority?: number;
+  projectId?: string;
   schedulePattern?: string;
   scheduleTimezone?: string;
   sortOrder?: number;
@@ -68,18 +84,10 @@ export interface CreateTaskInput {
   visibility?: 'private' | 'public';
 }
 
-export interface UpdateStatusResult {
-  allSubtasksDone?: boolean;
-  checkpointTriggered?: boolean;
-  parentTaskId?: string | null;
-  paused: string[];
-  task: TaskItem;
-  unlocked: string[];
-}
-
 export interface RunReadySubtasksResult {
-  failed: { error: string; identifier: string }[];
+  failed: { error: string; id?: string; identifier: string }[];
   kickedOff: string[];
+  kickedOffTasks?: { id: string; identifier: string }[];
   plan: SubtaskGraphPlan;
   skipped?: { reason: 'nothing-runnable' };
 }
@@ -88,6 +96,7 @@ export class TaskService {
   private agentModel: AgentModel;
   private db: LobeChatDatabase;
   private taskModel: TaskModel;
+  private projectModel: ProjectModel;
   private taskTopicModel: TaskTopicModel;
   private topicModel: TopicModel;
   private userId: string;
@@ -99,9 +108,22 @@ export class TaskService {
     this.userId = userId;
     this.workspaceId = workspaceId;
     this.agentModel = new AgentModel(db, userId, workspaceId);
+    this.projectModel = new ProjectModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
     this.topicModel = new TopicModel(db, userId, workspaceId);
+  }
+
+  /** Collaborators the extracted sub-domain functions read — resolved on every call. */
+  private get deps(): TaskServiceDeps {
+    return {
+      agentModel: this.agentModel,
+      db: this.db,
+      taskModel: this.taskModel,
+      taskTopicModel: this.taskTopicModel,
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    };
   }
 
   /**
@@ -109,17 +131,38 @@ export class TaskService {
    * `parentTaskId` if it's an identifier, and snapshots the assignee agent's
    * current model/provider into `task.config` so later changes to the agent's
    * default model don't silently affect this task.
+   *
+   * Inside a caller's transaction pass `maxRetries: 1`: an identifier clash
+   * aborts the transaction, so only the caller can retry it as a whole.
    */
-  async createTask(input: CreateTaskInput): Promise<TaskItem> {
+  async createTask(
+    input: CreateTaskInput,
+    options: { maxRetries?: number } = {},
+  ): Promise<TaskItem> {
     await this.assertAssigneeAgentBelongsToUser(input.assigneeAgentId);
 
-    const createData: CreateTaskInput & { config?: Record<string, unknown> } = { ...input };
+    const taskInput = input;
+    const createData: CreateTaskInput & { config?: Record<string, unknown> } = {
+      ...taskInput,
+    };
 
     let parentVisibility: 'private' | 'public' | undefined;
     if (createData.parentTaskId) {
-      const parent = await this.resolveOrThrow(createData.parentTaskId);
+      const parent = await this.findOrThrow(createData.parentTaskId);
       createData.parentTaskId = parent.id;
       parentVisibility = parent.visibility;
+      if (createData.projectId && createData.projectId !== parent.projectId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Subtask must belong to the same project as its parent',
+        });
+      }
+      createData.projectId ??= parent.projectId ?? undefined;
+    }
+
+    if (createData.projectId) {
+      const project = await this.projectModel.findById(createData.projectId);
+      if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
     }
 
     // Pull the model/provider snapshot and the agent's visibility in a single
@@ -129,7 +172,16 @@ export class TaskService {
     if (input.assigneeAgentId) {
       const agentInfo = await this.agentModel.getAgentSnapshotForTaskCreate(input.assigneeAgentId);
       if (agentInfo) {
-        if (agentInfo.snapshot) createData.config = agentInfo.snapshot;
+        if (agentInfo.snapshot) {
+          createData.config = {
+            ...createData.config,
+            ...resolveMissingTaskModelConfig(
+              createData.config,
+              agentInfo.snapshot,
+              agentInfo.modelOverrideProvider,
+            ),
+          };
+        }
         agentVisibility = agentInfo.visibility;
       }
     }
@@ -151,6 +203,15 @@ export class TaskService {
     // we have to assert here even though the inference path can't.
     this.assertAgentVisibilityCompat(createData.visibility, agentVisibility);
 
+    // Invariant: a private task can only be assigned to its creator — the
+    // resolved visibility (explicit, inherited, or agent-derived) is what
+    // counts, so this must run after the precedence chain above.
+    this.assertAssigneeUserVisibilityCompat(
+      createData.visibility,
+      createData.assigneeUserId,
+      this.userId,
+    );
+
     // Invariant: a subtask can never be more public than its parent.
     // Otherwise workspace members see an orphaned child whose parent is
     // hidden, leaking the existence of a private task. The inference path
@@ -158,7 +219,12 @@ export class TaskService {
     // produce a `Private parent + Public child` combo if the caller insists.
     this.assertParentVisibilityCompat(createData.visibility, parentVisibility);
 
-    return this.taskModel.create(createData);
+    const task = await this.createTaskWithAssigneeLock(
+      { ...createData, ...armScheduleOnCreate(createData) },
+      options.maxRetries,
+    );
+
+    return task;
   }
 
   /**
@@ -205,6 +271,31 @@ export class TaskService {
   }
 
   /**
+   * Enforces the invariant: a private task can only be assigned to its
+   * creator. A private task is visible to nobody else (ownership is
+   * creator-based), so assigning another member would hand them a task they
+   * can never see. Throws `BAD_REQUEST` on violation. Applies symmetrically
+   * to assigning on a private task and to demoting a member-assigned task to
+   * private.
+   */
+  assertAssigneeUserVisibilityCompat(
+    taskVisibility: 'private' | 'public' | undefined,
+    assigneeUserId: string | null | undefined,
+    creatorUserId: string,
+  ): void {
+    if (!assigneeUserId) return;
+    if (taskVisibility !== 'private') return;
+    if (assigneeUserId === creatorUserId) return;
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message:
+        'A private task can only be assigned to its creator. Unassign the member or keep the task visible to the workspace.',
+    });
+  }
+
+  private interruptTaskOperation = interruptTaskOperation;
+
+  /**
    * Cancel a running topic: interrupt the remote operation (if any), then
    * mark the topic as `canceled` and pause its parent task.
    */
@@ -223,7 +314,7 @@ export class TaskService {
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      await aiAgentService.interruptTask({ operationId: target.operationId });
+      await this.interruptTaskOperation(aiAgentService, target.operationId);
     }
 
     await this.taskTopicModel.updateStatus(target.taskId, topicId, 'canceled');
@@ -242,11 +333,109 @@ export class TaskService {
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });
-      await aiAgentService.interruptTask({ operationId: target.operationId });
+      await this.interruptTaskOperation(aiAgentService, target.operationId);
     }
 
     await this.taskTopicModel.remove(target.taskId, topicId);
     await this.topicModel.delete(topicId);
+  }
+
+  /**
+   * Delete a task: interrupt its still-running topics first, then remove the
+   * row. Deleting without the interrupt leaves the run executing against a
+   * task that no longer exists — its task tools answer "Task not found" and
+   * every document it produces fails the `task_documents` foreign key.
+   *
+   * `keepOperationId` spares the caller's own run (an agent deleting the task
+   * it is executing), which would otherwise interrupt itself mid-tool-call.
+   */
+  async deleteTask(taskId: string, options: { keepOperationId?: string } = {}): Promise<TaskItem> {
+    const task = await this.findOrThrow(taskId);
+
+    const runningTopics = await this.taskTopicModel.findRunningByTaskIds([task.id]);
+
+    // The runner marks the task `running` before it dispatches the agent and
+    // records the topic / operation only after dispatch returns. A delete in
+    // that window finds nothing to interrupt and would orphan the run it is
+    // about to start. Past the grace window a missing operation means the
+    // start died, and deletion goes ahead.
+    if (isTaskRunStarting(task, runningTopics)) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This task is still starting its run. Try deleting it again in a moment.',
+      });
+    }
+
+    const toInterrupt = runningTopics.filter(
+      (topic) => topic.operationId && topic.operationId !== options.keepOperationId,
+    );
+    if (toInterrupt.length > 0) {
+      const aiAgentService = new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      });
+      for (const topic of toInterrupt) {
+        await this.interruptTaskOperation(aiAgentService, topic.operationId!);
+      }
+    }
+
+    // Decide and delete under the task's row lock — the same lock a run takes
+    // to record its topic. A run that recorded one after the checks above is
+    // seen here and wins; a run that records later finds the task gone and
+    // stops its own execution. Compare-and-delete on the status as well, so a
+    // run that moved the task on in the meantime is never deleted under.
+    //
+    // The tool contract ("dependencies/topics/comments cascade-delete") is
+    // honored here for topics themselves: `task_topics` rows go via FK
+    // cascade, but the underlying `topics` rows have no FK back to `tasks`
+    // and would otherwise survive as orphans that keep showing up in the
+    // sidebar. Collect their ids before the task row goes (the cascade wipes
+    // the links with it), then delete the topic rows in the same transaction.
+    // The kept operation's own topic is excluded — it must survive with its
+    // run (see the snapshot below).
+    const handled = new Set(runningTopics.map((topic) => topic.operationId));
+    const outcome = await this.db.transaction(async (tx) => {
+      const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+      if (!(await taskModel.lockForUpdate(task.id))) return 'gone' as const;
+      const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
+      const nowRunning = await taskTopicModel.findRunningByTaskIds([task.id]);
+      if (nowRunning.some((topic) => !handled.has(topic.operationId))) return 'conflict' as const;
+
+      // The row lock guarantees no run can record a topic between here and
+      // the status CAS below, so this snapshot is the complete topic set.
+      // `keepOperationId` spares the caller's own run: its topic must survive
+      // with the operation, or the messages ON DELETE CASCADE would pull the
+      // conversation out from under the still-running tool call.
+      const allTopics = await taskTopicModel.findByTaskId(task.id);
+      const topicIds = allTopics
+        .filter(
+          (topic) =>
+            !topic.topicId ||
+            !options.keepOperationId ||
+            topic.operationId !== options.keepOperationId,
+        )
+        .map((topic) => topic.topicId)
+        .filter((topicId): topicId is string => !!topicId);
+
+      if (!(await taskModel.deleteIfStatus(task.id, task.status))) return 'conflict' as const;
+
+      if (topicIds.length > 0) {
+        // trashScope variant: a linked topic already sitting in the recycle
+        // bin must go too, or restoring it later resurrects the sidebar
+        // orphan this cascade exists to eliminate.
+        await new TopicModel(tx, this.userId, this.workspaceId).batchDeleteIncludingTrashed(
+          topicIds,
+        );
+      }
+      return 'deleted' as const;
+    });
+    if (outcome === 'conflict') {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message:
+          'The task changed while it was being deleted (it may have just started). Try again.',
+      });
+    }
+    return task;
   }
 
   /**
@@ -258,7 +447,7 @@ export class TaskService {
     id: string;
     topicId?: string;
   }): Promise<ReviewResult> {
-    const task = await this.resolveOrThrow(input.id);
+    const task = await this.findOrThrow(input.id);
 
     const reviewConfig = this.taskModel.getReviewConfig(task);
     if (!reviewConfig?.enabled) {
@@ -312,124 +501,42 @@ export class TaskService {
    *   - entering `completed`: check parent checkpoint, count sibling
    *     completions, kick off any newly-unlocked downstream tasks.
    */
-  async updateStatus(input: {
-    error?: string;
-    id: string;
-    status: TaskStatus;
-  }): Promise<UpdateStatusResult> {
-    const { id, status, error: errorMsg } = input;
-
-    if (errorMsg && status !== 'failed') {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Task error can only be provided when status is failed.',
-      });
-    }
-
-    const resolved = await this.resolveOrThrow(id);
-
-    if (resolved.status === 'running' && status !== 'running') {
-      const topics = await this.taskTopicModel.findByTaskId(resolved.id);
-      const aiAgentService = new AiAgentService(this.db, this.userId, {
-        workspaceId: this.workspaceId,
-      });
-
-      for (const t of topics) {
-        if (t.status !== 'running' || !t.topicId) continue;
-
-        // Interrupt the remote operation first; if it fails, skip cancellation
-        // to avoid desynchronizing DB state from a still-running operation.
-        if (t.operationId) {
-          try {
-            await aiAgentService.interruptTask({ operationId: t.operationId });
-          } catch (err) {
-            console.error(
-              '[TaskService.updateStatus] failed to interrupt topic %s:',
-              t.topicId,
-              err,
-            );
-            continue;
-          }
-        }
-
-        await this.taskTopicModel.cancelIfRunning(resolved.id, t.topicId);
-      }
-    }
-
-    const extra: Record<string, unknown> = {};
-    if (status === 'running') extra.startedAt = new Date();
-    if (status === 'completed' || status === 'failed' || status === 'canceled')
-      extra.completedAt = new Date();
-    if (errorMsg) extra.error = errorMsg;
-
-    const task = await this.taskModel.updateStatus(resolved.id, status, extra);
-    if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
-
-    // Stamp the schedule run-count window each time the user (re)starts a
-    // scheduled task. The cron dispatcher itself flips a task running →
-    // scheduled on every tick, so we exclude that natural cycle by only
-    // resetting when the previous status was NOT 'running'. This lets
-    // `runScheduleTick` enforce `config.schedule.maxExecutions` by counting
-    // task_topics created since this timestamp.
-    if (
-      status === 'scheduled' &&
-      task.automationMode === 'schedule' &&
-      resolved.status !== 'running'
-    ) {
-      await this.taskModel.updateContext(task.id, {
-        scheduler: { scheduleStartedAt: new Date().toISOString() },
-      });
-    }
-
-    const unlocked: string[] = [];
-    const paused: string[] = [];
-    let allSubtasksDone = false;
-    let checkpointTriggered = false;
-
-    if (status === 'completed') {
-      if (task.parentTaskId) {
-        const parentTask = await this.taskModel.findById(task.parentTaskId);
-        if (parentTask && this.taskModel.shouldPauseAfterComplete(parentTask, task.identifier)) {
-          await this.taskModel.updateStatus(parentTask.id, 'paused');
-          checkpointTriggered = true;
-        }
-        allSubtasksDone = await this.taskModel.areAllSubtasksCompleted(task.parentTaskId);
-      }
-
-      // Unlock blocked tasks and actually kick them off via the runner.
-      const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
-      const cascade = await runner.cascadeOnCompletion(task.id);
-      unlocked.push(...cascade.started);
-      paused.push(...cascade.paused);
-    }
-
-    return {
-      paused,
-      task,
-      unlocked,
-      ...(checkpointTriggered && { checkpointTriggered: true }),
-      ...(allSubtasksDone && { allSubtasksDone: true, parentTaskId: task.parentTaskId }),
-    };
+  async updateStatus(
+    ...args: Parameters<typeof updateStatus> extends [unknown, ...infer A] ? A : never
+  ): Promise<UpdateStatusResult> {
+    return updateStatus(this.deps, ...args);
   }
 
   /**
-   * Compute the subtask execution plan for `idOrIdentifier` without
+   * Transition a parent and every currently unfinished direct subtask as one
+   * database transaction. Completion side effects run only after the whole
+   * family has reached the target status, so dependency edges cannot start a
+   * sibling in the middle of the cascade.
+   */
+  async updateStatusCascade(
+    ...args: Parameters<typeof updateStatusCascade> extends [unknown, ...infer A] ? A : never
+  ): Promise<UpdateStatusCascadeResult> {
+    return updateStatusCascade(this.deps, ...args);
+  }
+
+  /**
+   * Compute the subtask execution plan for `taskId` without
    * actually kicking anything off.
    */
-  async previewSubtaskLayers(idOrIdentifier: string): Promise<SubtaskGraphPlan> {
-    const parent = await this.resolveOrThrow(idOrIdentifier);
+  async previewSubtaskLayers(taskId: string): Promise<SubtaskGraphPlan> {
+    const parent = await this.findOrThrow(taskId);
     const graph = new TaskGraphService(this.db, this.userId, this.workspaceId);
-    const { plan } = await graph.planForParent(parent.id);
-    return plan;
+    const { plan, descendants } = await graph.planForParent(parent.id);
+    return displaySubtaskPlan(plan, descendants);
   }
 
   /**
-   * Kick off the first runnable layer of subtasks under `idOrIdentifier`.
+   * Kick off the first runnable layer of subtasks under `taskId`.
    * Subsequent layers fire automatically through
    * `TaskRunnerService.cascadeOnCompletion` as each upstream finishes.
    */
-  async runReadySubtasks(idOrIdentifier: string): Promise<RunReadySubtasksResult> {
-    const parent = await this.resolveOrThrow(idOrIdentifier);
+  async runReadySubtasks(taskId: string): Promise<RunReadySubtasksResult> {
+    const parent = await this.findOrThrow(taskId);
     const graph = new TaskGraphService(this.db, this.userId, this.workspaceId);
     const { descendants, plan } = await graph.planForParent(parent.id);
 
@@ -437,39 +544,53 @@ export class TaskService {
       return {
         failed: [],
         kickedOff: [],
-        plan,
+        plan: displaySubtaskPlan(plan, descendants),
         skipped: { reason: 'nothing-runnable' as const },
       };
     }
 
     const firstLayer = plan.layers[0];
-    const identifierToId = new Map(descendants.map((d) => [d.identifier, d.id]));
+    const byId = new Map(descendants.map((d) => [d.id, d]));
     const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
 
     const kickedOff: string[] = [];
-    const failed: { error: string; identifier: string }[] = [];
+    const failed: { error: string; id?: string; identifier: string }[] = [];
 
-    const settled = await Promise.allSettled(
-      firstLayer.map(async (identifier) => {
-        const id = identifierToId.get(identifier);
-        if (!id) throw new Error(`Subtask ${identifier} not found`);
-        await runner.runTask({ taskId: id });
-        return identifier;
-      }),
+    const settled = await pMap(
+      firstLayer,
+      async (id): Promise<PromiseSettledResult<string>> => {
+        try {
+          await runner.runTask({ taskId: id });
+          return { status: 'fulfilled', value: id };
+        } catch (reason) {
+          return { reason, status: 'rejected' };
+        }
+      },
+      { concurrency: SUBTASK_KICKOFF_CONCURRENCY },
     );
 
     for (const [index, result] of settled.entries()) {
-      const identifier = firstLayer[index];
+      const id = firstLayer[index];
+      const identifier = byId.get(id)!.identifier;
       if (result.status === 'fulfilled') {
         kickedOff.push(identifier);
       } else {
         const message =
           result.reason instanceof Error ? result.reason.message : 'Failed to start task';
-        failed.push({ error: message, identifier });
+        failed.push({ error: message, id, identifier });
       }
     }
 
-    return { failed, kickedOff, plan };
+    return {
+      failed,
+      kickedOff,
+      kickedOffTasks: settled.flatMap((result, index) =>
+        result.status === 'fulfilled'
+          ? [{ id: firstLayer[index], identifier: byId.get(firstLayer[index])!.identifier }]
+          : [],
+      ),
+      plan: displaySubtaskPlan(plan, descendants),
+    };
   }
 
   private async assertAssigneeAgentBelongsToUser(assigneeAgentId?: string | null): Promise<void> {
@@ -483,377 +604,166 @@ export class TaskService {
     }
   }
 
-  private async resolveOrThrow(idOrIdentifier: string): Promise<TaskItem> {
-    const task = await this.taskModel.resolve(idOrIdentifier);
-    if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
-    return task;
-  }
-
-  async getTaskDetail(taskIdOrIdentifier: string): Promise<TaskDetailData | null> {
-    let task = await this.taskModel.resolve(taskIdOrIdentifier);
-    if (!task) return null;
-
-    // Auto-detect heartbeat timeout for running tasks before assembling detail.
-    if (task.status === 'running' && task.heartbeatTimeout && task.lastHeartbeatAt) {
-      const elapsed = (Date.now() - new Date(task.lastHeartbeatAt).getTime()) / 1000;
-      if (elapsed > task.heartbeatTimeout) {
-        await this.taskModel.updateStatus(task.id, 'paused', { error: 'Heartbeat timeout' });
-        await this.taskTopicModel.timeoutRunning(task.id);
-        task = await this.taskModel.resolve(taskIdOrIdentifier);
-        if (!task) return null;
-      }
-    }
-
-    // Clear stale heartbeat timeout error once the task is no longer running.
-    if (task.status !== 'running' && task.error === 'Heartbeat timeout') {
-      await this.taskModel.update(task.id, { error: null });
-      task = { ...task, error: null };
-    }
-
-    // Brief hidden: the task detail activity feed no longer carries
-    // brief-type activities — the UI converges on Task Run. Briefs are therefore
-    // not fetched/enriched here (see the omitted brief spread below). The brief
-    // lifecycle, model and data are untouched; revert this to bring them back.
-    const [allDescendants, dependencies, directTopics, comments, workspace] = await Promise.all([
-      this.taskModel.findAllDescendants(task.id),
-      this.taskModel.getDependencies(task.id),
-      this.taskTopicModel.findWithHandoff(task.id, TASK_DETAIL_DIRECT_TOPIC_LIMIT).catch(() => []),
-      this.taskModel.getComments(task.id).catch(() => []),
-      this.taskModel.getTreePinnedDocuments(task.id).catch(() => emptyWorkspace),
-    ]);
-
-    const allDescendantIds = allDescendants.map((s) => s.id);
-    const descendantTaskMap = new Map(allDescendants.map((s) => [s.id, s]));
-    const descendantTopics =
-      allDescendantIds.length > 0
-        ? await this.taskTopicModel
-            .findWithHandoffByTaskIds(allDescendantIds, TASK_DETAIL_DESCENDANT_TOPIC_LIMIT)
-            .catch(() => [])
-        : [];
-
-    const topics: TaskTopicActivityRow[] = [
-      ...directTopics,
-      ...descendantTopics.map((topic) => {
-        const sourceTask = descendantTaskMap.get(topic.sourceTaskId);
-        return {
-          ...topic,
-          sourceTaskAssigneeAgentId:
-            topic.sourceTaskAssigneeAgentId ?? sourceTask?.assigneeAgentId ?? null,
-          sourceTaskId: topic.sourceTaskId ?? sourceTask?.id ?? null,
-          sourceTaskIdentifier: topic.sourceTaskIdentifier ?? sourceTask?.identifier ?? null,
-          sourceTaskName: topic.sourceTaskName ?? sourceTask?.name ?? null,
-        };
-      }),
-    ];
-
-    // Derive fileIds from persisted editor_data (single source of truth).
-    const extractCtx = { db: this.db, userId: this.userId, workspaceId: this.workspaceId };
-    const [taskFileIds, ...commentFileIdLists] = await Promise.all([
-      extractFileIdsFromEditorData(task.editorData, extractCtx),
-      ...comments.map((c) => extractFileIdsFromEditorData(c.editorData, extractCtx)),
-    ]);
-    const commentFileIdsMap: Record<string, string[]> = {};
-    comments.forEach((c, i) => {
-      const ids = commentFileIdLists[i];
-      if (ids.length > 0) commentFileIdsMap[c.id] = ids;
-    });
-
-    const allFileIds = [...taskFileIds, ...Object.values(commentFileIdsMap).flat()];
-    const allFileMetadata = await resolveAttachmentMetadata({
-      db: this.db,
-      fileIds: allFileIds,
-      userId: this.userId,
-      workspaceId: this.workspaceId,
-    });
-    const fileById = new Map(allFileMetadata.map((f) => [f.id, f]));
-    const taskFiles = taskFileIds.map((id) => fileById.get(id)).filter((f) => !!f);
-
-    const [allDescendantDeps, allDescendantTopics] =
-      allDescendantIds.length > 0
-        ? await Promise.all([
-            this.taskModel.getDependenciesByTaskIds(allDescendantIds).catch(() => []),
-            this.taskTopicModel.findRunningByTaskIds(allDescendantIds).catch(() => []),
-          ])
-        : [[], []];
-
-    // Build dependency map for all descendants
-    const idToIdentifier = new Map(allDescendants.map((s) => [s.id, s.identifier]));
-    const depMap = new Map<string, string>();
-    for (const dep of allDescendantDeps) {
-      const depId = idToIdentifier.get(dep.dependsOnId);
-      if (depId) depMap.set(dep.taskId, depId);
-    }
-
-    const runningTopicByTaskId = new Map<string, (typeof allDescendantTopics)[number]>();
-    for (const topic of allDescendantTopics) {
-      if (!runningTopicByTaskId.has(topic.taskId)) runningTopicByTaskId.set(topic.taskId, topic);
-    }
-
-    // Build nested subtask tree
-    const childrenMap = new Map<string, typeof allDescendants>();
-    for (const t of allDescendants) {
-      const parentId = t.parentTaskId!;
-      if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
-      childrenMap.get(parentId)!.push(t);
-    }
-
-    // Resolve subtask assignee agents in batch so the UI can render avatars
-    // without depending on client-side agent store state.
-    const subtaskAssigneeIds = [
-      ...new Set(
-        allDescendants.map((s) => s.assigneeAgentId).filter((id): id is string => Boolean(id)),
-      ),
-    ];
-    const subtaskAgents =
-      subtaskAssigneeIds.length > 0
-        ? await this.agentModel.getAgentAvatarsByIds(subtaskAssigneeIds)
-        : [];
-    const subtaskAgentMap = new Map(subtaskAgents.map((a) => [a.id, a]));
-
-    const buildSubtaskTree = (parentId: string): TaskDetailSubtask[] | undefined => {
-      const children = childrenMap.get(parentId);
-      if (!children || children.length === 0) return undefined;
-      return children.map((s) => {
-        const agent = s.assigneeAgentId ? subtaskAgentMap.get(s.assigneeAgentId) : undefined;
-        const runningTopic = runningTopicByTaskId.get(s.id);
-        return {
-          ...(agent
-            ? {
-                assignee: {
-                  avatar: agent.avatar,
-                  backgroundColor: agent.backgroundColor,
-                  id: agent.id,
-                  title: agent.title,
-                },
-              }
-            : {}),
-          automationMode: s.automationMode,
-          blockedBy: depMap.get(s.id),
-          children: buildSubtaskTree(s.id),
-          ...(s.heartbeatInterval != null ? { heartbeat: { interval: s.heartbeatInterval } } : {}),
-          identifier: s.identifier,
-          name: s.name,
-          priority: s.priority,
-          ...(runningTopic?.topicId
-            ? {
-                runningTopic: {
-                  id: runningTopic.topicId,
-                  operationId: runningTopic.operationId ?? null,
-                },
-              }
-            : {}),
-          ...(s.schedulePattern || s.scheduleTimezone
-            ? { schedule: { pattern: s.schedulePattern, timezone: s.scheduleTimezone } }
-            : {}),
-          status: s.status,
-        };
-      });
-    };
-
-    // Root level: always return array (empty [] when no subtasks) for consistent API shape
-    const subtasks = buildSubtaskTree(task.id) ?? [];
-
-    // Resolve dependency task identifiers
-    const depTaskIds = [...new Set(dependencies.map((d) => d.dependsOnId))];
-    const depTasks = await this.taskModel.findByIds(depTaskIds);
-    const depIdToInfo = new Map(
-      depTasks.map((t) => [t.id, { identifier: t.identifier, name: t.name }]),
-    );
-
-    // Resolve parent
-    let parent: { agentId: string | null; identifier: string; name: string | null } | null = null;
-    if (task.parentTaskId) {
-      const parentTask = await this.taskModel.findById(task.parentTaskId);
-      if (parentTask) {
-        parent = {
-          agentId: parentTask.assigneeAgentId,
-          identifier: parentTask.identifier,
-          name: parentTask.name,
-        };
-      }
-    }
-
-    // Build workspace tree (recursive)
-    const buildWorkspaceNodes = (treeNodes: typeof workspace.tree): TaskDetailWorkspaceNode[] =>
-      treeNodes.map((node) => {
-        const doc = workspace.nodeMap[node.id];
-        return {
-          children: node.children.length > 0 ? buildWorkspaceNodes(node.children) : undefined,
-          createdAt: doc?.createdAt ? new Date(doc.createdAt).toISOString() : undefined,
-          documentId: node.id,
-          fileType: doc?.fileType,
-          size: doc?.charCount,
-          sourceTaskId: doc?.sourceTaskId,
-          sourceTaskIdentifier: doc?.sourceTaskIdentifier,
-          title: doc?.title,
-        };
-      });
-
-    const workspaceFolders = buildWorkspaceNodes(workspace.tree);
-
-    // Build activities (merged & sorted desc by time)
-    const toISO = (d: Date | string | null | undefined) =>
-      d ? new Date(d).toISOString() : undefined;
-
-    // Collect unique agent/user IDs for author resolution
-    const agentIds = new Set<string>();
-    const userIds = new Set<string>();
-
-    // Each topic keeps the agent that actually ran it (topics.agentId), so an
-    // earlier run's avatar stays correct after the task is reassigned. Fall back
-    // to the source task assignee, then the current task assignee, only when a
-    // topic has no recorded agent.
-    for (const t of topics) {
-      const topicAgentId = t.agentId ?? t.sourceTaskAssigneeAgentId ?? task.assigneeAgentId;
-      if (topicAgentId) agentIds.add(topicAgentId);
-    }
-    // Comments have authorAgentId or authorUserId
-    for (const c of comments) {
-      if (c.authorAgentId) agentIds.add(c.authorAgentId);
-      if (c.authorUserId) userIds.add(c.authorUserId);
-    }
-    // Creator of the task itself (agent takes precedence over user)
-    if (task.createdByAgentId) agentIds.add(task.createdByAgentId);
-    else if (task.createdByUserId) userIds.add(task.createdByUserId);
-
-    const authorMap = await this.resolveAuthors(agentIds, userIds);
-
-    const creatorId = task.createdByAgentId ?? task.createdByUserId;
-    const createdActivity: TaskDetailActivity | null =
-      task.createdAt && creatorId
-        ? {
-            author: authorMap.get(creatorId),
-            time: toISO(task.createdAt),
-            type: 'created' as const,
-          }
-        : null;
-
-    const activities: TaskDetailActivity[] = [
-      ...(createdActivity ? [createdActivity] : []),
-      ...topics.map((t) => {
-        const handoff = t.handoff as TaskTopicHandoff | null;
-        const topicAgentId = t.agentId ?? t.sourceTaskAssigneeAgentId ?? task.assigneeAgentId;
-        return {
-          author: topicAgentId ? authorMap.get(topicAgentId) : undefined,
-          completedAt: toISO(t.completedAt),
-          // Raw last assistant message of the run, shown alongside
-          // the synthesized summary on the run card.
-          content: handoff?.content,
-          id: t.topicId ?? undefined,
-          operationId: t.operationId ?? null,
-          runningOperation: t.metadata?.runningOperation ?? null,
-          seq: t.seq,
-          status: t.status,
-          summary: handoff?.summary,
-          sourceTaskId: t.sourceTaskId,
-          sourceTaskIdentifier: t.sourceTaskIdentifier,
-          sourceTaskName: t.sourceTaskName,
-          time: toISO(t.createdAt),
-          title: handoff?.title || t.title || UNTITLED_TOPIC_TITLE,
-          type: 'topic' as const,
-        };
-      }),
-      // Brief activities intentionally omitted — see the fetch note above.
-      ...comments.map((c) => {
-        const ids = commentFileIdsMap[c.id] ?? [];
-        const files = ids.map((id) => fileById.get(id)).filter((f) => !!f);
-        return {
-          agentId: c.authorAgentId,
-          author: c.authorAgentId
-            ? authorMap.get(c.authorAgentId)
-            : c.authorUserId
-              ? authorMap.get(c.authorUserId)
-              : undefined,
-          content: c.content,
-          editorData: c.editorData ?? undefined,
-          files: files.length > 0 ? files : undefined,
-          id: c.id,
-          time: toISO(c.createdAt),
-          type: 'comment' as const,
-        };
-      }),
-    ].sort((a, b) => {
-      if (!a.time) return 1;
-      if (!b.time) return -1;
-      return a.time.localeCompare(b.time);
-    });
-
-    const taskConfig = task.config ? (task.config as Record<string, unknown>) : undefined;
-    const scheduleConfig = (taskConfig?.schedule ?? {}) as { maxExecutions?: number | null };
-
-    return {
-      agentId: task.assigneeAgentId,
-      automationMode: task.automationMode ?? null,
-      checkpoint: this.taskModel.getCheckpointConfig(task),
-      config: taskConfig,
-      createdAt: task.createdAt ? new Date(task.createdAt).toISOString() : undefined,
-      createdByUserId: task.createdByUserId,
-      dependencies: dependencies.map((d) => {
-        const info = depIdToInfo.get(d.dependsOnId);
-        return {
-          dependsOn: info?.identifier ?? d.dependsOnId,
-          name: info?.name,
-          type: d.type,
-        };
-      }),
-      description: task.description,
-      editorData: task.editorData ?? undefined,
-      error: task.error,
-      files: taskFiles.length > 0 ? taskFiles : undefined,
-      heartbeat:
-        task.heartbeatInterval || task.heartbeatTimeout || task.lastHeartbeatAt
-          ? {
-              interval: task.heartbeatInterval,
-              lastAt: task.lastHeartbeatAt ? new Date(task.lastHeartbeatAt).toISOString() : null,
-              timeout: task.heartbeatTimeout,
-            }
-          : undefined,
-      identifier: task.identifier,
-      instruction: task.instruction,
-      name: task.name,
-      parent,
-      priority: task.priority,
-      schedule:
-        task.schedulePattern || task.scheduleTimezone || scheduleConfig.maxExecutions != null
-          ? {
-              maxExecutions: scheduleConfig.maxExecutions ?? null,
-              pattern: task.schedulePattern,
-              timezone: task.scheduleTimezone,
-            }
-          : undefined,
-      status: task.status,
-      userId: task.assigneeUserId,
-      verify: this.taskModel.getVerifyConfig(task),
-      visibility: task.visibility,
-      subtasks,
-      activities: activities.length > 0 ? activities : undefined,
-      topicCount: topics.length > 0 ? topics.length : undefined,
-      workspace: workspaceFolders.length > 0 ? workspaceFolders : undefined,
-      workspaceId: task.workspaceId ?? null,
-    };
+  /**
+   * A task can only be assigned to a human who can actually see it: an active
+   * member of the current workspace, or the caller themself in personal mode.
+   * NOT_FOUND (not FORBIDDEN) mirrors the agent-assignee path so membership of
+   * other workspaces is never leaked.
+   */
+  async assertAssigneeUserAssignable(assigneeUserId?: string | null): Promise<void> {
+    await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
   }
 
   /**
-   * Batch-resolve agent and user IDs to author info (name + avatar).
+   * {@link assertAssigneeUserAssignable} inside the caller's transaction,
+   * locking the member row until it commits — for bulk writes that assign
+   * many tasks in one transaction.
    */
-  private async resolveAuthors(
-    agentIds: Set<string>,
-    userIds: Set<string>,
-  ): Promise<Map<string, TaskDetailActivityAuthor>> {
-    const map = new Map<string, TaskDetailActivityAuthor>();
+  async assertAssigneeUserAssignableLocked(
+    tx: LobeChatDatabase,
+    assigneeUserId: string,
+  ): Promise<void> {
+    await this.assertAssigneeUserAssignableWithDatabase(tx, assigneeUserId, true);
+  }
 
-    const [agentRows, userRows] = await Promise.all([
-      this.agentModel.getAgentAvatarsByIds([...agentIds]),
-      UserModel.findByIds(this.db, [...userIds]),
-    ]);
+  private async assertAssigneeUserAssignableWithDatabase(
+    db: LobeChatDatabase,
+    assigneeUserId?: string | null,
+    lockMember = false,
+  ): Promise<void> {
+    if (!assigneeUserId) return;
 
-    for (const a of agentRows) {
-      map.set(a.id, { avatar: a.avatar, id: a.id, name: a.title, type: 'agent' });
+    if (!this.workspaceId) {
+      if (assigneeUserId !== this.userId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'Assignee user not found',
+        });
+      }
+      return;
     }
-    for (const u of userRows) {
-      map.set(u.id, { avatar: u.avatar, id: u.id, name: u.fullName, type: 'user' });
+
+    const memberModel = new WorkspaceMemberModel(db, this.userId);
+    const member = lockMember
+      ? await memberModel.getMemberForUpdate(this.workspaceId, assigneeUserId)
+      : await memberModel.getMember(this.workspaceId, assigneeUserId);
+    if (!member) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Assignee user is not a member of this workspace',
+      });
     }
 
-    return map;
+    const canManageTasks = await new RbacModel(db, assigneeUserId).hasAnyPermission(
+      [...TASK_ASSIGNEE_PERMISSION_CODES],
+      { userId: assigneeUserId, workspaceId: this.workspaceId },
+    );
+    if (!canManageTasks) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: 'Assignee user cannot manage tasks in this workspace',
+      });
+    }
+  }
+
+  private async withAssigneeUserLock<T>(
+    assigneeUserId: string | null | undefined,
+    write: (db: LobeChatDatabase) => Promise<T>,
+  ): Promise<T> {
+    if (!assigneeUserId || !this.workspaceId) {
+      await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+      return write(this.db);
+    }
+
+    return this.db.transaction(async (tx) => {
+      await this.assertAssigneeUserAssignableWithDatabase(tx, assigneeUserId, true);
+      return write(tx);
+    });
+  }
+
+  private async createTaskWithAssigneeLock(
+    createData: CreateTaskInput & { config?: Record<string, unknown>; status?: TaskStatus },
+    insertRetries?: number,
+  ): Promise<TaskItem> {
+    if (!createData.assigneeUserId || !this.workspaceId) {
+      await this.assertAssigneeUserAssignable(createData.assigneeUserId);
+      return insertRetries === undefined
+        ? this.taskModel.create(createData)
+        : this.taskModel.create(createData, { maxRetries: insertRetries });
+    }
+
+    // TaskModel's normal retry loop cannot continue after a unique violation
+    // inside an open Postgres transaction. Retry the whole lock + validation +
+    // insert transaction instead so concurrent identifier allocation remains
+    // safe while the membership row stays serialized with the write.
+    const maxRetries = 5;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await this.withAssigneeUserLock(createData.assigneeUserId, (db) =>
+          new TaskModel(db, this.userId, this.workspaceId).create(createData, { maxRetries: 1 }),
+        );
+      } catch (error) {
+        if (!isTaskIdentifierUniqueViolation(error) || attempt === maxRetries - 1) throw error;
+      }
+    }
+
+    throw new Error('Failed to create task after max retries');
+  }
+
+  async updateTaskWithAssigneeLock(
+    taskId: string,
+    data: Parameters<TaskModel['update']>[1],
+    actor: { agentId?: string | null; userId?: string | null } = {},
+    options: Parameters<TaskModel['updateWithLog']>[3] = {},
+  ): Promise<TaskItem | null> {
+    return this.withAssigneeUserLock(data.assigneeUserId, (db) =>
+      writeKeepingArchivedIdle(db, async (tx) => {
+        const model = new TaskModel(tx, this.userId, this.workspaceId);
+        // A schedule write that carries schedule columns but no status must arm
+        // the run-count window in the SAME write that makes the schedule
+        // dispatchable (vent T-634). The stamp is decided against the row as it
+        // exists right before this update, read under the same row lock the
+        // write itself uses, so a concurrent dispatcher can never observe a
+        // "pattern set, window unstamped" row and replay a grace-window
+        // occurrence. A status transition stamps inside `updateStatus` instead,
+        // so the arming is skipped there to avoid double-stamping.
+        if (
+          !data.status &&
+          (data.automationMode !== undefined || data.schedulePattern !== undefined)
+        ) {
+          await model.lockForUpdate(taskId);
+          const current = await model.findById(taskId);
+          if (current) {
+            // `context` is a whole-column replace: when the caller ships their
+            // own pocket it is the base, otherwise the row as locked. The
+            // schedule columns must NOT use `??`: the tRPC and REST schemas
+            // use an explicit `null` to clear a field, and `??` would swap
+            // that clear for the locked row's old value — the probe would
+            // stamp a window for a row the write is about to disable, and a
+            // later re-enable would preserve that stale stamp and replay an
+            // occurrence from the disabled interval. Only `undefined` means
+            // "not part of this patch".
+            const arming = armScheduleOnColumnWrite({
+              automationMode:
+                data.automationMode !== undefined ? data.automationMode : current.automationMode,
+              context: data.context ?? current.context,
+              schedulePattern:
+                data.schedulePattern !== undefined ? data.schedulePattern : current.schedulePattern,
+              status: current.status,
+            });
+            if (arming.context) data.context = arming.context;
+          }
+        }
+        return model.updateWithLog(taskId, data, actor, options);
+      }),
+    );
+  }
+
+  private async findOrThrow(taskId: string): Promise<TaskItem> {
+    return findTaskOrThrow(this.taskModel, taskId);
+  }
+
+  async getTaskDetail(taskId: string): Promise<TaskDetailData | null> {
+    return new TaskDetailService(this.db, this.userId, this.workspaceId).getTaskDetail(taskId);
   }
 }

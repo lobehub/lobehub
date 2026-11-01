@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
-import type { PermissionItem, RoleItem } from '@/database/schemas';
-
+import type { PublicPermission, PublicRole } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
 
@@ -31,7 +30,7 @@ export const RolesListQuerySchema = z
   .extend(PaginationQuerySchema.shape);
 
 export type RolesListResponse = PaginationQueryResponse<{
-  roles: RoleItem[];
+  roles: PublicRole[];
 }>;
 
 // ==================== Role Permission Types ====================
@@ -43,7 +42,7 @@ export interface RolePermissionsListRequest extends IPaginationQuery {
 }
 
 export type RolePermissionsListResponse = PaginationQueryResponse<{
-  permissions: Partial<PermissionItem>[];
+  permissions: Partial<PublicPermission>[];
 }>;
 
 // ==================== Role CRUD Types ====================

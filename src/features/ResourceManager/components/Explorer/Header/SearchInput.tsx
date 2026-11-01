@@ -1,20 +1,19 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
+import { ActionIcon, Input } from '@lobehub/ui';
 import { useDebounce } from 'ahooks';
-import { Input } from 'antd';
 import { SearchIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 
 const SearchInput = memo(() => {
   const { t } = useTranslation('components');
   const [expanded, setExpanded] = useState(false);
   const [showIcon, setShowIcon] = useState(true);
   const [localQuery, setLocalQuery] = useState('');
-  const inputRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const setSearchQuery = useResourceManagerStore((s) => s.setSearchQuery);
 
   const debouncedQuery = useDebounce(localQuery, { wait: 350 });

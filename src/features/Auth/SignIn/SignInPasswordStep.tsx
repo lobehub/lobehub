@@ -1,6 +1,5 @@
 import { Button, Icon, InputPassword, Text } from '@lobehub/ui';
-import { type FormInstance, type InputRef } from 'antd';
-import { Form } from 'antd';
+import { Form, type FormInstance } from '@lobehub/ui/form';
 import { Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +13,6 @@ export interface SignInPasswordStepProps {
   loading: boolean;
   onBackToEmail: () => void;
   onForgotPassword: () => Promise<void>;
-  onSubmit: (values: { password: string }) => Promise<void>;
 }
 
 export const SignInPasswordStep = ({
@@ -24,10 +22,9 @@ export const SignInPasswordStep = ({
   loading,
   onBackToEmail,
   onForgotPassword,
-  onSubmit,
 }: SignInPasswordStepProps) => {
   const { t } = useTranslation('auth');
-  const passwordInputRef = useRef<InputRef>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     passwordInputRef.current?.focus();
@@ -56,14 +53,13 @@ export const SignInPasswordStep = ({
         </Text>
       }
     >
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={(values) => onSubmit(values as { password: string })}
-      >
-        <Form.Item
+      <Form form={form} gap={0} layout="vertical">
+        <Form.Field
           name="password"
-          rules={[{ message: t('betterAuth.errors.passwordRequired'), required: true }]}
+          style={{ gap: 0, paddingBlock: '0 24px' }}
+          validate={(value: string) =>
+            value ? undefined : t('betterAuth.errors.passwordRequired')
+          }
         >
           <InputPassword
             autoComplete="current-password"
@@ -73,7 +69,7 @@ export const SignInPasswordStep = ({
             size="large"
             style={{ padding: 6 }}
           />
-        </Form.Item>
+        </Form.Field>
         <Button block htmlType="submit" loading={loading} size="large" type="primary">
           {t('betterAuth.signin.submit')}
         </Button>

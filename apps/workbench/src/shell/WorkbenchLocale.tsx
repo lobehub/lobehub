@@ -1,0 +1,79 @@
+'use client';
+
+import dayjs from 'dayjs';
+import { memo, type PropsWithChildren, useEffect, useState } from 'react';
+import { I18nextProvider } from 'react-i18next';
+
+import type { DayjsLocaleGlobEntry } from '@/utils/dayjsLocale';
+import { loadDayjsLocaleModule, normalizeDayjsLocale } from '@/utils/dayjsLocale';
+
+import { createWorkbenchI18n } from './createWorkbenchI18n';
+
+const dayjsLocaleLoaders: Record<string, DayjsLocaleGlobEntry> = {
+  'ar': () => import('dayjs/locale/ar'),
+  'bg': () => import('dayjs/locale/bg'),
+  'de': () => import('dayjs/locale/de'),
+  'en': () => import('dayjs/locale/en'),
+  'es': () => import('dayjs/locale/es'),
+  'fa': () => import('dayjs/locale/fa'),
+  'fr': () => import('dayjs/locale/fr'),
+  'it': () => import('dayjs/locale/it'),
+  'ja': () => import('dayjs/locale/ja'),
+  'ko': () => import('dayjs/locale/ko'),
+  'nl': () => import('dayjs/locale/nl'),
+  'pl': () => import('dayjs/locale/pl'),
+  'pt-br': () => import('dayjs/locale/pt-br'),
+  'ru': () => import('dayjs/locale/ru'),
+  'tr': () => import('dayjs/locale/tr'),
+  'vi': () => import('dayjs/locale/vi'),
+  'zh-cn': () => import('dayjs/locale/zh-cn'),
+  'zh-tw': () => import('dayjs/locale/zh-tw'),
+};
+
+const loadDayjsLocale = async (lang: string) => {
+  const locale = normalizeDayjsLocale(lang);
+  const loader = dayjsLocaleLoaders[locale] ?? dayjsLocaleLoaders.en;
+  const mod = await loadDayjsLocaleModule(loader!);
+
+  return mod.default;
+};
+
+interface WorkbenchLocaleProps extends PropsWithChildren {
+  defaultLang?: string;
+  resources?: Record<string, unknown>;
+}
+
+const WorkbenchLocale = memo<WorkbenchLocaleProps>(({ children, defaultLang, resources }) => {
+  const [i18n] = useState(() => createWorkbenchI18n(defaultLang, resources));
+
+  if (!i18n.instance.isInitialized) void i18n.init({ initAsync: !resources });
+
+  useEffect(() => {
+    if (defaultLang) void i18n.changeLanguage(defaultLang);
+  }, [defaultLang, i18n]);
+
+  useEffect(() => {
+    let localeRequest = 0;
+    const applyLocale = async (nextLang: string) => {
+      const request = ++localeRequest;
+      const nextDayjsLocale = await loadDayjsLocale(nextLang);
+      if (request !== localeRequest) return;
+
+      dayjs.locale(nextDayjsLocale);
+    };
+
+    void applyLocale(i18n.instance.language || defaultLang || 'en-US');
+    i18n.instance.on('languageChanged', applyLocale);
+
+    return () => {
+      localeRequest++;
+      i18n.instance.off('languageChanged', applyLocale);
+    };
+  }, [defaultLang, i18n]);
+
+  return <I18nextProvider i18n={i18n.instance}>{children}</I18nextProvider>;
+});
+
+WorkbenchLocale.displayName = 'WorkbenchLocale';
+
+export default WorkbenchLocale;

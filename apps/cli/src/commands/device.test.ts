@@ -14,6 +14,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       removeWorkspaceDevice: { mutate: vi.fn() },
       status: { query: vi.fn() },
     },
+    workspace: { list: { query: vi.fn() } },
   },
 }));
 
@@ -26,10 +27,6 @@ const { mockConfirm } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), heartbeat: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
 vi.mock('../utils/format', async (importOriginal) => {
   const actual = await importOriginal<typeof FormatUtils>();
   return { ...actual, confirm: mockConfirm };
@@ -44,6 +41,9 @@ describe('device command', () => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     mockConfirm.mockReset();
+    mockTrpcClient.workspace.list.query.mockResolvedValue([
+      { id: 'ws-abc', name: 'Acme', slug: 'acme' },
+    ]);
     for (const method of Object.values(mockTrpcClient.device)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
@@ -69,6 +69,53 @@ describe('device command', () => {
     registerDeviceCommand(program);
     return program;
   }
+
+  describe('list', () => {
+    it('should list under the personal context without --workspace', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'device', 'list', '--json']);
+
+      expect(mockGetTrpcClient).toHaveBeenCalledWith(undefined);
+      const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0]);
+      expect(printed.map((d: any) => d.deviceId)).toEqual(['d1', 'd2', '8040798a77ae']);
+    });
+
+    it('should filter to workspace-scope devices when --workspace is set', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'p1', scope: 'personal' },
+        { deviceId: 'ws1', scope: 'workspace' },
+        { deviceId: 'ws2', scope: 'workspace' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'device',
+        'list',
+        '--json',
+        '--workspace',
+        'ws-abc',
+      ]);
+
+      expect(mockGetTrpcClient).toHaveBeenCalledWith('ws-abc');
+      const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0]);
+      expect(printed.map((d: any) => d.deviceId)).toEqual(['ws1', 'ws2']);
+    });
+
+    it('should keep the personal+workspace union when the context is ambient (no flag)', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'p1', scope: 'personal' },
+        { deviceId: 'ws1', scope: 'workspace' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'device', 'list', '--json']);
+
+      const printed = JSON.parse(consoleSpy.mock.calls.at(-1)![0]);
+      expect(printed.map((d: any) => d.deviceId)).toEqual(['p1', 'ws1']);
+    });
+  });
 
   describe('delete', () => {
     it('should remove a device with --yes (no prompt)', async () => {
@@ -148,6 +195,30 @@ describe('device command', () => {
         deviceId: 'ws1',
       });
       expect(mockTrpcClient.device.removeDevice.mutate).not.toHaveBeenCalled();
+    });
+
+    it('should resolve a --workspace slug to its id before acting', async () => {
+      mockTrpcClient.device.listDevices.query.mockResolvedValue([
+        { deviceId: 'ws1', scope: 'workspace' },
+      ]);
+      mockTrpcClient.device.removeWorkspaceDevice.mutate.mockResolvedValue({ success: true });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'device',
+        'delete',
+        'ws1',
+        '--yes',
+        '--workspace',
+        'acme',
+      ]);
+
+      expect(mockGetTrpcClient).toHaveBeenCalledWith('ws-abc');
+      expect(mockTrpcClient.device.removeWorkspaceDevice.mutate).toHaveBeenCalledWith({
+        deviceId: 'ws1',
+      });
     });
 
     it('should error + exit(1) without deleting when the device is not in the list', async () => {

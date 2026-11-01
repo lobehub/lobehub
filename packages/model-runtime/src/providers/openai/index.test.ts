@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
 import * as getModelPricingModule from '../../utils/getModelPricing';
 import officalOpenAIModels from './fixtures/openai-models.json';
@@ -57,6 +58,27 @@ describe('LobeOpenAI', () => {
 
       // Assert
       expect(result).toBeInstanceOf(Response);
+    });
+
+    it('should abort locally when the prompt exceeds the OpenAI model context window', async () => {
+      const mockCreateMethod = vi.spyOn(instance['client'].chat.completions, 'create');
+      const hugeContent = 'lorem ipsum dolor '.repeat(150_000);
+
+      try {
+        await instance.chat({
+          messages: [{ content: hugeContent, role: 'user' }],
+          model: 'gpt-4o',
+          temperature: 0,
+        });
+        expect.fail('expected chat to reject');
+      } catch (error) {
+        expect((error as any).errorType).toBe(AgentRuntimeErrorType.ExceededContextWindow);
+        expect((error as any).error.type).toBe('context_exceeded_pre_flight');
+        expect((error as any).error.model).toBe('gpt-4o');
+        expect((error as any).error.ctx).toBe(128_000);
+      }
+
+      expect(mockCreateMethod).not.toHaveBeenCalled();
     });
 
     describe('Error', () => {
@@ -260,9 +282,62 @@ describe('LobeOpenAI', () => {
       expect(textEmbeddingAda).toBeDefined();
       expect(textEmbeddingAda?.type).toBe('embedding');
     });
+
+    it('lists a decision card next to a chat model served by the Decisions API', async () => {
+      (instance['client'].models.list as Mock).mockResolvedValue({
+        data: [{ created: 1_780_000_000, id: 'gpt-6-luna', object: 'model', owned_by: 'system' }],
+      });
+
+      const list = await instance.models();
+
+      expect(list.find((model) => model.id === 'gpt-6-luna')?.type).toBe('chat');
+      expect(list.find((model) => model.id === 'gpt-6-luna:decision')).toMatchObject({
+        displayName: 'GPT-6 Luna Decisions',
+        type: 'decision',
+      });
+    });
   });
 
   describe('chatCompletion.handlePayload', () => {
+    it('should force raw audio input through Chat Completions and send input_audio', async () => {
+      const wavBase64 = 'UklGRjAwMDBXQVZFZm10IA==';
+
+      await instance.chat({
+        enabledSearch: true,
+        messages: [
+          {
+            content: [
+              {
+                audio_url: {
+                  mimeType: 'audio/wav',
+                  url: `data:audio/wav;base64,${wavBase64}`,
+                },
+                type: 'audio_url',
+              },
+            ],
+            role: 'user',
+          },
+        ],
+        model: 'o1-pro',
+        temperature: 0.7,
+      });
+
+      expect(instance['client'].responses.create).not.toHaveBeenCalled();
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledTimes(1);
+      const createCall = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+      expect(createCall.messages).toEqual([
+        {
+          content: [
+            {
+              input_audio: { data: wavBase64, format: 'wav' },
+              type: 'input_audio',
+            },
+          ],
+          role: 'user',
+        },
+      ]);
+    });
+
     it('should use responses API for responsesAPIModels without enabledSearch', async () => {
       const payload = {
         messages: [{ content: 'Hello', role: 'user' as const }],
@@ -290,6 +365,40 @@ describe('LobeOpenAI', () => {
       expect(instance['client'].responses.create).toHaveBeenCalled();
       const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
       expect(createCall.model).toBe('gpt-5.6-sol');
+    });
+
+    it('should use responses API for GPT-6 family models', async () => {
+      const payload = {
+        messages: [{ content: 'Hello', role: 'user' as const }],
+        model: 'gpt-6-astra',
+        temperature: 0.7,
+      };
+
+      await instance.chat(payload);
+
+      expect(instance['client'].responses.create).toHaveBeenCalled();
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall.model).toBe('gpt-6-astra');
+    });
+
+    it('should prune sampling parameters for Codex-prefixed GPT-5.6 models', async () => {
+      const payload = {
+        frequency_penalty: 0.5,
+        messages: [{ content: 'Hello', role: 'user' as const }],
+        model: 'codex/gpt-5.6-luna',
+        presence_penalty: 0.3,
+        temperature: 0.7,
+        top_p: 0.9,
+      };
+
+      await instance.chat(payload);
+
+      expect(instance['client'].responses.create).toHaveBeenCalled();
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall.frequency_penalty).toBeUndefined();
+      expect(createCall.presence_penalty).toBeUndefined();
+      expect(createCall.temperature).toBeUndefined();
+      expect(createCall.top_p).toBeUndefined();
     });
 
     it('should use responses API when enabledSearch is true', async () => {
@@ -378,6 +487,27 @@ describe('LobeOpenAI', () => {
       expect(createCall.frequency_penalty).toBeUndefined();
       expect(createCall.presence_penalty).toBeUndefined();
       expect(createCall.temperature).toBeUndefined();
+      expect(createCall.top_p).toBeUndefined();
+    });
+
+    it('should prune the params GPT-6 Astra rejects and keep xhigh reasoning effort', async () => {
+      const payload = {
+        messages: [{ content: 'Hello', role: 'user' as const }],
+        model: 'gpt-6-astra',
+        reasoning_effort: 'xhigh' as const,
+        temperature: 0.7,
+        top_p: 0.9,
+      };
+
+      await instance.chat(payload);
+
+      const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
+      expect(createCall).toMatchObject({
+        model: 'gpt-6-astra',
+        reasoning: { effort: 'xhigh', summary: 'auto' },
+      });
+      expect(createCall.temperature).toBeUndefined();
+      expect(createCall.top_logprobs).toBeUndefined();
       expect(createCall.top_p).toBeUndefined();
     });
 

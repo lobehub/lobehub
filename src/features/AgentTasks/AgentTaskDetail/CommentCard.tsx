@@ -1,24 +1,15 @@
 import type { TaskDetailActivity } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
 import { LexicalRenderer } from '@lobehub/editor/renderer';
-import {
-  ActionIcon,
-  Avatar,
-  Block,
-  type DropdownItem,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Markdown,
-  Text,
-} from '@lobehub/ui';
-import { Button, confirmModal } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, type DropdownItem, DropdownMenu, Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, confirmModal, cssVar, Text } from '@lobehub/ui';
 import { MessageCircle, MoreHorizontal, Pencil, Trash } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
+import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
+import { richTextImageRenderers } from '@/features/Conversation/Messages/User/components/richTextImageRenderers';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { seedAttachments } from '@/features/EditorCanvas/attachmentRegistry';
 import {
@@ -26,15 +17,20 @@ import {
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { LinearFileCard } from '@/features/EditorCanvas/LinearFilePlugin';
+import { useWorkspaceCommentMentionOption } from '@/features/Portal/TopicComments/useWorkspaceCommentMentionOption';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
+import { isOptimisticActivityId } from '@/store/task/slices/detail/optimisticActivity';
 
 import { styles } from '../shared/style';
+import { commentMarkdownProps } from './commentMarkdown';
+import { resolveMarkdownSnapshotContent } from './commentRenderSource';
 
 // Keep saved comments visually consistent with the editor: render FileNodes
 // as the Linear-style card on its own row instead of the default inline pill.
 const FILE_WRAPPER_STYLE = { marginBlock: 8 };
 const rendererOverrides = {
+  ...richTextImageRenderers,
   file: (node: Record<string, any>) => (
     <div style={FILE_WRAPPER_STYLE}>
       <LinearFileCard node={node as Parameters<typeof LinearFileCard>[0]['node']} />
@@ -54,6 +50,7 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const editor = useEditor();
+  const mentionOption = useWorkspaceCommentMentionOption();
 
   const { text: relTime, title: relTimeTitle } = useActivityTime(activity.time);
   const content = activity.content || t('taskDetail.activities.fallback.comment');
@@ -66,14 +63,27 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
     }),
     [activity.content, activity.editorData],
   );
+  const snapshotMarkdown = useMemo(
+    () =>
+      resolveMarkdownSnapshotContent({
+        content: activity.content,
+        editorData: activity.editorData,
+      }),
+    [activity.content, activity.editorData],
+  );
+  const renderSnapshot = Boolean(activity.editorData) && snapshotMarkdown === undefined;
+
+  useEffect(() => {
+    if (activity.files && activity.files.length > 0) {
+      seedAttachments(
+        activity.files.map((f) => ({ downloadUrl: f.downloadUrl, id: f.id, url: f.url })),
+      );
+    }
+  }, [activity.files]);
 
   const handleEdit = useCallback(() => {
-    // Seed URL→fileId map so attachments serialize back to fileIds on save.
-    if (activity.files && activity.files.length > 0) {
-      seedAttachments(activity.files.map((f) => ({ id: f.id, url: f.url })));
-    }
     setIsEditing(true);
-  }, [activity.files]);
+  }, []);
 
   const handleCancel = useCallback(() => {
     setIsEditing(false);
@@ -160,13 +170,16 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
 
       {isEditing && (
         <>
-          <EditorCanvas
-            editor={editor}
-            editorData={editorData}
-            entityId={commentId}
-            floatingToolbar={false}
-            style={{ paddingBottom: 4 }}
-          />
+          <div className={mentionPlainClassName}>
+            <EditorCanvas
+              editor={editor}
+              editorData={editorData}
+              entityId={commentId}
+              floatingToolbar={false}
+              mentionOption={mentionOption}
+              style={{ paddingBottom: 4 }}
+            />
+          </div>
           <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
             <AttachmentUploadButton onFiles={handleAttach} />
             <Flexbox horizontal gap={8}>
@@ -180,20 +193,21 @@ const CommentCard = memo<CommentCardProps>(({ activity }) => {
           </Flexbox>
         </>
       )}
-      {!isEditing && Boolean(activity.editorData) && (
+      {!isEditing && renderSnapshot && (
         <LexicalRenderer
+          className={mentionPlainClassName}
           overrides={rendererOverrides}
           value={activity.editorData as Parameters<typeof LexicalRenderer>[0]['value']}
           variant={'chat'}
         />
       )}
-      {!isEditing && !activity.editorData && (
-        <Markdown fontSize={14} variant={'chat'}>
-          {content}
+      {!isEditing && !renderSnapshot && (
+        <Markdown fontSize={14} variant={'chat'} {...commentMarkdownProps}>
+          {snapshotMarkdown ?? content}
         </Markdown>
       )}
 
-      {!isEditing && commentId && (
+      {!isEditing && commentId && !isOptimisticActivityId(commentId) && (
         <div className={`${styles.commentActions} comment-actions`}>
           <DropdownMenu items={menuItems}>
             <ActionIcon icon={MoreHorizontal} size={'small'} />

@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AiAgentService } from '../index';
 
 // Use vi.hoisted to ensure mock functions are available before vi.mock runs
-const { mockMessageCreate } = vi.hoisted(() => ({
-  mockMessageCreate: vi.fn(),
-}));
+const { mockMessageCreate, mockTopicAppendRunningOperationChild, mockTopicUpdateMetadata } =
+  vi.hoisted(() => ({
+    mockMessageCreate: vi.fn(),
+    mockTopicAppendRunningOperationChild: vi.fn(),
+    mockTopicUpdateMetadata: vi.fn(),
+  }));
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -16,112 +19,139 @@ vi.mock('@/libs/trusted-client', () => ({
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn().mockImplementation(() => ({
-    create: mockMessageCreate,
-    query: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockResolvedValue({}),
-  })),
+  MessageModel: vi.fn().mockImplementation(function () {
+    return {
+      create: mockMessageCreate,
+      getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
+      getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    };
+  }),
 }));
 
 // Mock AgentModel
 vi.mock('@/database/models/agent', () => ({
-  AgentModel: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      files: [],
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-    queryAgents: vi.fn().mockResolvedValue([]),
-  })),
+  AgentModel: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+      queryAgents: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock AgentService
 vi.mock('@/server/services/agent', () => ({
-  AgentService: vi.fn().mockImplementation(() => ({
-    getAgentConfig: vi.fn().mockResolvedValue({
-      chatConfig: {},
-      files: [],
-      id: 'agent-1',
-      knowledgeBases: [],
-      model: 'gpt-4',
-      plugins: [],
-      provider: 'openai',
-      systemRole: 'You are a helpful assistant',
-    }),
-  })),
+  AgentService: vi.fn().mockImplementation(function () {
+    return {
+      getAgentConfig: vi.fn().mockResolvedValue({
+        chatConfig: {},
+        files: [],
+        id: 'agent-1',
+        knowledgeBases: [],
+        model: 'gpt-4',
+        plugins: [],
+        provider: 'openai',
+        systemRole: 'You are a helpful assistant',
+      }),
+    };
+  }),
 }));
 
 // Mock PluginModel
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({
-    query: vi.fn().mockResolvedValue([]),
-  })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return {
+      query: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock TopicModel
 vi.mock('@/database/models/topic', () => ({
-  TopicModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
-    findById: vi.fn().mockResolvedValue(undefined),
-    updateMetadata: vi.fn().mockResolvedValue(undefined),
-  })),
+  TopicModel: vi.fn().mockImplementation(function () {
+    return {
+      appendRunningOperationChild: mockTopicAppendRunningOperationChild,
+      releaseTaskCallbackReservation: vi.fn().mockResolvedValue(undefined),
+      tryReserveTaskCallback: vi.fn().mockResolvedValue(true),
+      create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
+      findById: vi.fn().mockResolvedValue(undefined),
+      updateMetadata: mockTopicUpdateMetadata,
+    };
+  }),
 }));
 
 // Mock ThreadModel
 vi.mock('@/database/models/thread', () => ({
-  ThreadModel: vi.fn().mockImplementation(() => ({
-    create: vi.fn(),
-    findById: vi.fn(),
-    update: vi.fn(),
-  })),
+  ThreadModel: vi.fn().mockImplementation(function () {
+    return {
+      create: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+  }),
 }));
 
 // Mock ChatGroupModel — execAgent resolves the operation's group context when
 // appContext.groupId is set (SubAgent task scenario). An empty roster makes
 // buildGroupAgentContext return undefined, so the run proceeds without a group.
 vi.mock('@/database/models/chatGroup', () => ({
-  ChatGroupModel: vi.fn().mockImplementation(() => ({
-    findById: vi.fn().mockResolvedValue(undefined),
-    getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
-  })),
+  ChatGroupModel: vi.fn().mockImplementation(function () {
+    return {
+      findById: vi.fn().mockResolvedValue(undefined),
+      getGroupAgentsWithMeta: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock AgentRuntimeService
 vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    createOperation: vi.fn().mockResolvedValue({
-      autoStarted: true,
-      messageId: 'queue-msg-1',
-      operationId: 'op-123',
-      success: true,
-    }),
-  })),
+  AgentRuntimeService: vi.fn().mockImplementation(function () {
+    return {
+      createOperation: vi.fn().mockResolvedValue({
+        autoStarted: true,
+        messageId: 'queue-msg-1',
+        operationId: 'op-123',
+        success: true,
+      }),
+    };
+  }),
 }));
 
 // Mock MarketService (for getLobehubSkillManifests)
 vi.mock('@/server/services/market', () => ({
-  MarketService: vi.fn().mockImplementation(() => ({
-    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
-  })),
+  MarketService: vi.fn().mockImplementation(function () {
+    return {
+      getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock ComposioService (for getComposioManifests)
 vi.mock('@/server/services/composio', () => ({
-  ComposioService: vi.fn().mockImplementation(() => ({
-    getComposioManifests: vi.fn().mockResolvedValue([]),
-  })),
+  ComposioService: vi.fn().mockImplementation(function () {
+    return {
+      getComposioManifests: vi.fn().mockResolvedValue([]),
+    };
+  }),
 }));
 
 // Mock FileService
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    uploadFromUrl: vi.fn(),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      uploadFromUrl: vi.fn(),
+    };
+  }),
 }));
 
 // Mock Mecha modules
@@ -170,6 +200,9 @@ describe('AiAgentService.execAgent - threadId handling', () => {
     // Explicitly clear the shared mock to prevent state pollution between tests
     mockMessageCreate.mockClear();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockTopicAppendRunningOperationChild.mockReset().mockResolvedValue(true);
+    mockTopicUpdateMetadata.mockClear();
+    mockTopicUpdateMetadata.mockResolvedValue(undefined);
 
     service = new AiAgentService(mockDb, userId);
   });
@@ -223,6 +256,77 @@ describe('AiAgentService.execAgent - threadId handling', () => {
         threadId: 'thread-123',
         topicId: 'topic-1',
       });
+    });
+  });
+
+  describe('topic running mark', () => {
+    const runningMarkCalls = () =>
+      mockTopicUpdateMetadata.mock.calls.filter((call) => 'runningOperation' in (call[1] ?? {}));
+
+    it('claims the mark for a main-conversation run', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        prompt: 'Test prompt',
+      });
+
+      expect(runningMarkCalls()).toHaveLength(1);
+      expect(runningMarkCalls()[0][1].runningOperation).toMatchObject({
+        assistantMessageId: 'msg-1',
+        operationId: expect.stringContaining('op_'),
+      });
+    });
+
+    it('does not trust a public member role to suppress the marker', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { orchestrationRole: 'member', topicId: 'topic-1' },
+        prompt: 'Test prompt',
+      });
+
+      expect(runningMarkCalls()).toHaveLength(1);
+    });
+
+    it('does not claim the mark for an isolation-thread run', async () => {
+      // A callAgent / callSubAgent / group-member child executes on the PARENT's
+      // topic. Claiming the mark pointed every client reconnect at the child's
+      // thread stream, and clearing it on the child's (much earlier) finish left
+      // the still-running parent with no reconnect anchor at all — the run drawer
+      // then never opened a gateway WebSocket for the rest of the run.
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { isolationThread: true, threadId: 'thread-123', topicId: 'topic-1' },
+        prompt: 'Test prompt',
+      });
+
+      expect(runningMarkCalls()).toHaveLength(0);
+    });
+
+    it('registers an owned isolation-thread run as a child marker', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: {
+          isolationThread: true,
+          orchestrationRole: 'member',
+          threadId: 'thread-123',
+          topicId: 'topic-1',
+        },
+        parentOperationId: 'parent-operation',
+        prompt: 'Test prompt',
+        topicStartOwnerOperationId: 'parent-operation',
+      } as any);
+
+      expect(mockTopicAppendRunningOperationChild).toHaveBeenCalledWith(
+        'topic-1',
+        'parent-operation',
+        expect.objectContaining({
+          assistantMessageId: 'msg-1',
+          operationId: expect.stringContaining('op_'),
+          orchestrationRole: 'member',
+          threadId: 'thread-123',
+        }),
+      );
+      expect(runningMarkCalls()).toHaveLength(0);
     });
   });
 

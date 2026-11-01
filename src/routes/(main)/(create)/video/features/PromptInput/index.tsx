@@ -1,15 +1,23 @@
 'use client';
 
-import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, InputNumber, SliderWithInput, Text } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
-import { Divider, Switch } from 'antd';
+import {
+  ActionIcon,
+  Divider,
+  Flexbox,
+  InputNumber,
+  Segmented,
+  SliderWithInput,
+  Switch,
+  Tabs,
+  Text,
+} from '@lobehub/ui';
 import { Clock3, Dices } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { type KeyboardEvent, memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import VideoFreeQuotaInfo from '@/business/client/features/VideoFreeQuotaInfo';
 import { loginRequired } from '@/components/Error/loginRequiredNotification';
+import { ModelIcon } from '@/components/LobeIcons';
 import Action from '@/features/ChatInput/ActionBar/components/Action';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
@@ -20,9 +28,12 @@ import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
   GenerationMediaModeSegment,
+  GenerationModelNotice,
+  GenerationPromptBlockedNotice,
   GenerationPromptInput,
   GenerationVisibilitySelector,
   InlineVideoFrames,
+  useVideoGenerationModelNotice,
 } from '@/routes/(main)/(create)/features/GenerationInput';
 import { AspectRatioSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel';
 import Select from '@/routes/(main)/(create)/image/features/ConfigPanel/components/Select';
@@ -33,12 +44,17 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 import { useVideoStore } from '@/store/video';
 import {
   createVideoSelectors,
+  generationBatchSelectors,
   videoGenerationConfigSelectors,
   videoGenerationTopicSelectors,
 } from '@/store/video/selectors';
 import { useVideoGenerationConfigParam } from '@/store/video/slices/generationConfig/hooks';
+import type { VideoImageInputMode } from '@/store/video/slices/generationConfig/imageInputMode';
+import type { VideoGenerationAsset } from '@/types/generation';
 import { generateUniqueSeeds } from '@/utils/number';
 
+import { revealVideoGeneration, useVideoVersionMap } from '../GenerationFeed/videoVersion';
+import EditingVideoHeader from './EditingVideoHeader';
 import PromptTitle from './Title';
 import { useVideoReferenceUpload } from './useVideoReferenceUpload';
 
@@ -48,6 +64,7 @@ interface PromptInputProps {
 }
 
 const isSupportedParamSelector = videoGenerationConfigSelectors.isSupportedParam;
+const isImageInputSlotEnabledSelector = videoGenerationConfigSelectors.isImageInputSlotEnabled;
 
 const AspectRatioItem = memo(() => {
   const { allowed: canCreate } = usePermission('create_content');
@@ -246,7 +263,11 @@ const PromptExtendItem = memo(() => {
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('promptExtend');
 
   const options =
-    enumValues?.map((item) => ({ disabled: !canCreate, key: item, label: item })) ?? [];
+    enumValues?.map((item) => ({
+      disabled: !canCreate,
+      key: item,
+      label: t(`config.promptExtend.options.${item}`, { defaultValue: item }),
+    })) ?? [];
 
   if (options.length > 0) {
     return (
@@ -303,6 +324,20 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     useVideoGenerationConfigParam('endImageUrl');
   const isCreating = useVideoStore(createVideoSelectors.isCreating);
   const createVideo = useVideoStore((s) => s.createVideo);
+  const cancelEditingVideo = useVideoStore((s) => s.cancelEditingVideo);
+  const blockedPrompt = useVideoStore(createVideoSelectors.blockedPrompt);
+  const dismissBlockedPrompt = useVideoStore((s) => s.dismissBlockedPrompt);
+  // Editing the prompt dismisses the notice: it only describes the submitted text.
+  const isPromptBlocked = blockedPrompt !== undefined && blockedPrompt === value;
+  const editingGenerationId = useVideoStore(createVideoSelectors.editingGenerationId);
+  const currentGenerationBatches = useVideoStore(generationBatchSelectors.currentGenerationBatches);
+  const editingBatch = useMemo(() => {
+    if (!editingGenerationId) return undefined;
+
+    return currentGenerationBatches.find((batch) =>
+      batch.generations.some((generation) => generation.id === editingGenerationId),
+    );
+  }, [currentGenerationBatches, editingGenerationId]);
   const setModelAndProviderOnSelect = useVideoStore((s) => s.setModelAndProviderOnSelect);
   const activeGenerationTopicId = useVideoStore(
     videoGenerationTopicSelectors.activeGenerationTopicId,
@@ -319,10 +354,17 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const currentModel = useVideoStore(videoGenerationConfigSelectors.model);
   const currentProvider = useVideoStore(videoGenerationConfigSelectors.provider);
   const enabledVideoModelList = useAiInfraStore(aiProviderSelectors.enabledVideoModelList);
+  const isModelConfigReady = useAiInfraStore((s) =>
+    aiProviderSelectors.isInitAiProviderRuntimeState(s),
+  );
+  const { notice: modelNotice, isModelUnavailable } = useVideoGenerationModelNotice();
   const isInit = useVideoStore((s) => s.isInit);
-  const isSupportImageUrl = useVideoStore(isSupportedParamSelector('imageUrl'));
-  const isSupportImageUrls = useVideoStore(isSupportedParamSelector('imageUrls'));
-  const isSupportEndImageUrl = useVideoStore(isSupportedParamSelector('endImageUrl'));
+  const isSupportImageUrl = useVideoStore(isImageInputSlotEnabledSelector('imageUrl'));
+  const isSupportImageUrls = useVideoStore(isImageInputSlotEnabledSelector('imageUrls'));
+  const isSupportEndImageUrl = useVideoStore(isImageInputSlotEnabledSelector('endImageUrl'));
+  const hasImageInputMode = useVideoStore(videoGenerationConfigSelectors.hasImageInputMode);
+  const imageInputMode = useVideoStore(videoGenerationConfigSelectors.imageInputMode);
+  const setImageInputMode = useVideoStore((s) => s.setImageInputMode);
   const isSupportAspectRatio = useVideoStore(isSupportedParamSelector('aspectRatio'));
   const isSupportResolution = useVideoStore(isSupportedParamSelector('resolution'));
   const isSupportSize = useVideoStore(isSupportedParamSelector('size'));
@@ -336,7 +378,28 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const { value: duration } = useVideoGenerationConfigParam('duration');
   const { handleUploadFiles, uploadingPreviews } = useVideoReferenceUpload();
+  const versionMap = useVideoVersionMap();
+  const inputWrapperRef = useRef<HTMLDivElement>(null);
   useFetchAiVideoConfig();
+
+  // Entering edit mode starts from the feed card, so move focus to the input to
+  // let users type the change right away.
+  useEffect(() => {
+    if (!editingGenerationId) return;
+
+    inputWrapperRef.current?.querySelector('textarea')?.focus();
+  }, [editingGenerationId]);
+
+  const handleEditingKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (!editingGenerationId || e.key !== 'Escape' || e.nativeEvent.isComposing) return;
+      if (!(e.target instanceof HTMLTextAreaElement)) return;
+
+      e.preventDefault();
+      cancelEditingVideo();
+    },
+    [cancelEditingVideo, editingGenerationId],
+  );
 
   // Read query parameters
   const [promptParam, setPromptParam] = useQueryState('prompt');
@@ -348,7 +411,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     if (!canCreate) return;
 
     if (!isLogin) {
-      loginRequired.redirect({ timeout: 2000 });
+      loginRequired.redirect();
       return;
     }
 
@@ -375,6 +438,22 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   // Auto-fill and auto-send when prompt query parameter is present
   useEffect(() => {
     if (promptParam && !hasProcessedPrompt.current && isLogin && canCreate) {
+      // Bail WITHOUT consuming the param while the model deep-link is still settling
+      // or the provider runtime config isn't ready — otherwise a valid deep link
+      // permanently skips auto-generate (see lobehub/lobehub#17400):
+      // 1. `?model=` still present: the model effect hasn't applied it yet, so
+      //    `isModelUnavailable` in this closure is stale (from the pre-model render).
+      //    Consuming now would set `hasProcessedPrompt` / clear the param before the
+      //    model resolves. Instead we wait; once the model effect clears `modelParam`
+      //    this effect re-runs with a fresh `isModelUnavailable` for the applied model.
+      // 2. Config not ready: the resolver returns undefined (so `isModelUnavailable`
+      //    is `false`) while the aiProvider runtime state is still loading, which would
+      //    auto-fire against a possibly-disabled provider. Wait until it settles.
+      // 3. Generation config not initialized: before `initializeVideoConfig` finishes,
+      //    the selection is still the hard-coded default, so availability would be
+      //    evaluated against a model the init step is about to replace.
+      if (modelParam || !isModelConfigReady || !isInit) return;
+
       const decodedPrompt = decodeURIComponent(promptParam);
 
       setValue(decodedPrompt);
@@ -382,6 +461,11 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       hasProcessedPrompt.current = true;
 
       setPromptParam(null);
+
+      // Config is ready and the selected model is genuinely unavailable — this path
+      // bypasses the generate button, so without the guard it would fire a request
+      // against a disabled provider (see lobehub/lobehub#17400).
+      if (isModelUnavailable) return;
 
       const timeoutId = window.setTimeout(async () => {
         await createVideo();
@@ -391,7 +475,18 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, canCreate, setValue, setPromptParam, createVideo]);
+  }, [
+    promptParam,
+    modelParam,
+    isLogin,
+    canCreate,
+    isModelConfigReady,
+    isInit,
+    isModelUnavailable,
+    setValue,
+    setPromptParam,
+    createVideo,
+  ]);
 
   const showInlineFrames = isSupportImageUrl || isSupportImageUrls || isSupportEndImageUrl;
   const framePreviewUrls = useMemo(
@@ -399,6 +494,17 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
     [imageUrl, imageUrls],
   );
   const hasRefImages = framePreviewUrls.length > 0 || Boolean(endImageUrl);
+  const isReferenceMode = hasImageInputMode && imageInputMode === 'reference';
+  /**
+   * Frame-mode requests of models with both frames and references (MiniMax H3) take the output
+   * aspect ratio from the frames, so the selector would have no effect.
+   */
+  const aspectRatioFollowsFrames =
+    hasImageInputMode && imageInputMode === 'frames' && (!!imageUrl || !!endImageUrl);
+  const editingGeneration = editingBatch?.generations.find(
+    (generation) => generation.id === editingGenerationId,
+  );
+  const editingAsset = editingGeneration?.asset as VideoGenerationAsset | null | undefined;
   const displayVisibility = activeGenerationTopic
     ? activeGenerationTopic.visibility === 'private'
       ? 'private'
@@ -473,159 +579,237 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   return (
     <Flexbox gap={32} width={'100%'}>
       {showTitle && <PromptTitle />}
+      <GenerationModelNotice notice={modelNotice} ns={'video'} />
       <Flexbox gap={8}>
-        <GenerationPromptInput
-          disableGenerate={!isInit}
-          disabled={!canCreate}
-          generateLabel={t('generation.actions.generate')}
-          generatingLabel={t('generation.status.generating')}
-          isCreating={isCreating}
-          isDarkMode={isDarkMode}
-          value={value}
-          inlineContent={
-            showInlineFrames ? (
-              <InlineVideoFrames
-                endImageUrl={endImageUrl}
-                imageUrl={imageUrl}
-                imageUrls={imageUrls}
-                isSupportEndImage={isSupportEndImageUrl}
-                maxCount={maxCount}
-                maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
-                uploadingPreviews={uploadingPreviews}
-                onEndImageChange={handleEndImageChange}
-                onImageUrlsChange={handleAddImage}
-                onRemoveImageUrl={handleRemoveImage}
-                onUploadFiles={handleUploadFiles}
-                onImageChange={(data) => {
-                  if (data === null) {
-                    handleRemoveImage(imageUrl || '');
-                    return;
-                  }
-                  handleAddImage(data);
-                }}
-              />
-            ) : undefined
-          }
-          leftActions={
-            <Flexbox
-              horizontal
-              align={'center'}
-              gap={4}
-              style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
-            >
-              <GenerationMediaModeSegment mode={'video'} />
-              <GenerationVisibilitySelector
-                disabledReason={visibilityLockedReason}
-                visibility={displayVisibility}
-                onChange={setNewGenerationTopicVisibility}
-              />
-              <ModelSwitchPanel
-                ModelItemComponent={VideoModelItem}
-                enabledList={enabledVideoModelList}
-                model={currentModel ?? undefined}
-                openOnHover={false}
-                placement="topLeft"
-                pricingMode="video"
-                provider={currentProvider ?? undefined}
-                onModelChange={async ({ model, provider }) => {
-                  if (!canCreate) return;
-
-                  setModelAndProviderOnSelect(model, provider);
-                }}
+        <div ref={inputWrapperRef} onKeyDownCapture={handleEditingKeyDown}>
+          <GenerationPromptInput
+            disableGenerate={!isInit || isModelUnavailable}
+            disabled={!canCreate}
+            isCreating={isCreating}
+            isDarkMode={isDarkMode}
+            value={value}
+            generateLabel={
+              editingGenerationId
+                ? t('generation.actions.generateEdit')
+                : t('generation.actions.generate')
+            }
+            generatingLabel={
+              editingGenerationId
+                ? t('generation.status.editing')
+                : t('generation.status.generating')
+            }
+            header={
+              editingGenerationId || isPromptBlocked ? (
+                <>
+                  {editingGenerationId && (
+                    <EditingVideoHeader
+                      coverUrl={editingAsset?.coverUrl || editingAsset?.thumbnailUrl}
+                      prompt={editingBatch?.prompt}
+                      version={versionMap.get(editingGenerationId)?.version ?? 1}
+                      onCancel={cancelEditingVideo}
+                      onLocate={() => revealVideoGeneration(editingGenerationId)}
+                    />
+                  )}
+                  {isPromptBlocked && (
+                    <GenerationPromptBlockedNotice onClose={dismissBlockedPrompt} />
+                  )}
+                </>
+              ) : undefined
+            }
+            inlineContent={
+              !editingGenerationId && showInlineFrames ? (
+                <Flexbox gap={6}>
+                  {hasImageInputMode && (
+                    <Segmented<VideoImageInputMode>
+                      disabled={!canCreate}
+                      size={'small'}
+                      value={imageInputMode}
+                      options={[
+                        { label: t('config.imageInputMode.frames'), value: 'frames' },
+                        { label: t('config.imageInputMode.reference'), value: 'reference' },
+                      ]}
+                      onChange={setImageInputMode}
+                    />
+                  )}
+                  <InlineVideoFrames
+                    endImageUrl={endImageUrl}
+                    imageUrl={imageUrl}
+                    imageUrls={imageUrls}
+                    isSupportEndImage={isSupportEndImageUrl}
+                    maxCount={maxCount}
+                    maxFileSize={imageUrlsMaxFileSize ?? imageUrlMaxFileSize}
+                    numberReferences={isReferenceMode}
+                    uploadingPreviews={uploadingPreviews}
+                    addLabel={
+                      hasImageInputMode && !isReferenceMode && !imageUrl
+                        ? t('config.imageUrl.label')
+                        : undefined
+                    }
+                    onEndImageChange={handleEndImageChange}
+                    onImageUrlsChange={handleAddImage}
+                    onRemoveImageUrl={handleRemoveImage}
+                    onUploadFiles={handleUploadFiles}
+                    onImageChange={(data) => {
+                      if (data === null) {
+                        handleRemoveImage(imageUrl || '');
+                        return;
+                      }
+                      handleAddImage(data);
+                    }}
+                  />
+                </Flexbox>
+              ) : undefined
+            }
+            leftActions={
+              <Flexbox
+                horizontal
+                align={'center'}
+                gap={4}
+                style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
               >
-                <ActionIcon
-                  icon={<ModelIcon model={currentModel ?? ''} size={22} />}
-                  size={{
-                    blockSize: 36,
-                    size: 20,
-                  }}
-                />
-              </ModelSwitchPanel>
-              <ConfigAction
-                title={t('config.title', { defaultValue: 'Config' })}
-                content={
-                  <Flexbox gap={12}>
-                    {isSupportAspectRatio && (
-                      <Flexbox gap={6}>
-                        <Text fontSize={12}>{t('config.aspectRatio.label')}</Text>
-                        <AspectRatioItem />
-                      </Flexbox>
-                    )}
-                    {isSupportResolution && (
-                      <Flexbox gap={6}>
-                        <Text fontSize={12}>{t('config.resolution.label')}</Text>
-                        <ResolutionItem />
-                      </Flexbox>
-                    )}
-                    {isSupportSize && (
-                      <Flexbox gap={6}>
-                        <Text fontSize={12}>{t('config.size.label')}</Text>
-                        <SizeItem />
-                      </Flexbox>
-                    )}
-                    {isSupportSeed && (
-                      <Flexbox gap={6}>
-                        <Text fontSize={12}>{t('config.seed.label')}</Text>
-                        <SeedItem />
-                      </Flexbox>
-                    )}
-                    {(isSupportGenerateAudio ||
-                      isSupportCameraFixed ||
-                      isSupportWatermark ||
-                      isSupportPromptExtend ||
-                      isSupportWebSearch) && <Divider style={{ marginBlock: 4 }} />}
-                    {isSupportGenerateAudio && (
-                      <SwitchItem
-                        label={t('config.generateAudio.label')}
-                        paramName={'generateAudio'}
-                      />
-                    )}
-                    {isSupportCameraFixed && (
-                      <SwitchItem label={t('config.cameraFixed.label')} paramName={'cameraFixed'} />
-                    )}
-                    {isSupportWatermark && (
-                      <SwitchItem label={t('config.watermark.label')} paramName={'watermark'} />
-                    )}
-                    {isSupportPromptExtend && <PromptExtendItem />}
-                    {isSupportWebSearch && (
-                      <SwitchItem label={t('config.webSearch.label')} paramName={'webSearch'} />
-                    )}
-                  </Flexbox>
-                }
-              />
-              {isSupportDuration && (
-                <Action
-                  icon={Clock3}
-                  trigger={'click'}
-                  popover={{
-                    content: <DurationItem />,
-                    minWidth: 220,
-                    title: t('config.duration.label'),
-                  }}
-                  title={[t('config.duration.label'), duration ? `${duration}s` : '']
-                    .filter(Boolean)
-                    .join(' ')}
-                />
-              )}
-            </Flexbox>
-          }
-          placeholder={
-            hasRefImages ? t('config.prompt.placeholderWithRef') : t('config.prompt.placeholder')
-          }
-          rightActions={
-            <PromptTransformAction
-              mode={'video'}
-              prompt={value}
-              onPromptChange={(next) => {
-                if (!canCreate) return;
+                <GenerationMediaModeSegment mode={'video'} />
+                {editingGenerationId ? (
+                  <ActionIcon
+                    disabled
+                    icon={<ModelIcon model={currentModel ?? ''} size={22} />}
+                    title={t('generation.editing.modelLocked')}
+                    size={{
+                      blockSize: 36,
+                      size: 20,
+                    }}
+                  />
+                ) : (
+                  <ModelSwitchPanel
+                    ModelItemComponent={VideoModelItem}
+                    enabledList={enabledVideoModelList}
+                    model={currentModel ?? undefined}
+                    openOnHover={false}
+                    placement="topLeft"
+                    pricingMode="video"
+                    provider={currentProvider ?? undefined}
+                    onModelChange={async ({ model, provider }) => {
+                      if (!canCreate) return;
 
-                setValue(next as any);
-              }}
-            />
-          }
-          onGenerate={handleGenerate}
-          onValueChange={setValue}
-        />
+                      setModelAndProviderOnSelect(model, provider);
+                    }}
+                  >
+                    <ActionIcon
+                      icon={<ModelIcon model={currentModel ?? ''} size={22} />}
+                      size={{
+                        blockSize: 36,
+                        size: 20,
+                      }}
+                    />
+                  </ModelSwitchPanel>
+                )}
+                <ConfigAction
+                  title={t('config.title', { defaultValue: 'Config' })}
+                  content={
+                    <Flexbox gap={12}>
+                      {isSupportAspectRatio && (
+                        <Flexbox gap={6}>
+                          <Text fontSize={12}>{t('config.aspectRatio.label')}</Text>
+                          {aspectRatioFollowsFrames ? (
+                            <Text fontSize={12} type={'secondary'}>
+                              {t('config.aspectRatio.followStartFrame')}
+                            </Text>
+                          ) : (
+                            <AspectRatioItem />
+                          )}
+                        </Flexbox>
+                      )}
+                      {isSupportResolution && (
+                        <Flexbox gap={6}>
+                          <Text fontSize={12}>{t('config.resolution.label')}</Text>
+                          <ResolutionItem />
+                        </Flexbox>
+                      )}
+                      {isSupportSize && (
+                        <Flexbox gap={6}>
+                          <Text fontSize={12}>{t('config.size.label')}</Text>
+                          <SizeItem />
+                        </Flexbox>
+                      )}
+                      {isSupportSeed && (
+                        <Flexbox gap={6}>
+                          <Text fontSize={12}>{t('config.seed.label')}</Text>
+                          <SeedItem />
+                        </Flexbox>
+                      )}
+                      {(isSupportGenerateAudio ||
+                        isSupportCameraFixed ||
+                        isSupportWatermark ||
+                        isSupportPromptExtend ||
+                        isSupportWebSearch) && <Divider style={{ marginBlock: 4 }} />}
+                      {isSupportGenerateAudio && (
+                        <SwitchItem
+                          label={t('config.generateAudio.label')}
+                          paramName={'generateAudio'}
+                        />
+                      )}
+                      {isSupportCameraFixed && (
+                        <SwitchItem
+                          label={t('config.cameraFixed.label')}
+                          paramName={'cameraFixed'}
+                        />
+                      )}
+                      {isSupportWatermark && (
+                        <SwitchItem label={t('config.watermark.label')} paramName={'watermark'} />
+                      )}
+                      {isSupportPromptExtend && <PromptExtendItem />}
+                      {isSupportWebSearch && (
+                        <SwitchItem label={t('config.webSearch.label')} paramName={'webSearch'} />
+                      )}
+                    </Flexbox>
+                  }
+                />
+                {isSupportDuration && (
+                  <Action
+                    icon={Clock3}
+                    trigger={'click'}
+                    popover={{
+                      content: <DurationItem />,
+                      minWidth: 220,
+                      title: t('config.duration.label'),
+                    }}
+                    title={[t('config.duration.label'), duration ? `${duration}s` : '']
+                      .filter(Boolean)
+                      .join(' ')}
+                  />
+                )}
+              </Flexbox>
+            }
+            placeholder={
+              editingGenerationId
+                ? t('config.prompt.editPlaceholder')
+                : isReferenceMode && hasRefImages
+                  ? t('config.prompt.placeholderWithReference')
+                  : hasRefImages
+                    ? t('config.prompt.placeholderWithRef')
+                    : t('config.prompt.placeholder')
+            }
+            rightActions={
+              <>
+                <PromptTransformAction
+                  mode={'video'}
+                  prompt={value}
+                  onPromptChange={(next) => {
+                    if (!canCreate) return;
+
+                    setValue(next as any);
+                  }}
+                />
+                <GenerationVisibilitySelector
+                  disabledReason={visibilityLockedReason}
+                  visibility={displayVisibility}
+                  onChange={setNewGenerationTopicVisibility}
+                />
+              </>
+            }
+            onGenerate={handleGenerate}
+            onValueChange={setValue}
+          />
+        </div>
         <VideoFreeQuotaInfo />
       </Flexbox>
     </Flexbox>

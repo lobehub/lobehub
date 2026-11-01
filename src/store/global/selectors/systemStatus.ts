@@ -1,13 +1,21 @@
+import { type TopicGroupMode } from '@/types/topic';
+
 import type {
+  AgentDocumentSort,
+  DocsPageSectionKey,
+  DocsPageSectionView,
   GlobalState,
   ModelDetailPanelExpandedKey,
+  ProjectListSortBy,
+  ProjectTopicSubGroupMode,
   SystemStatus,
   WorkspaceOverridableField,
 } from '../initialState';
 import {
+  DEFAULT_DOCS_PAGE_SECTION_VIEW,
   DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
-  DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS,
   INITIAL_STATUS,
+  MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
   WORKSPACE_OVERRIDABLE_FIELDS,
 } from '../initialState';
 
@@ -83,14 +91,51 @@ const sessionGroupKeys =
     return value || INITIAL_STATUS.expandSessionGroupKeys;
   };
 
-const topicGroupKeys = (s: GlobalState): string[] | undefined => s.status.expandTopicGroupKeys;
+const collapsedTopicGroupKeys =
+  (mode: TopicGroupMode) =>
+  (s: GlobalState): string[] | undefined =>
+    s.status.collapsedTopicGroupKeysByMode?.[mode];
+
+const docsPageSectionView =
+  (section: DocsPageSectionKey) =>
+  (s: GlobalState): DocsPageSectionView => {
+    const stored = s.status.docsPageSectionViews?.[section];
+    return stored
+      ? { ...DEFAULT_DOCS_PAGE_SECTION_VIEW, ...stored }
+      : DEFAULT_DOCS_PAGE_SECTION_VIEW;
+  };
+
+const projectTopicSubGroupMode =
+  (groupId: string) =>
+  (s: GlobalState): ProjectTopicSubGroupMode =>
+    s.status.projectTopicSubGroupModeByGroup?.[groupId] ?? 'none';
 
 const agentSidebarSections =
   (agentId: string | undefined) =>
   (s: GlobalState): Record<string, boolean> | undefined =>
     agentId ? s.status.expandAgentSidebarSectionsByAgent?.[agentId] : undefined;
 
-const topicPageSize = (s: GlobalState): number => s.status.topicPageSize || 20;
+const projectSidebarSections =
+  (projectId: string | undefined) =>
+  (s: GlobalState): Record<string, boolean> | undefined =>
+    projectId ? s.status.expandProjectSidebarSectionsByProject?.[projectId] : undefined;
+
+/** Whether the topic list owned by `ownerId` (agent / group / project) shows only my topics. */
+const topicOnlyMine =
+  (ownerId: string | undefined) =>
+  (s: GlobalState): boolean =>
+    !!ownerId && !!s.status.topicOnlyMineByAgent?.[ownerId];
+
+/** Upper bound of `topic.getTopics`'s `pageSize` input on the server. */
+export const MAX_TOPIC_PAGE_SIZE = 100;
+
+/**
+ * Clamped to the server's cap: the project sidebar's "load more" used to grow
+ * the persisted value past 100, after which every topic list request failed
+ * validation. Clamping on read recovers users who already persisted it.
+ */
+const topicPageSize = (s: GlobalState): number =>
+  Math.min(s.status.topicPageSize || 20, MAX_TOPIC_PAGE_SIZE);
 
 const agentPageSize = (s: GlobalState): number => s.status.agentPageSize || 5;
 
@@ -102,12 +147,15 @@ const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
 const taskListViewOptions = (s: GlobalState) =>
   s.status.taskListViewOptions || {
     groupBy: 'status',
-    hideCompleted: true,
+    nestedSubTasks: true,
     orderBy: 'updatedAt',
     orderCompletedByRecency: true,
     orderDirection: 'asc',
+    showSubTasks: false,
     subGroupBy: 'none',
   };
+
+const taskListViewMode = (s: GlobalState) => s.status.taskListViewMode ?? 'list';
 
 // Default the inline composer to collapsed so a populated task list keeps the
 // records at the top of the fold; the empty-state hero still shows the full
@@ -169,21 +217,30 @@ export const SIDEBAR_SPACER_ID = '__spacer__';
 
 export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'tasks',
-  'pages',
+  'goals',
+  'dashboard',
+  'resource',
+  'favorites',
   'recents',
+  'project',
   'private',
   'agent',
   SIDEBAR_SPACER_ID,
   'image',
   'community',
-  'resource',
   'memory',
 ];
 
 /** Items that must stay contiguous in the sidebar list (accordion block).
  * `private` sits above `agent` so workspace users see their personal items
  * first, with the workspace-shared agents right below. */
-export const SIDEBAR_ACCORDION_KEYS = new Set(['recents', 'private', 'agent']);
+export const SIDEBAR_ACCORDION_KEYS = new Set([
+  'favorites',
+  'recents',
+  'project',
+  'private',
+  'agent',
+]);
 
 const DEFAULT_BOTTOM_KEYS = new Set(
   DEFAULT_SIDEBAR_ITEMS.slice(DEFAULT_SIDEBAR_ITEMS.indexOf(SIDEBAR_SPACER_ID) + 1),
@@ -224,7 +281,16 @@ const normalizeSpacerPosition = (order: string[]): string[] => {
 // default added in a future version would silently appear in the bottom group
 // for existing users.
 const withAllKnownKeys = (order: string[]): string[] => {
-  const present = new Set(order);
+  let nextOrder = order;
+  if (!order.includes('project')) {
+    const recentsIndex = order.indexOf('recents');
+    const firstAgentIndex = order.findIndex((key) => key === 'private' || key === 'agent');
+    const insertAt =
+      recentsIndex >= 0 ? recentsIndex + 1 : firstAgentIndex >= 0 ? firstAgentIndex : 0;
+    nextOrder = [...order.slice(0, insertAt), 'project', ...order.slice(insertAt)];
+  }
+
+  const present = new Set(nextOrder);
   const missingTop: string[] = [];
   const missingBottom: string[] = [];
   for (const k of DEFAULT_SIDEBAR_ITEMS) {
@@ -232,7 +298,7 @@ const withAllKnownKeys = (order: string[]): string[] => {
     (DEFAULT_BOTTOM_KEYS.has(k) ? missingBottom : missingTop).push(k);
   }
 
-  const withSpacer = normalizeSpacerPosition(order);
+  const withSpacer = normalizeSpacerPosition(nextOrder);
   if (missingTop.length === 0 && missingBottom.length === 0) return withSpacer;
 
   const spacerIdx = withSpacer.indexOf(SIDEBAR_SPACER_ID);
@@ -362,10 +428,20 @@ const showSystemRole = (s: GlobalState) => s.status.showSystemRole;
 const mobileShowTopic = (s: GlobalState) => s.status.mobileShowTopic;
 const mobileShowPortal = (s: GlobalState) => s.status.mobileShowPortal;
 const showAgentBuilderPanel = (s: GlobalState) => s.status.showAgentBuilderPanel;
+const showHomeRail = (s: GlobalState) => s.status.showHomeRail ?? false;
+const showHomePortrait = (s: GlobalState) => s.status.showHomePortrait ?? true;
+const hiddenHomeWidgets = (s: GlobalState): string[] => s.status.hiddenHomeWidgets ?? [];
+const homeGoalsCollapsed = (s: GlobalState): boolean => s.status.homeGoalsCollapsed ?? false;
+const homeRecentsCount = (s: GlobalState): number => s.status.homeRecentsCount ?? 8;
+const homeTaskCount = (s: GlobalState): number => s.status.homeTaskCount ?? 8;
 const showRightPanel = (s: GlobalState) => s.status.showRightPanel;
+const showWorkingOverview = (s: GlobalState) =>
+  s.status.showWorkingOverview ?? !s.status.showRightPanel;
 const showLeftPanel = (s: GlobalState) => s.status.showLeftPanel;
 const showPageAgentPanel = (s: GlobalState) => s.status.showPageAgentPanel;
 const showTaskAgentPanel = (s: GlobalState) => s.status.showTaskAgentPanel;
+const showTerminalPanel = (s: GlobalState) => s.status.showTerminalPanel;
+const terminalPanelHeight = (s: GlobalState) => s.status.terminalPanelHeight || 320;
 const showFilePanel = (s: GlobalState) => s.status.showFilePanel;
 const showVerifyReportPanel = (s: GlobalState) => s.status.showVerifyReportPanel ?? true;
 const showImagePanel = (s: GlobalState) => s.status.showImagePanel;
@@ -373,20 +449,40 @@ const showImageTopicPanel = (s: GlobalState) => s.status.showImageTopicPanel;
 const hidePWAInstaller = (s: GlobalState) => s.status.hidePWAInstaller;
 const isShowCredit = (s: GlobalState) => s.status.isShowCredit;
 const language = (s: GlobalState) => s.status.language || 'auto';
-const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedKey[] =>
-  s.status.modelDetailPanelExpandedKeys ?? [...DEFAULT_MODEL_DETAIL_PANEL_EXPANDED_KEYS];
-const modelSwitchPanelGroupMode = (s: GlobalState) =>
-  s.status.modelSwitchPanelGroupMode || 'byProvider';
+const modelDetailPanelExpandedKeys = (s: GlobalState): ModelDetailPanelExpandedKey[] => {
+  const collapsedKeys = s.status.modelDetailPanelCollapsedKeys ?? [];
+
+  return MODEL_DETAIL_PANEL_EXPANDABLE_KEYS.filter((key) => !collapsedKeys.includes(key));
+};
+// Reads only the user-written key; the legacy `modelSwitchPanelGroupMode`
+// was seeded into persisted status and must not influence the default.
+const modelSwitchPanelGroupMode = (s: GlobalState) => s.status.modelSwitchPanelGroupBy || 'byModel';
 const modelSwitchPanelWidth = (s: GlobalState) => s.status.modelSwitchPanelWidth || 460;
 const pageAgentPanelWidth = (s: GlobalState) => s.status.pageAgentPanelWidth || 360;
+const workingSidebarWidth = (s: GlobalState) => s.status.workingSidebarWidth || 360;
 
 const leftPanelWidth = (s: GlobalState): number => {
   return normalizeNavPanelWidth(s.status.leftPanelWidth);
 };
 const portalWidth = (s: GlobalState) => s.status.portalWidth || 400;
+const portalWidths = (s: GlobalState) => s.status.portalWidths;
 const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;
 const groupAgentBuilderPanelWidth = (s: GlobalState) => s.status.groupAgentBuilderPanelWidth || 360;
 const imagePanelWidth = (s: GlobalState) => s.status.imagePanelWidth;
+const agentListViewMode = (s: GlobalState) => s.status.agentListViewMode || 'card';
+const DEFAULT_AGENT_DOCUMENT_SORT: AgentDocumentSort = {
+  by: 'name',
+  foldersFirst: true,
+  order: 'asc',
+};
+const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
+  s.status.projectListSortBy ?? 'manual';
+const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
+  s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
+const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
+const agentListExpandedGroupKeys = (s: GlobalState) => s.status.agentListExpandedGroupKeys ?? [];
+const agentListSidebarSectionCollapsed = (s: GlobalState) =>
+  s.status.agentListSidebarSectionCollapsed ?? false;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
 const verifyReportPanelWidth = (s: GlobalState) => s.status.verifyReportPanelWidth || 300;
@@ -431,17 +527,28 @@ const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
 
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
+  agentDocumentSort,
+  projectListSortBy,
+  agentListExpandedGroupKeys,
+  agentListSidebarSectionCollapsed,
+  agentListViewMode,
+  agentListViewOptions,
   agentPageSize,
   chatInputHeight,
   disabledModelProvidersSortType,
   disabledModelsSortType,
   expandInputActionbar,
+  docsPageSectionView,
   filePanelWidth,
   getAgentSystemRoleExpanded,
   groupAgentBuilderPanelWidth,
+  hiddenHomeWidgets,
   hiddenSidebarSections,
   hidePWAInstaller,
+  homeGoalsCollapsed,
+  homeRecentsCount,
   homeSelectedAgentId,
+  homeTaskCount,
   imagePanelWidth,
   imageTopicViewMode,
   imageTopicPanelWidth,
@@ -459,18 +566,23 @@ export const systemStatusSelectors = {
   pageAgentPanelWidth,
   pagePageSize,
   portalWidth,
+  portalWidths,
   privateAgentPageSize,
   recentPageSize,
   taskCreateInlineCollapsed,
   taskKanbanHiddenColumns,
   taskKanbanHiddenPanelCollapsed,
+  taskListViewMode,
   taskListViewOptions,
   sidebarExpandedKeys,
   agentSidebarSections,
+  projectSidebarSections,
   sidebarItems,
   sessionGroupKeys,
   showAgentBuilderPanel,
   showFilePanel,
+  showHomePortrait,
+  showHomeRail,
   showImagePanel,
   showImageTopicPanel,
   showLeftPanel,
@@ -478,16 +590,22 @@ export const systemStatusSelectors = {
   showRightPanel,
   showSystemRole,
   showTaskAgentPanel,
+  showWorkingOverview,
+  showTerminalPanel,
   showVerifyReportPanel,
   showVideoPanel,
   showVideoTopicPanel,
   systemStatus,
+  terminalPanelHeight,
   verifyReportPanelWidth,
   tokenDisplayFormatShort,
-  topicGroupKeys,
+  collapsedTopicGroupKeys,
+  projectTopicSubGroupMode,
+  topicOnlyMine,
   topicPageSize,
   videoPanelWidth,
   videoTopicViewMode,
   videoTopicPanelWidth,
   wideScreen,
+  workingSidebarWidth,
 };

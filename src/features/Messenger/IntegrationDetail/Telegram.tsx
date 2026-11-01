@@ -9,6 +9,7 @@ import AsyncError from '@/components/AsyncError';
 import { usePermission } from '@/hooks/usePermission';
 
 import { createMessengerLinkModal } from '../LinkModal';
+import { MessengerPushSection } from './MessengerPush';
 import {
   DetailLayout,
   IntegrationDetailSkeleton,
@@ -81,6 +82,9 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
       headerAction={headerAction}
       name={name}
       platform="telegram"
+      extraSections={
+        hasLinks ? <MessengerPushSection name={name} platform="telegram" /> : undefined
+      }
       onBack={onBack}
     >
       {link ? (

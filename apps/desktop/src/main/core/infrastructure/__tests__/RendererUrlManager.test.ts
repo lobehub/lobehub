@@ -16,8 +16,8 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('fs-extra', () => ({
-  pathExistsSync: (...args: any[]) => mockPathExistsSync(...args),
+vi.mock('node:fs', () => ({
+  existsSync: (...args: any[]) => mockPathExistsSync(...args),
 }));
 
 vi.mock('@/const/dir', () => ({
@@ -34,15 +34,6 @@ vi.mock('@/const/env', () => ({
 
 vi.mock('@/env', () => ({
   getDesktopEnv: vi.fn(() => ({ DESKTOP_RENDERER_STATIC: false })),
-}));
-
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
 }));
 
 describe('RendererUrlManager', () => {
@@ -67,7 +58,10 @@ describe('RendererUrlManager', () => {
         new URL('app://renderer/en-US__0__light.txt'),
       );
 
-      expect(resolved).toBe('/mock/export/out/en-US__0__light.txt');
+      expect(resolved).toEqual({
+        filePath: '/mock/export/out/en-US__0__light.txt',
+        name: 'en-US__0__light.txt',
+      });
     });
 
     it('should fall back to index.html for app routes', async () => {
@@ -80,7 +74,58 @@ describe('RendererUrlManager', () => {
 
       const resolved = await manager.resolveRendererFilePath(new URL('app://renderer/settings'));
 
-      expect(resolved).toBe('/mock/export/out/apps/desktop/index.html');
+      expect(resolved).toEqual({
+        filePath: '/mock/export/out/apps/desktop/index.html',
+        name: 'index.html',
+      });
+    });
+  });
+
+  describe('setActiveRenderer', () => {
+    const otaSource = {
+      resolve: (relPath: string) =>
+        ['apps/desktop/index.html', 'assets/new.js'].includes(relPath) ? `/ota/${relPath}` : null,
+    };
+
+    it('serves an OTA source and keeps old chunks reachable from the previous source', async () => {
+      const { RendererUrlManager } = await import('../RendererUrlManager');
+      const manager = new RendererUrlManager();
+      mockPathExistsSync.mockImplementation((p: string) => p === '/mock/export/out/assets/old.js');
+
+      manager.setActiveRenderer(otaSource);
+
+      expect(manager.getActiveRenderer()).toBe(otaSource);
+      expect(await manager.resolveRendererFilePath(new URL('app://renderer/settings'))).toEqual({
+        filePath: '/ota/apps/desktop/index.html',
+        name: 'index.html',
+      });
+      expect(
+        await manager.resolveRendererFilePath(new URL('app://renderer/assets/new.js')),
+      ).toEqual({ filePath: '/ota/assets/new.js', name: 'new.js' });
+      expect(
+        await manager.resolveRendererFilePath(new URL('app://renderer/assets/old.js')),
+      ).toEqual({ filePath: '/mock/export/out/assets/old.js', name: 'old.js' });
+    });
+
+    it('keeps the running renderer when the source has no entry HTML', async () => {
+      const { RendererUrlManager } = await import('../RendererUrlManager');
+      const manager = new RendererUrlManager();
+      const running = manager.getActiveRenderer();
+
+      manager.setActiveRenderer({ resolve: () => null });
+
+      expect(manager.getActiveRenderer()).toBe(running);
+    });
+
+    it('returns to the running renderer for null', async () => {
+      const { RendererUrlManager } = await import('../RendererUrlManager');
+      const manager = new RendererUrlManager();
+      const running = manager.getActiveRenderer();
+
+      manager.setActiveRenderer(otaSource);
+      manager.setActiveRenderer(null);
+
+      expect(manager.getActiveRenderer()).toBe(running);
     });
   });
 

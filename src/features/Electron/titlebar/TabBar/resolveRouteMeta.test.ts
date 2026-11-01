@@ -12,7 +12,11 @@ import {
   pickMeaningful,
 } from './resolveRouteMeta';
 
-const agentMeta: RouteMeta = { icon: MessageSquare, titleKey: 'navigation.chat' };
+const agentMeta: RouteMeta = {
+  icon: MessageSquare,
+  tabTitleKey: 'navigation.newChat',
+  titleKey: 'navigation.chat',
+};
 
 const fixtureRoutes: RouteObject[] = [
   {
@@ -25,6 +29,7 @@ describe('matchRouteMeta', () => {
   it('returns the deepest static meta for a matched route', () => {
     const result = matchRouteMeta(fixtureRoutes, '/agent/abc');
     expect(result.static.icon).toBe(MessageSquare);
+    expect(result.static.tabTitleKey).toBe('navigation.newChat');
     expect(result.static.titleKey).toBe('navigation.chat');
     expect(result.params.aid).toBe('abc');
     expect(result.meta).toBe(agentMeta);
@@ -70,6 +75,27 @@ describe('guardedMergeCache', () => {
   it('improves the cache with meaningful values', () => {
     const merged = guardedMergeCache({ title: 'Old' }, { avatar: 'a.png', title: 'New' });
     expect(merged).toEqual({ avatar: 'a.png', title: 'New' });
+  });
+
+  it('caches the seed of a generated project avatar', () => {
+    const merged = guardedMergeCache({ title: 'Fix login · Alpha' }, { avatarSeed: 'Alpha' });
+    expect(merged).toEqual({ avatarSeed: 'Alpha', title: 'Fix login · Alpha' });
+  });
+
+  it('keeps the avatar kind so a cold tab still draws the workspace mark', () => {
+    const merged = guardedMergeCache(
+      { avatar: 'logo.png', title: 'Acme' },
+      { avatar: null, avatarKind: 'workspace', title: 'Acme' },
+    );
+    expect(merged).toEqual({ avatarKind: 'workspace', title: 'Acme' });
+  });
+
+  it('drops a cached avatar the entity has confirmed it no longer has', () => {
+    const merged = guardedMergeCache(
+      { avatar: 'logo.png', avatarSeed: 'Alpha', title: 'Alpha' },
+      { avatar: null, avatarSeed: 'Alpha' },
+    );
+    expect(merged).toEqual({ avatarSeed: 'Alpha', title: 'Alpha' });
   });
 
   it('returns prev when next is undefined', () => {

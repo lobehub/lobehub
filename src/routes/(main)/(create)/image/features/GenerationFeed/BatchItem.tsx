@@ -1,10 +1,18 @@
 'use client';
 
 import { useAutoAnimate } from '@formkit/auto-animate/react';
-import { ModelTag } from '@lobehub/icons';
-import { ActionIconGroup, Block, Flexbox, Grid, Image, Markdown, Tag, Text } from '@lobehub/ui';
-import { App } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIconGroup,
+  Block,
+  createStaticStyles,
+  Flexbox,
+  Grid,
+  Image,
+  Markdown,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { omit } from 'es-toolkit/compat';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
@@ -14,7 +22,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import useRenderBusinessBatchItem from '@/business/client/hooks/useRenderBusinessBatchItem';
+import { ModelIcon } from '@/components/LobeIcons';
 import { GenerationInvalidAPIKey } from '@/routes/(main)/(create)/features/GenerationInput';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useImageStore } from '@/store/image';
 import { AsyncTaskErrorType } from '@/types/asyncTask';
 import { type GenerationBatch } from '@/types/generation';
@@ -60,7 +70,6 @@ interface GenerationBatchItemProps {
 
 export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) => {
   const { t } = useTranslation('image');
-  const { message } = App.useApp();
 
   const [imageGridRef] = useAutoAnimate();
 
@@ -69,6 +78,15 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
   const reuseSettings = useImageStore((s) => s.reuseSettings);
   const activeWorkspaceId = useActiveWorkspaceId();
   const { shouldRenderBusinessBatchItem, businessBatchItem } = useRenderBusinessBatchItem(batch);
+
+  const enabledImageModelList = useAiInfraStore(aiProviderSelectors.enabledImageModelList);
+  // Resolve the model's display name from the enabled model catalog, falling back
+  // to the raw model id when the model is not found (e.g. removed/renamed models).
+  const modelDisplayName = useMemo(() => {
+    const provider = enabledImageModelList.find((p) => p.id === batch.provider);
+    const model = provider?.children.find((m) => m.id === batch.model);
+    return model?.displayName || batch.model;
+  }, [enabledImageModelList, batch.provider, batch.model]);
 
   const creator = batch.creator;
   const showCreator = Boolean(activeWorkspaceId && creator?.id);
@@ -81,10 +99,10 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
   const handleCopyPrompt = async () => {
     try {
       await navigator.clipboard.writeText(batch.prompt);
-      message.success(t('generation.actions.promptCopied'));
+      toast.success(t('generation.actions.promptCopied'));
     } catch (error) {
       console.error('Failed to copy prompt:', error);
-      message.error(t('generation.actions.promptCopyFailed'));
+      toast.error(t('generation.actions.promptCopyFailed'));
     }
   };
 
@@ -156,7 +174,9 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
         style={{ opacity: 0.66 }}
       >
         <Flexbox horizontal align={'center'} gap={4}>
-          <ModelTag model={batch.model} variant={'borderless'} />
+          <Tag icon={<ModelIcon model={batch.model} />} variant={'borderless'}>
+            {modelDisplayName}
+          </Tag>
           {batch.width && batch.height && (
             <Tag variant={'borderless'}>
               {batch.width} × {batch.height}

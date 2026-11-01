@@ -1,11 +1,15 @@
 import {
   type DeviceAttachment,
-  RemoteDeviceExecutionRuntime,
   RemoteDeviceIdentifier,
 } from '@lobechat/builtin-tool-remote-device';
+import { RemoteDeviceExecutionRuntime } from '@lobechat/builtin-tool-remote-device/executionRuntime';
 import debug from 'debug';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
+import {
+  filterAuthorizedDevicePresence,
+  isGatewayOnlyDevicePresenceAllowed,
+} from '@/server/services/deviceGateway/scopedDevicePresence';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
@@ -14,6 +18,25 @@ import { type ServerRuntimeRegistration } from './types';
 // Enable with DEBUG=lobe-server:remote-device (works in prod via the env var).
 const log = debug('lobe-server:remote-device');
 
+/**
+ * Registers remote-device discovery for a server-side agent tool execution.
+ *
+ * Use when:
+ * - The tools engine activates the remote-device builtin runtime
+ *
+ * Expects:
+ * - Workspace discovery has a server database handle for registry authorization
+ *
+ * Returns:
+ * - A runtime whose device list is scoped to one authorized principal
+ *
+ * Call stack:
+ *
+ * ToolExecutionService
+ *   -> {@link remoteDeviceRuntime.factory}
+ *     -> getScopedOnlineDevices
+ *       -> RemoteDeviceExecutionRuntime
+ */
 export const remoteDeviceRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     if (!context.userId) {
@@ -37,13 +60,18 @@ export const remoteDeviceRuntime: ServerRuntimeRegistration = {
         // degrade to the personal-only pool.
         const workspaceId = await resolveRunWorkspaceId(context);
 
-        // Without a DB handle we cannot merge aliases / DB rows; fall back to the
-        // raw gateway pool for the active scope (workspace runs never include
-        // personal devices), still tagged with scope.
+        // Without a DB handle, personal scope may retain the auto-registration
+        // transient fallback. Workspace scope cannot: its registry row is the
+        // authorization boundary, and a raw Gateway socket may be a stale
+        // process that missed Unshare.
         if (!serverDB) {
           const scope = workspaceId ? ('workspace' as const) : ('personal' as const);
+          if (!isGatewayOnlyDevicePresenceAllowed(scope)) return [];
           const online = await deviceGateway.queryDeviceList(userId, workspaceId);
-          return online.map((d) => ({ ...d, scope }));
+          return filterAuthorizedDevicePresence(new Set(), online, scope).map((d) => ({
+            ...d,
+            scope,
+          }));
         }
 
         const devices = await getScopedOnlineDevices(serverDB, userId, workspaceId);

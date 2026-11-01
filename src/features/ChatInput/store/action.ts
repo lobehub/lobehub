@@ -6,6 +6,7 @@ import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userProfileSelectors } from '@/store/user/selectors';
 
 import { removeDraft } from '../draftStorage';
+import { readDocument, writeDocument } from '../editorDocument';
 import { addInputHistory } from '../inputHistoryStorage';
 import { type PublicState, type State } from './initialState';
 import { initialState } from './initialState';
@@ -18,6 +19,7 @@ export interface Action {
   handleSendButton: () => void;
   handleStop: () => void;
   pauseInputCompletion: (error: State['inputCompletionError']) => void;
+  setActiveAudioInputMode: (mode?: State['activeAudioInputMode']) => void;
   setDocument: (type: string, content: any, options?: Record<string, unknown>) => void;
   setExpand: (expend: boolean) => void;
   setJSONState: (content: any) => void;
@@ -40,6 +42,8 @@ const getEffectiveAgentId = (agentId?: string): string => {
 export const store: CreateStore = (publicState) => (set, get) => ({
   ...initialState,
   ...publicState,
+  leftActions: publicState?.leftActions ?? initialState.leftActions,
+  rightActions: publicState?.rightActions ?? initialState.rightActions,
 
   clearInputCompletionError: () => {
     set({ inputCompletionError: undefined, inputCompletionErrorDismissed: false });
@@ -50,15 +54,17 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   },
 
   getJSONState: () => {
-    return get().editor?.getDocument('json') as Record<string, any> | undefined;
+    return readDocument(get().editor, 'json') as Record<string, any> | undefined;
   },
   getMarkdownContent: () => {
-    return String(get().editor?.getDocument('markdown') || '').trimEnd();
+    return String(readDocument(get().editor, 'markdown') || '').trimEnd();
   },
   handleSendButton: () => {
     const editor = get().editor;
     if (!editor) return;
-    if (get().sendButtonProps?.disabled) return;
+
+    const { resolveSendBlocked, sendButtonProps } = get();
+    if (resolveSendBlocked ? resolveSendBlocked() : sendButtonProps?.disabled) return;
 
     // Drop any pending AI input-completion ghost before serializing the message.
     // The suggestion is materialized as real placeholder nodes inside the
@@ -83,8 +89,17 @@ export const store: CreateStore = (publicState) => (set, get) => ({
         }
       : undefined;
 
+    // Tie the draft's fate to the composer actually being cleared: a host may
+    // decline the send after the fact (a rejected scheduled send keeps the text
+    // on screen), and the key is captured here because committing the send can
+    // move the conversation to a freshly created topic.
+    const sentDraftKey = get().draftKey;
+
     onSend?.({
-      clearContent: () => editor?.cleanDocument(),
+      clearContent: () => {
+        editor?.cleanDocument();
+        if (sentDraftKey) removeDraft(sentDraftKey);
+      },
       editor: editor!,
       getEditorData: get().getJSONState,
       getMarkdownContent: get().getMarkdownContent,
@@ -93,9 +108,6 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     if (historySnapshot) {
       addInputHistory(historySnapshot);
     }
-
-    const { draftKey } = get();
-    if (draftKey) removeDraft(draftKey);
 
     if (get().expand) {
       set({ _savedEditorState: undefined, expand: false });
@@ -117,18 +129,22 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     set({ inputCompletionError, inputCompletionErrorDismissed: false });
   },
 
+  setActiveAudioInputMode: (activeAudioInputMode) => {
+    set({ activeAudioInputMode });
+  },
+
   setDocument: (type, content, options) => {
-    get().editor?.setDocument(type, content, options);
+    writeDocument(get().editor, type, content, options);
   },
 
   setExpand: (expand) => {
     const editor = get().editor;
-    const _savedEditorState = editor?.getDocument('json') as Record<string, any> | undefined;
+    const _savedEditorState = readDocument(editor, 'json') as Record<string, any> | undefined;
     set({ _savedEditorState, expand });
   },
 
   setJSONState: (content) => {
-    get().editor?.setDocument('json', content);
+    writeDocument(get().editor, 'json', content);
   },
 
   setShowTypoBar: (showTypoBar) => {

@@ -1,4 +1,7 @@
+export { default as AgentScopedTaskDetailPage } from './AgentScopedTaskDetailPage';
+export { default as RoutedTaskDetailPage } from './RoutedTaskDetailPage';
 export { default as TaskDetailPage } from './TaskDetailPage';
 export { default as TaskDetailSections } from './TaskDetailSections';
+export { default as TaskDetailSkeleton } from './TaskDetailSkeleton';
 export { default as TopicChatDrawer } from './TopicChatDrawer';
 export { useActiveTaskDetail } from './useActiveTaskDetail';

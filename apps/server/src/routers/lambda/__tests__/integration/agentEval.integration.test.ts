@@ -17,18 +17,22 @@ import { cleanupTestUser, createTestContext, createTestUser } from './setup';
 
 // Mock FileService to avoid S3 initialization issues in tests
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFileContent: vi.fn().mockResolvedValue('{"input":"test","expected":"test"}'),
-    getFullFileUrl: vi.fn().mockResolvedValue('mock-url'),
-    deleteFile: vi.fn().mockResolvedValue(undefined),
-    deleteFiles: vi.fn().mockResolvedValue(undefined),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFileContent: vi.fn().mockResolvedValue('{"input":"test","expected":"test"}'),
+      getFullFileUrl: vi.fn().mockResolvedValue('mock-url'),
+      deleteFile: vi.fn().mockResolvedValue(undefined),
+      deleteFiles: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
 }));
 
 // Mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 /**
@@ -711,6 +715,24 @@ describe('Agent Eval Router Integration Tests', () => {
         expect(result.metadata).toEqual({ reviewed: true });
         expect(result.sortOrder).toBe(5);
       });
+
+      it('should clear a test case message history', async () => {
+        const caller = agentEvalRouter.createCaller(createTestContext(userId));
+        const created = await caller.createTestCase({
+          content: {
+            input: 'Original',
+            messages: [{ content: 'Old turn', role: 'user' }],
+          },
+          datasetId,
+        });
+
+        const result = await caller.updateTestCase({
+          content: { input: 'Original', messages: [] },
+          id: created.id,
+        });
+
+        expect(result.content.messages).toEqual([]);
+      });
     });
 
     describe('deleteTestCase', () => {
@@ -876,7 +898,12 @@ describe('Agent Eval Router Integration Tests', () => {
         });
 
         expect(result.name).toBe('Test Run');
-        expect(result.config).toEqual({ maxConcurrency: 5, timeout: 300000 });
+        // createRun stamps an immutable executionMode snapshot into the config
+        expect(result.config).toEqual({
+          executionMode: 'internal',
+          maxConcurrency: 5,
+          timeout: 300000,
+        });
       });
 
       it('should default status to idle', async () => {

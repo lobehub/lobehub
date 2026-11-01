@@ -1,13 +1,14 @@
 'use client';
 
-import { Accordion, Flexbox } from '@lobehub/ui';
+import { AccordionRoot, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontal } from 'lucide-react';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useTopicGroupCollapse } from '@/hooks/useTopicGroupCollapse';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -16,12 +17,15 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import GroupItem from './GroupItem';
+import { resolveGroupSidebarMode } from './resolveGroupSidebarMode';
 
 const ByTimeMode = memo(() => {
   const { t } = useTranslation('topic');
   const topicPageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
+  const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
+  const groupMode = resolveGroupSidebarMode(topicGroupMode);
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
     topicSelectors.hasMoreTopicsForSidebar(s),
@@ -31,32 +35,28 @@ const ByTimeMode = memo(() => {
   const [activeTopicId, activeThreadId] = useChatStore((s) => [s.activeTopicId, s.activeThreadId]);
 
   const groupSelector = useMemo(
-    () => topicSelectors.groupedTopicsForSidebar(topicPageSize, topicSortBy, topicGroupMode),
-    [topicPageSize, topicSortBy, topicGroupMode],
+    () =>
+      topicSelectors.groupedTopicsForSidebar(
+        topicPageSize,
+        topicSortBy,
+        groupMode,
+        topicIncludeCompleted,
+      ),
+    [topicPageSize, topicSortBy, groupMode, topicIncludeCompleted],
   );
   const groupTopics = useChatStore(groupSelector, isEqual);
 
-  const [topicGroupKeys, updateSystemStatus] = useGlobalStore((s) => [
-    systemStatusSelectors.topicGroupKeys(s),
-    s.updateSystemStatus,
-  ]);
-
-  // Reset expanded keys when grouping changes so all groups start expanded
-  useEffect(() => {
-    updateSystemStatus({ expandTopicGroupKeys: undefined });
-  }, [topicSortBy, topicGroupMode, updateSystemStatus]);
-
-  const expandedKeys = useMemo(() => {
-    return topicGroupKeys || groupTopics.map((group) => group.id);
-  }, [topicGroupKeys, groupTopics]);
+  const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
+  const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(groupMode, groupIds);
 
   return (
     <Flexbox gap={2}>
       {/* Grouped topics */}
-      <Accordion
-        expandedKeys={expandedKeys}
-        gap={2}
-        onExpandedChange={(keys) => updateSystemStatus({ expandTopicGroupKeys: keys as any })}
+      <AccordionRoot
+        indicatorPlacement="inline"
+        style={{ gap: 2 }}
+        value={expandedKeys}
+        onValueChange={(next) => setExpandedKeys(next as string[])}
       >
         {groupTopics.map((group) => (
           <GroupItem
@@ -66,7 +66,7 @@ const ByTimeMode = memo(() => {
             key={group.id}
           />
         ))}
-      </Accordion>
+      </AccordionRoot>
       {isExpandingPageSize && <SkeletonList rows={3} />}
       {hasMore && !isExpandingPageSize && (
         <NavItem icon={MoreHorizontal} title={t('loadMore')} onClick={openAllTopicsDrawer} />

@@ -14,9 +14,16 @@ import {
 } from '../../core/anthropicCompatibleFactory/generateObject';
 import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
 import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
+import { resolveClaudeThinkingConfig } from '../../core/anthropicCompatibleFactory/resolveThinkingConfig';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
 import { resolveModelSamplingParameters } from '../../core/parameterResolver';
+import {
+  finalizeProviderResponse,
+  initializeProviderDiagnostics,
+  observeProviderReadableStream,
+  recordProviderError,
+} from '../../core/providerDiagnostics';
 import {
   AWSBedrockClaudeStream,
   AWSBedrockLlamaStream,
@@ -33,12 +40,21 @@ import type {
   GenerateObjectPayload,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
+import type { ProviderResponseDiagnostics } from '../../types/providerDiagnostics';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../anthropic/claudeModelId';
+import { stripUnsupportedClaudeAssistantPrefill } from '../anthropic/claudePrefill';
 import { normalizeClaudeThinkingHistoryMessages } from '../anthropic/claudeThinkingHistory';
+import { rejectsDisabledThinkingAtEffort } from '../anthropic/modelId';
+import { recordBedrockResponseEvent } from './providerDiagnostics';
+
+/**
+ * Bedrock accepts a 20MB request body and 3.75MB per image (5MB of base64), so
+ * images get a smaller share than on the Anthropic API.
+ */
+const BEDROCK_INLINE_IMAGE_BUDGET = { maxTotalBase64Bytes: 12 * 1024 * 1024 };
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.
@@ -178,7 +194,9 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     ) as GenerateObjectPayload['messages'];
     const { requestParams, schemaToolName } = await buildAnthropicGenerateObjectRequest(
       { ...payload, messages: [...systemMessages, ...normalizedMessages] },
-      { maxTokens: resolvedMaxTokens },
+      // requestModel keys the prefill guard on the Bedrock id actually sent
+      // below, so channel modelIdMapping aliases still get the strip.
+      { maxTokens: resolvedMaxTokens, requestModel: this.resolveModelId(payload.model) },
     );
     const bedrockRequestParams: Omit<Anthropic.MessageCreateParams, 'model'> & {
       model?: Anthropic.MessageCreateParams['model'];
@@ -305,14 +323,16 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       enabledContextCaching,
     });
 
-    const postMessages = await buildAnthropicMessages(user_messages, { enabledContextCaching });
-
-    if (
-      shouldDropUnsupportedClaudeAssistantPrefill(model) &&
-      postMessages.at(-1)?.role === 'assistant'
-    ) {
-      postMessages.pop();
-    }
+    // Key the prefill guard on the resolved Bedrock model id: a custom logical
+    // id can map to a Claude 4.6+/5 Bedrock id via the channel modelIdMapping,
+    // which would otherwise skip the strip and 400 on a trailing assistant turn.
+    const postMessages = stripUnsupportedClaudeAssistantPrefill(
+      this.resolveModelId(model),
+      await buildAnthropicMessages(user_messages, {
+        enabledContextCaching,
+        imageBudget: BEDROCK_INLINE_IMAGE_BUDGET,
+      }),
+    );
 
     const anthropicBase = {
       anthropic_version: 'bedrock-2023-05-31',
@@ -324,18 +344,17 @@ export class LobeBedrockAI implements LobeRuntimeAI {
 
     let anthropicPayload;
 
-    if (!!thinking && (thinking.type === 'enabled' || thinking.type === 'adaptive')) {
-      const resolvedThinking =
-        thinking.type === 'enabled'
-          ? {
-              budget_tokens: Math.min(thinking?.budget_tokens || 1024, resolvedMaxTokens - 1),
-              type: 'enabled' as const,
-            }
-          : { type: 'adaptive' as const };
+    const resolvedThinking = resolveClaudeThinkingConfig({
+      maxTokens: resolvedMaxTokens,
+      model,
+      requestModel: this.resolveModelId(model),
+      thinking,
+    });
 
+    if (resolvedThinking && resolvedThinking.type !== 'disabled') {
       anthropicPayload = {
         ...anthropicBase,
-        ...(thinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
+        ...(resolvedThinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
         thinking: resolvedThinking,
       };
     } else {
@@ -347,8 +366,16 @@ export class LobeBedrockAI implements LobeRuntimeAI {
         { normalizeTemperature: true, preferTemperature: true },
       );
 
+      // Claude Opus 5 and later reject disabled thinking at effort `xhigh` / `max`; every lower
+      // effort level stays valid, so only that pairing is dropped.
+      const forwardsEffort =
+        !!effort &&
+        !(resolvedThinking?.type === 'disabled' && rejectsDisabledThinkingAtEffort(model, effort));
+
       anthropicPayload = {
         ...anthropicBase,
+        ...(forwardsEffort ? { output_config: { effort } } : {}),
+        ...(resolvedThinking ? { thinking: resolvedThinking } : {}),
         temperature: resolvedSamplingParams.temperature,
         top_p: resolvedSamplingParams.top_p,
       };
@@ -360,16 +387,33 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       contentType: 'application/json',
       modelId: this.resolveModelId(model),
     });
+    const providerResponseDiagnostics = initializeProviderDiagnostics({
+      apiMode: 'bedrock_claude_messages',
+      diagnostics: options?.diagnostics,
+      endpoint: `bedrock:${this.region}`,
+      payload: anthropicPayload,
+      sentAt: Date.now(),
+    });
 
     try {
       // Ask Claude for a streaming chat completion given the prompt
       const res = await this.client.send(command, { abortSignal: options?.signal });
 
-      const claudeStream = createBedrockStream(res);
-
-      const [prod, debug] = claudeStream.tee();
+      if (providerResponseDiagnostics) {
+        providerResponseDiagnostics.requestId = res.$metadata?.requestId;
+        providerResponseDiagnostics.status = res.$metadata?.httpStatusCode;
+      }
+      const claudeStream = observeProviderReadableStream(
+        createBedrockStream(res),
+        providerResponseDiagnostics,
+        recordBedrockResponseEvent,
+        options?.signal,
+      );
+      let prod = claudeStream;
 
       if (process.env.DEBUG_BEDROCK_CHAT_COMPLETION === '1') {
+        const [productionStream, debug] = claudeStream.tee();
+        prod = productionStream;
         debugStream(debug).catch(console.error);
       }
 
@@ -390,6 +434,8 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       );
     } catch (e) {
       const err = e as Error & { $metadata: any };
+      recordProviderError(providerResponseDiagnostics, err);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
       const errorType = ErrorClassifier.isExceededContextWindow(err.message)
         ? AgentRuntimeErrorType.ExceededContextWindow
         : AgentRuntimeErrorType.ProviderBizError;
@@ -412,25 +458,44 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     options?: ChatMethodOptions,
   ): Promise<Response> => {
     const { max_tokens, messages, model } = payload;
+    const llamaPayload = {
+      max_gen_len: max_tokens || 400,
+      prompt: experimental_buildLlama2Prompt(messages as any),
+    };
     const command = new InvokeModelWithResponseStreamCommand({
       accept: 'application/json',
-      body: JSON.stringify({
-        max_gen_len: max_tokens || 400,
-        prompt: experimental_buildLlama2Prompt(messages as any),
-      }),
+      body: JSON.stringify(llamaPayload),
       contentType: 'application/json',
       modelId: model,
     });
+    const providerResponseDiagnostics: ProviderResponseDiagnostics | undefined =
+      initializeProviderDiagnostics({
+        apiMode: 'bedrock_llama',
+        diagnostics: options?.diagnostics,
+        endpoint: `bedrock:${this.region}`,
+        payload: llamaPayload,
+        sentAt: Date.now(),
+      });
 
     try {
       // Ask Claude for a streaming chat completion given the prompt
-      const res = await this.client.send(command);
+      const res = await this.client.send(command, { abortSignal: options?.signal });
 
-      const stream = createBedrockStream(res);
-
-      const [prod, debug] = stream.tee();
+      if (providerResponseDiagnostics) {
+        providerResponseDiagnostics.requestId = res.$metadata?.requestId;
+        providerResponseDiagnostics.status = res.$metadata?.httpStatusCode;
+      }
+      const stream = observeProviderReadableStream(
+        createBedrockStream(res),
+        providerResponseDiagnostics,
+        recordBedrockResponseEvent,
+        options?.signal,
+      );
+      let prod = stream;
 
       if (process.env.DEBUG_BEDROCK_CHAT_COMPLETION === '1') {
+        const [productionStream, debug] = stream.tee();
+        prod = productionStream;
         debugStream(debug).catch(console.error);
       }
       // Respond with the stream
@@ -439,6 +504,8 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       });
     } catch (e) {
       const err = e as Error & { $metadata: any };
+      recordProviderError(providerResponseDiagnostics, err);
+      await finalizeProviderResponse(providerResponseDiagnostics, options?.signal);
 
       throw AgentRuntimeError.chat({
         error: {

@@ -61,8 +61,8 @@ export const createCompletionPolicy = (options: CreateCompletionPolicyOptions = 
         );
 
         if (!agentId || !operationId) return;
-        // Marker-driven: only runs that stamped a marker carry a selfIteration
-        // payload. Unmarked runs have nothing to project.
+        // Ordinary foreground completions stay cheap. Post-processing is attached to marked
+        // self-review / self-reflection completions, after their bounded context window closes.
         if (!selfIteration) return;
         if (!options.onSelfIterationCompleted) {
           log('[completion-policy] no onSelfIterationCompleted wired — skipping projection');

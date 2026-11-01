@@ -1,9 +1,8 @@
-import type { WorkspaceScanDeps } from '@lobechat/device-control';
-import {
-  initWorkspace as runInitWorkspace,
-  listProjectSkills as runListProjectSkills,
-  statPath as runStatPath,
-} from '@lobechat/device-control/workspace';
+import type {
+  ListClaudeCodeMemoryParams,
+  ListClaudeCodeMemoryResult,
+  WorkspaceScanDeps,
+} from '@lobechat/device-control';
 import {
   type InitWorkspaceParams,
   type InitWorkspaceResult,
@@ -35,11 +34,24 @@ export default class WorkspaceCtr extends ControllerModule {
 
   @IpcMethod()
   async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
+    const { listProjectSkills: runListProjectSkills } =
+      await import('@lobechat/device-control/workspace');
     return runListProjectSkills(params, this.scanDeps);
+  }
+
+  /** Claude Code's auto-memory files for a project (`~/.claude/projects/<key>/memory`). */
+  @IpcMethod()
+  async listClaudeCodeMemory(
+    params: ListClaudeCodeMemoryParams,
+  ): Promise<ListClaudeCodeMemoryResult> {
+    const { listClaudeCodeMemory: runListClaudeCodeMemory } =
+      await import('@lobechat/device-control/claude-code-memory');
+    return runListClaudeCodeMemory(params, this.scanDeps);
   }
 
   @IpcMethod()
   async initWorkspace(params: InitWorkspaceParams): Promise<InitWorkspaceResult> {
+    const { initWorkspace: runInitWorkspace } = await import('@lobechat/device-control/workspace');
     return runInitWorkspace(params, this.scanDeps);
   }
 
@@ -47,6 +59,7 @@ export default class WorkspaceCtr extends ControllerModule {
   async statPath(params: {
     path: string;
   }): Promise<{ exists: boolean; isDirectory: boolean; repoType?: 'git' | 'github' }> {
+    const { statPath: runStatPath } = await import('@lobechat/device-control/workspace');
     return runStatPath(params);
   }
 

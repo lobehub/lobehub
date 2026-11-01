@@ -1,8 +1,8 @@
 import { CURRENT_VERSION } from '@lobechat/const';
 import { type CallReportRequest } from '@lobehub/market-types';
-import { after } from 'next/server';
 
 import { DiscoverService } from '@/server/services/discover';
+import { after } from '@/server/utils/scheduleAfterResponse';
 
 /**
  * Calculate byte size of object
@@ -56,7 +56,6 @@ export interface ScheduleToolCallReportParams {
 
 /**
  * Schedule a tool call report to be sent after the response.
- * Uses Next.js after() to avoid blocking the response.
  */
 export function scheduleToolCallReport(params: ScheduleToolCallReportParams): void {
   const {
@@ -77,7 +76,6 @@ export function scheduleToolCallReport(params: ScheduleToolCallReportParams): vo
   // Only report when telemetry is enabled and marketAccessToken exists
   if (!telemetryEnabled || !marketAccessToken) return;
 
-  // Use Next.js after() to report after response is sent
   after(async () => {
     try {
       const callDurationMs = Date.now() - startTime;

@@ -1,0 +1,164 @@
+import { Command } from 'commander';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { registerProjectCommand } from './project';
+
+const { mockClient, mockResolveWorkspaceId } = vi.hoisted(() => ({
+  mockClient: {
+    project: {
+      acceptCompletion: { mutate: vi.fn() },
+      addAgent: { mutate: vi.fn() },
+      addKnowledgeBase: { mutate: vi.fn() },
+      create: { mutate: vi.fn() },
+      delete: { mutate: vi.fn() },
+      detail: { query: vi.fn() },
+      list: { query: vi.fn() },
+      rejectCompletion: { mutate: vi.fn() },
+      removeAgent: { mutate: vi.fn() },
+      removeKnowledgeBase: { mutate: vi.fn() },
+      reopen: { mutate: vi.fn() },
+      requestCompletion: { mutate: vi.fn() },
+      update: { mutate: vi.fn() },
+      updateStatus: { mutate: vi.fn() },
+    },
+    task: { create: { mutate: vi.fn() } },
+    workspace: { getById: { query: vi.fn() } },
+  },
+  mockResolveWorkspaceId: vi.fn(),
+}));
+
+vi.mock('../api/client', () => ({ getTrpcClient: vi.fn().mockResolvedValue(mockClient) }));
+vi.mock('../api/workspace', () => ({ resolveWorkspaceId: mockResolveWorkspaceId }));
+vi.mock('../settings', () => ({ resolveServerUrl: () => 'https://app.example.com' }));
+vi.mock('../utils/logger', () => ({
+  log: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
+function createProgram() {
+  const program = new Command();
+  program.exitOverride();
+  registerProjectCommand(program);
+  return program;
+}
+
+describe('project command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockResolveWorkspaceId.mockReturnValue(undefined);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('links the project page in view --json output', async () => {
+    mockClient.project.detail.query.mockResolvedValue({
+      data: { project: { id: 'prj_1', name: 'Apollo' } },
+    });
+    await createProgram().parseAsync(['node', 'test', 'project', 'view', 'prj_1', '--json']);
+    expect(JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0])).toMatchObject({
+      project: { id: 'prj_1' },
+      url: 'https://app.example.com/project/prj_1',
+    });
+  });
+
+  it('creates a project', async () => {
+    mockClient.project.create.mutate.mockResolvedValue({ data: { id: 'prj_1' } });
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'project',
+      'create',
+      '--name',
+      'Apollo',
+      '--identifier',
+      'LOBE',
+      '--visibility',
+      'private',
+    ]);
+    expect(mockClient.project.create.mutate).toHaveBeenCalledWith({
+      identifier: 'LOBE',
+      name: 'Apollo',
+      visibility: 'private',
+    });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('https://app.example.com/project/prj_1'),
+    );
+  });
+
+  it('creates a project without an identifier', async () => {
+    mockClient.project.create.mutate.mockResolvedValue({ data: { id: 'prj_2' } });
+    await createProgram().parseAsync(['node', 'test', 'project', 'create', '--name', 'Apollo']);
+    expect(mockClient.project.create.mutate).toHaveBeenCalledWith({ name: 'Apollo' });
+  });
+
+  it('binds an agent with its project role', async () => {
+    mockClient.project.addAgent.mutate.mockResolvedValue({ success: true });
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'project',
+      'agent',
+      'add',
+      'prj_1',
+      'agent_1',
+      '--role',
+      'lead',
+    ]);
+    expect(mockClient.project.addAgent.mutate).toHaveBeenCalledWith({
+      agentId: 'agent_1',
+      id: 'prj_1',
+      role: 'lead',
+    });
+  });
+
+  it('creates a task directly in the project', async () => {
+    mockResolveWorkspaceId.mockReturnValue('ws-1');
+    mockClient.workspace.getById.query.mockResolvedValue({ id: 'ws-1', slug: 'lobehub' });
+    mockClient.task.create.mutate.mockResolvedValue({
+      data: { id: 'task_1', identifier: 'T-1' },
+    });
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'project',
+      'task',
+      'create',
+      'prj_1',
+      '--instruction',
+      'Ship it',
+      '--agent',
+      'agent_1',
+    ]);
+    expect(mockClient.task.create.mutate).toHaveBeenCalledWith({
+      assigneeAgentId: 'agent_1',
+      instruction: 'Ship it',
+      name: undefined,
+      parentTaskId: undefined,
+      projectId: 'prj_1',
+    });
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('https://app.example.com/lobehub/task/T-1'),
+    );
+  });
+
+  it('requests and accepts human completion review', async () => {
+    mockClient.project.requestCompletion.mutate.mockResolvedValue({ success: true });
+    mockClient.project.acceptCompletion.mutate.mockResolvedValue({ success: true });
+    await createProgram().parseAsync(['node', 'test', 'project', 'request-review', 'prj_1']);
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'project',
+      'accept',
+      'prj_1',
+      '--comment',
+      'Approved',
+    ]);
+    expect(mockClient.project.requestCompletion.mutate).toHaveBeenCalledWith({ id: 'prj_1' });
+    expect(mockClient.project.acceptCompletion.mutate).toHaveBeenCalledWith({
+      comment: 'Approved',
+      id: 'prj_1',
+    });
+  });
+});

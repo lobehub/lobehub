@@ -5,6 +5,7 @@ import {
   type LobeBuiltinTool,
   type LobeTool,
 } from '@lobechat/types';
+import type { ModelAbilities } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
 
@@ -98,12 +99,15 @@ export interface ServerCreateAgentToolsEngineParams {
   canUseDevice?: boolean;
   /** Device gateway context for remote tool calling */
   deviceContext?: {
+    supportedTools?: readonly string[];
     /** When true, a device has been auto-activated — Remote Device tool is unnecessary */
     autoActivated?: boolean;
     boundDeviceId?: string;
     deviceOnline?: boolean;
     gatewayConfigured: boolean;
   };
+  /** Plugin and builtin identifiers explicitly disabled in the agent configuration. */
+  disabledPluginIds?: string[];
   /** Whether to suppress the local-system builtin while preserving other tools. */
   disableLocalSystem?: boolean;
   /**
@@ -116,6 +120,8 @@ export interface ServerCreateAgentToolsEngineParams {
   globalMemoryEnabled?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
+  /** Whether an attached or agent-assigned file is previewed because it is too long to inline */
+  hasOversizedFiles?: boolean;
   /** Whether the request originates from a bot conversation (auto-enables message tool) */
   isBotConversation?: boolean;
   /**
@@ -135,6 +141,10 @@ export interface ServerCreateAgentToolsEngineParams {
   manifestContext?: BuiltinToolResolveContext;
   /** Model name for function calling compatibility check */
   model: string;
+  /** Active chat model abilities for mode-specific builtin tool gates */
+  modelAbilities?: ModelAbilities;
   /** Provider name for function calling compatibility check */
   provider: string;
+  /** Final search-routing decision resolved by the caller. */
+  useApplicationBuiltinSearchTool?: boolean;
 }

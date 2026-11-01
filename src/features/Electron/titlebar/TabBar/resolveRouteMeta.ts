@@ -23,14 +23,18 @@ export const matchRouteMeta = (routes: RouteObject[], url: string): MatchedRoute
   for (let i = matches.length - 1; i >= 0; i -= 1) {
     const meta = getRouteMetaFromHandle(matches[i].route.handle);
     if (meta) {
-      return { meta, params, static: { icon: meta.icon, titleKey: meta.titleKey } };
+      return {
+        meta,
+        params,
+        static: { icon: meta.icon, tabTitleKey: meta.tabTitleKey, titleKey: meta.titleKey },
+      };
     }
   }
 
   return { params, static: {} };
 };
 
-const isMeaningful = (value: string | undefined): value is string =>
+const isMeaningful = (value: string | null | undefined): value is string =>
   typeof value === 'string' && value.length > 0;
 
 export const guardedMergeCache = (
@@ -42,6 +46,9 @@ export const guardedMergeCache = (
   const merged: DynamicRouteMeta = { ...prev };
   if (isMeaningful(next.title)) merged.title = next.title;
   if (isMeaningful(next.avatar)) merged.avatar = next.avatar;
+  else if (next.avatar === null) delete merged.avatar;
+  if (isMeaningful(next.avatarSeed)) merged.avatarSeed = next.avatarSeed;
+  if (isMeaningful(next.avatarKind)) merged.avatarKind = next.avatarKind;
   if (isMeaningful(next.backgroundColor)) merged.backgroundColor = next.backgroundColor;
 
   return Object.keys(merged).length > 0 ? merged : undefined;
@@ -49,5 +56,5 @@ export const guardedMergeCache = (
 
 export const FALLBACK_ICON = Circle;
 
-export const pickMeaningful = (value: string | undefined): string | undefined =>
+export const pickMeaningful = (value: string | null | undefined): string | undefined =>
   isMeaningful(value) ? value : undefined;

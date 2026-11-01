@@ -17,6 +17,8 @@
   "desktop.showApp.title": "Pokaż/Ukryj główne okno",
   "editMessage.desc": "Wejdź w tryb edycji, przytrzymując Alt i klikając dwukrotnie wiadomość",
   "editMessage.title": "Edytuj wiadomość",
+  "findInTopic.desc": "Przeszukaj każdą wiadomość w bieżącym temacie w prawym panelu",
+  "findInTopic.title": "Znajdź w temacie",
   "navigateToChat.desc": "Przełącz na kartę Czat i wejdź do Lobe AI",
   "navigateToChat.title": "Przełącz na domyślny czat",
   "nextTab.desc": "Przejdź do następnej zakładki w stylu przeglądarki w aplikacji Desktop; po osiągnięciu końca przechodzi do pierwszej zakładki",
@@ -41,8 +43,12 @@
   "switchAgent.title": "Szybkie przełączanie agenta",
   "switchTab.desc": "Przejdź do konkretnej zakładki według jej pozycji (1–9) na pasku zakładek aplikacji Desktop",
   "switchTab.title": "Przełącz na zakładkę według numeru",
+  "toggleFavorite.desc": "Dodaj otwartą stronę do sekcji Ulubione na pasku bocznym lub usuń ją",
+  "toggleFavorite.title": "Dodaj do / Usuń z Ulubionych",
   "toggleLeftPanel.desc": "Pokaż lub ukryj lewy panel",
   "toggleLeftPanel.title": "Przełącz lewy panel",
   "toggleRightPanel.desc": "Pokaż lub ukryj prawy panel",
-  "toggleRightPanel.title": "Przełącz prawy panel"
+  "toggleRightPanel.title": "Przełącz prawy panel",
+  "toggleTerminalPanel.desc": "Pokaż lub ukryj dolny panel terminala",
+  "toggleTerminalPanel.title": "Przełącz panel terminala"
 }

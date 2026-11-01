@@ -85,4 +85,48 @@ describe('buildBotContext', () => {
       platformThreadId: 'thread-x',
     });
   });
+
+  describe('device list', () => {
+    it('trusts a listed sender who is not the owner', () => {
+      const ctx = buildBotContext({
+        ...baseParams,
+        authorUserId: 'friend-1',
+        deviceAllowlist: ['friend-1'],
+        operatorUserId: 'owner-1',
+      });
+      expect(ctx.isOwner).toBe(false);
+      expect(ctx.isDeviceTrusted).toBe(true);
+    });
+
+    it('does not trust a sender missing from the list', () => {
+      const ctx = buildBotContext({
+        ...baseParams,
+        authorUserId: 'stranger',
+        deviceAllowlist: ['friend-1'],
+        operatorUserId: 'owner-1',
+      });
+      expect(ctx.isDeviceTrusted).toBeUndefined();
+    });
+
+    it('does not trust an unknown sender, even with an empty ID on the list', () => {
+      const ctx = buildBotContext({
+        ...baseParams,
+        authorUserId: undefined,
+        deviceAllowlist: [''],
+        operatorUserId: 'owner-1',
+      });
+      expect(ctx.isDeviceTrusted).toBeUndefined();
+    });
+
+    it('leaves the owner marked as owner only', () => {
+      const ctx = buildBotContext({
+        ...baseParams,
+        authorUserId: 'owner-1',
+        deviceAllowlist: ['owner-1'],
+        operatorUserId: 'owner-1',
+      });
+      expect(ctx.isOwner).toBe(true);
+      expect(ctx.isDeviceTrusted).toBeUndefined();
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { CursorAdapter } from '../adapters/cursor';
 import type { SubagentIntent } from '../subagentCoordinator';
 import { createMainAgentRunState, reduceMainAgent } from './index';
 import type { MainAgentIntent, MainAgentReduceCtx, MainAgentRunState } from './types';
@@ -52,6 +53,21 @@ const tool = (id: string) => ({
 
 const toolsEvent = (tools: any[]) => ({
   data: { chunkType: 'tools_calling', toolsCalling: tools },
+  type: 'stream_chunk',
+});
+
+const toolStateEvent = (
+  toolCallId: string,
+  snapshotSeq: number,
+  pluginState: Record<string, unknown>,
+) => ({
+  data: {
+    chunkType: 'tool_state',
+    pluginState,
+    snapshotMode: 'replace',
+    snapshotSeq,
+    toolCallId,
+  },
   type: 'stream_chunk',
 });
 
@@ -108,6 +124,40 @@ describe('main agent reducer', () => {
     expect(state.accContent).toBe('Hello world');
   });
 
+  it('emits a replace-only tool-state intent without mutating reducer state', () => {
+    const pluginState = { todos: { items: [{ status: 'processing', text: 'Implement' }] } };
+    const initial = createMainAgentRunState('A0');
+    const result = reduceMainAgent(initial, toolStateEvent('todo-1', 2, pluginState), makeCtx());
+
+    expect(result.intents).toEqual([
+      {
+        kind: 'updateToolState',
+        pluginState,
+        snapshotSeq: 2,
+        toolCallId: 'todo-1',
+      },
+    ]);
+    expect(result.state).toBe(initial);
+  });
+
+  it('ignores malformed tool-state chunks', () => {
+    const { steps } = run([
+      toolStateEvent('todo-1', 0, { todos: {} }),
+      {
+        data: {
+          chunkType: 'tool_state',
+          pluginState: [],
+          snapshotMode: 'replace',
+          snapshotSeq: 1,
+          toolCallId: 'todo-1',
+        },
+        type: 'stream_chunk',
+      },
+    ]);
+
+    expect(steps).toEqual([[], []]);
+  });
+
   it('replace-mode text snapshots replace, and stale sequences are dropped', () => {
     const { steps, state } = run([
       textEvent('v2', { snapshotMode: 'replace', snapshotSeq: 2 }),
@@ -119,6 +169,31 @@ describe('main agent reducer', () => {
     expect(steps[2]).toEqual([{ content: 'v3', kind: 'streamContent', messageId: 'A0' }]);
     expect(state.accContent).toBe('v3');
     expect(state.lastTextSnapshotSeq).toBe(3);
+  });
+
+  it('replaces reasoning snapshots and drops stale or redelivered seqs', () => {
+    const snapshot = (reasoning: string, snapshotSeq: number) => ({
+      data: { chunkType: 'reasoning', reasoning, snapshotMode: 'replace', snapshotSeq },
+      type: 'stream_chunk',
+    });
+    const { state, steps } = run([
+      snapshot('thinking', 1),
+      snapshot('thinking done', 2),
+      // Redelivered seq 2 (batch retry on a cold replica) — must be a no-op,
+      // not an append: appending would duplicate the reasoning durably.
+      snapshot('thinking done', 2),
+      // Stale out-of-order snapshot — dropped.
+      snapshot('thinking', 1),
+    ]);
+
+    expect(steps[1]).toEqual([
+      { kind: 'streamContent', messageId: 'A0', reasoning: 'thinking done' },
+    ]);
+    expect(steps[2]).toEqual([]);
+    expect(steps[3]).toEqual([]);
+    expect(state.accReasoning).toBe('thinking done');
+    expect(state.lastReasoningSnapshotSeq).toBe(2);
+    expect(state.turnMetadata.heteroReasoningSnapshotSeq).toBe(2);
   });
 
   it('accumulates reasoning separately', () => {
@@ -167,6 +242,50 @@ describe('main agent reducer', () => {
     expect(flush).toMatchObject({ content: 'first', messageId: 'A0' });
     const created = ofKind(steps[3], 'createAssistant')[0];
     expect(created).toMatchObject({ messageId: 'msg_2', parentId: 'A0' });
+  });
+
+  it('persists Cursor post-tool output in a new assistant turn', () => {
+    const adapter = new CursorAdapter();
+    const cursorAssistant = (text: string, timestamp_ms: number) => ({
+      message: { content: [{ text, type: 'text' }], role: 'assistant' },
+      timestamp_ms,
+      type: 'assistant',
+    });
+    const started = {
+      call_id: 'cursor-tool',
+      subtype: 'started',
+      tool_call: { readToolCall: { args: { path: 'README.md' } } },
+      type: 'tool_call',
+    };
+    const events = [
+      ...adapter.adapt({ model: 'sonnet', subtype: 'init', type: 'system' }),
+      ...adapter.adapt(cursorAssistant('before tool', 1)),
+      ...adapter.adapt(started),
+      ...adapter.adapt({
+        ...started,
+        subtype: 'completed',
+        tool_call: {
+          readToolCall: {
+            args: { path: 'README.md' },
+            result: { success: { content: '# Project' } },
+          },
+        },
+      }),
+      ...adapter.adapt(cursorAssistant('after tool', 2)),
+    ];
+    const { state, steps } = run(events);
+    const created = steps.flatMap((step) => ofKind(step, 'createAssistant'));
+    const streamed = steps.flatMap((step) => ofKind(step, 'streamContent'));
+
+    expect(created).toEqual([
+      expect.objectContaining({ messageId: 'msg_2', parentId: 'A0', provider: 'cursor' }),
+    ]);
+    expect(streamed.at(-1)).toEqual({
+      content: 'after tool',
+      kind: 'streamContent',
+      messageId: 'msg_2',
+    });
+    expect(state.currentAssistantId).toBe('msg_2');
   });
 
   // ─── Signal/反应式 turns stay tool-mounted; the next normal turn resumes the spine ───
@@ -262,14 +381,6 @@ describe('main agent reducer', () => {
     expect(ofKind(r.intents, 'createAssistant')[0]).toMatchObject({ parentId: 'SIG' });
   });
 
-  it('falls back to the current assistant only before any tool exists', () => {
-    const { steps } = run([textEvent('hi'), newStepEvent()]); // no tool ever seen
-    expect(ofKind(steps[1], 'createAssistant')[0]).toMatchObject({
-      messageId: 'msg_1',
-      parentId: 'A0',
-    });
-  });
-
   it('resolves a main tool_result via the global tool map', () => {
     const { steps } = run([
       toolsEvent([tool('t1')]),
@@ -314,6 +425,34 @@ describe('main agent reducer', () => {
     });
     expect(state.ended).toBe(true);
     expect(state.accContent).toBe(''); // reset → idempotent re-finalize
+  });
+
+  it('persists the open turn on visible_output_end while the run stays open', () => {
+    const { steps, state } = run([
+      initEvent('claude-opus-4-8', 'claude-code'),
+      reasoningEvent('thinking'),
+      textEvent('final answer'),
+      { data: {}, type: 'visible_output_end' },
+    ]);
+    expect(steps[3]).toEqual([
+      {
+        content: 'final answer',
+        kind: 'persistAssistant',
+        messageId: 'A0',
+        model: 'claude-opus-4-8',
+        provider: 'claude-code',
+        reasoning: 'thinking',
+      },
+    ]);
+    // Not a terminal: the accumulators stay so the later terminal flush
+    // rewrites the same content instead of blanking it.
+    expect(state.ended).toBeFalsy();
+    expect(state.accContent).toBe('final answer');
+  });
+
+  it('emits nothing on visible_output_end when the turn has no text', () => {
+    const { steps } = run([{ data: {}, type: 'visible_output_end' }]);
+    expect(steps[0]).toEqual([]);
   });
 
   it('suppresses echoed content and stamps the error on AuthRequired terminal error', () => {
@@ -438,4 +577,204 @@ describe('reduceMainAgent — newStep idempotency key', () => {
     const { steps } = run([textEvent('first'), newStepWithId(undefined)]);
     expect(ofKind(steps[1], 'createAssistant')).toHaveLength(1);
   });
+});
+
+describe('reduceMainAgent — heterogeneous intervention ACK boundary', () => {
+  const request = {
+    data: {
+      apiName: 'askUserQuestion',
+      arguments: JSON.stringify({
+        questions: [
+          {
+            header: 'Permission',
+            multiSelect: false,
+            options: [
+              { id: 'allow', label: 'Allow' },
+              { id: 'deny', label: 'Deny' },
+            ],
+            question: 'Run command?',
+          },
+        ],
+      }),
+      deadline: 1_900_000_000_000,
+      identifier: 'claude-code',
+      interactionKind: 'permission',
+      provider: 'cursor',
+      toolCallId: 'permission-1',
+    },
+    type: 'agent_intervention_request',
+  };
+
+  it('materializes a request-before-tool row and persists pending exactly once', () => {
+    const { state, steps } = run([request]);
+
+    expect(ofKind(steps[0], 'persistToolBatch')).toHaveLength(1);
+    expect(ofKind(steps[0], 'setToolIntervention')).toEqual([
+      expect.objectContaining({
+        request: expect.objectContaining({ interactionKind: 'permission', provider: 'cursor' }),
+        toolCallId: 'permission-1',
+        transition: 'pending',
+      }),
+    ]);
+    expect(state.interventionsByCallId.get('permission-1')?.transition).toBe('pending');
+  });
+
+  it('keeps an existing subagent question out of the main tool batch and applies its ACK', () => {
+    const ctx = makeCtx({ toolMessageIds: new Map([['permission-1', 'child-tool']]) });
+    const ack = {
+      data: { producerAck: true, result: { answer: 'allow' }, toolCallId: 'permission-1' },
+      type: 'agent_intervention_response',
+    };
+    const { state, steps } = run([request, ack], 'A0', ctx);
+
+    expect(ofKind(steps[0], 'persistToolBatch')).toEqual([]);
+    expect(state.toolState.toolMsgIdByCallId.size).toBe(0);
+    expect(ofKind(steps[1], 'setToolIntervention')).toEqual([
+      expect.objectContaining({ intervention: { status: 'approved' }, toolCallId: 'permission-1' }),
+    ]);
+  });
+
+  it('closes a scoped child result and keeps a late unscoped request on the original tool', () => {
+    const ctx = makeCtx({ toolMessageIds: new Map([['permission-1', 'child-tool']]) });
+    const result = {
+      data: {
+        content: 'done',
+        subagent: { parentToolCallId: 'task-1', subagentMessageId: 'child-turn' },
+        toolCallId: 'permission-1',
+      },
+      type: 'tool_result',
+    };
+    const { state, steps } = run([request, result, request], 'A0', ctx);
+
+    expect(ofKind(steps[1], 'setToolIntervention')).toEqual([
+      expect.objectContaining({ toolCallId: 'permission-1', transition: 'session_ended' }),
+    ]);
+    expect(ofKind(steps[1], 'resolveToolResult')).toHaveLength(0);
+    expect(ofKind(steps[2], 'persistToolBatch')).toEqual([]);
+    expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('aborted');
+  });
+
+  it('closes a child question when its parent finishes and keeps late requests out of main', () => {
+    const ctx = makeCtx({ toolMessageIds: new Map([['permission-1', 'child-tool']]) });
+    const childTools = {
+      data: {
+        chunkType: 'tools_calling',
+        subagent: { parentToolCallId: 'task-1', subagentMessageId: 'child-turn' },
+        toolsCalling: [{ ...tool('permission-1'), apiName: 'askUserQuestion' }],
+      },
+      type: 'stream_chunk',
+    };
+    const { state, steps } = run(
+      [childTools, request, toolResultEvent('task-1', 'child finished'), request],
+      'A0',
+      ctx,
+    );
+
+    expect(state.subagents.runs.size).toBe(0);
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([
+      expect.objectContaining({ toolCallId: 'permission-1', transition: 'session_ended' }),
+    ]);
+    expect(ofKind(steps[3], 'persistToolBatch')).toEqual([]);
+    expect(ofKind(steps[3], 'setToolIntervention')[0].transition).toBe('session_ended');
+  });
+
+  it('keeps the XADD publish leg non-terminal and resolves only on producer ACK', () => {
+    const requestId = '018fbd8e-7baf-7c6d-8000-000000000001';
+    const publishLeg = {
+      data: {
+        producerAck: false,
+        resolutionRequestId: requestId,
+        result: { 'Run command?': 'allow' },
+        toolCallId: 'permission-1',
+      },
+      type: 'agent_intervention_response',
+    };
+    const producerAck = {
+      data: { ...publishLeg.data, producerAck: true },
+      type: 'agent_intervention_response',
+    };
+    const { state, steps } = run([request, publishLeg, producerAck]);
+
+    expect(steps[1]).toEqual([]);
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([
+      expect.objectContaining({
+        resolutionRequestId: requestId,
+        toolCallId: 'permission-1',
+        transition: 'resolved',
+      }),
+    ]);
+    expect(state.interventionsByCallId.get('permission-1')).toMatchObject({
+      resolutionRequestId: requestId,
+      transition: 'resolved',
+    });
+  });
+
+  it('buffers a producer ACK that beats the request and replays one terminal write', () => {
+    const producerAck = {
+      data: {
+        producerAck: true,
+        resolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000002',
+        result: { 'Run command?': 'deny' },
+        toolCallId: 'permission-1',
+      },
+      type: 'agent_intervention_response',
+    };
+    const { state, steps } = run([producerAck, request]);
+
+    expect(steps[0]).toEqual([]);
+    expect(ofKind(steps[1], 'setToolIntervention')).toHaveLength(1);
+    expect(ofKind(steps[1], 'setToolIntervention')[0]).toMatchObject({
+      request: expect.objectContaining({ provider: 'cursor' }),
+      transition: 'resolved',
+    });
+    expect(state.interventionsByCallId.get('permission-1')?.transition).toBe('resolved');
+  });
+
+  it('closes only the question whose upstream tool has returned, without a user response', () => {
+    const other = { ...request, data: { ...request.data, toolCallId: 'question-2' } };
+    const { state, steps } = run([request, other, toolResultEvent('permission-1', 'done')]);
+
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([
+      expect.objectContaining({
+        intervention: { rejectedReason: 'session_ended', resolving: false, status: 'aborted' },
+        toolCallId: 'permission-1',
+        transition: 'session_ended',
+      }),
+    ]);
+    expect(state.interventionsByCallId.get('question-2')?.transition).toBe('pending');
+  });
+
+  it.each(['agent_runtime_end', 'error'])('closes unanswered questions on %s', (type) => {
+    const { state, steps } = run([request, { data: {}, type }]);
+    expect(ofKind(steps[1], 'setToolIntervention')).toEqual([
+      expect.objectContaining({ toolCallId: 'permission-1', transition: 'session_ended' }),
+    ]);
+    expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('aborted');
+  });
+
+  it('preserves an acknowledged answer after the tool and runtime finish', () => {
+    const ack = {
+      data: { producerAck: true, result: { 'Run command?': 'allow' }, toolCallId: 'permission-1' },
+      type: 'agent_intervention_response',
+    };
+    const { state, steps } = run([
+      request,
+      ack,
+      toolResultEvent('permission-1', 'done'),
+      { type: 'agent_runtime_end' },
+    ]);
+    expect(ofKind(steps[2], 'setToolIntervention')).toEqual([]);
+    expect(ofKind(steps[3], 'setToolIntervention')).toEqual([]);
+    expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('approved');
+  });
+
+  it.each(['tool_result', 'agent_runtime_end'])(
+    'does not reopen a late request after %s',
+    (type) => {
+      const end = { data: { toolCallId: 'permission-1', content: 'done' }, type };
+      const { state, steps } = run([end, request]);
+      expect(state.interventionsByCallId.get('permission-1')?.intervention.status).toBe('aborted');
+      expect(ofKind(steps[1], 'setToolIntervention')[0]?.transition).toBe('session_ended');
+    },
+  );
 });

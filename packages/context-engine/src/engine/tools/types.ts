@@ -183,6 +183,8 @@ export type ActivationSource = 'active_tools' | 'mention' | 'device' | 'discover
  * Operation-level tool set: determined at createOperation time, immutable during execution.
  */
 export interface OperationToolSet {
+  /** Tool IDs that may be restored from historical explicit activations for this run. */
+  activatableToolIds?: string[];
   enabledToolIds: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;

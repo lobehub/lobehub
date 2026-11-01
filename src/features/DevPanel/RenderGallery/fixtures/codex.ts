@@ -69,6 +69,10 @@ export default defineFixtures({
   },
   apiList: [
     {
+      description: 'Show a warning emitted by the Codex runtime.',
+      name: 'error',
+    },
+    {
       description: 'Run a shell command in Codex.',
       name: 'command_execution',
     },
@@ -90,6 +94,15 @@ export default defineFixtures({
     },
   ],
   fixtures: {
+    error: single({
+      args: {
+        id: 'item_0',
+        message:
+          'This session was recorded with model `gpt-5.5` but is resuming with `gpt-5.6-sol`. Consider switching back to the original model.',
+        type: 'error',
+      },
+      content: 'Completed error.',
+    }),
     command_execution: single({
       args: { command: "/bin/zsh -lc 'bun run type-check'" },
       content: 'Checked 1247 files in 2.3s\nNo type errors found.',

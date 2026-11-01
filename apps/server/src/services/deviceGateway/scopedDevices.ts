@@ -1,10 +1,12 @@
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { type LobeChatDatabase } from '@lobechat/database';
+import { sortDevicesByActivity } from '@lobechat/types';
 import debug from 'debug';
 
 import { DeviceModel } from '@/database/models/device';
 
 import { deviceGateway } from './index';
+import { filterAuthorizedDevicePresence } from './scopedDevicePresence';
 
 const log = debug('lobe-server:device-scope');
 
@@ -28,10 +30,20 @@ const log = debug('lobe-server:device-scope');
  * devices filter on `online` (both `listOnlineDevices` and the systemRole
  * snapshot already do).
  *
- * The **gateway is authoritative** for which devices are online (and enforces the
- * scope via the principal); the DB lookup is best-effort enrichment (aliases +
- * offline rows). A DB hiccup must NOT blank the device list / disable
- * auto-activation, so it degrades to gateway-only on failure.
+ * The **gateway is authoritative** for liveness, while the database is
+ * authoritative for workspace enrollment and visibility. Personal lookups may
+ * degrade to Gateway-only transient devices during auto-registration; workspace
+ * lookups fail closed when their registry query is unavailable.
+ *
+ * Use when:
+ * - Agent planning or a server runtime needs devices eligible in one principal
+ * - Device metadata must combine persistent registration with current presence
+ *
+ * Expects:
+ * - `workspaceId`, when present, has already passed an authorized workspace scope
+ *
+ * Returns:
+ * - Registered devices with scoped liveness, plus personal-only transient devices
  */
 export const getScopedOnlineDevices = async (
   serverDB: LobeChatDatabase,
@@ -44,14 +56,21 @@ export const getScopedOnlineDevices = async (
   const [rows, online] = await Promise.all([
     (workspaceId ? deviceModel.queryWorkspaceDevices() : deviceModel.queryPersonal()).catch(
       (error) => {
-        log('DB device lookup failed (scope=%s); using gateway only: %O', scope, error);
+        log(
+          'DB device lookup failed (scope=%s); %s: %O',
+          scope,
+          workspaceId ? 'failing closed' : 'using gateway only',
+          error,
+        );
         return [] as Awaited<ReturnType<typeof deviceModel.queryPersonal>>;
       },
     ),
     deviceGateway.queryDeviceList(userId, workspaceId),
   ]);
 
-  const liveById = new Map(online.map((d) => [d.deviceId, d]));
+  const registeredDeviceIds = new Set(rows.map((device) => device.deviceId));
+  const authorizedOnline = filterAuthorizedDevicePresence(registeredDeviceIds, online, scope);
+  const liveById = new Map(authorizedOnline.map((d) => [d.deviceId, d]));
   const seen = new Set<string>();
   const fromDb = rows.map((row): DeviceAttachment => {
     seen.add(row.deviceId);
@@ -67,10 +86,17 @@ export const getScopedOnlineDevices = async (
       scope,
     };
   });
-  // Online in the gateway but not yet auto-registered in the DB (no alias yet).
-  const transient = online
+  // Personal clients register immediately before opening their socket, but a
+  // short race can still expose the live connection first. Preserve that
+  // compatibility only for personal scope. Workspace rows are authorization:
+  // a Gateway-only connection may be a stale process that missed Unshare and
+  // must never become visible or executable again.
+  const transient = authorizedOnline
     .filter((d) => !seen.has(d.deviceId))
     .map((d): DeviceAttachment => ({ ...d, friendlyName: null, scope }));
 
-  return [...fromDb, ...transient];
+  // Online first, then most recently active — the same order the settings list
+  // and the run-target picker render, so "the first device" means the same
+  // thing to the model as it does to the user reading the picker.
+  return sortDevicesByActivity([...fromDb, ...transient]);
 };

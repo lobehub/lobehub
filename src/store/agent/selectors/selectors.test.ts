@@ -12,11 +12,13 @@ import { describe, expect, it } from 'vitest';
 
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
+import { initialAgentArtworkSliceState } from '@/store/agent/slices/artwork/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin';
 
 import { agentSelectors, currentAgentConfig } from './selectors';
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
+  ...initialAgentArtworkSliceState,
   ...initialAgentSliceState,
   ...initialBuiltinAgentSliceState,
   ...overrides,
@@ -421,6 +423,36 @@ describe('agentSelectors', () => {
       });
 
       expect(agentSelectors.isAgentConfigLoading(state)).toBe(false);
+    });
+
+    it('should return false when agent is marked not-found (settled, not loading)', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {},
+        agentNotFoundMap: { 'agent-1': true },
+      });
+
+      expect(agentSelectors.isAgentConfigLoading(state)).toBe(false);
+    });
+  });
+
+  describe('isCurrentAgentNotFound', () => {
+    it('should return false when no activeAgentId', () => {
+      const state = createState({ agentNotFoundMap: { 'agent-1': true } });
+
+      expect(agentSelectors.isCurrentAgentNotFound(state)).toBe(false);
+    });
+
+    it('should reflect the active agent not-found flag', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentNotFoundMap: { 'agent-1': true },
+      });
+
+      expect(agentSelectors.isCurrentAgentNotFound(state)).toBe(true);
+      expect(agentSelectors.isCurrentAgentNotFound(createState({ activeAgentId: 'agent-1' }))).toBe(
+        false,
+      );
     });
   });
 

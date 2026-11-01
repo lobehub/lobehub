@@ -7,7 +7,7 @@ import { LobeAgentApiName } from './types';
 /**
  * Context-aware manifest for the lobe-agent tool.
  *
- * `lobe-agent` bundles plan / todo / visual-media APIs together with the
+ * `lobe-agent` bundles plan / todo / media-analysis APIs together with the
  * `callSubAgent` dispatch. The dispatch must be hidden in two contexts:
  *
  * - **Inside a group** (`scope` is `group` / `group_agent`): coordination already
@@ -16,7 +16,7 @@ import { LobeAgentApiName } from './types';
  * - **Inside a sub-agent** (`isSubAgent`): a nested sub-agent must not spawn
  *   further sub-agents.
  *
- * In both cases plan / todo / visual-media stay available, so this returns a
+ * In both cases plan / todo / media-analysis APIs stay available, so this returns a
  * trimmed manifest (not `null`). It rewrites BOTH halves of the manifest in step:
  * the `api` list drops `callSubAgent`, and `systemRole` switches to the variant
  * without the sub-agent section — otherwise the prompt would keep instructing the

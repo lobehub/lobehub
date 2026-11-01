@@ -1,5 +1,5 @@
 import type { LLMRoleType } from '../llm';
-import type { MessageToolCall } from '../message';
+import type { MessageToolCall, ModelReasoning } from '../message';
 import type { OpenAIFunctionCall } from './functionCall';
 
 export type ChatResponseFormat =
@@ -38,7 +38,12 @@ interface UserMessageContentPartVideo {
   video_url: { url: string };
 }
 interface UserMessageContentPartAudio {
-  audio_url: { url: string };
+  audio_url: {
+    codec?: string;
+    durationMs?: number;
+    mimeType?: string;
+    url: string;
+  };
   type: 'audio_url';
 }
 
@@ -59,11 +64,10 @@ export interface OpenAIChatMessage {
    * @deprecated
    */
   function_call?: OpenAIFunctionCall;
+  model?: string;
   name?: string;
-  reasoning?: {
-    content?: string;
-    duration?: number;
-  };
+  provider?: string;
+  reasoning?: ModelReasoning;
   reasoning_content?: string;
   /**
    * Role

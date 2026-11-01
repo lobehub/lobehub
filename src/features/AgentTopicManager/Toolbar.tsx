@@ -2,21 +2,24 @@
 
 import {
   ActionIcon,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
   type DropdownItem,
   DropdownMenu,
   Flexbox,
   Icon,
+  Tabs,
   Text,
+  toast,
   Tooltip,
 } from '@lobehub/ui';
-import { confirmModal, Tabs } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
 import {
   Archive,
   CalendarRange,
   ChevronDown,
   FolderClosed,
+  Hash,
   LayoutGrid,
   List as ListIcon,
   ListFilter,
@@ -32,11 +35,19 @@ import {
 import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getPlatformIcon } from '@/features/AgentChannel/const';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 import { useTopicsViewStore } from './store';
-import type { GroupBy, SortBy, StatusFilter, TimeRangeFilter, TriggerFilter } from './types';
+import type {
+  BotChannelOption,
+  GroupBy,
+  SortBy,
+  StatusFilter,
+  TimeRangeFilter,
+  TriggerFilter,
+} from './types';
 
 const CONTROL_HEIGHT = 32;
 const THREE_MONTHS_MS = 90 * 24 * 60 * 60 * 1000;
@@ -153,10 +164,11 @@ const STATUS_OPTIONS: { key: StatusFilter; labelKey: string }[] = [
   { key: 'completed', labelKey: 'management.filters.status.completed' },
 ];
 
-const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'api', 'task', 'eval'];
+const TRIGGER_OPTIONS: TriggerFilter[] = ['chat', 'bot', 'api', 'task', 'eval'];
 
 const TRIGGER_ICON: Record<TriggerFilter, LucideIcon> = {
   api: Webhook,
+  bot: Hash,
   chat: MessageCircle,
   eval: TestTubeIcon,
   task: ListTodoIcon,
@@ -169,6 +181,7 @@ const SORT_OPTIONS: SortBy[] = ['updatedAt', 'createdAt', 'title'];
 const GROUP_OPTIONS: GroupBy[] = ['byTime', 'byProject', 'none'];
 
 interface ToolbarProps {
+  botChannelOptions: BotChannelOption[];
   projects: { label: string; value: string }[];
   statusCounts: Record<StatusFilter, number>;
 }
@@ -179,18 +192,19 @@ const CheckMark = ({ visible }: { visible: boolean }) => (
 
 interface FilterChipProps {
   icon?: LucideIcon;
+  iconNode?: ReactNode;
   items: DropdownItem[];
   label: string;
   onClear: () => void;
   value: ReactNode;
 }
 
-const FilterChip = memo<FilterChipProps>(({ icon, label, value, items, onClear }) => {
+const FilterChip = memo<FilterChipProps>(({ icon, iconNode, label, value, items, onClear }) => {
   return (
     <span className={styles.chip}>
       <DropdownMenu items={items}>
         <span className={styles.chipMain}>
-          {icon && <Icon icon={icon} size={12} />}
+          {iconNode ?? (icon && <Icon icon={icon} size={12} />)}
           <Text style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>{label}:</Text>
           <span className={styles.chipValue}>{value}</span>
           <Icon icon={ChevronDown} size={10} />
@@ -211,9 +225,8 @@ const FilterChip = memo<FilterChipProps>(({ icon, label, value, items, onClear }
   );
 });
 
-const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
+const Toolbar = memo<ToolbarProps>(({ projects, statusCounts, botChannelOptions }) => {
   const { t } = useTranslation('topic');
-  const { message } = App.useApp();
 
   const topics = useChatStore(topicSelectors.agentTopicsViewTopics);
   const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
@@ -224,6 +237,10 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
   const setGroupIds = useTopicsViewStore((s) => s.setGroupIds);
   const triggers = useTopicsViewStore((s) => s.triggers);
   const setTriggers = useTopicsViewStore((s) => s.setTriggers);
+  const toggleTrigger = useTopicsViewStore((s) => s.toggleTrigger);
+  const botChannels = useTopicsViewStore((s) => s.botChannels);
+  const setBotChannels = useTopicsViewStore((s) => s.setBotChannels);
+  const toggleBotChannel = useTopicsViewStore((s) => s.toggleBotChannel);
   const timeRange = useTopicsViewStore((s) => s.timeRange);
   const setTimeRange = useTopicsViewStore((s) => s.setTimeRange);
   const sortBy = useTopicsViewStore((s) => s.sortBy);
@@ -240,10 +257,9 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
         icon: <Icon icon={TRIGGER_ICON[tr]} size={14} />,
         key: tr,
         label: t(`management.filters.trigger.${tr}` as any) as string,
-        onClick: () =>
-          setTriggers(triggers.includes(tr) ? triggers.filter((x) => x !== tr) : [...triggers, tr]),
+        onClick: () => toggleTrigger(tr),
       })),
-    [triggers, t, setTriggers],
+    [triggers, t, toggleTrigger],
   );
 
   const projectItems: DropdownItem[] = useMemo(() => {
@@ -262,6 +278,24 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
         ),
     }));
   }, [projects, groupIds, t, setGroupIds]);
+
+  // Flattened "send source" filter: one entry per bot platform (per review,
+  // only distinguish tg/discord level — no per-channel submenu).
+  const botChannelItems: DropdownItem[] = useMemo(() => {
+    if (botChannelOptions.length === 0) {
+      return [{ disabled: true, key: 'empty', label: t('management.filters.botChannel.empty') }];
+    }
+    return botChannelOptions.map((option) => {
+      const PlatformIcon = getPlatformIcon(option.key);
+      return {
+        extra: <CheckMark visible={botChannels.includes(option.key)} />,
+        icon: PlatformIcon ? <PlatformIcon size={14} /> : <Icon icon={Hash} size={14} />,
+        key: option.key,
+        label: option.label,
+        onClick: () => toggleBotChannel(option.key),
+      };
+    });
+  }, [botChannelOptions, botChannels, t, toggleBotChannel]);
 
   const timeItems: DropdownItem[] = useMemo(
     () =>
@@ -298,8 +332,9 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
 
   const triggerApplied = triggers.length > 0;
   const projectApplied = groupIds.length > 0;
+  const botChannelApplied = botChannels.length > 0;
   const timeApplied = timeRange !== 'all';
-  const anyFilterApplied = triggerApplied || projectApplied || timeApplied;
+  const anyFilterApplied = triggerApplied || projectApplied || botChannelApplied || timeApplied;
 
   const addFilterItems: DropdownItem[] = useMemo(() => {
     const items: DropdownItem[] = [];
@@ -321,6 +356,15 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
         type: 'submenu',
       });
     }
+    if (!botChannelApplied) {
+      items.push({
+        children: botChannelItems,
+        icon: <Icon icon={Hash} size={14} />,
+        key: 'botChannel',
+        label: t('management.filters.botChannel.label'),
+        type: 'submenu',
+      });
+    }
     if (!timeApplied) {
       items.push({
         children: timeItems,
@@ -331,7 +375,17 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
       });
     }
     return items;
-  }, [triggerApplied, projectApplied, timeApplied, triggerItems, projectItems, timeItems, t]);
+  }, [
+    triggerApplied,
+    projectApplied,
+    botChannelApplied,
+    timeApplied,
+    triggerItems,
+    projectItems,
+    botChannelItems,
+    timeItems,
+    t,
+  ]);
 
   const projectChipValue = useMemo(() => {
     if (groupIds.length === 1) {
@@ -345,6 +399,19 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
       ? (t(`management.filters.trigger.${triggers[0]}` as any) as string)
       : `${triggers.length} selected`;
 
+  // Single selection shows the channel (platform) name; multi shows a count.
+  const botChannelChipValue = useMemo(() => {
+    if (botChannels.length !== 1) return `${botChannels.length} selected`;
+    const selected = botChannels[0];
+    return botChannelOptions.find((o) => o.key === selected)?.label ?? selected;
+  }, [botChannels, botChannelOptions]);
+
+  const botChannelChipIcon = useMemo(() => {
+    if (botChannels.length !== 1) return <Icon icon={Hash} size={12} />;
+    const PlatformIcon = getPlatformIcon(botChannels[0]);
+    return PlatformIcon ? <PlatformIcon size={12} /> : <Icon icon={Hash} size={12} />;
+  }, [botChannels]);
+
   const handleArchiveStale = useCallback(() => {
     const cutoff = Date.now() - THREE_MONTHS_MS;
     const stale = (topics ?? []).filter((tp) => {
@@ -355,7 +422,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
     });
 
     if (stale.length === 0) {
-      message.info(t('management.actionsMenu.archiveStale.noneFound'));
+      toast.info(t('management.actionsMenu.archiveStale.noneFound'));
       return;
     }
 
@@ -366,11 +433,11 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
         for (const topic of stale) {
           await updateTopicStatus({ status: 'completed', topicId: topic.id });
         }
-        message.success(t('management.actionsMenu.archiveStale.done', { count: stale.length }));
+        toast.success(t('management.actionsMenu.archiveStale.done', { count: stale.length }));
       },
       title: t('management.actionsMenu.archiveStale.title'),
     });
-  }, [topics, updateTopicStatus, message, t]);
+  }, [topics, updateTopicStatus, t]);
 
   const overflowItems: DropdownItem[] = useMemo(() => {
     const items: DropdownItem[] = [
@@ -391,6 +458,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
           onClick: () => {
             setTriggers([]);
             setGroupIds([]);
+            setBotChannels([]);
             setTimeRange('all');
           },
         },
@@ -413,6 +481,7 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
     t,
     setTriggers,
     setGroupIds,
+    setBotChannels,
     setTimeRange,
     handleArchiveStale,
   ]);
@@ -465,6 +534,15 @@ const Toolbar = memo<ToolbarProps>(({ projects, statusCounts }) => {
           label={t('management.filters.project.label')}
           value={projectChipValue}
           onClear={() => setGroupIds([])}
+        />
+      )}
+      {botChannelApplied && (
+        <FilterChip
+          iconNode={botChannelChipIcon}
+          items={botChannelItems}
+          label={t('management.filters.botChannel.label')}
+          value={botChannelChipValue}
+          onClear={() => setBotChannels([])}
         />
       )}
       {timeApplied && (

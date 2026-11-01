@@ -5,6 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { BriefModel } from '@/database/models/brief';
 import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { notTrashed } from '@/database/utils/softDelete';
 import { setTaskSchedulerExecutionCallback } from '@/server/services/taskScheduler';
 
 import { TaskRunnerService } from './index';
@@ -18,7 +19,14 @@ export type HeartbeatTickOutcome =
   { ran: true; taskIdentifier: string } | { ran: false; reason: HeartbeatTickSkipReason };
 
 export type HeartbeatTickSkipReason =
-  'human-waiting' | 'in-flight' | 'mode-changed' | 'no-interval' | 'not-found' | 'terminal';
+  | 'archived'
+  | 'human-waiting'
+  | 'in-flight'
+  | 'mode-changed'
+  | 'no-interval'
+  | 'not-found'
+  | 'stale-tick'
+  | 'terminal';
 
 /**
  * Run a heartbeat tick — invoked by both the LocalScheduler `setTimeout`
@@ -31,6 +39,7 @@ export type HeartbeatTickSkipReason =
 export async function runHeartbeatTick(
   taskId: string,
   userId: string,
+  tickToken?: string,
 ): Promise<HeartbeatTickOutcome> {
   const db = await getServerDB();
 
@@ -39,11 +48,24 @@ export async function runHeartbeatTick(
   const [task] = await db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
+    .where(
+      and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId), notTrashed(tasks.isDeleted)),
+    )
     .limit(1);
   if (!task) {
     log('skip task=%s reason=not-found', taskId);
     return { ran: false, reason: 'not-found' };
+  }
+  // Archived tasks are hidden from every list; never run them out of sight.
+  if (task.archivedAt) {
+    log('skip task=%s reason=archived', taskId);
+    return { ran: false, reason: 'archived' };
+  }
+  const activeTickToken = (task.context as { scheduler?: { tickToken?: string } } | null)?.scheduler
+    ?.tickToken;
+  if (activeTickToken && activeTickToken !== tickToken) {
+    log('skip task=%s reason=stale-tick', taskId);
+    return { ran: false, reason: 'stale-tick' };
   }
   if (task.automationMode !== 'heartbeat') {
     log('skip task=%s reason=mode-changed (mode=%s)', taskId, task.automationMode);
@@ -86,6 +108,6 @@ export async function runHeartbeatTick(
 // callback. Importing this module from anywhere in the server bundle (the
 // heartbeat-tick handler is the natural place) ensures local-mode heartbeat
 // loops actually fire.
-setTaskSchedulerExecutionCallback(async (taskId, userId) => {
-  await runHeartbeatTick(taskId, userId);
+setTaskSchedulerExecutionCallback(async (taskId, userId, tickToken) => {
+  await runHeartbeatTick(taskId, userId, tickToken);
 });

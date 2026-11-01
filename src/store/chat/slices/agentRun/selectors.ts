@@ -13,7 +13,12 @@ const isIntentUnderstanding = (id: string) => (s: ChatStoreState) =>
   isMessageInSearchWorkflow(id)(s);
 
 const isCurrentSendMessageLoading = (s: ChatStoreState) => {
-  const contextKey = messageMapKey({ agentId: s.activeAgentId, topicId: s.activeTopicId });
+  const contextKey = messageMapKey({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
+    topicId: s.activeTopicId,
+  });
   const operationIds = s.operationsByContext[contextKey] || [];
 
   // Check if there's any running sendMessage operation
@@ -24,7 +29,12 @@ const isCurrentSendMessageLoading = (s: ChatStoreState) => {
 };
 
 const isCurrentSendMessageError = (s: ChatStoreState) => {
-  const contextKey = messageMapKey({ agentId: s.activeAgentId, topicId: s.activeTopicId });
+  const contextKey = messageMapKey({
+    agentId: s.activeAgentId,
+    groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
+    topicId: s.activeTopicId,
+  });
   const operationIds = s.operationsByContext[contextKey] || [];
 
   // Find the latest sendMessage operation with error
@@ -46,6 +56,15 @@ const isSendMessageLoadingForTopic = (topicKey: string) => (s: ChatStoreState) =
     const op = s.operations[opId];
     return op && op.type === 'sendMessage' && op.status === 'running';
   });
+};
+
+const gatewayFeed = (s: ChatStoreState) => s.gatewayFeed;
+
+const gatewayFeedEntry = (operationId: string) => (s: ChatStoreState) => s.gatewayFeed[operationId];
+
+export const gatewayFeedSelectors = {
+  gatewayFeed,
+  gatewayFeedEntry,
 };
 
 export const agentRunSelectors = {

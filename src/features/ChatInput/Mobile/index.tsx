@@ -1,11 +1,11 @@
 'use client';
 
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ChatInputNotice from '@/features/ChatInput/ChatInputNotice';
+import ComposerExpandButton from '@/features/ChatInput/components/ComposerExpandButton';
 import { useChatInputStore } from '@/features/ChatInput/store';
 import dynamic from '@/libs/next/dynamic';
 
@@ -64,7 +64,7 @@ const DesktopChatInput = memo(() => {
           footer={
             <ChatInputActionBar
               left={<div />}
-              right={<SendArea />}
+              right={<SendArea hideContextWindow={false} />}
               style={{
                 paddingRight: 8,
               }}
@@ -74,8 +74,11 @@ const DesktopChatInput = memo(() => {
             <ChatInputActionBar
               left={
                 <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
-                  <Flexbox horizontal align={'center'} className={styles.leftActions}>
-                    <ActionBar disableCollapse />
+                  <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
+                    <Flexbox horizontal align={'center'} className={styles.leftActions}>
+                      <ActionBar disableCollapse />
+                    </Flexbox>
+                    <ComposerExpandButton />
                   </Flexbox>
                   <ChatInputNotice />
                 </Flexbox>

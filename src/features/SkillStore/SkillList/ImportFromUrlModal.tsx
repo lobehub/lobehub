@@ -1,8 +1,16 @@
 'use client';
 
-import { Alert, Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
-import { App, Typography } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  createModal,
+  Input,
+  type ModalInstance,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { ArrowLeftRight, Link, Sparkles } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +21,7 @@ import { useToolStore } from '@/store/tool';
 const ImportFromUrlContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
   const { close, setCanDismissByClickOutside } = useModalContext();
-  const { message } = App.useApp();
+
   const importAgentSkillFromUrl = useToolStore((s) => s.importAgentSkillFromUrl);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +41,7 @@ const ImportFromUrlContent = memo(() => {
 
     try {
       await importAgentSkillFromUrl({ url: trimmed });
-      message.success(t('agentSkillModal.importSuccess'));
+      toast.success(t('agentSkillModal.importSuccess'));
       close();
     } catch (err: any) {
       setError(err?.message || String(err));
@@ -50,23 +58,23 @@ const ImportFromUrlContent = memo(() => {
           <Icon
             icon={ArrowLeftRight}
             size={16}
-            style={{ color: 'var(--ant-color-text-tertiary)' }}
+            style={{ color: 'var(--lobe-color-text-tertiary)' }}
           />
           <Icon icon={Sparkles} size={28} />
         </Flexbox>
 
         <Flexbox align="center" gap={4}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+          <Text as={'h4'} style={{ margin: 0 }}>
             {t('agentSkillModal.url.title')}
-          </Typography.Title>
-          <Typography.Text type="secondary">{t('agentSkillModal.url.desc')}</Typography.Text>
+          </Text>
+          <Text type={'secondary'}>{t('agentSkillModal.url.desc')}</Text>
         </Flexbox>
       </Flexbox>
 
       {error && <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />}
 
       <Flexbox gap={8}>
-        <Typography.Text strong>URL</Typography.Text>
+        <Text strong>URL</Text>
         <Input
           disabled={!canCreate}
           placeholder={t('agentSkillModal.url.urlPlaceholder')}
@@ -93,6 +101,5 @@ export const openImportFromUrlModal = (): ModalInstance =>
     content: <ImportFromUrlContent />,
     footer: null,
     maskClosable: true,
-    styles: { header: { display: 'none' } },
     width: 480,
   });

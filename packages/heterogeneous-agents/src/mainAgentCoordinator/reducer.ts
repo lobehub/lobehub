@@ -1,8 +1,12 @@
+import type { AgentInterventionRequestData } from '@lobechat/agent-gateway-client';
+
+import { isEchoedErrorText } from '../errors/echo';
 import type { SubagentIntent, SubagentReduceCtx } from '../subagentCoordinator';
 import { getEventScope, reduceSubagentRuns } from '../subagentCoordinator';
 import type { ToolCallPayload } from '../types';
 import type {
   MainAgentIntent,
+  MainAgentInterventionState,
   MainAgentReduceCtx,
   MainAgentRunState,
   MainAgentTurnToolState,
@@ -47,13 +51,12 @@ const emptyToolState = (): MainAgentTurnToolState => ({
 /** Deep-copy the parts of state a handler may mutate; subagents is swapped wholesale. */
 const copyState = (s: MainAgentRunState): MainAgentRunState => ({
   ...s,
+  interventionsByCallId: new Map(s.interventionsByCallId),
   toolState: copyToolState(s.toolState),
   turnMetadata: { ...s.turnMetadata },
 });
 
 // ─── Echo suppression (pure; mirrors both engines' shouldSuppressTerminalErrorEcho) ───
-
-const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
 
 /**
  * CC sometimes streams the error string into `content` BEFORE emitting the
@@ -68,9 +71,7 @@ const shouldSuppressTerminalErrorEcho = (content: string, errorData: unknown): b
     { clearEchoedContent?: boolean; code?: string; message?: string; stderr?: string } | undefined;
   // Keep in sync with the interpreters' ECHO_TRIGGER_CODES.
   if (!body?.clearEchoedContent && body?.code !== 'AuthRequired') return false;
-  const normalizedContent = normalizeErrorText(content);
-  const normalizedError = normalizeErrorText(body?.stderr || body?.message);
-  return !!normalizedContent && !!normalizedError && normalizedContent === normalizedError;
+  return isEchoedErrorText(content, body?.stderr || body?.message);
 };
 
 // ─── Subagent delegation ───
@@ -163,6 +164,7 @@ const openTurn = (state: MainAgentRunState, data: any, ctx: MainAgentReduceCtx):
   next.currentMainMessageId = mainMessageId;
   next.accContent = '';
   next.accReasoning = '';
+  next.lastReasoningSnapshotSeq = 0;
   next.lastTextSnapshotSeq = 0;
   next.turnMetadata = {};
   next.toolState = emptyToolState();
@@ -222,9 +224,23 @@ const reduceTextChunk = (state: MainAgentRunState, data: any): ReduceResult => {
 };
 
 const reduceReasoningChunk = (state: MainAgentRunState, data: any): ReduceResult => {
-  if (!data?.reasoning) return { intents: [], state };
   const next = copyState(state);
-  next.accReasoning = state.accReasoning + data.reasoning;
+  const snapshotMode = data?.snapshotMode;
+  const snapshotSeq = typeof data?.snapshotSeq === 'number' ? data.snapshotSeq : undefined;
+
+  // Mirrors `reduceTextChunk`: `replace` snapshots are idempotent under batch
+  // redelivery (a raw delta re-append would durably duplicate reasoning on a
+  // cold-replica retry), and the seq guard drops stale/out-of-order ones.
+  if (snapshotMode === 'replace' && snapshotSeq !== undefined) {
+    if (snapshotSeq <= state.lastReasoningSnapshotSeq) return { intents: [], state }; // stale snapshot
+    next.lastReasoningSnapshotSeq = snapshotSeq;
+    next.turnMetadata = { ...next.turnMetadata, heteroReasoningSnapshotSeq: snapshotSeq };
+    next.accReasoning = data.reasoning;
+  } else {
+    if (!data?.reasoning) return { intents: [], state };
+    next.accReasoning = state.accReasoning + data.reasoning;
+  }
+
   return {
     intents: [
       { kind: 'streamContent', messageId: next.currentAssistantId, reasoning: next.accReasoning },
@@ -240,6 +256,7 @@ const reduceToolsChunk = (
 ): ReduceResult => {
   const next = copyState(state);
   const newToolMsgIds: string[] = [];
+  const newToolCallIds: string[] = [];
 
   for (const tool of tools) {
     if (next.toolState.persistedIds.has(tool.id)) continue;
@@ -253,6 +270,7 @@ const reduceToolsChunk = (
     });
     const toolMessageId = ctx.newId('message');
     next.toolState.toolMsgIdByCallId.set(tool.id, toolMessageId);
+    newToolCallIds.push(tool.id);
     newToolMsgIds.push(toolMessageId);
   }
 
@@ -269,6 +287,16 @@ const reduceToolsChunk = (
       })),
     },
   ];
+
+  // A response can beat the provider's tool lifecycle event. Once the tool
+  // row is materialized, replay the buffered latest transition after the
+  // persistToolBatch intent so the interpreter always has a valid target.
+  for (const toolCallId of newToolCallIds) {
+    const intervention = next.interventionsByCallId.get(toolCallId);
+    if (intervention) {
+      intents.push({ ...intervention, kind: 'setToolIntervention', toolCallId });
+    }
+  }
 
   // Advance the chain fallback to this turn's last tool message.
   const lastToolMsgId = newToolMsgIds.at(-1);
@@ -293,6 +321,139 @@ const reduceToolsChunk = (
   return { intents, state: next };
 };
 
+const isInterventionRequest = (data: any): boolean =>
+  typeof data?.apiName === 'string' &&
+  typeof data?.arguments === 'string' &&
+  typeof data?.deadline === 'number' &&
+  typeof data?.identifier === 'string' &&
+  typeof data?.toolCallId === 'string' &&
+  data.toolCallId.length > 0;
+
+const reduceInterventionRequest = (
+  state: MainAgentRunState,
+  data: any,
+  ctx: MainAgentReduceCtx,
+): ReduceResult => {
+  if (!isInterventionRequest(data)) return { intents: [], state };
+
+  const request = data as AgentInterventionRequestData;
+  const existing = state.interventionsByCallId.get(request.toolCallId);
+  const preparedState = copyState(state);
+  const intervention: MainAgentInterventionState = existing
+    ? { ...existing, request }
+    : { intervention: { status: 'pending' }, request, transition: 'pending' };
+  if (state.ended && intervention.intervention.status === 'pending') {
+    intervention.intervention = {
+      rejectedReason: 'session_ended',
+      resolving: false,
+      status: 'aborted',
+    };
+    intervention.transition = 'session_ended';
+  }
+  preparedState.interventionsByCallId.set(request.toolCallId, intervention);
+
+  // The bridge and the adapter run on independent async pumps, so the request
+  // can arrive before tools_calling. The request already carries the complete
+  // canonical tool payload; materialize it here instead of dropping pending
+  // state or relying on process affinity for a later replay.
+  if (
+    !state.toolState.toolMsgIdByCallId.has(request.toolCallId) &&
+    !ctx.toolMessageIds?.has(request.toolCallId)
+  ) {
+    return reduceToolsChunk(
+      preparedState,
+      [
+        {
+          apiName: request.apiName,
+          arguments: request.arguments,
+          id: request.toolCallId,
+          identifier: request.identifier,
+          type: 'default',
+        },
+      ],
+      ctx,
+    );
+  }
+
+  return {
+    intents: [{ ...intervention, kind: 'setToolIntervention', toolCallId: request.toolCallId }],
+    state: preparedState,
+  };
+};
+
+const reduceInterventionResponse = (
+  state: MainAgentRunState,
+  data: any,
+  ctx: MainAgentReduceCtx,
+): ReduceResult => {
+  if (typeof data?.toolCallId !== 'string' || data.toolCallId.length === 0) {
+    return { intents: [], state };
+  }
+  // New two-leg resolution: the first XADD only delivers the user's intent to
+  // the producer. It becomes terminal only after AskUserBridge echoes an ACK.
+  // Legacy responses had no request id, so retain their historical behavior.
+  if (typeof data.resolutionRequestId === 'string' && data.producerAck !== true) {
+    return { intents: [], state };
+  }
+
+  const existing = state.interventionsByCallId.get(data.toolCallId);
+  const transition: MainAgentInterventionState['transition'] = !data.cancelled
+    ? 'resolved'
+    : data.cancelReason === 'timeout'
+      ? 'timed_out'
+      : data.cancelReason === 'session_ended'
+        ? 'session_ended'
+        : 'cancelled';
+  const intervention: MainAgentInterventionState = {
+    intervention: data.cancelled
+      ? { rejectedReason: data.cancelReason ?? 'user_cancelled', status: 'rejected' }
+      : { status: 'approved' },
+    request: existing?.request,
+    resolutionRequestId:
+      typeof data.resolutionRequestId === 'string' ? data.resolutionRequestId : undefined,
+    transition,
+  };
+  const next = copyState(state);
+  next.interventionsByCallId.set(data.toolCallId, intervention);
+
+  if (
+    !state.toolState.toolMsgIdByCallId.has(data.toolCallId) &&
+    !ctx.toolMessageIds?.has(data.toolCallId)
+  ) {
+    return { intents: [], state: next };
+  }
+
+  return {
+    intents: [{ ...intervention, kind: 'setToolIntervention', toolCallId: data.toolCallId }],
+    state: next,
+  };
+};
+
+/** A terminal tool/run is authoritative even when its bridge ACK never arrives. */
+const endInterventions = (
+  state: MainAgentRunState,
+  toolCallIds: Iterable<string>,
+): ReduceResult => {
+  const next = copyState(state);
+  const intents: AnyIntent[] = [];
+  for (const toolCallId of toolCallIds) {
+    const existing = next.interventionsByCallId.get(toolCallId);
+    if (existing && existing.intervention.status !== 'pending') continue;
+    const ended: MainAgentInterventionState = {
+      ...existing,
+      intervention: { rejectedReason: 'session_ended', resolving: false, status: 'aborted' },
+      transition: 'session_ended',
+    };
+    // Remember results that race ahead of the bridge request, without creating
+    // an intervention write/notification for ordinary tools.
+    next.interventionsByCallId.set(toolCallId, ended);
+    if (existing?.request) {
+      intents.push({ ...ended, kind: 'setToolIntervention', toolCallId });
+    }
+  }
+  return { intents, state: next };
+};
+
 const reduceStreamChunk = (
   state: MainAgentRunState,
   data: any,
@@ -303,6 +464,29 @@ const reduceStreamChunk = (
   }
   if (data?.chunkType === 'reasoning' && typeof data.reasoning === 'string') {
     return reduceReasoningChunk(state, data);
+  }
+  if (
+    data?.chunkType === 'tool_state' &&
+    data.snapshotMode === 'replace' &&
+    typeof data.toolCallId === 'string' &&
+    data.toolCallId.length > 0 &&
+    Number.isInteger(data.snapshotSeq) &&
+    data.snapshotSeq > 0 &&
+    typeof data.pluginState === 'object' &&
+    data.pluginState !== null &&
+    !Array.isArray(data.pluginState)
+  ) {
+    return {
+      intents: [
+        {
+          kind: 'updateToolState',
+          pluginState: data.pluginState,
+          snapshotSeq: data.snapshotSeq,
+          toolCallId: data.toolCallId,
+        },
+      ],
+      state,
+    };
   }
   if (data?.chunkType === 'tools_calling') {
     const tools = (data.toolsCalling as ToolCallPayload[] | undefined) ?? [];
@@ -331,8 +515,12 @@ const reduceToolResult = (
     pluginState: data.pluginState,
     toolCallId,
   };
-  const delegated = delegateSubagent(state, event, ctx);
-  return { intents: [main, ...delegated.intents], state: delegated.state };
+  const ended = endInterventions(state, [
+    toolCallId,
+    ...(state.subagents.runs.get(toolCallId)?.lifetimeToolCallIds ?? []),
+  ]);
+  const delegated = delegateSubagent(ended.state, event, ctx);
+  return { intents: [main, ...ended.intents, ...delegated.intents], state: delegated.state };
 };
 
 const reduceTurnMetadata = (state: MainAgentRunState, data: any): ReduceResult => {
@@ -354,6 +542,32 @@ const reduceTurnMetadata = (state: MainAgentRunState, data: any): ReduceResult =
       },
     ],
     state: next,
+  };
+};
+
+/**
+ * `visible_output_end` — the CLI finished its visible reply, but the run may
+ * stay open (CC SDK mode keeps the transport alive for background tasks, so
+ * the terminal flush can land minutes later). The UI already lets the user
+ * send a follow-up at this point, and that send replaces the store with the
+ * server's rows — so the final step's text must be durable NOW, or the prior
+ * answer renders empty until a refresh.
+ *
+ * Accumulators are kept, not reset: the later terminal flush rewrites the same
+ * content idempotently, and a background-task turn opens a new step through
+ * `openTurn` as usual.
+ */
+const reduceVisibleOutputEnd = (state: MainAgentRunState): ReduceResult => {
+  if (!state.accContent && !state.accReasoning) return { intents: [], state };
+
+  const flush: Record<string, any> = {};
+  if (state.accContent) flush.content = state.accContent;
+  if (state.accReasoning) flush.reasoning = state.accReasoning;
+  if (state.turnModel) flush.model = state.turnModel;
+  if (state.turnProvider) flush.provider = state.turnProvider;
+  return {
+    intents: [{ kind: 'persistAssistant', messageId: state.currentAssistantId, ...flush }],
+    state,
   };
 };
 
@@ -386,12 +600,13 @@ const reduceTerminal = (
 
   // Reset accumulators so a follow-up terminal/flush is an idempotent no-op,
   // then drain any subagent runs that never saw their parent tool_result.
-  const drained = copyState(state);
+  const ended = endInterventions(state, state.interventionsByCallId.keys());
+  const drained = ended.state;
   drained.accContent = '';
   drained.accReasoning = '';
   drained.ended = true;
   const delegated = delegateSubagent(drained, event, ctx);
-  return { intents: [...intents, ...delegated.intents], state: delegated.state };
+  return { intents: [...intents, ...ended.intents, ...delegated.intents], state: delegated.state };
 };
 
 /**
@@ -405,7 +620,16 @@ export const reduce = (
   ctx: MainAgentReduceCtx,
 ): ReduceResult => {
   // Subagent-tagged chunks / turn_metadata belong wholly to the coordinator.
-  if (getEventScope(event).kind === 'subagent') return delegateSubagent(state, event, ctx);
+  if (getEventScope(event).kind === 'subagent') {
+    const ended =
+      event.type === 'tool_result' &&
+      typeof event.data?.toolCallId === 'string' &&
+      event.data.toolCallId
+        ? endInterventions(state, [event.data?.toolCallId])
+        : { intents: [], state };
+    const delegated = delegateSubagent(ended.state, event, ctx);
+    return { intents: [...ended.intents, ...delegated.intents], state: delegated.state };
+  }
 
   const data = event.data ?? {};
   switch (event.type) {
@@ -428,9 +652,18 @@ export const reduce = (
     case 'tool_result': {
       return reduceToolResult(state, event, ctx);
     }
+    case 'agent_intervention_request': {
+      return reduceInterventionRequest(state, data, ctx);
+    }
+    case 'agent_intervention_response': {
+      return reduceInterventionResponse(state, data, ctx);
+    }
     case 'step_complete': {
       if (data?.phase === 'turn_metadata') return reduceTurnMetadata(state, data);
       return { intents: [], state };
+    }
+    case 'visible_output_end': {
+      return reduceVisibleOutputEnd(state);
     }
     case 'agent_runtime_end':
     case 'error': {

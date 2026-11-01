@@ -1,3 +1,4 @@
+import { type KnowledgeItem } from '@lobechat/types';
 import { Alert, Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { BookOpen, ServerCrash } from 'lucide-react';
@@ -6,43 +7,57 @@ import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
 import { useAgentStore } from '@/store/agent';
+import { agentKnowledgeSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 
 import Item from './Item';
 import MasonryItemWrapper from './Item/MasonryItemWrapper';
 import Loading from './Loading';
 import MasonrySkeleton from './MasonrySkeleton';
+import { resolvePickerScope } from './resolvePickerScope';
+import { useViewTransition } from './useViewTransition';
 import { type ViewMode } from './ViewSwitcher';
 import ViewSwitcher from './ViewSwitcher';
 import VisibilityTabs, { type PickerVisibility } from './VisibilityTabs';
 
+/** Stable empty list so an un-loaded surface never hands Virtuoso a new array each render. */
+const EMPTY_KNOWLEDGE: KnowledgeItem[] = [];
+
 export const List = memo(() => {
   const { t } = useTranslation(['file', 'chat']);
 
-  const [useFetchFilesAndKnowledgeBases, activeAgentId, agentVisibility] = useAgentStore((s) => [
-    s.useFetchFilesAndKnowledgeBases,
-    s.activeAgentId,
-    s.activeAgentId ? s.agentMap[s.activeAgentId]?.visibility : undefined,
-  ]);
-
-  // Public agents can only reference workspace resources. The backend
-  // enforces this hard (see agent.getKnowledgeBasesAndFiles) — this flag
-  // just drives the UX: hide the tab, show an explainer, and force the
-  // fetch to workspace scope so the client can't ask for private items.
-  const isPublicAgent = agentVisibility === 'public';
+  const [useFetchFilesAndKnowledgeBases, activeAgentId, agentVisibility, agentWorkspaceId] =
+    useAgentStore((s) => [
+      s.useFetchFilesAndKnowledgeBases,
+      s.activeAgentId,
+      s.activeAgentId ? s.agentMap[s.activeAgentId]?.visibility : undefined,
+      s.activeAgentId ? s.agentMap[s.activeAgentId]?.workspaceId : undefined,
+    ]);
 
   const [mode, setMode] = useState<PickerVisibility>('public');
-  const effectiveMode: PickerVisibility = isPublicAgent ? 'public' : mode;
+  const { effectiveVisibility, showPublicAgentHint, showVisibilityTabs } = resolvePickerScope({
+    agentVisibility,
+    agentWorkspaceId,
+    mode,
+  });
 
-  const { isLoading, error, data } = useFetchFilesAndKnowledgeBases(activeAgentId, effectiveMode);
+  const { isLoading, error } = useFetchFilesAndKnowledgeBases(activeAgentId, effectiveVisibility);
+  // The rows land in the knowledge replica; read them through the selector so a
+  // fetched / hydrated list re-renders the picker.
+  const data = useAgentStore(
+    agentKnowledgeSelectors.getAgentKnowledgeList(
+      activeAgentId ? { agentId: activeAgentId, visibility: effectiveVisibility } : undefined,
+    ),
+  );
+  const items = data ?? EMPTY_KNOWLEDGE;
 
   const [columnCount, setColumnCount] = useState(2);
-  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const viewMode = useGlobalStore((s) => s.status.knowledgeBaseModalViewMode || 'list') as ViewMode;
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const { isTransitioning, startTransition } = useViewTransition(viewMode);
   const setViewMode = (mode: ViewMode) => {
-    setIsTransitioning(true);
+    startTransition();
     updateSystemStatus({ knowledgeBaseModalViewMode: mode });
   };
 
@@ -69,19 +84,7 @@ export const List = memo(() => {
     }
   }, [viewMode, updateColumnCount]);
 
-  // Handle view transition with a brief delay to show skeleton
-  React.useEffect(() => {
-    if (isTransitioning && data) {
-      requestAnimationFrame(() => {
-        const timer = setTimeout(() => {
-          setIsTransitioning(false);
-        }, 100);
-        return () => clearTimeout(timer);
-      });
-    }
-  }, [isTransitioning, viewMode, data]);
-
-  const isEmpty = data && data.length === 0;
+  const isEmpty = items.length === 0;
 
   const masonryContext = useMemo(() => ({}), []);
 
@@ -95,10 +98,10 @@ export const List = memo(() => {
        */}
       <Flexbox gap={8} style={{ paddingBlockEnd: 12 }}>
         <Flexbox horizontal align={'center'} justify={'space-between'}>
-          {isPublicAgent ? <span /> : <VisibilityTabs value={mode} onChange={setMode} />}
+          {showVisibilityTabs ? <VisibilityTabs value={mode} onChange={setMode} /> : <span />}
           <ViewSwitcher view={viewMode} onViewChange={setViewMode} />
         </Flexbox>
-        {isPublicAgent && (
+        {showPublicAgentHint && (
           <Alert
             showIcon
             message={t('resources.knowledgePicker.publicAgentHint', { ns: 'chat' })}
@@ -133,9 +136,9 @@ export const List = memo(() => {
           increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
           overscan={24}
           style={{ flex: 1, marginInline: -16 }}
-          totalCount={data!.length}
+          totalCount={items.length}
           itemContent={(index) => {
-            const item = data![index];
+            const item = items[index];
             return <Item key={item.id} {...item} />;
           }}
         />
@@ -146,7 +149,7 @@ export const List = memo(() => {
               ItemContent={MasonryItemWrapper}
               columnCount={columnCount}
               context={masonryContext}
-              data={data || []}
+              data={items}
               style={{
                 gap: '16px',
                 height: '100%',

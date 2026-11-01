@@ -1,6 +1,6 @@
 ---
 name: spa-routes
-description: 'LobeHub SPA route architecture. Use when editing src/routes, src/features delegation, desktop/mobile/popup router configs, .desktop variants, route segments, redirects, or new pages.'
+description: 'Use for SPA routes and page segments: Web/desktop/mobile/popup routers, redirects and src/routes-to-features boundaries.'
 user-invocable: false
 ---
 
@@ -14,7 +14,7 @@ SPA structure:
 
 This project uses a **roots vs features** split: `src/routes/` only holds page segments; business logic and UI live in `src/features/` by domain.
 
-**Agent constraint — desktop router parity:** Edits to the desktop route tree must update **both** `src/spa/router/desktopRouter.config.tsx` and `src/spa/router/desktopRouter.config.desktop.tsx` in the same change (same paths, nesting, index routes, and segment registration). Updating only one causes drift; the missing tree can fail to register routes and surface as a **blank screen** or broken navigation on the affected build.
+**Agent constraint — shared desktop router:** Common Web/Electron paths, nesting, metadata, lazy loaders, and preload groups belong in `src/spa/router/desktopRouter.shared.tsx`. The two `desktopRouter.config*` files are thin platform adapters; change them only for genuine runtime differences. Do not duplicate a common route in both adapters.
 
 ## When to Use This Skill
 
@@ -76,35 +76,49 @@ Each feature should:
    - Layout: `export { default } from '@/features/MyFeature/MyLayout'` or compose a few feature components + `<Outlet />`.
    - Page: import from `@/features/MyFeature` (or a specific subpath) and render; no business logic in the route file.
 
-5. **Register the route (desktop — two files, always)**
-   - **`desktopRouter.config.tsx`:** Add the segment with `dynamicElement` / `dynamicLayout` pointing at route modules (e.g. `@/routes/(main)/my-feature`).
-   - **`desktopRouter.config.desktop.tsx`:** Mirror the **same** `RouteObject` shape: identical `path` / `index` / parent-child structure. Use the static imports and elements already used in that file (see neighboring routes). Do **not** register in only one of these files.
-   - **Mobile-only flows:** use `mobileRouter.config.tsx` instead (no need to duplicate into the desktop pair unless the route truly exists on both).
+5. **Register the route in the correct definition layer**
+   - **Shared Web/Electron route:** add the segment once in `desktopRouter.shared.tsx` with `dynamicElement` / `dynamicLayout`. Put its `preloadId` there as part of the shared lazy-loader definition.
+   - **Web-only or Electron-only route:** add it to the corresponding thin `desktopRouter.config.tsx` adapter. Keep platform-only differences explicit and small.
+   - **Mobile counterpart (required for every desktop main-area route):** see §3c. `mobileRouter.parity.test.ts` fails until the mobile router resolves the new URL to the same pattern, or the route is listed in `MOBILE_UNSUPPORTED` with a reason.
+   - **Mobile-only flow:** use `mobileRouter.config.tsx`.
+
+6. **Register a route skeleton (REQUIRED for every lazy route)**
+   - Every lazy route inside the main area renders `RouteSegmentSkeleton` (`src/components/Skeleton/RouteSegment.tsx`) while its chunk loads. It resolves via `handle.meta.Skeleton` only (deepest match wins, walking up through parent routes). Omitting `Skeleton` renders a blank pane — use `NoRouteSkeleton` when that is intentional.
+   - Pick the skeleton when adding or restructuring a route:
+     - A close-enough generic shape exists → `Skeleton: createSurfaceSkeleton('list' | 'form' | 'grid' | 'editor' | 'detail')` from `@/components/Skeleton/Surface`.
+     - The page has a distinctive layout (dashboard, multi-panel, conversation) → author a bespoke component under `src/components/Skeleton/` and register it (see `ResourceHome.tsx`, `Generation.tsx`, `Conversation/`).
+   - Where to put it: on the route's `routeMeta` (feature `routeMeta.ts` or inline in `desktopRouter.shared.tsx`). A whole subtree sharing one shape can register once on the parent/layout route's `handle` — children with their own `Skeleton` still override.
+   - When changing a page's layout, update its registered skeleton in the same PR — a stale skeleton that no longer matches the page is a regression.
+   - Skeleton-only parent handles are safe for titles: title/icon resolution also walks deepest-first, and leaf metas keep winning.
+   - The same deepest skeleton renders at every pending boundary of the chain (layout chunk, page chunk, then the page's own data wait). Make the page's in-component loading state the registered skeleton, or a body that continues it; a different shape there reads as a second, unrelated skeleton.
+   - Route skeletons are always static imports: a fallback has to paint on its first render, and a `lazy()` skeleton (preloaded or not) renders blank until its chunk lands. That puts the skeleton's whole import graph in the entry chunk, so it may only reach UI primitives, other skeletons, constants and `import type`. Keep stores, services, feature components and value imports from barrels (`@/types/*` re-exports zod schemas) out of it; move the minimal piece next to the skeleton instead (see `ResourceHome/Skeleton` and `Explorer/viewMode.ts`).
+   - A custom fallback (`fallback:` option, in-page `Suspense`, or an early `return <XSkeleton />`) keeps the handover continuous only through `delayed()` / `DelayedFallback` or `RouteLoading`, which register the skeleton as visible (`retainSkeleton`). Rendering a skeleton any other way lets the next boundary wait out its 200ms delay on a blank pane.
 
 ---
 
-## 3a. Desktop router pair (`desktopRouter.config` × 2)
+## 3a. Shared desktop route definition and platform adapters
 
-| File                               | Role                                                                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `desktopRouter.config.tsx`         | Dynamic imports via `dynamicElement` / `dynamicLayout` — code-splitting; used by `entry.web.tsx` and `entry.desktop.tsx`. |
-| `desktopRouter.config.desktop.tsx` | Same route tree with **synchronous** imports — kept for Electron / local parity and predictable bundling.                 |
+| File                               | Role                                                                                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `desktopRouter.shared.tsx`         | Single source of truth for common paths, nesting, metadata, lazy imports, and prioritized route preload groups.                    |
+| `desktopRouter.config.tsx`         | Thin Web adapter: mounts the common content tree at `/` and adds Web-only routes.                                                  |
+| `desktopRouter.config.desktop.tsx` | Thin Electron adapter: injects per-tab Home behavior, TabHost root stubs, and the Electron-only `/desktop-onboarding` local setup. |
 
-Anything that changes the tree (new segment, renamed `path`, moved layout, new child route) must be reflected in **both** files in one PR or commit. Remove routes from both when deleting.
+Add or remove common routes only in `desktopRouter.shared.tsx`, or in a subtree module it imports (`taskWorkspaceRoutes.tsx`, `projectWorkspaceRoutes.tsx`, `agentPageRoutes.tsx`, `memoryRoutes.tsx`, `resourceRoutes.tsx`, `workspaceSettingsRoutes.tsx` for the padded `/:slug/settings/*` tabs) — the shared file is over the 1200-line limit, so large subtrees move out instead of growing it. Add any new subtree module to `readRouterSources` in `desktopRouter.sync.test.tsx`. Keep `desktopRouter.sync.test.tsx` passing so path behavior, lazy boundaries, preload ownership, and the intentional platform differences remain verified.
 
 ---
 
 ## 3b. Other `.desktop.{ts,tsx}` variants inside `src/routes/`
 
-The router pair is **not** the only `.desktop` variant pattern in this repo. Some route trees colocate a `<name>.desktop.{ts,tsx}` next to its base `<name>.{ts,tsx}` — Vite's resolver swaps in the `.desktop` file for Electron builds. Same drift risk as the router pair: editing only one side can break Electron silently.
+The thin router adapters are not duplicated trees. Other route modules may still colocate a `<name>.desktop.{ts,tsx}` next to a base `<name>.{ts,tsx}`; Vite's resolver swaps in the `.desktop` file for Electron builds. Those paired module implementations still carry a drift risk.
 
 Known variants today:
 
-| Base file (web)                                       | Desktop file (Electron)                                       | Purpose                                                                                                                                    |
-| ----------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/routes/(main)/settings/features/componentMap.ts` | `src/routes/(main)/settings/features/componentMap.desktop.ts` | Settings tab → component map. Web uses dynamic `import()`; desktop uses sync imports. `componentMap.sync.test.ts` enforces identical keys. |
-| `src/routes/(main)/agent/index.tsx`                   | `src/routes/(main)/agent/index.desktop.tsx`                   | Page entry. Desktop variant overrides the web page wholesale (e.g. extra popup guards).                                                    |
-| `src/routes/(main)/group/index.tsx`                   | `src/routes/(main)/group/index.desktop.tsx`                   | Same pattern as agent.                                                                                                                     |
+| Base file (web)                                  | Desktop file (Electron)                                  | Purpose                                                                                                                                    |
+| ------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/features/Settings/features/componentMap.ts` | `src/features/Settings/features/componentMap.desktop.ts` | Settings tab → component map. Web uses dynamic `import()`; desktop uses sync imports. `componentMap.sync.test.ts` enforces identical keys. |
+| `src/routes/(main)/agent/index.tsx`              | `src/routes/(main)/agent/index.desktop.tsx`              | Page entry. Desktop variant overrides the web page wholesale (e.g. extra popup guards).                                                    |
+| `src/routes/(main)/group/index.tsx`              | `src/routes/(main)/group/index.desktop.tsx`              | Same pattern as agent.                                                                                                                     |
 
 **Rules:**
 
@@ -112,6 +126,22 @@ Known variants today:
 2. When adding a new SettingsTab, register it in **both** `componentMap.ts` (with `dynamic(...)`) and `componentMap.desktop.ts` (with a sync `import`). `componentMap.sync.test.ts` will fail the build otherwise.
 3. When adding a new desktop-only page wholesale-override, prefer a single base file with platform-aware code over introducing a new `.desktop.tsx` variant — only add a new variant when the two trees genuinely diverge (different store wiring, different popup guards, etc.).
 4. When deleting, remove **both** files together.
+
+---
+
+## 3c. Mobile counterparts of desktop routes
+
+The mobile web build has its own router (`mobileRouter.config.tsx`, `__MOBILE__`), but it mounts the **same page segments** as desktop. Do not copy a desktop route into the mobile files: reuse the subtree module and adjust only what differs with `overlayRoutes` (`routeOverlay.ts`; `withHandle`, `dropRoute`, or a mobile `element`).
+
+| Mobile file                         | Reuses                                                                                                                   |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `mobileAgentRoutes.tsx`             | `agentPageChildren` under the agent scope layout; group profile / permission                                             |
+| `mobileWorkspaceRoutes.tsx`         | `createTaskWorkspaceChildren`, `projectWorkspaceRoute`, `resourceRoute`, `memoryChildren`, inside the mobile page layout |
+| `mobileWorkspaceSettingsRoutes.tsx` | `workspaceSettingsContentRoute` children plus the mobile settings menu and full-bleed tabs                               |
+
+- A desktop subtree added to one of those modules reaches mobile automatically. A new top-level desktop surface needs one entry in the matching mobile file; wrap full-screen pages in `pageLayout` (`(mobile)/_page-layout`).
+- Mobile `NavHeader` draws back + the route's `NavPanelPortal` sidebar as a drawer, and falls back to the route `titleKey` when the page header has no title. A page that paints no `NavHeader` gets one from the route handle `mobileShellHeader: true | 'untitled'` (and `mobileShellTitle` for a record name). Do not add a second back button inside the page; opt out with `showTogglePanelButton={false}` when the page keeps its own.
+- Desktop-only surfaces go in `mobileUnsupportedRoutes` and `MOBILE_UNSUPPORTED` in `mobileRouter.parity.test.ts`, so they redirect home instead of being read as a `/:workspaceSlug`.
 
 ---
 
@@ -140,10 +170,7 @@ Known variants today:
 
 ## 5. Progressive Migration (existing code)
 
-We are migrating existing routes to this structure step by step:
-
-- **Phase 1 (done):** `/page` route – segment files in `src/routes/(main)/page/`, implementation in `src/features/Pages/`.
-- **Later phases:** home, settings, agent/group, community/resource/memory, mobile/share/onboarding.
+Existing routes follow this structure unevenly: some are already thin segment files (e.g. `src/routes/(main)/page/`, `src/routes/(main)/settings/`), while others still hold logic or a `features/` folder under `src/routes/`. Check the route's current state instead of assuming.
 
 When touching an old route that still has logic or `features/` inside `src/routes/`:
 

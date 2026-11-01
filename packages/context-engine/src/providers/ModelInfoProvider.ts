@@ -19,6 +19,12 @@ export interface ModelInfoProviderConfig {
   knowledgeCutoff?: string;
   /** Model runtime id, e.g. `claude-fable-5`. */
   modelId?: string;
+  /** Native media inputs accepted directly by the active model. */
+  nativeMediaCapabilities?: {
+    audio?: boolean;
+    video?: boolean;
+    vision?: boolean;
+  };
 }
 
 /**
@@ -48,6 +54,7 @@ export class ModelInfoProvider extends BaseSystemRoleProvider {
     const modelId = this.config.modelId?.trim();
     const displayName = this.config.displayName?.trim();
     const knowledgeCutoff = this.config.knowledgeCutoff?.trim();
+    const { audio, video, vision } = this.config.nativeMediaCapabilities ?? {};
 
     // Only surface identity when we know the model's real name (resolved from the
     // model bank). The id rides along in parens. A bare runtime id without a name
@@ -57,10 +64,17 @@ export class ModelInfoProvider extends BaseSystemRoleProvider {
         ? `${displayName} (${modelId})`
         : displayName
       : undefined;
+    const nativeMediaCapabilities = [
+      typeof vision === 'boolean' && `vision=${vision}`,
+      typeof video === 'boolean' && `video=${video}`,
+      typeof audio === 'boolean' && `audio=${audio}`,
+    ].filter(Boolean);
 
     const lines = [
       modelLabel && `Current model: ${modelLabel}`,
       knowledgeCutoff && `Model knowledge cutoff: ${knowledgeCutoff}`,
+      nativeMediaCapabilities.length > 0 &&
+        `Native media input capabilities: ${nativeMediaCapabilities.join(', ')}`,
     ].filter(Boolean);
 
     if (lines.length === 0) {

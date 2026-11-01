@@ -5,13 +5,26 @@ import { memo } from 'react';
 
 import { resolveHeterogeneousAgentGuideConfig } from './config';
 import AuthRequiredState from './states/AuthRequiredState';
+import CliDetectionTimeoutState from './states/CliDetectionTimeoutState';
 import CliInstallState from './states/CliInstallState';
 import OverloadedState from './states/OverloadedState';
 import RateLimitState from './states/RateLimitState';
+import WorkingDirectoryState from './states/WorkingDirectoryState';
 import type { HeterogeneousAgentStatusGuideProps } from './types';
 
 const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
-  ({ agentType = 'codex', autoRetry, error, onOpenSystemTools, onRetry, variant = 'inline' }) => {
+  ({
+    agentType = 'codex',
+    autoRetry,
+    error,
+    onDismiss,
+    onOpenSystemTools,
+    onRetry,
+    onHandoff,
+    schedule,
+    variant = 'inline',
+    workingDirectoryReset,
+  }) => {
     const config = resolveHeterogeneousAgentGuideConfig({
       agentType,
       errorAgentType: error?.agentType,
@@ -20,14 +33,22 @@ const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
       autoRetry,
       config,
       error,
+      onDismiss,
       onOpenSystemTools,
       onRetry,
+      onHandoff,
+      schedule,
       variant,
+      workingDirectoryReset,
     };
 
     switch (error?.code) {
       case HeterogeneousAgentSessionErrorCode.AuthRequired: {
         return <AuthRequiredState {...stateProps} />;
+      }
+
+      case HeterogeneousAgentSessionErrorCode.CliDetectionTimeout: {
+        return <CliDetectionTimeoutState {...stateProps} />;
       }
 
       case HeterogeneousAgentSessionErrorCode.RateLimit: {
@@ -36,6 +57,10 @@ const HeterogeneousAgentStatusGuide = memo<HeterogeneousAgentStatusGuideProps>(
 
       case HeterogeneousAgentSessionErrorCode.Overloaded: {
         return <OverloadedState {...stateProps} />;
+      }
+
+      case HeterogeneousAgentSessionErrorCode.WorkingDirectoryNotFound: {
+        return <WorkingDirectoryState {...stateProps} />;
       }
 
       default: {

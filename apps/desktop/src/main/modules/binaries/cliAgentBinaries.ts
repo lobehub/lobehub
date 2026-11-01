@@ -1,3 +1,4 @@
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
   detectHeterogeneousCliCommand,
   detectValidatedCommand,
@@ -12,7 +13,10 @@ import { defineCommandBinary } from '@/core/infrastructure/BinaryManager';
 // agents` package so the desktop manager path and the `lh hetero exec` CLI /
 // sandbox path resolve binaries identically. This module only adapts it into
 // the desktop `BinarySpec` shape.
-export { detectHeterogeneousCliCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+export {
+  detectHeterogeneousCliCommand,
+  invalidateLoginShellPathCache,
+} from '@lobechat/heterogeneous-agents/resolveCliCommand';
 
 interface ValidatedBinaryOptions {
   candidates: string[];
@@ -61,6 +65,14 @@ export const claudeCodeBinary: BinarySpec = {
   priority: 1,
 };
 
+/** Tencent CodeBuddy CLI @see https://www.codebuddy.ai/docs/cli/installation */
+export const codeBuddyBinary: BinarySpec = {
+  description: 'CodeBuddy - Tencent agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('codebuddy', 'codebuddy'),
+  name: 'codebuddy',
+  priority: 2,
+};
+
 /**
  * OpenAI Codex CLI
  * @see https://github.com/openai/codex
@@ -76,6 +88,86 @@ export const codexBinary: BinarySpec = {
   priority: 2,
 };
 
+/** Cursor Agent CLI @see https://cursor.com/docs/cli/installation */
+export const cursorBinary: BinarySpec = {
+  description: 'Cursor - Cursor agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('cursor', 'agent'),
+  name: 'agent',
+  priority: 3,
+};
+
+/** Factory Droid CLI @see https://docs.factory.ai/cli/getting-started/quickstart */
+export const droidBinary: BinarySpec = {
+  description: 'Factory Droid - Factory agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('droid', 'droid'),
+  name: 'droid',
+  priority: 3,
+};
+
+export const devinBinary: BinarySpec = {
+  description: 'Devin - Cognition agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('devin', 'devin'),
+  name: 'devin',
+  priority: 3,
+};
+
+/** xAI Grok Build CLI @see https://docs.x.ai/build/overview */
+export const grokBuildBinary: BinarySpec = {
+  description: 'Grok Build - xAI agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('grok-build', 'grok'),
+  name: 'grok',
+  priority: 3,
+};
+
+/**
+ * Amp CLI
+ * @see https://ampcode.com/manual
+ */
+export const ampBinary: BinarySpec = {
+  description: 'Amp - Sourcegraph agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('amp', 'amp'),
+  name: 'amp',
+  priority: 3,
+};
+
+/**
+ * OpenCode CLI
+ * @see https://opencode.ai/docs
+ */
+export const opencodeBinary: BinarySpec = {
+  description: 'OpenCode - Open source agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('opencode', 'opencode'),
+  name: 'opencode',
+  priority: 4,
+};
+
+/**
+ * Pi coding agent CLI
+ * @see https://github.com/earendil-works/pi
+ */
+export const piBinary: BinarySpec = {
+  description: 'Pi - Minimal coding agent CLI',
+  detect: () => detectHeterogeneousCliCommand('pi', 'pi'),
+  name: 'pi',
+  priority: 5,
+};
+
+/** Qoder CLI @see https://docs.qoder.com/cli/install.md */
+export const qoderBinary: BinarySpec = {
+  description: 'Qoder - AI coding agent CLI',
+  detect: () => detectHeterogeneousCliCommand('qoder', 'qodercli'),
+  name: 'qodercli',
+  priority: 6,
+};
+
+/** TRAE Enterprise CLI, capability-checked against its ACP runtime. */
+export const traeBinary: BinarySpec = {
+  description: 'TRAE CLI - ByteDance enterprise agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('trae', 'traecli'),
+  name: 'traecli',
+  priority: 7,
+};
+
 /**
  * Google Gemini CLI
  * @see https://github.com/google-gemini/gemini-cli
@@ -84,7 +176,7 @@ export const geminiCliBinary: BinarySpec = defineValidatedBinary({
   candidates: ['gemini'],
   description: 'Gemini CLI - Google agentic coding CLI',
   name: 'gemini',
-  priority: 3,
+  priority: 8,
   validateKeywords: ['gemini'],
 });
 
@@ -96,21 +188,20 @@ export const qwenCodeBinary: BinarySpec = defineValidatedBinary({
   candidates: ['qwen'],
   description: 'Qwen Code - Alibaba Qwen agentic coding CLI',
   name: 'qwen',
-  priority: 4,
+  priority: 9,
   validateKeywords: ['qwen'],
 });
 
 /**
- * Kimi CLI (Moonshot)
- * @see https://github.com/MoonshotAI/kimi-cli
+ * Kimi Code (Moonshot AI)
+ * @see https://github.com/MoonshotAI/kimi-code
  */
-export const kimiCliBinary: BinarySpec = defineValidatedBinary({
-  candidates: ['kimi'],
-  description: 'Kimi CLI - Moonshot AI agentic coding CLI',
+export const kimiCliBinary: BinarySpec = {
+  description: 'Kimi Code - Moonshot AI agentic coding CLI',
+  detect: () => detectHeterogeneousCliCommand('kimi-code', 'kimi'),
   name: 'kimi',
-  priority: 5,
-  validateKeywords: ['kimi'],
-});
+  priority: 10,
+};
 
 /**
  * Aider - AI pair programming CLI
@@ -119,17 +210,31 @@ export const kimiCliBinary: BinarySpec = defineValidatedBinary({
  */
 export const aiderBinary: BinarySpec = defineCommandBinary('aider', {
   description: 'Aider - AI pair programming in your terminal',
-  priority: 6,
+  priority: 11,
 });
 
 /**
  * All CLI agent binaries
  */
+export const heterogeneousCliAgentBinaries = {
+  'amp': ampBinary,
+  'claude-code': claudeCodeBinary,
+  'codebuddy': codeBuddyBinary,
+  'codex': codexBinary,
+  'cursor': cursorBinary,
+  'droid': droidBinary,
+  'devin': devinBinary,
+  'grok-build': grokBuildBinary,
+  'kimi-code': kimiCliBinary,
+  'opencode': opencodeBinary,
+  'pi': piBinary,
+  'qoder': qoderBinary,
+  'trae': traeBinary,
+} satisfies Record<LocalHeterogeneousAgentType, BinarySpec>;
+
 export const cliAgentBinaries: BinarySpec[] = [
-  claudeCodeBinary,
-  codexBinary,
+  ...Object.values(heterogeneousCliAgentBinaries),
   geminiCliBinary,
   qwenCodeBinary,
-  kimiCliBinary,
   aiderBinary,
 ];

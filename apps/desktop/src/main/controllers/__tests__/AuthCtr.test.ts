@@ -1,21 +1,12 @@
 import type { DataSyncConfig } from '@lobechat/electron-client-ipc';
 import { BrowserWindow, shell } from 'electron';
+import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
 
 import AuthCtr from '../AuthCtr';
 import RemoteServerConfigCtr from '../RemoteServerConfigCtr';
-
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
 
 const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
@@ -47,8 +38,8 @@ vi.mock('electron', () => ({
   },
 }));
 
-// Mock electron-is
-vi.mock('electron-is', () => ({
+// Mock platform detection
+vi.mock('@/utils/platform', () => ({
   macOS: vi.fn(() => false),
   windows: vi.fn(() => false),
   linux: vi.fn(() => false),
@@ -112,10 +103,11 @@ const mockApp = {
 
 describe('AuthCtr', () => {
   let authCtr: AuthCtr;
-  let mockFetch: ReturnType<typeof vi.fn>;
+  let mockFetch: Mock<(...args: any[]) => Promise<any>>;
   let mockWindow: any;
 
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
     ipcMainHandleMock.mockClear();
     randomBytesCounter = 0; // Reset counter for each test
@@ -141,15 +133,13 @@ describe('AuthCtr', () => {
   });
 
   afterEach(() => {
-    // Clean up authCtr intervals (using real timers, not fake timers)
+    // Stop polling before restoring the real clock.
     authCtr?.cleanup?.();
-    // Clean up any fake timers if used
     vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   describe('Basic functionality', () => {
-    // Use real timers for all tests since setInterval with async doesn't work well with fake timers
-
     describe('requestAuthorization', () => {
       it('should generate PKCE parameters and open authorization URL', async () => {
         const config: DataSyncConfig = {
@@ -195,7 +185,7 @@ describe('AuthCtr', () => {
         expect(result.success).toBe(true);
 
         // Wait a bit for polling to start
-        await new Promise((resolve) => setTimeout(resolve, 3500));
+        await vi.advanceTimersByTimeAsync(3500);
 
         // Verify fetch was called for polling
         const pollingCalls = mockFetch.mock.calls.filter((call) =>
@@ -259,7 +249,7 @@ describe('AuthCtr', () => {
         await authCtr.requestAuthorization(config);
 
         // Wait for first poll
-        await new Promise((resolve) => setTimeout(resolve, 3100));
+        await vi.advanceTimersByTimeAsync(3100);
 
         const firstCallCount = mockFetch.mock.calls.filter((call) =>
           (call[0] as string).includes('/oidc/handoff'),
@@ -267,13 +257,13 @@ describe('AuthCtr', () => {
         expect(firstCallCount).toBeGreaterThanOrEqual(1);
 
         // Wait for second poll
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        await vi.advanceTimersByTimeAsync(3000);
 
         const secondCallCount = mockFetch.mock.calls.filter((call) =>
           (call[0] as string).includes('/oidc/handoff'),
         ).length;
         expect(secondCallCount).toBeGreaterThanOrEqual(2);
-      }, 10000);
+      });
 
       it('should stop polling when credentials are received', async () => {
         const config: DataSyncConfig = {
@@ -339,14 +329,14 @@ describe('AuthCtr', () => {
         await authCtr.requestAuthorization(config);
 
         // Wait for polling to complete
-        await new Promise((resolve) => setTimeout(resolve, 10000));
+        await vi.advanceTimersByTimeAsync(10000);
 
         const pollCountBefore = pollCount;
 
         // Wait more time and verify no more polling
-        await new Promise((resolve) => setTimeout(resolve, 3500));
+        await vi.advanceTimersByTimeAsync(3500);
         expect(pollCount).toBe(pollCountBefore);
-      }, 15000);
+      });
 
       it('should broadcast authorizationSuccessful when credentials are exchanged', async () => {
         const config: DataSyncConfig = {
@@ -403,11 +393,52 @@ describe('AuthCtr', () => {
         await authCtr.requestAuthorization(config);
 
         // Wait for polling to complete and token exchange
-        await new Promise((resolve) => setTimeout(resolve, 4000));
+        await vi.advanceTimersByTimeAsync(4000);
 
         // Verify authorizationSuccessful was broadcast
         expect(mockWindow.webContents.send).toHaveBeenCalledWith('authorizationSuccessful');
-      }, 6000);
+      });
+
+      it("replaces the previous login's gateway connection instead of joining it", async () => {
+        const gatewaySrv = {
+          connect: vi.fn().mockResolvedValue({ success: true }),
+          restart: vi.fn().mockResolvedValue({ success: true }),
+        };
+        vi.mocked(mockApp.getService).mockReturnValue(gatewaySrv as any);
+        const tokens = { access_token: 'new-access-token', expires_in: 3600, refresh_token: 'r' };
+        mockFetch.mockImplementation((url: string) => {
+          const { pathname } = new URL(url);
+          if (pathname.includes('/oidc/handoff'))
+            return Promise.resolve({
+              json: () =>
+                Promise.resolve({
+                  data: { payload: { code: 'mock-auth-code', state: 'mock-random-2' } },
+                  success: true,
+                }),
+              ok: true,
+              status: 200,
+            });
+          if (pathname.includes('/oidc/token'))
+            return Promise.resolve({
+              clone: () => ({ json: () => Promise.resolve(tokens) }),
+              ok: true,
+              status: 200,
+            });
+          return Promise.resolve({ ok: false, status: 404 });
+        });
+
+        try {
+          await authCtr.requestAuthorization({ active: false, storageMode: 'cloud' });
+          await vi.advanceTimersByTimeAsync(4000);
+        } finally {
+          vi.mocked(mockApp.getService).mockReturnValue(null);
+        }
+
+        // A still-connected socket of the previous account would otherwise
+        // satisfy `connect()` and survive the sign-in.
+        expect(gatewaySrv.restart).toHaveBeenCalledTimes(1);
+        expect(gatewaySrv.connect).not.toHaveBeenCalled();
+      });
 
       it('should validate state parameter and reject mismatched state', async () => {
         const config: DataSyncConfig = {
@@ -441,13 +472,13 @@ describe('AuthCtr', () => {
         await authCtr.requestAuthorization(config);
 
         // Wait for polling and state validation
-        await new Promise((resolve) => setTimeout(resolve, 4000));
+        await vi.advanceTimersByTimeAsync(4000);
 
         // Verify authorizationFailed was broadcast with state error
         expect(mockWindow.webContents.send).toHaveBeenCalledWith('authorizationFailed', {
           error: 'Invalid state parameter',
         });
-      }, 6000);
+      });
     });
 
     describe('token refresh', () => {
@@ -506,7 +537,7 @@ describe('AuthCtr', () => {
         await authCtr.requestAuthorization(config);
 
         // Wait for polling and token exchange
-        await new Promise((resolve) => setTimeout(resolve, 4000));
+        await vi.advanceTimersByTimeAsync(4000);
 
         // Verify saveTokens was called
         expect(mockRemoteServerConfigCtr.saveTokens).toHaveBeenCalledWith(
@@ -519,13 +550,11 @@ describe('AuthCtr', () => {
         expect(mockRemoteServerConfigCtr.setRemoteServerConfig).toHaveBeenCalledWith({
           active: true,
         });
-      }, 6000);
+      });
     });
   });
 
   describe('Scenario: Authorization Timeout and Retry', () => {
-    // All scenario tests use real timers
-
     it('Step 1: User requests authorization but does not complete it within 5 minutes', async () => {
       const config: DataSyncConfig = {
         active: false,
@@ -542,21 +571,21 @@ describe('AuthCtr', () => {
       await authCtr.requestAuthorization(config);
 
       // Wait for some polling to happen
-      await new Promise((resolve) => setTimeout(resolve, 10000));
+      await vi.advanceTimersByTimeAsync(10000);
 
       const handoffCallsBeforeTimeout = mockFetch.mock.calls.filter((call) =>
         (call[0] as string).includes('/oidc/handoff'),
       ).length;
       expect(handoffCallsBeforeTimeout).toBeGreaterThan(0);
 
-      // Verify polling is active by checking calls increased
-      const callsBefore = handoffCallsBeforeTimeout;
-      await new Promise((resolve) => setTimeout(resolve, 3500));
-      const callsAfter = mockFetch.mock.calls.filter((call) =>
-        (call[0] as string).includes('/oidc/handoff'),
-      ).length;
-      expect(callsAfter).toBeGreaterThan(callsBefore);
-    }, 15000); // Increase test timeout
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('authorizationFailed', {
+        error: 'Authorization timed out',
+      });
+      const callsAtTimeout = mockFetch.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(mockFetch).toHaveBeenCalledTimes(callsAtTimeout);
+    });
 
     it('Step 2: User clicks retry button after previous attempt', async () => {
       const config: DataSyncConfig = {
@@ -571,7 +600,7 @@ describe('AuthCtr', () => {
 
       // First attempt
       await authCtr.requestAuthorization(config);
-      await new Promise((resolve) => setTimeout(resolve, 3500));
+      await vi.advanceTimersByTimeAsync(3500);
 
       // Reset mock to track retry
       mockFetch.mockClear();
@@ -580,13 +609,13 @@ describe('AuthCtr', () => {
       await authCtr.requestAuthorization(config);
 
       // Verify: New polling started
-      await new Promise((resolve) => setTimeout(resolve, 3500));
+      await vi.advanceTimersByTimeAsync(3500);
 
       const handoffCalls = mockFetch.mock.calls.filter((call) =>
         (call[0] as string).includes('/oidc/handoff'),
       );
       expect(handoffCalls.length).toBeGreaterThan(0);
-    }, 10000);
+    });
 
     it('Step 3: Retry generates new state parameter (not reusing old state)', async () => {
       const config: DataSyncConfig = {
@@ -607,7 +636,7 @@ describe('AuthCtr', () => {
 
       // First authorization attempt
       await authCtr.requestAuthorization(config);
-      await new Promise((resolve) => setTimeout(resolve, 3500));
+      await vi.advanceTimersByTimeAsync(3500);
       const firstState = capturedStates[0];
 
       // Clear for second attempt tracking
@@ -616,7 +645,7 @@ describe('AuthCtr', () => {
 
       // Retry - should generate NEW state
       await authCtr.requestAuthorization(config);
-      await new Promise((resolve) => setTimeout(resolve, 3500));
+      await vi.advanceTimersByTimeAsync(3500);
       const secondState = capturedStates[0];
 
       // CRITICAL: States must be different
@@ -624,7 +653,7 @@ describe('AuthCtr', () => {
       expect(secondState).toBeDefined();
       expect(secondState).not.toBe(firstState);
       expect(firstAttemptStates).not.toContain(secondState);
-    }, 10000);
+    });
 
     it('Step 4: User completes authorization on retry successfully', async () => {
       const config: DataSyncConfig = {
@@ -635,7 +664,7 @@ describe('AuthCtr', () => {
       // First attempt - incomplete
       mockFetch.mockResolvedValue({ status: 404, ok: false });
       await authCtr.requestAuthorization(config);
-      await new Promise((resolve) => setTimeout(resolve, 3500));
+      await vi.advanceTimersByTimeAsync(3500);
 
       // Second attempt - user completes it this time
       mockFetch.mockImplementation((url: string) => {
@@ -689,7 +718,7 @@ describe('AuthCtr', () => {
       await authCtr.requestAuthorization(config);
 
       // Wait longer for polling and token exchange
-      await new Promise((resolve) => setTimeout(resolve, 4000));
+      await vi.advanceTimersByTimeAsync(4000);
 
       // Verify: Success message shown
       const successCall = mockWindow.webContents.send.mock.calls.find(
@@ -699,7 +728,7 @@ describe('AuthCtr', () => {
 
       // Verify: Tokens saved
       expect(mockRemoteServerConfigCtr.saveTokens).toHaveBeenCalled();
-    }, 12000);
+    });
 
     it('Edge case: Rapid retry clicks should not create multiple polling intervals', async () => {
       const config: DataSyncConfig = {
@@ -715,17 +744,16 @@ describe('AuthCtr', () => {
       await authCtr.requestAuthorization(config);
 
       // Wait for some polling to happen
-      await new Promise((resolve) => setTimeout(resolve, 9000));
+      await vi.advanceTimersByTimeAsync(9000);
 
       // Count handoff requests
       const handoffCalls = mockFetch.mock.calls.filter((call) =>
         (call[0] as string).includes('/oidc/handoff'),
       );
 
-      // Should have ~3 calls (one per 3-second interval), not ~9 (3 intervals running)
-      // Allow some tolerance for timing
-      expect(handoffCalls.length).toBeLessThanOrEqual(5);
-    }, 10000);
+      // Exactly one active interval: one request per 3 seconds.
+      expect(handoffCalls).toHaveLength(3);
+    });
   });
 
   describe('Proactive Token Refresh', () => {
@@ -832,7 +860,7 @@ describe('AuthCtr', () => {
         vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mockReturnValue(true);
 
         authCtr.afterAppReady();
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await vi.advanceTimersByTimeAsync(100);
 
         expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalled();
       });
@@ -841,7 +869,7 @@ describe('AuthCtr', () => {
         vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mockReturnValue(false);
 
         authCtr.afterAppReady();
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await vi.advanceTimersByTimeAsync(100);
 
         expect(mockRemoteServerConfigCtr.refreshAccessToken).not.toHaveBeenCalled();
       });
@@ -850,7 +878,7 @@ describe('AuthCtr', () => {
         vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mockReturnValue(false);
 
         authCtr.afterAppReady();
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await vi.advanceTimersByTimeAsync(100);
 
         const [buffer] = vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mock.calls[0];
         expect(buffer).toBeGreaterThan(0);
@@ -862,7 +890,7 @@ describe('AuthCtr', () => {
         vi.mocked(mockRemoteServerConfigCtr.isTokenExpiringSoon).mockReturnValue(true);
 
         authCtr.afterAppReady();
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await vi.advanceTimersByTimeAsync(100);
 
         expect(mockRemoteServerConfigCtr.refreshAccessToken).not.toHaveBeenCalled();
       });

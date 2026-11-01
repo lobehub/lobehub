@@ -1,9 +1,17 @@
 'use client';
 
-import { Alert, Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button, createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  createModal,
+  Input,
+  type ModalInstance,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
-import { App, Typography } from 'antd';
 import { ArrowLeftRight, Sparkles } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +22,7 @@ import { useToolStore } from '@/store/tool';
 const ImportFromGithubContent = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
   const { close, setCanDismissByClickOutside } = useModalContext();
-  const { message } = App.useApp();
+
   const importAgentSkillFromGitHub = useToolStore((s) => s.importAgentSkillFromGitHub);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +42,7 @@ const ImportFromGithubContent = memo(() => {
 
     try {
       await importAgentSkillFromGitHub({ gitUrl: trimmed });
-      message.success(t('agentSkillModal.importSuccess'));
+      toast.success(t('agentSkillModal.importSuccess'));
       close();
     } catch (err: any) {
       setError(err?.message || String(err));
@@ -51,25 +59,25 @@ const ImportFromGithubContent = memo(() => {
           <Icon
             icon={ArrowLeftRight}
             size={16}
-            style={{ color: 'var(--ant-color-text-tertiary)' }}
+            style={{ color: 'var(--lobe-color-text-tertiary)' }}
           />
           <Icon icon={Sparkles} size={28} />
         </Flexbox>
 
         <Flexbox align="center" gap={4}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
+          <Text as={'h4'} style={{ margin: 0 }}>
             {t('agentSkillModal.github.title')}
-          </Typography.Title>
-          <Typography.Text style={{ textAlign: 'center' }} type="secondary">
+          </Text>
+          <Text align={'center'} type={'secondary'}>
             {t('agentSkillModal.github.desc')}
-          </Typography.Text>
+          </Text>
         </Flexbox>
       </Flexbox>
 
       {error && <Alert showIcon title={t('agentSkillModal.importError', { error })} type="error" />}
 
       <Flexbox gap={8}>
-        <Typography.Text strong>URL</Typography.Text>
+        <Text strong>URL</Text>
         <Input
           disabled={!canCreate}
           placeholder={t('agentSkillModal.github.urlPlaceholder')}
@@ -96,6 +104,5 @@ export const openImportFromGithubModal = (): ModalInstance =>
     content: <ImportFromGithubContent />,
     footer: null,
     maskClosable: true,
-    styles: { header: { display: 'none' } },
     width: 480,
   });

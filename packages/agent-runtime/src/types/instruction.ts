@@ -1,6 +1,7 @@
 import type {
   ChatToolPayload,
   ModelUsage,
+  RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
   RuntimeStepContext,
 } from '@lobechat/types';
@@ -19,6 +20,9 @@ export interface AgentRuntimeContext {
    * Set once during initialization and passed through to Context Engine
    */
   initialContext?: RuntimeInitialContext;
+
+  /** Zero-based instruction position within the current runtime step */
+  instructionIndex?: number;
 
   metadata?: Record<string, unknown>;
 
@@ -45,6 +49,7 @@ export interface AgentRuntimeContext {
 
   /** Session info (kept for backward compatibility, will be optional in the future) */
   session?: {
+    eventCount?: number;
     messageCount: number;
     sessionId: string;
     status: AgentState['status'];
@@ -115,7 +120,13 @@ export interface Agent {
 // ── Payloads ──────────────────────────────────────────────
 
 export interface CallLLMPayload {
+  additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   allowedToolNames?: string[];
+  /**
+   * Attachments the context engine sends as a preview plus file id, planned by
+   * `shouldCompress` so attachment text fits under the compression threshold.
+   */
+  attachmentPreviewFileIds?: string[];
   isFirstMessage?: boolean;
   messages: any[];
   model: string;
@@ -173,6 +184,8 @@ export interface SubAgentTask {
    * run on the server.
    */
   runInClient?: boolean;
+  /** Agent selected by callAgent; defaults to the current runtime agent when omitted */
+  targetAgentId?: string;
   /** Timeout in milliseconds (optional, default 30 minutes) */
   timeout?: number;
 }
@@ -252,6 +265,14 @@ export interface AgentInstructionCallTool extends AgentInstructionBase {
 
 export interface AgentInstructionCallToolsBatch extends AgentInstructionBase {
   payload: {
+    /**
+     * `tool_call_id → existing tool message id`, for tools whose row already
+     * exists as a pending placeholder (batch human approval: the approval pause
+     * created one row per pending tool). The executor UPDATES those rows instead
+     * of inserting new ones — without this, resuming an approved batch would
+     * duplicate every tool message and orphan the pending originals.
+     */
+    existingToolMessageIds?: Record<string, string>;
     parentMessageId: string;
     toolsCalling: ChatToolPayload[];
   } & any;
@@ -260,6 +281,15 @@ export interface AgentInstructionCallToolsBatch extends AgentInstructionBase {
 
 export interface AgentInstructionResolveAbortedTools extends AgentInstructionBase {
   payload: {
+    /**
+     * `tool_call_id → existing tool message id`, for calls whose row is already
+     * on disk as a pending placeholder (an approval pause creates one row per
+     * pending tool). The executor UPDATES those rows to the aborted state
+     * instead of inserting new ones — without this, aborting a parked approval
+     * duplicates every tool row and leaves the originals `pending`, so the
+     * approval cards stay on screen after Stop.
+     */
+    existingToolMessageIds?: Record<string, string>;
     /** Parent message ID (assistant message) */
     parentMessageId: string;
     /** Reason for the abort */
@@ -280,6 +310,20 @@ export interface AgentInstructionResolveBlockedTools extends AgentInstructionBas
     parentMessageId: string;
     /** Tool calls that were blocked and need tool results */
     toolsCalling: ChatToolPayload[];
+    /**
+     * These calls named tools that resolved to nothing, so the parent assistant
+     * was persisted without any `tools` of its own. Two consequences the
+     * executor has to handle:
+     *
+     * - The tool rows must be advertised on the parent, or the next step loses
+     *   them: state messages are rebuilt from the DB every step, and
+     *   conversation-flow only collects a tool row when its parent assistant
+     *   lists the matching call. An unadvertised rejection never reaches the
+     *   model, which is the feedback this whole path exists to deliver.
+     * - The instruction counts as one round against
+     *   {@link AgentState.unresolvedToolFeedbackRounds}.
+     */
+    unresolvedToolNames?: boolean;
   };
   type: 'resolve_blocked_tools';
 }
@@ -306,26 +350,6 @@ export interface AgentInstructionExecSubAgents extends AgentInstructionBase {
   type: 'exec_sub_agents';
 }
 
-export interface AgentInstructionExecClientSubAgent extends AgentInstructionBase {
-  payload: {
-    /** Parent message ID (tool message that dispatched the sub-agent) */
-    parentMessageId: string;
-    /** Sub-agent to execute */
-    task: SubAgentTask;
-  };
-  type: 'exec_client_sub_agent';
-}
-
-export interface AgentInstructionExecClientSubAgents extends AgentInstructionBase {
-  payload: {
-    /** Parent message ID (tool message that dispatched the sub-agents) */
-    parentMessageId: string;
-    /** Array of sub-agents to execute */
-    tasks: SubAgentTask[];
-  };
-  type: 'exec_client_sub_agents';
-}
-
 // ─ Human Interaction ─────────────────────────────────────
 
 export interface AgentInstructionRequestHumanPrompt extends AgentInstructionBase {
@@ -345,9 +369,27 @@ export interface AgentInstructionRequestHumanSelect extends AgentInstructionBase
 }
 
 export interface AgentInstructionRequestHumanApprove extends AgentInstructionBase {
+  /**
+   * The assistant message that emitted `pendingToolsCalling`. Any producer that
+   * creates pending tool rows should set it, so those rows land under their real
+   * owner — see the parent resolution comment in `executors/humanApprove.ts`.
+   *
+   * Required by `skipCreateToolMessage` (resume) paths so an unresolved subset
+   * can be rebound to its authoritative assistant owner. Optional only for
+   * backwards compatibility with fresh producers that omit it: the executor
+   * still falls back to scanning `state.messages`, which is accurate only
+   * within a single step.
+   */
+  parentMessageId?: string;
   pendingToolsCalling: ChatToolPayload[];
   reason?: string;
   skipCreateToolMessage?: boolean;
+  /** Previous sealed batch for a partial-decision re-park. */
+  supersedes?: {
+    batchId: string;
+    operationId: string;
+    toolCallIds: string[];
+  };
   type: 'request_human_approve';
 }
 
@@ -388,8 +430,6 @@ export type AgentInstruction =
   // Sub-Agent
   | AgentInstructionExecSubAgent
   | AgentInstructionExecSubAgents
-  | AgentInstructionExecClientSubAgent
-  | AgentInstructionExecClientSubAgents
   // Human Interaction
   | AgentInstructionRequestHumanPrompt
   | AgentInstructionRequestHumanSelect

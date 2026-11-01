@@ -1,4 +1,3 @@
-import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '@lobechat/const/currency';
 import type { ModelTokensUsage } from '@lobechat/types';
 import debug from 'debug';
 import type {
@@ -9,6 +8,9 @@ import type {
   PricingUnitName,
   TieredPricingUnit,
 } from 'model-bank';
+
+import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '../../../const/currency';
+import { DEFAULT_CACHE_TTL } from '../../anthropicCompatibleFactory/resolveCacheTTL';
 
 const log = debug('lobe-cost:computeChatPricing');
 
@@ -54,6 +56,7 @@ export interface PricingComputationResult {
 
 interface UnitQuantityResolverContext {
   hasDedicatedAudioCacheReadUnit: boolean;
+  hasDedicatedAudioInputUnit: boolean;
   hasDedicatedImageCacheReadUnit: boolean;
   hasDedicatedModalityCacheReadUnit: boolean;
 }
@@ -117,28 +120,60 @@ const sumDefinedTokens = (...values: Array<number | undefined>) => {
   return definedValues.reduce((sum, value) => sum + value, 0);
 };
 
+const hasAudioInputBreakdown = (usage: ModelTokensUsage) =>
+  typeof usage.inputAudioTokens === 'number';
+
+const resolveTextPricedAudioTokens = (
+  usage: ModelTokensUsage,
+  context: UnitQuantityResolverContext,
+) =>
+  sumDefinedTokens(
+    resolveInputTextTokens(usage),
+    context.hasDedicatedAudioInputUnit ? undefined : resolveInputAudioTokens(usage),
+  );
+
 const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResolver>> = {
-  textInput: (usage) => {
+  textInput: (usage, context) => {
     const toolTokens = usage.inputToolTokens ?? 0;
 
     if (hasCachedModalityBreakdown(usage)) {
-      const textTokens = resolveInputTextTokens(usage);
-      if (textTokens === undefined && toolTokens === 0) return undefined;
+      const textPricedTokens = resolveTextPricedAudioTokens(usage, context);
+      if (textPricedTokens === undefined && toolTokens === 0) return undefined;
 
-      return (textTokens ?? 0) + toolTokens;
+      return (textPricedTokens ?? 0) + toolTokens;
     }
 
     if (usage.inputCacheMissTokens !== undefined) {
       // inputCacheMissTokens only covers non-cached prompt tokens;
       // tool-use tokens (e.g. grounding results) are billed at the same input rate
       // and must be added here because there is no separate toolInput pricing unit.
-      return usage.inputCacheMissTokens + toolTokens;
+      // Provider aggregate miss counts include audio. Subtract it only when a dedicated audio
+      // unit exists; image/video allocation intentionally keeps its pre-audio behavior.
+      const dedicatedAudioTokens = context.hasDedicatedAudioInputUnit
+        ? (usage.inputAudioTokens ?? 0)
+        : 0;
+
+      return Math.max(0, usage.inputCacheMissTokens - dedicatedAudioTokens) + toolTokens;
     }
 
     if (typeof usage.inputCachedTokens === 'number' && typeof usage.totalInputTokens === 'number') {
       throw new Error(
         'Missing inputCacheMissTokens! You can set it by inputCacheMissTokens = totalInputTokens - inputCachedTokens',
       );
+    }
+
+    if (hasAudioInputBreakdown(usage)) {
+      const textPricedTokens = resolveTextPricedAudioTokens(usage, context) ?? 0;
+      const knownPromptTokens =
+        (usage.inputTextTokens ?? 0) +
+        (usage.inputAudioTokens ?? 0) +
+        (usage.inputImageTokens ?? 0) +
+        (usage.inputVideoTokens ?? 0);
+      const promptTokensFromTotal = Math.max(0, (usage.totalInputTokens ?? 0) - toolTokens);
+      // Keep unclassified provider tokens (for example citations) in the text bucket.
+      const unclassifiedTokens = Math.max(0, promptTokensFromTotal - knownPromptTokens);
+
+      return textPricedTokens + unclassifiedTokens + toolTokens;
     }
 
     // When tool tokens are present, totalInputTokens already includes them
@@ -200,6 +235,7 @@ const UNIT_QUANTITY_RESOLVERS: Partial<Record<PricingUnitName, UnitQuantityResol
   imageOutput: (usage) => usage.outputImageTokens,
 
   videoInput: resolveInputVideoTokens,
+  videoGeneration: (usage) => usage.outputVideoTokens,
 
   imageGeneration: () => undefined,
 
@@ -277,7 +313,11 @@ const resolveLookupKey = (
 
   const missingParams: string[] = [];
   const params = unit.lookup.pricingParams.map((param) => {
-    const source = options?.lookupParams?.[param];
+    // Paths that never resolve a TTL (e.g. OpenAI-compatible providers falling back to an
+    // Anthropic card) still write to the cache, which the API does for its default 5 minutes.
+    const source =
+      options?.lookupParams?.[param] ??
+      (param === 'ttl' && DEFAULT_CACHE_TTL in unit.lookup.prices ? DEFAULT_CACHE_TTL : undefined);
     if (source === undefined || source === null) {
       missingParams.push(param);
       return 'undefined';
@@ -342,6 +382,11 @@ const resolveQuantity = (
   usage: ModelTokensUsage,
   context: UnitQuantityResolverContext,
 ) => {
+  // Character-billed units (e.g. TTS) count input characters instead of tokens.
+  if (unit.unit === 'millionCharacters') {
+    return unit.name === 'textInput' ? usage.inputCharacters : undefined;
+  }
+
   const resolver = UNIT_QUANTITY_RESOLVERS[unit.name as PricingUnitName];
   const quantity = resolver?.(usage, context);
   return typeof quantity === 'number' ? quantity : undefined;
@@ -364,9 +409,25 @@ export const computeChatCost = (
   const usdToCnyRate = options?.usdToCnyRate ?? USD_TO_CNY;
   const pricingUnitNames = new Set(pricing.units.map((unit) => unit.name));
   const hasDedicatedAudioCacheReadUnit = pricingUnitNames.has('audioInput_cacheRead');
+  const hasDedicatedAudioInputUnit = pricingUnitNames.has('audioInput');
   const hasDedicatedImageCacheReadUnit = pricingUnitNames.has('imageInput_cacheRead');
+
+  if (
+    typeof usage.inputCachedTokens === 'number' &&
+    usage.inputCachedTokens > 0 &&
+    typeof usage.inputAudioTokens === 'number' &&
+    usage.inputAudioTokens > 0 &&
+    typeof usage.inputCachedAudioTokens !== 'number' &&
+    (hasDedicatedAudioInputUnit || hasDedicatedAudioCacheReadUnit)
+  ) {
+    // Aggregate cache usage does not reveal how many audio tokens received cache pricing.
+    // Dedicated audio units make that split material, so returning a cost would require guessing.
+    return undefined;
+  }
+
   const resolverContext: UnitQuantityResolverContext = {
     hasDedicatedAudioCacheReadUnit,
+    hasDedicatedAudioInputUnit,
     hasDedicatedImageCacheReadUnit,
     hasDedicatedModalityCacheReadUnit:
       hasDedicatedAudioCacheReadUnit || hasDedicatedImageCacheReadUnit,
@@ -377,7 +438,7 @@ export const computeChatCost = (
     if (quantity === undefined) continue;
 
     if (unit.strategy === 'fixed') {
-      if (unit.unit !== 'millionTokens')
+      if (unit.unit !== 'millionTokens' && unit.unit !== 'millionCharacters')
         throw new Error(`Unsupported chat pricing unit: ${unit.unit}`);
 
       const fixedUnit = unit as FixedPricingUnit;

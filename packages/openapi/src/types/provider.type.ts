@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import type { AiProviderSelectItem } from '@/database/schemas';
 import type { AiProviderConfig, AiProviderSettings } from '@/types/aiProvider';
 
+import type { PublicProvider } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
 
@@ -10,9 +10,7 @@ import { PaginationQuerySchema } from './common.type';
 
 export type ProviderKeyVaults = Record<string, string | undefined>;
 
-export type ProviderDetailResponse = Omit<AiProviderSelectItem, 'keyVaults'> & {
-  keyVaults?: ProviderKeyVaults;
-};
+export type ProviderDetailResponse = PublicProvider;
 
 export type GetProvidersResponse = PaginationQueryResponse<{
   providers: ProviderDetailResponse[];
@@ -54,14 +52,14 @@ export type ProviderListQuerySchemaType = z.infer<typeof ProviderListQuerySchema
 
 const ProviderPayloadBaseSchema = z.object({
   checkModel: z.string().nullish(),
-  config: z.record(z.unknown()).optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
   description: z.string().nullish(),
   enabled: z.boolean().optional(),
   fetchOnClient: z.boolean().nullish(),
-  keyVaults: z.record(z.string()).optional(),
+  keyVaults: z.record(z.string(), z.string()).optional(),
   logo: z.string().nullish(),
   name: z.string().min(1, 'Provider name cannot be empty').nullish(),
-  settings: z.record(z.unknown()).optional(),
+  settings: z.record(z.string(), z.unknown()).optional(),
   sort: z.number().int().nullish(),
   source: z.enum(['builtin', 'custom']).optional(),
 });
@@ -71,7 +69,7 @@ export const CreateProviderRequestSchema = ProviderPayloadBaseSchema.extend({
 });
 
 export const UpdateProviderRequestSchema = ProviderPayloadBaseSchema.extend({
-  keyVaults: z.record(z.string()).nullish(),
+  keyVaults: z.record(z.string(), z.string()).nullish(),
 });
 
 export type CreateProviderRequestSchemaType = z.infer<typeof CreateProviderRequestSchema>;

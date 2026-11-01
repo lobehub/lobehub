@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
     isAgentListInit: true,
     pinnedAgents: [] as any[],
     privateAgentGroups: [] as any[],
+    privatePinnedAgents: [] as any[],
     privateUngroupedAgents: [] as any[],
     ungroupedAgents: [
       { id: 'agt_custom', title: 'Custom Agent', type: 'agent' },
@@ -38,11 +39,10 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  Center: ({ children }: { children: ReactNode }) => (
-    <div data-testid="selector-trigger">{children}</div>
-  ),
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+// The real Popover only mounts its content after an open interaction; the
+// assertions read the selector list synchronously.
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Popover: ({
     children,
     content,
@@ -59,19 +59,6 @@ vi.mock('@lobehub/ui', () => ({
       <div data-testid="popover-content">{content}</div>
     </div>
   ),
-}));
-
-vi.mock('antd-style', () => ({
-  createStaticStyles: () => ({
-    chevron: 'chevron',
-    container: 'container',
-  }),
-  cx: (...classes: string[]) => classes.filter(Boolean).join(' '),
-}));
-
-vi.mock('lucide-react', () => ({
-  ChevronsUpDownIcon: () => <span data-testid="chevron" />,
-  Circle: () => <span data-testid="circle" />,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -112,11 +99,11 @@ vi.mock('@/hooks/useFetchAgentList', () => ({
   useFetchAgentList: () => mocks.fetchAgentList(),
 }));
 
-vi.mock('@/routes/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar', () => ({
+vi.mock('@/components/AgentAvatar', () => ({
   default: ({ avatar }: { avatar?: string }) => <span data-avatar={avatar} data-testid="avatar" />,
 }));
 
-vi.mock('@/routes/(main)/home/_layout/Body/Agent/ModalProvider', () => ({
+vi.mock('@/features/HomeSidebar/Body/Agent/ModalProvider', () => ({
   AgentModalProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 

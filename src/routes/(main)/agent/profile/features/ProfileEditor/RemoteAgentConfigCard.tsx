@@ -5,18 +5,34 @@ import {
   type RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
-import { ActionIcon, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { Button, createModal, Select, useModalContext } from '@lobehub/ui/base-ui';
-import { Tag } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button as BaseButton,
+  Button,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Select,
+  Tag,
+  Text,
+  Tooltip,
+  useModalContext,
+} from '@lobehub/ui';
 import { t as i18nT } from 'i18next';
 import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaQuery } from '@/libs/trpc/client';
+import AsyncError from '@/components/AsyncError';
+import {
+  getBoundDevicePresence,
+  getDeviceSelectState,
+} from '@/features/HeterogeneousAgent/ExecutionEnvironment/boundDevicePresence';
 import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
+import { isDevicePresenceUnknown, useDeviceList } from '@/store/device';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
@@ -56,13 +72,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   detailLabel: css`
     flex-shrink: 0;
-
     width: 96px;
-
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
   `,
   detailContent: css`
     display: flex;
@@ -103,13 +115,29 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
       setCanDismissByClickOutside(!saving);
     }, [saving, setCanDismissByClickOutside]);
 
-    const { data: devices, isLoading: loadingDevices } = lambdaQuery.device.listDevices.useQuery(
-      undefined,
-      { staleTime: 30_000 },
-    );
+    // The shared device replica (see useDeviceList), partitioned by workspace.
+    const {
+      data: devices,
+      error: deviceListError,
+      isConfirmed,
+      isLoading: loadingDevices,
+      isValidating: validatingDevices,
+      mutate: refreshDevices,
+    } = useDeviceList();
+    // Only online devices are offered, and neither a stored row's presence nor
+    // a stored copy's missing rows are known until the server confirms the list
+    // — keep the picker loading until then.
+    const selectState = getDeviceSelectState({
+      error: deviceListError,
+      hasUnknownPresence: (devices ?? []).some(isDevicePresenceUnknown),
+      isConfirmed,
+      isLoading: loadingDevices,
+      isValidating: validatingDevices,
+    });
 
     const onlineDevices = (devices ?? []).filter(
-      (d) => d.online && (!isWorkspaceAgent || d.scope === 'workspace'),
+      (d) =>
+        d.online && (!isWorkspaceAgent || (d.scope === 'workspace' && d.visibility === 'public')),
     );
 
     const checkCapability = useCallback(
@@ -157,7 +185,7 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
       <Flexbox gap={16}>
         <Flexbox gap={12} paddingBlock={'12px 4px'}>
           <Select
-            loading={loadingDevices}
+            loading={selectState === 'loading'}
             placeholder={t('platformAgentConfig.selectDevice')}
             style={{ width: '100%' }}
             value={selectedDeviceId}
@@ -175,6 +203,13 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
             }))}
             onChange={handleDeviceSelect}
           />
+          {selectState === 'error' && (
+            <AsyncError
+              error={deviceListError}
+              variant={'inline'}
+              onRetry={() => void refreshDevices()}
+            />
+          )}
           {checkingCapability && (
             <Tag style={{ marginInlineEnd: 0 }}>
               {t('platformAgentConfig.availability.checking')}
@@ -182,7 +217,7 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
           )}
           {capabilityOk && (
             <Flexbox horizontal align="center" gap={4}>
-              <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={14} />
+              <Icon color="var(--lobe-color-success)" icon={CheckCircle2} size={14} />
               <Tag color="success" style={{ marginInlineEnd: 0 }}>
                 {capabilityResult?.version ?? t('platformAgentConfig.availability.available')}
               </Tag>
@@ -190,7 +225,7 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
           )}
           {capabilityBad && (
             <Flexbox horizontal align="center" gap={4}>
-              <Icon color="var(--ant-color-error)" icon={XCircle} size={14} />
+              <Icon color="var(--lobe-color-error)" icon={XCircle} size={14} />
               <Tag color="error" style={{ marginInlineEnd: 0 }}>
                 {t('platformAgentConfig.availability.notInstalled')}
               </Tag>
@@ -198,17 +233,17 @@ const ChangeDeviceContent = memo<ChangeDeviceContentProps>(
           )}
         </Flexbox>
         <Flexbox horizontal gap={8} justify={'flex-end'}>
-          <Button disabled={saving} onClick={close}>
+          <BaseButton disabled={saving} onClick={close}>
             {t('cancel', { ns: 'common' })}
-          </Button>
-          <Button
+          </BaseButton>
+          <BaseButton
             disabled={!selectedDeviceId || checkingCapability || capabilityBad}
             loading={saving}
             type={'primary'}
             onClick={handleSave}
           >
             {t('platformAgentConfig.changeDevice')}
-          </Button>
+          </BaseButton>
         </Flexbox>
       </Flexbox>
     );
@@ -268,11 +303,12 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
 
     const platformName = HETEROGENEOUS_TYPE_LABELS[provider.type] ?? provider.type;
 
-    const { data: devices } = lambdaQuery.device.listDevices.useQuery(undefined, {
-      staleTime: 30_000,
-    });
+    // The shared device replica — see the comment on the sibling call above.
+    const { data: devices, isConfirmed } = useDeviceList();
 
     const boundDevice = devices?.find((d) => d.deviceId === boundDeviceId);
+    const boundPresence = getBoundDevicePresence(boundDeviceId, boundDevice, isConfirmed);
+    const boundPresenceUnknown = boundPresence === 'checking';
 
     const checkCapability = useCallback(
       async (deviceId: string) => {
@@ -316,6 +352,11 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
           <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgentConfig.availability.noDevice')}</Tag>
         );
       }
+      if (boundPresenceUnknown) {
+        return (
+          <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgentConfig.availability.checking')}</Tag>
+        );
+      }
       if (!boundDevice?.online) {
         return (
           <Tag color="warning" style={{ marginInlineEnd: 0 }}>
@@ -332,7 +373,7 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
       if (capabilityResult.available) {
         return (
           <Flexbox horizontal align="center" gap={4}>
-            <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={14} />
+            <Icon color="var(--lobe-color-success)" icon={CheckCircle2} size={14} />
             <Tag color="success" style={{ marginInlineEnd: 0 }}>
               {capabilityResult.version ?? t('platformAgentConfig.availability.available')}
             </Tag>
@@ -341,7 +382,7 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
       }
       return (
         <Flexbox horizontal align="center" gap={4}>
-          <Icon color="var(--ant-color-error)" icon={XCircle} size={14} />
+          <Icon color="var(--lobe-color-error)" icon={XCircle} size={14} />
           <Tag color="error" style={{ marginInlineEnd: 0 }}>
             {t('platformAgentConfig.availability.notInstalled')}
           </Tag>
@@ -388,13 +429,19 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
                     color={boundDevice.online ? 'success' : 'default'}
                     style={{ marginInlineEnd: 0 }}
                   >
-                    {boundDevice.online
-                      ? t('platformAgentConfig.device.online')
-                      : t('platformAgentConfig.device.offline')}
+                    {boundPresenceUnknown
+                      ? t('devices.status.checking')
+                      : boundDevice.online
+                        ? t('platformAgentConfig.device.online')
+                        : t('platformAgentConfig.device.offline')}
                   </Tag>
                 </Flexbox>
               ) : (
-                <Tag style={{ marginInlineEnd: 0 }}>{t('platformAgentConfig.device.none')}</Tag>
+                <Tag style={{ marginInlineEnd: 0 }}>
+                  {boundPresenceUnknown
+                    ? t('devices.status.checking')
+                    : t('platformAgentConfig.device.none')}
+                </Tag>
               )}
             </div>
           </div>

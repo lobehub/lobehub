@@ -1,3 +1,5 @@
+import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
+import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -11,6 +13,7 @@ import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -31,7 +34,11 @@ const agentNotifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (op
 
   return opts.next({
     ctx: {
-      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, { workspaceId: wsId }),
+      aiAgentService: new AiAgentService(ctx.serverDB, ctx.userId, {
+        withholdGatewayToken:
+          ctx.apiKeyScopes !== undefined && !isFullAccessApiKey(ctx.apiKeyScopes),
+        workspaceId: wsId,
+      }),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -42,6 +49,8 @@ const agentNotifyWriteProcedure = agentNotifyProcedure.use(withScopedPermission(
 const NotifySchema = z.object({
   /** Agent ID to trigger (overrides the topic's default agent) */
   agentId: z.string().optional(),
+  /** Signal that the remote hetero run was cancelled by a process signal. */
+  cancelled: z.boolean().optional(),
   /** Message content from the external agent */
   content: z.string(),
   /**
@@ -74,6 +83,12 @@ const NotifySchema = z.object({
    */
   messageId: z.string().optional(),
   /**
+   * Server-assigned operation identity for this callback. Remote CLI/Desktop
+   * clients propagate it through LOBEHUB_OPERATION_ID; assistant callbacks
+   * need it to distinguish concurrent group members sharing one topic.
+   */
+  operationId: z.string().optional(),
+  /**
    * Role of the message to write:
    * - 'user' (default): write as user message and trigger the agent to reply
    * - 'assistant': write directly as assistant message without an extra LLM call
@@ -85,310 +100,422 @@ const NotifySchema = z.object({
   topicId: z.string(),
 });
 
-export const agentNotifyRouter = router({
-  /**
-   * Receive a callback message from an external agent (e.g. Claude Code),
-   * write it into a topic, and optionally trigger the agent loop.
-   *
-   * role='user' (default): content becomes a user message → agent replies
-   * role='assistant': content is written directly as an assistant message
-   *   continue=true: also trigger a new agent turn after writing
-   */
-  notify: agentNotifyWriteProcedure.input(NotifySchema).mutation(async ({ input, ctx }) => {
-    const {
-      topicId,
-      content,
-      agentId: inputAgentId,
-      threadId,
-      role = 'user',
-      continue: shouldContinue = false,
-      done = false,
-      error: terminalError,
-      messageId,
-    } = input;
-
-    // An error is itself a terminal signal — finalize the run even if the
-    // remote agent didn't also set `done`.
-    const isTerminal = done || !!terminalError;
-
-    log(
-      'notify: topicId=%s, agentId=%s, role=%s, continue=%s, done=%s, messageId=%s, content=%s',
-      topicId,
-      inputAgentId,
-      role,
-      shouldContinue,
-      done,
-      messageId,
-      content.slice(0, 80),
-    );
-
-    // 1. Verify the topic exists and get its agentId + running operationId
-    const topic = await ctx.topicModel.findById(topicId);
-    if (!topic) {
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: `Topic ${topicId} not found`,
-      });
-    }
-
-    // Extract the operationId seeded by execAgent for remote hetero agents.
-    // Used to publish notify_update / agent_runtime_end events to the gateway WS.
-    const remoteOperationId = (topic.metadata as any)?.runningOperation?.operationId as
-      string | undefined;
-
-    const agentId = inputAgentId ?? topic.agentId;
-    if (!agentId) {
-      throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: `Topic ${topicId} has no associated agent and no agentId was provided`,
-      });
-    }
-
+/** Internal callers can persist their operation link before execution is dispatched. */
+export const createAgentNotifyRouter = (
+  onOperationCreated?: (operationId: string) => Promise<void>,
+) =>
+  router({
     /**
-     * Publish a stream event for remote hetero agents (openclaw / hermes).
-     * Fire-and-forget — stream publish failures must not break the notify response.
+     * Receive a callback message from an external agent (e.g. Claude Code),
+     * write it into a topic, and optionally trigger the agent loop.
+     *
+     * role='user' (default): content becomes a user message → agent replies
+     * role='assistant': content is written directly as an assistant message
+     *   continue=true: also trigger a new agent turn after writing
      */
-    const publishRemoteHeteroEvent = async (writtenMessageId?: string) => {
-      if (!remoteOperationId) return;
-      try {
-        const stream = getStreamManager();
-        if (isTerminal) {
-          // Signal task completion — frontend gateway WS subscription closes.
-          // A `terminalError` finalizes the run as failed; otherwise it succeeded.
-          await stream.publishAgentRuntimeEnd({
-            finalState: terminalError
-              ? { error: terminalError.message, reason: 'error' }
-              : { reason: 'success' },
-            operationId: remoteOperationId,
-            reason: terminalError ? 'error' : 'success',
-            reasonDetail: terminalError?.message ?? 'Remote hetero agent task completed',
-            stepIndex: 0,
-          });
+    notify: agentNotifyWriteProcedure.input(NotifySchema).mutation(async ({ input, ctx }) => {
+      const {
+        topicId,
+        content,
+        agentId: inputAgentId,
+        threadId,
+        role = 'user',
+        continue: shouldContinue = false,
+        cancelled = false,
+        done = false,
+        error: terminalError,
+        messageId,
+      } = input;
 
-          // Remote hetero (openclaw / hermes) has no `heteroFinish` callback, so
-          // this is its terminal funnel. Route it through CompletionLifecycle's
-          // single entry — the SAME owner the CLI / in-process paths use — so
-          // persistCompletion writes the terminal op row, onComplete/onError hooks
-          // fire (task lifecycle → task done/failed + IM bot callback), and on
-          // success the delivery-checker verify gate runs against the task's plan.
-          // (Previously this fired the stripped-down dispatchTerminalHooks, which
-          // skipped persist + verify — so openclaw/hermes tasks never auto-verified.)
-          // Hooks were serialized onto runningOperation at dispatch time.
-          const serializedHooks = (topic.metadata as any)?.runningOperation?.hooks as
-            SerializedHook[] | undefined;
-          let lastAssistantContent: string | undefined = content || undefined;
-          if (!lastAssistantContent && writtenMessageId) {
-            const msg = await ctx.messageModel.findById(writtenMessageId).catch(() => undefined);
-            lastAssistantContent = (msg?.content as string | undefined) ?? undefined;
-          }
-          // Mirror heteroFinish's done-path prep (this is the openclaw/hermes
-          // equivalent terminal funnel). Skipped on the error path (verify is
-          // done-only). Each step is self-guarded so a failure degrades instead
-          // of aborting the terminal funnel.
-          let goal: unknown = '';
-          if (!terminalError) {
-            // Guarantee the task's verify plan is DURABLY persisted before the gate
-            // (completeOperation → runVerifyOnCompletion) reads it. The start-side
-            // instantiation in execAgent is fire-and-forget on a SEPARATE
-            // CompletionLifecycle instance, so its in-memory await can't bridge to
-            // THIS notify request — a fast remote task could otherwise reach the
-            // gate before the plan lands and silently skip verify (and the
-            // verify-bound task deferral). instantiateVerifyPlanOnStart is
-            // idempotent, so awaiting it here creates the plan only when the start
-            // side hasn't yet, and is a no-op once it has.
-            try {
-              const op = await new AgentOperationModel(
+      // An error is itself a terminal signal — finalize the run even if the
+      // remote agent didn't also set `done`.
+      const isTerminal = done || !!terminalError || cancelled;
+      const completionReason = terminalError ? 'error' : cancelled ? 'interrupted' : 'done';
+
+      log(
+        'notify: topicId=%s, agentId=%s, role=%s, continue=%s, done=%s, messageId=%s, content=%s',
+        topicId,
+        inputAgentId,
+        role,
+        shouldContinue,
+        done,
+        messageId,
+        content.slice(0, 80),
+      );
+
+      // 1. Verify the topic exists and get its agentId + running operationId.
+      // `findOwnTopicById` excludes agent-share visitor topics: they live under
+      // the creator's userId, and no legitimate visitor run reaches this
+      // callback (heterogeneous providers, sub-agent dispatch and the sandbox
+      // `lh` CLI are all refused for share runs), so a visitor topic id here can
+      // only be a creator-side caller trying to write into a private transcript.
+      const topic = await ctx.topicModel.findOwnTopicById(topicId);
+      if (!topic) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Topic ${topicId} not found`,
+        });
+      }
+
+      // Extract the operationId seeded by execAgent for remote hetero agents.
+      // Used to publish notify_update / agent_runtime_end events to the gateway WS.
+      const marker = (topic.metadata as any)?.runningOperation;
+      let remoteOperationId = input.operationId ?? marker?.operationId;
+      let activeOperation =
+        remoteOperationId && marker
+          ? marker.operationId === remoteOperationId
+            ? marker
+            : marker.childOperations?.find((child: any) => child.operationId === remoteOperationId)
+          : marker;
+
+      // Legacy CLI clients do not send operationId. Keep them working when the
+      // topic has exactly one remote operation; concurrent remote members remain
+      // ambiguous and must use an operation-scoped client.
+      if (role === 'assistant' && !input.operationId && marker?.childOperations?.length) {
+        const remoteCandidates = [marker, ...(marker.childOperations ?? [])].filter((operation) =>
+          isRemoteHeterogeneousType(operation.heteroType),
+        );
+        if (remoteCandidates.length === 1) {
+          [activeOperation] = remoteCandidates;
+          remoteOperationId = activeOperation.operationId;
+        } else {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              remoteCandidates.length > 1
+                ? 'operationId is required when multiple remote operations are active'
+                : 'operationId is required for child operations',
+          });
+        }
+      }
+
+      const agentId = inputAgentId ?? topic.agentId;
+      if (!agentId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Topic ${topicId} has no associated agent and no agentId was provided`,
+        });
+      }
+
+      // Workspace guard: notify executes the resolved agent (directly in user
+      // mode, via `continue` in assistant mode) — require `use` before any write.
+      await assertCanUseWorkspaceAgent({
+        agentId,
+        db: ctx.serverDB,
+        groupId: topic.groupId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      // Reject late callbacks after their exact operation marker has been removed.
+      // This applies to progress as well as terminal delivery: a delayed update must
+      // not overwrite a completed member's final message.
+      let terminalRetry = false;
+      if (role === 'assistant' && input.operationId && !activeOperation) {
+        const operation = await new AgentOperationModel(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        ).findById(input.operationId);
+        terminalRetry = isTerminal && !!operation?.completedAt;
+        if (!terminalRetry) {
+          log('notify: ignoring stale callback for operationId=%s', input.operationId);
+          return { messageId: undefined, operationId: undefined, topicId };
+        }
+      }
+
+      const terminalOperation = activeOperation;
+
+      /**
+       * Publish a stream event for remote hetero agents (openclaw / hermes).
+       * Fire-and-forget — stream publish failures must not break the notify response.
+       */
+      const publishRemoteHeteroEvent = async (writtenMessageId?: string) => {
+        if (!remoteOperationId) return;
+        try {
+          const stream = getStreamManager();
+          if (isTerminal) {
+            // Remote hetero (openclaw / hermes) has no `heteroFinish` callback, so
+            // this is its terminal funnel. Route it through CompletionLifecycle's
+            // single entry — the SAME owner the CLI / in-process paths use — so
+            // persistCompletion writes the terminal op row, onComplete/onError hooks
+            // fire (task lifecycle → task done/failed + IM bot callback), and on
+            // success the delivery-checker verify gate runs against the task's plan.
+            // (Previously this fired the stripped-down dispatchTerminalHooks, which
+            // skipped persist + verify — so openclaw/hermes tasks never auto-verified.)
+            // Use the terminal claim snapshot. Publishing the end event lets a
+            // connected client clear the live marker before this continuation runs.
+            const serializedHooks = terminalOperation?.hooks as SerializedHook[] | undefined;
+            let lastAssistantContent: string | undefined = content || undefined;
+            if (!lastAssistantContent && writtenMessageId) {
+              const msg = await ctx.messageModel.findById(writtenMessageId).catch(() => undefined);
+              lastAssistantContent = (msg?.content as string | undefined) ?? undefined;
+            }
+            // Mirror heteroFinish's done-path prep (this is the openclaw/hermes
+            // equivalent terminal funnel). Only needed for successful completion
+            // (verify is done-only). Each step is self-guarded so a failure degrades instead
+            // of aborting the terminal funnel.
+            let goal: unknown = '';
+            if (completionReason === 'done') {
+              // Guarantee the task's verify plan is DURABLY persisted before the gate
+              // (completeOperation → runVerifyOnCompletion) reads it. The start-side
+              // instantiation in execAgent is fire-and-forget on a SEPARATE
+              // CompletionLifecycle instance, so its in-memory await can't bridge to
+              // THIS notify request — a fast remote task could otherwise reach the
+              // gate before the plan lands and silently skip verify (and the
+              // verify-bound task deferral). instantiateVerifyPlanOnStart is
+              // idempotent, so awaiting it here creates the plan only when the start
+              // side hasn't yet, and is a no-op once it has.
+              try {
+                const op = await new AgentOperationModel(
+                  ctx.serverDB,
+                  ctx.userId,
+                  ctx.workspaceId ?? undefined,
+                ).findById(remoteOperationId);
+                if (op?.taskId && !op.parentOperationId) {
+                  await instantiateVerifyPlanOnStart(
+                    ctx.serverDB,
+                    ctx.userId,
+                    { operationId: remoteOperationId, taskId: op.taskId },
+                    ctx.workspaceId ?? undefined,
+                  );
+                }
+              } catch (err) {
+                log('notify: ensure verify plan failed (non-fatal): %O', err);
+              }
+              // Resolve the run goal (first user turn) — the verify gate judges the
+              // deliverable against it. Wrapped in try/catch (not just a promise
+              // `.catch`) so a throwing/absent query degrades to an empty goal.
+              try {
+                const history = await ctx.messageModel.query({ pageSize: 50, topicId });
+                goal = history.find((m) => m.role === 'user')?.content ?? '';
+              } catch (err) {
+                log('notify: failed to resolve verify goal (non-fatal): %O', err);
+              }
+            }
+            if (!terminalRetry) {
+              await new CompletionLifecycle(
                 ctx.serverDB,
                 ctx.userId,
                 ctx.workspaceId ?? undefined,
-              ).findById(remoteOperationId);
-              if (op?.taskId && !op.parentOperationId) {
-                await instantiateVerifyPlanOnStart(
-                  ctx.serverDB,
-                  ctx.userId,
-                  { operationId: remoteOperationId, taskId: op.taskId },
-                  ctx.workspaceId ?? undefined,
-                );
-              }
-            } catch (err) {
-              log('notify: ensure verify plan failed (non-fatal): %O', err);
+              ).completeOperation(
+                {
+                  agentId,
+                  assistantMessageId: writtenMessageId,
+                  deliverable: lastAssistantContent,
+                  error: terminalError ?? undefined,
+                  goal,
+                  operationId: remoteOperationId,
+                  orchestrationRole: terminalOperation?.orchestrationRole,
+                  serializedHooks,
+                  topicId,
+                  userId: ctx.userId,
+                },
+                completionReason,
+                // openclaw/hermes surface their failure via the runtime-end stream event
+                // + their own message write, not the lifecycle's assistant-row error
+                // write — keep that prior behavior on the error path.
+                { skipErrorMessageWrite: true },
+              );
             }
-            // Resolve the run goal (first user turn) — the verify gate judges the
-            // deliverable against it. Wrapped in try/catch (not just a promise
-            // `.catch`) so a throwing/absent query degrades to an empty goal.
-            try {
-              const history = await ctx.messageModel.query({ pageSize: 50, topicId });
-              goal = history.find((m) => m.role === 'user')?.content ?? '';
-            } catch (err) {
-              log('notify: failed to resolve verify goal (non-fatal): %O', err);
+
+            // Claim the marker before publishing. A retry after a successful
+            // lifecycle can then publish the missing stream event without firing
+            // completion hooks a second time.
+            // Settle rather than take, for the same reason as
+            // `ServerOperationStore.clearRunningMark`: dropping the marker on its
+            // own leaves `topics.status` on 'running' with nothing left to match.
+            // `status === 'settled'` carries exactly the claim this used to read
+            // off `takeRunningOperation`'s return.
+            if (!terminalRetry) {
+              const settled = await ctx.topicModel.settleRunningOperation(
+                topicId,
+                remoteOperationId,
+                completionReason === 'done' ? 'unread' : 'active',
+              );
+              if (settled.status !== 'settled') return;
             }
-          }
-          await new CompletionLifecycle(
-            ctx.serverDB,
-            ctx.userId,
-            ctx.workspaceId ?? undefined,
-          ).completeOperation(
-            {
-              agentId,
-              assistantMessageId: writtenMessageId,
-              deliverable: lastAssistantContent,
-              error: terminalError ?? undefined,
-              goal,
+
+            const streamReason = completionReason === 'done' ? 'success' : completionReason;
+            await stream.publishAgentRuntimeEnd({
+              finalState: terminalError
+                ? { error: terminalError.message, reason: 'error' }
+                : { reason: streamReason },
               operationId: remoteOperationId,
-              serializedHooks,
-              topicId,
-              userId: ctx.userId,
-            },
-            terminalError ? 'error' : 'done',
-            // openclaw/hermes surface their failure via the runtime-end stream event
-            // + their own message write, not the lifecycle's assistant-row error
-            // write — keep that prior behavior on the error path.
-            { skipErrorMessageWrite: true },
-          );
-
-          // The operation is finished — drop the running marker so a duplicate
-          // terminal signal / reconnect doesn't re-fire the hooks.
-          await ctx.topicModel.updateMetadata(topicId, { runningOperation: null }).catch(() => {});
-        } else {
-          // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
-          await stream.publishStreamEvent(remoteOperationId, {
-            data: { messageId: writtenMessageId },
-            stepIndex: 0,
-            type: 'notify_update',
-          });
-        }
-      } catch (err) {
-        log(
-          'notify: failed to publish stream event for operationId=%s: %O',
-          remoteOperationId,
-          err,
-        );
-      }
-    };
-
-    // 2a. Assistant mode: write message directly without triggering LLM
-    if (role === 'assistant') {
-      try {
-        // Resolve the target message ID:
-        // 1. Caller-supplied messageId (subsequent notify calls with --message-id)
-        // 2. Placeholder assistantMessageId seeded by execAgent (first notify call for remote hetero)
-        // Using the placeholder avoids creating a second empty bubble in the UI.
-        const placeholderMessageId = (topic.metadata as any)?.runningOperation
-          ?.assistantMessageId as string | undefined;
-        const resolvedMessageId = messageId ?? placeholderMessageId;
-
-        // Update existing message if we have a resolved target
-        if (resolvedMessageId) {
-          // Security: verify the message belongs to this topic before writing.
-          // MessageModel.update scopes only by userId; without this check, a remote
-          // runtime could overwrite messages from other conversations.
-          const existingMsg = await ctx.messageModel.findById(resolvedMessageId);
-          if (!existingMsg || existingMsg.topicId !== topicId) {
-            throw new TRPCError({
-              code: 'FORBIDDEN',
-              message: 'Message does not belong to this topic',
+              reason: streamReason,
+              reasonDetail:
+                terminalError?.message ??
+                (cancelled
+                  ? 'Remote hetero agent task cancelled'
+                  : 'Remote hetero agent task completed'),
+              stepIndex: 0,
+            });
+          } else {
+            // Refresh the durable liveness lease before publishing progress.
+            // Remote hetero providers (openclaw / hermes) report through
+            // `agentNotify.notify` rather than `heteroIngest`, so nothing else on
+            // this path bumps `agent_operations.updated_at` — the column the
+            // stale-operation sweep compares against the hetero window before it
+            // retires a *stateless* heterogeneous run (a remote run carries no
+            // coordinator state either). Without this refresh a remote agent that
+            // is actively streaming progress for over an hour is
+            // indistinguishable from a dead one: an unrelated opportunistic sweep
+            // retires it mid-run and every later callback is rejected as stale.
+            // Terminal notifications are excluded — they settle the row through
+            // CompletionLifecycle instead.
+            try {
+              await new AgentOperationModel(
+                ctx.serverDB,
+                ctx.userId,
+                ctx.workspaceId ?? undefined,
+              ).touchRunning(remoteOperationId);
+            } catch (err) {
+              log('notify: failed to refresh lease for operationId=%s: %O', remoteOperationId, err);
+            }
+            // Lightweight invalidation — frontend calls fetchAndReplaceMessages.
+            await stream.publishStreamEvent(remoteOperationId, {
+              data: { messageId: writtenMessageId },
+              stepIndex: 0,
+              type: 'notify_update',
             });
           }
+        } catch (err) {
+          log(
+            'notify: failed to publish stream event for operationId=%s: %O',
+            remoteOperationId,
+            err,
+          );
+          if (isTerminal) throw err;
+        }
+      };
 
-          // Terminal signal (done or error) with empty content + existing
-          // placeholder → just finalize the run, no message update. Pass the
-          // resolved id so the finalizer can reload the agent's final reply
-          // (written in-place via earlier `lh notify` calls) into
-          // `lastAssistantContent` — bot completion callbacks and the task
-          // lifecycle follow-ups (handoff / auto-review / brief) depend on it.
-          if (isTerminal && !content) {
-            void publishRemoteHeteroEvent(resolvedMessageId);
+      // 2a. Assistant mode: write message directly without triggering LLM
+      if (role === 'assistant') {
+        try {
+          // Resolve the target message ID:
+          // 1. Caller-supplied messageId (subsequent notify calls with --message-id)
+          // 2. Placeholder assistantMessageId seeded by execAgent (first notify call for remote hetero)
+          // Using the placeholder avoids creating a second empty bubble in the UI.
+          const placeholderMessageId = terminalOperation?.assistantMessageId as string | undefined;
+          const resolvedMessageId = messageId ?? placeholderMessageId;
+
+          // Update existing message if we have a resolved target
+          if (resolvedMessageId) {
+            // Security: verify the message belongs to this topic before writing.
+            // MessageModel.update scopes only by userId; without this check, a remote
+            // runtime could overwrite messages from other conversations.
+            const existingMsg = await ctx.messageModel.findById(resolvedMessageId);
+            if (!existingMsg || existingMsg.topicId !== topicId) {
+              throw new TRPCError({
+                code: 'FORBIDDEN',
+                message: 'Message does not belong to this topic',
+              });
+            }
+
+            // Terminal signal (done or error) with empty content + existing
+            // placeholder → just finalize the run, no message update. Pass the
+            // resolved id so the finalizer can reload the agent's final reply
+            // (written in-place via earlier `lh notify` calls) into
+            // `lastAssistantContent` — bot completion callbacks and the task
+            // lifecycle follow-ups (handoff / auto-review / brief) depend on it.
+            if (isTerminal && !content) {
+              await publishRemoteHeteroEvent(resolvedMessageId);
+              return { messageId: resolvedMessageId, operationId: undefined, topicId };
+            }
+            await ctx.messageModel.update(resolvedMessageId, { content });
+            if (isTerminal) await publishRemoteHeteroEvent(resolvedMessageId);
+            else void publishRemoteHeteroEvent(resolvedMessageId);
+            if (shouldContinue) {
+              const result = await ctx.aiAgentService.execAgent({
+                agentId,
+                appContext: { threadId, topicId },
+                parentMessageId: resolvedMessageId,
+                prompt: '',
+                resume: true,
+                trigger: RequestTrigger.Notify,
+              });
+              return { messageId: resolvedMessageId, operationId: result.operationId, topicId };
+            }
             return { messageId: resolvedMessageId, operationId: undefined, topicId };
           }
-          await ctx.messageModel.update(resolvedMessageId, { content });
-          void publishRemoteHeteroEvent(resolvedMessageId);
+
+          // Terminal signal (done or error) with no messageId and empty content →
+          // just finalize the run, no DB write.
+          if (isTerminal && !content) {
+            await publishRemoteHeteroEvent();
+            return { messageId: undefined, operationId: undefined, topicId };
+          }
+
+          const msg = await ctx.messageModel.create({
+            agentId,
+            content,
+            role: 'assistant',
+            threadId: threadId ?? undefined,
+            topicId,
+          });
+
+          if (isTerminal) await publishRemoteHeteroEvent(msg.id);
+          else void publishRemoteHeteroEvent(msg.id);
+
+          // Optionally trigger a follow-up agent turn.
+          // Use resume=true + parentMessageId so execAgent skips creating an
+          // empty user message (effectiveResume=true bypasses that branch).
           if (shouldContinue) {
             const result = await ctx.aiAgentService.execAgent({
               agentId,
               appContext: { threadId, topicId },
-              parentMessageId: resolvedMessageId,
+              parentMessageId: msg.id,
               prompt: '',
               resume: true,
               trigger: RequestTrigger.Notify,
             });
-            return { messageId: resolvedMessageId, operationId: result.operationId, topicId };
+
+            return {
+              messageId: msg.id,
+              operationId: result.operationId,
+              topicId,
+            };
           }
-          return { messageId: resolvedMessageId, operationId: undefined, topicId };
-        }
 
-        // Terminal signal (done or error) with no messageId and empty content →
-        // just finalize the run, no DB write.
-        if (isTerminal && !content) {
-          void publishRemoteHeteroEvent();
-          return { messageId: undefined, operationId: undefined, topicId };
+          return { messageId: msg.id, operationId: undefined, topicId };
+        } catch (error: any) {
+          if (error instanceof TRPCError) throw error;
+          throw new TRPCError({
+            cause: error,
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Failed to write assistant message: ${error.message}`,
+          });
         }
+      }
 
-        const msg = await ctx.messageModel.create({
+      // 2b. User mode (default): trigger the agent loop
+      try {
+        const result = await ctx.aiAgentService.execAgent({
           agentId,
-          content,
-          role: 'assistant',
-          threadId: threadId ?? undefined,
-          topicId,
+          appContext: { threadId, topicId },
+          prompt: content,
+          ...(onOperationCreated ? { onOperationCreated } : {}),
+          trigger: RequestTrigger.Notify,
         });
 
-        void publishRemoteHeteroEvent(msg.id);
+        return {
+          operationId: result.operationId,
+          topicId,
+        };
+      } catch (error: any) {
+        console.error('agentNotify execAgent failed: %O', error);
 
-        // Optionally trigger a follow-up agent turn.
-        // Use resume=true + parentMessageId so execAgent skips creating an
-        // empty user message (effectiveResume=true bypasses that branch).
-        if (shouldContinue) {
-          const result = await ctx.aiAgentService.execAgent({
-            agentId,
-            appContext: { threadId, topicId },
-            parentMessageId: msg.id,
-            prompt: '',
-            resume: true,
-            trigger: RequestTrigger.Notify,
-          });
-
-          return {
-            messageId: msg.id,
-            operationId: result.operationId,
-            topicId,
-          };
+        if (error instanceof TRPCError) {
+          throw error;
         }
 
-        return { messageId: msg.id, operationId: undefined, topicId };
-      } catch (error: any) {
-        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           cause: error,
           code: 'INTERNAL_SERVER_ERROR',
-          message: `Failed to write assistant message: ${error.message}`,
+          message: `Failed to trigger agent: ${error.message}`,
         });
       }
-    }
+    }),
+  });
 
-    // 2b. User mode (default): trigger the agent loop
-    try {
-      const result = await ctx.aiAgentService.execAgent({
-        agentId,
-        appContext: { threadId, topicId },
-        prompt: content,
-        trigger: RequestTrigger.Notify,
-      });
-
-      return {
-        operationId: result.operationId,
-        topicId,
-      };
-    } catch (error: any) {
-      console.error('agentNotify execAgent failed: %O', error);
-
-      if (error instanceof TRPCError) {
-        throw error;
-      }
-
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: `Failed to trigger agent: ${error.message}`,
-      });
-    }
-  }),
-});
+export const agentNotifyRouter = createAgentNotifyRouter();

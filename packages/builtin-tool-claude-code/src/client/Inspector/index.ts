@@ -3,13 +3,14 @@
 import {
   createGlobLocalFilesInspector,
   createGrepContentInspector,
-  createRunCommandInspector,
 } from '@lobechat/shared-tool-ui/inspectors';
 import type { BuiltinInspector } from '@lobechat/types';
 
 import { ClaudeCodeApiName } from '../../types';
 import { AgentInspector } from './Agent';
 import { AskUserQuestionInspector } from './AskUserQuestion';
+import { BashInspector } from './Bash';
+import { BrowserMcpInspectors } from './BrowserMcp';
 import { EditInspector } from './Edit';
 import { LinearMcpInspectors } from './LinearMcp';
 import { MonitorInspector } from './Monitor';
@@ -33,13 +34,14 @@ import { WriteInspector } from './Write';
 // the "translation key" and let react-i18next's missing-key fallback echo it
 // back verbatim. Keeps this package out of the plugin locale file.
 //
-// Bash / Glob / Grep can use the shared factories directly — Glob / Grep only
-// need `pattern`. Edit / Read / Write need arg mapping (or synthesized plugin
-// state for diff stats), so they live in their own sibling files.
+// Glob / Grep can use the shared factories directly — they only need
+// `pattern`. Bash reads `lh goal` steps as goal progress, and Edit / Read /
+// Write need arg mapping (or synthesized plugin state for diff stats), so they
+// live in their own sibling files.
 const FixedClaudeCodeInspectors = {
   [ClaudeCodeApiName.Agent]: AgentInspector,
   [ClaudeCodeApiName.AskUserQuestion]: AskUserQuestionInspector,
-  [ClaudeCodeApiName.Bash]: createRunCommandInspector(ClaudeCodeApiName.Bash),
+  [ClaudeCodeApiName.Bash]: BashInspector,
   [ClaudeCodeApiName.Edit]: EditInspector,
   [ClaudeCodeApiName.EnterWorktree]: EnterWorktreeInspector,
   [ClaudeCodeApiName.ExitWorktree]: ExitWorktreeInspector,
@@ -71,12 +73,14 @@ const FixedClaudeCodeInspectors = {
   [ClaudeCodeApiName.WebFetch]: WebFetchInspector,
   [ClaudeCodeApiName.WebSearch]: WebSearchInspector,
   [ClaudeCodeApiName.Write]: WriteInspector,
+  ...BrowserMcpInspectors,
   ...LinearMcpInspectors,
 };
 
 export const ClaudeCodeInspectors = new Proxy(FixedClaudeCodeInspectors, {
   get: (target, prop) => {
     if (typeof prop !== 'string') return undefined;
-    return prop in target ? target[prop as keyof typeof target] : LinearMcpInspectors[prop];
+    if (prop in target) return target[prop as keyof typeof target];
+    return BrowserMcpInspectors[prop] ?? LinearMcpInspectors[prop];
   },
 }) as unknown as Record<string, BuiltinInspector>;

@@ -86,6 +86,32 @@ describe('AiInfraRepos', () => {
       );
     });
 
+    it('should hide preference-only shells without a builtin card', async () => {
+      const mockUserModels = [
+        // Preference-only shell (e.g. left after clearRemoteModels demoted a
+        // remote row with a saved reasoning preference): no identity at all
+        {
+          config: { chatConfig: { reasoningEffort: 'high' } },
+          id: 'gone-remote-model',
+          type: 'chat' as const,
+        },
+        // Preference row for a builtin model keeps merging onto its card
+        {
+          config: { chatConfig: { reasoningEffort: 'low' } },
+          id: 'gpt-4',
+          type: 'chat' as const,
+        },
+      ] as AiProviderModelListItem[];
+      const mockBuiltinModels = [{ displayName: 'GPT-4', enabled: true, id: 'gpt-4' }];
+
+      vi.spyOn(repo.aiModelModel, 'getModelListByProviderId').mockResolvedValue(mockUserModels);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue(mockBuiltinModels);
+
+      const result = await repo.getAiProviderModelList('openai');
+
+      expect(result.map((m) => m.id)).toEqual(['gpt-4']);
+    });
+
     it('should use builtin models', async () => {
       const providerId = 'ai21';
 

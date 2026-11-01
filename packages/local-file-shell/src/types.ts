@@ -17,9 +17,10 @@ export interface RunCommandResult {
   duration_ms?: number;
   error?: string;
   /**
-   * Present only after the command has exited.
+   * Present only after the command has exited *normally*.
    * `0` means success, non-zero means the command finished with an error.
-   * `undefined` means the command is still running.
+   * Absent while the command runs — but also when it was killed by a signal or
+   * never spawned, so it cannot stand in for liveness. Read `running`.
    */
   exit_code?: number;
   output?: string;
@@ -28,15 +29,34 @@ export interface RunCommandResult {
     stdout: { path: string; size: number; truncated: boolean };
   };
   /**
+   * Whether the command was still executing when the wait window closed.
+   * Absent for a `run_in_background` start, which returns before observing.
+   */
+  running?: boolean;
+  /**
+   * Whether this command was actually confined by the device sandbox.
+   *
+   * Reports what HAPPENED, not what was configured. The picker's chip shows the
+   * user's intent, and intent is not proof: the flag has to survive every layer
+   * between the config and the spawn, and a run that lost it on the way would
+   * otherwise look identical to a fenced one. A security guarantee nobody can
+   * observe is a guarantee nobody should trust — so an unfenced run says so.
+   *
+   * Absent on a request that never asked for a sandbox.
+   */
+  sandboxed?: boolean;
+  /**
    * Session identifier. Present for background commands and foreground commands
    * that can be resumed with `getCommandOutput`.
    */
   shell_id?: string;
+  /** The signal that terminated the command, when one did (POSIX). */
+  signal?: string;
   stderr?: string;
   stdout?: string;
   /**
    * True when the command/session request completed successfully.
-   * Use `exit_code` to determine whether the underlying command has exited.
+   * Use `running` to determine whether the underlying command has finished.
    */
   success: boolean;
 }
@@ -60,9 +80,10 @@ export interface GetCommandOutputResult {
   duration_ms?: number;
   error?: string;
   /**
-   * Present only after the command has exited.
+   * Present only after the command has exited *normally*.
    * `0` means success, non-zero means the command finished with an error.
-   * `undefined` means the command is still running.
+   * Absent while the command runs — but also when it was killed by a signal or
+   * never spawned, so it cannot stand in for liveness. Read `running`.
    */
   exit_code?: number;
   output: string;
@@ -70,11 +91,20 @@ export interface GetCommandOutputResult {
     stderr: { path: string; size: number; truncated: boolean };
     stdout: { path: string; size: number; truncated: boolean };
   };
+  /**
+   * Whether the command was still executing when this observation was taken.
+   * The authoritative liveness signal: the three ways a command can be finished
+   * (exited, signalled, failed to spawn) do not share a single field, and only
+   * this side can see all of them.
+   */
+  running: boolean;
+  /** The signal that terminated the command, when one did (POSIX). */
+  signal?: string;
   stderr: string;
   stdout: string;
   /**
    * True when the output request completed successfully.
-   * Use `exit_code` to determine whether the underlying command has exited.
+   * Use `running` to determine whether the underlying command has finished.
    */
   success: boolean;
 }
@@ -117,6 +147,24 @@ export interface ReadFileResult {
   totalLineCount: number;
   /** True when the returned content was truncated because it exceeded the total character cap. */
   truncated?: boolean;
+}
+
+/** Durable reference to an image uploaded to file storage. */
+export interface UploadedImageRecord {
+  id: string;
+  url: string;
+}
+
+/**
+ * {@link ReadFileResult} for an image path. The bytes are uploaded to file
+ * storage instead of being read as text, so a vision model can see the image.
+ */
+export interface ReadImageFileResult extends ReadFileResult {
+  /** File record id of the uploaded image; absent when the upload failed. */
+  imageFileId?: string;
+  /** Durable URL of the uploaded image; absent when the upload failed. */
+  imageUrl?: string;
+  isImage: true;
 }
 
 export interface WriteFileParams {
@@ -279,6 +327,51 @@ export interface RenameFileResult {
   error?: string;
   newPath: string;
   success: boolean;
+}
+
+export interface CreateFileParams {
+  /** Initial content. Defaults to an empty file. */
+  content?: string;
+  /** Working directory a relative `path` resolves against. See {@link ReadFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+export interface CreateDirectoryParams {
+  /** Working directory a relative `path` resolves against. See {@link ReadFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+/** Result of creating one new file or directory. Never overwrites: an existing entry fails. */
+export interface CreateEntryResult {
+  error?: string;
+  /** The resolved absolute path of the entry that was (or would have been) created. */
+  path: string;
+  success: boolean;
+}
+
+export interface CopyFileItem {
+  sourcePath: string;
+  /**
+   * Where the copy lands. Omit it to duplicate next to the source under a
+   * Finder-style free name (`name copy.ext`, `name copy 2.ext`, …).
+   */
+  targetPath?: string;
+}
+
+export interface CopyFilesParams {
+  /** Working directory each item's relative paths resolve against. See {@link ReadFileParams.cwd}. */
+  cwd?: string;
+  items: CopyFileItem[];
+}
+
+export interface CopyFileResultItem {
+  error?: string;
+  sourcePath: string;
+  success: boolean;
+  /** The path the copy was written to, when it succeeded. */
+  targetPath?: string;
 }
 
 export interface GrepContentParams {

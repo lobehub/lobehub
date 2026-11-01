@@ -10,6 +10,10 @@ const specsByCode: Record<string, LLMErrorCodeSpecLike> = {
   AgentRuntimeError: { code: 'AgentRuntimeError', retryable: false },
   ExceededToolLimit: { code: 'ExceededToolLimit', retryable: false },
   InvalidProviderAPIKey: { code: 'InvalidProviderAPIKey', retryable: false },
+  ProviderContentPolicyViolation: {
+    code: 'ProviderContentPolicyViolation',
+    retryable: false,
+  },
   RateLimitExceeded: { code: 'RateLimitExceeded', retryable: true },
 };
 
@@ -64,6 +68,21 @@ describe('llmErrorClassifier', () => {
         errorType: 'ProviderBizError',
       }).kind,
     ).toBe('retry');
+  });
+
+  it('stops ProviderContentPolicyViolation instead of retrying content blocks', () => {
+    expect(
+      classifyWithSpecs({
+        body: {
+          context: { promptFeedback: { blockReason: 'PROHIBITED_CONTENT' } },
+          message: 'The content may contain prohibited content. Please adjust it and try again.',
+          provider: 'google',
+        },
+        errorType: 'ProviderContentPolicyViolation',
+        message: 'The content may contain prohibited content. Please adjust it and try again.',
+        type: 'ProviderContentPolicyViolation',
+      }).kind,
+    ).toBe('stop');
   });
 
   it('falls back to numeric status and keyword classification without injected specs', () => {

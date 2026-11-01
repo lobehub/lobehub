@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Drawer } from 'antd';
-import { cssVar } from 'antd-style';
+import { cssVar, Drawer, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import dynamic from '@/libs/next/dynamic';
@@ -24,10 +22,10 @@ const ChunkDrawer = memo(() => {
   return (
     <Drawer
       open={open}
-      size="large"
       title={file?.name}
+      width={736}
       styles={{
-        body: { padding: 0 },
+        bodyContent: { height: '100%', padding: 0 },
       }}
       onClose={() => {
         closeChunkDrawer();

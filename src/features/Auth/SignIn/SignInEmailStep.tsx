@@ -1,15 +1,23 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Alert, Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { type FormInstance, type InputRef } from 'antd';
-import { Badge, Divider, Form } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import {
+  Alert,
+  Badge,
+  Button,
+  createStaticStyles,
+  Divider,
+  Flexbox,
+  Icon,
+  Input,
+  Text,
+} from '@lobehub/ui';
+import { Form, type FormInstance } from '@lobehub/ui/form';
 import { Mail } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthIcons from '@/components/AuthIcons';
 import AuthCard from '@/features/AuthCard';
-import { AuthAgreement } from '@/features/AuthShell';
+import AuthAgreement from '@/features/AuthShell/AuthAgreement';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   inlineLink: css`
@@ -24,29 +32,39 @@ export const USERNAME_REGEX = /^\w+$/;
 
 // Pin both the provider logo and the loading spinner to the same spot so the
 // spinner doesn't jump when a social button enters its loading state.
-const PROVIDER_ICON_STYLE: CSSProperties = { left: 12, position: 'absolute', top: 13 };
+const PROVIDER_ICON_STYLE: CSSProperties = {
+  insetInlineStart: 12,
+  position: 'absolute',
+  top: '50%',
+  transform: 'translateY(-50%)',
+};
 
 // Turn a provider id into a display name, e.g. "google" -> "Google".
 const getProviderName = (provider: string) =>
   provider.toLowerCase().replaceAll(/(^|[_-])([a-z])/g, (_, __, c) => c.toUpperCase());
 
 export interface SignInEmailStepProps {
+  agreementChecked: boolean;
+  continueWithAgreement: (continueAction: () => void) => void;
   disableEmailPassword?: boolean;
   form: FormInstance<{ email: string }>;
   isSocialOnly: boolean;
   lastAuthProvider?: string | null;
   loading: boolean;
   oAuthSSOProviders: string[];
-  onCheckUser: (values: { email: string }) => Promise<void>;
   onGoToSignup: () => void;
   onResetEmail: () => void;
   onSetPassword: () => void;
   onSocialSignIn: (provider: string) => void;
   serverConfigInit: boolean;
+  sessionExpired?: boolean;
+  setAgreementChecked: (checked: boolean) => void;
   socialLoading: string | null;
 }
 
 export const SignInEmailStep = ({
+  agreementChecked,
+  continueWithAgreement,
   disableEmailPassword,
   form,
   isSocialOnly,
@@ -54,22 +72,23 @@ export const SignInEmailStep = ({
   loading,
   oAuthSSOProviders,
   serverConfigInit,
+  sessionExpired,
+  setAgreementChecked,
   socialLoading,
-  onCheckUser,
   onGoToSignup,
   onResetEmail,
   onSetPassword,
   onSocialSignIn,
 }: SignInEmailStepProps) => {
   const { t } = useTranslation('auth');
-  const emailInputRef = useRef<InputRef>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     emailInputRef.current?.focus();
   }, []);
 
   const divider = (
-    <Divider>
+    <Divider style={{ marginBlock: 16 }}>
       <Text fontSize={12} type={'secondary'}>
         {t('betterAuth.signin.orContinueWith')}
       </Text>
@@ -89,18 +108,33 @@ export const SignInEmailStep = ({
 
   return (
     <AuthCard title={t('signin.subtitle', { appName: BRANDING_NAME })}>
+      {sessionExpired && (
+        <Alert
+          showIcon
+          message={t('betterAuth.signin.sessionExpired')}
+          style={{ marginBlockEnd: 12 }}
+          type="warning"
+          variant="filled"
+        />
+      )}
       {serverConfigInit && oAuthSSOProviders.length > 0 && (
         <Flexbox gap={12}>
           {oAuthSSOProviders.map((provider) => {
             const button = (
               <Button
                 block
-                icon={<Icon icon={AuthIcons(provider, 18)} style={PROVIDER_ICON_STYLE} />}
-                iconProps={{ size: 18, style: PROVIDER_ICON_STYLE }}
+                htmlType="button"
+                icon={<Icon icon={AuthIcons(provider, 18)} />}
                 key={provider}
                 loading={socialLoading === provider}
                 size="large"
-                onClick={() => onSocialSignIn(provider)}
+                styles={{ icon: PROVIDER_ICON_STYLE }}
+                type="fill"
+                onClick={() =>
+                  continueWithAgreement(() => {
+                    onSocialSignIn(provider);
+                  })
+                }
               >
                 {getProviderLabel(provider)}
               </Button>
@@ -111,10 +145,10 @@ export const SignInEmailStep = ({
                 (oAuthSSOProviders.length === 1 && !disableEmailPassword));
             return showLastUsed ? (
               <Badge
-                color="var(--ant-color-info)"
+                color="var(--lobe-color-info)"
                 count={t('betterAuth.signin.lastUsed')}
                 key={provider}
-                styles={{ root: { display: 'block', width: '100%' } }}
+                style={{ display: 'block', width: '100%' }}
               >
                 {button}
               </Badge>
@@ -129,26 +163,17 @@ export const SignInEmailStep = ({
         <Alert showIcon description={t('betterAuth.signin.ssoOnlyNoProviders')} type="warning" />
       )}
       {showEmailForm && (
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={(values) => onCheckUser(values as { email: string })}
-        >
-          <Form.Item
+        <Form form={form} gap={0} layout="vertical">
+          <Form.Field
             name="email"
-            rules={[
-              { message: t('betterAuth.errors.emailRequired'), required: true },
-              {
-                validator: (_, value) => {
-                  if (!value) return Promise.resolve();
-                  const trimmedValue = (value as string).trim();
-                  if (EMAIL_REGEX.test(trimmedValue) || USERNAME_REGEX.test(trimmedValue)) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(new Error(t('betterAuth.errors.emailInvalid')));
-                },
-              },
-            ]}
+            style={{ gap: 0, paddingBlock: '0 24px' }}
+            validateOn="submit"
+            validate={(value: string) => {
+              if (!value) return t('betterAuth.errors.emailRequired');
+              const trimmedValue = value.trim();
+              if (EMAIL_REGEX.test(trimmedValue) || USERNAME_REGEX.test(trimmedValue)) return;
+              return t('betterAuth.errors.emailInvalid');
+            }}
           >
             <Input
               autoComplete="username"
@@ -159,7 +184,8 @@ export const SignInEmailStep = ({
               size="large"
               style={{ padding: 6 }}
             />
-          </Form.Item>
+          </Form.Field>
+          <AuthAgreement checked={agreementChecked} onChange={setAgreementChecked} />
           <Button block htmlType="submit" loading={loading} size="large" type="primary">
             {t('betterAuth.signin.nextStep')}
           </Button>
@@ -209,7 +235,7 @@ export const SignInEmailStep = ({
           </a>
         </Text>
       )}
-      <AuthAgreement />
+      {!showEmailForm && <AuthAgreement />}
       {showEmailForm && (
         <Text align={'center'} fontSize={13} style={{ marginTop: 16 }} type={'secondary'}>
           {t('betterAuth.signin.noAccount')}{' '}

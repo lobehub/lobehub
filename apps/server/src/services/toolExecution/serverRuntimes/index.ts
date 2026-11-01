@@ -6,7 +6,12 @@
  * - Pre-instantiated runtimes (e.g., WebBrowsing - no per-request context needed)
  * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
  */
+
+import { LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
+import { LegacyGoalIdentifier } from '@lobechat/builtin-tool-goal';
+
 import type { ToolExecutionContext } from '../types';
+import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
 import { agentBuilderRuntime } from './agentBuilder';
 import { agentDocumentsRuntime } from './agentDocuments';
@@ -15,14 +20,24 @@ import { agentSignalFeedbackIntentRuntime } from './agentSignalFeedbackIntent';
 import { agentSignalReflectionRuntime } from './agentSignalReflection';
 import { agentSignalReviewRuntime } from './agentSignalReview';
 import { agentSignalSkillManagementRuntime } from './agentSignalSkillManagement';
+import { attachmentsRuntime } from './attachments';
+import { auvRuntime } from './auv';
 import { briefRuntime } from './brief';
+import { browserRuntime } from './browser';
 import { calculatorRuntime } from './calculator';
+import { canvasRuntime } from './canvas';
+import { channelRuntime } from './channel';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
+import { dashboardRuntime } from './dashboard';
+import { goalRuntime } from './goal';
+import { goalReportRuntime } from './goalReport';
+import { goalSupervisorRuntime } from './goalSupervisor';
+import { groupAgentBuilderRuntime } from './groupAgentBuilder';
 import { groupManagementRuntime } from './groupManagement';
+import { imageGenerationRuntime } from './imageGeneration';
 import { knowledgeBaseRuntime } from './knowledgeBase';
 import { lobeAgentRuntime } from './lobeAgent';
-import { lobeDeliveryCheckerRuntime } from './lobeDeliveryChecker';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
@@ -34,10 +49,10 @@ import { skillManagementRuntime } from './skillManagement';
 import { skillsRuntime } from './skills';
 import { skillStoreRuntime } from './skillStore';
 import { taskRuntime } from './task';
-import { topicReferenceRuntime } from './topicReference';
 import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
 import { userInteractionRuntime } from './userInteraction';
 import { verifyResultRuntime } from './verifyResult';
+import { videoGenerationRuntime } from './videoGeneration';
 import { webBrowsingRuntime } from './webBrowsing';
 import { webOnboardingRuntime } from './webOnboarding';
 
@@ -57,6 +72,9 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  channelRuntime,
+  acceptanceEvidenceRuntime,
+  auvRuntime,
   agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,
@@ -71,14 +89,23 @@ registerRuntimes([
   activatorRuntime,
   messageRuntime,
   localSystemRuntime,
+  browserRuntime,
   remoteDeviceRuntime,
   briefRuntime,
   taskRuntime,
-  topicReferenceRuntime,
   userInteractionRuntime,
   credsRuntime,
+  canvasRuntime,
+  dashboardRuntime,
+  groupAgentBuilderRuntime,
   groupManagementRuntime,
+  goalRuntime,
+  goalReportRuntime,
+  goalSupervisorRuntime,
+  imageGenerationRuntime,
+  videoGenerationRuntime,
   knowledgeBaseRuntime,
+  attachmentsRuntime,
   webOnboardingRuntime,
   lobeAgentRuntime,
   selfFeedbackIntentRuntime,
@@ -88,8 +115,12 @@ registerRuntimes([
   agentSignalFeedbackIntentRuntime,
   pageAgentRuntime,
   verifyResultRuntime,
-  lobeDeliveryCheckerRuntime,
 ]);
+
+// Goal calls approved after the rename still name the tool `lobe-goal`.
+serverRuntimeFactories.set(LegacyGoalIdentifier, goalRuntime.factory);
+// Same for dashboard calls approved after the rename from `lobe-dashboard`.
+serverRuntimeFactories.set(LegacyDashboardIdentifier, dashboardRuntime.factory);
 
 // ==================== Registry API ====================
 

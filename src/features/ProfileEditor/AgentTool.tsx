@@ -1,14 +1,13 @@
 'use client';
 
-import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { getActivePluginIds, parsePluginEntry, upsertPluginMode } from '@lobechat/types';
-import { type ItemType } from '@lobehub/ui';
-import { Avatar, Button, Flexbox, Icon } from '@lobehub/ui';
+import { getConnectorCatalog } from '@lobechat/const';
+import { getActivePluginIds, upsertPluginMode } from '@lobechat/types';
+import type { ItemType } from '@lobehub/ui';
+import { Avatar, Button, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon } from 'lucide-react';
-import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
@@ -22,29 +21,29 @@ import MarketAgentSkillPopoverContent from '@/features/ChatInput/ActionBar/Tools
 import MarketSkillIcon from '@/features/ChatInput/ActionBar/Tools/MarketSkillIcon';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ToolItemDetailPopover from '@/features/ChatInput/ActionBar/Tools/ToolItemDetailPopover';
+import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { createSkillStoreModal } from '@/features/SkillStore';
-import { USER_HIDDEN_BUILTIN_SKILLS } from '@/helpers/skillFilters';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { agentSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
   agentSkillsSelectors,
   builtinToolSelectors,
   composioStoreSelectors,
-  lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
+import { agentSkillListResource } from '@/store/tool/slices/agentSkills/projection';
+import type { LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
 import PluginTag from './PluginTag';
 import PopoverContent from './PopoverContent';
-
-const WEB_BROWSING_IDENTIFIER = 'lobe-web-browsing';
+import { getVisibleProfileToolIds } from './profileToolVisibility';
+import { selectProfileToolCatalogsSynced, useStalePluginAutoResolve } from './staleProfilePlugins';
 
 export interface AgentToolProps {
   /**
@@ -53,29 +52,61 @@ export interface AgentToolProps {
    */
   agentId?: string;
   /**
+   * Hide identifiers that are agent-owned/linked connectors from the rendered
+   * chips. ONLY the two-section agent profile sets this (it renders those
+   * connectors in a separate "Agent Tools" section above, so showing them here
+   * too would duplicate them — as an "uninstalled" chip lacking a base manifest).
+   * Consumers that render `AgentTool` as the SOLE tool list (e.g. the group
+   * member profile) MUST leave this off, otherwise the enabled agent tool would
+   * disappear entirely with no way to see or remove it.
+   * @default false
+   */
+  excludeAgentConnectors?: boolean;
+  /**
    * Whether to filter tools by availableInWeb property
    * @default false
    */
   filterAvailableInWeb?: boolean;
   /**
-   * Whether to show web browsing toggle functionality
+   * Show an "authorized by X" avatar on each connector chip. Set by the
+   * two-section agent profile in a workspace so a teammate can see whose
+   * credentials each shared tool runs under. Off elsewhere (personal mode has a
+   * single authorizer — always the caller — so the tag would be noise).
    * @default false
    */
-  showWebBrowsing?: boolean;
+  showAuthor?: boolean;
   /**
-   * Whether to use allMetaList (includes hidden tools) or metaList
+   * Whether to include installed hidden tools that remain profile-configurable
    * @default false
    */
   useAllMetaList?: boolean;
 }
 
 const AgentTool = memo<AgentToolProps>(
-  ({ agentId, showWebBrowsing = false, filterAvailableInWeb = false, useAllMetaList = false }) => {
+  ({
+    agentId,
+    filterAvailableInWeb = false,
+    useAllMetaList = false,
+    excludeAgentConnectors = false,
+    showAuthor = false,
+  }) => {
     const { t } = useTranslation('setting');
     const { allowed: canEdit } = usePermission('edit_own_content');
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
     const effectiveAgentId = agentId || activeAgentId || '';
     const config = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId), isEqual);
+    const isManualSkillMode = config?.chatConfig?.skillActivateMode === 'manual';
+    // Workspace General access on this agent. A private agent is creator-only and
+    // has no shared access row, so skip the query for it (same shape as the
+    // prompt editor's gate). Only the automatic stale-plugin cleanup below reads
+    // this — the visible controls keep their own `canEdit` gating.
+    const isPrivateAgent = useAgentStore(
+      (s) => s.agentMap[effectiveAgentId]?.visibility === 'private',
+    );
+    const { canEditResource, isAccessResolved } = useResourceAccess(
+      'agent',
+      isPrivateAgent ? undefined : effectiveAgentId || undefined,
+    );
 
     // Plugin state management — pinned identifiers only (a disabled entry
     // is a distinct, valid config state; this component has no tri-state UI
@@ -83,20 +114,31 @@ const AgentTool = memo<AgentToolProps>(
     const plugins = getActivePluginIds(config?.plugins);
 
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
-    const updateAgentChatConfigById = useAgentStore((s) => s.updateAgentChatConfigById);
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
-    // Use appropriate builtin list based on prop
-    // When useAllMetaList is true, use installedAllMetaList to include hidden/platform-specific
-    // tools but still exclude user-uninstalled tools
-    const builtinList = useToolStore(
+    // Keep the broad list for stale-config validation. The picker uses the
+    // narrower profile list below so runtime-owned tools never become choices.
+    const knownBuiltinList = useToolStore(
       useAllMetaList ? builtinToolSelectors.installedAllMetaList : builtinToolSelectors.metaList,
       isEqual,
     );
-
-    // Web browsing uses searchMode instead of plugins array - use byId selector
-    const isSearchEnabled = useAgentStore(
-      chatConfigByIdSelectors.isEnableSearchById(effectiveAgentId),
+    const profileBuiltinList = useToolStore(
+      useAllMetaList
+        ? builtinToolSelectors.installedProfileConfigurableMetaList({
+            isManualMode: isManualSkillMode,
+          })
+        : builtinToolSelectors.metaList,
+      isEqual,
+    );
+    const nonProfileConfigurableBuiltinToolIds = useToolStore(
+      builtinToolSelectors.nonProfileConfigurableBuiltinToolIds({
+        isManualMode: isManualSkillMode,
+      }),
+      isEqual,
+    );
+    const nonProfileConfigurableBuiltinToolIdentifiers = useMemo(
+      () => new Set(nonProfileConfigurableBuiltinToolIds),
+      [nonProfileConfigurableBuiltinToolIds],
     );
 
     // Composio-related state
@@ -104,7 +146,6 @@ const AgentTool = memo<AgentToolProps>(
     const isComposioEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
 
     // LobeHub Skill-related state
-    const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
     // Agent Skills-related state
@@ -143,19 +184,32 @@ const AgentTool = memo<AgentToolProps>(
 
     // Custom connectors (user-added OAuth MCP servers) from the connector store
     const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    // Agent-owned / linked connectors: when `excludeAgentConnectors` is set (the
+    // two-section agent profile), these are rendered in the dedicated "Agent
+    // Tools" section above, so they must be dropped from THIS base/user list —
+    // otherwise the identifier, pinned into `config.plugins` for runtime gating,
+    // would surface here too and, lacking a base-dimension manifest, render as an
+    // "uninstalled" chip. When the prop is off (e.g. the group member profile,
+    // where AgentTool is the only tool list) they are kept, so the enabled tool
+    // stays visible and removable. Display-only either way; the pin is untouched.
+    const agentConnectors = useToolStore(
+      connectorSelectors.agentConnectors(effectiveAgentId),
+      isEqual,
+    );
+    const agentConnectorIdentifiers = useMemo(
+      () => (excludeAgentConnectors ? new Set(agentConnectors.map((c) => c.identifier)) : null),
+      [agentConnectors, excludeAgentConnectors],
+    );
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
+    const isToolStoreCatalogSynced = useToolStore(selectProfileToolCatalogsSynced);
+    // Not `serverConfigInit`: it is also set by the error fallback, whose default
+    // config hides the Composio and LobeHub Skill catalogs.
+    const isServerConfigLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
+    const isToolCatalogSynced = isToolStoreCatalogSynced && isServerConfigLoaded;
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
     useEffect(() => {
       if (!isConnectorsInit) fetchConnectors();
     }, [isConnectorsInit, fetchConnectors]);
-
-    // Toggle web browsing via searchMode - use byId action
-    const toggleWebBrowsing = useCallback(async () => {
-      if (!canEdit) return;
-      if (!effectiveAgentId) return;
-      const nextMode = isSearchEnabled ? 'off' : 'auto';
-      await updateAgentChatConfigById(effectiveAgentId, { searchMode: nextMode });
-    }, [canEdit, isSearchEnabled, updateAgentChatConfigById, effectiveAgentId]);
 
     // Toggle a plugin - use byId action
     const togglePlugin = useCallback(
@@ -176,43 +230,51 @@ const AgentTool = memo<AgentToolProps>(
       [canEdit, effectiveAgentId, plugins, config?.plugins, updateAgentConfigById],
     );
 
-    // Check if a tool is enabled (handles web browsing specially)
+    // Check if a profile-managed tool is pinned.
     const isToolEnabled = useCallback(
-      (identifier: string) => {
-        if (showWebBrowsing && identifier === WEB_BROWSING_IDENTIFIER) {
-          return isSearchEnabled;
-        }
-        return plugins.includes(identifier);
-      },
-      [plugins, isSearchEnabled, showWebBrowsing],
+      (identifier: string) => plugins.includes(identifier),
+      [plugins],
     );
 
-    // Toggle a tool (handles web browsing specially)
+    // Toggle a profile-managed tool.
     const handleToggleTool = useCallback(
       async (identifier: string) => {
-        if (!canEdit) return;
-
-        if (showWebBrowsing && identifier === WEB_BROWSING_IDENTIFIER) {
-          await toggleWebBrowsing();
-        } else {
-          await togglePlugin(identifier);
-        }
+        await togglePlugin(identifier);
       },
-      [canEdit, toggleWebBrowsing, togglePlugin, showWebBrowsing],
+      [togglePlugin],
     );
 
-    // Get connected server by identifier
-    const getServerByName = (identifier: string) => {
-      return allComposioServers.find((server) => server.identifier === identifier);
-    };
-
-    // Get all Composio server type identifiers (used to filter builtinList)
-    const allComposioTypeIdentifiers = useMemo(
-      () => new Set(COMPOSIO_APP_TYPES.map((type) => type.identifier)),
-      [],
+    const connectorCatalog = useMemo(
+      () =>
+        getConnectorCatalog({
+          composio: isComposioEnabledInEnv,
+          lobehub: isLobehubSkillEnabled,
+        }),
+      [isComposioEnabledInEnv, isLobehubSkillEnabled],
+    );
+    const connectorIdentifiers = useMemo(
+      () =>
+        new Set(
+          connectorCatalog.map((item) =>
+            item.type === 'lobehub' ? item.provider.id : item.serverType.identifier,
+          ),
+        ),
+      [connectorCatalog],
+    );
+    const composioConnectorTypes = useMemo(
+      () =>
+        connectorCatalog
+          .filter((item) => item.type === 'composio')
+          .map(({ serverType }) => serverType),
+      [connectorCatalog],
+    );
+    const lobehubConnectorProviders = useMemo(
+      () =>
+        connectorCatalog.filter((item) => item.type === 'lobehub').map(({ provider }) => provider),
+      [connectorCatalog],
     );
 
-    // Get all skill identifiers (used to filter builtinList)
+    // Get all skill identifiers (used to filter the builtin list)
     const allSkillIdentifiers = useMemo(() => {
       const ids = new Set<string>();
       for (const s of installedBuiltinSkills) ids.add(s.identifier);
@@ -221,12 +283,12 @@ const AgentTool = memo<AgentToolProps>(
       return ids;
     }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills]);
 
-    // Filter out Composio tools and skills from builtinList (they are displayed separately)
+    // Filter out Composio tools and skills from profileBuiltinList (they are displayed separately)
     // Optionally filter out tools with availableInWeb: false based on config (e.g., LocalSystem is desktop-only)
     const filteredBuiltinList = useMemo(() => {
       // Cast to LobeToolMetaWithAvailability for type safety when filterAvailableInWeb is used
-      type ListType = typeof builtinList;
-      let list: ListType = builtinList;
+      type ListType = typeof profileBuiltinList;
+      let list: ListType = profileBuiltinList;
 
       // Filter by availableInWeb if requested (only makes sense when using allMetaList)
       if (filterAvailableInWeb && useAllMetaList) {
@@ -235,19 +297,16 @@ const AgentTool = memo<AgentToolProps>(
         ) as ListType;
       }
 
-      // Filter out Composio tools if Composio is enabled
-      if (isComposioEnabledInEnv) {
-        list = list.filter((item) => !allComposioTypeIdentifiers.has(item.identifier));
-      }
+      // Connector identifiers are rendered through their canonical owner below.
+      list = list.filter((item) => !connectorIdentifiers.has(item.identifier));
 
       // Filter out skills (they are shown separately)
       list = list.filter((item) => !allSkillIdentifiers.has(item.identifier));
 
       return list;
     }, [
-      builtinList,
-      allComposioTypeIdentifiers,
-      isComposioEnabledInEnv,
+      profileBuiltinList,
+      connectorIdentifiers,
       filterAvailableInWeb,
       useAllMetaList,
       allSkillIdentifiers,
@@ -257,7 +316,7 @@ const AgentTool = memo<AgentToolProps>(
     const composioServerItems = useMemo(
       () =>
         isComposioEnabledInEnv
-          ? COMPOSIO_APP_TYPES.map((type) => ({
+          ? composioConnectorTypes.map((type) => ({
               icon: (
                 <ComposioSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />
               ),
@@ -268,7 +327,9 @@ const AgentTool = memo<AgentToolProps>(
                   appSlug={type.appSlug}
                   identifier={type.identifier}
                   label={type.label}
-                  server={getServerByName(type.identifier)}
+                  server={allComposioServers.find(
+                    (server) => server.identifier === type.identifier,
+                  )}
                 />
               ),
               popoverContent: (
@@ -284,14 +345,14 @@ const AgentTool = memo<AgentToolProps>(
               ),
             }))
           : [],
-      [isComposioEnabledInEnv, allComposioServers, effectiveAgentId, t],
+      [isComposioEnabledInEnv, composioConnectorTypes, allComposioServers, effectiveAgentId, t],
     );
 
     // LobeHub Skill Provider list items
     const lobehubSkillItems = useMemo(
       () =>
         isLobehubSkillEnabled
-          ? LOBEHUB_SKILL_PROVIDERS.map((provider) => ({
+          ? lobehubConnectorProviders.map((provider) => ({
               icon: (
                 <LobehubSkillIcon
                   icon={provider.icon}
@@ -320,7 +381,7 @@ const AgentTool = memo<AgentToolProps>(
               ),
             }))
           : [],
-      [isLobehubSkillEnabled, allLobehubSkillServers, effectiveAgentId, t],
+      [isLobehubSkillEnabled, lobehubConnectorProviders, effectiveAgentId, t],
     );
 
     // Handle plugin remove via Tag close - use byId actions
@@ -334,12 +395,7 @@ const AgentTool = memo<AgentToolProps>(
         if (!canEdit) return;
 
         const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
-        if (showWebBrowsing && identifier === WEB_BROWSING_IDENTIFIER) {
-          if (!effectiveAgentId) return;
-          await updateAgentChatConfigById(effectiveAgentId, { searchMode: 'off' });
-        } else {
-          await togglePlugin(identifier, false);
-        }
+        await togglePlugin(identifier, false);
       };
 
     // Builtin Agent Skills list items (grouped under LobeHub)
@@ -522,8 +578,11 @@ const AgentTool = memo<AgentToolProps>(
     );
 
     // Distinguish community plugins from custom plugins
-    const communityPlugins = installedPluginList.filter((item) => item.type !== 'customPlugin');
-    const customPlugins = installedPluginList.filter((item) => item.type === 'customPlugin');
+    const profilePluginList = installedPluginList.filter(
+      (item) => !nonProfileConfigurableBuiltinToolIdentifiers.has(item.identifier),
+    );
+    const communityPlugins = profilePluginList.filter((item) => item.type !== 'customPlugin');
+    const customPlugins = profilePluginList.filter((item) => item.type === 'customPlugin');
 
     // Function to generate plugin list items
     const mapPluginToItem = useCallback(
@@ -692,19 +751,16 @@ const AgentTool = memo<AgentToolProps>(
       const all = new Set<string>();
 
       // 1. Builtin tools (includes Composio metas)
-      for (const tool of builtinList) all.add(tool.identifier);
+      for (const tool of knownBuiltinList) all.add(tool.identifier);
 
       // 2. Installed plugins
       for (const plugin of installedPluginList) all.add(plugin.identifier);
 
-      // 3. Composio server types (if enabled)
-      if (isComposioEnabledInEnv) {
-        for (const type of COMPOSIO_APP_TYPES) all.add(type.identifier);
-      }
-
-      // 4. LobeHub Skill providers (if enabled)
-      if (isLobehubSkillEnabled) {
-        for (const provider of LOBEHUB_SKILL_PROVIDERS) all.add(provider.id);
+      // 3. Canonical connector identifiers
+      for (const connector of connectorCatalog) {
+        all.add(
+          connector.type === 'lobehub' ? connector.provider.id : connector.serverType.identifier,
+        );
       }
 
       // 5. Builtin skills
@@ -721,62 +777,47 @@ const AgentTool = memo<AgentToolProps>(
 
       return all;
     }, [
-      builtinList,
+      knownBuiltinList,
       installedPluginList,
-      isComposioEnabledInEnv,
-      isLobehubSkillEnabled,
+      connectorCatalog,
       installedBuiltinSkills,
       marketAgentSkills,
       userAgentSkills,
       customConnectors,
     ]);
 
-    // Track whether initial cleanup has been performed
-    const cleanupDoneRef = useRef(false);
+    // Self-heal unresolved plugin entries once the catalogs are complete. They
+    // may be Market skills that are not installed yet, so the server is asked
+    // first and only entries it says are not skills are removed.
+    useStalePluginAutoResolve({
+      agentId: effectiveAgentId,
+      canEditContent: canEdit,
+      canEditResource,
+      getScope: () => agentSkillListResource.scope.get(),
+      getCurrentPlugins: () =>
+        agentSelectors.getAgentConfigById(effectiveAgentId)(useAgentStore.getState())?.plugins,
+      isAccessResolved,
+      isConnectorsInit,
+      isToolCatalogSynced,
+      plugins: config?.plugins,
+      scope: agentSkillListResource.scope.use(),
+      // Best-effort: the user never asked for this, so a rejection (edit lock
+      // held by another member, access revoked between render and write) must
+      // not claim "your change was not applied". It retries on the next open.
+      updatePlugins: (id, nextPlugins) =>
+        updateAgentConfigById(id, { plugins: nextPlugins }, { showErrorMessage: false }),
+      validIdentifiers,
+    });
 
-    // Auto-remove stale plugin IDs from the agent config
-    // Uses a short debounce to allow async data (SWR) to complete loading
-    useEffect(() => {
-      if (cleanupDoneRef.current) return;
-      if (validIdentifiers.size === 0) return;
-      const rawPlugins = config?.plugins ?? [];
-      if (rawPlugins.length === 0) return;
-      // Don't prune until the connector store has loaded — connector identifiers
-      // are absent from validIdentifiers until fetchConnectors() resolves, so
-      // running cleanup before that would incorrectly mark enabled connectors as stale.
-      if (!isConnectorsInit) return;
-
-      // Defer cleanup to avoid race with async data loading (SWR, Composio, etc.)
-      const timer = setTimeout(() => {
-        // Checked (and filtered) by identifier regardless of entry shape, so
-        // a stale disabled/pinned object entry is pruned exactly like a
-        // stale legacy string one — untouched valid entries keep their
-        // original shape (lazy per-item upgrade).
-        const isValid = (entry: (typeof rawPlugins)[number]) =>
-          validIdentifiers.has(parsePluginEntry(entry).identifier);
-        const hasStale = rawPlugins.some((entry) => !isValid(entry));
-
-        if (hasStale && effectiveAgentId) {
-          const cleanedPlugins = rawPlugins.filter(isValid);
-          updateAgentConfigById(effectiveAgentId, { plugins: cleanedPlugins });
-        }
-
-        cleanupDoneRef.current = true;
-      }, 500);
-
-      return () => clearTimeout(timer);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [validIdentifiers]);
-
-    // Combine plugins and web browsing for display
+    // Only display tools that this profile surface actually manages. Runtime-
+    // managed entries remain untouched in config for compatibility with other
+    // flows, but do not inflate this section's count or render misleading chips.
     const allEnabledTools = useMemo(() => {
-      const tools = [...plugins];
-      // Add web browsing if enabled (it's not in plugins array)
-      if (showWebBrowsing && isSearchEnabled && !tools.includes(WEB_BROWSING_IDENTIFIER)) {
-        tools.unshift(WEB_BROWSING_IDENTIFIER);
-      }
-      return tools.filter((toolId) => !USER_HIDDEN_BUILTIN_SKILLS.has(toolId));
-    }, [plugins, isSearchEnabled, showWebBrowsing]);
+      return getVisibleProfileToolIds(plugins, {
+        agentConnectorIdentifiers,
+        nonConfigurableBuiltinToolIdentifiers: nonProfileConfigurableBuiltinToolIdentifiers,
+      });
+    }, [plugins, agentConnectorIdentifiers, nonProfileConfigurableBuiltinToolIdentifiers]);
 
     return (
       <>
@@ -835,6 +876,7 @@ const AgentTool = memo<AgentToolProps>(
                 disabled={!canEdit}
                 key={pluginId}
                 pluginId={pluginId}
+                showAuthor={showAuthor}
                 showDesktopOnlyLabel={filterAvailableInWeb}
                 useAllMetaList={useAllMetaList}
                 onRemove={handleRemovePlugin(pluginId)}

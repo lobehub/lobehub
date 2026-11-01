@@ -5,6 +5,7 @@ import { publishResourceEvent, resourceChannelId } from '../index';
 describe('resourceEvents', () => {
   it('formats a stable channel id per resource', () => {
     expect(resourceChannelId({ id: 'doc-1', type: 'document' })).toBe('resource:document:doc-1');
+    expect(resourceChannelId({ id: 'topic-1', type: 'topic' })).toBe('resource:topic:topic-1');
   });
 
   it('publish is best-effort and never throws (no Redis → in-memory)', async () => {
@@ -12,6 +13,13 @@ describe('resourceEvents', () => {
       publishResourceEvent(
         { id: 'doc-1', type: 'document' },
         { actorId: 'u1', type: 'doc.updated' },
+      ),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      publishResourceEvent(
+        { id: 'topic-1', type: 'topic' },
+        { actorId: 'u1', type: 'topic.commentsChanged' },
       ),
     ).resolves.toBeUndefined();
 

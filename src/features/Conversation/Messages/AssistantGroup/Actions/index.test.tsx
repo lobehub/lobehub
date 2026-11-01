@@ -5,28 +5,36 @@ import type { UIChatMessage } from '@lobechat/types';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AssistantActionsBar } from '../../Assistant/Actions';
+import { UserActionsBar } from '../../User/Actions';
 import { GroupActionsBar } from './index';
 
 const storeMock = vi.hoisted(() => ({ isGenerating: false }));
 
-// Flexbox → passthrough so we can read the inner MessageActionBar stub.
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-}));
-
 // Stub the action bar to expose the resolved `bar` / `menu` slots verbatim.
 vi.mock('../../components/MessageActionBar', () => ({
-  MessageActionBar: ({ bar, menu }: { bar?: string[]; menu?: string[] }) => (
+  MessageActionBar: ({
+    bar,
+    leading,
+    menu,
+  }: {
+    bar?: string[];
+    leading?: React.ReactNode;
+    menu?: string[];
+  }) => (
     <div
       data-bar={(bar ?? []).join(',')}
+      data-has-leading={!!leading}
       data-menu={(menu ?? []).join(',')}
       data-testid="action-bar"
-    />
+    >
+      {leading}
+    </div>
   ),
 }));
 
 vi.mock('../../../components/Reaction', () => ({
-  ReactionPicker: () => null,
+  ReactionPicker: () => <span data-testid="reaction-picker" />,
 }));
 
 // isAssistantGroupItemGenerating(id) is called through useConversationStore; the
@@ -43,6 +51,27 @@ const data = { id: 'group-1', role: 'assistantGroup', tools: [] } as unknown as 
 const renderBar = (props: { contentId?: string }) =>
   render(<GroupActionsBar data={data} id="group-1" {...props} />);
 
+describe('message action defaults', () => {
+  it('does not expose the retired text-to-speech action', () => {
+    render(
+      <>
+        <AssistantActionsBar
+          data={{ content: 'Assistant reply', role: 'assistant' } as UIChatMessage}
+          id="assistant-1"
+        />
+        <UserActionsBar
+          data={{ content: 'User prompt', role: 'user' } as UIChatMessage}
+          id="user-1"
+        />
+      </>,
+    );
+
+    for (const bar of screen.getAllByTestId('action-bar')) {
+      expect(bar.getAttribute('data-menu')?.split(',')).not.toContain('tts');
+    }
+  });
+});
+
 describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', () => {
   it('still generating with no text block → only delete', () => {
     storeMock.isGenerating = true;
@@ -53,14 +82,11 @@ describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', ()
     expect(bar).toHaveAttribute('data-menu', '');
   });
 
-  it('finished but last block is a tool call → exposes share + select (forward entry) + delete', () => {
+  it('finished but last block is a tool call → exposes share, select, and delete', () => {
     storeMock.isGenerating = false;
     renderBar({ contentId: undefined });
 
     const bar = screen.getByTestId('action-bar');
-    // This is the heterogeneous-agent gap: a completed CC/Codex turn that ends on
-    // a tool block used to fall into the delete-only "in progress" bar, hiding the
-    // forward (`select`) and `share` entries. It must now surface them.
     const menu = bar.getAttribute('data-menu') ?? '';
     expect(menu.split(',')).toContain('select');
     expect(menu.split(',')).toContain('share');
@@ -68,7 +94,7 @@ describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', ()
     expect(bar).toHaveAttribute('data-bar', 'delAndRegenerate');
   });
 
-  it('finished with a trailing text block → full menu (unchanged native behavior)', () => {
+  it('finished with a trailing text block → full menu', () => {
     storeMock.isGenerating = false;
     renderBar({ contentId: 'block-text' });
 
@@ -77,5 +103,7 @@ describe('GroupActionsBar — hetero (assistantGroup) forward/select gating', ()
     expect(menu.split(',')).toContain('select');
     expect(menu.split(',')).toContain('share');
     expect(menu.split(',')).toContain('edit');
+    expect(bar).toHaveAttribute('data-has-leading', 'true');
+    expect(screen.getByTestId('reaction-picker')).toBeInTheDocument();
   });
 });

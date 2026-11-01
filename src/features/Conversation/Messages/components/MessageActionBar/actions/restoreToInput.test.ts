@@ -27,13 +27,16 @@ vi.mock('@/store/file', () => ({
   },
 }));
 
-const messageSuccess = vi.fn();
-vi.mock('antd', () => ({
-  App: { useApp: () => ({ message: { success: messageSuccess } }) },
+const { messageSuccess } = vi.hoisted(() => ({ messageSuccess: vi.fn() }));
+
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  toast: { success: messageSuccess },
 }));
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  App: { useApp: () => ({ message: { success: messageSuccess } }) },
 }));
 
 const build = (data: Partial<UIChatMessage>, role: MessageActionContext['role'] = 'user') =>

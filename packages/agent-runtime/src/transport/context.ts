@@ -1,23 +1,29 @@
-import type { OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
+import type { ResolvedToolSet } from '@lobechat/context-engine';
+
+import type { AgentState, CallLLMPayload } from '../types';
 
 /**
  * Inputs for building the final prompt sent to the model.
  *
- * NOTE (scaffolding): only the always-required trio is pinned. The many context
- * sources the server engine consumes (systemRole, knowledge, tool manifests,
- * agentDocuments, persona/onboarding, topic references, capabilities…) are
- * resolved/bound by the adapter and firm when `call_llm` / `compress_context`
- * (Tier C) migrate onto the port.
+ * The package passes the runtime-owned payload/state while adapters bind host
+ * sources such as knowledge, skills, documents, persona, and topic references.
  */
 export interface ContextBuildInput {
   [key: string]: unknown;
-  messages: UIChatMessage[];
   model: string;
+  payload: CallLLMPayload;
   provider: string;
+  state: AgentState;
 }
 
 export interface ContextBuildOutput {
-  messages: OpenAIChatMessage[];
+  /** Adapter-native prepared messages; kept in-memory and out of serialized state. */
+  messages: unknown[];
+  /** Adapter-native model extension parameters consumed by the LLM transport. */
+  modelParameters?: unknown;
+  preserveThinking?: boolean;
+  replayAssistantReasoning: boolean;
+  resolvedTools?: ResolvedToolSet;
 }
 
 /**

@@ -12,15 +12,45 @@ const parseJsonString = (value: unknown): unknown => {
   }
 };
 
+/**
+ * Convention-based recommendation marker (see `AskUserQuestionOption.recommended`).
+ * Accepts ASCII/fullwidth parens and the English/Chinese wording models emit.
+ * Surrounding whitespace is handled with `trimEnd()` instead of `\s*` in the
+ * pattern — the label is model-controlled input, and ambiguous `\s*` around an
+ * end anchor makes the scan polynomial (CodeQL js/polynomial-redos).
+ */
+const RECOMMENDED_SUFFIX = /[(（](?:recommended|推荐)[)）]$/i;
+
+const stripRecommendedSuffix = (rawLabel: string): string => {
+  const trimmed = rawLabel.trimEnd();
+  const match = RECOMMENDED_SUFFIX.exec(trimmed);
+
+  return match ? trimmed.slice(0, match.index).trimEnd() : rawLabel;
+};
+
 const normalizeOption = (value: unknown): AskUserQuestionOption | undefined => {
   const option = toRecord(value);
-  const label = pickString(option?.label);
+  const rawLabel = pickString(option?.label);
 
-  if (!label) return;
+  if (!rawLabel) return;
 
+  const strippedLabel = stripRecommendedSuffix(rawLabel);
+  // Only treat the suffix as a marker when something remains — a label that IS
+  // "(Recommended)" stays verbatim rather than collapsing to an empty option.
+  const suffixed = strippedLabel.length > 0 && strippedLabel !== rawLabel;
+  const label = suffixed ? strippedLabel : rawLabel;
+  // Hosts that ask their own questions (a goal gate) know their pick and say
+  // so directly; only tool calls need the label convention.
+  const recommended = suffixed || option?.recommended === true;
   const description = pickString(option?.description);
+  const id = pickString(option?.id);
 
-  return description ? { description, label } : { label };
+  return {
+    ...(id ? { id } : {}),
+    label,
+    ...(description ? { description } : {}),
+    ...(recommended ? { recommended } : {}),
+  };
 };
 
 const isQuestionOption = (
@@ -38,9 +68,11 @@ const normalizeQuestion = (value: unknown): AskUserQuestionItem | undefined => {
     ? rawOptions.map(normalizeOption).filter(isQuestionOption)
     : [];
   const header = pickString(item?.header) ?? '';
+  const description = pickString(item?.description);
   const multiSelect = typeof item?.multiSelect === 'boolean' ? item.multiSelect : undefined;
 
   return {
+    ...(description ? { description } : {}),
     header,
     ...(multiSelect === undefined ? {} : { multiSelect }),
     options,

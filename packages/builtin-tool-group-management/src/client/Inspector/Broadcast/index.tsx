@@ -1,12 +1,11 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinInspectorProps } from '@lobechat/types';
-import { Avatar, Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cx, useTheme } from 'antd-style';
+import { Avatar, createStaticStyles, cx, Flexbox, useTheme } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar, { isDefaultAgentAvatar } from '@/components/AgentAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { shinyTextStyles } from '@/styles';
@@ -52,7 +51,11 @@ export const BroadcastInspector = memo<BuiltinInspectorProps<BroadcastParams>>(
     const avatarItems = useMemo(
       () =>
         agents.map((agent) => ({
-          avatar: agent.avatar || DEFAULT_AVATAR,
+          avatar: isDefaultAgentAvatar(agent.avatar) ? (
+            <AgentAvatar agentId={agent.id} name={agent.title} size={24} />
+          ) : (
+            agent.avatar
+          ),
           background: agent.backgroundColor || theme.colorBgContainer,
           key: agent.id,
           title: agent.title || undefined,
@@ -62,20 +65,17 @@ export const BroadcastInspector = memo<BuiltinInspectorProps<BroadcastParams>>(
 
     if (isArgumentsStreaming && agents.length === 0) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
-          <span>{t('builtins.lobe-group-management.apiName.broadcast')}</span>
+        <div className={styles.root}>
+          <span className={shinyTextStyles.shinyText}>
+            {t('builtins.lobe-group-management.apiName.broadcast')}
+          </span>
         </div>
       );
     }
 
     return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
-        gap={8}
-      >
-        <span className={styles.title}>
+      <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
+        <span className={cx(styles.title, isArgumentsStreaming && shinyTextStyles.shinyText)}>
           {t('builtins.lobe-group-management.inspector.broadcast.title')}
         </span>
         {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape={'circle'} size={24} />}

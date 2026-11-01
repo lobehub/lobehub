@@ -1,12 +1,12 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { MessagesSquare } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 interface EmptyStateProps {
   agentId: string;
@@ -16,7 +16,7 @@ interface EmptyStateProps {
 
 const EmptyState = memo<EmptyStateProps>(({ agentId, hasFilters, onClearFilters }) => {
   const { t } = useTranslation('topic');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   return (
     <Flexbox align={'center'} flex={1} gap={16} justify={'center'} paddingBlock={64}>

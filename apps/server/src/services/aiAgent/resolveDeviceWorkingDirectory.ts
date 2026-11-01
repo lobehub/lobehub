@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import type { WorkingDirConfig, WorkingDirConfigValue } from '@lobechat/types';
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 
@@ -6,6 +8,29 @@ const toWorkingDirConfig = (
 ): WorkingDirConfig | undefined => {
   if (!value) return;
   return typeof value === 'string' ? { path: value } : value;
+};
+
+/**
+ * A topic's pinned cwd is a bare path recorded on one machine, so it only
+ * holds on that machine. `topicDeviceId` (`topic.metadata.boundDeviceId`) names
+ * it when known; for older topics without one, a Windows drive/UNC path on a
+ * non-Windows device is the tell-tale that the pin came from elsewhere.
+ */
+const topicPinFitsDevice = (
+  pinnedPath: string | undefined,
+  params: { deviceId?: string; devicePlatform?: string | null; topicDeviceId?: string },
+): boolean => {
+  if (params.deviceId && params.topicDeviceId && params.deviceId !== params.topicDeviceId)
+    return false;
+  if (
+    pinnedPath &&
+    params.devicePlatform &&
+    params.devicePlatform !== 'win32' &&
+    path.win32.isAbsolute(pinnedPath) &&
+    !path.posix.isAbsolute(pinnedPath)
+  )
+    return false;
+  return true;
 };
 
 /**
@@ -20,26 +45,52 @@ const toWorkingDirConfig = (
  *   choice > device default.
  *
  * - `topicWorkingDirectory` — an existing topic's pinned cwd
- *   (`topic.metadata.workingDirectory`); always wins once a conversation exists.
+ *   (`topic.metadata.workingDirectory`); wins once a conversation exists, but
+ *   only on the device it was pinned on (`topicDeviceId` / `devicePlatform`).
+ *   Another device — a sub-agent, or the agent moved to a new machine — skips
+ *   it and resolves its own directory from the sources below.
  * - `initialWorkingDirectory` — only populated for a brand-new topic
  *   (`appContext.initialTopicMetadata.workingDirectory`, e.g. the primary repo).
  * - `workingDirByDevice[deviceId]` — the agent's per-device pick from the picker
  *   when no topic existed yet.
  * - `deviceDefaultCwd` — the device's user-configured default.
+ *
+ * A source that holds a REPO IDENTIFIER is skipped rather than trusted: see
+ * `isRepoIdentifier` below — the selection's unit has to match the run's target.
  */
 export const resolveDeviceWorkingDirectoryConfig = (params: {
   deviceDefaultCwd?: string | null;
   deviceId?: string;
+  devicePlatform?: string | null;
   initialWorkingDirectory?: string;
   initialWorkingDirectoryConfig?: WorkingDirConfig;
+  /** Repos this run carries (`topic.metadata.repos`, seeded from a Task's own selection). */
+  repos?: string[];
+  topicDeviceId?: string;
   topicWorkingDirectory?: string;
   topicWorkingDirectoryConfig?: WorkingDirConfig;
   workingDirByDevice?: Record<string, WorkingDirConfigValue> | null;
 }): WorkingDirConfig | undefined => {
-  if (params.topicWorkingDirectoryConfig) return params.topicWorkingDirectoryConfig;
-  if (params.topicWorkingDirectory) return { path: params.topicWorkingDirectory };
-  if (params.initialWorkingDirectoryConfig) return params.initialWorkingDirectoryConfig;
-  if (params.initialWorkingDirectory) return { path: params.initialWorkingDirectory };
+  // `owner/repo` is a repo, not a directory on this machine: taking one as the
+  // device cwd would override the machine's own choice with a path that does not
+  // exist here, and the spawned CLI would start in it. A real machine path is
+  // absolute, so it can never equal a repo entry; skipping these costs nothing
+  // when the run is genuinely cloud-bound (the sandbox reads `repos`, not the cwd).
+  const isRepoIdentifier = (path?: string): boolean =>
+    !!path && (params.repos ?? []).includes(path);
+
+  const topicPin =
+    params.topicWorkingDirectoryConfig ??
+    (params.topicWorkingDirectory ? { path: params.topicWorkingDirectory } : undefined);
+  if (topicPin && topicPinFitsDevice(topicPin.path, params) && !isRepoIdentifier(topicPin.path)) {
+    return topicPin;
+  }
+
+  const initialConfig = params.initialWorkingDirectoryConfig;
+  if (initialConfig && !isRepoIdentifier(initialConfig.path)) return initialConfig;
+  if (params.initialWorkingDirectory && !isRepoIdentifier(params.initialWorkingDirectory)) {
+    return { path: params.initialWorkingDirectory };
+  }
 
   const agentChoice = toWorkingDirConfig(
     params.deviceId ? params.workingDirByDevice?.[params.deviceId] : undefined,

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { CUSTOM_DOCUMENT_FILE_TYPE, RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH } from '@lobechat/const';
 import { FilesTabs, SortType } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -226,6 +227,47 @@ describe('KnowledgeRepo', () => {
       expect(result.every((item) => item.id !== 'other-doc')).toBe(true);
     });
 
+    it('should omit document bodies from summary queries', async () => {
+      const content = `Preview body ${'x'.repeat(RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH)}`;
+      await serverDB.insert(documents).values({
+        content,
+        editorData: { root: { children: [{ text: 'Large editor payload' }] } },
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+        id: 'doc-summary',
+        source: 'internal://note/doc-summary',
+        sourceType: 'topic',
+        title: 'Summary projection',
+        totalCharCount: 42,
+        totalLineCount: 1,
+        userId,
+      });
+
+      const [summary] = await knowledgeRepo.query({
+        includeContent: false,
+        q: 'Summary projection',
+      });
+      const [full] = await knowledgeRepo.query({ q: 'Summary projection' });
+      const [withPreview] = await knowledgeRepo.query({
+        includeContent: false,
+        includeContentPreview: true,
+        q: 'Summary projection',
+      });
+
+      expect(summary).toMatchObject({
+        content: null,
+        editorData: null,
+        id: 'doc-summary',
+        name: 'Summary projection',
+      });
+      expect(summary.contentPreviewSource).toBeUndefined();
+      expect(withPreview).toMatchObject({ content: null, editorData: null });
+      expect(withPreview.contentPreviewSource).toHaveLength(RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH);
+      expect(full).toMatchObject({
+        content,
+        editorData: { root: { children: [{ text: 'Large editor payload' }] } },
+      });
+    });
+
     it('should return uploader info for current user owned files and documents', async () => {
       await serverDB
         .update(users)
@@ -270,16 +312,87 @@ describe('KnowledgeRepo', () => {
       expect(result.every((item) => item.fileType.startsWith('audio'))).toBe(true);
     });
 
-    it('should filter by category - Documents', async () => {
+    it('should filter by category - Documents includes uploaded text/pdf files only', async () => {
       const result = await knowledgeRepo.query({ category: FilesTabs.Documents });
 
+      const fileTypes = result.map((item) => item.fileType);
+      // uploaded text/* and office/pdf files are document files
+      expect(fileTypes).toContain('text/plain');
+      expect(fileTypes).toContain('application/pdf');
+      // derived notes/pages belong to the Pages category, media stays out too
+      expect(result.every((item) => item.sourceType === 'file')).toBe(true);
       expect(
         result.every(
           (item) =>
-            item.fileType.startsWith('application') ||
-            (item.fileType.startsWith('custom') && item.fileType !== 'custom/document'),
+            !/^(?:audio|image|video|custom)/.test(item.fileType) &&
+            item.fileType !== 'custom/folder',
         ),
       ).toBe(true);
+    });
+
+    it('should filter by category - Pages returns derived notes only', async () => {
+      const result = await knowledgeRepo.query({ category: FilesTabs.Pages });
+
+      const fileTypes = result.map((item) => item.fileType);
+      // derived notes/pages surface here
+      expect(fileTypes).toContain('custom/note');
+      // uploaded files (text, pdf, media, raw data) never do
+      expect(result.every((item) => item.sourceType === 'document')).toBe(true);
+      expect(fileTypes).not.toContain('text/plain');
+      expect(fileTypes).not.toContain('application/pdf');
+      expect(fileTypes).not.toContain('custom/folder');
+    });
+
+    it('should filter by category - Files returns raw data files only', async () => {
+      // Document-table rows (agent instructions, derived docs) must never leak
+      // into the Files category even when their fileType matches no other bucket.
+      await serverDB.insert(documents).values([
+        {
+          id: 'doc-verify-instruction',
+          userId,
+          title: 'Verification checklist',
+          fileType: 'verify/instruction',
+          sourceType: 'agent',
+          source: 'internal://verify/doc-verify-instruction',
+          totalCharCount: 100,
+          totalLineCount: 5,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file-raw-json',
+          userId,
+          name: 'data.json',
+          fileType: 'application/json',
+          size: 100,
+          url: 'https://example.com/data.json',
+        },
+        {
+          id: 'file-raw-zip',
+          userId,
+          name: 'bundle.zip',
+          fileType: 'application/zip',
+          size: 100,
+          url: 'https://example.com/bundle.zip',
+        },
+      ]);
+
+      const result = await knowledgeRepo.query({ category: FilesTabs.Files });
+
+      const ids = result.map((item) => item.id);
+      expect(ids).toContain('file-raw-json');
+      expect(ids).toContain('file-raw-zip');
+      // documents / media / notes are excluded from the Files category
+      expect(
+        result.every(
+          (item) =>
+            !/^(?:audio|image|video|text|custom)/.test(item.fileType) &&
+            item.fileType !== 'application/pdf',
+        ),
+      ).toBe(true);
+      // no documents-table rows at all, whatever their fileType
+      expect(ids).not.toContain('doc-verify-instruction');
+      expect(result.every((item) => item.sourceType === 'file')).toBe(true);
     });
 
     it('should search by query', async () => {
@@ -395,6 +508,8 @@ describe('KnowledgeRepo', () => {
       // Create test documents
       await serverDB.insert(documents).values([
         {
+          content: 'Recent document body',
+          editorData: { root: { children: [{ text: 'Recent editor payload' }] } },
           id: 'recent-doc-1',
           userId,
           title: 'Recent Note',
@@ -425,6 +540,17 @@ describe('KnowledgeRepo', () => {
       const result = await knowledgeRepo.queryRecent(1);
 
       expect(result).toHaveLength(1);
+    });
+
+    it('should return summaries without document bodies', async () => {
+      const [page] = await knowledgeRepo.queryRecent(1, 'page');
+
+      expect(page).toMatchObject({
+        content: null,
+        editorData: null,
+        id: 'recent-doc-1',
+        name: 'Recent Note',
+      });
     });
   });
 
@@ -1039,20 +1165,17 @@ describe('KnowledgeRepo', () => {
       expect(result.every((item) => item.fileType.startsWith('image'))).toBe(true);
     });
 
-    it('should filter KB files by category (Documents) and exclude custom/document', async () => {
+    it('should filter KB files by category (Documents) including text files and notes', async () => {
       const result = await knowledgeRepo.query({
         knowledgeBaseId: 'kb-filter',
         category: FilesTabs.Documents,
       });
 
-      // Should include application/* files and custom/* docs
-      expect(
-        result.every(
-          (item) =>
-            item.fileType.startsWith('application') ||
-            (item.fileType.startsWith('custom') && item.fileType !== 'custom/document'),
-        ),
-      ).toBe(true);
+      const ids = result.map((item) => item.id);
+      expect(ids).toContain('kb-f-pdf');
+      expect(ids).toContain('kb-f-searchable');
+      // media stays out of Documents
+      expect(result.every((item) => !/^(?:audio|image|video)/.test(item.fileType))).toBe(true);
     });
 
     it('should return KB standalone documents (no fileId) with search', async () => {
@@ -1140,13 +1263,43 @@ describe('KnowledgeRepo', () => {
           url: 'https://example.com/readme.txt',
         },
       ]);
+
+      // a web clipping saved as an article document plus a plain note that
+      // must stay out of the Websites category
+      await serverDB.insert(documents).values([
+        {
+          id: 'article-doc',
+          userId,
+          title: 'Clipped Article',
+          fileType: 'article',
+          sourceType: 'web',
+          source: 'https://example.com/some-article',
+          content: 'clipped content',
+          totalCharCount: 15,
+          totalLineCount: 1,
+        },
+        {
+          id: 'plain-note',
+          userId,
+          title: 'Plain Note',
+          fileType: 'custom/note',
+          sourceType: 'topic',
+          source: 'internal://note/plain-note',
+          totalCharCount: 10,
+          totalLineCount: 1,
+        },
+      ]);
     });
 
-    it('should filter by category - Websites', async () => {
+    it('should filter by category - Websites includes html files and article clippings', async () => {
       const result = await knowledgeRepo.query({ category: FilesTabs.Websites });
 
       expect(result.some((item) => item.id === 'website-file')).toBe(true);
-      expect(result.every((item) => item.fileType === 'text/html')).toBe(true);
+      expect(result.some((item) => item.id === 'article-doc')).toBe(true);
+      expect(result.every((item) => item.id !== 'plain-note')).toBe(true);
+      expect(
+        result.every((item) => item.fileType === 'text/html' || item.fileType === 'article'),
+      ).toBe(true);
     });
   });
 
@@ -1366,6 +1519,91 @@ describe('KnowledgeRepo', () => {
       // from this branch so we're just asserting the call succeeds without
       // an unexpected error caused by hidden clauses.
       await expect(knowledgeRepo.query({ visibility: 'private' })).resolves.toBeDefined();
+    });
+
+    it('should not hand out a page id another member cannot open', async () => {
+      // A workspace-public file whose derived document stayed creator-private:
+      // the file legitimately lists for every member, but the page behind it is
+      // only readable by its creator. Surfacing that page id makes the library
+      // show an entry that 404s on click.
+      await serverDB.insert(knowledgeBases).values({ id: 'kb-vis', userId, name: 'Vis KB' });
+      await serverDB.insert(files).values({
+        id: 'vis-file-shared',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'public',
+        name: 'shared.md',
+        fileType: 'text/markdown',
+        size: 10,
+        url: 'https://example.com/shared.md',
+      });
+      await serverDB.insert(documents).values({
+        id: 'vis-doc-hidden',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'private',
+        fileId: 'vis-file-shared',
+        title: 'Hidden Page',
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+        sourceType: 'file',
+        source: 'https://example.com/shared.md',
+        totalCharCount: 5,
+        totalLineCount: 1,
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        knowledgeBaseId: 'kb-vis',
+        fileId: 'vis-file-shared',
+        userId: otherUserId,
+        workspaceId,
+      });
+
+      const result = await wsRepo.query({ knowledgeBaseId: 'kb-vis' });
+
+      const row = result.find((item) => item.fileId === 'vis-file-shared');
+      expect(row).toBeDefined();
+      expect(row?.documentId).toBeFalsy();
+      // The row now addresses the file it really is, so opening it lands on the
+      // file preview instead of a page the caller is not allowed to read.
+      expect(row?.id).toBe('vis-file-shared');
+    });
+
+    it('should still carry the page id when the caller can open it', async () => {
+      await serverDB.insert(knowledgeBases).values({ id: 'kb-vis-ok', userId, name: 'Vis KB OK' });
+      await serverDB.insert(files).values({
+        id: 'vis-file-open',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'public',
+        name: 'open.md',
+        fileType: 'text/markdown',
+        size: 10,
+        url: 'https://example.com/open.md',
+      });
+      await serverDB.insert(documents).values({
+        id: 'vis-doc-open',
+        userId: otherUserId,
+        workspaceId,
+        visibility: 'public',
+        fileId: 'vis-file-open',
+        title: 'Open Page',
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
+        sourceType: 'file',
+        source: 'https://example.com/open.md',
+        totalCharCount: 5,
+        totalLineCount: 1,
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        knowledgeBaseId: 'kb-vis-ok',
+        fileId: 'vis-file-open',
+        userId: otherUserId,
+        workspaceId,
+      });
+
+      const result = await wsRepo.query({ knowledgeBaseId: 'kb-vis-ok' });
+
+      const row = result.find((item) => item.fileId === 'vis-file-open');
+      expect(row?.documentId).toBe('vis-doc-open');
+      expect(row?.id).toBe('vis-doc-open');
     });
   });
 });

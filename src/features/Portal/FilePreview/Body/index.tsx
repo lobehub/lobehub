@@ -1,14 +1,18 @@
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Markdown, Tabs } from '@lobehub/ui';
 import { BoltIcon, FileIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/CircleLoading';
+import FileNotFound from '@/features/FileNotFound';
 import FileViewer from '@/features/FileViewer';
+import ImageEditTools from '@/features/FileViewer/ImageEditTools';
+import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { useFileStore } from '@/store/file';
+
+import { usePreviewFileItem } from '../usePreviewFileItem';
 
 enum FilePreviewTab {
   Chunk = 'chunk',
@@ -24,20 +28,25 @@ const FilePreview = () => {
   const previewFileId = useChatStore(chatPortalSelectors.previewFileId);
   const chunkText = useChatStore(chatPortalSelectors.chunkText);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const useFetchFileItem = useFileStore((s) => s.useFetchKnowledgeItem);
   const { t } = useTranslation('portal');
 
   const topicKey = activeTopicId ?? NO_TOPIC_KEY;
   const [tabByTopic, setTabByTopic] = useState<Record<string, FilePreviewTab>>({});
   const tab = tabByTopic[topicKey] ?? getDefaultTab(chunkText);
-  const { data, isLoading } = useFetchFileItem(previewFileId);
+  const { data, error, fromSource, isLoading, mutate } = usePreviewFileItem();
 
   useEffect(() => {
     setTabByTopic((prev) => ({ ...prev, [topicKey]: getDefaultTab(chunkText) }));
   }, [chunkText, previewFileId, topicKey]);
 
   if (isLoading) return <Loading />;
-  if (!data) return;
+  // The backend answers a deleted / access-revoked file with 404 (and a
+  // resolved-nothing on some list paths) — both are terminal, not retryable.
+  // Other failures offer Reload.
+  if (error && normalizeAsyncError(error).status !== 404) {
+    return <AsyncError error={error} variant={'page'} onRetry={() => void mutate?.()} />;
+  }
+  if (error || !data) return <FileNotFound />;
 
   const showChunk = tab === FilePreviewTab.Chunk && !!chunkText;
   return (
@@ -76,7 +85,12 @@ const FilePreview = () => {
         <Markdown style={{ overflow: 'scroll', paddingInline: 8 }}>{chunkText}</Markdown>
       ) : (
         <Flexbox flex={1} paddingBlock={8} style={{ overflow: 'scroll' }}>
-          <FileViewer {...data} />
+          {/* Image editing and chunk highlights act on the viewer's own library file. */}
+          <FileViewer
+            {...data}
+            imageTools={fromSource ? undefined : <ImageEditTools />}
+            showChunkHighlights={!fromSource}
+          />
         </Flexbox>
       )}
     </Flexbox>

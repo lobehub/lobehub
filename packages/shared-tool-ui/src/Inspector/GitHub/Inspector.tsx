@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { GitBranch, Hash } from 'lucide-react';
 import { memo } from 'react';
 
@@ -220,14 +220,16 @@ const GitHubInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>>
     const { branch, primary } = pickChip(effectiveArgs);
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={inspectorTextStyles.root}>
         <GitHubMark />
-        <span className={styles.productPrefix}>GitHub</span>
+        <span
+          className={cx(
+            styles.productPrefix,
+            (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
+          )}
+        >
+          GitHub
+        </span>
         <span className={styles.chip}>
           <span className={styles.chipAction}>{label}</span>
           {primary && (

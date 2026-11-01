@@ -3,7 +3,15 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentOperations, messages, sessions, threads, topics, users } from '../../schemas';
+import {
+  agentOperations,
+  messages,
+  sessions,
+  threads,
+  topics,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ThreadModel } from '../thread';
 
@@ -279,6 +287,20 @@ describe('ThreadModel', () => {
 
       expect(result.map((thread) => thread.id)).toEqual(['visible-subagent-thread']);
     });
+
+    it('hides marked onboarding Understanding writing threads from topic thread lists', async () => {
+      await serverDB.insert(threads).values({
+        id: 'understanding-thread',
+        metadata: { onboardingUnderstanding: { kind: 'writing' } },
+        status: ThreadStatus.Pending,
+        topicId,
+        type: ThreadType.Isolation,
+        userId,
+      });
+
+      expect(await threadModel.queryByTopicId(topicId)).toEqual([]);
+      expect(await threadModel.findById('understanding-thread')).toBeDefined();
+    });
   });
 
   describe('findById', () => {
@@ -370,6 +392,92 @@ describe('ThreadModel', () => {
     });
   });
 
+  describe('claimForRun', () => {
+    const insertThread = (values: Partial<typeof threads.$inferInsert> = {}) =>
+      serverDB.insert(threads).values({
+        id: 'thread-claim',
+        metadata: { operationId: 'op-old' },
+        status: ThreadStatus.Failed,
+        topicId,
+        type: ThreadType.Isolation,
+        userId,
+        ...values,
+      });
+
+    it('moves the thread to processing when it still matches the validated run', async () => {
+      await insertThread();
+
+      const claimed = await threadModel.claimForRun(
+        'thread-claim',
+        { operationId: 'op-old', status: ThreadStatus.Failed },
+        { startedAt: '2026-09-25T00:00:00.000Z' },
+      );
+
+      const row = await serverDB.query.threads.findFirst({ where: eq(threads.id, 'thread-claim') });
+      expect(claimed).toBe(true);
+      expect(row?.status).toBe(ThreadStatus.Processing);
+      expect(row?.metadata).toEqual({ startedAt: '2026-09-25T00:00:00.000Z' });
+    });
+
+    it('lets only one of two concurrent claims win', async () => {
+      await insertThread();
+      const expected = { operationId: 'op-old', status: ThreadStatus.Failed };
+
+      const results = await Promise.all([
+        threadModel.claimForRun('thread-claim', expected, { startedAt: 'a' }),
+        threadModel.claimForRun('thread-claim', expected, { startedAt: 'b' }),
+      ]);
+
+      expect(results.filter(Boolean)).toHaveLength(1);
+    });
+
+    it('refuses when the thread moved on since it was read', async () => {
+      await insertThread({ metadata: { operationId: 'op-new' } });
+
+      await expect(
+        threadModel.claimForRun(
+          'thread-claim',
+          { operationId: 'op-old', status: ThreadStatus.Failed },
+          { startedAt: 'a' },
+        ),
+      ).resolves.toBe(false);
+    });
+
+    it('matches a thread that never recorded a run id', async () => {
+      await insertThread({ metadata: null, status: ThreadStatus.Active });
+
+      await expect(
+        threadModel.claimForRun(
+          'thread-claim',
+          { status: ThreadStatus.Active },
+          { startedAt: 'a' },
+        ),
+      ).resolves.toBe(true);
+    });
+
+    it('does not claim a thread owned by another user', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(topics).values({ id: 'other-topic', userId: otherUserId });
+        await tx.insert(threads).values({
+          id: 'thread-other',
+          metadata: { operationId: 'op-old' },
+          status: ThreadStatus.Failed,
+          topicId: 'other-topic',
+          type: ThreadType.Isolation,
+          userId: otherUserId,
+        });
+      });
+
+      await expect(
+        threadModel.claimForRun(
+          'thread-other',
+          { operationId: 'op-old', status: ThreadStatus.Failed },
+          { startedAt: 'a' },
+        ),
+      ).resolves.toBe(false);
+    });
+  });
+
   describe('delete', () => {
     it('should delete a thread', async () => {
       await serverDB.insert(threads).values({
@@ -450,6 +558,48 @@ describe('ThreadModel', () => {
 
       expect(userThreads).toHaveLength(0);
       expect(otherUserThreads).toHaveLength(1);
+    });
+
+    it('should only clear the caller own threads in workspace mode', async () => {
+      const workspaceId = 'thread-delete-workspace';
+      const workspaceThreadModel = new ThreadModel(serverDB, userId, workspaceId);
+
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(workspaces).values({
+          id: workspaceId,
+          name: 'Thread Delete Workspace',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await tx.insert(topics).values({ id: 'ws-topic', userId, workspaceId });
+        await tx.insert(threads).values([
+          {
+            id: 'ws-thread-mine',
+            topicId: 'ws-topic',
+            type: ThreadType.Standalone,
+            status: ThreadStatus.Active,
+            userId,
+            workspaceId,
+          },
+          {
+            id: 'ws-thread-other',
+            topicId: 'ws-topic',
+            type: ThreadType.Standalone,
+            status: ThreadStatus.Active,
+            userId: otherUserId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      await workspaceThreadModel.deleteAll();
+
+      const remaining = await serverDB
+        .select()
+        .from(threads)
+        .where(eq(threads.workspaceId, workspaceId));
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].userId).toBe(otherUserId);
     });
   });
 });

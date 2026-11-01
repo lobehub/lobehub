@@ -1,15 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import AsyncBoundary from './index';
-
-// Stub the base-ui Button (the failure state's Retry) to a native button — it
-// needs a MotionProvider the app sets up globally but the unit env doesn't; the
-// state-machine assertions only care that a button is/isn't present. vitest
-// hoists this above the imports regardless of position.
-vi.mock('@lobehub/ui/base-ui', () => ({
-  Button: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
-}));
 
 const DATA = <div>DATA_CONTENT</div>;
 const EMPTY = <div>EMPTY_ONBOARDING</div>;
@@ -127,4 +119,26 @@ describe('AsyncBoundary', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(screen.queryByText('EMPTY_ONBOARDING')).not.toBeInTheDocument();
   });
+
+  it.each(['inline', 'metric'] as const)(
+    'forwards Retry through the %s error variant',
+    (errorVariant) => {
+      const onRetry = vi.fn();
+
+      render(
+        <AsyncBoundary
+          data={undefined}
+          error={new Error('boom')}
+          errorVariant={errorVariant}
+          onRetry={onRetry}
+        >
+          {DATA}
+        </AsyncBoundary>,
+      );
+
+      fireEvent.click(screen.getByRole('button'));
+
+      expect(onRetry).toHaveBeenCalledTimes(1);
+    },
+  );
 });

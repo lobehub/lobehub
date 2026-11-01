@@ -1,24 +1,16 @@
 'use client';
 
-import { memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 
-import Loading from '@/components/Loading/BrandTextLoading';
 import AgentDocumentPage from '@/features/AgentDocumentPage';
 import { getIdFromIdentifier } from '@/utils/identifier';
 
-const AgentDocumentRoute = memo(() => {
+const AgentDocumentRoute = () => {
   const { docId } = useParams<{ docId: string }>();
   const documentId = getIdFromIdentifier(docId ?? '', 'docs');
 
-  return (
-    <Suspense fallback={<Loading debugId="AgentDocumentRoute" />}>
-      {/* key remounts the editor when switching between documents */}
-      <AgentDocumentPage documentId={documentId} key={documentId} />
-    </Suspense>
-  );
-});
-
-AgentDocumentRoute.displayName = 'AgentDocumentRoute';
+  // key remounts the editor when switching between documents
+  return <AgentDocumentPage documentId={documentId} key={documentId} />;
+};
 
 export default AgentDocumentRoute;

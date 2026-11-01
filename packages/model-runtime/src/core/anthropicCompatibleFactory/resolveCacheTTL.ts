@@ -4,7 +4,8 @@ import type { ChatStreamPayload } from '../../types';
 
 type CacheTTL = Anthropic.Messages.CacheControlEphemeral['ttl'];
 
-const DEFAULT_CACHE_TTL = '5m' as const;
+/** Anthropic caches for 5 minutes unless a request asks for `1h`. */
+export const DEFAULT_CACHE_TTL = '5m' as const;
 /**
  * Resolves cache TTL from Anthropic payload or request settings
  * Returns the first valid TTL found in system messages or content blocks

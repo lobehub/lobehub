@@ -1,17 +1,44 @@
 packages:
   - '../../packages/agent-gateway-client'
+  - '../../packages/agent-tracing'
   - '../../packages/device-control'
+  - '../../packages/device-sandbox'
   - '../../packages/device-gateway-client'
   - '../../packages/device-identity'
   - '../../packages/heterogeneous-agents'
+  - '../../packages/html-artifact'
   - '../../packages/local-file-shell'
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
   - '../../packages/const'
+  - '../../packages/eval-rubric'
   - '../../packages/types'
   - '../../packages/model-bank'
+  - '../../packages/ssrf-safe-fetch'
   - '../../packages/business/const'
   - '../../packages/file-loaders'
+  - '../../packages/html-artifact'
+  - '../../packages/utils'
   - '.'
+
+lockfile: false
+ignoreWorkspaceRootCheck: true
+
+publicHoistPattern:
+  - '*@umijs/lint*'
+  - '*unicorn*'
+  - '*changelog*'
+  - '*commitlint*'
+  - '*eslint*'
+  - '*postcss*'
+  - '*prettier*'
+  - '*remark*'
+  - '*semantic-release*'
+  - '*stylelint*'
+
 allowBuilds:
   esbuild: true
+
+overrides:
+  '@types/react': 19.2.13
+  antd: 6.3.5

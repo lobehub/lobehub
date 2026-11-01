@@ -2,6 +2,7 @@
 // fs-heavy machinery into the Next.js server bundle, and its dynamic
 // `process.cwd()`-rooted fs calls make Vercel's file tracing pull the whole
 // repo source tree into every serverless function (250 MB limit blowout).
+import { isPersistentSandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   buildHeteroExecStdinPayload,
   type HeteroExecImageRef,
@@ -11,6 +12,7 @@ import debug from 'debug';
 import { appEnv } from '@/envs/app';
 import type { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
+import type { SandboxSessionConfig } from '@/server/services/sandbox/session';
 
 const log = debug('lobe-server:hetero-sandbox-runner');
 
@@ -40,7 +42,19 @@ export interface SandboxRunParams {
   prompt: string;
   /** GitHub repos to clone before running the agent (e.g. ['owner/repo', ...]). */
   repos?: string[];
+  /** Full system context used only by the automatic retry without native resume. */
+  resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
+  /**
+   * Where this run keeps its files — the topic's persistence preferences as
+   * `resolveSandboxSessionConfig` resolved them. Absent means the throwaway
+   * sandbox every run used before persistence existed. The entitlement itself
+   * travels on `marketService`'s trust token, not here.
+   */
+  sandbox?: Pick<
+    SandboxSessionConfig,
+    'cwd' | 'environment' | 'initialization' | 'mode' | 'specification' | 'workingDir'
+  >;
   /**
    * Optional context injected as a text block BEFORE the user's prompt.
    * Useful for priming CC with workspace state (cloned repos, env info, etc.).
@@ -49,6 +63,8 @@ export interface SandboxRunParams {
   systemContext?: string;
   topicId: string;
   userId: string;
+  /** Topic/run workspace — injected as `LOBEHUB_WORKSPACE_ID` for ingest. */
+  workspaceId?: string;
 }
 
 /**
@@ -141,15 +157,26 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     prompt,
     repos,
     resumeSessionId,
+    sandbox,
     topicId,
     userId,
+    workspaceId,
   } = params;
 
-  // For cloud sandbox, default cwd is /workspace — must be explicit so CC stores and
-  // finds session files at the same path on every invocation (session files live under
-  // ~/.claude/projects/<encoded-cwd>/). Without a consistent --cwd the session id stored
-  // in topic.metadata.heteroSessionId can't be resolved on --resume after a page reload.
-  const cwd = params.cwd ?? '/workspace';
+  // For the ephemeral sandbox the cwd is /workspace, and it must be explicit so
+  // CC stores and finds session files at the same path on every invocation
+  // (session files live under ~/.claude/projects/<encoded-cwd>/). Without a
+  // consistent --cwd the session id stored in topic.metadata.heteroSessionId
+  // can't be resolved on --resume after a page reload.
+  //
+  // A persistent run (a drive folder or an environment directory) gets NO
+  // --cwd: the execution plane starts every command inside that directory, and where it mounts the workspace is its
+  // business — a path spelled out here would be a second source of truth that
+  // can only drift. `lh` falls back to its process cwd, which is that
+  // directory, and it is the same one on every run of this topic, so session
+  // files stay findable exactly as they do under /workspace.
+  const persistent = isPersistentSandboxMode(sandbox?.mode);
+  const cwd = params.cwd ?? (persistent ? undefined : '/workspace');
 
   // Build the `lh hetero exec` command string.
   // Prompt is passed via --input-json stdin ('-') to avoid shell quoting issues
@@ -172,7 +199,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   if (resumeSessionId) {
     args.push('--resume', resumeSessionId);
   }
-  args.push('--cwd', cwd);
+  if (cwd) args.push('--cwd', cwd);
   args.push(...(extraArgs ?? []));
 
   // Encode the prompt as base64 to avoid all shell quoting issues.
@@ -182,7 +209,9 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   // changes required.
   const stdinPayload = buildHeteroExecStdinPayload({
     imageList: params.imageList,
+    isNewSession: !resumeSessionId,
     prompt,
+    resumeFallbackSystemContext: params.resumeFallbackSystemContext,
     systemContext: params.systemContext,
   });
   const base64Payload = Buffer.from(stdinPayload).toString('base64');
@@ -195,6 +224,7 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     `LOBEHUB_JWT=${shellQuote(jwt)}`,
     `LOBEHUB_SERVER=${shellQuote(serverUrl)}`,
     `LOBEHUB_ASSISTANT_MESSAGE_ID=${shellQuote(assistantMessageId)}`,
+    ...(workspaceId ? [`LOBEHUB_WORKSPACE_ID=${shellQuote(workspaceId)}`] : []),
     // Inject GitHub token so CC can authenticate git operations and GitHub API
     // calls inside the sandbox (e.g. gh CLI, git push, API requests).
     ...(githubToken ? [`GITHUB_TOKEN=${shellQuote(githubToken)}`] : []),
@@ -216,7 +246,17 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     topicId,
   );
 
-  const sandboxService = createSandboxService({ marketService, topicId, userId });
+  const sandboxService = createSandboxService({
+    marketService,
+    sandboxCwd: sandbox?.cwd,
+    sandboxInitialization: sandbox?.initialization,
+    sandboxInstanceId: sandbox?.environment,
+    sandboxMode: sandbox?.mode,
+    sandboxSpecification: sandbox?.specification,
+    sandboxWorkingDir: sandbox?.workingDir,
+    topicId,
+    userId,
+  });
   const result = await sandboxService.callTool('runCommand', {
     background: true,
     command: shellCommand,

@@ -1,9 +1,9 @@
 'use client';
 
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { type UIChatMessage } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import { ActionIcon, Avatar } from '@lobehub/ui';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, ChevronUp } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,7 +12,6 @@ import { ConversationProvider } from '@/features/Conversation';
 import InterventionContent from '@/features/Conversation/InterventionBar/InterventionContent';
 import InterventionTabBar from '@/features/Conversation/InterventionBar/InterventionTabBar';
 import MarkdownMessage from '@/features/Conversation/Markdown';
-import { type ConversationContext } from '@/features/Conversation/types';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -27,6 +26,11 @@ import { type GlobalApprovalGroup } from './useGlobalPendingApprovals';
 
 interface ApprovalCardProps {
   group: GlobalApprovalGroup;
+  /**
+   * Collapse the island to its pill. Lives in the card header so the "put this
+   * away and keep working" escape hatch is visible on the surface itself.
+   */
+  onCollapse?: () => void;
 }
 
 /**
@@ -36,7 +40,7 @@ interface ApprovalCardProps {
  * intervention UIs) operates on the right conversation without the user having
  * to switch into it.
  */
-const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
+const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
   const { context, interventions } = group;
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
@@ -44,26 +48,20 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
 
   const chatKey = useMemo(() => messageMapKey(context), [context]);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const handleMessagesChange = useCallback(
-    (next: UIChatMessage[], ctx: ConversationContext) => {
-      replaceMessages(next, { context: ctx });
-    },
-    [replaceMessages],
-  );
 
   const operationState = useOperationState(context);
   const meta = useAgentStore(agentSelectors.getAgentMetaById(context.agentId));
 
   // Topic title tells the user *which* conversation this approval belongs to.
-  // Read agent-scoped (not active-scoped) so a non-active conversation resolves.
-  const topicTitle = useChatStore((s) =>
-    context.topicId
-      ? topicSelectors
-          .getTopicsByAgentId(context.agentId)(s)
-          ?.find((tp) => tp.id === context.topicId)?.title
-      : undefined,
-  );
+  // A parked approval can belong to an older topic outside the agent's loaded
+  // sidebar page, so resolve across every topic cache and fetch the detail by
+  // id when it is still missing. Falling back to the agent name here makes two
+  // approvals from the same agent indistinguishable.
+  const [topicTitle, useFetchTopicDetail] = useChatStore((s) => [
+    context.topicId ? topicSelectors.getTopicById(context.topicId)(s)?.title : undefined,
+    s.useFetchTopicDetail,
+  ]);
+  useFetchTopicDetail(context.topicId && !topicTitle ? context.topicId : undefined);
 
   const [actionsPortalTarget, setActionsPortalTarget] = useState<HTMLDivElement | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -134,28 +132,18 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
   if (!activeIntervention) return null;
 
   return (
-    <ConversationProvider
-      skipFetch
-      context={context}
-      hasInitMessages={!!messages}
-      messages={messages}
-      operationState={operationState}
-      onMessagesChange={handleMessagesChange}
-    >
-      <div className={styles.card}>
+    <ConversationProvider skipFetch context={context} operationState={operationState}>
+      <div data-pending-hotkey-scope className={styles.card}>
         <div className={styles.header}>
           <Avatar
             avatar={meta.avatar}
             background={meta.backgroundColor}
             size={28}
-            title={meta.title}
+            title={agentDisplayName(meta)}
           />
           <div className={styles.headerMeta}>
-            <div className={styles.headerTitle}>
-              {topicTitle || meta.title || t('globalApproval.title')}
-            </div>
             <div className={styles.headerSubtitle}>
-              {meta.title ? `${meta.title} · ` : ''}
+              {agentDisplayName(meta) && <span>{agentDisplayName(meta)}</span>}
               {t('globalApproval.subtitle')}
             </div>
           </div>
@@ -167,16 +155,24 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group }) => {
               onClick={handleGoToConversation}
             />
           )}
+          {onCollapse && (
+            <ActionIcon
+              icon={ChevronUp}
+              size="small"
+              title={t('globalApproval.collapse')}
+              onClick={onCollapse}
+            />
+          )}
         </div>
 
-        {userRequest && (
-          <div className={styles.userRequest}>
-            <span className={styles.userRequestLabel}>{t('globalApproval.userRequestLabel')}</span>
+        <div className={styles.requestContext}>
+          <div className={styles.headerTitle}>{topicTitle || t('globalApproval.title')}</div>
+          {userRequest && (
             <div className={styles.userRequestBody}>
               <MarkdownMessage>{userRequest}</MarkdownMessage>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {interventions.length > 1 && (
           <InterventionTabBar

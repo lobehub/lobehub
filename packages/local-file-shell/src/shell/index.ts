@@ -1,5 +1,32 @@
+export type {
+  ShellBackend,
+  ShellBackendCapabilities,
+  ShellHandle,
+  ShellLaunchCommand,
+  ShellOutputChunk,
+  ShellOutputFile,
+  ShellOutputFiles,
+  ShellSpawnOptions,
+} from './backend';
+export { ChildProcessBackend } from './child-process-backend';
+export { decodeClixml } from './clixml';
+export { executeDeviceOperation } from './deviceOperation';
 export type { ShellProcess } from './process-manager';
 export { ShellProcessManager } from './process-manager';
 export type { RunCommandOptions } from './runner';
 export { runCommand } from './runner';
-export { buildOutputPreview, getShellConfig, INLINE_OUTPUT_MAX_BYTES } from './utils';
+export {
+  buildOutputPreview,
+  detectWindowsShell,
+  findGitBash,
+  getShellConfig,
+  getShellInfo,
+  getWindowsShellPreference,
+  INLINE_OUTPUT_MAX_BYTES,
+  normalizeEnvVarRefs,
+  resetShellDetectionCache,
+  setWindowsShellPreference,
+  type ShellInfo,
+  type WindowsShellPreference,
+  type WindowsShellType,
+} from './utils';

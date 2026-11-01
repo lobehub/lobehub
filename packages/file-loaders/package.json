@@ -9,13 +9,13 @@
     "parser",
     "lobehub"
   ],
-  "homepage": "https://github.com/lobehub/lobe-chat/tree/master/packages/file-loaders",
+  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/file-loaders",
   "bugs": {
-    "url": "https://github.com/lobehub/lobe-chat/issues/new"
+    "url": "https://github.com/lobehub/lobehub/issues/new"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/lobehub/lobe-chat.git"
+    "url": "https://github.com/lobehub/lobehub.git"
   },
   "author": "LobeHub <i@lobehub.com>",
   "sideEffects": false,
@@ -25,7 +25,7 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.100",
+    "@lobechat/utils": "workspace:*",
     "@xmldom/xmldom": "^0.9.10",
     "concat-stream": "^2.0.0",
     "debug": "^4.4.3",

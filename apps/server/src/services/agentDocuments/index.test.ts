@@ -1,18 +1,20 @@
 // @vitest-environment node
 import { AGENT_DOCUMENT_FILE_TYPE } from '@lobechat/const';
+import { DOCUMENT_FOLDER_TYPE } from '@lobechat/database/schemas';
+import { FileSource } from '@lobechat/types';
+import { createHeadlessEditor } from '@lobehub/editor/headless';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
-import {
-  AgentDocumentModel,
-  buildDocumentFilename,
-  extractMarkdownH1Title,
-} from '@/database/models/agentDocuments';
+import type * as AgentDocumentsModels from '@/database/models/agentDocuments';
+import { AgentDocumentModel, buildDocumentFilename } from '@/database/models/agentDocuments';
 import { AgentSkillModel } from '@/database/models/agentSkill';
+import { FileModel } from '@/database/models/file';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { DocumentService } from '../document';
+import { FileService } from '../file';
 import { SkillResourceService } from '../skill/resource';
 import { AgentDocumentsService } from './index';
 
@@ -21,14 +23,16 @@ const headlessEditorMocks = vi.hoisted(() => ({
   applyLiteXMLBatch: vi.fn(),
 }));
 
-vi.mock('@/database/models/agentDocuments', () => ({
+vi.mock('@/database/models/agentDocuments', async (importOriginal) => ({
+  // Spread the real module so pure helpers (e.g. extractMarkdownH1Title) keep
+  // their production behavior while the model classes stay mocked.
+  ...(await importOriginal<typeof AgentDocumentsModels>()),
   AgentDocumentModel: vi.fn(),
   DocumentLoadPosition: {
     BEFORE_FIRST_USER: 'before_first_user',
   },
   buildDocumentFilename: vi.fn(),
   deriveAgentDocumentFields: vi.fn(() => ({})),
-  extractMarkdownH1Title: vi.fn((content: string) => ({ content })),
 }));
 
 vi.mock('@/database/models/agent', () => ({
@@ -43,8 +47,16 @@ vi.mock('@/database/models/topicDocument', () => ({
   TopicDocumentModel: vi.fn(),
 }));
 
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn(),
+}));
+
 vi.mock('../document', () => ({
   DocumentService: vi.fn(),
+}));
+
+vi.mock('../file', () => ({
+  FileService: vi.fn(),
 }));
 
 vi.mock('../skill/resource', () => ({
@@ -52,6 +64,7 @@ vi.mock('../skill/resource', () => ({
 }));
 
 vi.mock('@lobehub/editor/headless', () => ({
+  DEFAULT_HEADLESS_EDITOR_PLUGINS: [],
   createHeadlessEditor: vi.fn(() => {
     let markdown = '';
     let litexml = '<p id="node-1">content</p>';
@@ -73,8 +86,8 @@ vi.mock('@lobehub/editor/headless', () => ({
         litexml: options?.litexml ? litexml : undefined,
         markdown,
       })),
-      hydrateEditorData: vi.fn(() => {
-        markdown = 'projected';
+      hydrateEditorData: vi.fn((editorData: { root?: { recoverFromMarkdown?: boolean } }) => {
+        markdown = editorData.root?.recoverFromMarkdown ? '' : 'projected';
       }),
       hydrateMarkdown: vi.fn((content: string) => {
         markdown = content;
@@ -83,6 +96,10 @@ vi.mock('@lobehub/editor/headless', () => ({
   }),
 }));
 
+const FOLDER_ROW_ID = '23d908ac-0a43-440d-a67f-1f57b8427c53';
+const DOC_ROW_ID = 'ae743612-eef4-4c46-879f-9db9c346e760';
+const SKILL_ROW_ID = '8716f7a5-1234-4d35-80fd-5d4354f1a439';
+
 describe('AgentDocumentsService', () => {
   const db = {} as LobeChatDatabase;
   const userId = 'user-1';
@@ -90,10 +107,14 @@ describe('AgentDocumentsService', () => {
   const mockModel = {
     associate: vi.fn(),
     copy: vi.fn(),
+    countChildrenByParentIds: vi.fn(),
     create: vi.fn(),
+    delete: vi.fn(),
+    deleteSubtreeByDocumentId: vi.fn(),
     findById: vi.fn(),
     findByAgent: vi.fn(),
     findContextByAgent: vi.fn(),
+    findByDocumentId: vi.fn(),
     findByDocumentIds: vi.fn(),
     findByFilename: vi.fn(),
     findByParentAndFilename: vi.fn(),
@@ -101,8 +122,10 @@ describe('AgentDocumentsService', () => {
     hasByAgent: vi.fn(),
     listByAgent: vi.fn(),
     listByDocumentIds: vi.fn(),
+    movePath: vi.fn(),
     rename: vi.fn(),
     update: vi.fn(),
+    updateEditorSnapshotIfUnchanged: vi.fn(),
     upsert: vi.fn(),
   };
   const mockDocumentService = {
@@ -110,6 +133,13 @@ describe('AgentDocumentsService', () => {
     deleteDocument: vi.fn(),
     trySaveCurrentDocumentHistory: vi.fn(),
     updateDocument: vi.fn(),
+  };
+  const mockFileModel = {
+    findById: vi.fn(),
+  };
+  const mockFileService = {
+    getFileContent: vi.fn(),
+    removeUnreferencedFile: vi.fn().mockResolvedValue(undefined),
   };
   const mockAgentModel = {
     getAgentConfigById: vi.fn(),
@@ -129,19 +159,56 @@ describe('AgentDocumentsService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    (AgentDocumentModel as any).mockImplementation(() => mockModel);
-    (AgentModel as any).mockImplementation(() => mockAgentModel);
-    (AgentSkillModel as any).mockImplementation(() => mockSkillModel);
-    (DocumentService as any).mockImplementation(() => mockDocumentService);
-    (SkillResourceService as any).mockImplementation(() => mockSkillResourceService);
-    (TopicDocumentModel as any).mockImplementation(() => mockTopicDocumentModel);
+    mockModel.updateEditorSnapshotIfUnchanged.mockResolvedValue(true);
+    mockModel.countChildrenByParentIds.mockResolvedValue(new Map());
+    (AgentDocumentModel as any).mockImplementation(function () {
+      return mockModel;
+    });
+    (AgentModel as any).mockImplementation(function () {
+      return mockAgentModel;
+    });
+    (AgentSkillModel as any).mockImplementation(function () {
+      return mockSkillModel;
+    });
+    (DocumentService as any).mockImplementation(function () {
+      return mockDocumentService;
+    });
+    (FileModel as any).mockImplementation(function () {
+      return mockFileModel;
+    });
+    (FileService as any).mockImplementation(function () {
+      return mockFileService;
+    });
+    (SkillResourceService as any).mockImplementation(function () {
+      return mockSkillResourceService;
+    });
+    (TopicDocumentModel as any).mockImplementation(function () {
+      return mockTopicDocumentModel;
+    });
     vi.mocked(buildDocumentFilename).mockImplementation((title: string) => title);
-    vi.mocked(extractMarkdownH1Title).mockImplementation((content: string) => ({ content }));
   });
 
   describe('createDocument', () => {
+    /** @example Native document creation works without object-storage configuration. */
+    it('does not initialize file storage when creating a native document', async () => {
+      // ROOT CAUSE:
+      // Eager cleanup-service construction made ordinary agent operations require S3.
+      // Storage must only initialize when an operation actually needs file cleanup.
+      vi.mocked(FileService).mockImplementationOnce(function () {
+        throw new Error('Storage is not configured');
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'native-document' });
+      const service = new AgentDocumentsService(db, userId);
+      /** @example Creating text content never contacts storage. */
+      await expect(service.createDocument('agent-1', 'Note', 'hello')).resolves.toBeDefined();
+      /** @example The storage dependency stays uninitialized. */
+      expect(FileService).not.toHaveBeenCalled();
+      vi.mocked(FileService).mockReset();
+    });
+
     it('should append a numeric suffix when the base filename already exists', async () => {
-      mockModel.findByFilename
+      mockModel.findByParentAndFilename
         .mockResolvedValueOnce({ id: 'existing-doc' })
         .mockResolvedValueOnce(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'note-2' });
@@ -149,8 +216,13 @@ describe('AgentDocumentsService', () => {
       const service = new AgentDocumentsService(db, userId);
       const result = await service.createDocument('agent-1', 'note', 'content');
 
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(1, 'agent-1', 'note');
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(2, 'agent-1', 'note-2');
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(1, 'agent-1', null, 'note');
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(
+        2,
+        'agent-1',
+        null,
+        'note-2',
+      );
       expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'note-2', 'content', {
         editorData: { root: { children: [] } },
         title: 'note',
@@ -159,13 +231,13 @@ describe('AgentDocumentsService', () => {
     });
 
     it('should preserve an explicit filename extension', async () => {
-      mockModel.findByFilename.mockResolvedValueOnce(undefined);
+      mockModel.findByParentAndFilename.mockResolvedValueOnce(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'notes.txt' });
 
       const service = new AgentDocumentsService(db, userId);
       await service.createDocument('agent-1', 'notes.txt', 'content');
 
-      expect(mockModel.findByFilename).toHaveBeenCalledWith('agent-1', 'notes.txt');
+      expect(mockModel.findByParentAndFilename).toHaveBeenCalledWith('agent-1', null, 'notes.txt');
       expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'notes.txt', 'content', {
         editorData: { root: { children: [] } },
         title: 'notes.txt',
@@ -173,7 +245,7 @@ describe('AgentDocumentsService', () => {
     });
 
     it('should append collision suffix before the filename extension', async () => {
-      mockModel.findByFilename
+      mockModel.findByParentAndFilename
         .mockResolvedValueOnce({ id: 'existing-doc' })
         .mockResolvedValueOnce(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Untitled document-2.md' });
@@ -181,14 +253,16 @@ describe('AgentDocumentsService', () => {
       const service = new AgentDocumentsService(db, userId);
       const result = await service.createDocument('agent-1', 'Untitled document.md', 'content');
 
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(
         1,
         'agent-1',
+        null,
         'Untitled document.md',
       );
-      expect(mockModel.findByFilename).toHaveBeenNthCalledWith(
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(
         2,
         'agent-1',
+        null,
         'Untitled document-2.md',
       );
       expect(mockModel.create).toHaveBeenCalledWith(
@@ -204,7 +278,7 @@ describe('AgentDocumentsService', () => {
     });
 
     it('should throw after too many filename collisions', async () => {
-      mockModel.findByFilename.mockResolvedValue({ id: 'existing-doc' });
+      mockModel.findByParentAndFilename.mockResolvedValue({ id: 'existing-doc' });
 
       const service = new AgentDocumentsService(db, userId);
 
@@ -214,16 +288,116 @@ describe('AgentDocumentsService', () => {
       expect(mockModel.create).not.toHaveBeenCalled();
     });
 
-    it('should extract H1 from markdown content as the document title', async () => {
-      vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
-        content: 'body',
-        title: 'My Title',
+    it('removes a leading H1 even when it differs from the explicit title', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'G-2D-CIERRE-20260922-1101' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument(
+        'agent-1',
+        'G-2D-CIERRE-20260922-1101',
+        '# FASE G-2D — INFORME DE CIERRE\n\nbody',
+      );
+
+      expect(vi.mocked(buildDocumentFilename)).toHaveBeenCalledWith('G-2D-CIERRE-20260922-1101');
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        'G-2D-CIERRE-20260922-1101',
+        'body',
+        {
+          editorData: { root: { children: [] } },
+          title: 'G-2D-CIERRE-20260922-1101',
+        },
+      );
+    });
+
+    it('names the document from its H1 when the tool call omits the title', async () => {
+      // Seen in production after #19969: a model sent only `content`, and
+      // `title.trim()` threw "Cannot read properties of undefined (reading 'trim')".
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Research Notes V2' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument(
+        'agent-1',
+        undefined as unknown as string,
+        '# Research Notes V2\n\nbody',
+      );
+
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'Research Notes V2', 'body', {
+        editorData: { root: { children: [] } },
+        title: 'Research Notes V2',
       });
-      mockModel.findByFilename.mockResolvedValue(undefined);
+    });
+
+    it('strips an H1 that duplicates the explicit title', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'My Title' });
 
       const service = new AgentDocumentsService(db, userId);
-      await service.createDocument('agent-1', 'fallback', '# My Title\n\nbody');
+      await service.createDocument('agent-1', 'My Title', '# My Title\n\nbody');
+
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'My Title', 'body', {
+        editorData: { root: { children: [] } },
+        title: 'My Title',
+      });
+    });
+
+    it('strips a near-duplicate H1 when the title carries a suffix', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: '任务验证未通过汇总' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument(
+        'agent-1',
+        '任务验证未通过汇总（T-77-T-312）',
+        '# 任务验证未通过汇总\n\nbody',
+      );
+
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        '任务验证未通过汇总（T-77-T-312）',
+        'body',
+        {
+          editorData: { root: { children: [] } },
+          title: '任务验证未通过汇总（T-77-T-312）',
+        },
+      );
+    });
+
+    it('removes a leading H1 that differs from the explicit title', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Doc' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', 'Doc', '# 一、总体结论\n\nbody');
+
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'Doc', 'body', {
+        editorData: { root: { children: [] } },
+        title: 'Doc',
+      });
+    });
+
+    it('keeps H1 headings that appear after other body content', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Doc' });
+
+      const service = new AgentDocumentsService(db, userId);
+      const content = 'intro\n\n# Echoes the title\n\n## Keep me\n\nbody';
+      await service.createDocument('agent-1', 'Doc', content);
+
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'Doc', content, {
+        editorData: { root: { children: [] } },
+        title: 'Doc',
+      });
+    });
+
+    it('falls back to the H1 as the title when no title is given', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'My Title' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', '  ', '# My Title\n\nbody');
 
       expect(vi.mocked(buildDocumentFilename)).toHaveBeenCalledWith('My Title');
       expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'My Title', 'body', {
@@ -232,8 +406,19 @@ describe('AgentDocumentsService', () => {
       });
     });
 
+    it('rejects LiteXML content instead of creating an empty document', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(
+        service.createDocument('agent-1', 'Doc', '<?xml version="1.0"?>\n<root><p>Body</p></root>'),
+      ).rejects.toThrow('looks like LiteXML');
+      expect(mockModel.create).not.toHaveBeenCalled();
+    });
+
     it('persists agent signal skill hints in document metadata', async () => {
-      mockModel.findByFilename.mockResolvedValue(undefined);
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Reusable Procedure' });
 
       const service = new AgentDocumentsService(db, userId);
@@ -255,11 +440,318 @@ describe('AgentDocumentsService', () => {
         }),
       );
     });
+
+    it('creates a document under a parent folder and scopes filename collisions to it', async () => {
+      mockModel.findByDocumentId.mockResolvedValue({
+        agentId: 'agent-1',
+        documentId: 'folder-doc-id',
+        fileType: DOCUMENT_FOLDER_TYPE,
+        id: 'folder-agent-doc-id',
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'note' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', 'note', 'content', {
+        parentId: 'folder-doc-id',
+      });
+
+      expect(mockModel.findByParentAndFilename).toHaveBeenCalledWith(
+        'agent-1',
+        'folder-doc-id',
+        'note',
+      );
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'note', 'content', {
+        editorData: { root: { children: [] } },
+        parentId: 'folder-doc-id',
+        title: 'note',
+      });
+    });
+
+    // A workflow document holds its run records: an ordinary document is a valid parent.
+    it('creates under an ordinary document parent', async () => {
+      mockModel.findByDocumentId.mockResolvedValue({
+        agentId: 'agent-1',
+        documentId: 'sop-doc-id',
+        fileType: 'agent/document',
+        id: 'sop-agent-doc-id',
+        sourceType: 'agent',
+        templateId: null,
+        title: 'Vent fix-round SOP',
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'run' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', 'run', 'content', { parentId: 'sop-doc-id' });
+
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        'run',
+        'content',
+        expect.objectContaining({ parentId: 'sop-doc-id' }),
+      );
+    });
+
+    it.each([
+      ['a skill', { fileType: 'skills/index' }],
+      ['a web clip', { fileType: 'agent/document', sourceType: 'web' }],
+    ])('rejects %s as parent', async (_label, overrides) => {
+      mockModel.findByDocumentId.mockResolvedValue({
+        agentId: 'agent-1',
+        documentId: 'other-doc-id',
+        id: 'other-agent-doc-id',
+        sourceType: 'agent',
+        templateId: null,
+        title: 'Other',
+        ...overrides,
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(
+        service.createDocument('agent-1', 'note', 'content', { parentId: 'other-doc-id' }),
+      ).rejects.toThrow('cannot contain other documents');
+      expect(mockModel.create).not.toHaveBeenCalled();
+    });
+
+    it('accepts the folder agent-document row id as parentId', async () => {
+      mockModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        documentId: 'folder-doc-id',
+        fileType: DOCUMENT_FOLDER_TYPE,
+        id: FOLDER_ROW_ID,
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'note' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', 'note', 'content', { parentId: FOLDER_ROW_ID });
+
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        'note',
+        'content',
+        expect.objectContaining({ parentId: 'folder-doc-id' }),
+      );
+    });
+  });
+
+  describe('folders', () => {
+    const folder = {
+      agentId: 'agent-1',
+      documentId: 'docs_folder',
+      fileType: DOCUMENT_FOLDER_TYPE,
+      filename: 'P95 Reports',
+      id: FOLDER_ROW_ID,
+      parentId: null,
+      title: 'P95 Reports',
+    };
+    const doc = (overrides: Record<string, unknown> = {}) => ({
+      agentId: 'agent-1',
+      documentId: 'docs_a',
+      fileType: 'agent/document',
+      filename: 'P95 Report — 2026-10-10',
+      id: DOC_ROW_ID,
+      parentId: null,
+      templateId: null,
+      title: 'P95 Report — 2026-10-10',
+      ...overrides,
+    });
+
+    describe('resolveParent', () => {
+      it('resolves a folder by its documents id or its agent-document row id', async () => {
+        mockModel.findByDocumentId.mockResolvedValue(folder);
+        mockModel.findById.mockResolvedValue(folder);
+        const service = new AgentDocumentsService(db, userId);
+
+        await expect(service.resolveParent('agent-1', 'docs_folder')).resolves.toBe(folder);
+        await expect(service.resolveParent('agent-1', FOLDER_ROW_ID)).resolves.toBe(folder);
+        expect(mockModel.findByDocumentId).toHaveBeenCalledWith('agent-1', 'docs_folder');
+        expect(mockModel.findById).toHaveBeenCalledWith(FOLDER_ROW_ID);
+      });
+
+      it('throws instead of resolving a folder owned by another agent', async () => {
+        mockModel.findById.mockResolvedValue({ ...folder, agentId: 'agent-2' });
+        const service = new AgentDocumentsService(db, userId);
+
+        await expect(service.resolveParent('agent-1', FOLDER_ROW_ID)).rejects.toThrow(
+          `Parent not found: ${FOLDER_ROW_ID}`,
+        );
+      });
+    });
+
+    describe('createFolder', () => {
+      it('creates a folder under the resolved parent', async () => {
+        mockModel.findByDocumentId.mockResolvedValue(folder);
+        mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+        mockModel.create.mockResolvedValue({ ...folder, documentId: 'docs_new', id: 'new' });
+        const service = new AgentDocumentsService(db, userId);
+
+        const result = await service.createFolder('agent-1', ' 2026-10 ', 'docs_folder');
+
+        expect(result.created).toBe(true);
+        expect(mockModel.create).toHaveBeenCalledWith('agent-1', '2026-10', '', {
+          fileType: DOCUMENT_FOLDER_TYPE,
+          parentId: 'docs_folder',
+          title: '2026-10',
+        });
+      });
+
+      it('reuses an existing folder with the same name instead of duplicating it', async () => {
+        mockModel.findByParentAndFilename.mockResolvedValue(folder);
+        const service = new AgentDocumentsService(db, userId);
+
+        const result = await service.createFolder('agent-1', 'P95 Reports');
+
+        expect(result).toEqual({ created: false, folder });
+        expect(mockModel.findByParentAndFilename).toHaveBeenCalledWith(
+          'agent-1',
+          null,
+          'P95 Reports',
+        );
+        expect(mockModel.create).not.toHaveBeenCalled();
+      });
+
+      it('refuses a name taken by a document, or a name with a path separator', async () => {
+        mockModel.findByParentAndFilename.mockResolvedValue(doc({ filename: 'Notes' }));
+        const service = new AgentDocumentsService(db, userId);
+
+        await expect(service.createFolder('agent-1', 'Notes')).rejects.toThrow('already exists');
+        await expect(service.createFolder('agent-1', 'a/b')).rejects.toThrow('cannot contain');
+        expect(mockModel.create).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('moveDocuments', () => {
+      beforeEach(() => {
+        mockModel.findByDocumentId.mockImplementation(async (_agentId: string, id: string) =>
+          id === folder.documentId ? folder : undefined,
+        );
+        mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+        mockModel.movePath = vi.fn(async (id: string) => ({ id }));
+      });
+
+      it('moves a document into the folder and keeps its title', async () => {
+        mockModel.findById.mockImplementation(async (id: string) =>
+          id === FOLDER_ROW_ID ? folder : doc(),
+        );
+        const service = new AgentDocumentsService(db, userId);
+
+        const results = await service.moveDocuments('agent-1', [DOC_ROW_ID], FOLDER_ROW_ID);
+
+        expect(results).toEqual([
+          {
+            documentId: 'docs_a',
+            id: DOC_ROW_ID,
+            status: 'moved',
+            title: 'P95 Report — 2026-10-10',
+          },
+        ]);
+        expect(mockModel.movePath).toHaveBeenCalledWith(DOC_ROW_ID, {
+          filename: 'P95 Report — 2026-10-10',
+          parentId: 'docs_folder',
+          title: 'P95 Report — 2026-10-10',
+        });
+      });
+
+      it('reports each failure without stopping the rest', async () => {
+        mockModel.findById.mockImplementation(async (id: string) => {
+          if (id === DOC_ROW_ID) return doc();
+          if (id === SKILL_ROW_ID) return doc({ fileType: 'skills/index', id: SKILL_ROW_ID });
+          return undefined;
+        });
+        mockModel.findByParentAndFilename.mockImplementation(async () =>
+          doc({ id: 'other-row', parentId: 'docs_folder' }),
+        );
+        const service = new AgentDocumentsService(db, userId);
+
+        const results = await service.moveDocuments(
+          'agent-1',
+          [DOC_ROW_ID, SKILL_ROW_ID, 'docs_missing'],
+          'docs_folder',
+        );
+
+        expect(results.map((r) => [r.status, r.error])).toEqual([
+          ['failed', '"P95 Report — 2026-10-10" already exists in the destination folder.'],
+          ['failed', 'Skill documents cannot be moved.'],
+          ['failed', 'Document not found: docs_missing'],
+        ]);
+        expect(mockModel.movePath).not.toHaveBeenCalled();
+      });
+
+      it('leaves documents already in the destination untouched', async () => {
+        mockModel.findById.mockResolvedValue(doc({ parentId: 'docs_folder' }));
+        const service = new AgentDocumentsService(db, userId);
+
+        const [result] = await service.moveDocuments('agent-1', [DOC_ROW_ID], 'docs_folder');
+
+        expect(result.status).toBe('unchanged');
+        expect(mockModel.movePath).not.toHaveBeenCalled();
+      });
+
+      it('refuses to move a folder into its own subfolder', async () => {
+        const child = {
+          ...folder,
+          documentId: 'docs_child',
+          id: 'child-row',
+          parentId: 'docs_folder',
+        };
+        mockModel.findByDocumentId.mockImplementation(async (_agentId: string, id: string) =>
+          id === 'docs_child' ? child : id === 'docs_folder' ? folder : undefined,
+        );
+        mockModel.findById.mockResolvedValue(folder);
+        const service = new AgentDocumentsService(db, userId);
+
+        const [result] = await service.moveDocuments('agent-1', [FOLDER_ROW_ID], 'docs_child');
+
+        expect(result).toMatchObject({
+          error: 'Cannot move a document or folder under itself or one of its descendants.',
+          status: 'failed',
+        });
+        expect(mockModel.movePath).not.toHaveBeenCalled();
+      });
+
+      it('moves records under a workflow document', async () => {
+        const sop = doc({
+          documentId: 'docs_sop',
+          filename: 'Vent fix-round SOP',
+          id: 'sop-row',
+          title: 'Vent fix-round SOP',
+        });
+        mockModel.findByDocumentId.mockImplementation(async (_agentId: string, id: string) =>
+          id === 'docs_sop' ? sop : undefined,
+        );
+        mockModel.findById.mockResolvedValue(doc());
+        const service = new AgentDocumentsService(db, userId);
+
+        const [result] = await service.moveDocuments('agent-1', [DOC_ROW_ID], 'docs_sop');
+
+        expect(result.status).toBe('moved');
+        expect(mockModel.movePath).toHaveBeenCalledWith(
+          DOC_ROW_ID,
+          expect.objectContaining({ parentId: 'docs_sop' }),
+        );
+      });
+
+      it('moves to the root with a null parent', async () => {
+        mockModel.findById.mockResolvedValue(doc({ parentId: 'docs_folder' }));
+        const service = new AgentDocumentsService(db, userId);
+
+        const [result] = await service.moveDocuments('agent-1', [DOC_ROW_ID], null);
+
+        expect(result.status).toBe('moved');
+        expect(mockModel.movePath).toHaveBeenCalledWith(
+          DOC_ROW_ID,
+          expect.objectContaining({ parentId: null }),
+        );
+      });
+    });
   });
 
   describe('createForTopic', () => {
     it('should create an agent document and associate the underlying document with the topic', async () => {
-      mockModel.findByFilename.mockResolvedValue(undefined);
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({
         documentId: 'documents-1',
         filename: 'note',
@@ -280,6 +772,49 @@ describe('AgentDocumentsService', () => {
         documentId: 'documents-1',
         topicId: 'topic-1',
       });
+    });
+  });
+
+  describe('removeDocumentById', () => {
+    const parentDoc = {
+      agentId: 'agent-1',
+      content: '',
+      documentId: 'docs_sop',
+      fileType: 'agent/document',
+      id: DOC_ROW_ID,
+      title: 'Vent fix-round SOP',
+    };
+
+    it('refuses a document with nested children unless asked to take them', async () => {
+      mockModel.findById.mockResolvedValue(parentDoc);
+      mockModel.countChildrenByParentIds.mockResolvedValue(new Map([['docs_sop', 24]]));
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(service.removeDocumentById(DOC_ROW_ID, 'agent-1')).rejects.toThrow(
+        '"Vent fix-round SOP" has 24 nested document(s)',
+      );
+      expect(mockModel.delete).not.toHaveBeenCalled();
+      expect(mockModel.deleteSubtreeByDocumentId).not.toHaveBeenCalled();
+    });
+
+    it('deletes the whole subtree with withChildren', async () => {
+      mockModel.findById.mockResolvedValue(parentDoc);
+      mockModel.countChildrenByParentIds.mockResolvedValue(new Map([['docs_sop', 24]]));
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(
+        service.removeDocumentById(DOC_ROW_ID, 'agent-1', { withChildren: true }),
+      ).resolves.toBe(true);
+      expect(mockModel.deleteSubtreeByDocumentId).toHaveBeenCalledWith('agent-1', 'docs_sop');
+      expect(mockModel.delete).not.toHaveBeenCalled();
+    });
+
+    it('deletes a leaf document on its own', async () => {
+      mockModel.findById.mockResolvedValue(parentDoc);
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(service.removeDocumentById(DOC_ROW_ID, 'agent-1')).resolves.toBe(true);
+      expect(mockModel.delete).toHaveBeenCalledWith(DOC_ROW_ID);
     });
   });
 
@@ -343,6 +878,11 @@ describe('AgentDocumentsService', () => {
 
     it('should pass the parentId folder filter to the model', async () => {
       mockModel.listByAgent.mockResolvedValue([]);
+      mockModel.findByDocumentId.mockResolvedValue({
+        agentId: 'agent-1',
+        documentId: 'folder-1',
+        fileType: DOCUMENT_FOLDER_TYPE,
+      });
 
       const service = new AgentDocumentsService(db, userId);
       await service.listDocuments('agent-1', undefined, { parentId: 'folder-1' });
@@ -351,6 +891,36 @@ describe('AgentDocumentsService', () => {
         parentId: 'folder-1',
         sourceType: undefined,
       });
+    });
+
+    // An agent passed the folder's row uuid here and got an empty list back,
+    // which read as "the folder is empty".
+    it('resolves a folder row id to its documents id before filtering', async () => {
+      mockModel.listByAgent.mockResolvedValue([]);
+      mockModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        documentId: 'docs_tool_results',
+        fileType: DOCUMENT_FOLDER_TYPE,
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.listDocuments('agent-1', undefined, { parentId: FOLDER_ROW_ID });
+
+      expect(mockModel.listByAgent).toHaveBeenCalledWith('agent-1', {
+        parentId: 'docs_tool_results',
+        sourceType: undefined,
+      });
+    });
+
+    it('throws for an unknown folder instead of returning an empty list', async () => {
+      mockModel.findByDocumentId.mockResolvedValue(undefined);
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(
+        service.listDocuments('agent-1', undefined, { parentId: 'docs_gone' }),
+      ).rejects.toThrow('Parent not found: docs_gone');
+      expect(mockModel.listByAgent).not.toHaveBeenCalled();
     });
 
     it('should hide the .tool-results archive folder and its children by default', async () => {
@@ -567,25 +1137,170 @@ describe('AgentDocumentsService', () => {
   });
 
   describe('getDocumentSnapshotById', () => {
+    it('should persist repaired editor data so returned node IDs survive the next modify', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
+      const staleEditorData = {
+        root: {
+          children: [{ children: [], type: 'paragraph' }],
+          recoverFromMarkdown: true,
+          type: 'root',
+        },
+      };
+      const repairedEditorData = { root: { children: [] } };
+      const staleDocument = {
+        agentId: 'agent-1',
+        content: 'fallback content',
+        documentId: 'documents-1',
+        editorData: staleEditorData,
+        id: agentDocumentId,
+        title: 'Doc',
+      };
+      const repairedDocument = { ...staleDocument, editorData: repairedEditorData };
+      const modifiedDocument = {
+        ...repairedDocument,
+        content: 'xml updated',
+      };
+      mockModel.findById
+        .mockResolvedValueOnce(staleDocument)
+        .mockResolvedValueOnce(repairedDocument)
+        .mockResolvedValueOnce(modifiedDocument);
+      mockModel.updateEditorSnapshotIfUnchanged.mockResolvedValueOnce(true);
+
+      const service = new AgentDocumentsService(db, userId);
+      const readResult = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
+      const modifyResult = await service.modifyDocumentNodesById(
+        agentDocumentId,
+        [{ action: 'modify', litexml: '<p id="node-1">xml updated</p>' }],
+        'agent-1',
+      );
+
+      expect(mockModel.updateEditorSnapshotIfUnchanged).toHaveBeenCalledWith(
+        agentDocumentId,
+        { content: 'fallback content', editorData: staleEditorData },
+        { content: 'fallback content', editorData: repairedEditorData },
+      );
+      expect(readResult?.editorData).toEqual(repairedEditorData);
+      expect(mockDocumentService.trySaveCurrentDocumentHistory).toHaveBeenCalledWith(
+        'documents-1',
+        'llm_call',
+        repairedEditorData,
+      );
+      expect(modifyResult?.content).toBe('xml updated');
+    });
+
+    it('should not overwrite an autosave that lands between the read and the snapshot repair', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
+      // Nonempty document whose editorData is missing (legacy `lh doc` write),
+      // so readDocument repairs it from Markdown and wants to persist the repair.
+      const legacyDocument = {
+        agentId: 'agent-1',
+        content: 'stale body',
+        documentId: 'documents-1',
+        editorData: null,
+        id: agentDocumentId,
+        title: 'Doc',
+      };
+      // The mounted page autosaves a newer body before the repair is written.
+      const autosavedEditorData = {
+        root: { children: [{ text: 'newer body', type: 'text' }], type: 'root' },
+      };
+      const autosavedDocument = {
+        ...legacyDocument,
+        content: 'newer body',
+        editorData: autosavedEditorData,
+      };
+      mockModel.findById.mockResolvedValueOnce(legacyDocument);
+      mockModel.findById.mockResolvedValueOnce(autosavedDocument);
+      mockModel.updateEditorSnapshotIfUnchanged.mockResolvedValueOnce(false);
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
+
+      // The stale repair must only be written behind a version predicate.
+      expect(mockModel.update).not.toHaveBeenCalled();
+      expect(mockModel.updateEditorSnapshotIfUnchanged).toHaveBeenCalledTimes(1);
+      expect(mockModel.updateEditorSnapshotIfUnchanged).toHaveBeenCalledWith(
+        agentDocumentId,
+        { content: 'stale body', editorData: null },
+        { content: 'stale body', editorData: { root: { children: [] } } },
+      );
+      // The read is rebuilt from the autosaved version instead of the stale fetch.
+      expect(result).toMatchObject({ content: 'projected', editorData: autosavedEditorData });
+    });
+
     it('should fall back to markdown content when editor data is empty', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
       mockModel.findById.mockResolvedValue({
         agentId: 'agent-1',
         content: 'fallback content',
         editorData: { root: { children: [] } },
-        id: 'agent-doc-1',
+        id: agentDocumentId,
         title: 'Doc',
       });
 
       const service = new AgentDocumentsService(db, userId);
-      const result = await service.getDocumentSnapshotById('agent-doc-1', 'agent-1');
+      const result = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
 
       expect(result).toEqual({
         agentId: 'agent-1',
         content: 'fallback content',
         editorData: { root: { children: [] } },
-        id: 'agent-doc-1',
+        id: agentDocumentId,
         litexml: '<p id="node-1">content</p>',
         title: 'Doc',
+      });
+    });
+
+    it('should return raw text documents without Markdown projection', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
+      const content = `<knowledge_base_files totalCount="1">
+<file id="file-1" name="raw.txt">
+lossless tool result
+</file>
+</knowledge_base_files>`;
+      mockModel.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        content,
+        editorData: null,
+        fileType: 'text/plain',
+        filename: 'topic_call.txt',
+        id: agentDocumentId,
+        title: 'topic_call.txt',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
+
+      expect(createHeadlessEditor).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        agentId: 'agent-1',
+        content,
+        editorData: null,
+        fileType: 'text/plain',
+        filename: 'topic_call.txt',
+        id: agentDocumentId,
+        title: 'topic_call.txt',
+      });
+    });
+
+    it('should resolve a backing document id without querying the UUID binding column', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
+      mockModel.findByDocumentId.mockResolvedValue({
+        agentId: 'agent-1',
+        content: 'backing content',
+        documentId: 'docs_backing-doc-1',
+        id: agentDocumentId,
+        title: 'Doc',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.getDocumentSnapshotById('docs_backing-doc-1', 'agent-1');
+
+      expect(mockModel.findByDocumentId).toHaveBeenCalledWith('agent-1', 'docs_backing-doc-1');
+      expect(mockModel.findById).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        documentId: 'docs_backing-doc-1',
+        id: agentDocumentId,
       });
     });
   });
@@ -656,6 +1371,28 @@ describe('AgentDocumentsService', () => {
   });
 
   describe('replaceDocumentContentById', () => {
+    it('rejects LiteXML content instead of saving an empty document', async () => {
+      mockModel.findById.mockResolvedValueOnce({
+        agentId: 'agent-1',
+        content: 'old',
+        documentId: 'documents-1',
+        id: 'agent-doc-1',
+        title: 'Doc',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(
+        service.replaceDocumentContentById(
+          'agent-doc-1',
+          '<?xml version="1.0" encoding="UTF-8"?>\n<root>\n  <p id="rxam"></p>\n</root>',
+          'agent-1',
+        ),
+      ).rejects.toThrow('looks like LiteXML');
+      expect(mockModel.update).not.toHaveBeenCalled();
+      expect(mockDocumentService.trySaveCurrentDocumentHistory).not.toHaveBeenCalled();
+    });
+
     it('should save history before editing document content', async () => {
       mockModel.findById
         .mockResolvedValueOnce({
@@ -723,6 +1460,88 @@ describe('AgentDocumentsService', () => {
       });
     });
 
+    it('strips a leading H1 that duplicates the document title', async () => {
+      mockModel.findById
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'old',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'My Title',
+        })
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'body',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'My Title',
+        });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.replaceDocumentContentById('agent-doc-1', '# My Title\n\nbody', 'agent-1');
+
+      expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {
+        content: 'body',
+        editorData: { root: { children: [] } },
+      });
+    });
+
+    it('strips a leading H1 that differs from the document title', async () => {
+      mockModel.findById
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'old',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'Doc',
+        })
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'body',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'Doc',
+        });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.replaceDocumentContentById('agent-doc-1', '# 一、总体结论\n\nbody', 'agent-1');
+
+      expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {
+        content: 'body',
+        editorData: { root: { children: [] } },
+      });
+    });
+
+    it('keeps H1 headings that appear after other body content', async () => {
+      mockModel.findById
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'old',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'Doc',
+        })
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'intro\n\n# Echoes the title\n\n## Keep me\n\nbody',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'Doc',
+        });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.replaceDocumentContentById(
+        'agent-doc-1',
+        'intro\n\n# Echoes the title\n\n## Keep me\n\nbody',
+        'agent-1',
+      );
+
+      expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {
+        content: 'intro\n\n# Echoes the title\n\n## Keep me\n\nbody',
+        editorData: { root: { children: [] } },
+      });
+    });
+
     it('should apply LiteXML operations against editor data', async () => {
       mockModel.findById
         .mockResolvedValueOnce({
@@ -752,18 +1571,17 @@ describe('AgentDocumentsService', () => {
       expect(mockDocumentService.trySaveCurrentDocumentHistory).toHaveBeenCalledWith(
         'documents-1',
         'llm_call',
+        { root: { children: [] } },
       );
       expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {
         content: 'xml updated',
         editorData: { root: { children: [] } },
       });
-      expect(headlessEditorMocks.applyLiteXML).toHaveBeenCalledWith([
-        {
-          action: 'replace',
-          delay: true,
-          litexml: '<p id="node-1">xml updated</p>',
-        },
-      ]);
+      expect(headlessEditorMocks.applyLiteXML).toHaveBeenCalledWith({
+        action: 'replace',
+        delay: true,
+        litexml: '<p id="node-1">xml updated</p>',
+      });
       expect(headlessEditorMocks.applyLiteXMLBatch).not.toHaveBeenCalled();
       expect(result?.content).toBe('xml updated');
     });
@@ -952,6 +1770,209 @@ describe('AgentDocumentsService', () => {
 
       expect(mockModel.associate).toHaveBeenCalledWith({ agentId: 'agent-1', documentId: 'doc-1' });
       expect(result).toEqual({ id: 'ad-1' });
+    });
+  });
+
+  describe('importFile', () => {
+    /** @example A rejected import reclaims only the caller's dedicated upload. */
+    it('reclaims a dedicated upload when the parent disappeared', async () => {
+      mockFileModel.findById.mockResolvedValue({
+        id: 'failed-upload',
+        userId,
+        source: FileSource.AgentDocument,
+      });
+      mockModel.findByDocumentId.mockResolvedValue(undefined);
+      const service = new AgentDocumentsService(db, userId);
+      /** @example The original validation failure still reaches the caller. */
+      await expect(service.importFile('agent-1', 'failed-upload', 'missing')).rejects.toThrow(
+        'Parent folder not found',
+      );
+      /** @example Server-side cleanup still runs if the client has disconnected. */
+      expect(mockFileService.removeUnreferencedFile.mock.calls).toEqual([
+        ['failed-upload', FileSource.AgentDocument],
+      ]);
+    });
+
+    /** @example A failed attachment never deletes a pre-existing Resources upload. */
+    it('preserves ordinary resources after a rejected import', async () => {
+      mockFileModel.findById.mockResolvedValue({ id: 'resource', userId });
+      mockModel.findByDocumentId.mockResolvedValue(undefined);
+      const service = new AgentDocumentsService(db, userId);
+      /** @example Import rejects the invalid parent. */
+      await expect(service.importFile('agent-1', 'resource', 'missing')).rejects.toThrow();
+      /** @example Resources keeps its independent lifecycle. */
+      expect(mockFileService.removeUnreferencedFile).not.toHaveBeenCalled();
+    });
+
+    it('creates a file-backed agent document from an uploaded file', async () => {
+      mockFileModel.findById.mockResolvedValue({
+        fileType: 'application/pdf',
+        id: 'file-1',
+        name: 'brief.pdf',
+        url: 's3://brief.pdf',
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'ad-1', documentId: 'doc-1' });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.importFile('agent-1', 'file-1');
+
+      expect(mockFileService.getFileContent).not.toHaveBeenCalled();
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'brief.pdf', '', {
+        fileId: 'file-1',
+        fileType: 'application/pdf',
+        source: 's3://brief.pdf',
+        sourceType: 'file',
+        title: 'brief.pdf',
+      });
+      expect(result).toEqual({ id: 'ad-1', documentId: 'doc-1' });
+    });
+
+    it('creates under the given parent folder', async () => {
+      mockFileModel.findById.mockResolvedValue({
+        fileType: 'application/pdf',
+        id: 'file-1b',
+        name: 'brief.pdf',
+        url: 's3://brief.pdf',
+      });
+      mockModel.findByDocumentId.mockResolvedValue({
+        documentId: 'folder-doc',
+        fileType: DOCUMENT_FOLDER_TYPE,
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'ad-1b' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.importFile('agent-1', 'file-1b', 'folder-doc');
+
+      expect(mockModel.findByParentAndFilename).toHaveBeenCalledWith(
+        'agent-1',
+        'folder-doc',
+        'brief.pdf',
+      );
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        'brief.pdf',
+        '',
+        expect.objectContaining({ fileId: 'file-1b', parentId: 'folder-doc' }),
+      );
+    });
+
+    it('keeps text uploads file-backed without converting their contents', async () => {
+      mockFileModel.findById.mockResolvedValue({
+        fileType: 'text/markdown',
+        id: 'file-2',
+        name: 'notes.md',
+        url: 's3://notes.md',
+      });
+      mockFileService.getFileContent.mockResolvedValue('# Hello');
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'ad-2' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.importFile('agent-1', 'file-2');
+
+      // ROOT CAUSE:
+      // Import converted selected text formats into a second editable Markdown copy.
+      // The file preview must read the original bytes, regardless of filename or MIME.
+      /** @example Importing text keeps its file association without a Markdown snapshot. */
+      expect(mockFileService.getFileContent).not.toHaveBeenCalled();
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        'notes.md',
+        '',
+        expect.objectContaining({
+          fileId: 'file-2',
+          sourceType: 'file',
+        }),
+      );
+    });
+
+    it('uniques a colliding filename with a spaced suffix', async () => {
+      mockFileModel.findById.mockResolvedValue({
+        fileType: 'text/plain',
+        id: 'file-3',
+        name: 'notes.md',
+        url: 's3://notes.md',
+      });
+      mockFileService.getFileContent.mockResolvedValue('body');
+      mockModel.findByParentAndFilename
+        .mockResolvedValueOnce({ id: 'existing' })
+        .mockResolvedValueOnce(undefined);
+      mockModel.create.mockResolvedValue({ id: 'ad-3' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.importFile('agent-1', 'file-3');
+
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(
+        1,
+        'agent-1',
+        null,
+        'notes.md',
+      );
+      expect(mockModel.findByParentAndFilename).toHaveBeenNthCalledWith(
+        2,
+        'agent-1',
+        null,
+        'notes 2.md',
+      );
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        'notes 2.md',
+        '',
+        expect.objectContaining({ fileId: 'file-3' }),
+      );
+    });
+
+    it('rejects a parent that is not a folder', async () => {
+      mockFileModel.findById.mockResolvedValue({
+        fileType: 'application/pdf',
+        id: 'file-4b',
+        name: 'brief.pdf',
+        url: 's3://brief.pdf',
+      });
+      mockModel.findByDocumentId.mockResolvedValue({ fileType: 'agent/document', id: 'doc-row' });
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(service.importFile('agent-1', 'file-4b', 'doc-row')).rejects.toThrow(
+        'Parent document is not a folder: doc-row',
+      );
+      expect(mockModel.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a missing parent folder', async () => {
+      mockFileModel.findById.mockResolvedValue({
+        fileType: 'application/pdf',
+        id: 'file-4',
+        name: 'brief.pdf',
+        url: 's3://brief.pdf',
+      });
+      mockModel.findByDocumentId.mockResolvedValue(undefined);
+
+      const service = new AgentDocumentsService(db, userId);
+
+      await expect(service.importFile('agent-1', 'file-4', 'missing-folder')).rejects.toThrow(
+        'Parent folder not found: missing-folder',
+      );
+      expect(mockModel.create).not.toHaveBeenCalled();
+    });
+
+    it('does not reuse an existing document for the same file', async () => {
+      mockFileModel.findById.mockResolvedValue({
+        fileType: 'application/pdf',
+        id: 'file-5',
+        name: 'brief.pdf',
+        url: 's3://brief.pdf',
+      });
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'ad-5' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.importFile('agent-1', 'file-5');
+
+      expect(mockModel.create).toHaveBeenCalled();
+      expect(mockModel.associate).not.toHaveBeenCalled();
     });
   });
 

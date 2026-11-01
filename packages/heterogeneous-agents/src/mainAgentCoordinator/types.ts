@@ -1,3 +1,6 @@
+import type { AgentInterventionRequestData } from '@lobechat/agent-gateway-client';
+import type { ToolIntervention } from '@lobechat/types';
+
 import type { PersistToolBatchEntry, SubagentRunsState } from '../subagentCoordinator';
 import { createSubagentRunsState } from '../subagentCoordinator';
 import type { ExternalSignalContext, ToolCallPayload } from '../types';
@@ -57,6 +60,19 @@ export interface MainAgentTurnToolState {
   toolMsgIdByCallId: Map<string, string>;
 }
 
+export type MainAgentInterventionTransition =
+  'cancelled' | 'pending' | 'resolved' | 'session_ended' | 'timed_out';
+
+/** Latest durable projection for one intervention correlation id. */
+export interface MainAgentInterventionState {
+  intervention: ToolIntervention;
+  /** Original request metadata, retained so terminal business hooks stay typed. */
+  request?: AgentInterventionRequestData;
+  /** User-resolution id echoed by the producer on its terminal ACK. */
+  resolutionRequestId?: string;
+  transition: MainAgentInterventionTransition;
+}
+
 /**
  * Per-run main-agent state. Lifetime spans the whole CLI run. Designed to be
  * fully RE-HYDRATABLE from the DB so a stateless server replica can project it
@@ -81,6 +97,10 @@ export interface MainAgentRunState {
   currentMainMessageId: string | undefined;
   /** Set once a terminal event has been reduced (idempotent finalize). */
   ended: boolean;
+  /** Request/terminal state buffered independently from tool-event ordering. */
+  interventionsByCallId: Map<string, MainAgentInterventionState>;
+  /** Highest seen reasoning snapshot sequence (replace-mode de-dup). */
+  lastReasoningSnapshotSeq: number;
   /**
    * Chain rule: the most recent NON-tool, NON-signal
    * main-thread message — the run's spine. The next NORMAL turn's assistant
@@ -126,8 +146,10 @@ export const createMainAgentRunState = (seedAssistantId: string): MainAgentRunSt
   currentMainMessageId: undefined,
   ended: false,
   lastSpineMessageId: seedAssistantId,
+  lastReasoningSnapshotSeq: 0,
   lastTextSnapshotSeq: 0,
   lastToolMsgIdEver: undefined,
+  interventionsByCallId: new Map(),
   subagents: createSubagentRunsState(),
   toolState: { payloads: [], persistedIds: new Set(), toolMsgIdByCallId: new Map() },
   turnMetadata: {},
@@ -147,6 +169,8 @@ export interface MainAgentReduceCtx {
   agentId?: string | null;
   /** Allocate a prefixed id (`thd_…` / `msg_…`). Deterministic counter in tests. */
   newId: (kind: 'message' | 'thread') => string;
+  /** Persisted tools across all turns and subagent threads, owned by the interpreter. */
+  toolMessageIds?: ReadonlyMap<string, string>;
   topicId: string | null;
 }
 
@@ -168,7 +192,9 @@ export type MainAgentIntent =
   | PersistAssistantIntent
   | MainStreamContentIntent
   | MainPersistToolBatchIntent
+  | MainUpdateToolStateIntent
   | MainResolveToolResultIntent
+  | MainSetToolInterventionIntent
   | MainRecordUsageIntent
   | SetErrorIntent;
 
@@ -231,6 +257,14 @@ export interface MainPersistToolBatchIntent {
   tools: PersistToolBatchEntry[];
 }
 
+/** Replace the live/durable plugin state for a still-running main-agent tool. */
+export interface MainUpdateToolStateIntent {
+  kind: 'updateToolState';
+  pluginState: Record<string, unknown>;
+  snapshotSeq: number;
+  toolCallId: string;
+}
+
 /**
  * Resolve a main-agent tool_result. The interpreter looks up the tool-message
  * id from its `toolCallId → messageId` map (the run-global one, DB-backed on
@@ -241,6 +275,12 @@ export interface MainResolveToolResultIntent {
   isError: boolean;
   kind: 'resolveToolResult';
   pluginState?: Record<string, any>;
+  toolCallId: string;
+}
+
+/** Persist one intervention state transition on its correlated tool row. */
+export interface MainSetToolInterventionIntent extends MainAgentInterventionState {
+  kind: 'setToolIntervention';
   toolCallId: string;
 }
 

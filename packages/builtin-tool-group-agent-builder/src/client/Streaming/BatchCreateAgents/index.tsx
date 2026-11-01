@@ -1,9 +1,9 @@
 'use client';
 
 import type { BuiltinStreamingProps } from '@lobechat/types';
-import { Avatar, Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Divider } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Block, Flexbox, Markdown } from '@lobehub/ui';
+import { Avatar, Divider } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ToolTag from '@/features/ToolTag';
@@ -82,7 +82,7 @@ export const BatchCreateAgentsStreaming = memo<BuiltinStreamingProps<BatchCreate
                   ))}
                 </Flexbox>
               )}
-              <Divider />
+              <Divider style={{ marginBlock: 24 }} />
               {agent.systemRole && (
                 <div className={styles.systemRole}>
                   <Markdown animated variant={'chat'}>

@@ -1,5 +1,4 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';
@@ -25,15 +24,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Title = memo(() => {
   const taskId = useChatStore(chatPortalSelectors.taskDetailId);
-  const detail = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId] : undefined));
+  const detail = useTaskStore((s) =>
+    taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId] : undefined,
+  );
   const identifier = detail?.identifier ?? taskId;
   const name = detail?.name;
 
   return (
+    // Hug the content so the shared `…` sits right after the name.
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
       {identifier && <span className={styles.identifier}>{identifier}</span>}
       {name && (
-        <Text className={oneLineEllipsis} style={{ color: cssVar.colorText, fontSize: 14 }}>
+        <Text
+          className={oneLineEllipsis}
+          style={{ color: cssVar.colorText, flex: '0 1 auto', fontSize: 14, minWidth: 0 }}
+        >
           {name}
         </Text>
       )}

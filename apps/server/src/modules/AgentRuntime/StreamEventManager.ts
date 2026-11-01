@@ -1,5 +1,6 @@
 import { type AgentStreamEventType } from '@lobechat/agent-gateway-client';
 import { type ChatToolPayload } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
 import { type Redis } from 'ioredis';
 
@@ -54,7 +55,10 @@ export const getDefaultReasonDetail = (finalState: any, reason?: string): string
  *   it (e.g. `execSubAgent.onComplete`) receive the full state
  *   via the local `HookContext` channel, not via the stream.
  * - `operationToolSet`, `toolManifestMap`, `toolSourceMap`, `tools`
- *   — operation-level snapshot; back-compat copies of one struct.
+ *   — operation-level snapshot; the four top-level names are the legacy
+ *   mirrors of the slot, kept here for operations that still carry them.
+ * - `world.expertise` — immutable operation-level snapshot retained in working
+ *   state. The rest of `world` stays: the client renders from it.
  *
  * Mirrors the `done`-event strip in `OperationTraceRecorder.appendStep`;
  * keep the two lists in sync if either set changes.
@@ -64,20 +68,28 @@ const stripStateForStream = <T extends Record<string, any>>(
 ): T | undefined => {
   if (!state) return state;
   const {
+    expertise: _expertise,
     messages: _messages,
     operationToolSet: _operationToolSet,
     toolManifestMap: _toolManifestMap,
     toolSourceMap: _toolSourceMap,
     tools: _tools,
+    world,
     ...rest
   } = state;
-  return rest as T;
+  // `world` had to be destructured to reach its expertise snapshot, so it must be
+  // put back: everything else on it (agent, group, channel …) has to survive.
+  if (!world || typeof world !== 'object') return rest as T;
+  if (!('expertise' in world)) return { ...rest, world } as unknown as T;
+  const { expertise: _worldExpertise, ...worldRest } = world as Record<string, unknown>;
+  return { ...rest, world: worldRest } as unknown as T;
 };
 
 /**
  * Chokepoint helper applied inside every stream-event publish site.
- * If the event `data` carries a `finalState`, strip `messages` + the
- * tool-set group off it (see `stripStateForStream` for the rationale).
+ * Step completion events omit finalState unless the persisted run host opts in.
+ * For other events carrying a `finalState`, strip `expertise`, `messages`,
+ * and the tool-set group off it (see `stripStateForStream` for the rationale).
  *
  * Centralizing the strip here means new callers — including direct
  * `publishStreamEvent` users (e.g. `RuntimeExecutors`, the per-step
@@ -87,9 +99,16 @@ const stripStateForStream = <T extends Record<string, any>>(
  * Returns the original reference when no stripping is needed so the
  * common path stays allocation-free.
  */
-export const stripFinalStateInEventData = (data: unknown): unknown => {
+export const stripFinalStateInEventData = (data: unknown, eventType?: unknown): unknown => {
   if (!data || typeof data !== 'object') return data;
   const record = data as Record<string, unknown>;
+  const state = record.finalState;
+  const includeFinalState =
+    isRecord(state) && isRecord(state.host) && state.host.includeFinalState === true;
+  if (eventType === 'step_complete' && !includeFinalState) {
+    const { finalState: _finalState, ...rest } = record;
+    return rest;
+  }
   const finalState = record.finalState;
   if (!finalState || typeof finalState !== 'object') return data;
   return { ...record, finalState: stripStateForStream(finalState as Record<string, any>) };
@@ -108,6 +127,13 @@ export interface StreamEvent {
   stepIndex: number;
   timestamp: number;
   type: AgentStreamEventType;
+}
+
+export interface StreamHistoryPage {
+  available: boolean;
+  events: StreamEvent[];
+  hasMore: boolean;
+  nextCursor: string;
 }
 
 export interface StreamChunkData {
@@ -131,8 +157,27 @@ export interface StreamChunkData {
   reasoning?: string;
   /** Multimodal reasoning parts (text + images) */
   reasoningParts?: Array<{ text: string; type: 'text' } | { image: string; type: 'image' }>;
+  /** Relayed LLM attempt this chunk re-publishes; the executor client skips its own echo. */
+  relayCallId?: string;
   toolsCalling?: ChatToolPayload[];
 }
+
+/** Decode one Redis stream entry (`[id, [field, value, ...]]`) into a `StreamEvent`. */
+const parseStreamEntry = (id: string, fields: string[]): StreamEvent => {
+  const eventData: any = {};
+  for (let i = 0; i < fields.length; i += 2) {
+    const key = fields[i];
+    const value = fields[i + 1];
+    if (key === 'data') {
+      eventData[key] = JSON.parse(value);
+    } else if (key === 'stepIndex' || key === 'timestamp') {
+      eventData[key] = parseInt(value);
+    } else {
+      eventData[key] = value;
+    }
+  }
+  return { ...eventData, id } as StreamEvent;
+};
 
 export class StreamEventManager {
   private redis: Redis;
@@ -148,6 +193,30 @@ export class StreamEventManager {
   }
 
   /**
+   * Run blocking reads on a short-lived duplicated connection. ioredis
+   * executes commands on one connection strictly in order, so an
+   * `XREAD BLOCK` issued on the shared client parks the connection for up to
+   * the block timeout and every concurrent command (XADD / EXPIRE, plus any
+   * other module sharing the client) queues behind it — with an SSE
+   * subscriber attached, each publish paid up to ~1s, serializing streaming
+   * into a chunk-per-second drip.
+   *
+   * The connection is scoped to the read rather than the instance: managers
+   * are constructed per request (`createStreamEventManager()`) and most
+   * callers never `disconnect()`, so an instance-held duplicate would leak a
+   * socket per request. Scoping also lets concurrent blocking readers block
+   * independently instead of queueing on one shared blocking connection.
+   */
+  private async withBlockingConnection<T>(fn: (conn: Redis) => Promise<T>): Promise<T> {
+    const conn = this.redis.duplicate();
+    try {
+      return await fn(conn);
+    } finally {
+      conn.disconnect();
+    }
+  }
+
+  /**
    * Publish stream event to Redis Stream
    */
   async publishStreamEvent(
@@ -159,10 +228,10 @@ export class StreamEventManager {
     const eventData: StreamEvent = {
       ...event,
       // Chokepoint strip — every event passing through here gets its
-      // `data.finalState` trimmed (messages + tool-set fields) before
+      // `data.finalState` removed for step_complete, otherwise trimmed, before
       // serialization so a single xadd can't blow past Upstash's 10 MB
       // request limit on long topics.
-      data: stripFinalStateInEventData(event.data),
+      data: stripFinalStateInEventData(event.data, event.type),
       operationId,
       timestamp: Date.now(),
     };
@@ -171,9 +240,8 @@ export class StreamEventManager {
       const xaddStart = Date.now();
       const eventId = await this.redis.xadd(
         streamKey,
-        'MAXLEN',
-        '~',
-        '1000', // Limit stream length to prevent memory overflow
+        // Retain every event until the stream's inactivity TTL expires.
+        // Count trimming makes a reconnect silently lose earlier output.
         '*', // Auto-generate ID
         'type',
         eventData.type,
@@ -247,6 +315,8 @@ export class StreamEventManager {
     operationId,
     stepIndex,
     finalState,
+    messagePatchMode,
+    messageRevision,
     reason,
     reasonDetail,
     uiMessages,
@@ -257,7 +327,8 @@ export class StreamEventManager {
     // so the error message remains available.
     return this.publishStreamEvent(operationId, {
       data: {
-        finalState,
+        ...(!messagePatchMode && { finalState }),
+        ...(messagePatchMode && { messagePatchMode: true, messageRevision }),
         operationId,
         phase: 'execution_complete',
         reason: reason || 'completed',
@@ -283,78 +354,62 @@ export class StreamEventManager {
 
     log('Starting subscription for operation %s from %s', operationId, lastEventId);
 
-    while (!signal?.aborted) {
-      try {
-        const xreadStart = Date.now();
-        const results = await this.redis.xread(
-          'BLOCK',
-          1000, // 1 second timeout
-          'STREAMS',
-          streamKey,
-          currentLastId,
-        );
-        const xreadEnd = Date.now();
+    // One dedicated connection for the whole subscription loop.
+    await this.withBlockingConnection(async (conn) => {
+      while (!signal?.aborted) {
+        try {
+          const xreadStart = Date.now();
+          const results = await conn.xread(
+            'BLOCK',
+            1000, // 1 second timeout
+            'STREAMS',
+            streamKey,
+            currentLastId,
+          );
+          const xreadEnd = Date.now();
 
-        if (results && results.length > 0) {
-          const [, messages] = results[0];
-          const events: StreamEvent[] = [];
+          if (results && results.length > 0) {
+            const [, messages] = results[0];
+            const events: StreamEvent[] = [];
 
-          for (const [id, fields] of messages) {
-            const eventData: any = {};
+            for (const [id, fields] of messages) {
+              events.push(parseStreamEntry(id, fields));
 
-            // Parse Redis Stream fields
-            for (let i = 0; i < fields.length; i += 2) {
-              const key = fields[i];
-              const value = fields[i + 1];
+              currentLastId = id;
+            }
 
-              if (key === 'data') {
-                eventData[key] = JSON.parse(value);
-              } else if (key === 'stepIndex' || key === 'timestamp') {
-                eventData[key] = parseInt(value);
-              } else {
-                eventData[key] = value;
+            if (events.length > 0) {
+              const now = Date.now();
+              // Calculate latency from event publication to read
+              for (const event of events) {
+                const latency = now - event.timestamp;
+                timing(
+                  '[%s:%d] XREAD %s, published at %d, read at %d, latency %dms, xread took %dms',
+                  operationId,
+                  event.stepIndex,
+                  event.type,
+                  event.timestamp,
+                  now,
+                  latency,
+                  xreadEnd - xreadStart,
+                );
               }
+              onEvents(events);
             }
-
-            events.push({
-              ...eventData,
-              id, // Redis Stream event ID
-            } as StreamEvent);
-
-            currentLastId = id;
+          }
+        } catch (error) {
+          if (signal?.aborted) {
+            break;
           }
 
-          if (events.length > 0) {
-            const now = Date.now();
-            // Calculate latency from event publication to read
-            for (const event of events) {
-              const latency = now - event.timestamp;
-              timing(
-                '[%s:%d] XREAD %s, published at %d, read at %d, latency %dms, xread took %dms',
-                operationId,
-                event.stepIndex,
-                event.type,
-                event.timestamp,
-                now,
-                latency,
-                xreadEnd - xreadStart,
-              );
-            }
-            onEvents(events);
-          }
+          console.error('[StreamEventManager] Stream subscription error:', error);
+          // Retry after brief delay
+          await new Promise((resolve) => {
+            setTimeout(resolve, 1000);
+          });
         }
-      } catch (error) {
-        if (signal?.aborted) {
-          break;
-        }
-
-        console.error('[StreamEventManager] Stream subscription error:', error);
-        // Retry after brief delay
-        await new Promise((resolve) => {
-          setTimeout(resolve, 1000);
-        });
       }
-    }
+    });
 
     log('Subscription ended for operation %s', operationId);
   }
@@ -391,7 +446,9 @@ export class StreamEventManager {
       fromId = tail.length > 0 ? tail[0][0] : '0';
     }
 
-    const results = await this.redis.xread('BLOCK', blockMs, 'STREAMS', streamKey, fromId);
+    const results = await this.withBlockingConnection((conn) =>
+      conn.xread('BLOCK', blockMs, 'STREAMS', streamKey, fromId),
+    );
     if (!results || results.length === 0) return { events: [], lastEventId: fromId };
 
     const [, messages] = results[0];
@@ -399,19 +456,7 @@ export class StreamEventManager {
     let currentLastId = fromId;
 
     for (const [id, fields] of messages) {
-      const eventData: any = {};
-      for (let i = 0; i < fields.length; i += 2) {
-        const key = fields[i];
-        const value = fields[i + 1];
-        if (key === 'data') {
-          eventData[key] = JSON.parse(value);
-        } else if (key === 'stepIndex' || key === 'timestamp') {
-          eventData[key] = parseInt(value);
-        } else {
-          eventData[key] = value;
-        }
-      }
-      events.push({ ...eventData, id } as StreamEvent);
+      events.push(parseStreamEntry(id, fields));
       currentLastId = id;
     }
 
@@ -427,28 +472,41 @@ export class StreamEventManager {
     try {
       const results = await this.redis.xrevrange(streamKey, '+', '-', 'COUNT', count);
 
-      return results.map(([id, fields]) => {
-        const eventData: any = { id };
-
-        for (let i = 0; i < fields.length; i += 2) {
-          const key = fields[i];
-          const value = fields[i + 1];
-
-          if (key === 'data') {
-            eventData[key] = JSON.parse(value);
-          } else if (key === 'stepIndex' || key === 'timestamp') {
-            eventData[key] = parseInt(value);
-          } else {
-            eventData[key] = value;
-          }
-        }
-
-        return eventData as StreamEvent;
-      });
+      return results.map(([id, fields]) => parseStreamEntry(id, fields));
     } catch (error) {
       console.error('[StreamEventManager] Failed to get stream history:', error);
       return [];
     }
+  }
+
+  /** Forward, exclusive-cursor replay; never substitute a truncated suffix for full history. */
+  async getStreamHistoryPage(
+    operationId: string,
+    cursor = '0',
+    limit = 200,
+  ): Promise<StreamHistoryPage> {
+    const key = `${this.STREAM_PREFIX}:${operationId}`;
+    const unavailable = { available: false, events: [], hasMore: false, nextCursor: cursor };
+    if (cursor !== '0') {
+      const previous = await this.redis.xrange(key, cursor, cursor, 'COUNT', 1);
+      if (previous.length === 0) return unavailable;
+    }
+    const rows = await this.redis.xrange(
+      key,
+      cursor === '0' ? '-' : `(${cursor}`,
+      '+',
+      'COUNT',
+      limit + 1,
+    );
+    const events = rows.slice(0, limit).map(([id, fields]) => parseStreamEntry(id, fields));
+    // Legacy streams may already have been trimmed before this deployment.
+    if (cursor === '0' && events[0]?.type !== 'agent_runtime_init') return unavailable;
+    return {
+      available: true,
+      events,
+      hasMore: rows.length > limit,
+      nextCursor: events.at(-1)?.id ?? cursor,
+    };
   }
 
   /**

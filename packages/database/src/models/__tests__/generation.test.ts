@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import type { NewGeneration } from '../../schemas';
+import type { GenerationWithAsyncTask, NewGeneration } from '../../schemas';
 import {
   asyncTasks,
   files,
@@ -21,19 +21,25 @@ import { GenerationModel } from '../generation';
 const serverDB: LobeChatDatabase = await getTestDB();
 
 // Mock FileService
+const mockGetFileAccessUrl = vi.fn();
 const mockGetFullFileUrl = vi.fn();
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: mockGetFullFileUrl,
-  })),
+  FileService: vi.fn(function () {
+    return {
+      getFileAccessUrl: mockGetFileAccessUrl,
+      getFullFileUrl: mockGetFullFileUrl,
+    };
+  }),
 }));
 
 // Mock FileModel
 const mockFileModelCreate = vi.fn();
 vi.mock('../file', () => ({
-  FileModel: vi.fn().mockImplementation(() => ({
-    create: mockFileModelCreate,
-  })),
+  FileModel: vi.fn(function () {
+    return {
+      create: mockFileModelCreate,
+    };
+  }),
 }));
 
 const userId = 'generation-test-user-id';
@@ -99,6 +105,9 @@ beforeEach(async () => {
 
   // Setup mock return values
   mockGetFullFileUrl.mockImplementation((url: string) => `https://example.com/${url}`);
+  mockGetFileAccessUrl.mockImplementation(({ fileId, url }: { fileId?: string; url: string }) =>
+    fileId ? `https://example.com/f/${fileId}` : mockGetFullFileUrl(url),
+  );
 
   // Clear database and create test users
   await serverDB.delete(users);
@@ -661,6 +670,8 @@ describe('GenerationModel', () => {
         } as ImageGenerationAsset,
         accessedAt: new Date(),
         createdAt: new Date(),
+        deletedAt: null,
+        isDeleted: null,
         updatedAt: new Date(),
         asyncTask: {
           id: '550e8400-e29b-41d4-a716-446655440000',
@@ -681,9 +692,10 @@ describe('GenerationModel', () => {
       const result = await generationModel.transformGeneration(generationWithTask);
 
       expect(result).toMatchObject({
+        fileId: 'file-id',
         id: 'test-gen-id',
         asset: {
-          url: 'https://example.com/original-asset.jpg',
+          url: 'https://example.com/f/file-id',
           thumbnailUrl: 'https://example.com/original-thumbnail.jpg',
           width: 1024,
           height: 1024,
@@ -696,7 +708,11 @@ describe('GenerationModel', () => {
         },
       });
 
-      expect(mockGetFullFileUrl).toHaveBeenCalledWith('original-asset.jpg');
+      expect(mockGetFileAccessUrl).toHaveBeenCalledWith({
+        fileId: 'file-id',
+        url: 'original-asset.jpg',
+      });
+      expect(mockGetFullFileUrl).not.toHaveBeenCalledWith('original-asset.jpg');
       expect(mockGetFullFileUrl).toHaveBeenCalledWith('original-thumbnail.jpg');
     });
 
@@ -730,6 +746,7 @@ describe('GenerationModel', () => {
 
       const result = await generationModel.transformGeneration(generationWithoutAsset as any);
 
+      expect(result).not.toHaveProperty('fileId');
       expect(result).toMatchObject({
         id: 'test-gen-id',
         asset: null,
@@ -1123,5 +1140,43 @@ describe('GenerationModel', () => {
         generationModel.findByAsyncTaskId(workspaceAsyncTaskId),
       ).resolves.toBeUndefined();
     });
+  });
+});
+
+describe('GenerationModel guards', () => {
+  it('deletes inside the caller transaction when one is passed', async () => {
+    const created = await generationModel.create({ ...testGeneration, asyncTaskId: null });
+    const transaction = vi.spyOn(serverDB, 'transaction');
+
+    const deleted = await serverDB.transaction((trx) => generationModel.delete(created.id, trx));
+
+    expect(deleted?.id).toBe(created.id);
+    // Only the caller's own transaction; the model did not open a second one.
+    expect(transaction).toHaveBeenCalledTimes(1);
+    transaction.mockRestore();
+    const row = await serverDB.query.generations.findFirst({
+      where: eq(generations.id, created.id),
+    });
+    expect(row).toBeUndefined();
+  });
+
+  it('carries previousGenerationId from the async task metadata', async () => {
+    const result = await generationModel.transformGeneration({
+      asset: null,
+      asyncTask: {
+        error: null,
+        id: testAsyncTask.id,
+        metadata: { previousGenerationId: 'gen-before' },
+        status: AsyncTaskStatus.Success,
+      },
+      asyncTaskId: testAsyncTask.id,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      fileId: null,
+      id: 'gen-current',
+      seed: 1,
+    } as unknown as GenerationWithAsyncTask);
+
+    expect(result.previousGenerationId).toBe('gen-before');
+    expect(result.id).toBe('gen-current');
   });
 });

@@ -4,6 +4,13 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  CONNECT_RETRYABLE_EXIT_CODE,
+  getWorkspaceFailureExitCode,
+  installConnectService,
+  startConnectService,
+} from './connect';
+
 const tmpDir = path.join(os.tmpdir(), `lobehub-connect-service-test-${process.pid}`);
 const unitDir = path.join(tmpDir, 'systemd-user');
 const entryPath = path.join(tmpDir, 'lh.js');
@@ -36,15 +43,14 @@ vi.mock('../daemon/manager', () => ({
   getRunningDaemonPid: getRunningDaemonPidMock,
 }));
 
-// eslint-disable-next-line import-x/first
-import { installConnectService, readConnectServiceStatus, startConnectService } from './connect';
-
 describe('connect service', () => {
   const originalArgv1 = process.argv[1];
   const originalEnv = { ...process.env };
   let systemctlCalls: string[][];
 
   beforeEach(() => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+
     systemctlCalls = [];
     fs.rmSync(tmpDir, { force: true, recursive: true });
     fs.mkdirSync(tmpDir, { recursive: true });
@@ -90,6 +96,7 @@ describe('connect service', () => {
     process.argv[1] = originalArgv1;
     process.env = { ...originalEnv };
     fs.rmSync(tmpDir, { force: true, recursive: true });
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -99,13 +106,27 @@ describe('connect service', () => {
     const unitPath = path.join(unitDir, 'lobehub-connect.service');
     expect(fs.existsSync(unitPath)).toBe(true);
     expect(fs.readFileSync(unitPath, 'utf8')).toContain(
-      `"${process.execPath}" "${entryPath}" "connect" "--service-child"`,
+      `"${process.execPath}" "${fs.realpathSync(entryPath)}" "connect" "--service-child"`,
     );
     expect(fs.readFileSync(unitPath, 'utf8')).toContain(
       `EnvironmentFile=${path.join(tmpDir, '.lobehub', 'connect-service.env')}`,
     );
     expect(systemctlCalls).toContainEqual(['--user', 'daemon-reload']);
-    expect(systemctlCalls).toContainEqual(['--user', 'enable', '--now', 'lobehub-connect.service']);
+    expect(systemctlCalls).toContainEqual(['--user', 'enable', 'lobehub-connect.service']);
+    expect(systemctlCalls).toContainEqual(['--user', 'restart', 'lobehub-connect.service']);
+  });
+
+  it('passes workspace enrollment flags to the service child', () => {
+    installConnectService({ public: true, workspace: 'ws_123' });
+
+    expect(fs.readFileSync(path.join(unitDir, 'lobehub-connect.service'), 'utf8')).toContain(
+      `"${process.execPath}" "${fs.realpathSync(entryPath)}" "connect" "--service-child" "--workspace" "ws_123" "--public"`,
+    );
+  });
+
+  it('rejects --public without --workspace', () => {
+    expect(() => installConnectService({ public: true })).toThrow('--public requires --workspace.');
+    expect(fs.existsSync(path.join(unitDir, 'lobehub-connect.service'))).toBe(false);
   });
 
   it('does not install when a managed connect daemon is already running', () => {
@@ -115,12 +136,7 @@ describe('connect service', () => {
       'Background connect daemon is already running (PID 12345).',
     );
     expect(fs.existsSync(path.join(unitDir, 'lobehub-connect.service'))).toBe(false);
-    expect(systemctlCalls).not.toContainEqual([
-      '--user',
-      'enable',
-      '--now',
-      'lobehub-connect.service',
-    ]);
+    expect(systemctlCalls).not.toContainEqual(['--user', 'enable', 'lobehub-connect.service']);
   });
 
   it('does not install when no auth is available', () => {
@@ -128,12 +144,7 @@ describe('connect service', () => {
 
     expect(() => installConnectService()).toThrow("No authentication found. Run 'lh login' first");
     expect(fs.existsSync(path.join(unitDir, 'lobehub-connect.service'))).toBe(false);
-    expect(systemctlCalls).not.toContainEqual([
-      '--user',
-      'enable',
-      '--now',
-      'lobehub-connect.service',
-    ]);
+    expect(systemctlCalls).not.toContainEqual(['--user', 'enable', 'lobehub-connect.service']);
   });
 
   it('writes the current environment to a service-scoped env file', () => {
@@ -156,10 +167,6 @@ describe('connect service', () => {
     expect(systemctlCalls).not.toContainEqual(['--user', 'import-environment']);
   });
 
-  it('returns null status when the unit file is not installed', () => {
-    expect(readConnectServiceStatus()).toBeNull();
-  });
-
   it('starts an installed service after preflight checks pass', () => {
     installConnectService();
     systemctlCalls = [];
@@ -171,5 +178,32 @@ describe('connect service', () => {
       'LOBEHUB_CLI_API_KEY="rotated-key"',
     );
     expect(systemctlCalls).toContainEqual(['--user', 'start', 'lobehub-connect.service']);
+  });
+
+  describe('getWorkspaceFailureExitCode', () => {
+    it('lets systemd retry transient workspace startup failures', () => {
+      expect(getWorkspaceFailureExitCode(new Error('fetch failed'))).toBe(
+        CONNECT_RETRYABLE_EXIT_CODE,
+      );
+      expect(getWorkspaceFailureExitCode({ data: { code: 'INTERNAL_SERVER_ERROR' } })).toBe(
+        CONNECT_RETRYABLE_EXIT_CODE,
+      );
+    });
+
+    it('stops on server refusals that a restart cannot fix', () => {
+      expect(getWorkspaceFailureExitCode({ data: { code: 'CONFLICT' } })).toBe(1);
+      expect(getWorkspaceFailureExitCode({ data: { code: 'FORBIDDEN' } })).toBe(1);
+    });
+
+    it('keeps the retryable code outside the unit success exit statuses', () => {
+      installConnectService({ workspace: 'ws_123' });
+      const unit = fs.readFileSync(path.join(unitDir, 'lobehub-connect.service'), 'utf8');
+      const successCodes = unit.match(/^SuccessExitStatus=(.*)$/m)![1].split(' ');
+      expect(successCodes).not.toContain(String(CONNECT_RETRYABLE_EXIT_CODE));
+      expect(unit).toContain('Restart=on-failure');
+      // A start-rate limit would stop the retries after a burst of failures.
+      expect(unit).toContain('StartLimitIntervalSec=0');
+      expect(unit).not.toContain('StartLimitBurst');
+    });
   });
 });

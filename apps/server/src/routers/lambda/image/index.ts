@@ -1,4 +1,4 @@
-import { BRANDING_PROVIDER } from '@lobechat/business-const';
+import { BRANDING_PROVIDER, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
 import { ChatErrorType } from '@lobechat/types';
@@ -7,16 +7,20 @@ import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
+import { checkFileStorageUsage } from '@/business/server/trpc-middlewares/lambda';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { UserModel } from '@/database/models/user';
+import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { asyncTasks, generationBatches, generations } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getServerGlobalConfig } from '@/server/globalConfig';
 import { createAsyncCaller } from '@/server/routers/async/caller';
 import { FileService } from '@/server/services/file';
 import {
@@ -25,9 +29,14 @@ import {
   AsyncTaskStatus,
   AsyncTaskType,
 } from '@/types/asyncTask';
+import { type ProviderConfig } from '@/types/user/settings';
 import { generateUniqueSeeds } from '@/utils/number';
 
-import { validateNoUrlsInConfig } from './utils';
+import {
+  applyLookupPricingParamDefaults,
+  findUnsupportedImageParams,
+  validateNoUrlsInConfig,
+} from './utils';
 
 const log = debug('lobe-image:lambda');
 
@@ -44,7 +53,13 @@ const imageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   });
 });
 
-const imageCreateProcedure = imageProcedure.use(withScopedPermission('file:upload'));
+// Generated images land in storage through `FileService`, which has no quota
+// gate of its own — blocking there would fail after the model call is already
+// paid for. Admit at submission instead: refuse to start when storage is
+// already full, and let an in-flight generation finish.
+const imageCreateProcedure = imageProcedure
+  .use(withScopedPermission('file:upload'))
+  .use(checkFileStorageUsage);
 
 const createImageInputSchema = z.object({
   generationTopicId: z.string(),
@@ -55,7 +70,7 @@ const createImageInputSchema = z.object({
       cfg: z.number().optional(),
       height: z.number().optional(),
       imageUrls: z.array(z.string()).optional(),
-      prompt: z.string(),
+      prompt: z.string().refine((prompt) => prompt.trim().length > 0, 'prompt is required'),
       seed: z.number().nullish(),
       steps: z.number().optional(),
       width: z.number().optional(),
@@ -64,6 +79,21 @@ const createImageInputSchema = z.object({
   provider: z.string(),
 });
 export type CreateImageServicePayload = z.infer<typeof createImageInputSchema>;
+
+const isErrorBatchResult = (
+  result: unknown,
+): result is {
+  data: {
+    batch: NewGenerationBatch;
+    generations: NewGeneration[];
+  };
+  success: true;
+} =>
+  typeof result === 'object' &&
+  result !== null &&
+  'data' in result &&
+  'success' in result &&
+  result.success === true;
 
 export const imageRouter = router({
   createImage: imageCreateProcedure
@@ -91,6 +121,32 @@ export const imageRouter = router({
           code: 'BAD_REQUEST',
           message: ChatErrorType.LobeHubModelDeprecated,
         });
+      }
+
+      // Reject params the model does not declare before anything is queued or charged. The
+      // schema comes from the same merged model list the image page and image tool read, so a
+      // user-customized model is validated against its own declaration. Models without a
+      // declared schema (e.g. custom ids) are passed through unchanged.
+      const { aiProvider } = await getServerGlobalConfig();
+      const aiInfraRepos = new AiInfraRepos(
+        serverDB,
+        userId,
+        aiProvider as Record<string, ProviderConfig>,
+        wsId,
+      );
+      const modelCard = (
+        await aiInfraRepos.getAiProviderModelList(provider, { type: 'image' })
+      ).find((item) => item.id === model);
+      const parametersSchema =
+        modelCard && 'parameters' in modelCard ? modelCard.parameters : undefined;
+      if (parametersSchema) {
+        const unsupportedParams = findUnsupportedImageParams(params, parametersSchema);
+        if (unsupportedParams.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Unsupported parameters for ${model}: ${unsupportedParams.join(', ')}. Supported: ${Object.keys(parametersSchema).join(', ')}`,
+          });
+        }
       }
 
       // Normalize reference image addresses, store S3 keys uniformly (avoid storing expiring presigned URLs in database)
@@ -169,6 +225,16 @@ export const imageRouter = router({
       // Defensive check: ensure no full URLs enter the database
       validateNoUrlsInConfig(configForDatabase, 'configForDatabase');
 
+      // Backfill lookup-pricing params (e.g. quality/resolution) from model
+      // card defaults so omitted optional parameters don't break cost
+      // computation before charging. Use the resolved model ID so business
+      // aliases without their own model-bank card still resolve pricing.
+      generationParams = await applyLookupPricingParamDefaults(
+        generationParams,
+        resolvedModelId,
+        provider,
+      );
+
       const generationTopic = await generationTopicModel.findById(generationTopicId);
       if (!generationTopic) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid generation topic' });
@@ -182,12 +248,19 @@ export const imageRouter = router({
         imageNum,
         model,
         provider,
+        spendOrigin: ctx.spendOrigin,
         userId,
         workspaceId: wsId,
       });
-      if (chargeResult) {
+      // An error batch (insufficient budget / cooldown / frozen workspace) is
+      // returned to the client as-is.
+      if (isErrorBatchResult(chargeResult)) {
         return chargeResult;
       }
+      // Otherwise, opaque per-generation billing handles to thread through each
+      // asyncTask so the completion charge can reconcile against them.
+      const prechargeItems =
+        chargeResult && 'prechargeItems' in chargeResult ? chargeResult.prechargeItems : undefined;
 
       // Step 1: Atomically create all database records in a transaction
       const { batch: createdBatch, generationsWithTasks } = await serverDB.transaction(
@@ -237,11 +310,25 @@ export const imageRouter = router({
           // 3. Concurrently create asyncTask for each generation (within transaction)
           log('Creating async tasks for generations');
           const generationsWithTasks = await Promise.all(
-            createdGenerations.map(async (generation) => {
-              // Create asyncTask directly in transaction
+            createdGenerations.map(async (generation, index) => {
+              // Create asyncTask directly in transaction, carrying this
+              // generation's billing handle (if any) for the completion charge.
+              // Presence check (not truthiness): handles are opaque, so falsy
+              // values like 0 or '' must still be stored verbatim.
+              const prechargeItem = prechargeItems?.[index];
+              // The completion charge runs in the async router, which no longer
+              // sees this request; carry the origin attribution on the task so
+              // it can still be stamped on the spend log. Stored independently
+              // of `precharge` because paths without a billing handle (free /
+              // unpriced models) still charge at completion.
+              const taskMetadata = {
+                ...(prechargeItem === undefined ? {} : { precharge: prechargeItem }),
+                ...(ctx.spendOrigin ? { spendOrigin: ctx.spendOrigin } : {}),
+              };
               const [createdAsyncTask] = await tx
                 .insert(asyncTasks)
                 .values({
+                  metadata: Object.keys(taskMetadata).length === 0 ? undefined : taskMetadata,
                   status: AsyncTaskStatus.Pending,
                   type: AsyncTaskType.ImageGeneration,
                   userId,
@@ -272,8 +359,8 @@ export const imageRouter = router({
 
       log('Database transaction completed successfully. Starting async task triggers directly.');
 
-      // Step 2: Trigger background image generation tasks using after() API
-      log('Starting async image generation tasks with after()');
+      // Step 2: Trigger background image generation tasks.
+      log('Starting async image generation tasks');
 
       try {
         log('Creating unified async caller for userId: %s', userId);
@@ -288,20 +375,27 @@ export const imageRouter = router({
 
         // Fire-and-forget: trigger async tasks without awaiting
         // These calls go to the async router which handles them independently
-        // Do NOT use after() here as it would keep the lambda alive unnecessarily
+        // Do not schedule here; the async router handles these tasks independently.
         generationsWithTasks.forEach(({ generation, asyncTaskId }) => {
           log('Starting background async task %s for generation %s', asyncTaskId, generation.id);
 
-          asyncCaller.image.createImage({
-            generationBatchId: createdBatch.id,
-            generationId: generation.id,
-            generationTopicId,
-            model,
-            params: generationParams,
-            provider,
-            taskId: asyncTaskId,
-            workspaceId: wsId,
-          });
+          asyncCaller.image
+            .createImage({
+              generationBatchId: createdBatch.id,
+              generationId: generation.id,
+              generationTopicId,
+              model,
+              params: generationParams,
+              provider,
+              taskId: asyncTaskId,
+              workspaceId: wsId,
+            })
+            // The async router owns the task's status and billing once the request
+            // reaches it; a failed HTTP response here (e.g. a proxy timing out a
+            // long generation) does not mean the task failed, so only log it.
+            .catch((error: unknown) => {
+              console.error('Async image task %s request failed: %O', asyncTaskId, error);
+            });
         });
 
         log('All %d background async image generation tasks started', generationsWithTasks.length);
@@ -324,6 +418,36 @@ export const imageRouter = router({
           );
         } catch (batchUpdateError) {
           console.error('Failed to update batch task statuses:', batchUpdateError);
+        }
+
+        // The async router never ran for these tasks, so its failure billing
+        // reconciliation cannot fire — reconcile each generation's billing
+        // handle here instead of leaving it dangling.
+        if (ENABLE_BUSINESS_FEATURES && prechargeItems?.length) {
+          await Promise.allSettled(
+            generationsWithTasks.map(async ({ asyncTaskId }, index) => {
+              const prechargeItem = prechargeItems[index];
+              if (prechargeItem === undefined) return;
+              try {
+                await chargeAfterGenerate({
+                  isError: true,
+                  metadata: {
+                    ...ctx.spendOrigin,
+                    asyncTaskId,
+                    generationBatchId: createdBatch.id,
+                    modelId: model,
+                    topicId: generationTopicId,
+                  },
+                  prechargeResult: prechargeItem,
+                  provider,
+                  userId,
+                  workspaceId: wsId,
+                });
+              } catch (chargeError) {
+                console.error('Failed to reconcile billing for failed task:', chargeError);
+              }
+            }),
+          );
         }
       }
 

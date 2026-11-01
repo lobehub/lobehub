@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,19 +29,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export const DeleteTaskInspector = memo<BuiltinInspectorProps<DeleteTaskParams, DeleteTaskState>>(
-  ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
+  ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
     const { t } = useTranslation('plugin');
 
-    const identifier = args?.identifier || partialArgs?.identifier;
+    const identifier = pluginState?.identifier ?? args?.identifier ?? partialArgs?.identifier;
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span style={{ color: cssVar.colorError }}>
+      <div className={inspectorTextStyles.root}>
+        <span
+          className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
+          style={{ color: cssVar.colorError }}
+        >
           {t('builtins.lobe-task.apiName.deleteTask')}
         </span>
         {identifier && <span className={styles.identifierChip}>{identifier}</span>}

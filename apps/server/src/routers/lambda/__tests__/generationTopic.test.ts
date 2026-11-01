@@ -34,12 +34,11 @@ describe('generationTopicRouter', () => {
     };
 
     const mockCreate = vi.fn().mockResolvedValue(mockCreatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          create: mockCreate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.createTopic();
@@ -48,11 +47,11 @@ describe('generationTopicRouter', () => {
     expect(mockCreate).toHaveBeenCalledWith('', undefined, undefined);
   });
 
-  it('should create a workspace topic with explicit public visibility', async () => {
+  it('should create a titled workspace topic with explicit public visibility', async () => {
     const mockTopicId = 'topic-public';
     const mockCreatedTopic = {
       id: mockTopicId,
-      title: '',
+      title: 'A mountain lake at sunrise',
       userId: 'test-user',
       workspaceId: 'workspace-1',
       coverUrl: null,
@@ -64,21 +63,24 @@ describe('generationTopicRouter', () => {
     };
 
     const mockCreate = vi.fn().mockResolvedValue(mockCreatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          create: mockCreate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        create: mockCreate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller({
       ...mockCtx,
       workspaceId: 'workspace-1',
     });
-    const result = await caller.createTopic({ type: 'image', visibility: 'public' } as any);
+    const result = await caller.createTopic({
+      title: 'A mountain lake at sunrise',
+      type: 'image',
+      visibility: 'public',
+    });
 
     expect(result).toBe(mockTopicId);
-    expect(mockCreate).toHaveBeenCalledWith('', 'image', 'public');
+    expect(mockCreate).toHaveBeenCalledWith('A mountain lake at sunrise', 'image', 'public');
   });
 
   it('should get all generation topics', async () => {
@@ -93,6 +95,8 @@ describe('generationTopicRouter', () => {
         visibility: 'public',
         accessedAt: new Date(),
         createdAt: new Date(),
+        deletedAt: null,
+        isDeleted: null,
         updatedAt: new Date(),
       },
       {
@@ -105,17 +109,18 @@ describe('generationTopicRouter', () => {
         visibility: 'public',
         accessedAt: new Date(),
         createdAt: new Date(),
+        deletedAt: null,
+        isDeleted: null,
         updatedAt: new Date(),
       },
     ];
 
     const mockQueryAll = vi.fn().mockResolvedValue(mockTopics);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          queryAll: mockQueryAll,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        queryAll: mockQueryAll,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.getAllGenerationTopics();
@@ -128,7 +133,6 @@ describe('generationTopicRouter', () => {
     const mockTopicId = 'topic-123';
     const mockUpdateValue = {
       title: 'Updated Title',
-      coverUrl: 'updated-cover-url',
     };
     const mockUpdatedTopic = {
       id: mockTopicId,
@@ -140,12 +144,12 @@ describe('generationTopicRouter', () => {
     };
 
     const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.updateTopic({
@@ -155,6 +159,26 @@ describe('generationTopicRouter', () => {
 
     expect(result).toEqual(mockUpdatedTopic);
     expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, mockUpdateValue);
+  });
+
+  it('should not let updateTopic write an arbitrary cover key', async () => {
+    const mockTopicId = 'topic-123';
+    const mockUpdate = vi.fn().mockResolvedValue({ id: mockTopicId, title: 'Title' });
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
+
+    const caller = generationTopicRouter.createCaller(mockCtx);
+    await caller.updateTopic({
+      id: mockTopicId,
+      // A key of another user's object; deleting the topic would delete it
+      value: { coverUrl: 'files/other-user/private.png', title: 'Title' } as any,
+    });
+
+    expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, { title: 'Title' });
   });
 
   it('should update topic cover', async () => {
@@ -172,21 +196,22 @@ describe('generationTopicRouter', () => {
     };
 
     const mockCreateCoverFromUrl = vi.fn().mockResolvedValue(mockNewCoverKey);
-    const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
+    const mockReplaceCover = vi
+      .fn()
+      .mockResolvedValue({ previousCoverUrl: null, topic: mockUpdatedTopic });
 
-    vi.mocked(GenerationService).mockImplementation(
-      () =>
-        ({
-          createCoverFromUrl: mockCreateCoverFromUrl,
-        }) as any,
-    );
+    vi.mocked(GenerationService).mockImplementation(function () {
+      return {
+        createCoverFromUrl: mockCreateCoverFromUrl,
+      } as any;
+    });
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        replaceCover: mockReplaceCover,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.updateTopicCover({
@@ -196,7 +221,42 @@ describe('generationTopicRouter', () => {
 
     expect(result).toEqual(mockUpdatedTopic);
     expect(mockCreateCoverFromUrl).toHaveBeenCalledWith(mockCoverUrl);
-    expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, { coverUrl: mockNewCoverKey });
+    expect(mockReplaceCover).toHaveBeenCalledWith(mockTopicId, mockNewCoverKey);
+  });
+
+  it('should delete the cover actually displaced by the update', async () => {
+    const mockTopicId = 'topic-123';
+    // Set after the request read the topic (e.g. by the server success path)
+    const mockDisplacedCoverKey = 'generations/covers/server-cover.webp';
+    const mockNewCoverKey = 'generations/covers/new-cover-key.webp';
+    const mockUpdatedTopic = { coverUrl: mockNewCoverKey, id: mockTopicId, userId: 'test-user' };
+    const mockDeleteFile = vi.fn().mockResolvedValue(undefined);
+
+    vi.mocked(GenerationService).mockImplementation(function () {
+      return { createCoverFromUrl: vi.fn().mockResolvedValue(mockNewCoverKey) } as any;
+    });
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ coverUrl: null, id: mockTopicId, userId: 'test-user' }),
+        replaceCover: vi
+          .fn()
+          .mockResolvedValue({ previousCoverUrl: mockDisplacedCoverKey, topic: mockUpdatedTopic }),
+      } as any;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return { deleteFile: mockDeleteFile } as any;
+    });
+
+    const caller = generationTopicRouter.createCaller(mockCtx);
+    const result = await caller.updateTopicCover({
+      coverUrl: 'https://example.com/cover.jpg',
+      id: mockTopicId,
+    });
+
+    expect(result).toEqual(mockUpdatedTopic);
+    expect(mockDeleteFile).toHaveBeenCalledWith(mockDisplacedCoverKey);
   });
 
   it('should delete a topic without cover', async () => {
@@ -218,19 +278,18 @@ describe('generationTopicRouter', () => {
     });
     const mockDeleteFiles = vi.fn();
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -260,19 +319,18 @@ describe('generationTopicRouter', () => {
     });
     const mockDeleteFiles = vi.fn().mockResolvedValue(true);
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -302,21 +360,20 @@ describe('generationTopicRouter', () => {
 
     // Mock file deletion to fail
     const mockDeleteFiles = vi.fn().mockRejectedValue(new Error('S3 deletion failed'));
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -350,19 +407,18 @@ describe('generationTopicRouter', () => {
     });
     const mockDeleteFiles = vi.fn().mockResolvedValue(true);
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -395,21 +451,20 @@ describe('generationTopicRouter', () => {
     const mockDeleteFiles = vi
       .fn()
       .mockRejectedValue(new Error('Some files could not be deleted from S3'));
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(mockDeletedTopic),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.deleteTopic({ id: mockTopicId });
@@ -430,19 +485,18 @@ describe('generationTopicRouter', () => {
     const mockDelete = vi.fn().mockResolvedValue(undefined);
     const mockDeleteFiles = vi.fn();
 
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          delete: mockDelete,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        delete: mockDelete,
+        findById: vi.fn().mockResolvedValue(undefined),
+      } as any;
+    });
 
-    vi.mocked(FileService).mockImplementation(
-      () =>
-        ({
-          deleteFiles: mockDeleteFiles,
-        }) as any,
-    );
+    vi.mocked(FileService).mockImplementation(function () {
+      return {
+        deleteFiles: mockDeleteFiles,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
 
@@ -450,7 +504,7 @@ describe('generationTopicRouter', () => {
     const result = await caller.deleteTopic({ id: mockTopicId });
     expect(result).toBeUndefined();
 
-    expect(mockDelete).toHaveBeenCalledWith(mockTopicId);
+    expect(mockDelete).not.toHaveBeenCalled();
     expect(mockDeleteFiles).not.toHaveBeenCalled(); // no files to delete
   });
 
@@ -470,12 +524,12 @@ describe('generationTopicRouter', () => {
     };
 
     const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.updateTopic({
@@ -491,7 +545,6 @@ describe('generationTopicRouter', () => {
     const mockTopicId = 'topic-123';
     const mockUpdateValue = {
       title: null,
-      coverUrl: null,
     };
     const mockUpdatedTopic = {
       id: mockTopicId,
@@ -504,12 +557,12 @@ describe('generationTopicRouter', () => {
     };
 
     const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          update: mockUpdate,
-        }) as any,
-    );
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
 
     const caller = generationTopicRouter.createCaller(mockCtx);
     const result = await caller.updateTopic({
@@ -521,27 +574,28 @@ describe('generationTopicRouter', () => {
     expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, mockUpdateValue);
   });
 
-  it('should return undefined when updating non-existent topic', async () => {
+  it('should throw NOT_FOUND when updating non-existent topic', async () => {
     const mockTopicId = 'non-existent-topic';
     const mockUpdateValue = {
       title: 'New Title',
     };
 
     const mockUpdate = vi.fn().mockResolvedValue(undefined);
-    vi.mocked(GenerationTopicModel).mockImplementation(
-      () =>
-        ({
-          update: mockUpdate,
-        }) as any,
-    );
-
-    const caller = generationTopicRouter.createCaller(mockCtx);
-    const result = await caller.updateTopic({
-      id: mockTopicId,
-      value: mockUpdateValue,
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue(undefined),
+        update: mockUpdate,
+      } as any;
     });
 
-    expect(result).toBeUndefined();
-    expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, mockUpdateValue);
+    const caller = generationTopicRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.updateTopic({
+        id: mockTopicId,
+        value: mockUpdateValue,
+      }),
+    ).rejects.toThrow('Generation topic not found');
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });

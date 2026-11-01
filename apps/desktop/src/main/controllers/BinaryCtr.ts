@@ -5,9 +5,16 @@ import type {
   ClaudeAuthStatus,
   DetectHeterogeneousAgentCommandParams,
 } from '@lobechat/electron-client-ipc';
+import {
+  getHeterogeneousAgentConfigOrThrow,
+  isLocalRuntimeHeterogeneousType,
+  isRemoteHeterogeneousType,
+} from '@lobechat/heterogeneous-agents';
+import { resolveRemotePlatformCommand } from '@lobechat/heterogeneous-agents/scanHost';
+import { detectDshCommand, DSH_COMMAND } from '@lobechat/heterogeneous-agents/spawn';
 
 import type { BinaryCategory, BinaryStatus } from '@/core/infrastructure/BinaryManager';
-import { detectHeterogeneousCliCommand } from '@/modules/binaries';
+import { detectHeterogeneousCliCommand, invalidateLoginShellPathCache } from '@/modules/binaries';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -43,6 +50,31 @@ export default class BinaryCtr extends ControllerModule {
     params: DetectHeterogeneousAgentCommandParams,
   ): Promise<BinaryStatus> {
     logger.debug('Detecting heterogeneous agent command:', params);
+    if (isLocalRuntimeHeterogeneousType(params.agentType)) {
+      // DeepSeek Harness is the user-installed `dsh` CLI. Probe it the way the
+      // launch path does, so the wizard never offers an agent that cannot run;
+      // drop the cached login-shell PATH so a Rescan sees a fresh install.
+      invalidateLoginShellPathCache();
+      return detectDshCommand(params.command?.trim() || DSH_COMMAND);
+    }
+    if (isRemoteHeterogeneousType(params.agentType)) {
+      return resolveRemotePlatformCommand(params.agentType);
+    }
+
+    const defaultCommand = getHeterogeneousAgentConfigOrThrow(params.agentType).defaultCommand;
+    if (params.command === defaultCommand) {
+      // Keep the explicit Rescan result in the same manager entry that launch
+      // preflight reads. This refreshes both the login-shell PATH and stale
+      // negative/positive binary status in one operation.
+      return this.manager.detect(defaultCommand, true);
+    }
+
+    // This is the Connect Agent Rescan path, and it bypasses `BinaryManager`
+    // for custom commands, which have no registered manager entry. A user
+    // pressing Rescan after installing one still has to see the PATH that its
+    // installer wrote, not the one cached at first scan.
+    invalidateLoginShellPathCache();
+
     return detectHeterogeneousCliCommand(params.agentType, params.command);
   }
 

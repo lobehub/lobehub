@@ -3,6 +3,7 @@
 import { memo, useLayoutEffect } from 'react';
 import { useParams } from 'react-router';
 
+import { AgentNotFoundGuard } from '@/features/AgentNotFound';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import Conversation from '@/routes/(main)/agent/features/Conversation';
@@ -35,7 +36,11 @@ const PopupAgentTopicPage = memo(() => {
 
   if (!aid || !tid) return null;
 
-  return <Conversation />;
+  return (
+    <AgentNotFoundGuard>
+      <Conversation />
+    </AgentNotFoundGuard>
+  );
 });
 
 PopupAgentTopicPage.displayName = 'PopupAgentTopicPage';

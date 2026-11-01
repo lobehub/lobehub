@@ -1,7 +1,7 @@
-import { type OpenAIChatMessage } from '@lobechat/types';
+import { type OpenAIChatMessage, type VoiceMessageRecording } from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
-import { type MenuProps } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 
 import { type ActionKeys } from '@/features/ChatInput';
 
@@ -12,11 +12,19 @@ export type SendButtonHandler = (params: {
   getMarkdownContent: () => string;
 }) => Promise<void> | void;
 
+export type VoiceMessageSendHandler = (recording: VoiceMessageRecording) => boolean;
+
 export interface SendButtonProps {
   disabled?: boolean;
   generating: boolean;
   onStop: (params: { editor: IEditor }) => void;
   shape?: 'round' | 'default';
+  /**
+   * While `generating`, render a Send button beside Stop so a follow-up can be
+   * sent without hiding the running indicator. Only hosts whose `onSend`
+   * accepts sends during generation (e.g. by queueing) should enable this.
+   */
+  showSendWhileGenerating?: boolean;
   size?: number;
 }
 
@@ -54,8 +62,11 @@ export const DEFAULT_CHAT_INPUT_FEATURE = {
 } as const satisfies Required<ChatInputFeature>;
 
 export interface PublicState {
+  activeAudioInputMode?: 'dictation' | 'voiceMessage';
   agentId?: string;
   allowExpand?: boolean;
+  canRecordVoiceMessage?: boolean;
+  contextSelectionKey?: string;
   contextWindowMessages?: ContextWindowMessage[];
   draftKey?: string;
   expand?: boolean;
@@ -66,14 +77,34 @@ export interface PublicState {
   mobile?: boolean;
   onMarkdownContentChange?: (content: string) => void;
   onSend?: SendButtonHandler;
+  onVoiceMessageSend?: VoiceMessageSendHandler;
+  /**
+   * Live send gate consulted by `handleSendButton` instead of
+   * `sendButtonProps.disabled`. The disabled flag mirrors editor content
+   * through the editor's debounced onChange, so a fast type→Enter arrives
+   * while the mirror still reads "empty" and the send would be silently
+   * dropped. Only hosts whose onSend re-validates its own gates should
+   * provide this.
+   */
+  resolveSendBlocked?: () => boolean;
   rightActions: ActionKeys[];
   sendButtonProps?: SendButtonProps;
-  sendMenu?: MenuProps;
+  sendMenu?: { items: DropdownItem[] };
   showTypoBar?: boolean;
   /**
    * Slash menu placement: 'bottom' for home page (input in center), 'top' for page input (at bottom)
    */
   slashPlacement?: SlashPlacement;
+  /**
+   * The topic this composer belongs to, as its host conversation resolves it —
+   * `null` when the host has a conversation with no topic (a page copilot
+   * embedded beside another chat, a not-yet-created topic). Left `undefined` by
+   * hosts that have no conversation of their own, which fall back to the global
+   * `activeTopicId` (see `useTopicId`). Never read the global id directly from
+   * a composer control: an embedded conversation can run against a different
+   * topic than the surrounding page.
+   */
+  topicId?: string | null;
 }
 
 export interface State extends PublicState {
@@ -87,6 +118,7 @@ export interface State extends PublicState {
 }
 
 export const initialState: State = {
+  activeAudioInputMode: undefined,
   allowExpand: true,
   expand: false,
   feature: DEFAULT_CHAT_INPUT_FEATURE,

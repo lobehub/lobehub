@@ -1,7 +1,8 @@
 'use client';
 
 import { Button, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { CircleAlert, CircleCheck, CircleSlash, SquareArrowOutUpRight } from 'lucide-react';
 import { memo } from 'react';
@@ -11,22 +12,20 @@ import { useChatStore } from '@/store/chat';
 
 import { dataSelectors, useConversationStore } from '../../store';
 
-const useStyles = createStyles(({ css, token }) => ({
-  card: css`
-    overflow: hidden;
-
-    padding-block: 12px;
-    padding-inline: 16px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: 16px;
-
-    background: ${token.colorBgElevated};
-  `,
-  identifier: css`
-    font-family: ${token.fontFamilyCode};
-    color: ${token.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '16px',
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+  },
+  identifier: { fontFamily: cssVar.fontFamilyCode, color: cssVar.colorTextSecondary },
+});
 
 interface TaskCallbackMessageProps {
   id: string;
@@ -38,7 +37,7 @@ type CallbackReason = 'done' | 'error' | 'interrupted';
 const reasonMeta: Record<
   CallbackReason,
   {
-    color: string;
+    color: keyof typeof cssVar;
     i18nKey: 'taskCallback.done' | 'taskCallback.error' | 'taskCallback.interrupted';
     icon: typeof CircleCheck;
   }
@@ -56,7 +55,6 @@ const reasonMeta: Record<
  * Renders as a standalone card (no avatar bubble), like the verify card.
  */
 const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
-  const { styles, theme } = useStyles();
   const { t } = useTranslation('chat');
   // Open the task in the right-side detail portal (in-context), instead of
   // navigating away from the conversation to the full task page.
@@ -69,24 +67,24 @@ const TaskCallbackMessage = memo<TaskCallbackMessageProps>(({ id }) => {
   const reason = (callback.reason ?? 'done') as CallbackReason;
   const { color, i18nKey, icon } = reasonMeta[reason] ?? reasonMeta.done;
   const content = typeof item?.content === 'string' ? item.content : '';
+  const openTask = () => openTaskDetail(callback.taskId ?? callback.identifier);
+
+  const viewTaskButton = (
+    <Button icon={SquareArrowOutUpRight} size={'small'} type={'text'} onClick={openTask}>
+      {t('taskCallback.viewTask')}
+    </Button>
+  );
 
   return (
     <Flexbox paddingBlock={8}>
-      <Flexbox className={styles.card} gap={8}>
+      <Flexbox className={stylex.props(styles.card).className} gap={8}>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           <Flexbox horizontal align={'center'} gap={8}>
-            <Icon color={(theme as any)[color]} icon={icon} size={18} />
+            <Icon color={cssVar[color]} icon={icon} size={18} />
             <Text strong>{t(i18nKey)}</Text>
-            <span className={styles.identifier}>{callback.identifier}</span>
+            <span {...stylex.props(styles.identifier)}>{callback.identifier}</span>
           </Flexbox>
-          <Button
-            icon={SquareArrowOutUpRight}
-            size={'small'}
-            type={'text'}
-            onClick={() => openTaskDetail(callback.identifier)}
-          >
-            {t('taskCallback.viewTask')}
-          </Button>
+          {viewTaskButton}
         </Flexbox>
         {content ? <Markdown variant={'chat'}>{content}</Markdown> : null}
       </Flexbox>

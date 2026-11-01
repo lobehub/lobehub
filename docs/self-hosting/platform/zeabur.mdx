@@ -16,8 +16,8 @@ tags:
   This article assumes that you are familiar with the basic principles and processes of deploying
   the LobeHub server database version, so it only includes content related to core environment
   variable configuration. If you are not familiar with the deployment principles of the LobeHub
-  server database version, please refer to [Deploying Server
-  Database](/docs/self-hosting/server-database) first.
+  server database version, please refer to [Getting
+  Started](/docs/self-hosting/start) first.
 </Callout>
 
 The template on Zeabur includes 4 services:
@@ -62,7 +62,7 @@ Here is the process for deploying the LobeHub server database version on Zeabur:
 
   After the deployment is done, you need to configure your Logto service to enable authrization.
 
-  Access your Logto console with the console domain you just binded, and then create a `Next.js 14(App router)` application to get the client ID and client secret, and fill in the cors and callback URLs. You can check [this document](../advanced/auth.mdx) for a more detailed guide.
+  Access your Logto console with the console domain you just binded, and then create a `Next.js 14(App router)` application to get the client ID and client secret, and fill in the cors and callback URLs. You can check [this document](/docs/self-hosting/auth) for a more detailed guide.
 
   Fill in those variables into your LobeHub service on Zeabur, here is a more detailed guide for [editing environment variables on Zeabur](https://zeabur.com/docs/deploy/variables).
 

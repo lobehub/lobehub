@@ -45,6 +45,7 @@ export const HotkeyEnum = {
   DeleteAndRegenerateMessage: 'deleteAndRegenerateMessage',
   DeleteLastMessage: 'deleteLastMessage',
   EditMessage: 'editMessage',
+  FindInTopic: 'findInTopic',
   NavigateToChat: 'navigateToChat',
   NextTab: 'nextTab',
   OpenChatSettings: 'openChatSettings',
@@ -57,8 +58,10 @@ export const HotkeyEnum = {
   ShowApp: 'showApp',
   SwitchAgent: 'switchAgent',
   SwitchTab: 'switchTab',
+  ToggleFavorite: 'toggleFavorite',
   ToggleLeftPanel: 'toggleLeftPanel',
   ToggleRightPanel: 'toggleRightPanel',
+  ToggleTerminalPanel: 'toggleTerminalPanel',
 } as const satisfies Record<string, HotkeyId>;
 
 export const HotkeyGroupEnum = {
@@ -119,7 +122,7 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.NavigateToChat,
-    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Backquote]),
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Shift, KeyEnum.Backquote]),
     scopes: [HotkeyScopeEnum.Global],
   },
   {
@@ -140,7 +143,25 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Shift, KeyEnum.QuestionMark]),
     scopes: [HotkeyScopeEnum.Global],
   },
+  {
+    group: HotkeyGroupEnum.Essential,
+    id: HotkeyEnum.ToggleFavorite,
+    keys: combineKeys([KeyEnum.Alt, 'f']),
+    scopes: [HotkeyScopeEnum.Global],
+  },
   // Chat
+  {
+    group: HotkeyGroupEnum.Conversation,
+    id: HotkeyEnum.FindInTopic,
+    keys: combineKeys([KeyEnum.Mod, 'f']),
+    scopes: [HotkeyScopeEnum.Chat],
+  },
+  {
+    group: HotkeyGroupEnum.Conversation,
+    id: HotkeyEnum.ToggleTerminalPanel,
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Backquote]),
+    scopes: [HotkeyScopeEnum.Chat],
+  },
   {
     group: HotkeyGroupEnum.Conversation,
     id: HotkeyEnum.OpenChatSettings,

@@ -8,6 +8,57 @@ import { UserPersonaModel } from '../persona';
 
 const userId = 'persona-user';
 
+interface MetadataMergeCase {
+  expectedMetadata: Record<string, unknown> | null;
+  expectedVersion: number;
+  initialMetadata?: Record<string, unknown> | null;
+  initialPatch?: Record<string, unknown>;
+  name: string;
+  updateMetadata?: Record<string, unknown> | null;
+  updatePatch: Record<string, unknown>;
+}
+
+const metadataMergeCases: MetadataMergeCase[] = [
+  {
+    expectedMetadata: { preference: { concise: true } },
+    expectedVersion: 1,
+    initialMetadata: { preference: { concise: true } },
+    name: 'preserves existing metadata when metadata is undefined and the patch is empty',
+    updateMetadata: undefined,
+    updatePatch: {},
+  },
+  {
+    expectedMetadata: {
+      onboardingUnderstanding: { sessionId: 'session-1' },
+      preference: { concise: true },
+    },
+    expectedVersion: 2,
+    initialMetadata: { preference: { concise: true } },
+    name: 'preserves existing metadata when metadata is null and applies the patch',
+    updateMetadata: null,
+    updatePatch: { onboardingUnderstanding: { sessionId: 'session-1' } },
+  },
+  {
+    expectedMetadata: null,
+    expectedVersion: 1,
+    initialPatch: {},
+    name: 'keeps an empty patch over absent metadata as a no-op',
+    updatePatch: {},
+  },
+  {
+    expectedMetadata: {
+      added: true,
+      collision: 'patch',
+      replacement: true,
+    },
+    expectedVersion: 2,
+    initialMetadata: { existing: true },
+    name: 'uses explicit metadata as the replacement base with patch precedence',
+    updateMetadata: { collision: 'metadata', replacement: true },
+    updatePatch: { added: true, collision: 'patch' },
+  },
+];
+
 let personaModel: UserPersonaModel;
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -97,6 +148,96 @@ describe('UserPersonaModel', () => {
     expect(persisted).toHaveLength(existingDiffs.length);
   });
 
+  it('shallowly merges metadata patches into the current persona metadata', async () => {
+    await personaModel.upsertPersona({
+      metadata: { preference: { concise: true } },
+      persona: '# Persona',
+    });
+
+    const { diff, document } = await personaModel.upsertPersona({
+      diffPersona: '- captured onboarding understanding',
+      metadataPatch: {
+        onboardingUnderstanding: {
+          sessionId: 'session-1',
+          sourceFingerprint: 'github@1',
+        },
+      },
+      persona: '# Persona',
+    });
+
+    const expectedMetadata = {
+      onboardingUnderstanding: {
+        sessionId: 'session-1',
+        sourceFingerprint: 'github@1',
+      },
+      preference: { concise: true },
+    };
+    expect(document.metadata).toEqual(expectedMetadata);
+    expect(document.version).toBe(2);
+    expect(diff?.metadata).toEqual(expectedMetadata);
+
+    const persisted = await serverDB.query.userPersonaDocuments.findFirst({
+      where: (t, { eq }) => eq(t.userId, userId),
+    });
+    expect(persisted?.metadata).toEqual(expectedMetadata);
+  });
+
+  it.each(metadataMergeCases)(
+    '$name',
+    async ({
+      expectedMetadata,
+      expectedVersion,
+      initialMetadata,
+      initialPatch,
+      updateMetadata,
+      updatePatch,
+    }) => {
+      await personaModel.upsertPersona({
+        metadata: initialMetadata,
+        metadataPatch: initialPatch,
+        persona: '# Persona',
+      });
+
+      const { document } = await personaModel.upsertPersona({
+        metadata: updateMetadata,
+        metadataPatch: updatePatch,
+        persona: '# Persona',
+      });
+
+      expect(document.metadata).toEqual(expectedMetadata);
+      expect(document.version).toBe(expectedVersion);
+    },
+  );
+
+  it('does not create a new version when an identical metadata patch is repeated', async () => {
+    const params = {
+      metadataPatch: {
+        onboardingUnderstanding: {
+          sessionId: 'session-1',
+          sourceFingerprint: 'github@1',
+        },
+      },
+      persona: '# Stable persona',
+      snapshot: '# Stable persona',
+      tagline: 'Stable',
+    };
+    const { document: created } = await personaModel.upsertPersona(params);
+    const existingDiffs = await serverDB.query.userPersonaDocumentHistories.findMany({
+      where: (t, { eq }) => eq(t.userId, userId),
+    });
+
+    const { diff, document } = await personaModel.upsertPersona(params);
+
+    expect(document.metadata).toEqual(params.metadataPatch);
+    expect(document.version).toBe(created.version);
+    expect(diff).toBeUndefined();
+
+    const persisted = await serverDB.query.userPersonaDocumentHistories.findMany({
+      where: (t, { eq }) => eq(t.userId, userId),
+    });
+    expect(persisted).toHaveLength(existingDiffs.length);
+  });
+
   it('skips diff insert when no diff content supplied', async () => {
     const { diff } = await personaModel.upsertPersona({
       persona: '# only persona',
@@ -162,5 +303,112 @@ describe('UserPersonaModel', () => {
 
     const diffs = await personaModel.listDiffs();
     expect(diffs).toHaveLength(2);
+  });
+
+  describe('restoreVersion', () => {
+    it('restores a snapshot as a new current version without deleting history', async () => {
+      await personaModel.upsertPersona({
+        persona: '# v1',
+        snapshot: '# v1',
+        tagline: 'First',
+      });
+      await personaModel.upsertPersona({
+        persona: '# v2',
+        snapshot: '# v2',
+        tagline: 'Second',
+      });
+      const [firstVersion] = (await personaModel.listDiffs()).toReversed();
+
+      const restored = await personaModel.restoreVersion(firstVersion.id);
+
+      expect(restored.document).toMatchObject({
+        persona: '# v1',
+        tagline: 'First',
+        version: 3,
+      });
+      expect(restored.diff).toMatchObject({
+        editedBy: 'user',
+        nextVersion: 3,
+        previousVersion: 2,
+        snapshotPersona: '# v1',
+        snapshotTagline: 'First',
+      });
+      await expect(personaModel.listDiffs()).resolves.toHaveLength(3);
+    });
+
+    it('rejects a history entry owned by another user', async () => {
+      const otherUserId = 'persona-other-user';
+      await serverDB.insert(users).values({ id: otherUserId });
+      const otherModel = new UserPersonaModel(serverDB, otherUserId);
+      await otherModel.upsertPersona({ persona: '# private', snapshot: '# private' });
+      const [otherVersion] = await otherModel.listDiffs();
+
+      await expect(personaModel.restoreVersion(otherVersion.id)).rejects.toThrow(
+        'User persona version was not found',
+      );
+    });
+
+    it('rejects a history entry without a persona snapshot', async () => {
+      const { document } = await personaModel.upsertPersona({ persona: '# current' });
+      const [history] = await serverDB
+        .insert(userPersonaDocumentHistories)
+        .values({
+          nextVersion: 1,
+          personaId: document.id,
+          profile: 'default',
+          userId,
+        })
+        .returning();
+
+      await expect(personaModel.restoreVersion(history.id)).rejects.toThrow(
+        'User persona version snapshot is unavailable',
+      );
+    });
+
+    it('clears the current tagline when the restored snapshot has a null tagline', async () => {
+      await personaModel.upsertPersona({ persona: '# v1', snapshot: '# v1', tagline: null });
+      await personaModel.upsertPersona({
+        persona: '# v2',
+        snapshot: '# v2',
+        tagline: 'Current tagline',
+      });
+      const [firstVersion] = (await personaModel.listDiffs()).toReversed();
+
+      const restored = await personaModel.restoreVersion(firstVersion.id);
+
+      expect(restored.document).toMatchObject({ persona: '# v1', tagline: null, version: 3 });
+    });
+
+    it('restores an empty persona snapshot as a new version', async () => {
+      const { document } = await personaModel.upsertPersona({ persona: '# current' });
+      const [history] = await serverDB
+        .insert(userPersonaDocumentHistories)
+        .values({
+          nextVersion: 0,
+          personaId: document.id,
+          profile: 'default',
+          snapshotPersona: '',
+          userId,
+        })
+        .returning();
+
+      const restored = await personaModel.restoreVersion(history.id);
+
+      expect(restored.document).toMatchObject({ persona: '', version: 2 });
+      expect(restored.diff).toMatchObject({ snapshotPersona: '' });
+    });
+
+    it('rejects a history entry from a non-default profile', async () => {
+      await personaModel.upsertPersona({
+        persona: '# work',
+        profile: 'work',
+        snapshot: '# work',
+      });
+      const [workVersion] = await personaModel.listDiffs(50, 'work');
+
+      await expect(personaModel.restoreVersion(workVersion.id)).rejects.toThrow(
+        'User persona version was not found',
+      );
+    });
   });
 });

@@ -3,6 +3,12 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AcceptanceModel } from '@/database/models/acceptance';
+import { ProjectModel } from '@/database/models/project';
+import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TaskService } from '@/server/services/task';
+
 import { taskRouter } from '../../task';
 import {
   cleanupTestUser,
@@ -15,7 +21,9 @@ import {
 // Mock getServerDB
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 // Mock AiAgentService
@@ -26,30 +34,59 @@ const mockExecAgent = vi.fn().mockResolvedValue({
 });
 const mockInterruptTask = vi.fn().mockResolvedValue({ success: true });
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn().mockImplementation(() => ({
-    execAgent: mockExecAgent,
-    interruptTask: mockInterruptTask,
-  })),
+  AiAgentService: vi.fn().mockImplementation(function () {
+    return {
+      execAgent: mockExecAgent,
+      interruptTask: mockInterruptTask,
+    };
+  }),
 }));
 
 // Mock TaskLifecycleService
 vi.mock('@/server/services/taskLifecycle', () => ({
-  TaskLifecycleService: vi.fn().mockImplementation(() => ({
-    onTopicComplete: vi.fn(),
-  })),
+  TaskLifecycleService: vi.fn().mockImplementation(function () {
+    return {
+      onTopicComplete: vi.fn(),
+    };
+  }),
 }));
 
 // Mock TaskReviewService
 vi.mock('@/server/services/taskReview', () => ({
-  TaskReviewService: vi.fn().mockImplementation(() => ({
-    review: vi.fn(),
-  })),
+  TaskReviewService: vi.fn().mockImplementation(function () {
+    return {
+      review: vi.fn(),
+    };
+  }),
 }));
 
 // Mock initModelRuntimeFromDB
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
+
+// Mock the assignment-notification business slot (default impl is a no-op;
+// the router must fire it only on an actual assignee change to someone else).
+const mockNotifyTaskAssigned = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/business/server/task/notifyTaskAssigned', () => ({
+  notifyTaskAssigned: (...args: unknown[]) => mockNotifyTaskAssigned(...args),
+}));
+
+// Mock the comment-notification business slot (default impl is a no-op).
+const mockNotifyTaskCommentActivity = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/business/server/task/notifyTaskCommentActivity', () => ({
+  notifyTaskCommentActivity: (...args: unknown[]) => mockNotifyTaskCommentActivity(...args),
+}));
+
+// Notifications are retained past the response through `after()`; run that
+// work eagerly here and flush it before asserting on the slots above.
+const afterResponseTasks = vi.hoisted(() => [] as Promise<unknown>[]);
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: (work: () => unknown) => void afterResponseTasks.push(Promise.resolve().then(work)),
+}));
+const flushAfterResponse = async () => {
+  while (afterResponseTasks.length > 0) await Promise.all(afterResponseTasks.splice(0));
+};
 
 describe('Task Router Integration', () => {
   let serverDB: LobeChatDatabase;
@@ -82,6 +119,46 @@ describe('Task Router Integration', () => {
   });
 
   describe('create + find + detail', () => {
+    it.each(['personal', 'workspace'])(
+      'ignores legacy prefixes and inherits project numbering in %s',
+      async (scope) => {
+        let workspaceId: string | undefined;
+        if (scope === 'workspace') {
+          workspaceId = 'task-prefix-integration-workspace';
+          const { workspaces, workspaceMembers } = await import('@/database/schemas');
+          await serverDB.insert(workspaces).values({
+            id: workspaceId,
+            name: 'Task prefixes',
+            primaryOwnerId: userId,
+            slug: workspaceId,
+          });
+          await serverDB.insert(workspaceMembers).values({ role: 'owner', userId, workspaceId });
+        }
+        const scopedCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+        const model = new TaskModel(serverDB, userId, workspaceId);
+        const project = await new ProjectModel(serverDB, userId, workspaceId).create({
+          identifier: 'PROJ',
+          name: 'Prefix project',
+        });
+        for (const identifierPrefix of ['T', 'CUSTOM', '', null, 42]) {
+          const legacyInput = { identifierPrefix, instruction: 'Standalone' };
+          const standalone = await scopedCaller.create(legacyInput);
+          expect(standalone.success).toBe(true);
+          expect(standalone.data.identifier).toBe(`T-${standalone.data.seq}`);
+          const projectInput = { ...legacyInput, projectId: project.id };
+          const parent = await scopedCaller.create(projectInput);
+          expect(parent.data.identifier).toBe(`PROJ-${parent.data.seq}`);
+          for (const parentTaskId of [parent.data.id, parent.data.identifier]) {
+            const childInput = { ...legacyInput, parentTaskId };
+            const child = await scopedCaller.create(childInput);
+            expect(child.data.projectId).toBe(project.id);
+            expect(child.data.identifier).toBe(`PROJ-${child.data.seq}`);
+            expect((await model.findById(child.data.id))?.identifier).toBe(child.data.identifier);
+          }
+        }
+      },
+    );
+
     it('should create a task and retrieve it', async () => {
       const result = await caller.create({
         instruction: 'Write a book',
@@ -154,6 +231,128 @@ describe('Task Router Integration', () => {
           id: task.data.id,
         }),
       ).rejects.toThrow('Assignee agent not found');
+    });
+
+    it('should clear stale editorData for instruction-only updates', async () => {
+      const task = await caller.create({
+        editorData: { root: { children: [{ text: 'Old instruction' }] } },
+        instruction: 'Old instruction',
+        name: 'Editable task',
+      });
+
+      const instructionOnlyUpdate = await caller.update({
+        id: task.data.id,
+        instruction: 'New instruction',
+      });
+
+      expect(instructionOnlyUpdate.data.instruction).toBe('New instruction');
+      expect(instructionOnlyUpdate.data.editorData).toBeNull();
+
+      const nextEditorData = { root: { children: [{ text: 'Rich instruction' }] } };
+      const richTextUpdate = await caller.update({
+        editorData: nextEditorData,
+        id: task.data.id,
+        instruction: 'Rich instruction',
+      });
+
+      expect(richTextUpdate.data.instruction).toBe('Rich instruction');
+      expect(richTextUpdate.data.editorData).toEqual(nextEditorData);
+    });
+
+    it('should apply field and status edits in one mutation', async () => {
+      const task = await caller.create({ instruction: 'Original', name: 'Original' });
+
+      const result = await caller.update({
+        id: task.data.id,
+        name: 'Updated',
+        status: 'completed',
+      });
+
+      expect(result.data.name).toBe('Updated');
+      expect(result.data.status).toBe('completed');
+    });
+
+    it('should roll back field edits when the status transition fails', async () => {
+      const task = await caller.create({ instruction: 'Original', name: 'Original' });
+      const statusError = vi
+        .spyOn(TaskService.prototype, 'updateStatus')
+        .mockRejectedValueOnce(new Error('status transition failed'));
+
+      await expect(
+        caller.update({ id: task.data.id, name: 'Updated', status: 'completed' }),
+      ).rejects.toThrow('Failed to update task');
+
+      statusError.mockRestore();
+      const persisted = await new TaskModel(serverDB, userId).findById(task.data.id);
+      expect(persisted?.name).toBe('Original');
+      expect(persisted?.status).toBe('backlog');
+    });
+  });
+
+  describe('coexisting assignees (agent + member)', () => {
+    // The executing agent and the human owner are independent sides that can
+    // coexist on one task — the tool layer and the UI both rely on the router
+    // never cross-clearing them.
+    const setupWorkspace = async () => {
+      const workspaceId = 'task-assignee-coexist-workspace';
+      const { agents, workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Assignee Coexist Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsAgentId = 'agt_assignee_coexist_ws';
+      await serverDB
+        .insert(agents)
+        .values({ id: wsAgentId, slug: wsAgentId, userId, workspaceId })
+        .onConflictDoNothing();
+      return {
+        workspaceId,
+        wsAgentId,
+        wsCaller: taskRouter.createCaller({ ...createTestContext(userId), workspaceId }),
+      };
+    };
+
+    it('creates a task with an executing agent AND a human owner, notifying the member once', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const { wsAgentId, wsCaller } = await setupWorkspace();
+
+      const task = await wsCaller.create({
+        assigneeAgentId: wsAgentId,
+        assigneeUserId: otherUserId,
+        instruction: 'Coexisting assignees',
+      });
+
+      expect(task.data.assigneeAgentId).toBe(wsAgentId);
+      expect(task.data.assigneeUserId).toBe(otherUserId);
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledWith(
+        expect.objectContaining({ assigneeUserId: otherUserId, taskId: task.data.id }),
+      );
+    });
+
+    it('updating one assignee side never clears the other', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const { wsAgentId, wsCaller } = await setupWorkspace();
+      const task = await wsCaller.create({ assigneeAgentId: wsAgentId, instruction: 'Sides' });
+
+      const withMember = await wsCaller.update({ assigneeUserId: otherUserId, id: task.data.id });
+      expect(withMember.data.assigneeAgentId).toBe(wsAgentId);
+      expect(withMember.data.assigneeUserId).toBe(otherUserId);
+
+      const agentCleared = await wsCaller.update({ assigneeAgentId: null, id: task.data.id });
+      expect(agentCleared.data.assigneeAgentId).toBeNull();
+      expect(agentCleared.data.assigneeUserId).toBe(otherUserId);
+
+      const memberCleared = await wsCaller.update({ assigneeUserId: null, id: task.data.id });
+      expect(memberCleared.data.assigneeUserId).toBeNull();
+      expect(memberCleared.data.assigneeAgentId).toBeNull();
     });
   });
 
@@ -256,6 +455,63 @@ describe('Task Router Integration', () => {
     });
   });
 
+  describe('schedule pattern validation', () => {
+    it('accepts standard cron with day-of-month, month and weekday ranges', async () => {
+      const created = await caller.create({
+        automationMode: 'schedule',
+        instruction: 'One-shot reminder',
+        schedulePattern: '0 10 27 9 *',
+        scheduleTimezone: 'Asia/Shanghai',
+      });
+      const updated = await caller.update({
+        id: created.data.id,
+        schedulePattern: '45 11 * * 1-5',
+      });
+      expect(updated.data.schedulePattern).toBe('45 11 * * 1-5');
+    });
+
+    it('rejects cron the dispatcher cannot evaluate on create and update', async () => {
+      await expect(
+        caller.create({
+          automationMode: 'schedule',
+          instruction: 'Bad cron',
+          schedulePattern: '0 0 9 * * *',
+        }),
+      ).rejects.toThrow(/Invalid schedulePattern .*0 0 9 \* \* \*.*expected 5 fields/);
+
+      const created = await caller.create({ instruction: 'Later scheduled' });
+      await expect(
+        caller.update({ id: created.data.id, schedulePattern: '0 0 30 2 *' }),
+      ).rejects.toThrow(/Invalid schedulePattern .*0 0 30 2 \*.*day of month/);
+      await expect(
+        caller.update({ id: created.data.id, scheduleTimezone: 'Mars/Base' }),
+      ).rejects.toThrow(/IANA timezone/);
+    });
+
+    it('checks the resulting pattern/timezone pair against the stored schedule', async () => {
+      const created = await caller.create({ instruction: 'Legacy schedule' });
+      // A row written before write-time validation existed.
+      await new TaskModel(testDB, userId).update(created.data.id, {
+        schedulePattern: '0 0 9 * * *',
+        scheduleTimezone: 'Mars/Base',
+      });
+
+      await expect(
+        caller.update({ id: created.data.id, schedulePattern: '0 9 * * *' }),
+      ).rejects.toThrow(/Invalid schedule: unknown timezone "Mars\/Base"/);
+      await expect(
+        caller.update({ automationMode: 'schedule', id: created.data.id }),
+      ).rejects.toThrow(/Invalid schedule: expected 5 fields/);
+
+      const updated = await caller.update({
+        id: created.data.id,
+        schedulePattern: '0 9 * * *',
+        scheduleTimezone: 'Asia/Shanghai',
+      });
+      expect(updated.data.scheduleTimezone).toBe('Asia/Shanghai');
+    });
+  });
+
   describe('status transitions', () => {
     it('should transition backlog → running → paused → completed', async () => {
       const task = await caller.create({ instruction: 'Test' });
@@ -280,6 +536,17 @@ describe('Task Router Integration', () => {
         status: 'completed',
       });
       expect(completed.data.status).toBe('completed');
+    });
+
+    it('resolves a task identifier to its row when changing status', async () => {
+      const task = await caller.create({ instruction: 'Test identifier resolution' });
+
+      const running = await caller.updateStatus({
+        id: task.data.identifier,
+        status: 'running',
+      });
+
+      expect(running.data).toMatchObject({ id: task.data.id, status: 'running' });
     });
   });
 
@@ -329,6 +596,33 @@ describe('Task Router Integration', () => {
       const deletedDetail = await caller.detail({ id: task.data.identifier });
       expect(deletedDetail.data.activities?.some((a) => a.id === added.data.id)).toBe(false);
     });
+
+    it('should clear stale editorData for content-only comment updates', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+      const comment = await caller.addComment({
+        content: 'Old comment',
+        editorData: { root: { children: [{ text: 'Old comment' }] } },
+        id: task.data.id,
+      });
+
+      const contentOnlyUpdate = await caller.updateComment({
+        commentId: comment.data.id,
+        content: 'New comment',
+      });
+
+      expect(contentOnlyUpdate.data.content).toBe('New comment');
+      expect(contentOnlyUpdate.data.editorData).toBeNull();
+
+      const nextEditorData = { root: { children: [{ text: 'Rich comment' }] } };
+      const richTextUpdate = await caller.updateComment({
+        commentId: comment.data.id,
+        content: 'Rich comment',
+        editorData: nextEditorData,
+      });
+
+      expect(richTextUpdate.data.content).toBe('Rich comment');
+      expect(richTextUpdate.data.editorData).toEqual(nextEditorData);
+    });
   });
 
   describe('review config', () => {
@@ -369,6 +663,28 @@ describe('Task Router Integration', () => {
   });
 
   describe('verify config', () => {
+    it('moves verify config supplied at task creation into Acceptance', async () => {
+      const task = await caller.create({
+        config: {
+          model: 'test-model',
+          verify: { enabled: true, maxIterations: 2, requirement: 'Ship the artifact' },
+        },
+        instruction: 'Test',
+      });
+
+      const storedTask = await new TaskModel(serverDB, userId).findById(task.data.id);
+      const acceptance = await new AcceptanceModel(serverDB, userId).findBySubject(
+        'task',
+        task.data.id,
+      );
+
+      expect(storedTask?.config).toEqual({ model: 'test-model' });
+      expect(acceptance).toMatchObject({
+        config: { enabled: true, maxIterations: 2 },
+        requirement: 'Ship the artifact',
+      });
+    });
+
     it('should set and retrieve verify config (round-trip)', async () => {
       const task = await caller.create({ instruction: 'Test' });
 
@@ -401,6 +717,22 @@ describe('Task Router Integration', () => {
         verifyCriteriaIds: ['c1', 'c2'],
         verifyRubricId: 'rub_1',
       });
+
+      const storedTask = await new TaskModel(serverDB, userId).findById(task.data.id);
+      const acceptance = await new AcceptanceModel(serverDB, userId).findBySubject(
+        'task',
+        task.data.id,
+      );
+      expect(storedTask?.config).not.toHaveProperty('verify');
+      expect(acceptance).toMatchObject({
+        config: {
+          enabled: true,
+          maxIterations: 3,
+          verifierAgentId: 'agt_codex',
+          verifyCriteriaIds: ['c1', 'c2'],
+          verifyRubricId: 'rub_1',
+        },
+      });
     });
 
     it('should clear a saved field when passed null', async () => {
@@ -432,9 +764,42 @@ describe('Task Router Integration', () => {
       const verify = await caller.getVerifyConfig({ id: task.data.id });
       expect(verify.data).toEqual({ enabled: true, maxIterations: 4 });
     });
+
+    it('preserves legacy verify fields when applying a partial Acceptance patch', async () => {
+      const task = await caller.create({ instruction: 'Test' });
+      await new TaskModel(serverDB, userId).updateVerifyConfig(task.data.id, {
+        enabled: true,
+        maxIterations: 4,
+        verifierAgentId: 'legacy-verifier',
+      });
+
+      await caller.updateVerifyConfig({
+        id: task.data.id,
+        verify: { maxIterations: 2 },
+      });
+
+      const verify = await caller.getVerifyConfig({ id: task.data.id });
+      expect(verify.data).toEqual({
+        enabled: true,
+        maxIterations: 2,
+        verifierAgentId: 'legacy-verifier',
+      });
+    });
   });
 
   describe('run idempotency', () => {
+    it('resolves a task identifier to its row when starting a run', async () => {
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Test',
+      });
+
+      await caller.run({ id: task.data.identifier });
+
+      const updated = await caller.detail({ id: task.data.id });
+      expect(updated.data?.status).toBe('running');
+    });
+
     it('should reject run when a topic is already running', async () => {
       const task = await caller.create({
         assigneeAgentId: testAgentId,
@@ -454,11 +819,44 @@ describe('Task Router Integration', () => {
         instruction: 'Test',
       });
 
-      const result = await caller.run({ id: task.data.id });
+      await caller.run({ id: task.data.id });
 
       await expect(caller.run({ continueTopicId: 'tpc_test', id: task.data.id })).rejects.toThrow(
         /already running/,
       );
+    });
+  });
+
+  describe('usage', () => {
+    it('aggregates the task topic usage', async () => {
+      const task = await caller.create({ instruction: 'Measure this task' });
+      await new TaskTopicModel(serverDB, userId).add(task.data.id, testTopicId, {
+        operationId: 'op_usage',
+        seq: 1,
+      });
+      const { topics } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB
+        .update(topics)
+        .set({
+          totalCost: '0.125',
+          totalInputTokens: 1200,
+          totalOutputTokens: 300,
+          totalTokens: 1500,
+        })
+        .where(eq(topics.id, testTopicId));
+
+      const result = await caller.usage({ id: task.data.identifier });
+
+      expect(result.data).toMatchObject({
+        runs: 1,
+        taskId: task.data.id,
+        taskIdentifier: task.data.identifier,
+        totalCost: 0.125,
+        totalInputTokens: 1200,
+        totalOutputTokens: 300,
+        totalTokens: 1500,
+      });
     });
   });
 
@@ -477,6 +875,42 @@ describe('Task Router Integration', () => {
       const found = await caller.find({ id: task.data.id });
       expect(found.data.status).toBe('paused');
       expect(found.data.error).toContain('LLM failed');
+    });
+
+    it('does not book a running topic when execAgent reports a dispatch failure', async () => {
+      // A heterogeneous dispatch or operation startup failure comes back as a
+      // result (`success: false`) rather than a throw: the topic and its error
+      // bubble already exist. Booking that dead operation as a running run left
+      // the Task in flight forever, with a goal coordinator recording a start.
+      mockExecAgent.mockResolvedValueOnce({
+        error:
+          'Heterogeneous agent provider binding is only supported for Desktop local execution.',
+        message: 'Heterogeneous agent provider binding requires Desktop local execution',
+        operationId: 'op_dead',
+        status: 'error',
+        success: false,
+        topicId: testTopicId,
+      });
+
+      const task = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Test',
+      });
+
+      await expect(caller.run({ id: task.data.id })).rejects.toThrow();
+
+      const found = await caller.find({ id: task.data.id });
+      expect(found.data.status).toBe('paused');
+      expect(found.data.error).toContain('Desktop local execution');
+
+      // The attempt stays visible, but as a failed run — never a running one.
+      const runs = await new TaskTopicModel(serverDB, userId).findByTaskId(task.data.id);
+      expect(runs.map((run) => [run.topicId, run.operationId, run.status])).toEqual([
+        [testTopicId, 'op_dead', 'failed'],
+      ]);
+      // ...so a fresh run is allowed instead of "already has a running topic".
+      await caller.run({ id: task.data.id });
+      expect((await caller.detail({ id: task.data.id })).data?.status).toBe('running');
     });
   });
 
@@ -615,7 +1049,7 @@ describe('Task Router Integration', () => {
       expect(mockInterruptTask).not.toHaveBeenCalled();
     });
 
-    it('should skip cancellation when interrupt fails', async () => {
+    it('rejects the status change and retains running work when interrupt fails', async () => {
       const task = await caller.create({
         assigneeAgentId: testAgentId,
         instruction: 'Test interrupt failure',
@@ -626,13 +1060,133 @@ describe('Task Router Integration', () => {
       // Make interruptTask fail
       mockInterruptTask.mockRejectedValueOnce(new Error('network error'));
 
-      // Transition task from running → paused
-      await caller.updateStatus({ id: task.data.id, status: 'paused' });
+      await expect(caller.updateStatus({ id: task.data.id, status: 'paused' })).rejects.toThrow(
+        'Failed to update status',
+      );
+      expect((await caller.find({ id: task.data.id })).data.status).toBe('running');
+      const runningTopics = await new TaskTopicModel(serverDB, userId).findByTaskId(task.data.id);
+      expect(runningTopics.some((topic) => topic.status === 'running')).toBe(true);
+    });
+  });
 
-      // The topic should still be running because interrupt failed
-      // so re-running should hit CONFLICT
-      await caller.updateStatus({ id: task.data.id, status: 'backlog' });
-      await expect(caller.run({ id: task.data.id })).rejects.toThrow(/already has a running topic/);
+  describe('updateStatusCascade', () => {
+    it('updates the task family atomically without rewriting failed subtasks', async () => {
+      const parent = await caller.create({ instruction: 'Parent' });
+      const open = await caller.create({
+        instruction: 'Open',
+        parentTaskId: parent.data.id,
+      });
+      const failed = await caller.create({
+        instruction: 'Failed',
+        parentTaskId: parent.data.id,
+      });
+      await caller.updateStatus({ error: 'Needs attention', id: failed.data.id, status: 'failed' });
+
+      const result = await caller.updateStatusCascade({
+        id: parent.data.identifier,
+        status: 'completed',
+      });
+
+      expect(result.data.updatedSubtasks).toEqual([open.data.identifier]);
+      expect((await caller.find({ id: parent.data.id })).data.status).toBe('completed');
+      expect((await caller.find({ id: open.data.id })).data.status).toBe('completed');
+      expect((await caller.find({ id: failed.data.id })).data).toMatchObject({
+        error: 'Needs attention',
+        status: 'failed',
+      });
+    });
+
+    it('does not start a dependent sibling while completing the whole family', async () => {
+      const parent = await caller.create({ instruction: 'Parent' });
+      const first = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'First',
+        parentTaskId: parent.data.id,
+      });
+      const dependent = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'Dependent',
+        parentTaskId: parent.data.id,
+      });
+      await caller.addDependency({ dependsOnId: first.data.id, taskId: dependent.data.id });
+      mockExecAgent.mockClear();
+
+      await caller.updateStatusCascade({ id: parent.data.id, status: 'completed' });
+
+      expect(mockExecAgent).not.toHaveBeenCalled();
+      expect((await caller.find({ id: first.data.id })).data.status).toBe('completed');
+      expect((await caller.find({ id: dependent.data.id })).data.status).toBe('completed');
+    });
+
+    it('starts an external dependent unlocked by the family completion', async () => {
+      const parent = await caller.create({ instruction: 'Parent' });
+      const sub = await caller.create({ instruction: 'Sub', parentTaskId: parent.data.id });
+      const external = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'External',
+      });
+      await caller.addDependency({ dependsOnId: sub.data.id, taskId: external.data.id });
+      mockExecAgent.mockClear();
+
+      const result = await caller.updateStatusCascade({ id: parent.data.id, status: 'completed' });
+
+      expect(result.data.unlocked).toEqual([external.data.identifier]);
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+      expect((await caller.find({ id: external.data.id })).data.status).toBe('running');
+    });
+
+    it('persists successful interrupts before surfacing a partial interrupt failure', async () => {
+      const parent = await caller.create({ instruction: 'Parent' });
+      const subA = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'A',
+        parentTaskId: parent.data.id,
+      });
+      const subB = await caller.create({
+        assigneeAgentId: testAgentId,
+        instruction: 'B',
+        parentTaskId: parent.data.id,
+      });
+
+      const topicA = await createTestTopic(serverDB, userId, 'tpc_cascade_a');
+      const topicB = await createTestTopic(serverDB, userId, 'tpc_cascade_b');
+      mockExecAgent.mockResolvedValueOnce({
+        operationId: 'op_cascade_a',
+        success: true,
+        topicId: topicA,
+      });
+      mockExecAgent.mockResolvedValueOnce({
+        operationId: 'op_cascade_b',
+        success: true,
+        topicId: topicB,
+      });
+      await caller.run({ id: subA.data.id });
+      await caller.run({ id: subB.data.id });
+
+      mockInterruptTask.mockImplementation(async ({ operationId }: { operationId: string }) => {
+        if (operationId === 'op_cascade_a') throw new Error('gateway unreachable');
+        return { success: true };
+      });
+
+      await expect(
+        caller.updateStatusCascade({ id: parent.data.id, status: 'canceled' }),
+      ).rejects.toThrow('Failed to update task family status');
+
+      // No status was cascaded — the family is untouched.
+      expect((await caller.find({ id: parent.data.id })).data.status).toBe('backlog');
+      expect((await caller.find({ id: subA.data.id })).data.status).toBe('running');
+      expect((await caller.find({ id: subB.data.id })).data.status).toBe('running');
+
+      // But the interrupt that did succeed is persisted: B's topic is no
+      // longer recorded as running, while A's (failed interrupt) still is.
+      const topicModel = new TaskTopicModel(serverDB, userId);
+      const [aTopic] = await topicModel.findByTaskId(subA.data.id);
+      const [bTopic] = await topicModel.findByTaskId(subB.data.id);
+      expect(aTopic!.status).toBe('running');
+      expect(bTopic!.status).toBe('canceled');
+
+      // clearAllMocks does not restore implementations — undo the override.
+      mockInterruptTask.mockImplementation(async () => ({ success: true }));
     });
   });
 
@@ -966,6 +1520,602 @@ describe('Task Router Integration', () => {
       expect(mockExecAgent).toHaveBeenCalledWith(
         expect.objectContaining({ model: 'claude-sonnet-4-6', provider: 'anthropic' }),
       );
+    });
+  });
+
+  describe('list scope (my tasks)', () => {
+    it('should narrow the list to tasks assigned to or created by the caller', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-list-scope-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task List Scope Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const wsOtherCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId),
+        workspaceId,
+      });
+
+      const mineForOther = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Mine for other',
+        name: 'Mine for other',
+      });
+      const othersForMe = await wsOtherCaller.create({
+        assigneeUserId: userId,
+        instruction: 'Others for me',
+        name: 'Others for me',
+      });
+      await wsOtherCaller.create({ instruction: 'Others unassigned', name: 'Others unassigned' });
+
+      const assigned = await wsCaller.list({ scope: 'assigned' });
+      expect(assigned.total).toBe(1);
+      expect(assigned.data.map((t) => t.id)).toEqual([othersForMe.data.id]);
+
+      const created = await wsCaller.list({ scope: 'created' });
+      expect(created.total).toBe(1);
+      expect(created.data.map((t) => t.id)).toEqual([mineForOther.data.id]);
+
+      const all = await wsCaller.list({});
+      expect(all.total).toBe(3);
+    });
+
+    it('should narrow the grouped board to the same slice as the list', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-group-scope-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Group Scope Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const wsOtherCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId),
+        workspaceId,
+      });
+
+      const mineForOther = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Mine for other',
+        name: 'Mine for other',
+      });
+      const othersForMe = await wsOtherCaller.create({
+        assigneeUserId: userId,
+        instruction: 'Others for me',
+        name: 'Others for me',
+      });
+      await wsOtherCaller.create({ instruction: 'Others unassigned', name: 'Others unassigned' });
+
+      const groups = () => ({ groups: [{ key: 'backlog', statuses: ['backlog'] }] });
+      const idsIn = (result: { data: Array<{ tasks: Array<{ id: string }> }> }) =>
+        result.data.flatMap((group) => group.tasks.map((task) => task.id));
+
+      // The board is the same rows as the list, only grouped — a scope the
+      // board ignored would quietly widen "My tasks" on the view switch.
+      expect(idsIn(await wsCaller.groupList({ ...groups(), scope: 'assigned' }))).toEqual([
+        othersForMe.data.id,
+      ]);
+      expect(idsIn(await wsCaller.groupList({ ...groups(), scope: 'created' }))).toEqual([
+        mineForOther.data.id,
+      ]);
+      expect(idsIn(await wsCaller.groupList(groups()))).toHaveLength(3);
+    });
+  });
+
+  describe('human assignee (assigneeUserId)', () => {
+    it('should persist agent and member assignments independently', async () => {
+      const created = await caller.create({
+        assigneeAgentId: testAgentId,
+        assigneeUserId: userId,
+        instruction: 'Dual-assigned task',
+      });
+
+      expect(created.data.assigneeAgentId).toBe(testAgentId);
+      expect(created.data.assigneeUserId).toBe(userId);
+
+      const memberCleared = await caller.update({
+        assigneeUserId: null,
+        id: created.data.id,
+      });
+      expect(memberCleared.data.assigneeAgentId).toBe(testAgentId);
+      expect(memberCleared.data.assigneeUserId).toBeNull();
+
+      const memberRestored = await caller.update({
+        assigneeUserId: userId,
+        id: created.data.id,
+      });
+      const agentCleared = await caller.update({
+        assigneeAgentId: null,
+        id: memberRestored.data.id,
+      });
+      expect(agentCleared.data.assigneeAgentId).toBeNull();
+      expect(agentCleared.data.assigneeUserId).toBe(userId);
+    });
+
+    it('should notify the assignee only on an actual assignment to someone else', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-assign-notify-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Assign Notify Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+
+      // Create without assignee, then assign another member → notifies once.
+      const task = await wsCaller.create({ instruction: 'Notify target', name: 'Notify target' });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).not.toHaveBeenCalled();
+
+      await wsCaller.update({ assigneeUserId: otherUserId, id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledWith({
+        actorUserId: userId,
+        assigneeUserId: otherUserId,
+        taskId: task.data.id,
+        taskIdentifier: task.data.identifier,
+        taskName: 'Notify target',
+        workspaceId,
+      });
+
+      // Re-saving the same assignee is a no-op → no second notification.
+      await wsCaller.update({ assigneeUserId: otherUserId, id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+
+      // Self-assignment never notifies.
+      await wsCaller.update({ assigneeUserId: userId, id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+
+      // Clearing the assignee never notifies.
+      await wsCaller.update({ assigneeUserId: null, id: task.data.id });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(1);
+
+      // Creating a task already assigned to another member notifies too.
+      const created = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Assigned at creation',
+      });
+      await flushAfterResponse();
+      expect(mockNotifyTaskAssigned).toHaveBeenCalledTimes(2);
+      expect(mockNotifyTaskAssigned).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          actorUserId: userId,
+          assigneeUserId: otherUserId,
+          taskId: created.data.id,
+          workspaceId,
+        }),
+      );
+    });
+
+    it('should allow assigning to self in personal mode', async () => {
+      const created = await caller.create({
+        assigneeUserId: userId,
+        instruction: 'Self-assigned task',
+      });
+      expect(created.data.assigneeUserId).toBe(userId);
+
+      const cleared = await caller.update({ assigneeUserId: null, id: created.data.id });
+      expect(cleared.data.assigneeUserId).toBeNull();
+    });
+
+    it('should reject assigning to another user in personal mode', async () => {
+      otherUserId = await createTestUser(serverDB);
+
+      await expect(
+        caller.create({ assigneeUserId: otherUserId, instruction: 'Cross-user assignment' }),
+      ).rejects.toThrow('Assignee user not found');
+
+      const task = await caller.create({ instruction: 'Reassign target' });
+      await expect(
+        caller.update({ assigneeUserId: otherUserId, id: task.data.id }),
+      ).rejects.toThrow('Assignee user not found');
+    });
+
+    it('should validate workspace membership when assigning in workspace mode', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const outsiderId = await createTestUser(serverDB);
+      const removedId = await createTestUser(serverDB);
+      const workspaceId = 'task-assignee-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Assignee Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+        { deletedAt: new Date(), role: 'member', userId: removedId, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+
+      const assigned = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Assigned to a member',
+      });
+      expect(assigned.data.assigneeUserId).toBe(otherUserId);
+
+      await expect(
+        wsCaller.create({ assigneeUserId: outsiderId, instruction: 'Assigned to an outsider' }),
+      ).rejects.toThrow('Assignee user is not a member of this workspace');
+
+      await expect(
+        wsCaller.update({ assigneeUserId: removedId, id: assigned.data.id }),
+      ).rejects.toThrow('Assignee user is not a member of this workspace');
+
+      try {
+        await cleanupTestUser(serverDB, outsiderId);
+        await cleanupTestUser(serverDB, removedId);
+      } catch {
+        /* cascade cleanup is best-effort */
+      }
+    });
+
+    it('should serialize assignments against concurrent membership removal', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const memberId = otherUserId;
+      const workspaceId = 'task-assignee-removal-race-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { and, eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Assignee Removal Race Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: memberId, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const existingTask = await wsCaller.create({ instruction: 'Concurrent update target' });
+
+      let signalMemberLocked: () => void = () => {};
+      const memberLocked = new Promise<void>((resolve) => {
+        signalMemberLocked = resolve;
+      });
+      let releaseRemoval: () => void = () => {};
+      const removalReleased = new Promise<void>((resolve) => {
+        releaseRemoval = resolve;
+      });
+
+      const removal = serverDB.transaction(async (tx) => {
+        await tx
+          .update(workspaceMembers)
+          .set({ deletedAt: new Date() })
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, workspaceId),
+              eq(workspaceMembers.userId, memberId),
+            ),
+          );
+        signalMemberLocked();
+        await removalReleased;
+      });
+      await memberLocked;
+
+      let updateSettled = false;
+      const update = wsCaller
+        .update({ assigneeUserId: memberId, id: existingTask.data.id })
+        .then(
+          (value) => ({ error: null, value }),
+          (error: Error) => ({ error, value: null }),
+        )
+        .finally(() => {
+          updateSettled = true;
+        });
+      let createSettled = false;
+      const create = wsCaller
+        .create({ assigneeUserId: memberId, instruction: 'Concurrent create target' })
+        .then(
+          (value) => ({ error: null, value }),
+          (error: Error) => ({ error, value: null }),
+        )
+        .finally(() => {
+          createSettled = true;
+        });
+
+      // Both writes have started while removal owns the membership row. They
+      // must wait for that row lock instead of committing from a stale read.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const updateWaitedForRemoval = !updateSettled;
+      const createWaitedForRemoval = !createSettled;
+
+      releaseRemoval();
+      await removal;
+      const [updateResult, createResult] = await Promise.all([update, create]);
+      expect(updateWaitedForRemoval).toBe(true);
+      expect(createWaitedForRemoval).toBe(true);
+      expect(updateResult.error?.message).toContain(
+        'Assignee user is not a member of this workspace',
+      );
+      expect(createResult.error?.message).toContain(
+        'Assignee user is not a member of this workspace',
+      );
+
+      const [afterUpdate] = await serverDB
+        .select({ assigneeUserId: tasks.assigneeUserId })
+        .from(tasks)
+        .where(eq(tasks.id, existingTask.data.id));
+      expect(afterUpdate.assigneeUserId).toBeNull();
+      const strandedCreate = await serverDB
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(eq(tasks.instruction, 'Concurrent create target'));
+      expect(strandedCreate).toHaveLength(0);
+    });
+
+    it('should let a member take over another member’s public task as their private task', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-take-over-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Take Over Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const memberCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId!),
+        workspaceId,
+      });
+
+      const root = await ownerCaller.create({
+        assigneeUserId: userId,
+        automationMode: 'schedule',
+        instruction: 'Owner task',
+        schedulePattern: '0 9 * * *',
+        visibility: 'public',
+      });
+      const child = await ownerCaller.create({
+        instruction: 'Owner subtask',
+        parentTaskId: root.data.id,
+      });
+
+      // Without opting in, a non-creator still cannot demote it.
+      await expect(
+        memberCaller.updateVisibility({ id: root.data.id, visibility: 'private' }),
+      ).rejects.toThrow('Only the task creator can make this task private');
+
+      const taken = await memberCaller.updateVisibility({
+        id: root.data.id,
+        takeOwnership: true,
+        visibility: 'private',
+      });
+      expect(taken.data).toMatchObject({
+        assigneeUserId: null,
+        automationMode: null,
+        createdByUserId: otherUserId,
+        status: 'backlog',
+        visibility: 'private',
+      });
+
+      const [childRow] = await serverDB
+        .select({ createdByUserId: tasks.createdByUserId, visibility: tasks.visibility })
+        .from(tasks)
+        .where(eq(tasks.id, child.data.id));
+      expect(childRow).toEqual({ createdByUserId: otherUserId, visibility: 'private' });
+
+      // The previous creator no longer sees it.
+      await expect(ownerCaller.find({ id: root.data.id })).rejects.toThrow();
+    });
+
+    it('should not take over a task while a subtask is running', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-take-over-running-workspace';
+      const { tasks, workspaces, workspaceMembers } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Take Over Running Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const ownerCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+      const memberCaller = taskRouter.createCaller({
+        ...createTestContext(otherUserId!),
+        workspaceId,
+      });
+
+      const root = await ownerCaller.create({ instruction: 'Busy root', visibility: 'public' });
+      const child = await ownerCaller.create({
+        instruction: 'Busy subtask',
+        parentTaskId: root.data.id,
+      });
+      await serverDB.update(tasks).set({ status: 'running' }).where(eq(tasks.id, child.data.id));
+
+      await expect(
+        memberCaller.updateVisibility({
+          id: root.data.id,
+          takeOwnership: true,
+          visibility: 'private',
+        }),
+      ).rejects.toThrow('Cannot take over this task while it or a subtask is running');
+      const [rootRow] = await serverDB
+        .select({ createdByUserId: tasks.createdByUserId, visibility: tasks.visibility })
+        .from(tasks)
+        .where(eq(tasks.id, root.data.id));
+      expect(rootRow).toEqual({ createdByUserId: userId, visibility: 'public' });
+    });
+
+    it('should keep private tasks creator-only for human assignees', async () => {
+      otherUserId = await createTestUser(serverDB);
+      const workspaceId = 'task-private-assignee-workspace';
+      const { workspaces, workspaceMembers } = await import('@/database/schemas');
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Task Private Assignee Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'member', userId: otherUserId!, workspaceId },
+      ]);
+      const wsCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+
+      // Creating a private task assigned to another member is rejected.
+      await expect(
+        wsCaller.create({
+          assigneeUserId: otherUserId,
+          instruction: 'Private cross-member create',
+          visibility: 'private',
+        }),
+      ).rejects.toThrow('A private task can only be assigned to its creator');
+
+      // A private task can still be self-assigned; assigning another member is rejected.
+      const privateTask = await wsCaller.create({
+        assigneeUserId: userId,
+        instruction: 'Private task',
+        visibility: 'private',
+      });
+      expect(privateTask.data.assigneeUserId).toBe(userId);
+      await expect(
+        wsCaller.update({ assigneeUserId: otherUserId, id: privateTask.data.id }),
+      ).rejects.toThrow('A private task can only be assigned to its creator');
+
+      // Demoting a member-assigned public task to private unassigns the member,
+      // who could no longer open it.
+      const publicTask = await wsCaller.create({
+        assigneeUserId: otherUserId,
+        instruction: 'Public task assigned to member',
+        visibility: 'public',
+      });
+      const demoted = await wsCaller.updateVisibility({
+        id: publicTask.data.id,
+        visibility: 'private',
+      });
+      expect(demoted.data.visibility).toBe('private');
+      expect(demoted.data.assigneeUserId).toBeNull();
+    });
+
+    it('should preserve the responsible assignee independently of automation', async () => {
+      const createdScheduled = await caller.create({
+        assigneeUserId: userId,
+        automationMode: 'schedule',
+        instruction: 'Automated assigned task',
+        schedulePattern: '0 9 * * *',
+      });
+      expect(createdScheduled.data.assigneeUserId).toBe(userId);
+      expect(createdScheduled.data.automationMode).toBe('schedule');
+
+      const automated = await caller.create({
+        automationMode: 'schedule',
+        instruction: 'Automated task',
+        schedulePattern: '0 9 * * *',
+      });
+      const assignedAutomated = await caller.update({
+        assigneeUserId: userId,
+        id: automated.data.id,
+      });
+      expect(assignedAutomated.data.assigneeUserId).toBe(userId);
+      expect(assignedAutomated.data.automationMode).toBe('schedule');
+
+      const humanTask = await caller.create({
+        assigneeUserId: userId,
+        instruction: 'Human task',
+      });
+      const scheduled = await caller.update({
+        automationMode: 'schedule',
+        id: humanTask.data.id,
+        schedulePattern: '0 9 * * *',
+      });
+      expect(scheduled.data.automationMode).toBe('schedule');
+      expect(scheduled.data.assigneeUserId).toBe(userId);
+    });
+
+    it('should keep inbox fallback ephemeral without clearing an explicit inbox assignment', async () => {
+      // Seed the builtin inbox agent so the runner's fallback path can resolve it.
+      const inboxAgentId = await createTestAgent(serverDB, userId, 'inbox');
+
+      const humanTask = await caller.create({
+        assigneeUserId: userId,
+        instruction: 'Human-assigned task',
+      });
+      await caller.run({ id: humanTask.data.id });
+
+      const afterHumanRun = await caller.find({ id: humanTask.data.id });
+      expect(afterHumanRun.data.assigneeUserId).toBe(userId);
+      expect(afterHumanRun.data.assigneeAgentId).toBeNull();
+
+      // Inbox is also a valid explicit agent assignment. Once a member and an
+      // agent can be selected independently, the persisted pair must survive
+      // execution because it is indistinguishable from any historical fallback.
+      const dualAssignedTask = await caller.create({
+        assigneeUserId: userId,
+        instruction: 'Inbox-and-member-assigned task',
+      });
+      await caller.update({ assigneeAgentId: inboxAgentId, id: dualAssignedTask.data.id });
+      await caller.run({ id: dualAssignedTask.data.id });
+
+      const afterDualAssignedRun = await caller.find({ id: dualAssignedTask.data.id });
+      expect(afterDualAssignedRun.data.assigneeUserId).toBe(userId);
+      expect(afterDualAssignedRun.data.assigneeAgentId).toBe(inboxAgentId);
+
+      // Control: a fully unassigned task still gets the fallback persisted.
+      const unassignedTask = await caller.create({ instruction: 'Unassigned task' });
+      await caller.run({ id: unassignedTask.data.id });
+
+      const afterUnassignedRun = await caller.find({ id: unassignedTask.data.id });
+      expect(afterUnassignedRun.data.assigneeAgentId).toBe(inboxAgentId);
+    });
+
+    it('should populate a user participant in list', async () => {
+      const { users } = await import('@/database/schemas');
+      const { eq } = await import('drizzle-orm');
+      await serverDB
+        .update(users)
+        .set({ avatar: 'user-avatar.png', fullName: 'User One' })
+        .where(eq(users.id, userId));
+
+      await caller.create({ assigneeUserId: userId, instruction: 'Human task' });
+
+      const list = await caller.list({});
+      const assigned = list.data.find((t) => t.assigneeUserId === userId)!;
+      expect(assigned.participants).toEqual([
+        {
+          avatar: 'user-avatar.png',
+          backgroundColor: null,
+          id: userId,
+          title: 'User One',
+          type: 'user',
+        },
+      ]);
     });
   });
 });

@@ -1,21 +1,39 @@
 import { type AgentState } from '@lobechat/agent-runtime';
-import { type BotPlatformContext } from '@lobechat/context-engine';
-import { type ExecSubAgentParams, type ExecVirtualSubAgentParams } from '@lobechat/types';
+import {
+  type AgentShareVisitorContext,
+  type ExecSubAgentParams,
+  type ExecSubAgentResult,
+  type ExecVirtualSubAgentParams,
+} from '@lobechat/types';
 
 import { type MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
-import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { HookDispatcher } from '@/server/services/agentRuntime/hooks/HookDispatcher';
 import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
+  GroupActionMemberBridgeParams,
 } from '@/server/services/agentRuntime/types';
 import { type ToolExecutionService } from '@/server/services/toolExecution';
 
 import { type IStreamEventManager } from './types';
 
 export interface RuntimeExecutorContext {
-  agentConfig?: any;
+  /**
+   * Cancels tool work that is still in flight for this step. Driven by the
+   * persisted interruption flag (the step runs in its own invocation, so there
+   * is no in-process controller to share with whoever requested the stop).
+   */
+  abortSignal?: AbortSignal;
+  /**
+   * Shared-agent visitor marker, read back from
+   * `state.principal.actor.shareVisitor`. Present ONLY for a share-visitor run;
+   * its presence alone is the signal every per-step consumer keys off. Forwarded
+   * into `ToolExecutionContext.agentShareVisitor` so
+   * `BuiltinToolsExecutor.execute` can re-check the visitor's grants right
+   * before dispatch — see `isShareBlockedDataToolCall` in `shareGate/dispatch.ts`.
+   */
+  agentShareVisitor?: AgentShareVisitorContext;
   /**
    * Allows call_llm to publish visible_output_end immediately after a no-tool
    * LLM stream_end. Only the default GeneralChatAgent treats no-tool llm_result
@@ -24,9 +42,6 @@ export interface RuntimeExecutorContext {
    */
   allowEarlyFinalAnswerVisibleOutputEnd?: boolean;
   botContext?: unknown;
-  botPlatformContext?: BotPlatformContext;
-  discordContext?: any;
-  evalContext?: EvalContext;
   /**
    * Callback to fork a group member ("call agent member") under a
    * `lobe-group-management` tool call. Injected by AiAgentService; powers the
@@ -38,16 +53,25 @@ export interface RuntimeExecutorContext {
    * Injected by AiAgentService so exec_sub_agent / exec_sub_agents executors
    * can dispatch callAgent-triggered runs without a circular import.
    */
-  execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  execSubAgent?: (params: ExecSubAgentParams) => Promise<ExecSubAgentResult>;
   /**
    * Callback to fork a `lobe-agent.callSubAgent` virtual child run. Unlike
    * execSubAgent, this path installs the async completion bridge and marks the
    * child operation as a sub-agent.
    */
-  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<unknown>;
+  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
   hookDispatcher?: HookDispatcher;
+  isInterrupted?: (operationId: string) => Promise<boolean>;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
+  modelRuntimeConfig?: AgentState['modelRuntimeConfig'];
+  /** Check the shared completion barrier after a startup-failure receipt is published. */
+  onGroupMemberResult?: (
+    params: Pick<
+      GroupActionMemberBridgeParams,
+      'anchorMessageId' | 'expectedMembers' | 'groupToolMessageId' | 'parentOperationId'
+    >,
+  ) => Promise<boolean>;
   operationId: string;
   serverDB: LobeChatDatabase;
   stepIndex: number;
@@ -66,9 +90,8 @@ export interface RuntimeExecutorContext {
    * ~83% of each step. Routing CE through this callback keeps the heavy
    * payload in trace only, reducing per-step Redis state from ~3.4MB to ~6KB.
    */
-  tracingContextEngine?: (input: unknown, output: unknown) => void;
+  tracingContextEngine?: (input: unknown, output: unknown, metadata?: unknown) => void;
   userId?: string;
-  userTimezone?: string;
   /**
    * Workspace scoping for ownership filters on models/services constructed
    * inside the agent runtime. Threaded down from the originating request

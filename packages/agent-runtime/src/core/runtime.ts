@@ -18,7 +18,9 @@ import type {
   ToolsCalling,
   Usage,
 } from '../types';
+import { getLlmAttemptCount } from '../utils/llmCalls';
 import { isBlockedStatus } from '../utils/status';
+import { UsageCounter } from './UsageCounter';
 
 /**
  * Simplified Agent Runtime - The "Engine" that executes instructions from an "Agent" (Brain).
@@ -83,6 +85,18 @@ export class AgentRuntime {
     state: AgentState,
     context?: AgentRuntimeContext,
   ): Promise<{ events: AgentEvent[]; newState: AgentState; nextContext?: AgentRuntimeContext }> {
+    // LLM-call accounting is additive. `usage.llm.apiCalls` only counts the
+    // current operation and `llmCalls` carries the seeded baseline of a resumed
+    // one, so remember where this step started and add the attempts it actually
+    // made instead of taking a max that drops retries.
+    const llmCallsBeforeStep = Math.max(state.llmCalls ?? 0, state.usage?.llm?.apiCalls ?? 0);
+    const apiCallsBeforeStep = state.usage?.llm?.apiCalls ?? 0;
+
+    // Tracked outside the try block: when an instruction throws, the error path
+    // still has to keep the work the earlier instructions of this step finished.
+    let latestState: AgentState | undefined;
+    let executedLlmInstructions = 0;
+
     try {
       // Increment step count and check limits
       const newState = structuredClone(state);
@@ -110,12 +124,19 @@ export class AgentRuntime {
       // Handle human approved tool calls
       if (runtimeContext.phase === 'human_approved_tool') {
         const approvedPayload = runtimeContext.payload as {
-          approvedToolCall: ChatToolPayload;
+          approvedToolCall?: ChatToolPayload;
+          /**
+           * Batch approval — every tool the user approved in ONE action.
+           * Present instead of `approvedToolCall` when the client resolved the
+           * whole pending batch at once.
+           */
+          approvedToolCalls?: ChatToolPayload[];
           assistantMessageId?: string;
           parentMessageId: string;
-          skipCreateToolMessage: boolean;
+          skipCreateToolMessage?: boolean;
+          /** `tool_call_id → pending tool message id`, batch path only. */
+          toolMessageIds?: Record<string, string>;
         };
-        const toolCalling = approvedPayload.approvedToolCall;
 
         // The resume seeded an assistant placeholder (assistantMessageId) for
         // this operation, but the first instruction here is a tool execution —
@@ -128,14 +149,39 @@ export class AgentRuntime {
           newState.pendingAssistantMessageId = approvedPayload.assistantMessageId;
         }
 
-        rawInstructions = {
-          payload: {
-            parentMessageId: approvedPayload.parentMessageId,
-            skipCreateToolMessage: approvedPayload.skipCreateToolMessage,
-            toolCalling,
-          },
-          type: 'call_tool',
-        };
+        const approvedBatch = approvedPayload.approvedToolCalls ?? [];
+
+        if (approvedBatch.length > 0) {
+          // Run every approved tool in ONE batch, exactly as the original
+          // (pre-approval) `call_tools_batch` would have. Approving them one at
+          // a time instead means one LLM continuation per tool, each seeing the
+          // not-yet-approved siblings as empty results.
+          rawInstructions = {
+            payload: {
+              existingToolMessageIds: approvedPayload.toolMessageIds ?? {},
+              parentMessageId: approvedPayload.parentMessageId,
+              toolsCalling: approvedBatch,
+            },
+            type: 'call_tools_batch',
+          };
+        } else {
+          rawInstructions = {
+            payload: {
+              parentMessageId: approvedPayload.parentMessageId,
+              skipCreateToolMessage: approvedPayload.skipCreateToolMessage,
+              toolCalling: approvedPayload.approvedToolCall,
+            },
+            type: 'call_tool',
+          };
+        }
+      } else if (newState.deferredHumanApproval && !isBlockedStatus(newState.status)) {
+        // The operation is resuming from an async-tool park whose LLM turn also
+        // asked for human approval. Put that request to the user now, before
+        // the agent plans another LLM call — the tool call would otherwise
+        // never get a result. Once approved, the continuation sees every tool
+        // result of the turn and moves on.
+        rawInstructions = newState.deferredHumanApproval;
+        newState.deferredHumanApproval = undefined;
       } else {
         if (runtimeContext.phase === 'tool_result') {
           const toolResultPayload = runtimeContext.payload as
@@ -183,24 +229,36 @@ export class AgentRuntime {
 
       // Execute all instructions sequentially
       let currentState = newState;
+      latestState = currentState;
       const allEvents: AgentEvent[] = [];
       let finalNextContext: AgentRuntimeContext | undefined = undefined;
       let hasFinishInstruction = false;
 
-      for (const instruction of normalizedInstructions) {
+      // Counted rather than flagged: a runner may queue several `call_llm`
+      // instructions in one step (the fallback path when the selected executor
+      // does not mutate `usage`). Only the instructions whose executor actually
+      // ran are counted — see the increment inside the loop below.
+      executedLlmInstructions = 0;
+
+      for (const [instructionIndex, instruction] of normalizedInstructions.entries()) {
         if (instruction.type === 'finish') hasFinishInstruction = true;
 
         let result;
+        const instructionContext = { ...runtimeContext, instructionIndex };
 
         // Special handling for batch tool execution
         if (instruction.type === 'call_tools_batch') {
           // Check if custom executor is provided (e.g., server-side with DB access)
           const customExecutor = this.executors['call_tools_batch' as keyof typeof this.executors];
           if (customExecutor) {
-            result = await customExecutor(instruction, currentState, runtimeContext);
+            result = await customExecutor(instruction, currentState, instructionContext);
           } else {
             // Fallback to built-in executeToolsBatch
-            result = await this.executeToolsBatch(instruction as any, currentState, runtimeContext);
+            result = await this.executeToolsBatch(
+              instruction as any,
+              currentState,
+              instructionContext,
+            );
           }
         } else {
           const executor = this.executors[instruction.type as keyof typeof this.executors];
@@ -208,14 +266,24 @@ export class AgentRuntime {
             throw new Error(`No executor found for instruction type: ${instruction.type}`);
           }
           // Pass runtimeContext to executor so it can access stepContext
-          result = await executor(instruction, currentState, runtimeContext);
+          result = await executor(instruction, currentState, instructionContext);
         }
+
+        // Count a `call_llm` only once its executor returned. A preflight
+        // failure — missing model/provider, absent parent message, or a rejected
+        // context — throws before the transport is invoked, so no provider call
+        // happened. Counting it up-front would let the fallback in the success
+        // and error paths report a model call that never ran, and inflate the
+        // `maxSteps` budget with it.
+        if (instruction.type === 'call_llm') executedLlmInstructions += 1;
 
         // Accumulate events
         allEvents.push(...result.events);
 
         // Update state
         currentState = result.newState;
+        latestState = currentState;
+
 
         // A call_llm consumes any resume-seeded assistant placeholder exactly
         // once — it has now either reused that message id or created its own —
@@ -232,6 +300,14 @@ export class AgentRuntime {
 
         // Stop execution if blocked
         if (isBlockedStatus(currentState.status)) {
+          if (currentState.status === 'waiting_for_async_tool') {
+            currentState = await this.settleInstructionsBehindAsyncToolPause(
+              normalizedInstructions.slice(instructionIndex + 1),
+              currentState,
+              runtimeContext,
+              allEvents,
+            );
+          }
           break;
         }
       }
@@ -239,6 +315,13 @@ export class AgentRuntime {
       // Ensure stepCount and lastModified are preserved
       currentState.stepCount = newState.stepCount;
       currentState.lastModified = newState.lastModified;
+      // Prefer the attempts the provider actually reported; fall back to one
+      // call per executed LLM instruction when usage is unavailable.
+      const apiCallsDelta = Math.max(
+        (currentState.usage?.llm?.apiCalls ?? 0) - apiCallsBeforeStep,
+        0,
+      );
+      currentState.llmCalls = llmCallsBeforeStep + (apiCallsDelta || executedLlmInstructions);
 
       // A 'finish' instruction is not a real execution step, undo the +1 from the top of step()
       if (hasFinishInstruction) {
@@ -254,11 +337,71 @@ export class AgentRuntime {
         nextContext: isBlockedStatus(currentState.status) ? undefined : finalNextContext,
       };
     } catch (error) {
-      const errorState = structuredClone(state);
-      errorState.stepCount += 1;
+      // Keep the progress this step already made. Earlier instructions may have
+      // reached the provider and mutated `usage`; rebuilding from the step-entry
+      // `state` would drop those calls, so a step whose second `call_llm` threw
+      // reported only the failed call and a step whose later tool threw reported
+      // the successful call as zero.
+      const errorState = structuredClone(latestState ?? state);
+      // `newState` bumped the counter before the first instruction; only the
+      // untouched step-entry state still needs it.
+      if (!latestState) errorState.stepCount += 1;
+
+      // A terminated LLM call still made provider attempts. Record them even
+      // though no output was finalized, so the user-facing count and the
+      // `maxSteps` budget match what actually happened.
+      const llmAttempts = getLlmAttemptCount(error);
+      if (llmAttempts > 0) {
+        errorState.usage = UsageCounter.accumulateAttempts(errorState.usage, llmAttempts);
+      }
+      const apiCallsDelta = Math.max(
+        (errorState.usage?.llm?.apiCalls ?? 0) - apiCallsBeforeStep,
+        0,
+      );
+      errorState.llmCalls = llmCallsBeforeStep + (apiCallsDelta || executedLlmInstructions);
       errorState.lastModified = new Date().toISOString();
       return this.createErrorResult(errorState, error);
     }
+  }
+
+  /**
+   * Handle the instructions an LLM turn queued behind a tool that parked the
+   * operation for an async result (sub-agent, client tool). Dropping them
+   * leaves their tool calls without a result row, and the next LLM call gets a
+   * synthetic `tool_result_missing` for each.
+   *
+   * - `resolve_blocked_tools` only persists rejected results, so it runs now.
+   * - `request_human_approve` would park the operation a second time; it is
+   *   held on the state and issued when the async tool resumes the operation.
+   *
+   * Anything else keeps the previous behavior and is left to the resumed turn.
+   */
+  private async settleInstructionsBehindAsyncToolPause(
+    queuedInstructions: AgentInstruction[],
+    pausedState: AgentState,
+    runtimeContext: AgentRuntimeContext,
+    events: AgentEvent[],
+  ): Promise<AgentState> {
+    let currentState = pausedState;
+
+    for (const instruction of queuedInstructions) {
+      if (instruction.type === 'request_human_approve') {
+        currentState = { ...currentState, deferredHumanApproval: instruction };
+        continue;
+      }
+
+      if (instruction.type === 'resolve_blocked_tools') {
+        const result = await this.executors.resolve_blocked_tools(
+          instruction,
+          currentState,
+          runtimeContext,
+        );
+        events.push(...result.events);
+        currentState = result.newState;
+      }
+    }
+
+    return currentState;
   }
 
   /**
@@ -439,7 +582,7 @@ export class AgentRuntime {
       messages: [],
       status: 'idle',
       stepCount: 0,
-      toolManifestMap: {},
+      llmCalls: 0,
       usage: AgentRuntime.createDefaultUsage(),
       // User provided values override defaults
       ...(partialState || { operationId: '' }),
@@ -612,7 +755,8 @@ export class AgentRuntime {
 
       for (const toolCalling of payload.toolsCalling) {
         const result = {
-          content: 'Blocked by security/privacy.',
+          content: payload.blockedContent ?? 'Blocked by security/privacy.',
+          ...(payload.blockedReason && { error: payload.blockedReason }),
           success: false,
         };
 

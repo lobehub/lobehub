@@ -36,24 +36,35 @@ describe('workspaceHomeRouteMeta', () => {
     await waitFor(() => {
       expect(onResolve).toHaveBeenLastCalledWith({
         avatar: 'https://example.com/avatar.png',
+        avatarKind: 'workspace',
         backgroundColor: undefined,
         title: 'Acme',
       });
     });
   });
 
-  it('uses the workspace name as the avatar placeholder source when no avatar is set', async () => {
+  // The tab draws the workspace mark seeded from the title, so no name string
+  // poses as the avatar.
+  it('marks the tab as a workspace without an avatar when no avatar is set', async () => {
     mocks.workspaces = [{ avatar: null, id: 'ws-1', name: 'Acme', slug: 'acme' }];
 
     const onResolve = renderDynamicMeta('acme');
 
     await waitFor(() => {
       expect(onResolve).toHaveBeenLastCalledWith({
-        avatar: 'Acme',
+        avatar: null,
+        avatarKind: 'workspace',
         backgroundColor: undefined,
         title: 'Acme',
       });
     });
+  });
+
+  it('renders no outlet skeleton — Home never loads inside the outlet', () => {
+    const Skeleton = workspaceHomeRouteMeta.Skeleton!;
+    const { container } = render(<Skeleton />);
+
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('returns no dynamic meta while the workspace slug is unresolved', async () => {

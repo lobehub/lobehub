@@ -1,4 +1,9 @@
-import type { BriefArtifacts, BriefMetadata } from '@lobechat/types';
+import type {
+  BriefArtifacts,
+  BriefMetadata,
+  TaskActivityLogPayload,
+  TaskActivityLogType,
+} from '@lobechat/types';
 import { isNotNull, isNull } from 'drizzle-orm';
 import {
   foreignKey,
@@ -12,10 +17,11 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
-import { createdAt, timestamps, timestamptz, varchar255 } from './_helpers';
+import { createdAt, softDeleteColumns, timestamps, timestamptz, varchar255 } from './_helpers';
 import { agents } from './agent';
 import { agentCronJobs } from './agentCronJob';
 import { documents } from './file';
+import { projects } from './project';
 import { topics } from './topic';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -38,6 +44,7 @@ export const tasks = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
     createdByAgentId: text('created_by_agent_id').references(() => agents.id, {
       onDelete: 'set null',
     }),
@@ -85,7 +92,7 @@ export const tasks = pgTable(
 
     // Context & config (each task independent, no inheritance from parent)
     context: jsonb('context').default({}),
-    config: jsonb('config').default({}), // CheckpointConfig, ReviewConfig, etc.
+    config: jsonb('config').default({}), // CheckpointConfig, ReviewConfig, TaskExecutionConfig, etc.
     error: text('error'),
 
     // Visibility (mirrors agent.visibility semantics). Workspace-mode rows can be
@@ -99,6 +106,11 @@ export const tasks = pgTable(
     // Timestamps
     startedAt: timestamptz('started_at'),
     completedAt: timestamptz('completed_at'),
+    // Set when the user archives the task ("truly done"); orthogonal to
+    // `status`, null = not archived.
+    archivedAt: timestamptz('archived_at'),
+    /** Recycle bin — see `schemas/trash.ts`. */
+    ...softDeleteColumns(),
     ...timestamps,
   },
   (t) => [
@@ -121,6 +133,7 @@ export const tasks = pgTable(
     index('tasks_automation_mode_idx').on(t.automationMode),
     index('tasks_heartbeat_idx').on(t.status, t.lastHeartbeatAt),
     index('tasks_workspace_id_idx').on(t.workspaceId),
+    index('tasks_project_id_status_idx').on(t.projectId, t.status),
     index('tasks_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.createdByUserId),
     uniqueIndex('tasks_identifier_workspace_id_unique')
       .on(t.workspaceId, t.identifier)
@@ -238,8 +251,8 @@ export const taskTopics = pgTable(
     // What triggered this run: 'manual' (ad-hoc run-now / agent tool call),
     // 'schedule' (cron tick) or 'heartbeat' (interval tick). Null for legacy
     // rows created before this column existed. Used so the maxExecutions quota
-    // counts only automation ticks, not manual runs (LOBE-11391).
-    trigger: text('trigger').$type<'manual' | 'schedule' | 'heartbeat'>(),
+    // counts only automation ticks, not manual runs.
+    trigger: text('trigger').$type<'manual' | 'schedule' | 'heartbeat' | 'goal'>(),
 
     // Handoff (populated after topic completes via LLM summarization)
     // { title, summary, keyFindings: string[], nextAction }
@@ -385,3 +398,61 @@ export const taskComments = pgTable(
 
 export type NewTaskComment = typeof taskComments.$inferInsert;
 export type TaskCommentItem = typeof taskComments.$inferSelect;
+
+// ── Task Activities ─────────────────────────────────────
+
+/**
+ * Append-only event log for a task's non-content changes.
+ *
+ * The task detail feed used to be assembled purely from rows that happen to
+ * exist (`tasks.created_at`, `task_topics`, `task_comments`), so a mutation
+ * that only rewrites a column on `tasks` — reassigning the task — left no
+ * trace at all. This table is the missing side: one row per change, carrying
+ * who made it and what the value moved between.
+ *
+ * `type` is deliberately plain `text` (see the db-migrations skill): adding a
+ * new event kind is a type-only change, not a migration.
+ */
+export const taskActivities = pgTable(
+  'task_activities',
+  {
+    // Rows are only ever read in bulk for one task — never addressed by id in a
+    // URL or an API — so they take a plain uuid like the other task child
+    // tables (`task_dependencies` / `task_documents` / `task_topics`) rather
+    // than a prefixed id.
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+    taskId: text('task_id')
+      .references(() => tasks.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    // Actor (user or agent, both nullable — an agent tool call has no user).
+    actorUserId: text('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    actorAgentId: text('actor_agent_id').references(() => agents.id, { onDelete: 'set null' }),
+
+    // 'assignee_agent' | 'assignee_user'
+    type: text('type').$type<TaskActivityLogType>().notNull(),
+    // { fromId, toId } — null on either side means "unassigned".
+    payload: jsonb('payload').$type<TaskActivityLogPayload>(),
+
+    // Mirror of the parent task's visibility, same contract as the other
+    // task-child tables: lets ownership filter without joining back to `tasks`.
+    visibility: text('visibility', { enum: ['private', 'public'] })
+      .default('public')
+      .notNull(),
+
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('task_activities_task_id_idx').on(t.taskId),
+    index('task_activities_user_id_idx').on(t.userId),
+    index('task_activities_workspace_id_idx').on(t.workspaceId),
+    index('task_activities_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
+  ],
+);
+
+export type NewTaskActivity = typeof taskActivities.$inferInsert;
+export type TaskActivityItem = typeof taskActivities.$inferSelect;

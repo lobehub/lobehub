@@ -9,7 +9,10 @@
     "./gen-ai": "./src/gen-ai/index.ts",
     "./modules/agent-runtime": "./src/modules/agent-runtime/index.ts",
     "./modules/agent-signal": "./src/modules/agent-signal/index.ts",
+    "./modules/bot-wake": "./src/modules/bot-wake/index.ts",
     "./modules/memory-user-memory": "./src/modules/memory-user-memory/index.ts",
+    "./modules/onboarding-understanding": "./src/modules/onboarding-understanding/index.ts",
+    "./modules/fts-search-reindex": "./src/modules/fts-search-reindex/index.ts",
     "./modules/upstash-workflow": "./src/modules/upstash-workflow/index.ts"
   },
   "dependencies": {
@@ -24,6 +27,7 @@
     "@opentelemetry/resources": "^2.8.0",
     "@opentelemetry/sdk-metrics": "^2.8.0",
     "@opentelemetry/sdk-node": "^0.217.0",
+    "@opentelemetry/sdk-trace-base": "^2.8.0",
     "@opentelemetry/sdk-trace-node": "^2.8.0",
     "@opentelemetry/semantic-conventions": "^1.41.1",
     "@vercel/otel": "^2.1.3"

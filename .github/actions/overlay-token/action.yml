@@ -1,0 +1,45 @@
+name: Overlay Token
+description: >-
+  Mint a LobeHub bot GitHub App installation token scoped to the private overlay repository. Outputs an empty token when no private key is available (fork PRs), so callers fall back to the open-source build.
+
+inputs:
+  app-id:
+    description: LobeHub bot GitHub App id — pass the LOBEHUB_BOT_APP_ID repository variable
+    required: true
+  private-key:
+    description: LobeHub bot GitHub App private key — pass the LOBEHUB_BOT_APP_PRIVATE_KEY secret
+    required: false
+    default: ''
+  repository:
+    description: Overlay repository (owner/name) — pass the OVERLAY_REPOSITORY repository variable
+    required: true
+
+outputs:
+  token:
+    description: Installation token with read access to the overlay repository
+    value: ${{ steps.token.outputs.token }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve overlay repository
+      id: repo
+      if: inputs.private-key != ''
+      shell: bash
+      env:
+        OVERLAY_REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        : "${OVERLAY_REPOSITORY:?repository input is empty — pass the OVERLAY_REPOSITORY repository variable}"
+        echo "owner=${OVERLAY_REPOSITORY%%/*}" >> "$GITHUB_OUTPUT"
+        echo "name=${OVERLAY_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+
+    - name: Create GitHub App token
+      id: token
+      if: inputs.private-key != ''
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: ${{ steps.repo.outputs.owner }}
+        repositories: ${{ steps.repo.outputs.name }}

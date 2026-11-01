@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, responsive } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, responsive, Text } from '@lobehub/ui';
 import { RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +12,6 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 
-const HERO_MAX_WIDTH = 960;
 const EMPTY_STATE_RECOMMEND_COUNT = 10;
 
 const styles = createStaticStyles(({ css }) => ({
@@ -31,32 +29,36 @@ const styles = createStaticStyles(({ css }) => ({
 interface EmptyStateProps {
   /** When set, scopes task creation to this agent and locks the assignee. */
   agentId?: string;
+  projectId?: string;
 }
 
-const EmptyState = memo<EmptyStateProps>(({ agentId }) => {
+const EmptyState = memo<EmptyStateProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
   const { t: tCommon } = useTranslation('common');
   const templatesState = useDailyBriefRecommendationsUI({ count: EMPTY_STATE_RECOMMEND_COUNT });
 
   return (
     <WideScreenContainer
+      fullWidth
       gap={32}
-      minWidth={HERO_MAX_WIDTH}
       paddingBlock={48}
+      paddingInline={16}
       wrapperStyle={{ flex: 1, overflowY: 'auto' }}
     >
-      <Flexbox align={'center'} gap={8}>
+      <Flexbox align={'center'}>
         <Text as={'h1'} style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>
           {t('taskList.emptyHero.greeting')}
         </Text>
-        <Text fontSize={14} type={'secondary'}>
-          {t('taskList.emptyHero.subtitle')}
-        </Text>
       </Flexbox>
 
-      <CreateTaskInlineEntry agentId={agentId} lockAssignee={!!agentId} variant={'hero'} />
+      <CreateTaskInlineEntry
+        agentId={agentId}
+        lockAssignee={!!agentId}
+        projectId={projectId}
+        variant={'hero'}
+      />
 
-      {templatesState.mode !== 'hidden' && (
+      {!projectId && templatesState.mode !== 'hidden' && (
         <Flexbox gap={12}>
           <Flexbox horizontal align={'center'} justify={'space-between'}>
             <Text fontSize={13} type={'secondary'} weight={500}>

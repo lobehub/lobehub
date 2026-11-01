@@ -73,11 +73,7 @@ const GroupStatusTag = memo(() => {
 
   if (loading || !statusConfig) return null;
 
-  return (
-    <Tag bordered={false} color={statusConfig.color}>
-      {statusConfig.label}
-    </Tag>
-  );
+  return <Tag color={statusConfig.color}>{statusConfig.label}</Tag>;
 });
 
 GroupStatusTag.displayName = 'GroupStatusTag';

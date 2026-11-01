@@ -67,17 +67,39 @@ describe('preferenceSelectors', () => {
     });
   });
 
-  describe('labPreferSelectors', () => {
-    it('returns false for agent document floating chat panel by default', () => {
-      store.preference.lab = undefined;
+  describe('terminalFontFamily', () => {
+    it('returns the configured font family without surrounding whitespace', () => {
+      store.preference.terminalFontFamily = '  JetBrains Mono  ';
 
-      expect(labPreferSelectors.enableAgentDocumentFloatingChatPanel(store)).toBe(false);
+      expect(preferenceSelectors.terminalFontFamily(store)).toBe('JetBrains Mono');
     });
 
-    it('returns the configured agent document floating chat panel preference', () => {
-      store.preference.lab = { enableAgentDocumentFloatingChatPanel: true };
+    it('falls back when the configured font family is empty', () => {
+      store.preference.terminalFontFamily = '   ';
 
-      expect(labPreferSelectors.enableAgentDocumentFloatingChatPanel(store)).toBe(true);
+      expect(preferenceSelectors.terminalFontFamily(store)).toBeUndefined();
+    });
+  });
+
+  describe('labPreferSelectors', () => {
+    it('keeps desktop split view disabled by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableDesktopSplitView(store)).toBe(false);
+    });
+
+    it('returns the configured desktop split view preference', () => {
+      store.preference.lab = { enableDesktopSplitView: true };
+
+      expect(labPreferSelectors.enableDesktopSplitView(store)).toBe(true);
+    });
+
+    it('should default project workspaces to disabled and honor the lab preference', () => {
+      store.preference.lab = undefined;
+      expect(labPreferSelectors.enableProjects(store)).toBe(false);
+
+      store.preference.lab = { enableProjects: true };
+      expect(labPreferSelectors.enableProjects(store)).toBe(true);
     });
 
     it('returns false for message text selection actions by default', () => {
@@ -90,6 +112,18 @@ describe('preferenceSelectors', () => {
       store.preference.lab = { enableMessageTextSelectionActions: true };
 
       expect(labPreferSelectors.enableMessageTextSelectionActions(store)).toBe(true);
+    });
+
+    it('keeps OAuth app management hidden by default', () => {
+      store.preference.lab = undefined;
+
+      expect(labPreferSelectors.enableOAuthApps(store)).toBe(false);
+    });
+
+    it('returns the configured OAuth app management preference', () => {
+      store.preference.lab = { enableOAuthApps: true };
+
+      expect(labPreferSelectors.enableOAuthApps(store)).toBe(true);
     });
   });
 });

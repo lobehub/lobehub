@@ -1,43 +1,55 @@
-import { app } from 'electron';
-import i18next from 'i18next';
+import type { i18n as I18NextInstance } from 'i18next';
 
 import type { App } from '@/core/App';
 import { loadResources } from '@/locales/resources';
 import { createLogger } from '@/utils/logger';
+import { resolveUILocale } from '@/utils/system-language';
 
 // Create logger
 const logger = createLogger('core:I18nManager');
 
 export class I18nManager {
-  private i18n: typeof i18next;
+  private i18n?: I18NextInstance;
+  private initializationPromise?: Promise<I18NextInstance>;
   private initialized: boolean = false;
   private app: App;
 
   constructor(app: App) {
     logger.debug('Initializing I18nManager');
     this.app = app;
-    this.i18n = i18next.createInstance();
   }
 
   /**
    * Initialize i18next instance
    */
-  async init(lang?: string) {
+  async init(lang?: string): Promise<I18NextInstance> {
     if (this.initialized) {
       logger.debug('I18nManager already initialized, skipping');
-      return this.i18n;
+      return this.getI18n();
     }
+
+    this.initializationPromise ??= this.initialize(lang).catch((error) => {
+      this.initializationPromise = undefined;
+      throw error;
+    });
+
+    return this.initializationPromise;
+  }
+
+  private initialize = async (lang?: string): Promise<I18NextInstance> => {
+    const { default: i18next } = await import('i18next');
+    const i18n = i18next.createInstance();
+    this.i18n = i18n;
 
     // Priority: parameter language > stored locale > system language
     const storedLocale = this.app.storeManager.get('locale', 'auto') as string;
-    const defaultLanguage =
-      lang || (storedLocale !== 'auto' ? storedLocale : app.getLocale()) || 'en';
+    const defaultLanguage = lang || resolveUILocale(storedLocale);
 
     logger.info(
       `Initializing i18n, app locale: ${defaultLanguage}, stored locale: ${storedLocale}`,
     );
 
-    await this.i18n.init({
+    await i18n.init({
       defaultNS: 'menu',
       fallbackLng: 'en',
       // Load resources as needed
@@ -52,30 +64,36 @@ export class I18nManager {
       partialBundledLanguages: true,
     });
 
-    logger.info(`i18n initialized, language: ${this.i18n.language}`);
+    logger.info(`i18n initialized, language: ${i18n.language}`);
 
     // Preload base namespaces
-    await this.loadLocale(this.i18n.language);
+    await this.loadLocale(i18n.language);
 
     this.initialized = true;
 
     this.refreshMainUI();
 
     // Listen for language change events
-    this.i18n.on('languageChanged', this.handleLanguageChanged);
+    i18n.on('languageChanged', this.handleLanguageChanged);
 
+    return i18n;
+  };
+
+  private getI18n = (): I18NextInstance => {
+    if (!this.i18n) throw new Error('I18nManager has not been initialized');
     return this.i18n;
-  }
+  };
 
   /**
    * Basic translation function
    */
   t = (key: string, options?: any) => {
-    const result = this.i18n.t(key, options) as string;
+    const i18n = this.getI18n();
+    const result = i18n.t(key, options) as string;
 
     // If translation result is the same as key, translation might be missing
     if (result === key) {
-      logger.warn(`${this.i18n.language} key: ${key} is not found`);
+      logger.warn(`${i18n.language} key: ${key} is not found`);
     }
 
     return result;
@@ -89,7 +107,7 @@ export class I18nManager {
   createNamespacedT(namespace: string) {
     return (key: string, options: any = {}) => {
       // Copy options to avoid modifying the original object
-      const mergedOptions = { ...options , ns: namespace,};
+      const mergedOptions = { ...options, ns: namespace };
       // Set namespace
 
       return this.t(key, mergedOptions);
@@ -106,7 +124,7 @@ export class I18nManager {
    * Get current language
    */
   getCurrentLanguage() {
-    return this.i18n.language;
+    return this.getI18n().language;
   }
 
   /**
@@ -120,7 +138,7 @@ export class I18nManager {
       await this.init();
     }
 
-    await this.i18n.changeLanguage(lng);
+    await this.getI18n().changeLanguage(lng);
     // Language change event will trigger handleLanguageChanged
   }
 
@@ -164,7 +182,7 @@ export class I18nManager {
       logger.debug(`Loading namespace: ${lng}/${ns}`);
       const resources = await loadResources(lng, ns);
 
-      this.i18n.addResourceBundle(lng, ns, resources, true, true);
+      this.getI18n().addResourceBundle(lng, ns, resources, true, true);
       return true;
     } catch (error) {
       logger.error(`Failed to load namespace: ${lng}/${ns}`, error);

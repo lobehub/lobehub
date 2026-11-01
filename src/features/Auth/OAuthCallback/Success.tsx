@@ -1,10 +1,11 @@
 'use client';
 
-import { FluentEmoji, Text } from '@lobehub/ui';
-import { Result } from 'antd';
+import { FluentEmoji, Result, Text } from '@lobehub/ui';
 import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
+
+import resultStyles from '../resultStyles.module.css';
 
 const SuccessPage = memo(() => {
   const { t } = useTranslation('oauth');
@@ -47,10 +48,11 @@ const SuccessPage = memo(() => {
 
   return (
     <Result
+      className={resultStyles.fullWidthSubTitle}
       icon={<FluentEmoji emoji={'✅'} size={96} type={'anim'} />}
       status="success"
       subTitle={
-        <Text fontSize={16} type="secondary">
+        <Text align="center" as="span" fontSize={16} style={{ display: 'block' }} type="secondary">
           {provider
             ? t('success.subTitleWithCountdown', {
                 countdown,

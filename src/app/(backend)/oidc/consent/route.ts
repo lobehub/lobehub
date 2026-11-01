@@ -3,10 +3,15 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-import { appEnv } from '@/envs/app';
+import { getServerDB } from '@/database/core/db-adaptor';
+import { isAcceptanceReviewClient } from '@/libs/oidc-provider/acceptanceReview';
+import { describeReviewTarget } from '@/server/services/acceptanceReview/reviewTarget';
 import { OIDCService } from '@/server/services/oidc';
 
 const log = debug('lobe-oidc:consent');
+
+const canReview = async (userId: string | null | undefined, resource: unknown) =>
+  (await describeReviewTarget(await getServerDB(), userId, resource)).allowed;
 
 export async function POST(request: NextRequest) {
   log('Received POST request for /oidc/consent, URL: %s', request.url);
@@ -62,6 +67,21 @@ export async function POST(request: NextRequest) {
         // 1. Get necessary IDs
         const clientId = details.params.client_id as string;
 
+        if (
+          isAcceptanceReviewClient(clientId) &&
+          !(await canReview(userId, details.params.resource))
+        ) {
+          const denied = await oidcService.getInteractionResult(uid, {
+            error: 'access_denied',
+            error_description: 'No access to this acceptance',
+          });
+          const { pathname, search, hash } = new URL(denied);
+          return new NextResponse(null, {
+            headers: { location: `${pathname}${search}${hash}` },
+            status: 303,
+          });
+        }
+
         // 2. Find or create Grant object
         const grant = await oidcService.findOrCreateGrants(userId!, clientId, details.grantId);
 
@@ -115,25 +135,14 @@ export async function POST(request: NextRequest) {
     const internalRedirectUrlString = await oidcService.getInteractionResult(uid, result);
     log('OIDC Provider internal redirect URL string: %s', internalRedirectUrlString);
 
-    // Use APP_URL directly as base
-    if (appEnv.APP_URL) {
-      const baseUrl = new URL(appEnv.APP_URL);
-      const internalUrl = new URL(internalRedirectUrlString);
-      baseUrl.pathname = internalUrl.pathname;
-      baseUrl.search = internalUrl.search;
-      baseUrl.hash = internalUrl.hash;
-      const finalRedirectUrl = baseUrl;
-      log('Using APP_URL as base for redirect: %s', finalRedirectUrl.toString());
-      return NextResponse.redirect(finalRedirectUrl, {
-        status: 303,
-      });
-    }
+    // The gateway rewrites Host on the way to the origin, so the server cannot tell which
+    // public origin the browser is on. A relative Location keeps it on the origin that holds
+    // the interaction cookies.
+    const { pathname, search, hash } = new URL(internalRedirectUrlString);
+    const location = `${pathname}${search}${hash}`;
 
-    // Fallback: use original internal URL
-    log('Using internal redirect URL directly: %s', internalRedirectUrlString);
-    return NextResponse.redirect(new URL(internalRedirectUrlString), {
-      status: 303,
-    });
+    log('Redirecting to: %s', location);
+    return new NextResponse(null, { headers: { location }, status: 303 });
   } catch (error) {
     console.error('Error processing consent:', error);
     return NextResponse.json(

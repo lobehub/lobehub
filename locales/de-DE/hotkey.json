@@ -17,6 +17,8 @@
   "desktop.showApp.title": "Hauptfenster ein-/ausblenden",
   "editMessage.desc": "Bearbeitungsmodus aktivieren, indem Sie Alt gedrückt halten und doppelt auf die Nachricht klicken",
   "editMessage.title": "Nachricht bearbeiten",
+  "findInTopic.desc": "Durchsuchen Sie jede Nachricht des aktuellen Themas im rechten Bereich",
+  "findInTopic.title": "Im Thema suchen",
   "navigateToChat.desc": "Wechsle zum Chat-Tab und öffne Lobe AI",
   "navigateToChat.title": "Zum Standard-Chat wechseln",
   "nextTab.desc": "Wechseln Sie zur nächsten Registerkarte im Desktop-App-Stil; springt am Ende zur ersten Registerkarte zurück",
@@ -41,8 +43,12 @@
   "switchAgent.title": "Schnellwechsel-Agent",
   "switchTab.desc": "Springen Sie zu einer bestimmten Registerkarte anhand ihrer Position (1–9) in der Registerkartenleiste der Desktop-App",
   "switchTab.title": "Zu Registerkarte nach Nummer wechseln",
+  "toggleFavorite.desc": "Fügen Sie die geöffnete Seite dem Bereich Favoriten in der Seitenleiste hinzu oder entfernen Sie sie",
+  "toggleFavorite.title": "Zu Favoriten hinzufügen / aus Favoriten entfernen",
   "toggleLeftPanel.desc": "Linkes Panel ein- oder ausblenden",
   "toggleLeftPanel.title": "Linkes Panel umschalten",
   "toggleRightPanel.desc": "Rechtes Panel ein- oder ausblenden",
-  "toggleRightPanel.title": "Rechtes Panel umschalten"
+  "toggleRightPanel.title": "Rechtes Panel umschalten",
+  "toggleTerminalPanel.desc": "Das untere Terminal-Panel anzeigen oder ausblenden",
+  "toggleTerminalPanel.title": "Terminal-Panel umschalten"
 }

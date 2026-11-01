@@ -1,44 +1,40 @@
 'use client';
 
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { Center, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { FolderPlusIcon } from 'lucide-react';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VList } from 'virtua';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { useFolderPath } from '@/features/ResourceManager/hooks/useFolderPath';
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useFileStore } from '@/store/file';
-import type { TreeItem } from '@/store/tree';
 import { useTreeStore } from '@/store/tree';
 
 import AddButton from '../Header/AddButton';
 import { KnowledgeBaseListProvider } from '../KnowledgeBaseListProvider';
 import { HierarchyNode } from './HierarchyNode';
+import SearchResults from './SearchResults';
+import { resolveHierarchySelectedKey } from './selection';
 import TreeSkeleton from './TreeSkeleton';
-
-interface VisibleNode {
-  item: TreeItem;
-  key: string;
-  level: number;
-  parentKey: string;
-}
+import { useInitLibraryTree } from './useInitLibraryTree';
+import { buildVisibleNodes } from './visibleNodes';
 
 const LibraryHierarchy = memo(() => {
   const { t } = useTranslation('file');
-  const { currentFolderSlug } = useFolderPath();
-  const [libraryId, currentViewItemId] = useResourceManagerStore((s) => [
-    s.libraryId,
+  const { currentFolderId } = useFolderPath();
+  const [currentViewItemId, librarySearchQuery] = useResourceManagerStore((s) => [
     s.currentViewItemId,
+    s.librarySearchQuery,
   ]);
+  // Effect 1: Library switch → reset + load root (seeded from the persisted tree)
+  const libraryId = useInitLibraryTree();
 
   const children = useTreeStore((s) => s.children);
   const expanded = useTreeStore((s) => s.expanded);
   const status = useTreeStore((s) => s.status);
   const errors = useTreeStore((s) => s.errors);
-  const init = useTreeStore((s) => s.init);
   const expandAncestors = useTreeStore((s) => s.expandAncestors);
   const toggle = useTreeStore((s) => s.toggle);
   const loadChildren = useTreeStore((s) => s.loadChildren);
@@ -46,13 +42,7 @@ const LibraryHierarchy = memo(() => {
   // Reuse Explorer Breadcrumb's SWR cache so the sidebar doesn't double-fetch
   // document.getFolderBreadcrumb when navigating into a folder.
   const useFetchFolderBreadcrumb = useFileStore((s) => s.useFetchFolderBreadcrumb);
-  const { data: folderChain } = useFetchFolderBreadcrumb(currentFolderSlug);
-
-  // Effect 1: Library switch → reset + load root
-  useEffect(() => {
-    if (!libraryId) return;
-    init(libraryId);
-  }, [libraryId, init]);
+  const { data: folderChain } = useFetchFolderBreadcrumb(currentFolderId);
 
   // Effect 2: Folder navigation → expand ancestors once breadcrumb resolves
   useEffect(() => {
@@ -62,23 +52,9 @@ const LibraryHierarchy = memo(() => {
 
   const isLoading = status[''] === 'loading';
 
-  const visibleNodes = useMemo(() => {
-    const result: VisibleNode[] = [];
+  const visibleNodes = useMemo(() => buildVisibleNodes(children, expanded), [children, expanded]);
 
-    const walk = (parentKey: string, level: number) => {
-      for (const node of children[parentKey] ?? []) {
-        result.push({ item: node, key: node.id, level, parentKey });
-        if (node.isFolder && expanded[node.id]) {
-          walk(node.id, level + 1);
-        }
-      }
-    };
-
-    walk('', 0);
-    return result;
-  }, [children, expanded]);
-
-  const selectedKey = currentFolderSlug ?? null;
+  const selectedKey = resolveHierarchySelectedKey({ currentFolderId, currentViewItemId });
 
   const hasData = visibleNodes.length > 0;
   // The root fetch is in flight with nothing cached yet.
@@ -102,39 +78,48 @@ const LibraryHierarchy = memo(() => {
     </Center>
   );
 
+  // A typed query swaps the tree for flat, library-scoped results. The tree
+  // stays mounted underneath in store terms (children / expanded are untouched),
+  // so clearing the query brings the exact same tree back.
+  const hasSearchQuery = librarySearchQuery.trim().length > 0;
+
   return (
     <KnowledgeBaseListProvider>
-      <AsyncBoundary
-        data={hasData ? (children[''] ?? true) : undefined}
-        empty={emptyState}
-        error={rootError}
-        errorVariant={'block'}
-        isEmpty={isRootEmpty}
-        isLoading={isRootLoading}
-        loading={<TreeSkeleton />}
-        onRetry={() => loadChildren('')}
-      >
-        <Flexbox paddingInline={4} style={{ height: '100%' }}>
-          <VList
-            bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
-            style={{ height: '100%' }}
-          >
-            {visibleNodes.map(({ item, key, level, parentKey }) => (
-              <div key={key} style={{ paddingBottom: 2 }}>
-                <HierarchyNode
-                  isExpanded={!!expanded[item.id]}
-                  isLoading={status[item.id] === 'loading'}
-                  item={item}
-                  level={level}
-                  parentKey={parentKey}
-                  selectedKey={selectedKey}
-                  onToggle={toggle}
-                />
-              </div>
-            ))}
-          </VList>
-        </Flexbox>
-      </AsyncBoundary>
+      {hasSearchQuery && libraryId ? (
+        <SearchResults libraryId={libraryId} query={librarySearchQuery} />
+      ) : (
+        <AsyncBoundary
+          data={hasData ? (children[''] ?? true) : undefined}
+          empty={emptyState}
+          error={rootError}
+          errorVariant={'block'}
+          isEmpty={isRootEmpty}
+          isLoading={isRootLoading}
+          loading={<TreeSkeleton />}
+          onRetry={() => loadChildren('')}
+        >
+          <Flexbox paddingInline={4} style={{ height: '100%' }}>
+            <VList
+              bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
+              style={{ height: '100%' }}
+            >
+              {visibleNodes.map(({ item, key, level, parentKey }) => (
+                <div key={key} style={{ paddingBottom: 2 }}>
+                  <HierarchyNode
+                    isExpanded={!!expanded[item.id]}
+                    isLoading={status[item.id] === 'loading'}
+                    item={item}
+                    level={level}
+                    parentKey={parentKey}
+                    selectedKey={selectedKey}
+                    onToggle={toggle}
+                  />
+                </div>
+              ))}
+            </VList>
+          </Flexbox>
+        </AsyncBoundary>
+      )}
     </KnowledgeBaseListProvider>
   );
 });

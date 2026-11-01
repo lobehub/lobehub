@@ -56,7 +56,7 @@ describe('resolveGatewayModeEnabled', () => {
 });
 
 describe('useIsGatewayModeEnabled', () => {
-  it('re-computes when the agent toggles disableGatewayMode (reactivity, LOBE-11473)', () => {
+  it('re-computes when the agent toggles disableGatewayMode (reactivity)', () => {
     mockServerConfig({ agentGatewayUrl: 'wss://gw', enableGatewayMode: true });
     useAgentStore.setState(stateWith(false));
 

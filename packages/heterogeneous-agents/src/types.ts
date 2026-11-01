@@ -7,7 +7,8 @@
  *
  * Architecture:
  *   Claude Code stream-json ──→ ClaudeCodeAdapter ──→ HeterogeneousAgentEvent[]
- *   Codex CLI output         ──→ CodexAdapter      ──→ HeterogeneousAgentEvent[]  (future)
+ *   Codex CLI output         ──→ CodexAdapter      ──→ HeterogeneousAgentEvent[]
+ *   OpenCode JSONL           ──→ OpenCodeAdapter   ──→ HeterogeneousAgentEvent[]
  *   ACP JSON-RPC             ──→ ACPAdapter        ──→ HeterogeneousAgentEvent[]  (future)
  */
 
@@ -19,6 +20,12 @@ export type HeterogeneousEventType =
   | 'stream_start'
   | 'stream_chunk'
   | 'stream_end'
+  /**
+   * Producer is retrying the upstream model request after a transient failure.
+   * Mirrors the server/gateway `stream_retry` event so renderer-side running
+   * operation metadata can surface the otherwise silent wait.
+   */
+  | 'stream_retry'
   /**
    * Producer-side boundary meaning this operation will not emit more visible
    * assistant/tool output. The operation may still wait for `agent_runtime_end`
@@ -37,7 +44,7 @@ export type HeterogeneousEventType =
   | 'agent_runtime_end'
   | 'error';
 
-export type StreamChunkType = 'text' | 'reasoning' | 'tools_calling';
+export type StreamChunkType = 'text' | 'reasoning' | 'tool_state' | 'tools_calling';
 
 export interface HeterogeneousAgentEvent {
   data: any;
@@ -49,6 +56,8 @@ export interface HeterogeneousAgentEvent {
 /** Data shape for stream_start events */
 export interface StreamStartData {
   assistantMessage?: { id: string };
+  /** Native Codex turn boundary, stable across tool-separated assistant steps. */
+  codexTurnId?: string;
   /**
    * External-trigger context for the step opened by this stream_start.
    * Set when the new step was opened in response to a repeated tool
@@ -182,19 +191,43 @@ export interface SubagentEventContext {
 export interface StreamChunkData {
   chunkType: StreamChunkType;
   content?: string;
+  pluginState?: Record<string, unknown>;
   reasoning?: string;
+  snapshotMode?: 'replace';
+  snapshotSeq?: number;
   /**
    * Subagent context for the entire chunk — peer to `toolsCalling`,
    * `content`, and `reasoning`. Stream-state info (parent spawn id,
    * subagent turn id) belongs on the event, not inside the payloads.
    */
   subagent?: SubagentEventContext;
+  toolCallId?: string;
   toolsCalling?: ToolCallPayload[];
+}
+
+/**
+ * Non-terminal, replace-only snapshot for a running tool message.
+ *
+ * `snapshotSeq` is monotonic within `(operationId, toolCallId)`; operationId
+ * lives on the enclosing wire event. The final `tool_result` remains the
+ * authoritative terminal snapshot and does not consume this sequence.
+ */
+export interface ToolStateChunkData {
+  chunkType: 'tool_state';
+  pluginState: Record<string, unknown>;
+  snapshotMode: 'replace';
+  snapshotSeq: number;
+  subagent?: SubagentEventContext;
+  toolCallId: string;
 }
 
 /** Data shape for tool_end events */
 export interface ToolEndData {
   isSuccess: boolean;
+  /** Canonical gateway payload used to resolve renderer-side lifecycle hooks. */
+  payload?: ToolCallPayload | { toolCalling: ToolCallPayload };
+  /** Builtin-tool-compatible result passed to renderer-side lifecycle hooks. */
+  result?: { content?: string; state?: unknown; success: boolean };
   /** Subagent context if this tool_end belongs to a subagent inner tool. */
   subagent?: SubagentEventContext;
   toolCallId: string;
@@ -217,10 +250,14 @@ export interface HeterogeneousToolResultImage {
   data?: string;
   /** File record id after upload to the file store. */
   fileId?: string;
+  /** Intrinsic height in pixels, read from the image header at upload time. */
+  height?: number;
   /** IANA media type, e.g. `image/png`. */
   mediaType: string;
   /** Remote URL after upload. */
   url?: string;
+  /** Intrinsic width in pixels, read from the image header at upload time. */
+  width?: number;
 }
 
 /** Data shape for tool_result events (ACP-specific) */
@@ -269,6 +306,12 @@ export interface ToolCallPayload {
  * this shape. Provider-specific shape knowledge does not leak past the adapter.
  */
 export interface UsageData {
+  /** Estimated session or turn cost in USD, if the CLI reports it. */
+  cost?: number;
+  /** Provider-native subscription credits consumed (e.g. Qoder), when the CLI
+   * bills in credits instead of reporting token counts. Not USD — keep it
+   * separate from `cost` so spend math never mixes units. */
+  credits?: number;
   /** Input tokens served from the prompt cache (cache reads). */
   inputCachedTokens?: number;
   /** Input tokens that missed the prompt cache (fresh prompt bytes). */
@@ -290,7 +333,11 @@ export interface UsageData {
  *   - `result_usage`: authoritative grand total at the end of a session
  */
 export interface StepCompleteData {
-  /** Total session cost in USD (only on `result_usage`, if the CLI reports it). */
+  /**
+   * This run's cost in USD (only on `result_usage`, if the CLI reports it).
+   * Adapters whose CLI reports a session-cumulative figure across resume
+   * (Claude Code) convert it to the run's own spend before emitting.
+   */
   costUsd?: number;
   /** Model id for this turn (only meaningful on `turn_metadata`). */
   model?: string;
@@ -324,6 +371,14 @@ export interface HeterogeneousTerminalErrorData {
   agentType?: string;
   clearEchoedContent?: boolean;
   code?: string;
+  command?: string;
+  /**
+   * Diagnostic context from the CLI's terminal event (subtype, HTTP status,
+   * turn count, session id, …). Persisted verbatim into the error body so the
+   * error card's details pane explains the failure even when the CLI reported
+   * no message text.
+   */
+  details?: Record<string, unknown>;
   docsUrl?: string;
   error?: string;
   installCommands?: readonly string[];
@@ -340,11 +395,35 @@ export interface HeterogeneousTerminalErrorData {
  * Adapters maintain internal state (e.g., pending tool calls) to correctly
  * emit lifecycle events like tool_start / tool_end.
  */
+/**
+ * Options for reading a run's usage after the CLI exits. `env` is the child
+ * process environment, so home-resolution honors relocations like
+ * `KIMI_CODE_HOME` that only exist in the spawn env.
+ */
+export interface PostRunUsageOptions {
+  env?: Record<string, string | undefined>;
+}
+
+/** Token usage a CLI only records outside stdout, read once the run has exited. */
+export interface PostRunUsage {
+  model?: string;
+  usage: UsageData;
+}
+
 export interface AgentEventAdapter {
   /**
    * Convert a single raw event into zero or more HeterogeneousAgentEvents.
    */
   adapt: (raw: any) => HeterogeneousAgentEvent[];
+
+  /**
+   * Turn usage read after exit into events, for agents whose token usage never
+   * appears on stdout (e.g. Kimi Code logs it only to the session's
+   * wire.jsonl). Pure: the spawn pipeline reads the usage from disk and hands
+   * it over, because adapters are also bundled for the browser and must not
+   * touch the file system.
+   */
+  buildPostRunUsageEvents?: (usage: PostRunUsage) => HeterogeneousAgentEvent[];
 
   /**
    * Flush any buffered events (call at end of stream).
@@ -353,6 +432,12 @@ export interface AgentEventAdapter {
 
   /** The session ID extracted from the agent's init event (for multi-turn resume). */
   sessionId?: string;
+
+  /**
+   * Validate provider-specific terminal contracts after stdout has drained and
+   * the upstream process has reported a successful exit.
+   */
+  validateCompletion?: () => HeterogeneousAgentEvent[];
 }
 
 // ─── Agent Process Config ───

@@ -5,8 +5,10 @@ import { memo, useCallback, useMemo } from 'react';
 
 import { useCommunityWorkspaceProfile } from '@/business/client/hooks/useCommunityWorkspaceProfile';
 import AsyncError from '@/components/AsyncError';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDiscoverStore } from '@/store/discover';
+import { userSelectors } from '@/store/discover/selectors';
 import type { DiscoverUserProfile } from '@/types/discover';
 
 import NotFound from '../components/NotFound';
@@ -18,7 +20,6 @@ import {
 } from './features/resolveWorkspaceProfileEdit';
 import WorkspaceContent from './features/WorkspaceContent';
 import { openWorkspaceProfileModal } from './features/WorkspaceProfileModal';
-import Loading from './loading';
 
 interface WorkspaceDetailPageProps {
   mobile?: boolean;
@@ -40,13 +41,15 @@ const WorkspaceDetailPage = memo<WorkspaceDetailPageProps>(({ mobile }) => {
 
   const useUserProfile = useDiscoverStore((s) => s.useUserProfile);
   const {
-    data,
     error: userProfileError,
     isLoading: isUserProfileLoading,
     mutate,
+    queryKey: userProfileQueryKey,
   } = useUserProfile({
     username: workspaceUsername ?? '',
   });
+  // The replica view of this profile; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(userSelectors.userProfile(userProfileQueryKey));
 
   // Fallback profile so the page header renders even before the market profile is materialized
   const fallbackProfile = useMemo<DiscoverUserProfile | null>(() => {
@@ -151,7 +154,8 @@ const WorkspaceDetailPage = memo<WorkspaceDetailPageProps>(({ mobile }) => {
     profileData,
   ]);
 
-  if ((isWorkspaceProfileLoading || isUserProfileLoading) && !fallbackProfile) return <Loading />;
+  if ((isWorkspaceProfileLoading || isUserProfileLoading) && !fallbackProfile)
+    return <RouteLoading />;
   if (!contextConfig) {
     // A transient profile fetch failure must not masquerade as "workspace not
     // found" — offer Reload. Only a resolved-empty profile is a real 404
@@ -178,8 +182,8 @@ const WorkspaceDetailPage = memo<WorkspaceDetailPageProps>(({ mobile }) => {
   );
 });
 
-export const MobileWorkspaceDetailPage = memo(() => {
+export const MobileWorkspaceDetailPage = () => {
   return <WorkspaceDetailPage mobile={true} />;
-});
+};
 
 export default WorkspaceDetailPage;

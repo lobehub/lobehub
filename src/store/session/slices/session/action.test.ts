@@ -1,7 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { message } from '@/components/AntdStaticMethods';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
 import { useSessionStore } from '@/store/session';
@@ -13,13 +12,9 @@ import { sessionSelectors } from './selectors';
 vi.mock('@/services/session', () => ({
   sessionService: {
     createSession: vi.fn(),
-    cloneSession: vi.fn(),
     updateSessionGroup: vi.fn(),
-    removeSession: vi.fn(),
-    getAllSessions: vi.fn(),
     updateSession: vi.fn(),
     updateSessionGroupId: vi.fn(),
-    searchSessions: vi.fn(),
     updateSessionPinned: vi.fn(),
   },
 }));
@@ -30,21 +25,8 @@ vi.mock('@/services/chatGroup', () => ({
   },
 }));
 
-vi.mock('@/components/AntdStaticMethods', () => ({
-  message: {
-    loading: vi.fn(),
-    success: vi.fn(),
-    error: vi.fn(),
-    destroy: vi.fn(),
-  },
-}));
-
-const mockRefresh = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
-  useSessionStore.setState({
-    refreshSessions: mockRefresh,
-  });
 });
 
 afterEach(() => {
@@ -95,37 +77,6 @@ describe('SessionAction', () => {
     });
   });
 
-  describe('cloneSession', () => {
-    it('should duplicate a session and switch to the new one', async () => {
-      const { result } = renderHook(() => useSessionStore());
-      const sessionId = 'session-id';
-      const duplicatedSessionId = 'duplicated-session-id';
-      vi.mocked(sessionService.cloneSession).mockResolvedValue(duplicatedSessionId);
-      vi.mocked(message.loading).mockResolvedValue(true);
-
-      await act(async () => {
-        await result.current.duplicateSession(sessionId);
-      });
-
-      expect(message.loading).toHaveBeenCalled();
-      expect(sessionService.cloneSession).toHaveBeenCalledWith(sessionId, expect.any(String));
-    });
-  });
-
-  describe('removeSession', () => {
-    it('should remove a session and refresh the list', async () => {
-      const { result } = renderHook(() => useSessionStore());
-      const sessionId = 'session-id';
-
-      await act(async () => {
-        await result.current.removeSession(sessionId);
-      });
-
-      expect(sessionService.removeSession).toHaveBeenCalledWith(sessionId);
-      expect(mockRefresh).toHaveBeenCalled();
-    });
-  });
-
   describe('activeSession', () => {
     it('should set the provided session id as active', async () => {
       const { result } = renderHook(() => useSessionStore());
@@ -149,7 +100,6 @@ describe('SessionAction', () => {
       });
 
       expect(sessionService.updateSession).toHaveBeenCalledWith(sessionId, { pinned: true });
-      expect(mockRefresh).toHaveBeenCalled();
     });
 
     it('should unpin a session when pinned is false', async () => {
@@ -161,12 +111,11 @@ describe('SessionAction', () => {
       });
 
       expect(sessionService.updateSession).toHaveBeenCalledWith(sessionId, { pinned: false });
-      expect(mockRefresh).toHaveBeenCalled();
     });
   });
 
   describe('updateSessionGroupId', () => {
-    it('should update regular session group and refresh the list', async () => {
+    it('should update regular session group', async () => {
       const { result } = renderHook(() => useSessionStore());
       const sessionId = 'session-id';
       const groupId = 'new-group-id';
@@ -185,10 +134,9 @@ describe('SessionAction', () => {
       });
 
       expect(sessionService.updateSession).toHaveBeenCalledWith(sessionId, { group: groupId });
-      expect(mockRefresh).toHaveBeenCalled();
     });
 
-    it('should update chat group session and refresh the list', async () => {
+    it('should update chat group session', async () => {
       const { result } = renderHook(() => useSessionStore());
       const sessionId = 'group-session-id';
       const groupId = 'new-group-id';
@@ -207,7 +155,6 @@ describe('SessionAction', () => {
       });
 
       expect(chatGroupService.updateGroup).toHaveBeenCalledWith(sessionId, { groupId });
-      expect(mockRefresh).toHaveBeenCalled();
     });
 
     it('should handle default group for chat group sessions', async () => {
@@ -229,7 +176,6 @@ describe('SessionAction', () => {
       });
 
       expect(chatGroupService.updateGroup).toHaveBeenCalledWith(sessionId, { groupId: null });
-      expect(mockRefresh).toHaveBeenCalled();
     });
   });
 });

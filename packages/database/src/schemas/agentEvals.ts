@@ -161,9 +161,20 @@ export const agentEvalDatasets = pgTable(
       .$defaultFn(() => idGenerator('evalDatasets'))
       .primaryKey(),
 
-    benchmarkId: text('benchmark_id')
-      .references(() => agentEvalBenchmarks.id, { onDelete: 'cascade' })
-      .notNull(),
+    /**
+     * The published benchmark this dataset is a part of, when it is part of one.
+     * Nullable because a benchmark models a *published* suite — it carries
+     * `rubrics`, a `referenceUrl` and `isSystem` — while a dataset accumulated
+     * from captured cases has no such origin and each of its cases carries its
+     * own criteria. Requiring one forced those datasets to invent a fake
+     * benchmark row, which also put them under its delete cascade.
+     *
+     * A *run* still requires one: the benchmark is what defines the shared
+     * rubrics a run is scored against.
+     */
+    benchmarkId: text('benchmark_id').references(() => agentEvalBenchmarks.id, {
+      onDelete: 'cascade',
+    }),
 
     sourceExperimentId: text('source_experiment_id').references(() => agentEvalExperiments.id, {
       onDelete: 'set null',

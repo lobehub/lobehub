@@ -16,7 +16,26 @@ const sheetHandlers = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ActionIcon: ({
+    onClick,
+    title,
+    ...rest
+  }: {
+    onClick?: () => void;
+    title?: string;
+    [key: string]: unknown;
+  }) => (
+    <button
+      data-testid={(rest as any)['data-testid']}
+      title={title}
+      type="button"
+      onClick={onClick}
+    >
+      {title}
+    </button>
+  ),
   FloatingSheet: ({
     children,
     dismissible,
@@ -59,30 +78,13 @@ vi.mock('@lobehub/ui/base-ui', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({
-    onClick,
-    title,
-    ...rest
-  }: {
-    onClick?: () => void;
-    title?: string;
-    [key: string]: unknown;
-  }) => (
-    <button
-      data-testid={(rest as any)['data-testid']}
-      title={title}
-      type="button"
-      onClick={onClick}
-    >
-      {title}
-    </button>
-  ),
-  Icon: ({ icon }: { icon: () => void }) => <span data-icon={icon.name} />,
-}));
-
 const mergedHooksCaptured = vi.hoisted(() => ({
-  current: undefined as undefined | { onBeforeSendMessage?: () => Promise<void> },
+  current: undefined as
+    | undefined
+    | {
+        onBeforeSendMessage?: () => Promise<void>;
+        onTopicCreated?: (topicId: string) => Promise<void>;
+      },
 }));
 
 vi.mock('@/features/Conversation', () => ({
@@ -109,19 +111,11 @@ vi.mock('@/features/Conversation', () => ({
     />
   ),
   ChatList: () => null,
-  ConversationProvider: ({
-    children,
-    context,
-    hooks,
-    skipFetch,
-    hasInitMessages,
-    messages,
-  }: any) => {
+  ConversationProvider: ({ children, context, hooks, skipFetch, messages }: any) => {
     mergedHooksCaptured.current = hooks;
     return (
       <div
         data-context={JSON.stringify(context)}
-        data-has-init-messages={String(hasInitMessages ?? false)}
         data-has-messages-prop={String(messages !== undefined)}
         data-skip-fetch={String(skipFetch ?? false)}
         data-testid="provider"
@@ -152,6 +146,29 @@ vi.mock('@/routes/(main)/agent/features/Conversation/useActionsBarConfig', () =>
 
 vi.mock('@/hooks/useOperationState', () => ({
   useOperationState: () => undefined,
+}));
+
+vi.mock('@/features/PageEditor/Copilot/Toolbar', () => ({
+  default: ({
+    onTopicChange,
+    topicId,
+  }: {
+    onTopicChange?: (topicId: string | null) => void;
+    topicId?: string | null;
+  }) => (
+    <header data-testid="copilot-toolbar" data-topic-id={topicId ?? 'new'}>
+      <button data-testid="toolbar-new-topic" onClick={() => onTopicChange?.(null)}>
+        New topic
+      </button>
+      <button data-testid="toolbar-history-topic" onClick={() => onTopicChange?.('topic-2')}>
+        History topic
+      </button>
+    </header>
+  ),
+}));
+
+vi.mock('@/features/PageEditor/RightPanel/OverrideContext', () => ({
+  PageAgentPanelOverrideProvider: ({ children }: { children?: ReactNode }) => children,
 }));
 
 vi.mock('@/features/Conversation/hooks/useChatFollowUp', () => ({
@@ -223,21 +240,14 @@ describe('FloatingChatPanel', () => {
     });
   });
 
-  it('lets ConversationProvider drive the fetch when the chat store has no slice yet', () => {
-    const { getByTestId } = render(<FloatingChatPanel agentId="agent-1" topicId="topic-1" />);
-    const provider = getByTestId('provider');
-    expect(provider.dataset.skipFetch).toBe('false');
-    expect(provider.dataset.hasInitMessages).toBe('false');
-  });
-
-  it('syncs the chat store slice into ConversationProvider when the topic already has messages', () => {
+  it('shows the chat store bucket of its context instead of passing a static transcript', () => {
     mockChatState.current.dbMessagesMap = {
       'agent-1:topic-1:null': [{ id: 'msg-1' }],
     };
     const { getByTestId } = render(<FloatingChatPanel agentId="agent-1" topicId="topic-1" />);
     const provider = getByTestId('provider');
-    expect(provider.dataset.hasInitMessages).toBe('true');
-    expect(provider.dataset.hasMessagesProp).toBe('true');
+    expect(provider.dataset.skipFetch).toBe('false');
+    expect(provider.dataset.hasMessagesProp).toBe('false');
   });
 
   it('forwards title and headerActions to floating panel header', () => {
@@ -262,6 +272,73 @@ describe('FloatingChatPanel', () => {
     expect(sheet.dataset.open).toBe('false');
     expect(sheet.dataset.activeSnap).toBe('320');
     expect(getByTestId('floating-chat-panel').dataset.collapsed).toBe('true');
+  });
+
+  it('starts expanded when defaultOpen is enabled', () => {
+    const { getByTestId } = render(
+      <FloatingChatPanel defaultOpen agentId="agent-1" topicId="topic-1" />,
+    );
+
+    expect(getByTestId('floating-panel-shell').dataset.open).toBe('true');
+    expect(getByTestId('floating-chat-panel').dataset.collapsed).toBe('false');
+  });
+
+  it('renders a full-height conversation without FloatingSheet chrome in embedded mode', () => {
+    const { getByTestId, queryByTestId } = render(
+      <FloatingChatPanel agentId="agent-1" mode="embedded" topicId="topic-1" />,
+    );
+
+    const panel = getByTestId('floating-chat-panel');
+    expect(panel.dataset.mode).toBe('embedded');
+    expect(panel.dataset.collapsed).toBe('false');
+    expect(panel).toContainElement(getByTestId('chat-body'));
+    expect(panel).toContainElement(getByTestId('chat-input'));
+    expect(queryByTestId('floating-panel-shell')).toBeNull();
+    expect(queryByTestId('floating-chat-panel-collapse-button')).toBeNull();
+  });
+
+  it('binds the embedded toolbar topic selection to the conversation context', () => {
+    const { getByTestId, queryByTestId } = render(
+      <FloatingChatPanel agentId="agent-1" mode="embedded" topicId="topic-1" />,
+    );
+
+    expect(getByTestId('copilot-toolbar')).toHaveAttribute('data-topic-id', 'topic-1');
+    expect(JSON.parse(getByTestId('provider').dataset.context!)).toMatchObject({
+      isolatedTopic: true,
+      topicId: 'topic-1',
+    });
+
+    fireEvent.click(getByTestId('toolbar-history-topic'));
+
+    expect(getByTestId('copilot-toolbar')).toHaveAttribute('data-topic-id', 'topic-2');
+    expect(JSON.parse(getByTestId('provider').dataset.context!)).toMatchObject({
+      isolatedTopic: true,
+      topicId: 'topic-2',
+    });
+    expect(queryByTestId('floating-panel-shell')).toBeNull();
+  });
+
+  it('keeps a newly created embedded topic bound to the toolbar and conversation', async () => {
+    const { getByTestId } = render(
+      <FloatingChatPanel agentId="agent-1" mode="embedded" topicId="topic-1" />,
+    );
+
+    fireEvent.click(getByTestId('toolbar-new-topic'));
+    expect(getByTestId('copilot-toolbar')).toHaveAttribute('data-topic-id', 'new');
+    expect(JSON.parse(getByTestId('provider').dataset.context!)).toMatchObject({
+      isolatedTopic: true,
+      topicId: null,
+    });
+
+    await act(async () => {
+      await mergedHooksCaptured.current?.onTopicCreated?.('topic-created');
+    });
+
+    expect(getByTestId('copilot-toolbar')).toHaveAttribute('data-topic-id', 'topic-created');
+    expect(JSON.parse(getByTestId('provider').dataset.context!)).toMatchObject({
+      isolatedTopic: true,
+      topicId: 'topic-created',
+    });
   });
 
   it('renders a minimal ChatInput while collapsed (no left/right actions)', () => {

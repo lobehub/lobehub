@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, type DropdownItem, DropdownMenu, Icon, type MenuInfo } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { type DropdownItem, DropdownMenu, Icon, type MenuInfo } from '@lobehub/ui';
+import { ActionIcon, cssVar } from '@lobehub/ui';
 import { Globe, LockIcon, UsersIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,8 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListVisibilityFilter as Filter } from '@/store/task/slices/list/initialState';
+
+import { renderMenuCheck } from '../features/menuExtra';
 
 const FILTER_OPTIONS: Array<{ icon: typeof Globe; key: Filter; labelKey: string }> = [
   {
@@ -51,6 +53,7 @@ const TaskListVisibilityFilter = memo(() => {
       FILTER_OPTIONS.map((option) => {
         const OptionIcon = option.icon;
         return {
+          extra: renderMenuCheck(option.key === visibility),
           icon: <Icon color={cssVar.colorTextSecondary} icon={OptionIcon} size={16} />,
           key: option.key,
           label: t(option.labelKey as never),
@@ -60,7 +63,7 @@ const TaskListVisibilityFilter = memo(() => {
           },
         };
       }),
-    [setListVisibility, t],
+    [setListVisibility, t, visibility],
   );
 
   if (!activeWorkspaceId) return null;

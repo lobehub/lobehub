@@ -13,13 +13,20 @@ import { wechat } from './wechat/definition';
 
 export {
   allowFromField,
+  BOT_REACTION_MODES,
+  BOT_REPLY_PLACEMENT_MODES,
+  type BotReactionMode,
+  type BotReactionPhase,
   type BotReplyLocale,
+  type BotReplyPlacementMode,
+  DEFAULT_BOT_REACTION_MODE,
   displayToolCallsField,
   type DmDecision,
   type DmPolicy,
   type DmSettings,
   extractDmSettings,
   extractGroupSettings,
+  extractGuestSettings,
   extractUserAllowlist,
   extractWatchKeywordEntries,
   extractWatchKeywords,
@@ -28,17 +35,27 @@ export {
   getStepReactionEmoji,
   type GroupPolicy,
   type GroupSettings,
+  type GuestDecision,
+  type GuestPolicy,
+  type GuestSettings,
   makeDmPolicyField,
   makeGroupPolicyFields,
+  makeGuestPolicyField,
   makeServerIdField,
   makeUserIdField,
   messageMatchesWatchKeyword,
   normalizeAllowFromEntries,
+  normalizeBotReactionMode,
   normalizeBotReplyLocale,
+  normalizeBotReplyPlacementMode,
+  reactionModeField,
   RECEIVED_REACTION_EMOJI,
+  replyPlacementField,
   shouldAllowSender,
+  shouldApplyReaction,
   shouldHandleDm,
   shouldHandleGroup,
+  shouldHandleGuest,
   THINKING_REACTION_EMOJI,
   type UserAllowlist,
   validateAccessSettings,
@@ -47,6 +64,12 @@ export {
   WORKING_REACTION_EMOJI,
 } from './const';
 export { PlatformRegistry } from './registry';
+export {
+  extractReplyEmojis,
+  type ReplyEmojiEntry,
+  replyStyleFields,
+  resolveReplyStyle,
+} from './replyStyle';
 export type {
   BotMessageAttachment,
   BotPlatformRedisClient,
@@ -60,12 +83,18 @@ export type {
   PlatformDefinition,
   PlatformDocumentation,
   PlatformMessenger,
+  ReplyTargets,
   SerializedPlatformDefinition,
   UsageStats,
   ValidationResult,
 } from './types';
 export { ClientFactory, messengerContentText } from './types';
-export type { ProviderConfigInput, ResolvedBotProviderConfig } from './utils';
+export type {
+  BotConcurrencyStrategy,
+  ProviderConfigInput,
+  ResolvedBotConcurrency,
+  ResolvedBotProviderConfig,
+} from './utils';
 export {
   buildRuntimeKey,
   extractDefaults,
@@ -75,9 +104,14 @@ export {
   getEffectiveConnectionMode,
   mergeWithDefaults,
   parseRuntimeKey,
+  platformFromThreadId,
+  resolveBotConcurrency,
   resolveBotProviderConfig,
   resolveConnectionMode,
+  withResolvedConcurrencySettings,
 } from './utils';
+export type { BotProviderFieldValues, FieldFormatViolation } from './validateFieldFormats';
+export { collectFieldFormatViolations, formatFieldFormatViolations } from './validateFieldFormats';
 
 // --------------- Platform definitions ---------------
 export { discord } from './discord/definition';

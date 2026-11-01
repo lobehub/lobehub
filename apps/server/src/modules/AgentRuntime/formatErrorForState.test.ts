@@ -1,10 +1,28 @@
-import { ModelEmptyError } from '@lobechat/model-runtime';
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { formatErrorForState } from './formatErrorForState';
+import {
+  formatErrorForState,
+  readDispatchErrorContext,
+  readErrorBudgetContext,
+} from './formatErrorForState';
 
 describe('formatErrorForState', () => {
+  it('classifies an already-wrapped error using its nested provider message', () => {
+    const error = {
+      body: { error: { message: 'insufficient quota' }, provider: 'openai' },
+      type: AgentRuntimeErrorType.ProviderBizError,
+    };
+    const result = formatErrorForState(error);
+    expect(result).toMatchObject({
+      attribution: 'user',
+      body: error.body,
+      type: AgentRuntimeErrorType.InsufficientQuota,
+    });
+    expect(formatErrorForState(result)).toEqual(result);
+  });
+
   describe('input normalization', () => {
     it('handles ChatCompletionErrorPayload — extracts errorType and message', () => {
       const result = formatErrorForState({
@@ -52,7 +70,54 @@ describe('formatErrorForState', () => {
 
       expect(result.type).toBe(ChatErrorType.InternalServerError);
       expect(result.message).toBe('boom');
-      expect(result.body).toEqual({ name: 'TypeError' });
+      expect(result.body).toMatchObject({ name: 'TypeError' });
+    });
+
+    it('persists the stack of an unclassified Error so the throw site is locatable', () => {
+      // `name` + `message` alone are useless for a recurring harness 500 — the
+      // only thing that identifies where it blew up is the stack.
+      const result = formatErrorForState(new Error('some opaque internal failure'));
+
+      expect(result.type).toBe(ChatErrorType.InternalServerError);
+      expect((result.body as { stack?: string }).stack).toContain('formatErrorForState.test');
+    });
+
+    it('classifies a harness JSON.parse throw instead of leaving a bare 500', () => {
+      // The production shape: `SyntaxError` out of a harness `JSON.parse`,
+      // previously stored as `{ type: 500, body: { name: 'SyntaxError' } }` with
+      // no attribution, category or failure accounting at all.
+      const result = formatErrorForState(
+        new SyntaxError('Bad escaped character in JSON at position 46269 (line 1 column 46270)'),
+      );
+
+      expect(result.type).toBe(AgentRuntimeErrorType.HarnessJsonParseError);
+      expect(result.attribution).toBe('harness');
+      expect(result.category).toBe('stream');
+      expect(result.numericId).toBe(7008);
+      expect(result.countAsFailure).toBe(true);
+      // Deterministic — the same corrupt payload re-parses to the same failure,
+      // so a transport retry would only re-burn the run's tokens.
+      expect(result.retryable).toBe(false);
+      // Classification must not cost us the throw site.
+      expect((result.body as { name?: string; stack?: string }).name).toBe('SyntaxError');
+      expect((result.body as { stack?: string }).stack).toContain('formatErrorForState.test');
+    });
+
+    it('truncates an oversized stack instead of storing it whole', () => {
+      const error = new Error('boom');
+      error.stack = 'x'.repeat(10_000);
+
+      const stack = (formatErrorForState(error).body as { stack?: string }).stack;
+
+      expect(stack).toHaveLength(1001);
+      expect(stack?.endsWith('…')).toBe(true);
+    });
+
+    it('omits `stack` when the thrown Error carries none', () => {
+      const error = new Error('boom');
+      error.stack = undefined;
+
+      expect((formatErrorForState(error).body as { stack?: string }).stack).toBeUndefined();
     });
 
     it('falls back to AgentRuntimeError for unknown thrown values', () => {
@@ -82,13 +147,13 @@ describe('formatErrorForState', () => {
       });
     });
 
-    it('enriches a thrown ModelEmptyError into a readable retryable terminal error', () => {
+    it('enriches a thrown ModelEmptyError into a readable non-retryable terminal error', () => {
       const result = formatErrorForState(
         new ModelEmptyError(undefined, {
-          attempt: 3,
-          maxAttempts: 3,
-          outputTokens: 1,
-          retryEvents: [{ attempt: 2, delayMs: 1000, maxAttempts: 3 }],
+          attempt: 1,
+          cost: 5.980_015,
+          maxAttempts: 1,
+          outputTokens: 25_617,
         }),
       );
 
@@ -98,17 +163,46 @@ describe('formatErrorForState', () => {
       expect(result.type).toBe(AgentRuntimeErrorType.ModelEmptyCompletion);
       expect(result.category).toBe('provider');
       expect(result.attribution).toBe('provider');
-      expect(result.retryable).toBe(true);
+      expect(result.retryable).toBe(false);
       expect(result.countAsFailure).toBe(true);
       expect(result.numericId).toBe(8014);
       expect(result.message).toContain('empty completion');
       expect(result.body).toMatchObject({
         diagnostics: {
-          attempt: 3,
-          maxAttempts: 3,
-          outputTokens: 1,
-          retryEvents: [expect.objectContaining({ attempt: 2 })],
+          attempt: 1,
+          cost: 5.980_015,
+          maxAttempts: 1,
+          outputTokens: 25_617,
         },
+      });
+    });
+
+    it('enriches a thrown ModelRefusalError without counting it as an operational failure', () => {
+      const result = formatErrorForState(
+        new ModelRefusalError(undefined, {
+          attempt: 1,
+          finishReason: 'refusal',
+          model: 'fable',
+          provider: 'lobehub',
+        }),
+      );
+
+      expect(result).toMatchObject({
+        attribution: 'provider',
+        body: {
+          diagnostics: {
+            attempt: 1,
+            finishReason: 'refusal',
+            model: 'fable',
+            provider: 'lobehub',
+          },
+        },
+        category: 'provider',
+        countAsFailure: false,
+        httpStatus: 471,
+        numericId: 8015,
+        retryable: false,
+        type: AgentRuntimeErrorType.ModelRefusal,
       });
     });
 
@@ -356,5 +450,106 @@ describe('formatErrorForState', () => {
       expect(result.message).toBe('plain string failure');
       expect(result.body).toEqual({ message: 'plain string failure' });
     });
+  });
+});
+
+// The cost-admission gate attaches `budget` to the thrown payload, and
+// `formatErrorForState` copies it onto `body` verbatim — `body` is `any`, so
+// reading it back has to narrow rather than cast.
+describe('readErrorBudgetContext', () => {
+  it('reads the budget context an admission gate attached', () => {
+    const formatted = formatErrorForState({
+      budget: {
+        availableCredits: 7_242_747,
+        budgetTypeAtError: 'workspace_member',
+        requiredCredits: 197_391,
+        shortfallCredits: 0,
+      },
+      error: { message: 'Workspace budget exceeded' },
+      errorType: ChatErrorType.InsufficientBudgetForModel,
+      provider: 'lobehub',
+    });
+
+    expect(readErrorBudgetContext(formatted)).toEqual({
+      availableCredits: 7_242_747,
+      budgetTypeAtError: 'workspace_member',
+      requiredCredits: 197_391,
+      shortfallCredits: 0,
+    });
+  });
+
+  it('drops fields of the wrong shape instead of forwarding them to a renderer', () => {
+    const formatted = formatErrorForState({
+      budget: {
+        availableCredits: '7242747',
+        budgetTypeAtError: 'workspace',
+        requiredCredits: Number.NaN,
+      },
+      error: { message: 'Workspace budget exceeded' },
+      errorType: ChatErrorType.InsufficientBudgetForModel,
+    });
+
+    expect(readErrorBudgetContext(formatted)).toEqual({
+      availableCredits: undefined,
+      budgetTypeAtError: 'workspace',
+      requiredCredits: undefined,
+      shortfallCredits: undefined,
+    });
+  });
+
+  it('returns undefined when there is no usable budget context', () => {
+    expect(readErrorBudgetContext(undefined)).toBeUndefined();
+    expect(readErrorBudgetContext(formatErrorForState(new Error('boom')))).toBeUndefined();
+    expect(
+      readErrorBudgetContext(
+        formatErrorForState({
+          budget: { pricingBasis: 'unknown' },
+          errorType: ChatErrorType.InsufficientBudgetForModel,
+        }),
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe('readDispatchErrorContext', () => {
+  const sandboxFailure = (dispatch: Record<string, unknown> = {}) =>
+    formatErrorForState({
+      body: {
+        detail: 'CLAUDE_CODE_OAUTH_TOKEN 未设置。请先在凭证管理中添加该凭证后再运行 claude-code。',
+        dispatch: { agentType: 'claude-code', stage: 'sandbox_spawn', ...dispatch },
+      },
+      message: 'Hetero sandbox spawn failed',
+      type: ChatErrorType.ServerAgentRuntimeError,
+    });
+
+  it('projects only the allowlisted dispatch fields', () => {
+    const context = readDispatchErrorContext(
+      sandboxFailure({
+        deviceAccessDenied: true,
+        missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+        workspaceId: 'ws-internal',
+      }),
+    );
+
+    expect(context).toEqual({
+      agentType: 'claude-code',
+      deviceAccessDenied: true,
+      missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+      stage: 'sandbox_spawn',
+    });
+    expect(JSON.stringify(context)).not.toContain('凭证管理');
+  });
+
+  it('drops a credential that is not an environment-variable name', () => {
+    expect(
+      readDispatchErrorContext(sandboxFailure({ missingCredential: 'sk-ant-oat01-AbC_dEf' })),
+    ).toEqual({ agentType: 'claude-code', stage: 'sandbox_spawn' });
+  });
+
+  it('ignores errors without an allowlisted dispatch context', () => {
+    expect(readDispatchErrorContext(undefined)).toBeUndefined();
+    expect(readDispatchErrorContext(formatErrorForState(new Error('boom')))).toBeUndefined();
+    expect(readDispatchErrorContext(sandboxFailure({ stage: 'other' }))).toBeUndefined();
+    expect(readDispatchErrorContext(sandboxFailure({ agentType: 'openclaw' }))).toBeUndefined();
   });
 });

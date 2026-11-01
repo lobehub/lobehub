@@ -1,5 +1,6 @@
+import { LOADING_FLAT } from '@lobechat/const';
 import { renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { markdownElements } from '../Markdown/plugins';
 import { useChatMarkdown } from './useChatMarkdown';
@@ -9,14 +10,20 @@ import { useChatMarkdown } from './useChatMarkdown';
 vi.mock('@/store/user', () => ({
   useUserStore: (selector: any) => selector({ settings: {} }),
 }));
+let mockTransitionMode = 'none';
+
 vi.mock('@/store/user/selectors', () => ({
-  userGeneralSettingsSelectors: { config: () => ({ transitionMode: 'none' }) },
+  userGeneralSettingsSelectors: { config: () => ({ transitionMode: mockTransitionMode }) },
 }));
 
 const remarkPluginFor = (tag: string) =>
   markdownElements.find((el) => el.tag === tag)?.remarkPlugin;
 
 describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
+  afterEach(() => {
+    mockTransitionMode = 'none';
+  });
+
   it('excludes user-scoped plugins so echoed <skill>/<tool> tags never become chips', () => {
     const { result } = renderHook(() => useChatMarkdown({ id: 'a1', isGenerating: false }));
 
@@ -37,7 +44,7 @@ describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
     const { result } = renderHook(() => useChatMarkdown({ id: 'a2', isGenerating: false }));
     const remarkPlugins = result.current.markdownProps.remarkPlugins ?? [];
 
-    // Sanity: an assistant-scoped plugin (e.g. LocalFile) is still wired in, so
+    // Sanity: an assistant-scoped plugin (e.g. LobeThinking) is still wired in, so
     // the filter narrowed the set rather than emptying it.
     const assistantScoped = markdownElements.find(
       (el) => el.scope === 'assistant' && el.remarkPlugin,
@@ -50,5 +57,112 @@ describe('useChatMarkdown (assistant / grouped message pipeline)', () => {
     const { result } = renderHook(() => useChatMarkdown({ id: 'a3', isGenerating: false }));
 
     expect(result.current.markdownProps.showFootnotes).toBe(true);
+  });
+
+  it('keeps animated disabled when streaming is disabled even during generation', () => {
+    mockTransitionMode = 'fadeIn';
+
+    const { result } = renderHook(() =>
+      useChatMarkdown({ enableStream: false, id: 'a4', isGenerating: true }),
+    );
+
+    expect(result.current.markdownProps.animated).toBe(false);
+    expect(result.current.markdownProps.enableStream).toBe(false);
+  });
+
+  it('animates a message that has never been on screen', () => {
+    mockTransitionMode = 'fadeIn';
+
+    const { result } = renderHook(() =>
+      useChatMarkdown({ content: 'Shown reply', id: 'fresh-1', isGenerating: true }),
+    );
+
+    expect(result.current.markdownProps.animated).toBe(true);
+  });
+
+  it('does not re-enter streaming after the text settled statically', () => {
+    mockTransitionMode = 'fadeIn';
+
+    // A transient block below makes this one non-last, then disappears again.
+    const { result, rerender } = renderHook(
+      ({ enableStream }) =>
+        useChatMarkdown({
+          content: 'Shown reply',
+          enableStream,
+          id: 'settle-1',
+          isGenerating: true,
+        }),
+      { initialProps: { enableStream: false } },
+    );
+    rerender({ enableStream: true });
+
+    expect(result.current.markdownProps.animated).toBe(false);
+    expect(result.current.markdownProps.enableStream).toBe(false);
+  });
+
+  it('does not replay the fade when a message whose text was shown remounts', () => {
+    mockTransitionMode = 'fadeIn';
+
+    const first = renderHook(() =>
+      useChatMarkdown({ content: 'Shown reply', id: 'remount-1', isGenerating: true }),
+    );
+    expect(first.result.current.markdownProps.animated).toBe(true);
+    first.unmount();
+
+    const second = renderHook(() =>
+      useChatMarkdown({ content: 'Shown reply', id: 'remount-1', isGenerating: true }),
+    );
+
+    expect(second.result.current.markdownProps.animated).toBe(false);
+  });
+
+  it('still animates after a remount when no text had been shown yet', () => {
+    mockTransitionMode = 'fadeIn';
+
+    renderHook(() =>
+      useChatMarkdown({ content: LOADING_FLAT, id: 'empty-1', isGenerating: true }),
+    ).unmount();
+
+    const { result } = renderHook(() =>
+      useChatMarkdown({ content: 'Shown reply', id: 'empty-1', isGenerating: true }),
+    );
+
+    expect(result.current.markdownProps.animated).toBe(true);
+  });
+
+  it('keeps streaming a reply that keeps growing after it remounts', () => {
+    mockTransitionMode = 'fadeIn';
+
+    // A post-tool reply starts inside the workflow fold as a short status line,
+    // then moves out to the answer segment once it grows, which remounts it.
+    renderHook(() =>
+      useChatMarkdown({ content: 'Let me summarize.', id: 'grow-1', isGenerating: true }),
+    ).unmount();
+
+    const { result } = renderHook(() =>
+      useChatMarkdown({
+        content: 'Let me summarize.\n\n## Findings',
+        id: 'grow-1',
+        isGenerating: true,
+      }),
+    );
+
+    expect(result.current.markdownProps.animated).toBe(true);
+    expect(result.current.markdownProps.enableStream).toBe(true);
+  });
+
+  it('resumes streaming when settled text grows again', () => {
+    mockTransitionMode = 'fadeIn';
+
+    const { result, rerender } = renderHook(
+      ({ content, enableStream }) =>
+        useChatMarkdown({ content, enableStream, id: 'resume-1', isGenerating: true }),
+      { initialProps: { content: 'Shown reply', enableStream: false } },
+    );
+    rerender({ content: 'Shown reply', enableStream: true });
+    expect(result.current.markdownProps.animated).toBe(false);
+
+    rerender({ content: 'Shown reply, continued', enableStream: true });
+    expect(result.current.markdownProps.animated).toBe(true);
   });
 });

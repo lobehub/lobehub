@@ -1,4 +1,1 @@
-export interface ModelPricingContext {
-  plan: string;
-  scope: 'personal';
-}
+export type { ModelPricingContext } from '@lobechat/types';

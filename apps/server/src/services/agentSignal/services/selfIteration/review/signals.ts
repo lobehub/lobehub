@@ -90,6 +90,41 @@ export const deriveSelfReviewSignals = (
     }
   }
 
+  const correctionTopics = (input.topics ?? []).filter(
+    (topic) => (topic.correctionCount ?? 0) > 0 || topic.hasCorrection,
+  );
+  if (correctionTopics.length >= 2) {
+    signals.push({
+      evidenceRefs: correctionTopics.slice(0, 5).flatMap((topic) => topic.evidenceRefs.slice(0, 2)),
+      features: correctionTopics.slice(0, 5).map((topic) => ({
+        correctionCount: topic.correctionCount ?? 1,
+        hasCorrection: true,
+        messageCount: topic.messageCount ?? 0,
+        topicId: topic.id,
+        type: 'topic_signal' as const,
+      })),
+      kind: 'repeated_user_correction',
+      strength: correctionTopics.length >= 3 ? 'strong' : 'medium',
+    });
+  }
+
+  for (const group of input.receiptActivity.duplicateGroups.filter((item) => item.count >= 2)) {
+    signals.push({
+      evidenceRefs: group.receiptIds.slice(0, 5).map((id) => ({ id, type: 'receipt' })),
+      features: [
+        {
+          appliedCount: input.receiptActivity.appliedCount,
+          dedupedCount: group.count,
+          failedCount: input.receiptActivity.failedCount,
+          pendingProposalCount: input.receiptActivity.pendingProposalCount,
+          type: 'receipt_history',
+        },
+      ],
+      kind: 'recurring_review_idea',
+      strength: group.count >= 3 ? 'strong' : 'medium',
+    });
+  }
+
   if (input.documentActivity.skillBucket.length > 0) {
     const evidenceRefs: EvidenceRef[] = [];
     for (const item of input.documentActivity.skillBucket) {

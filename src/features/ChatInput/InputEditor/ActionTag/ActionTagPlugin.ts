@@ -14,7 +14,7 @@ import {
 } from './ActionTagNode';
 import { registerActionTagCommand } from './command';
 import { registerActionTagSelectionObserver } from './selectionObserver';
-import type { ActionTagCategory, ActionTagType } from './types';
+import { type ActionTagCategory, type ActionTagType, GOAL_COMMAND_TYPE } from './types';
 
 type IEditorKernel = ReturnType<typeof getKernelFromEditor>;
 
@@ -97,6 +97,46 @@ export const resolveActionTagFromMatch = (
   const reader = TAG_READERS[tagName.toLowerCase()];
   if (!reader) return null;
   return reader(parseAttributeSource(attributeString));
+};
+
+/**
+ * ActionTagNode → markdown, the format the message is actually sent in.
+ *
+ * Skills       → <skill name="..." label="..." />
+ * AgentSkill   → <skill name="agent-skills:<filename>" label="..." />
+ *                Wire format collapses to <skill>; the `agent-skills:` prefix in
+ *                the identifier is what the runtime keys off to route the
+ *                activation through agentDocumentsService.
+ * ProjectSkill → <skill name="<skill-name>" label="..." />
+ *                Same wire format as a registered skill — the project skill is
+ *                in the runtime's `<available_skills>` registry (added on the
+ *                server when a device is active), so the model resolves it
+ *                through `activateSkill` like any other. Keeps the rendered
+ *                prompt uniform across skill sources, which the LiteXML
+ *                round-trip preserves via the category-aware <projectSkill>
+ *                save format.
+ * Tools        → <tool name="..." label="..." />
+ * Goal         → `/goal ` — the one command the model is meant to read: both the
+ *                client tool gate and the server system role detect a goal turn
+ *                from the message's literal `/goal` prefix (`isGoalPrompt`), so
+ *                the chip serializes back to the prefix it stands for. The
+ *                trailing space keeps `/goal ship it` from collapsing into
+ *                `/goalship it` when text follows the chip directly.
+ * Commands     → <action type="..." category="command" label="..." />
+ */
+export const writeActionTagMarkdown = (node: {
+  actionCategory: ActionTagCategory;
+  actionLabel: string;
+  actionType: ActionTagType;
+}): string => {
+  const cat = node.actionCategory;
+
+  if (cat === 'command' && node.actionType === GOAL_COMMAND_TYPE) return `/${GOAL_COMMAND_TYPE} `;
+  if (cat === 'skill' || cat === 'agentSkill' || cat === 'projectSkill')
+    return `<skill name="${node.actionType}" label="${node.actionLabel}" />`;
+  if (cat === 'tool') return `<tool name="${node.actionType}" label="${node.actionLabel}" />`;
+
+  return `<action type="${node.actionType}" category="${cat}" label="${node.actionLabel}" />`;
 };
 
 // @lobehub/editor code node types: 'code' (CodeMirror block), 'codeInline'
@@ -200,34 +240,9 @@ export class ActionTagPlugin {
   private registerMarkdown(): void {
     const mdService = this.kernel.requireService(IMarkdownShortCutService);
 
-    // Writer: ActionTagNode → markdown
-    // Skills       → <skill name="..." label="..." />
-    // AgentSkill   → <skill name="agent-skills:<filename>" label="..." />
-    //                Wire format collapses to <skill>; the `agent-skills:`
-    //                prefix in the identifier is what the runtime keys off to
-    //                route the activation through agentDocumentsService.
-    // ProjectSkill → <skill name="<skill-name>" label="..." />
-    //                Same wire format as a registered skill — the project
-    //                skill is in the runtime's `<available_skills>` registry
-    //                (added on the server when a device is active), so the
-    //                model resolves it through `activateSkill` like any
-    //                other. Keeps the rendered prompt uniform across skill
-    //                sources, which the LiteXML round-trip preserves via the
-    //                category-aware `<projectSkill>` save format.
-    // Tools        → <tool name="..." label="..." />
-    // Commands     → <action type="..." category="command" label="..." />
     mdService?.registerMarkdownWriter(ActionTagNode.getType(), (ctx: any, node: any) => {
       if ($isActionTagNode(node)) {
-        const cat = node.actionCategory;
-        if (cat === 'skill' || cat === 'agentSkill' || cat === 'projectSkill') {
-          ctx.appendLine(`<skill name="${node.actionType}" label="${node.actionLabel}" />`);
-        } else if (cat === 'tool') {
-          ctx.appendLine(`<tool name="${node.actionType}" label="${node.actionLabel}" />`);
-        } else {
-          ctx.appendLine(
-            `<action type="${node.actionType}" category="${cat}" label="${node.actionLabel}" />`,
-          );
-        }
+        ctx.appendLine(writeActionTagMarkdown(node));
       }
     });
   }

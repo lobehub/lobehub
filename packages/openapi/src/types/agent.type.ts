@@ -1,10 +1,10 @@
-import type { LobeAgentChatConfig } from '@lobechat/types';
-import { ReasoningGraphSchema } from '@lobechat/types';
+import type { LobeAgentAgencyConfig, LobeAgentChatConfig } from '@lobechat/types';
+import { AgentGraphSchema } from '@lobechat/types/agent/graph';
 import { z } from 'zod';
 
-import type { AgentItem } from '@/database/schemas';
-
+import type { PublicAgent, PublicFile, PublicKnowledgeBase } from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
+import { PaginationQuerySchema } from './common.type';
 
 // ==================== Agent CRUD Types ====================
 
@@ -12,31 +12,45 @@ import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
  * Create Agent request parameters
  */
 export interface CreateAgentRequest {
+  agencyConfig?: Pick<LobeAgentAgencyConfig, 'enableGraphMode' | 'graph'>;
   avatar?: string;
   chatConfig?: LobeAgentChatConfig;
   description?: string;
   model?: string;
   params?: Record<string, unknown>;
+  personal?: boolean;
+  plugins?: Array<{ identifier: string; mode?: 'pinned' | 'auto' | 'disabled' }>;
   provider?: string;
   systemRole?: string;
   title: string;
 }
 
-export type GetAgentsRequest = IPaginationQuery;
+export type GetAgentsRequest = IPaginationQuery & { personal?: boolean };
+
+export const GetAgentsQuerySchema = PaginationQuerySchema.extend({
+  personal: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
+});
 
 export const CreateAgentRequestSchema = z.object({
+  agencyConfig: z
+    .object({
+      enableGraphMode: z.boolean().nullish(),
+      graph: AgentGraphSchema.nullish(),
+    })
+    .nullish(),
   avatar: z.string().nullish(),
   chatConfig: z
     .object({
       disableContextCaching: z.boolean().nullish(),
       displayMode: z.enum(['chat', 'docs']).nullish(),
       enableCompressHistory: z.boolean().nullish(),
-      enableGraphMode: z.boolean().nullish(),
       enableHistoryCount: z.boolean().nullish(),
       enableMaxTokens: z.boolean().nullish(),
       enableReasoning: z.boolean().nullish(),
       enableReasoningEffort: z.boolean().nullish(),
-      graph: ReasoningGraphSchema.nullish(),
       historyCount: z.number().nullish(),
       reasoningBudgetToken: z.number().nullish(),
       reasoningEffort: z.enum(['low', 'medium', 'high']).nullish(),
@@ -47,7 +61,23 @@ export const CreateAgentRequestSchema = z.object({
     .nullish(),
   description: z.string().nullish(),
   model: z.string().nullish(),
-  params: z.record(z.unknown()).nullish(),
+  plugins: z
+    .array(
+      z
+        .object({
+          identifier: z.string().min(1).max(255),
+          mode: z.enum(['pinned', 'auto', 'disabled']).optional(),
+        })
+        .strict(),
+    )
+    .max(100)
+    .refine(
+      (items) => new Set(items.map((item) => item.identifier)).size === items.length,
+      'Duplicate plugin identifiers',
+    )
+    .optional(),
+  params: z.record(z.string(), z.unknown()).nullish(),
+  personal: z.boolean().optional(),
   provider: z.string().nullish(),
   systemRole: z.string().nullish(),
   title: z.string().min(1, 'Title cannot be empty'),
@@ -160,37 +190,15 @@ export interface AgentSessionRelation {
  * Agent list response type
  */
 export type AgentListResponse = PaginationQueryResponse<{
-  agents: AgentItem[];
+  agents: PublicAgent[];
 }>;
 
 /**
  * Agent detail response type, includes complete configuration information
  */
-export interface AgentDetailResponse extends AgentItem {
-  agentsFiles?: Array<{
-    file: {
-      fileType: string;
-      id: string;
-      name: string;
-      size: number;
-    };
-  }>;
-  agentsKnowledgeBases?: Array<{
-    knowledgeBase: {
-      description: string | null;
-      id: string;
-      name: string;
-    };
-  }>;
-  agentsToSessions?: Array<{
-    session: {
-      avatar: string | null;
-      description: string | null;
-      id: string;
-      title: string | null;
-      updatedAt: Date;
-    };
-  }>;
+export interface AgentDetailResponse extends PublicAgent {
+  files?: Array<PublicFile & { enabled?: boolean | null }>;
+  knowledgeBases?: Array<PublicKnowledgeBase & { enabled?: boolean | null }>;
 }
 
 // ==================== Common Schemas ====================
@@ -198,3 +206,7 @@ export interface AgentDetailResponse extends AgentItem {
 export const AgentIdParamSchema = z.object({
   id: z.string().min(1, 'Agent ID cannot be empty'),
 });
+
+export const DuplicateAgentSchema = z
+  .object({ title: z.string().trim().min(1).max(255).optional() })
+  .strict();

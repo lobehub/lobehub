@@ -35,7 +35,7 @@ const PendingSkillSynthesisSchema = z.object({
     .optional(),
   evidence: z.array(z.object({ cue: z.string(), excerpt: z.string() })).optional(),
   message: z.string(),
-  sourceHints: z.record(z.unknown()).optional(),
+  sourceHints: z.record(z.string(), z.unknown()).optional(),
   threadId: z.string().optional(),
   topicId: z.string().optional(),
 });

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import type { GoogleGenAI } from '@google/genai';
 import { MediaModality } from '@google/genai';
-import * as imageToBase64Module from '@lobechat/utils';
+import * as imageToBase64Module from '../../utils/imageToBase64';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types/image';
@@ -411,6 +411,52 @@ describe('createGoogleImage', () => {
       expect(result).toEqual({
         imageUrl: `data:image/png;base64,${realBase64ImageData}`,
       });
+    });
+
+    it('should return the final image instead of an interim thought image', async () => {
+      // Nano Banana 2.1 on Vertex AI returns a draft `thought` image before the final image.
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                { inlineData: { data: 'draft-image', mimeType: 'image/png' }, thought: true },
+                { inlineData: { data: 'final-image', mimeType: 'image/png' } },
+              ],
+            },
+          },
+        ],
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const result = await createGoogleImage(mockClient, provider, {
+        model: 'gemini-nano-banana-2.1:image',
+        params: { prompt: 'A red apple' },
+      });
+
+      expect(result).toEqual({ imageUrl: 'data:image/png;base64,final-image' });
+    });
+
+    it('should fall back to a thought image when no final image is returned', async () => {
+      const mockContentResponse = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                { inlineData: { data: 'draft-image', mimeType: 'image/png' }, thought: true },
+              ],
+            },
+          },
+        ],
+      };
+      vi.spyOn(mockClient.models, 'generateContent').mockResolvedValue(mockContentResponse as any);
+
+      const result = await createGoogleImage(mockClient, provider, {
+        model: 'gemini-nano-banana-2.1:image',
+        params: { prompt: 'A red apple' },
+      });
+
+      expect(result).toEqual({ imageUrl: 'data:image/png;base64,draft-image' });
     });
 
     it('should include text output tokens in successful image usage cost', async () => {

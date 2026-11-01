@@ -36,6 +36,30 @@ describe('isSupportedChatUploadFile', () => {
     ).toBe(true);
   });
 
+  it('accepts Verilog / SystemVerilog source files regardless of detected mime', () => {
+    // Browsers report an empty or octet-stream mime for .v/.sv — the extension
+    // whitelist must still admit them.
+    expect(
+      isSupportedChatUploadFile(new File(['module m(); endmodule'], 'adder.v', { type: '' })),
+    ).toBe(true);
+    expect(
+      isSupportedChatUploadFile(
+        new File(['module m(); endmodule'], 'adder.v', { type: 'application/octet-stream' }),
+      ),
+    ).toBe(true);
+    expect(
+      isSupportedChatUploadFile(new File(['package p; endpackage'], 'top.sv', { type: '' })),
+    ).toBe(true);
+    expect(
+      isSupportedChatUploadFile(
+        new File(['package p; endpackage'], 'top.sv', { type: 'text/plain' }),
+      ),
+    ).toBe(true);
+    // Case-insensitive extension matching
+    expect(isSupportedChatUploadFile(new File(['x'], 'UPPER.V', { type: '' }))).toBe(true);
+    expect(isSupportedChatUploadFile(new File(['x'], 'UPPER.SV', { type: '' }))).toBe(true);
+  });
+
   it('rejects unsupported archive formats before upload', () => {
     expect(
       isSupportedChatUploadFile(new File(['zip'], 'archive.zip', { type: 'application/zip' })),

@@ -18,7 +18,7 @@ describe('settingsSelectors', () => {
 
       expect(result).toEqual({
         animationMode: 'agile',
-        costEstimateWarningThreshold: 2,
+        costEstimateWarningThreshold: 0.5,
         fontSize: 12,
         highlighterTheme: 'lobe-theme',
         isDevMode: false,
@@ -41,6 +41,20 @@ describe('settingsSelectors', () => {
       const result = userGeneralSettingsSelectors.fontSize(s as UserStore);
 
       expect(result).toBe(12);
+    });
+  });
+
+  describe('fontAntialiasing', () => {
+    it('should default to true when unset', () => {
+      expect(userGeneralSettingsSelectors.fontAntialiasing(initialState as UserStore)).toBe(true);
+    });
+
+    it('should return false when turned off', () => {
+      const s: UserState = merge(initialState, {
+        settings: { general: { fontAntialiasing: false } },
+      });
+
+      expect(userGeneralSettingsSelectors.fontAntialiasing(s as UserStore)).toBe(false);
     });
   });
 

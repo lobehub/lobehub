@@ -17,6 +17,8 @@
   "desktop.showApp.title": "Mostrar/Ocultar ventana principal",
   "editMessage.desc": "Entrar en modo de edición manteniendo Alt y haciendo doble clic en el mensaje",
   "editMessage.title": "Editar mensaje",
+  "findInTopic.desc": "Busca cada mensaje del tema actual en el panel derecho",
+  "findInTopic.title": "Buscar en el Tema",
   "navigateToChat.desc": "Cambiar a la pestaña de Chat e ingresar a Lobe AI",
   "navigateToChat.title": "Cambiar al chat predeterminado",
   "nextTab.desc": "Cambiar a la siguiente pestaña estilo navegador en la aplicación de escritorio; vuelve a la primera pestaña al llegar al final",
@@ -41,8 +43,12 @@
   "switchAgent.title": "Cambio rápido de agente",
   "switchTab.desc": "Saltar a una pestaña específica según su posición (1–9) en la barra de pestañas de la aplicación de escritorio",
   "switchTab.title": "Cambiar a Pestaña por Número",
+  "toggleFavorite.desc": "Añade la página abierta a la sección de Favoritos de la barra lateral, o elimínala",
+  "toggleFavorite.title": "Añadir a / Eliminar de Favoritos",
   "toggleLeftPanel.desc": "Mostrar u ocultar el panel izquierdo",
   "toggleLeftPanel.title": "Alternar panel izquierdo",
   "toggleRightPanel.desc": "Mostrar u ocultar el panel derecho",
-  "toggleRightPanel.title": "Alternar panel derecho"
+  "toggleRightPanel.title": "Alternar panel derecho",
+  "toggleTerminalPanel.desc": "Mostrar u ocultar el panel de terminal inferior",
+  "toggleTerminalPanel.title": "Alternar panel de terminal"
 }

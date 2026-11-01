@@ -1,3 +1,8 @@
+import type {
+  HeterogeneousAgentType,
+  LocalHeterogeneousAgentType,
+} from '@lobechat/heterogeneous-agents';
+
 /**
  * Status of a registered binary
  */
@@ -12,7 +17,15 @@ export interface BinaryStatus {
 /**
  * Binary categories
  */
-export type BinaryCategory = 'content-search' | 'custom' | 'file-search' | 'system';
+export type BinaryCategory =
+  | 'ast-search'
+  | 'browser-automation'
+  | 'cli-agents'
+  | 'content-search'
+  | 'custom'
+  | 'file-search'
+  | 'runtime-environment'
+  | 'system';
 
 /**
  * Binary info for display
@@ -23,10 +36,12 @@ export interface BinaryInfo {
   priority?: number;
 }
 
-export type HeterogeneousCliAgentType = 'claude-code' | 'codex';
+export type HeterogeneousCliAgentType = LocalHeterogeneousAgentType;
+
+export type DetectableHeterogeneousAgentType = HeterogeneousAgentType;
 
 export interface DetectHeterogeneousAgentCommandParams {
-  agentType: HeterogeneousCliAgentType;
+  agentType: DetectableHeterogeneousAgentType;
   command: string;
 }
 

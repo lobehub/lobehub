@@ -62,7 +62,7 @@ export abstract class BaseMemoryExtractor<
   protected getPromptName(): string {
     return this.agent;
   }
-  protected abstract getResultSchema(): z.ZodType<TOutput, z.ZodTypeDef, unknown> | undefined;
+  protected abstract getResultSchema(): z.ZodType<TOutput, unknown> | undefined;
 
   protected getSchema(_options: TExtractorTemplateProps): GenerateObjectSchema | undefined {
     const schema = this.getResultSchema();
@@ -164,6 +164,8 @@ export abstract class BaseMemoryExtractor<
                   ...(options?.parentMemoryTraceKey
                     ? { parent_memory_trace_key: options.parentMemoryTraceKey }
                     : {}),
+                  ...(options?.taskId ? { taskId: options.taskId } : {}),
+                  ...(options?.topicId ? { topicId: options.topicId } : {}),
                   trigger: RequestTrigger.Memory,
                 },
               });

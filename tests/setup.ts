@@ -3,9 +3,9 @@ import '@testing-library/jest-dom';
 // refs: https://github.com/dumbmatter/fakeIndexedDB#dexie-and-other-indexeddb-api-wrappers
 import 'fake-indexeddb/auto';
 
-import { theme } from 'antd';
 import i18n from 'i18next';
 import { enableMapSet, enablePatches } from 'immer';
+import type { ButtonHTMLAttributes, ComponentType, ElementType, ReactNode } from 'react';
 import React from 'react';
 import { beforeEach, vi } from 'vitest';
 
@@ -85,6 +85,166 @@ vi.mock('@/auth', () => ({
   },
 }));
 
+// Route zustand store creation through __mocks__/zustand/traditional.ts so every
+// store resets to its initial state between tests without per-file opt-in
+vi.mock('zustand/traditional');
+
+// Key-passthrough translations so component tests assert locale keys, not copy;
+// defaultValue still wins to match real t() fallback semantics. Tests needing
+// custom t/Trans behavior override with their own vi.mock
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useTranslation: () => ({
+    i18n: { changeLanguage: vi.fn(), language: 'en-US' },
+    t: (key: string, defaultValueOrOptions?: unknown, maybeOptions?: unknown) => {
+      if (typeof defaultValueOrOptions === 'string') return defaultValueOrOptions;
+      const options =
+        (defaultValueOrOptions as { defaultValue?: unknown } | undefined) ??
+        (maybeOptions as { defaultValue?: unknown } | undefined);
+      return typeof options?.defaultValue === 'string' ? options.defaultValue : key;
+    },
+  }),
+}));
+
+type NativeButtonType = 'button' | 'submit' | 'reset';
+type TestButtonIcon = ComponentType<{ size?: number }> | ReactNode;
+
+interface TestBaseUIButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
+  block?: boolean;
+  color?: string;
+  danger?: boolean;
+  fill?: string;
+  ghost?: boolean;
+  htmlType?: NativeButtonType;
+  icon?: TestButtonIcon;
+  iconPosition?: 'end' | 'start';
+  iconProps?: Record<string, unknown>;
+  loading?: boolean;
+  shadow?: boolean;
+  size?: string;
+  type?: string;
+  variant?: string;
+}
+
+interface TestBaseUISwitchProps extends Omit<
+  ButtonHTMLAttributes<HTMLButtonElement>,
+  'defaultValue' | 'onChange' | 'onClick' | 'value'
+> {
+  checked?: boolean;
+  checkedChildren?: ReactNode;
+  defaultChecked?: boolean;
+  defaultValue?: boolean;
+  loading?: boolean;
+  onChange?: (checked: boolean, event: React.MouseEvent<HTMLButtonElement>) => void;
+  onClick?: (checked: boolean, event: React.MouseEvent<HTMLButtonElement>) => void;
+  size?: string;
+  unCheckedChildren?: ReactNode;
+  value?: boolean;
+}
+
+const getNativeButtonType = (type?: string): NativeButtonType =>
+  type === 'submit' || type === 'reset' ? type : 'button';
+
+const renderTestButtonIcon = (icon?: TestButtonIcon) => {
+  if (!icon) return null;
+
+  if (React.isValidElement(icon)) return icon;
+
+  return typeof icon === 'function' || (typeof icon === 'object' && '$$typeof' in icon)
+    ? React.createElement(icon as ElementType<{ size?: number }>, { size: 16 })
+    : icon;
+};
+
+const TestBaseUIButton = (props: TestBaseUIButtonProps) => {
+  const {
+    block: _block,
+    children,
+    color: _color,
+    danger: _danger,
+    disabled,
+    fill: _fill,
+    ghost: _ghost,
+    htmlType,
+    icon,
+    iconPosition = 'start',
+    iconProps: _iconProps,
+    loading,
+    shadow: _shadow,
+    size: _size,
+    type,
+    variant: _variant,
+    ...buttonProps
+  } = props;
+  const renderedIcon = renderTestButtonIcon(icon);
+  const nativeType = htmlType ?? getNativeButtonType(type);
+
+  return React.createElement(
+    'button',
+    {
+      ...buttonProps,
+      'aria-busy': loading || undefined,
+      'disabled': disabled || loading,
+      'type': nativeType,
+    },
+    iconPosition === 'end' ? children : renderedIcon,
+    iconPosition === 'end' ? renderedIcon : children,
+  );
+};
+
+const TestBaseUISwitch = (props: TestBaseUISwitchProps) => {
+  const {
+    checked,
+    checkedChildren,
+    defaultChecked,
+    defaultValue,
+    disabled,
+    loading,
+    onChange,
+    onClick,
+    size: _size,
+    unCheckedChildren,
+    value,
+    ...buttonProps
+  } = props;
+  const [innerChecked, setInnerChecked] = React.useState(defaultValue ?? defaultChecked ?? false);
+  const currentChecked = value ?? checked ?? innerChecked;
+
+  return React.createElement(
+    'button',
+    {
+      ...buttonProps,
+      'aria-busy': loading || undefined,
+      'aria-checked': currentChecked,
+      'disabled': disabled || loading,
+      'role': 'switch',
+      'type': 'button',
+      'onClick': (event: React.MouseEvent<HTMLButtonElement>) => {
+        const nextChecked = !currentChecked;
+
+        if (value === undefined && checked === undefined) {
+          setInnerChecked(nextChecked);
+        }
+
+        onChange?.(nextChecked, event);
+        onClick?.(nextChecked, event);
+      },
+    },
+    currentChecked ? checkedChildren : unCheckedChildren,
+  );
+};
+
+// base-ui Button requires the app-level motion provider. Unit tests exercise
+// consuming components, so a native button keeps interaction behavior stable.
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+
+  return {
+    ...actual,
+    Button: TestBaseUIButton,
+    Switch: TestBaseUISwitch,
+  };
+});
+
 // node runtime
 if (typeof globalThis.window === 'undefined') {
   // test with polyfill crypto
@@ -98,9 +258,6 @@ if (typeof globalThis.window === 'undefined') {
 
 installTestStorage();
 beforeEach(installTestStorage);
-
-// remove antd hash on test
-theme.defaultConfig.hashed = false;
 
 // init i18n for non-React modules (stores/utils) using i18next.t(...)
 // Use in-memory resources to avoid interfering with Vitest module mocking.

@@ -6,10 +6,14 @@ import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
   HeterogeneousToolResultImage,
+  PostRunUsageOptions,
   UsageData,
 } from '../types';
 import { CodexFileChangeTracker } from './codexFileChangeTracker';
+import { createCodexImageOutputReader } from './codexImageOutputs';
+import { readImageDimensions } from './imageDimensions';
 import { JsonlStreamProcessor } from './jsonlProcessor';
+import { readPostRunUsage } from './postRunUsage';
 import { toStreamEvent } from './streamEvent';
 
 /**
@@ -22,20 +26,30 @@ import { toStreamEvent } from './streamEvent';
  */
 export type UploadHeterogeneousImage = (image: {
   data: string;
+  height?: number;
   mediaType: string;
+  width?: number;
 }) => Promise<{ fileId: string; url: string } | undefined>;
 
 export interface AgentStreamPipelineOptions {
+  /** Adapter to use instead of the registered one for `agentType`. */
+  adapter?: AgentEventAdapter;
   /** Agent type key (e.g. `claude-code`, `codex`). */
   agentType: string;
   /** Working directory used to resolve relative file paths emitted by CLI tools. */
   cwd?: string;
+  /** Environment of the spawned CLI, including its CODEX_HOME. */
+  env?: Record<string, string | undefined>;
   /** Last known Codex cumulative usage before a resumed turn starts. */
   initialCumulativeUsage?: UsageData | undefined;
   /** Host-known model to emit before the CLI's first stdout payload. */
   initialModel?: string | undefined;
+  /** Claude Code session's cumulative cost before a resumed run starts. */
+  initialSessionCostUsd?: number | undefined;
   /** Operation id to stamp onto every emitted `AgentStreamEvent`. */
   operationId: string;
+  /** Invocation start, recorded before spawning the CLI. */
+  startedAt?: number;
   /**
    * Uploader for tool_result images. When omitted, `pluginState.images` base64
    * entries are dropped (the `[Image: …]` content placeholder is the fallback)
@@ -59,22 +73,35 @@ export interface AgentStreamPipelineOptions {
 export class AgentStreamPipeline {
   private readonly processor = new JsonlStreamProcessor();
   private readonly adapter: AgentEventAdapter;
+  private readonly agentType: string;
   private readonly operationId: string;
   private readonly codexTracker?: CodexFileChangeTracker;
   private readonly uploadImage?: UploadHeterogeneousImage;
+  private readonly readCodexImages: ReturnType<typeof createCodexImageOutputReader>;
+  private recoveredCodexImageCallIds = new Set<string>();
   private queuedEvents: AgentStreamEvent[] = [];
 
   constructor(options: AgentStreamPipelineOptions) {
-    this.adapter = createAdapter(options.agentType);
+    this.adapter = options.adapter ?? createAdapter(options.agentType);
+    this.agentType = options.agentType;
+    this.readCodexImages = createCodexImageOutputReader({
+      env: options.env ?? process.env,
+      startedAt: options.startedAt ?? Date.now(),
+    });
     this.operationId = options.operationId;
     this.uploadImage = options.uploadImage;
     this.codexTracker =
       options.agentType === 'codex' ? new CodexFileChangeTracker(options.cwd) : undefined;
 
-    if (options.initialModel || options.initialCumulativeUsage) {
+    if (
+      options.initialModel ||
+      options.initialCumulativeUsage ||
+      options.initialSessionCostUsd !== undefined
+    ) {
       this.queuedEvents.push(
         ...this.configureSession({
           initialCumulativeUsage: options.initialCumulativeUsage,
+          initialSessionCostUsd: options.initialSessionCostUsd,
           model: options.initialModel,
         }),
       );
@@ -101,7 +128,8 @@ export class AgentStreamPipeline {
    */
   async flush(): Promise<AgentStreamEvent[]> {
     const trailing = await this.processPayloads(this.processor.flush());
-    const flushedEvents = this.adapter.flush();
+    const recovered = await this.recoverCodexImages();
+    const flushedEvents = [...recovered, ...this.adapter.flush()];
     await this.uploadResultImages(flushedEvents);
     const flushed = flushedEvents.map((event) => toStreamEvent(event, this.operationId));
     return [...trailing, ...flushed];
@@ -109,6 +137,7 @@ export class AgentStreamPipeline {
 
   configureSession(data: {
     initialCumulativeUsage?: UsageData | undefined;
+    initialSessionCostUsd?: number | undefined;
     model?: string | undefined;
   }): AgentStreamEvent[] {
     return this.toStreamEvents(
@@ -130,17 +159,63 @@ export class AgentStreamPipeline {
     ]);
   }
 
+  /**
+   * Read usage the CLI only wrote to disk (Kimi Code's session wire log) and
+   * let the adapter turn it into events. Call after {@link flush} and process
+   * exit. Always best-effort: agents without post-run usage, a missing log, or
+   * a failing read yield `[]`.
+   */
+  async collectPostRunUsage(options?: PostRunUsageOptions): Promise<AgentStreamEvent[]> {
+    if (!this.adapter.buildPostRunUsageEvents) return [];
+    try {
+      const usage = await readPostRunUsage(this.agentType, this.adapter.sessionId, options);
+      if (!usage) return [];
+      return this.toStreamEvents(this.adapter.buildPostRunUsageEvents(usage));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Validate provider-specific terminal contracts after a successful process
+   * exit. Call only after {@link flush} has drained the full stdout stream.
+   */
+  validateCompletion(): AgentStreamEvent[] {
+    return this.toStreamEvents(this.adapter.validateCompletion?.() ?? []);
+  }
+
   private async processPayloads(payloads: unknown[]): Promise<AgentStreamEvent[]> {
     const out: AgentStreamEvent[] = this.drainQueuedEvents();
 
     for (const raw of payloads) {
       const payload = this.codexTracker ? await this.codexTracker.track(raw as any) : raw;
-      const events = this.adapter.adapt(payload);
+      const rawEvent = payload as { item?: { type?: string }; type?: string };
+      const recoverImages =
+        rawEvent?.type === 'turn.completed' ||
+        rawEvent?.type === 'turn.failed' ||
+        (rawEvent?.type === 'item.completed' && rawEvent.item?.type === 'agent_message');
+      const recovered = recoverImages ? await this.recoverCodexImages() : [];
+      const events = [...recovered, ...this.adapter.adapt(payload)];
       await this.uploadResultImages(events);
       out.push(...this.toStreamEvents(events));
     }
 
     return out;
+  }
+
+  private async recoverCodexImages(): Promise<HeterogeneousAgentEvent[]> {
+    if (this.agentType !== 'codex' || !this.adapter.sessionId) return [];
+    try {
+      const items = await this.readCodexImages(this.adapter.sessionId);
+      return items.flatMap((item) => {
+        if (this.recoveredCodexImageCallIds.has(item.id)) return [];
+        this.recoveredCodexImageCallIds.add(item.id);
+        return this.adapter.adapt({ item, type: 'item.completed' });
+      });
+    } catch (error) {
+      console.error('Failed to recover Codex tool images from the session transcript:', error);
+      return [];
+    }
   }
 
   /**
@@ -180,10 +255,21 @@ export class AgentStreamPipeline {
           continue;
         }
         try {
-          const ref = await this.uploadImage({ data: image.data, mediaType: image.mediaType });
+          // Best-effort: lets renders reserve the image box before it loads.
+          const dims = readImageDimensions(image.data);
+          const ref = await this.uploadImage({
+            data: image.data,
+            mediaType: image.mediaType,
+            ...dims,
+          });
           // `undefined` → uploader declined; drop the entry rather than persist base64.
           if (ref) {
-            uploaded.push({ fileId: ref.fileId, mediaType: image.mediaType, url: ref.url });
+            uploaded.push({
+              fileId: ref.fileId,
+              mediaType: image.mediaType,
+              url: ref.url,
+              ...dims,
+            });
             outcomes.push({ mediaType: image.mediaType, url: ref.url });
           } else {
             outcomes.push({ mediaType: image.mediaType });

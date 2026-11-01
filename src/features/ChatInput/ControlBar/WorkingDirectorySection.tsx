@@ -1,19 +1,26 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { isRecord } from '@lobechat/utils';
+import type { WorkingDirEntry } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { memo } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
-import { getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
+import { getConfigRepoType, getWorkingDirectoryPathString } from '@/helpers/workingDirectoryPath';
+import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
+import { useTopicId } from '../hooks/useTopicId';
 import GitStatus from './GitStatus';
+import {
+  useActiveProjectDirectoryTopicId,
+  useStagedProjectDirectoryId,
+} from './useProjectTopicDirectory';
 import { useRepoType } from './useRepoType';
 import WorkingDirectoryPicker from './WorkingDirectoryPicker';
 
@@ -21,12 +28,9 @@ interface WorkingDirectorySectionProps {
   agentId: string;
 }
 
-const getEntryEffectivePath = (entry: unknown) => {
-  if (!isRecord(entry)) return;
-
+const getEntryEffectivePath = (entry: WorkingDirEntry) => {
   const sourcePath = getWorkingDirectoryPathString(entry.path);
-  const git = isRecord(entry.git) ? entry.git : undefined;
-  return getWorkingDirectoryPathString(git?.activeWorktree) ?? sourcePath;
+  return getWorkingDirectoryPathString(entry.git?.activeWorktree) ?? sourcePath;
 };
 
 /**
@@ -36,13 +40,41 @@ const getEntryEffectivePath = (entry: unknown) => {
  * (read-only) via GitStatus's `deviceId`.
  */
 const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agentId }) => {
-  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
+  // Effective config (shared row + this member's device override)
+  // so GitStatus probes the same device `useEffectiveWorkingDirectory` resolved
+  // the cwd from — raw shared config could point them at different machines.
+  const topicId = useTopicId();
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
-  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
+    workspaceScoped,
+  });
   const isLocalDevice = isDesktop && !!targetDeviceId && targetDeviceId === currentDeviceId;
 
-  const rawEffectiveWorkingDirectory = useEffectiveWorkingDirectory(agentId);
+  const rawEffectiveWorkingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
   const effectiveWorkingDirectory = getWorkingDirectoryPathString(rawEffectiveWorkingDirectory);
+
+  // Live probes (fs / cached device dirs) can't resolve repoType for a worktree
+  // path that was never registered as a device working dir — so fall back to the
+  // repoType persisted on the topic (the same snapshot the meta hover card reads).
+  // Without this the whole GitStatus is gated out and branch/worktree/PR chips
+  // vanish even though the topic clearly carries git context. The same snapshot
+  // also feeds GitStatus's `fallbackGit`, which covers the harder case: the
+  // recorded worktree directory was DELETED, so the live branch probe reads
+  // nothing and the chips would vanish even with repoType resolved.
+  const topicWorkingDirectoryConfig = useChatStore((s) =>
+    topicId ? topicSelectors.getTopicById(topicId)(s)?.metadata?.workingDirectoryConfig : undefined,
+  );
+  // The project owns this conversation's directory and the device switcher
+  // already names it, so there is nothing to pick or show here.
+  const projectTopicId = useActiveProjectDirectoryTopicId();
+  // Only trust the persisted config when it actually describes the directory we
+  // resolved — the topic override wins in `useEffectiveWorkingDirectory`, so this
+  // holds whenever the config is what produced `effectiveWorkingDirectory`.
+  const topicConfigMatchesEffective =
+    !!effectiveWorkingDirectory &&
+    getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === effectiveWorkingDirectory;
+  const persistedConfig = topicConfigMatchesEffective ? topicWorkingDirectoryConfig : undefined;
 
   // Local machine probes the filesystem for repoType; a remote device's repoType
   // comes from the cached `workingDirs` entry (we can't probe a remote fs here).
@@ -51,25 +83,36 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   const currentEntry = effectiveWorkingDirectory
     ? deviceDirs.find((entry) => getEntryEffectivePath(entry) === effectiveWorkingDirectory)
     : undefined;
-  const sourceWorkingDirectory =
-    (isRecord(currentEntry) ? getWorkingDirectoryPathString(currentEntry.path) : undefined) ??
-    effectiveWorkingDirectory;
   const remoteRepoType =
     currentEntry?.repoType === 'git' || currentEntry?.repoType === 'github'
       ? currentEntry.repoType
       : undefined;
-  const repoType = isLocalDevice ? localRepoType : remoteRepoType;
+
+  // The SOURCE repo, not the checkout. A persisted-worktree topic has no matching
+  // `workingDirs` entry (that's exactly why the repoType probe misses), so without
+  // the persisted `config.path` this would collapse to the worktree path — and
+  // WorktreeSwitcher commits `sourcePath` as the WorkingDirEntry.path, rewriting
+  // the topic's repo source to the linked worktree and breaking later switches.
+  const sourceWorkingDirectory =
+    getWorkingDirectoryPathString(currentEntry?.path) ??
+    getWorkingDirectoryPathString(persistedConfig?.path) ??
+    effectiveWorkingDirectory;
+
+  const repoType =
+    (isLocalDevice ? localRepoType : remoteRepoType) ?? getConfigRepoType(persistedConfig);
 
   return (
     <>
-      <WorkingDirectoryPicker agentId={agentId} />
+      {!projectTopicId && <WorkingDirectoryPicker agentId={agentId} />}
       {effectiveWorkingDirectory && repoType && (
         <GitStatus
           agentId={agentId}
           deviceId={isLocalDevice ? undefined : targetDeviceId}
+          fallbackGit={persistedConfig?.git}
           isGithub={repoType === 'github'}
           path={effectiveWorkingDirectory}
           sourcePath={sourceWorkingDirectory}
+          topicId={topicId}
         />
       )}
     </>
@@ -78,11 +121,18 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
 
 WorkingDirectorySectionInner.displayName = 'WorkingDirectorySectionInner';
 
-const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId }) => (
-  <SafeBoundary minHeight={22} resetKeys={[agentId]}>
-    <WorkingDirectorySectionInner agentId={agentId} />
-  </SafeBoundary>
-));
+const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId }) => {
+  // A blank conversation staged in a project directory runs there, not in the
+  // agent default this section resolves; the device switcher names it.
+  const stagedDirectoryId = useStagedProjectDirectoryId(agentId);
+  if (stagedDirectoryId) return null;
+
+  return (
+    <SafeBoundary minHeight={22} resetKeys={[agentId]}>
+      <WorkingDirectorySectionInner agentId={agentId} />
+    </SafeBoundary>
+  );
+});
 
 WorkingDirectorySection.displayName = 'WorkingDirectorySection';
 

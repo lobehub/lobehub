@@ -8,22 +8,6 @@ import type {
   InstructionExecutor,
 } from '../types';
 
-const requireCompressionTransport = (host: AgentRuntimeHost) => {
-  const compression = host.transports.compression;
-  if (!compression) {
-    throw new Error('CompressionTransport is required for compress_context executor');
-  }
-  return compression;
-};
-
-const requireLLMTransport = (host: AgentRuntimeHost) => {
-  const llm = host.transports.llm;
-  if (!llm) {
-    throw new Error('LLMTransport is required for compress_context executor');
-  }
-  return llm;
-};
-
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
   if (typeof error === 'string' && error) return error;
@@ -63,25 +47,31 @@ export const compressContext =
     const { operationId, stepIndex, userId } = operation;
     const events: AgentEvent[] = [];
     const newState = structuredClone(state);
-    const topicId = state.metadata?.topicId ?? operation.topicId;
-    const workspaceId = state.metadata?.workspaceId ?? operation.workspaceId;
-    const lastMessage = messages.at(-1);
-    const preservedMessages =
-      messages.length > 1 && lastMessage?.role === 'user' ? [lastMessage] : [];
+    const topicId = state.origin?.topicId ?? operation.topicId;
+    const workspaceId = state.origin?.workspaceId ?? operation.workspaceId;
+    const agentId = operation.agentId ?? state.origin?.agentId;
+    const groupId = operation.groupId ?? state.origin?.groupId;
+    const threadId = operation.threadId ?? state.origin?.threadId;
+    const compression = transports.compression;
+    const llm = transports.llm;
+    // The latest user turn is the active contract even after assistant/tool steps have followed it.
+    // Keep it verbatim and re-inject it after the summary so compression can never demote a Task's
+    // Current Work instruction into historical prose or reactivate an older objective.
+    const latestUserMessage =
+      messages.length > 1 ? messages.findLast((message) => message.role === 'user') : undefined;
+    const preservedMessages = latestUserMessage ? [latestUserMessage] : [];
     const preservedMessageIds = new Set(
       preservedMessages.map((message) => message.id).filter((id): id is string => Boolean(id)),
     );
-    const messagesToCompress = preservedMessages.length > 0 ? messages.slice(0, -1) : messages;
-    const compressedMessagesFallback = [...messagesToCompress, ...preservedMessages];
-
+    const messagesToCompress = latestUserMessage
+      ? messages.filter((message) => message !== latestUserMessage)
+      : messages;
     const createNextContext = ({
-      compressedMessages,
       groupId,
       parentMessageId,
       skipped,
     }: GeneralAgentCompressionResultPayload) => ({
       payload: {
-        compressedMessages,
         groupId,
         parentMessageId,
         skipped,
@@ -99,14 +89,13 @@ export const compressContext =
       events,
       newState,
       nextContext: createNextContext({
-        compressedMessages: compressedMessagesFallback,
         groupId: '',
         parentMessageId,
         skipped: true,
       }),
     });
 
-    if (!topicId || !userId) {
+    if (!topicId || !agentId || !compression || !llm) {
       return skippedResult();
     }
 
@@ -120,22 +109,32 @@ export const compressContext =
         tokenCount: currentTokenCount,
         userId,
       } as AnyHookEvent,
-      state.metadata?._hooks,
+      state.host?.hooks,
     );
 
-    try {
-      const compression = requireCompressionTransport(host);
-      const llm = requireLLMTransport(host);
+    let createdGroupId: string | undefined;
 
+    try {
       const dbMessages = await transports.messages.query(
         {
-          agentId: state.metadata?.agentId,
-          groupId: state.metadata?.groupId,
-          threadId: state.metadata?.threadId,
+          agentId,
+          groupId,
+          threadId,
           topicId,
         },
         { resolveAssetUrls: true },
       );
+
+      const sourceCompressionGroups = dbMessages.filter(
+        (message) => message.role === 'compressedGroup' && Boolean(message.id),
+      );
+      const sourceGroupIds = sourceCompressionGroups
+        .map((message) => message.id)
+        .filter((id): id is string => Boolean(id));
+      const persistedExistingSummary = sourceCompressionGroups
+        .map((message) => (typeof message.content === 'string' ? message.content.trim() : ''))
+        .filter(Boolean)
+        .join('\n\n');
 
       const messageIds = dbMessages
         .filter(
@@ -146,51 +145,88 @@ export const compressContext =
         )
         .map((message) => message.id);
 
-      if (messageIds.length === 0 || messagesToCompress.length === 0) {
+      if (
+        (messageIds.length === 0 && sourceGroupIds.length === 0) ||
+        messagesToCompress.length === 0
+      ) {
         return skippedResult();
       }
 
       const latestAssistantMessage = dbMessages.findLast((message) => message.role === 'assistant');
-      const compressionResult = await compression.createGroup({
-        agentId: state.metadata?.agentId,
-        groupId: state.metadata?.groupId,
-        messageIds,
-        threadId: state.metadata?.threadId,
-        topicId,
-        workspaceId,
-      });
-
+      const parentMessageId =
+        latestAssistantMessage?.id ??
+        (sourceCompressionGroups.at(-1) as { lastMessageId?: string } | undefined)?.lastMessageId;
       const compressionModel =
         newState.modelRuntimeConfig?.compressionModel || newState.modelRuntimeConfig;
 
       if (!compressionModel?.model || !compressionModel?.provider) {
-        return skippedResult(latestAssistantMessage?.id);
+        return skippedResult(parentMessageId);
       }
 
+      const compressionResult = await compression.createGroup({
+        agentId,
+        groupId,
+        messageIds,
+        threadId,
+        topicId,
+        workspaceId,
+      });
+      createdGroupId = compressionResult.messageGroupId;
+
       const compressionPayload = await compression.buildPrompt({
-        existingSummary,
+        existingSummary: persistedExistingSummary || existingSummary,
         messages: compressionResult.messagesToSummarize,
       });
 
-      const summaryResult = await llm.stream({
-        messages: compressionPayload.messages,
-        model: compressionModel.model,
-        provider: compressionModel.provider,
-        stream: true,
-      });
+      let streamedSummary = '';
+      const summaryResult = await llm.stream(
+        {
+          messages: compressionPayload.messages,
+          model: compressionModel.model,
+          provider: compressionModel.provider,
+          stream: true,
+        },
+        {
+          onText: (text) => {
+            streamedSummary += text;
+            compression.updateGroup?.({
+              content: streamedSummary,
+              messageGroupId: compressionResult.messageGroupId,
+            });
+          },
+        },
+        compressionResult.signal,
+      );
+
+      if (compressionResult.signal?.aborted) {
+        const abortError = new Error('Context compression cancelled');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
 
       const finalCompression = await compression.finalizeGroup({
-        agentId: state.metadata?.agentId,
+        agentId,
         content: summaryResult.content,
-        groupId: state.metadata?.groupId,
+        groupId,
         messageGroupId: compressionResult.messageGroupId,
-        threadId: state.metadata?.threadId,
+        sourceGroupIds,
+        threadId,
         topicId,
         workspaceId,
       });
 
+      const sourceGroupIdSet = new Set(sourceGroupIds);
+      const finalizedMessagesFallback = compressionResult.messages
+        ?.filter((message) => !sourceGroupIdSet.has(message.id))
+        .map((message) =>
+          message.id === compressionResult.messageGroupId
+            ? { ...message, content: summaryResult.content }
+            : message,
+        );
       const compressedMessagesBase =
-        finalCompression.messages || compressionResult.messagesToSummarize;
+        finalCompression.messages ??
+        finalizedMessagesFallback ??
+        compressionResult.messagesToSummarize;
       const compressedMessages = [...compressedMessagesBase];
 
       for (const preservedMessage of preservedMessages) {
@@ -224,7 +260,7 @@ export const compressContext =
 
       events.push({
         groupId: compressionResult.messageGroupId,
-        parentMessageId: latestAssistantMessage?.id,
+        parentMessageId,
         type: 'compression_complete',
       });
 
@@ -240,7 +276,7 @@ export const compressContext =
           summary: summaryResult.content.slice(0, 500),
           userId,
         } as AnyHookEvent,
-        state.metadata?._hooks,
+        state.host?.hooks,
       );
 
       return {
@@ -248,9 +284,8 @@ export const compressContext =
         newState,
         nextContext: {
           ...createNextContext({
-            compressedMessages,
             groupId: compressionResult.messageGroupId,
-            parentMessageId: latestAssistantMessage?.id,
+            parentMessageId,
           }),
           session: {
             messageCount: compressedMessages.length,
@@ -261,6 +296,22 @@ export const compressContext =
         },
       };
     } catch (error) {
+      if (createdGroupId && compression.rollbackGroup) {
+        try {
+          await compression.rollbackGroup({
+            agentId,
+            error,
+            groupId,
+            messageGroupId: createdGroupId,
+            threadId,
+            topicId,
+            workspaceId,
+          });
+        } catch (rollbackError) {
+          console.error('Failed to rollback context compression', rollbackError);
+        }
+      }
+
       dispatchLifecycle(
         host,
         'onCompactError',
@@ -271,7 +322,7 @@ export const compressContext =
           tokenCount: currentTokenCount,
           userId,
         } as AnyHookEvent,
-        state.metadata?._hooks,
+        state.host?.hooks,
       );
 
       events.push({ error, type: 'compression_error' });

@@ -17,6 +17,12 @@ const { mockUserDataDir, setUserDataDir } = vi.hoisted(() => {
   };
 });
 
+const { invalidateSpy } = vi.hoisted(() => ({ invalidateSpy: vi.fn() }));
+
+vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
+  invalidateLoginShellPathCache: invalidateSpy,
+}));
+
 vi.mock('electron', () => ({
   app: {
     getPath: (key: string) => {
@@ -24,15 +30,6 @@ vi.mock('electron', () => ({
       throw new Error(`unexpected app.getPath('${key}') in test`);
     },
   },
-}));
-
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
 }));
 
 // Import AFTER the mocks so the singleton logger and electron stub are wired.
@@ -94,6 +91,55 @@ describe('BinaryManager', () => {
     });
   });
 
+  describe('login-shell PATH freshness', () => {
+    const spec: BinarySpec = {
+      detect: async () => ({ available: false }),
+      name: 'probe-target',
+    };
+
+    beforeEach(() => invalidateSpy.mockClear());
+
+    it('re-reads the login-shell PATH on a forced detect', () => {
+      // Rescan means "I just installed something" — the PATH cached for this
+      // process may predate the edit. Hooked on `detect` because that is the
+      // one method the sweeping variants route through; wiring the callers
+      // individually is how the first version missed the path that mattered.
+      const mgr = new BinaryManager(stubApp);
+      mgr.register(spec, 'content-search');
+
+      return mgr.detect('probe-target', true).then(() => {
+        expect(invalidateSpy).toHaveBeenCalled();
+      });
+    });
+
+    it('leaves the cache alone on an ordinary detect', () => {
+      const mgr = new BinaryManager(stubApp);
+      mgr.register(spec, 'content-search');
+
+      return mgr.detect('probe-target').then(() => {
+        expect(invalidateSpy).not.toHaveBeenCalled();
+      });
+    });
+
+    it('drops it once for a forced sweep, not once per registered binary', async () => {
+      const mgr = new BinaryManager(stubApp);
+      mgr.register({ ...spec, name: 'one' }, 'content-search');
+      mgr.register({ ...spec, name: 'two' }, 'content-search');
+
+      await mgr.detectAll(true);
+
+      // `detectAll` drops it up front and each `detect` would drop it again;
+      // what matters is that the sweep cannot be satisfied by a pre-Rescan
+      // value, not the exact count — so assert it happened, and that a
+      // non-forced sweep never touches it.
+      expect(invalidateSpy).toHaveBeenCalled();
+
+      invalidateSpy.mockClear();
+      await mgr.detectAll();
+      expect(invalidateSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe('detect', () => {
     it('caches detect() and stamps `source: system` for PATH-resolved binaries', async () => {
       const mgr = new BinaryManager(stubApp);
@@ -139,6 +185,40 @@ describe('BinaryManager', () => {
       expect(status.manageable).toBe(true);
       // Managed cache shortcut means we never bothered the spec's detect().
       expect(detect).not.toHaveBeenCalled();
+    });
+
+    it('re-probes an unavailable binary once the cached verdict ages out', async () => {
+      // A negative is often transient — the CLI printed an upgrade banner that
+      // failed validation, or it simply wasn't installed yet. Caching it for
+      // the whole session pins the UI to "not installed" with no way back.
+      vi.useFakeTimers();
+
+      try {
+        const mgr = new BinaryManager(stubApp);
+        const detect = vi
+          .fn<() => Promise<BinaryStatus>>()
+          .mockResolvedValueOnce({ available: false })
+          .mockResolvedValue({ available: true, path: '/usr/local/bin/foo', version: '1.0' });
+        mgr.register({ detect, name: 'foo' }, 'content-search');
+
+        expect((await mgr.detect('foo')).available).toBe(false);
+        // Repeated scans within the window reuse the verdict.
+        expect((await mgr.detect('foo')).available).toBe(false);
+        expect(detect).toHaveBeenCalledTimes(1);
+
+        vi.advanceTimersByTime(60_001);
+        const recovered = await mgr.detect('foo');
+
+        expect(recovered.available).toBe(true);
+        expect(detect).toHaveBeenCalledTimes(2);
+
+        // A positive verdict stays cached for the session.
+        vi.advanceTimersByTime(60_001);
+        await mgr.detect('foo');
+        expect(detect).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('marks unavailable + manageable when neither managed cache nor PATH has the binary', async () => {

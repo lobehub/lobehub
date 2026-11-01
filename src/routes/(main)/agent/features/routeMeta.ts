@@ -1,89 +1,129 @@
-import { MessageSquare, MessagesSquareIcon } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import {
+  ChartColumnBigIcon,
+  FileUserIcon,
+  GraduationCapIcon,
+  MessageSquare,
+  MessagesSquareIcon,
+  RadioTowerIcon,
+  Share2Icon,
+  UsersIcon,
+} from 'lucide-react';
+import { lazy } from 'react';
 
-import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
-import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
-import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
+import {
+  AgentChannelDetailSkeleton,
+  AgentChannelSkeleton,
+} from '@/components/Skeleton/AgentChannel';
+import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
+import AgentStatisticsSkeleton from '@/components/Skeleton/AgentStatistics';
+import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
+import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
+import ProfileSkeleton from '@/components/Skeleton/Profile';
+import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
+import TopicsSkeleton from '@/components/Skeleton/Topics';
 import { routeMeta } from '@/spa/router/routeMeta';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
-const useTopicTitle = (
-  agentId: string | undefined,
-  topicId: string | undefined,
-  routeWorkspaceId: string | null | undefined,
-): string | undefined =>
-  useChatStore((s) => {
-    if (!agentId || !topicId || routeWorkspaceId === undefined) return undefined;
-
-    const topic = s.topicDataMap[topicMapKey({ agentId })]?.items?.find(
-      (item) => item.id === topicId,
-    );
-    return topic?.title || undefined;
-  });
-
-const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
-  const routeWorkspaceId = useRouteWorkspaceId(params);
-  const meta = useAgentStore((s) => {
-    const agentId = params.aid ?? '';
-    const agent = s.agentMap[agentId];
-
-    if (!matchesRouteWorkspace(agent?.workspaceId, routeWorkspaceId)) return {};
-
-    return agentSelectors.getAgentMetaById(agentId)(s);
-  });
-  const topicTitle = useTopicTitle(params.aid, params.topicId ?? params.topic, routeWorkspaceId);
-  const hasMeta = Object.keys(meta).length > 0;
-  const agentTitle = hasMeta ? meta.title : undefined;
-
-  usePublishDynamicRouteMeta(
-    {
-      avatar: meta.avatar,
-      backgroundColor: meta.backgroundColor,
-      title: [topicTitle, agentTitle].filter(Boolean).join(' · ') || undefined,
-    },
-    onResolve,
-  );
-
-  return null;
-};
+const AgentDynamicMeta = lazy(() => import('@/features/RouteMeta/AgentDynamicMeta'));
+const TopicsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.TopicsDynamicMeta,
+  })),
+);
+const ProfileDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.ProfileDynamicMeta,
+  })),
+);
+const ChannelDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.ChannelDynamicMeta,
+  })),
+);
+const StatisticsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.StatisticsDynamicMeta,
+  })),
+);
+const ShareDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.ShareDynamicMeta,
+  })),
+);
+const SelfLearningDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.SelfLearningDynamicMeta,
+  })),
+);
+const PermissionDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.PermissionDynamicMeta,
+  })),
+);
 
 export const agentRouteMeta = routeMeta({
   DynamicMeta: AgentDynamicMeta,
   icon: MessageSquare,
+  Skeleton: ConversationLayoutSkeleton,
   titleKey: 'navigation.chat',
 });
 
-const TopicsDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
-  const { t } = useTranslation('electron');
-  const routeWorkspaceId = useRouteWorkspaceId(params);
-  const meta = useAgentStore((s) => {
-    const agentId = params.aid ?? '';
-    const agent = s.agentMap[agentId];
-
-    if (!matchesRouteWorkspace(agent?.workspaceId, routeWorkspaceId)) return {};
-
-    return agentSelectors.getAgentMetaById(agentId)(s);
-  });
-  const hasMeta = Object.keys(meta).length > 0;
-  const agentTitle = hasMeta ? meta.title : undefined;
-
-  usePublishDynamicRouteMeta(
-    {
-      avatar: meta.avatar,
-      backgroundColor: meta.backgroundColor,
-      title: [t('navigation.topics'), agentTitle].filter(Boolean).join(' · ') || undefined,
-    },
-    onResolve,
-  );
-
-  return null;
-};
+// Desktop mounts the working sidebar beside the conversation; mobile does not.
+export const agentChatDesktopRouteMeta = routeMeta({
+  ...agentRouteMeta,
+  Skeleton: AgentConversationLayoutSkeleton,
+});
 
 export const topicsRouteMeta = routeMeta({
   DynamicMeta: TopicsDynamicMeta,
   icon: MessagesSquareIcon,
+  Skeleton: TopicsSkeleton,
   titleKey: 'navigation.topics',
+});
+
+export const agentProfileRouteMeta = routeMeta({
+  DynamicMeta: ProfileDynamicMeta,
+  icon: FileUserIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.profile',
+});
+
+export const agentChannelRouteMeta = routeMeta({
+  DynamicMeta: ChannelDynamicMeta,
+  icon: RadioTowerIcon,
+  Skeleton: AgentChannelSkeleton,
+  titleKey: 'navigation.channels',
+});
+
+// A platform detail is a credential form without the tab switcher, not the card grid.
+export const agentChannelDetailRouteMeta = routeMeta({
+  ...agentChannelRouteMeta,
+  Skeleton: AgentChannelDetailSkeleton,
+});
+
+export const agentStatisticsRouteMeta = routeMeta({
+  DynamicMeta: StatisticsDynamicMeta,
+  icon: ChartColumnBigIcon,
+  Skeleton: AgentStatisticsSkeleton,
+  titleKey: 'navigation.stats',
+});
+
+export const agentShareRouteMeta = routeMeta({
+  DynamicMeta: ShareDynamicMeta,
+  icon: Share2Icon,
+  Skeleton: AgentShareSkeleton,
+  titleKey: 'navigation.agentShare',
+});
+
+export const agentSelfLearningRouteMeta = routeMeta({
+  DynamicMeta: SelfLearningDynamicMeta,
+  icon: GraduationCapIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.selfLearning',
+});
+
+export const agentPermissionRouteMeta = routeMeta({
+  DynamicMeta: PermissionDynamicMeta,
+  icon: UsersIcon,
+  Skeleton: createSurfaceSkeleton('form'),
+  titleKey: 'navigation.permission',
 });

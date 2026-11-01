@@ -4,7 +4,9 @@ import { asc, desc, eq } from 'drizzle-orm';
 
 import { messages } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
+import { notCopiedTranscript } from '@/database/utils/copiedTranscript';
 import { genRangeWhere, genWhere } from '@/database/utils/genWhere';
+import { hasLiveParentTopic } from '@/database/utils/topicVisibility';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { type MessageMetadata, type ModelUsage } from '@/types/message';
 import {
@@ -31,6 +33,19 @@ export class UsageRecordService {
     this.db = db;
   }
 
+  private messageScope = () =>
+    genWhere([
+      buildWorkspaceWhere(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        {
+          isDeleted: messages.isDeleted,
+          userId: messages.userId,
+          workspaceId: messages.workspaceId,
+        },
+      ),
+      hasLiveParentTopic(messages.topicId),
+    ]);
+
   /**
    * @description Find usage records by date range.
    * @param agentId Optional agent id to attribute usage to a single agent.
@@ -55,11 +70,9 @@ export class UsageRecordService {
       .from(messages)
       .where(
         genWhere([
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { userId: messages.userId, workspaceId: messages.workspaceId },
-          ),
+          this.messageScope(),
           eq(messages.role, 'assistant'),
+          notCopiedTranscript(),
           agentId ? eq(messages.agentId, agentId) : undefined,
           genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
         ]),
@@ -76,6 +89,7 @@ export class UsageRecordService {
       const totalOutputTokens = usage?.totalOutputTokens ?? metadata?.totalOutputTokens ?? 0;
       return {
         createdAt: spend.createdAt,
+        credits: usage?.credits ?? 0,
         id: spend.id,
         metadata: spend.metadata,
         model: spend.model,
@@ -236,11 +250,9 @@ export class UsageRecordService {
       .from(messages)
       .where(
         genWhere([
-          buildWorkspaceWhere(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { userId: messages.userId, workspaceId: messages.workspaceId },
-          ),
+          this.messageScope(),
           eq(messages.role, 'assistant'),
+          notCopiedTranscript(),
           eq(messages.agentId, agentId),
           genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
         ]),
@@ -274,6 +286,8 @@ export class UsageRecordService {
       const start = bucketStart(row.createdAt);
       const key = start.format('YYYY-MM-DD');
       const bucket = buckets.get(key) ?? {
+        cachedInputCost: 0,
+        cachedInputTokens: 0,
         cacheWriteCost: 0,
         cacheWriteTokens: 0,
         date: start.valueOf(),
@@ -285,10 +299,12 @@ export class UsageRecordService {
         totalCost: 0,
       };
       bucket.inputCost += split.inputCost;
+      bucket.cachedInputCost += split.cachedInputCost;
       bucket.outputCost += split.outputCost;
       bucket.cacheWriteCost += split.cacheWriteCost;
       bucket.totalCost += split.totalCost;
-      bucket.inputTokens += split.inputTokens;
+      bucket.inputTokens += split.cacheMissTokens;
+      bucket.cachedInputTokens += split.cacheReadTokens;
       bucket.outputTokens += split.outputTokens;
       bucket.cacheWriteTokens += split.cacheWriteTokens;
       buckets.set(key, bucket);
@@ -336,6 +352,8 @@ export class UsageRecordService {
       const key = cursor.format('YYYY-MM-DD');
       padded.push(
         buckets.get(key) ?? {
+          cachedInputCost: 0,
+          cachedInputTokens: 0,
           cacheWriteCost: 0,
           cacheWriteTokens: 0,
           date: cursor.valueOf(),

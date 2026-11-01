@@ -1,9 +1,11 @@
 import { type ModelPricingContext } from '@lobechat/model-runtime';
+import { type SpendOrigin } from '@lobechat/types';
 
 import { type ModelPerformance, type ModelUsage } from '@/types/index';
 
 interface ChargeParams {
-  metadata: {
+  isError?: boolean;
+  metadata: SpendOrigin & {
     asyncTaskId: string;
     generationBatchId: string;
     modelId: string;
@@ -11,11 +13,12 @@ interface ChargeParams {
   };
   metrics?: ModelPerformance;
   modelUsage?: ModelUsage;
+  /** Opaque billing handle passed through from `asyncTask.metadata.precharge`. */
+  prechargeResult?: unknown;
   pricingContext?: ModelPricingContext;
   provider: string;
   userId: string;
   workspaceId?: string;
 }
 
-// eslint-disable-next-line unused-imports/no-unused-vars
-export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {}
+export async function chargeAfterGenerate(_params: ChargeParams): Promise<void> {}

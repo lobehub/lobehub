@@ -39,10 +39,18 @@ export const updateDocumentInputSchema = z.object({
   breakAutosaveWindow: z.boolean().optional(),
   content: z.string().optional(),
   editorData: z.string().optional(),
+  /**
+   * Optimistic-concurrency predicate: when set, the save succeeds only if the
+   * stored row's `updatedAt` still equals this value (compared atomically
+   * inside the update transaction), otherwise it fails with CONFLICT. Used by
+   * the client's CONFLICT recovery so a retried payload can never overwrite a
+   * version it has not seen.
+   */
+  expectedUpdatedAt: z.date().optional(),
   fileType: z.string().optional(),
   id: z.string(),
   lockOwnerId: z.string().optional(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   parentId: z.string().nullish(),
   restoreFromHistoryId: z.string().optional(),
   saveSource: documentHistorySaveSourceSchema.optional(),
@@ -57,6 +65,8 @@ export const saveDocumentHistoryInputSchema = z.object({
 });
 
 export interface DocumentHistoryListItem {
+  agentId?: string | null;
+  editorIds?: string[] | null;
   id: string;
   isCurrent: boolean;
   savedAt: string;
@@ -95,6 +105,7 @@ export interface UpdateDocumentOutput {
   historyAppended: boolean;
   id: string;
   savedAt?: string;
+  updatedAt: string;
 }
 
 export interface SaveDocumentHistoryInput {
@@ -132,6 +143,8 @@ export interface UpdateDocumentInput {
   breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: string;
+  /** See `updateDocumentInputSchema.expectedUpdatedAt` — atomic version predicate. */
+  expectedUpdatedAt?: Date;
   fileType?: string;
   id: string;
   lockOwnerId?: string;

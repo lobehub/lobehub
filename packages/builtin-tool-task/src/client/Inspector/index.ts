@@ -1,11 +1,13 @@
 import type { BuiltinInspector } from '@lobechat/types';
 
 import { TaskApiName } from '../../types';
+import CreateGoalInspector from './CreateGoal';
 import { CreateTaskInspector } from './CreateTask';
 import { CreateTasksInspector } from './CreateTasks';
 import { DeleteTaskInspector } from './DeleteTask';
 import { EditTaskInspector } from './EditTask';
 import { ListTasksInspector } from './ListTasks';
+import { ListWorkspaceMembersInspector } from './ListWorkspaceMembers';
 import { RunTaskInspector } from './RunTask';
 import { RunTasksInspector } from './RunTasks';
 import { SetTaskScheduleInspector } from './SetTaskSchedule';
@@ -27,11 +29,13 @@ import { ViewTaskInspector } from './ViewTask';
 export const TaskInspectors: Record<string, BuiltinInspector> = {
   [TaskApiName.addTaskComment]: AddTaskCommentInspector as BuiltinInspector,
   [TaskApiName.createTask]: CreateTaskInspector as BuiltinInspector,
+  [TaskApiName.createGoal]: CreateGoalInspector as BuiltinInspector,
   [TaskApiName.createTasks]: CreateTasksInspector as BuiltinInspector,
   [TaskApiName.deleteTask]: DeleteTaskInspector as BuiltinInspector,
   [TaskApiName.deleteTaskComment]: DeleteTaskCommentInspector as BuiltinInspector,
   [TaskApiName.editTask]: EditTaskInspector as BuiltinInspector,
   [TaskApiName.listTasks]: ListTasksInspector as BuiltinInspector,
+  [TaskApiName.listWorkspaceMembers]: ListWorkspaceMembersInspector as BuiltinInspector,
   [TaskApiName.runTask]: RunTaskInspector as BuiltinInspector,
   [TaskApiName.runTasks]: RunTasksInspector as BuiltinInspector,
   [TaskApiName.setTaskSchedule]: SetTaskScheduleInspector as BuiltinInspector,
@@ -41,11 +45,13 @@ export const TaskInspectors: Record<string, BuiltinInspector> = {
   [TaskApiName.viewTask]: ViewTaskInspector as BuiltinInspector,
 };
 
+export { default as CreateGoalInspector } from './CreateGoal';
 export { CreateTaskInspector } from './CreateTask';
 export { CreateTasksInspector } from './CreateTasks';
 export { DeleteTaskInspector } from './DeleteTask';
 export { EditTaskInspector } from './EditTask';
 export { ListTasksInspector } from './ListTasks';
+export { ListWorkspaceMembersInspector } from './ListWorkspaceMembers';
 export { RunTaskInspector } from './RunTask';
 export { RunTasksInspector } from './RunTasks';
 export { SetTaskScheduleInspector } from './SetTaskSchedule';

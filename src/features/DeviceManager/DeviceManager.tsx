@@ -1,35 +1,30 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import type { DeviceScope } from '@lobechat/types';
-import { Button, Checkbox, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import {
   ChevronRightIcon,
   FolderCogIcon,
   type LucideIcon,
   MonitorDownIcon,
+  MonitorUpIcon,
+  RefreshCwIcon,
   ServerIcon,
   TerminalIcon,
-  Trash2Icon,
   ZapIcon,
 } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
-import { useClientDataSWR } from '@/libs/swr';
-import { lambdaQuery } from '@/libs/trpc/client';
-import { deviceService } from '@/services/device';
+import { useDeviceList } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
-import { useUserStore } from '@/store/user';
-import { authSelectors } from '@/store/user/selectors';
 
-import { DEVICE_LIST_SWR_KEY, refreshDeviceList } from './const';
-import DeviceDetailPanel from './DeviceDetailPanel';
-import DeviceItem from './DeviceItem';
-import { useCanEditDevice } from './useCanEditDevice';
+import DeviceCard from './DeviceCard';
+import DeviceGrid from './DeviceGrid';
+import { getDeviceListBoundary } from './deviceListBoundary';
+import { DeviceGridSkeleton } from './Skeleton';
 
 const styles = createStaticStyles(({ css }) => ({
   // ─── Onboarding empty state ───
@@ -72,10 +67,7 @@ const styles = createStaticStyles(({ css }) => ({
   emptyHero: css`
     padding-block: 40px;
     padding-inline: 32px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
     text-align: center;
-
     background: ${cssVar.colorFillQuaternary};
   `,
   heroIcon: css`
@@ -114,6 +106,9 @@ const styles = createStaticStyles(({ css }) => ({
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1px;
+
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+
     background: ${cssVar.colorBorderSecondary};
   `,
   optionIcon: css`
@@ -129,42 +124,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextSecondary};
 
     background: ${cssVar.colorFillTertiary};
-  `,
-  // ─── Master-detail surfaces ───
-  detailCol: css`
-    align-self: stretch;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  listCol: css`
-    overflow: hidden;
-
-    min-width: 0;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  listHeader: css`
-    min-height: 44px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-  listScroll: css`
-    overflow-y: auto;
-
-    /* Cap the list so long fleets (servers / CLI agents) stay scrollable instead
-       of pushing the page — pairs with the detail panel sitting beside it. */
-    max-height: 480px;
-  `,
-  selectAll: css`
-    cursor: pointer;
-    user-select: none;
   `,
 }));
 
@@ -251,58 +210,53 @@ const Capabilities = memo(() => {
   );
 });
 
-// Loading placeholder that reuses the list-card chrome and only skeletonises the
-// row text — loading → loaded is a content swap, not a relayout (ux §4.1).
-const ListSkeleton = memo(() => (
-  <Flexbox className={styles.listCol} flex={1}>
-    <Flexbox horizontal align={'center'} className={styles.listHeader}>
-      <Skeleton.Button active size={'small'} style={{ height: 16, minWidth: 80, width: 80 }} />
-    </Flexbox>
-    <Flexbox gap={2} padding={4}>
-      {[0, 1, 2, 3].map((i) => (
-        <Flexbox horizontal align={'center'} gap={12} key={i} style={{ padding: 12 }}>
-          <Skeleton.Avatar active shape={'square'} size={36} />
-          <Flexbox flex={1} gap={8}>
-            <Skeleton.Button active size={'small'} style={{ height: 14, width: 140 }} />
-            <Skeleton.Button active size={'small'} style={{ height: 12, width: 200 }} />
-          </Flexbox>
-        </Flexbox>
-      ))}
-    </Flexbox>
-  </Flexbox>
-));
-
 interface DeviceManagerProps {
-  /** Open the enrollment wizard (the modal is owned by the route, by the header button). */
+  /** Open the enrollment wizard (the modal is owned by the route). */
   onConnect: (tab?: 'cli' | 'desktop') => void;
+  /** Open a device's detail page (the `devices/:sub` route is owned by the host). */
+  onOpenDevice: (deviceId: string) => void;
   /** Which device pool this surface manages. */
   scope: DeviceScope;
+  /**
+   * Left side of the toolbar — the workspace page puts its visibility tabs
+   * here; the personal page has a single pool and leaves it empty.
+   */
+  toolbarLeading?: ReactNode;
+  /**
+   * Workspace scope only: narrow the list to one visibility tab — 'public'
+   * (shared pool) or 'private' (the caller's own private enrollments). Omitted
+   * → no visibility filtering (personal page).
+   */
+  visibility?: DeviceVisibility;
 }
 
 /**
- * Master-detail device manager shared by the personal (`/settings/devices`) and
- * workspace (`/:slug/settings/devices`) pages — list + detail panel + onboarding
- * empty state, filtered to the given `scope`.
+ * Device list shared by the personal (`/settings/devices`) and workspace
+ * (`/:slug/settings/devices`) pages — toolbar (refresh + connect) above the
+ * card grid / onboarding empty state, filtered to the given `scope` (and, for
+ * workspace, the active visibility tab). A card opens the device's detail
+ * page; the host owns that route.
  */
-const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
+const DeviceManager = memo<DeviceManagerProps>((props) => {
+  const { onConnect, onOpenDevice, scope, toolbarLeading, visibility } = props;
   const { t } = useTranslation('setting');
   const isWorkspace = scope === 'workspace';
 
-  // Fetch via SWR so the cache key carries the active workspace id (see
-  // `DEVICE_LIST_SWR_KEY`). The raw TRPC React Query key had no workspace
-  // dimension, so a fetch primed while the workspace was still resolving (empty
-  // `X-Workspace-Id` header → personal pool) stuck for the whole session and the
-  // workspace list rendered empty until a hard refresh.
-  // Devices come from an authed lambda procedure, so only query once signed in
-  // (desktop always queries — it lists the local device's registered cwd).
-  const isLogin = useUserStore(authSelectors.isLogin);
-  const { data, isLoading, error, mutate } = useClientDataSWR(
-    isLogin || isDesktop ? [DEVICE_LIST_SWR_KEY] : null,
-    () => deviceService.listDevices(),
-  );
+  // The device replica every device-listing surface reads (see `useDeviceList`):
+  // a reload paints the persisted cards first, presence pending.
+  const deviceList = useDeviceList();
+  const { data, isValidating, error, mutate } = deviceList;
   // `listDevices` is workspace-aware and returns both pools — keep each surface
-  // to its own scope.
-  const devices = (data ?? []).filter((d) => d.scope === scope);
+  // to its own scope (and visibility tab). Ghost rows (`visibility: null`,
+  // online but unregistered) belong to the shared pool: the server already
+  // strips other members' private devices, so an unclaimed live connection can
+  // only be a public-pool machine.
+  const devices = (data ?? []).filter(
+    (d) => d.scope === scope && (!visibility || (d.visibility ?? 'public') === visibility),
+  );
+  // A persisted copy with no row for this pool / tab is not proof the pool is
+  // empty: wait for the server (or its error) before showing onboarding.
+  const boundary = getDeviceListBoundary(deviceList, devices.length === 0);
 
   // The machine the user is on right now (desktop only) — personal pool only;
   // a workspace device is never "this machine" in the personal sense.
@@ -311,28 +265,21 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
   useFetchDeviceInfo();
   const currentDeviceId = !isWorkspace && isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  const [selectedId, setSelectedId] = useState<string>();
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
-
-  // Bulk remove routes by the managed scope (the list is single-scope), mirroring
-  // the per-row mutation choice in `DeviceItem`.
-  const removePersonal = lambdaQuery.device.removeDevice.useMutation();
-  const removeWorkspace = lambdaQuery.device.removeWorkspaceDevice.useMutation();
-  const removeMutation = isWorkspace ? removeWorkspace : removePersonal;
-
-  // Hook must run before any early return so render order stays stable.
-  const canEditDevice = useCanEditDevice();
-
   // ─── Empty state: onboarding hero + connect options + capabilities ───
   // Now gated by AsyncBoundary so a *failed* device fetch renders a failure +
   // Retry instead of this "connect your first device" onboarding (which falsely
   // told the user they own no devices — ux Read §1.1 error-as-empty trap).
+  // Workspace machines are headless (CLI-only enrollment), so that scope gets
+  // a single primary button instead of the personal page's connect-method
+  // cards + capabilities. The copy is pool-agnostic; only the hero icon forks
+  // between the shared (server) and private (own machine) pools.
+  const isPrivatePool = isWorkspace && visibility === 'private';
   const emptyState = (
     <Flexbox gap={32}>
       <Flexbox className={styles.emptyCard}>
         <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
           <span className={styles.heroIcon}>
-            <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
+            <Icon icon={isWorkspace && !isPrivatePool ? ServerIcon : MonitorDownIcon} size={28} />
           </span>
           <Text fontSize={18} weight={600}>
             {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
@@ -340,10 +287,20 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
           <Text style={{ maxWidth: 440 }} type={'secondary'}>
             {t(isWorkspace ? 'workspaceSetting.devices.heroDesc' : 'devices.empty.desc')}
           </Text>
+          {isWorkspace && (
+            <Button
+              icon={<Icon icon={TerminalIcon} />}
+              style={{ marginBlockStart: 8 }}
+              type={'primary'}
+              onClick={() => onConnect('cli')}
+            >
+              {t('devices.empty.methodCli.title')}
+            </Button>
+          )}
         </Flexbox>
 
-        <div className={isWorkspace ? undefined : styles.optionGrid}>
-          {!isWorkspace && (
+        {!isWorkspace && (
+          <div className={styles.optionGrid}>
             <ConnectOption
               badge={t('devices.empty.methodDesktop.badge')}
               desc={t('devices.empty.methodDesktop.desc')}
@@ -351,157 +308,80 @@ const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
               title={t('devices.empty.methodDesktop.title')}
               onClick={() => onConnect('desktop')}
             />
-          )}
-          <ConnectOption
-            desc={t('devices.empty.methodCli.desc')}
-            icon={TerminalIcon}
-            title={t('devices.empty.methodCli.title')}
-            onClick={() => onConnect('cli')}
-          />
-        </div>
+            <ConnectOption
+              desc={t('devices.empty.methodCli.desc')}
+              icon={TerminalIcon}
+              title={t('devices.empty.methodCli.title')}
+              onClick={() => onConnect('cli')}
+            />
+          </div>
+        )}
       </Flexbox>
 
-      <Capabilities />
+      {!isWorkspace && <Capabilities />}
     </Flexbox>
   );
 
-  const selected = selectedId ? devices.find((d) => d.deviceId === selectedId) : undefined;
   const isCurrent = (id: string) => !!currentDeviceId && id === currentDeviceId;
 
-  // Bulk-selection set excludes rows the user can't edit so the toolbar only
-  // ever offers actions the server would actually accept, mirroring the
-  // self-or-owner gate. `canEditDevice` is a stable callback so deriving from
-  // it on render is fine.
-  const editableDevices = devices.filter((d) => canEditDevice(d));
+  // Workspace machines are headless, so that pool enrolls through the CLI
+  // only; the personal wizard also offers the desktop app.
+  const toolbar = (
+    <Flexbox horizontal align={'center'} gap={16} justify={'space-between'}>
+      <div style={{ minWidth: 0 }}>{toolbarLeading}</div>
+      <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+        <Button
+          icon={<Icon icon={RefreshCwIcon} />}
+          loading={isValidating}
+          title={t('devices.actions.refresh')}
+          onClick={() => mutate()}
+        />
+        {isWorkspace ? (
+          <Button
+            icon={<Icon icon={TerminalIcon} />}
+            type={'primary'}
+            onClick={() => onConnect('cli')}
+          >
+            {t('devices.empty.methodCli.title')}
+          </Button>
+        ) : (
+          <Button icon={<Icon icon={MonitorUpIcon} />} type={'primary'} onClick={() => onConnect()}>
+            {t('devices.connectWizard.button')}
+          </Button>
+        )}
+      </Flexbox>
+    </Flexbox>
+  );
 
-  // Only count ids that still exist in the current scope's editable list, so a
-  // stale tick (e.g. a device removed elsewhere) never inflates the toolbar
-  // count.
-  const checkedCount = editableDevices.filter((d) => checkedIds.has(d.deviceId)).length;
-  const allChecked = editableDevices.length > 0 && checkedCount === editableDevices.length;
-  const someChecked = checkedCount > 0 && !allChecked;
-  const selectionActive = checkedCount > 0;
-
-  const toggleChecked = (deviceId: string, next: boolean) =>
-    setCheckedIds((prev) => {
-      const draft = new Set(prev);
-      if (next) draft.add(deviceId);
-      else draft.delete(deviceId);
-      return draft;
-    });
-
-  const toggleAll = () =>
-    setCheckedIds(allChecked ? new Set() : new Set(editableDevices.map((d) => d.deviceId)));
-
-  const handleBulkRemove = () => {
-    const ids = editableDevices.filter((d) => checkedIds.has(d.deviceId)).map((d) => d.deviceId);
-    if (ids.length === 0) return;
-    // Revoking the machine the user is on right now disconnects this very session
-    // — call it out so a bulk sweep can't silently cut the ground from under them.
-    const includesCurrent = ids.some((id) => isCurrent(id));
-    confirmModal({
-      content: includesCurrent
-        ? `${t('devices.remove.confirmManyDesc', { count: ids.length })}\n\n${t('devices.remove.currentSessionWarning')}`
-        : t('devices.remove.confirmManyDesc', { count: ids.length }),
-      okButtonProps: { danger: true },
-      okText: t('devices.actions.removeSelected', { count: ids.length }),
-      onOk: async () => {
-        await Promise.all(ids.map((deviceId) => removeMutation.mutateAsync({ deviceId })));
-        await refreshDeviceList();
-        setCheckedIds(new Set());
-        if (selectedId && ids.includes(selectedId)) setSelectedId(undefined);
-      },
-      title: t('devices.remove.confirmMany', { count: ids.length }),
-    });
-  };
-
-  return (
+  const list = (
     <AsyncBoundary
-      data={data}
+      data={boundary.data}
       empty={emptyState}
       error={error}
       errorVariant={'block'}
       isEmpty={devices.length === 0}
-      isLoading={isLoading}
-      loading={<ListSkeleton />}
+      isLoading={boundary.isLoading}
+      loading={<DeviceGridSkeleton />}
       onRetry={() => mutate()}
     >
-      <Flexbox horizontal align={'flex-start'} gap={16}>
-        <Flexbox className={styles.listCol} flex={1}>
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={styles.listHeader}
-            justify={'space-between'}
-          >
-            <Flexbox
-              horizontal
-              align={'center'}
-              className={editableDevices.length > 0 ? styles.selectAll : undefined}
-              gap={8}
-              onClick={editableDevices.length > 0 ? toggleAll : undefined}
-            >
-              {editableDevices.length > 0 && (
-                <Checkbox checked={allChecked} indeterminate={someChecked} />
-              )}
-              <Text fontSize={12} type={'secondary'} weight={500}>
-                {selectionActive
-                  ? t('devices.selection.selected', { count: checkedCount })
-                  : t('devices.selection.total', { count: devices.length })}
-              </Text>
-            </Flexbox>
-            {selectionActive && (
-              <Button
-                danger
-                icon={<Icon icon={Trash2Icon} />}
-                loading={removeMutation.isPending}
-                size={'small'}
-                onClick={handleBulkRemove}
-              >
-                {t('devices.actions.removeSelected', { count: checkedCount })}
-              </Button>
-            )}
-          </Flexbox>
-          <Flexbox className={styles.listScroll} gap={2} padding={4}>
-            {devices.map((device) => {
-              const editable = canEditDevice(device);
-              return (
-                <DeviceItem
-                  checked={checkedIds.has(device.deviceId)}
-                  device={device}
-                  isCurrent={isCurrent(device.deviceId)}
-                  key={device.deviceId}
-                  selected={device.deviceId === selectedId}
-                  selectionActive={selectionActive}
-                  // Withholding the handler also withholds the checkbox; non-
-                  // editable rows render without a tick so bulk selection only
-                  // ever includes devices the server would accept.
-                  onCheckChange={
-                    editable ? (next) => toggleChecked(device.deviceId, next) : undefined
-                  }
-                  onSelect={() =>
-                    setSelectedId((prev) =>
-                      prev === device.deviceId ? undefined : device.deviceId,
-                    )
-                  }
-                />
-              );
-            })}
-          </Flexbox>
-        </Flexbox>
-        {selected && (
-          <Flexbox className={styles.detailCol} flex={1}>
-            {/* keyed on deviceId so the form state resets when the selection changes */}
-            <DeviceDetailPanel
-              device={selected}
-              isCurrent={isCurrent(selected.deviceId)}
-              key={selected.deviceId}
-              onClose={() => setSelectedId(undefined)}
-            />
-          </Flexbox>
-        )}
-      </Flexbox>
+      <DeviceGrid>
+        {devices.map((device) => (
+          <DeviceCard
+            device={device}
+            isCurrent={isCurrent(device.deviceId)}
+            key={device.deviceId}
+            onOpen={() => onOpenDevice(device.deviceId)}
+          />
+        ))}
+      </DeviceGrid>
     </AsyncBoundary>
+  );
+
+  return (
+    <Flexbox gap={16}>
+      {toolbar}
+      {list}
+    </Flexbox>
   );
 });
 

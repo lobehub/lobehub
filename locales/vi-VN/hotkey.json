@@ -17,6 +17,8 @@
   "desktop.showApp.title": "Hiện/Ẩn Cửa Sổ Chính",
   "editMessage.desc": "Vào chế độ chỉnh sửa bằng cách giữ phím Alt và nhấp đúp vào tin nhắn",
   "editMessage.title": "Chỉnh Sửa Tin Nhắn",
+  "findInTopic.desc": "Tìm kiếm mọi tin nhắn trong chủ đề hiện tại ở bảng bên phải",
+  "findInTopic.title": "Tìm trong Chủ đề",
   "navigateToChat.desc": "Chuyển sang tab Trò chuyện và vào Lobe AI",
   "navigateToChat.title": "Chuyển Đến Trò Chuyện Mặc Định",
   "nextTab.desc": "Chuyển sang tab kiểu trình duyệt tiếp theo trong ứng dụng Desktop; quay lại tab đầu tiên khi đến cuối",
@@ -41,8 +43,12 @@
   "switchAgent.title": "Chuyển Nhanh Tác Nhân",
   "switchTab.desc": "Chuyển đến một tab cụ thể theo vị trí của nó (1–9) trên thanh tab của ứng dụng Desktop",
   "switchTab.title": "Chuyển Đến Tab Theo Số",
+  "toggleFavorite.desc": "Thêm trang đang mở vào mục Yêu thích trong thanh bên, hoặc xóa nó",
+  "toggleFavorite.title": "Thêm vào / Xóa khỏi Yêu thích",
   "toggleLeftPanel.desc": "Hiện hoặc ẩn bảng bên trái",
   "toggleLeftPanel.title": "Bật/Tắt Bảng Bên Trái",
   "toggleRightPanel.desc": "Hiện hoặc ẩn bảng bên phải",
-  "toggleRightPanel.title": "Bật/Tắt Bảng Bên Phải"
+  "toggleRightPanel.title": "Bật/Tắt Bảng Bên Phải",
+  "toggleTerminalPanel.desc": "Hiển thị hoặc ẩn bảng điều khiển terminal ở dưới cùng",
+  "toggleTerminalPanel.title": "Chuyển đổi Bảng Điều Khiển Terminal"
 }

@@ -14,6 +14,7 @@ describe('normalizeMemoryExtractionPayload', () => {
     const toDate = new Date('2024-02-01T00:00:00Z');
 
     const payload: MemoryExtractionPayloadInput = {
+      dryRun: true,
       forceAll: true,
       forceTopics: true,
       fromDate,
@@ -31,6 +32,7 @@ describe('normalizeMemoryExtractionPayload', () => {
     const normalized = normalizeMemoryExtractionPayload(payload, 'https://api.example.com');
 
     expect(normalized.baseUrl).toBe('https://api.example.com');
+    expect(normalized.dryRun).toBe(true);
     expect(normalized.forceAll).toBe(true);
     expect(normalized.forceTopics).toBe(true);
     expect(normalized.from).toEqual(fromDate);
@@ -61,6 +63,7 @@ describe('normalizeMemoryExtractionPayload', () => {
 describe('buildWorkflowPayloadInput', () => {
   const baseNormalized: MemoryExtractionNormalizedPayload = {
     baseUrl: 'https://api.example.com',
+    dryRun: true,
     forceAll: false,
     forceTopics: false,
     from: undefined,
@@ -84,6 +87,7 @@ describe('buildWorkflowPayloadInput', () => {
     expect(payload.userId).toBe('user-x');
     expect(payload.userIds).toEqual(['user-x', 'user-y']);
     expect(payload.baseUrl).toBe('https://api.example.com');
+    expect(payload.dryRun).toBe(true);
     expect(payload.mode).toBe('workflow');
   });
 

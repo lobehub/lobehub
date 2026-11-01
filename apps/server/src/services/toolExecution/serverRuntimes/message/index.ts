@@ -1,9 +1,13 @@
-import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
-import type { BotProviderQuery } from '@lobechat/builtin-tool-message/executionRuntime';
+import {
+  MessageToolIdentifier,
+  MESSENGER_PUSH_CONTENT_MAX_LENGTH,
+} from '@lobechat/builtin-tool-message';
+import type {
+  BotProviderQuery,
+  MessageRuntimeService,
+} from '@lobechat/builtin-tool-message/executionRuntime';
 import { MessageExecutionRuntime } from '@lobechat/builtin-tool-message/executionRuntime';
-import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
-import { QQApiClient } from '@lobechat/chat-adapter-qq';
-import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
+import type { ChatTopicBotContext } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, eq } from 'drizzle-orm';
 
@@ -15,34 +19,48 @@ import {
   getMessengerTelegramConfig,
 } from '@/config/messenger';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import type { SafeMessengerAccountLink } from '@/database/models/messengerAccountLink';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
+import { TopicModel } from '@/database/models/topic';
 import { agents } from '@/database/schemas';
+import { notTrashed } from '@/database/utils/softDelete';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { flattenBotWakeSettings } from '@/server/services/agentSignal/scenarios/botWake/config';
 import {
   assertBotAccessSettings,
+  assertWatchKeywordsWritable,
   invalidateBotAfterUpdate,
-  mergeBotSettingsForPersist,
+  mergeBotSettingsForCreate,
+  mergeBotSettingsPatch,
 } from '@/server/services/bot/agentBotProviderSettings';
+import type { ResolvedMessageTarget } from '@/server/services/bot/messageTarget';
+import {
+  createMessageServiceForCredentials,
+  resolveBotMessageTarget,
+  resolveMessengerInstallTarget,
+  resolveMessengerKeyTarget,
+} from '@/server/services/bot/messageTarget';
 import { platformRegistry } from '@/server/services/bot/platforms';
-import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
-import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
-import { FeishuMessageService } from '@/server/services/bot/platforms/feishu/service';
-import { ImessageDesktopBridgeApi } from '@/server/services/bot/platforms/imessage/desktopBridge';
-import { ImessageMessageService } from '@/server/services/bot/platforms/imessage/service';
-import { QQMessageService } from '@/server/services/bot/platforms/qq/service';
-import { SlackApi } from '@/server/services/bot/platforms/slack/api';
-import { SlackMessageService } from '@/server/services/bot/platforms/slack/service';
-import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
-import { TelegramMessageService } from '@/server/services/bot/platforms/telegram/service';
-import { WechatMessageService } from '@/server/services/bot/platforms/wechat/service';
+import {
+  wechatLegacyTokenKey,
+  wechatPendingPushKey,
+  wechatWindowKey,
+} from '@/server/services/bot/platforms/wechat/contextWindow';
 import { GatewayService } from '@/server/services/gateway';
-import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
-import { messengerPlatformRegistry } from '@/server/services/messenger';
+import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
+import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
+import { wechatInstallationKey } from '@/server/services/messenger/installations/wechat';
+import type { TelegramInstallationView } from '@/server/services/messenger/installationViews';
+import { maybeSynthesizeTelegramInstall } from '@/server/services/messenger/installationViews';
+import { sendMessengerPush } from '@/server/services/messenger/push';
 
 import type { ServerRuntimeRegistration } from '../types';
+import type { MessageRouteParams } from './MessageDispatcherService';
 import { MessageDispatcherService } from './MessageDispatcherService';
+import { createMessageImageStore } from './storeMessageImages';
 
 /**
  * Shape returned by `listMessengers` / `getMessengerDetail` to the tool runtime.
@@ -63,44 +81,84 @@ type MessengerInstallationView = {
 };
 
 /**
- * Telegram bots are env-backed singletons — they never get a row in
- * `messenger_installations` (see `installations/telegram.ts`). Without this
- * synthesis the agent's two-step outbound discovery (`listBots` → fallback
- * `listMessengers`) sees Telegram nowhere and falsely concludes the platform
- * is unconfigured, even while it is actively replying inside a Telegram chat.
- *
- * Returns a virtual install entry when both gates pass:
- *   1. Env has Telegram config (otherwise the singleton genuinely isn't set up)
- *   2. The current user has an account link for `platform='telegram'`
- *      (otherwise the install exists globally but isn't routed to this user —
- *      surfacing it would let any user send through a bot they haven't linked)
+ * Adapt the shared Telegram singleton view (which keeps `installedAt` as a
+ * `Date` for the TRPC contract) to this runtime's ISO-string shape.
  */
-const maybeSynthesizeTelegramInstall = async (
-  serverDB: NonNullable<Parameters<typeof MessengerInstallationModel.listByInstallerUserId>[0]>,
-  userId: string,
-): Promise<MessengerInstallationView | undefined> => {
-  const telegramConfig = await getMessengerTelegramConfig();
-  if (!telegramConfig) return undefined;
+const toTelegramInstallationView = (
+  view: TelegramInstallationView | undefined,
+): MessengerInstallationView | undefined =>
+  view && { ...view, installedAt: view.installedAt.toISOString() };
 
-  const link = await new MessengerAccountLinkModel(serverDB, userId).findByPlatform('telegram');
-  if (!link) return undefined;
-
-  return {
-    applicationId: TELEGRAM_INSTALLATION_KEY,
-    enterpriseId: null,
-    id: TELEGRAM_INSTALLATION_KEY,
-    installedAt:
-      link.createdAt instanceof Date ? link.createdAt.toISOString() : String(link.createdAt),
-    isEnterpriseInstall: false,
-    platform: 'telegram',
-    scope: '',
-    tenantId: '',
-    tenantName: 'Telegram',
-  };
+const synthesizeWechatInstalls = (
+  links: SafeMessengerAccountLink[],
+): MessengerInstallationView[] => {
+  return links
+    .filter(
+      (link): link is SafeMessengerAccountLink & { applicationId: string } =>
+        link.platform === 'wechat' && typeof link.applicationId === 'string',
+    )
+    .map((link) => ({
+      applicationId: link.applicationId,
+      enterpriseId: null,
+      id: link.id,
+      installedAt:
+        link.createdAt instanceof Date ? link.createdAt.toISOString() : String(link.createdAt),
+      isEnterpriseInstall: false,
+      platform: 'wechat',
+      scope: '',
+      tenantId: link.tenantId,
+      tenantName: 'WeChat',
+    }));
 };
 
 /**
- * Resolves credentials for the given platform from the user's configured bot providers.
+ * Resolve the caller's account links once, then derive every synthetic install
+ * from them: the Telegram singleton (no DB row) + user-owned WeChat accounts.
+ */
+const synthesizeInstallsFromLinks = async (
+  serverDB: NonNullable<Parameters<typeof MessengerInstallationModel.listByInstallerUserId>[0]>,
+  userId: string,
+): Promise<MessengerInstallationView[]> => {
+  const links = await new MessengerAccountLinkModel(serverDB, userId).list();
+  const telegramView = toTelegramInstallationView(await maybeSynthesizeTelegramInstall(links));
+
+  return [...(telegramView ? [telegramView] : []), ...synthesizeWechatInstalls(links)];
+};
+
+const disconnectWechatAccountLink = async (
+  link: SafeMessengerAccountLink,
+  userId: string,
+): Promise<void> => {
+  const installationKey = wechatInstallationKey(link.tenantId);
+  await new GatewayService().disconnectUserMessenger({
+    installationKey,
+    platform: 'wechat',
+    userId,
+  });
+  // Credential bundles rotate under the same installation key on rescan —
+  // evict the cached Chat SDK bot so webhooks rebuild it with fresh creds.
+  getMessengerRouter().invalidateBot(installationKey);
+  if (!link.applicationId) return;
+
+  const redis = getAgentRuntimeRedisClient();
+  if (redis)
+    await redis.del(
+      wechatLegacyTokenKey(link.applicationId, link.tenantId),
+      wechatWindowKey(link.applicationId, link.tenantId),
+      wechatPendingPushKey(link.applicationId, link.tenantId),
+    );
+};
+
+/**
+ * Resolves credentials for the given platform from the user's configured bot
+ * providers — the platform-level default used when a call names no connection
+ * and does not target the conversation the run is replying in.
+ *
+ * Bots whose runtime status is `failed` are skipped: their credentials are
+ * known-broken (e.g. an expired WeChat iLink session still accepts text but
+ * rejects every media upload), so auto-picking one silently loses whatever the
+ * agent sends. Other statuses are kept — `disconnected` is also the fallback
+ * when no status was ever recorded, which is normal for webhook bots.
  *
  * Every outbound platform service is built through here, so this is also the
  * runtime paid-feature gate: an enabled provider whose plan no longer covers
@@ -113,22 +171,46 @@ const resolveCredentials = async (
   userId: string,
 ): Promise<{ applicationId: string; credentials: Record<string, string> }> => {
   const providers = await providerModel.query({ platform });
-  const enabled = providers.find((p) => p.enabled);
-  if (!enabled?.credentials) {
+  const enabled = providers.filter((p) => p.enabled && p.credentials);
+  if (enabled.length === 0) {
     throw new Error(
       `No enabled ${platform} bot provider found. ` +
         `Please configure a ${platform} integration in your bot settings.`,
     );
   }
+  const statuses = await Promise.all(
+    enabled.map((p) => getBotRuntimeStatus(platform, p.applicationId)),
+  );
+  const usable = enabled.find((_, i) => statuses[i].status !== BOT_RUNTIME_STATUSES.failed);
+  if (!usable) {
+    throw new Error(
+      `Every enabled ${platform} bot is in a failed state (App ID: ${enabled
+        .map((p) => p.applicationId)
+        .join(', ')}). Reconnect it in the bot settings (WeChat: rescan its QR code), ` +
+        'or send through a System Bot connection from `listMessengers`.',
+    );
+  }
   await assertBotFeatureAccess({
     action: 'runtime',
-    applicationId: enabled.applicationId,
+    applicationId: usable.applicationId,
     platform,
     userId,
-    workspaceId: enabled.workspaceId ?? undefined,
+    workspaceId: usable.workspaceId ?? undefined,
   });
-  return { applicationId: enabled.applicationId, credentials: enabled.credentials };
+  return { applicationId: usable.applicationId, credentials: usable.credentials! };
 };
+
+/** Platforms the message tool can reach through a per-agent bot provider. */
+const PROVIDER_PLATFORMS = [
+  'discord',
+  'feishu',
+  'imessage',
+  'lark',
+  'qq',
+  'slack',
+  'telegram',
+  'wechat',
+] as const;
 
 export const messageRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
@@ -149,99 +231,211 @@ export const messageRuntime: ServerRuntimeRegistration = {
       context.workspaceId ?? undefined,
     );
 
-    const service = new MessageDispatcherService({
-      discord: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'discord', context.userId!);
-        return new DiscordMessageService(new DiscordApi(credentials.botToken));
-      },
-      feishu: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'feishu',
-          context.userId!,
-        );
-        return new FeishuMessageService(
-          new LarkApiClient(applicationId, credentials.appSecret, 'feishu'),
-          'feishu',
-        );
-      },
-      imessage: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'imessage',
-          context.userId!,
-        );
-        return new ImessageMessageService(
-          new ImessageDesktopBridgeApi({
-            applicationId,
-            deviceId: credentials.desktopDeviceId,
-            userId: context.userId!,
-          }),
-        );
-      },
-      lark: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'lark',
-          context.userId!,
-        );
-        return new FeishuMessageService(
-          new LarkApiClient(applicationId, credentials.appSecret, 'lark'),
-          'lark',
-        );
-      },
-      qq: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'qq',
-          context.userId!,
-        );
-        return new QQMessageService(new QQApiClient(applicationId, credentials.appSecret));
-      },
-      slack: async () => {
-        const { credentials } = await resolveCredentials(providerModel, 'slack', context.userId!);
-        return new SlackMessageService(new SlackApi(credentials.botToken));
-      },
-      telegram: async () => {
-        // Per-agent provider takes precedence; fall back to the env-backed
-        // singleton so the synthetic telegram:singleton install actually works.
-        try {
-          const { credentials } = await resolveCredentials(
-            providerModel,
-            'telegram',
-            context.userId!,
+    const userId = context.userId;
+    const serverDB = context.serverDB;
+
+    const serviceForProvider = async (platform: string) => {
+      const { applicationId, credentials } = await resolveCredentials(
+        providerModel,
+        platform,
+        userId,
+      );
+      return createMessageServiceForCredentials(platform, applicationId, credentials, { userId });
+    };
+
+    const serviceFactories: Record<string, () => Promise<MessageRuntimeService>> =
+      Object.fromEntries(
+        PROVIDER_PLATFORMS.map((platform) => [platform, () => serviceForProvider(platform)]),
+      );
+
+    // Per-agent provider takes precedence; fall back to the env-backed
+    // singleton so the synthetic telegram:singleton install actually works.
+    serviceFactories.telegram = async () => {
+      try {
+        return await serviceForProvider('telegram');
+      } catch (error) {
+        // A paid-gate denial is not a "provider missing" condition — falling
+        // back to the env singleton here would bypass the feature gate.
+        if (error instanceof BotFeatureAccessError) throw error;
+        const envConfig = await getMessengerTelegramConfig();
+        if (!envConfig) {
+          throw new Error(
+            'No enabled telegram bot provider found and no env-backed Telegram config available. ' +
+              'Please configure a telegram integration in your bot settings.',
+            { cause: error },
           );
-          return new TelegramMessageService(new TelegramApi(credentials.botToken));
-        } catch (error) {
-          // A paid-gate denial is not a "provider missing" condition — falling
-          // back to the env singleton here would bypass the feature gate.
-          if (error instanceof BotFeatureAccessError) throw error;
-          const envConfig = await getMessengerTelegramConfig();
-          if (!envConfig) {
-            throw new Error(
-              'No enabled telegram bot provider found and no env-backed Telegram config available. ' +
-                'Please configure a telegram integration in your bot settings.',
-              { cause: error },
-            );
-          }
-          return new TelegramMessageService(new TelegramApi(envConfig.botToken));
         }
-      },
-      wechat: async () => {
-        const { applicationId, credentials } = await resolveCredentials(
-          providerModel,
-          'wechat',
-          context.userId!,
+        return createMessageServiceForCredentials('telegram', TELEGRAM_INSTALLATION_KEY, {
+          botToken: envConfig.botToken,
+        });
+      }
+    };
+
+    // No usable per-agent WeChat bot (none, or all failed) → the user's own
+    // System Bot WeChat connection, which is where the user most likely talks
+    // to LobeHub anyway.
+    serviceFactories.wechat = async () => {
+      try {
+        return await serviceForProvider('wechat');
+      } catch (error) {
+        if (error instanceof BotFeatureAccessError) throw error;
+        const link = await new MessengerAccountLinkModel(serverDB, userId).findByPlatform('wechat');
+        if (!link) throw error;
+        return (await resolveMessengerInstallTarget({ serverDB, userId }, link.id)).service;
+      }
+    };
+
+    // The IM conversation this run replies in, as stamped on its topic by the
+    // bot/messenger router. Loaded at most once per runtime, only when a call
+    // actually needs it.
+    let inboundBotContext: Promise<ChatTopicBotContext | undefined> | undefined;
+    const loadInboundBotContext = () => {
+      inboundBotContext ??= (async () => {
+        if (!context.topicId) return undefined;
+        const topic = await new TopicModel(
+          serverDB,
+          userId,
+          context.workspaceId ?? undefined,
+        ).findById(context.topicId);
+        return topic?.metadata?.bot as ChatTopicBotContext | undefined;
+      })();
+      return inboundBotContext;
+    };
+
+    /**
+     * The connection the current conversation arrived on: the System Bot
+     * install (messenger runs carry `messengerInstallationKey`) or the
+     * per-agent bot whose `applicationId` received it. Undefined when that
+     * connection is gone — callers then fall back to platform routing.
+     */
+    const resolveInboundTarget = async (
+      botContext: ChatTopicBotContext,
+    ): Promise<ResolvedMessageTarget | undefined> => {
+      if (botContext.messengerInstallationKey) {
+        return resolveMessengerKeyTarget(botContext.platform, botContext.messengerInstallationKey);
+      }
+      const provider = await providerModel.findEnabledByApplicationId(
+        botContext.platform,
+        botContext.applicationId,
+      );
+      if (!provider) return undefined;
+      await assertBotFeatureAccess({
+        action: 'runtime',
+        applicationId: provider.applicationId,
+        platform: provider.platform,
+        userId,
+        workspaceId: provider.workspaceId ?? undefined,
+      });
+      return {
+        applicationId: provider.applicationId,
+        platform: botContext.platform as ResolvedMessageTarget['platform'],
+        service: createMessageServiceForCredentials(
+          provider.platform,
+          provider.applicationId,
+          provider.credentials as Record<string, any>,
+          { userId },
+        ),
+        settings: {},
+      };
+    };
+
+    const assertTargetPlatform = (
+      target: ResolvedMessageTarget,
+      params: MessageRouteParams,
+      label: string,
+    ) => {
+      if (target.platform !== params.platform) {
+        throw new Error(
+          `${label} is a ${target.platform} connection, but the call targets ${params.platform}.`,
         );
-        return new WechatMessageService(
-          new WechatApiClient(credentials.botToken, credentials.botId),
-          applicationId,
+      }
+    };
+
+    // Resolved connections, cached per routing key for this runtime.
+    const routedServices = new Map<string, MessageRuntimeService>();
+    const cachedRoute = async (
+      key: string,
+      resolve: () => Promise<MessageRuntimeService | undefined>,
+    ) => {
+      const cached = routedServices.get(key);
+      if (cached) return cached;
+      const service = await resolve();
+      if (service) routedServices.set(key, service);
+      return service;
+    };
+
+    /**
+     * Connection priority for every call: explicit `botId` → explicit
+     * `messengerInstallationId` → the connection the current conversation
+     * arrived on (same platform only) → the platform default above.
+     *
+     * Without the inbound step, a WeChat conversation held over the System
+     * Bot would have its files sent through whatever per-agent WeChat bot the
+     * account also has — including a failed one, whose expired session rejects
+     * every upload.
+     */
+    const resolveRoute = async (
+      params: MessageRouteParams,
+    ): Promise<MessageRuntimeService | undefined> => {
+      const { botId, messengerInstallationId } = params;
+      if (botId && messengerInstallationId) {
+        throw new Error('Provide at most one of botId or messengerInstallationId.');
+      }
+
+      if (botId) {
+        return cachedRoute(`bot:${botId}`, async () => {
+          const target = await resolveBotMessageTarget(providerModel, botId, { userId });
+          assertTargetPlatform(target, params, `Bot ${botId}`);
+          await assertBotFeatureAccess({
+            action: 'runtime',
+            applicationId: target.applicationId,
+            platform: target.platform,
+            userId,
+            workspaceId: target.provider.workspaceId ?? undefined,
+          });
+          return target.service;
+        });
+      }
+
+      if (messengerInstallationId) {
+        return cachedRoute(`messenger:${messengerInstallationId}`, async () => {
+          const target = await resolveMessengerInstallTarget(
+            { serverDB, userId },
+            messengerInstallationId,
+          );
+          assertTargetPlatform(target, params, `Messenger connection ${messengerInstallationId}`);
+          return target.service;
+        });
+      }
+
+      const botContext = await loadInboundBotContext();
+      if (botContext?.platform !== params.platform) return undefined;
+      return cachedRoute(
+        `inbound:${botContext.platform}`,
+        async () => (await resolveInboundTarget(botContext))?.service,
+      );
+    };
+
+    const service = new MessageDispatcherService(serviceFactories, { resolveRoute });
+
+    /**
+     * Bot runs act with the owner's credentials, so whoever talks to the bot in a shared channel
+     * could otherwise talk it into rewiring itself. Every call that changes a bot or messenger
+     * connection refuses unless the person who sent the message this run answers is the owner.
+     * Keyed on the run's own sender (`botContext`, built per inbound message), not the topic's
+     * first author; a run outside an IM conversation carries none and is unaffected.
+     */
+    const assertOwnerMayManageBots = () => {
+      if (context.botContext && !context.botContext.isOwner) {
+        throw new Error(
+          "Only the bot's owner can change its settings. Ask them to make this change.",
         );
-      },
-    });
+      }
+    };
 
     const botProvider: BotProviderQuery = {
       connectBot: async (botId) => {
+        assertOwnerMayManageBots();
         const bot = await providerModel.findById(botId);
         if (!bot) throw new Error(`Bot not found: ${botId}`);
         await assertBotFeatureAccess({
@@ -256,6 +450,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         return { status };
       },
       createBot: async (params) => {
+        assertOwnerMayManageBots();
         await assertBotFeatureAccess({
           action: 'manage',
           applicationId: params.applicationId,
@@ -263,12 +458,25 @@ export const messageRuntime: ServerRuntimeRegistration = {
           userId: context.userId!,
           workspaceId: context.workspaceId ?? undefined,
         });
-        const settings = mergeBotSettingsForPersist(params.platform, params.settings);
+        const settings = await mergeBotSettingsForCreate(
+          serverDB,
+          params.agentId,
+          params.platform,
+          params.settings,
+        );
         assertBotAccessSettings(settings);
+        await assertWatchKeywordsWritable({
+          applicationId: params.applicationId,
+          platform: params.platform,
+          settings,
+          userId: context.userId!,
+          workspaceId: context.workspaceId ?? undefined,
+        });
         const result = await providerModel.create({ ...params, settings });
         return { id: result.id, platform: params.platform };
       },
       deleteBot: async (botId) => {
+        assertOwnerMayManageBots();
         const existing = await providerModel.findById(botId);
         await providerModel.delete(botId);
         if (existing) {
@@ -292,7 +500,9 @@ export const messageRuntime: ServerRuntimeRegistration = {
           id: bot.id,
           platform: bot.platform,
           runtimeStatus: status.status,
-          settings: (bot.settings as Record<string, unknown>) ?? undefined,
+          // As the settings form shows them, so the agent reads the keys `updateBot` writes
+          // (`botWakeDuties`) even for a bot configured with a nested `botWake` object.
+          settings: flattenBotWakeSettings(bot.settings as Record<string, unknown>) ?? undefined,
         };
       },
       listBots: async () => {
@@ -333,6 +543,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         });
       },
       toggleBot: async (botId, enabled) => {
+        assertOwnerMayManageBots();
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
         if (enabled) {
@@ -355,6 +566,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         );
       },
       updateBot: async (botId, params) => {
+        assertOwnerMayManageBots();
         const existing = await providerModel.findById(botId);
         if (!existing) throw new Error(`Bot not found: ${botId}`);
         await assertBotFeatureAccess({
@@ -369,8 +581,21 @@ export const messageRuntime: ServerRuntimeRegistration = {
           {};
         if (params.credentials !== undefined) value.credentials = params.credentials;
         if (params.settings !== undefined) {
-          const merged = mergeBotSettingsForPersist(existing.platform, params.settings);
+          // A partial update: the keys the agent did not send keep their stored values.
+          const merged = mergeBotSettingsPatch(
+            existing.platform,
+            existing.settings as Record<string, unknown> | null,
+            params.settings,
+          );
           assertBotAccessSettings(merged);
+          await assertWatchKeywordsWritable({
+            applicationId: existing.applicationId,
+            existingSettings: existing.settings,
+            platform: existing.platform,
+            settings: merged,
+            userId: context.userId!,
+            workspaceId: existing.workspaceId ?? undefined,
+          });
           value.settings = merged;
         }
 
@@ -379,9 +604,10 @@ export const messageRuntime: ServerRuntimeRegistration = {
           {
             applicationId: existing.applicationId,
             platform: existing.platform,
+            settings: existing.settings,
             userId: context.userId!,
           },
-          {},
+          value,
         );
       },
 
@@ -405,7 +631,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         // install will still appear here; the actual send/uninstall call will
         // surface the underlying token error if and when it matters.
         const installations: MessengerInstallationView[] = rows
-          .filter((row) => !row.revokedAt)
+          .filter((row) => !row.revokedAt && row.platform !== 'wechat')
           .map((row) => ({
             applicationId: row.applicationId,
             enterpriseId:
@@ -423,8 +649,9 @@ export const messageRuntime: ServerRuntimeRegistration = {
               ((row.metadata as Record<string, unknown> | null)?.tenantName as string) ?? '',
           }));
 
-        const telegramView = await maybeSynthesizeTelegramInstall(context.serverDB, context.userId);
-        if (telegramView) installations.push(telegramView);
+        installations.push(
+          ...(await synthesizeInstallsFromLinks(context.serverDB, context.userId)),
+        );
 
         return installations;
       },
@@ -437,12 +664,36 @@ export const messageRuntime: ServerRuntimeRegistration = {
         // env config + the caller's account link. Without this branch the
         // synthetic install id returned by `listMessengers` would 404 here.
         if (installationId === TELEGRAM_INSTALLATION_KEY) {
-          const telegramView = await maybeSynthesizeTelegramInstall(
+          const links = await new MessengerAccountLinkModel(
             context.serverDB,
             context.userId,
+          ).list();
+          const telegramView = toTelegramInstallationView(
+            await maybeSynthesizeTelegramInstall(links),
           );
           if (!telegramView) return null;
           return { ...telegramView, revokedAt: null };
+        }
+        const wechatLink = await new MessengerAccountLinkModel(
+          context.serverDB,
+          context.userId,
+        ).findById(installationId, 'wechat');
+        if (wechatLink?.applicationId) {
+          return {
+            applicationId: wechatLink.applicationId,
+            enterpriseId: null,
+            id: wechatLink.id,
+            installedAt:
+              wechatLink.createdAt instanceof Date
+                ? wechatLink.createdAt.toISOString()
+                : String(wechatLink.createdAt),
+            isEnterpriseInstall: false,
+            platform: 'wechat',
+            revokedAt: null,
+            scope: '',
+            tenantId: wechatLink.tenantId,
+            tenantName: 'WeChat',
+          };
         }
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
         const row = await MessengerInstallationModel.findById(
@@ -477,6 +728,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       uninstallMessenger: async (installationId) => {
+        assertOwnerMayManageBots();
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required to uninstall');
         }
@@ -490,6 +742,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
               'Telegram is a global env-backed bot and cannot be uninstalled here. ' +
               "Use unlinkMessenger({ platform: 'telegram' }) to remove your own routing.",
           });
+        }
+        const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        const wechatLink = await linkModel.findById(installationId, 'wechat');
+        if (wechatLink) {
+          await linkModel.delete(wechatLink.id);
+          await disconnectWechatAccountLink(wechatLink, context.userId);
+          return;
         }
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);
         const row = await MessengerInstallationModel.findById(
@@ -559,6 +818,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       setMessengerActiveAgent: async (params) => {
+        assertOwnerMayManageBots();
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required');
         }
@@ -568,7 +828,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
           const [agentRow] = await context.serverDB
             .select({ id: agents.id })
             .from(agents)
-            .where(and(eq(agents.id, params.agentId), eq(agents.userId, context.userId)))
+            .where(
+              and(
+                eq(agents.id, params.agentId),
+                eq(agents.userId, context.userId),
+                notTrashed(agents.isDeleted),
+              ),
+            )
             .limit(1);
           if (!agentRow) {
             throw new TRPCError({
@@ -596,15 +862,66 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
 
       unlinkMessenger: async (params) => {
+        assertOwnerMayManageBots();
         if (!context.userId || !context.serverDB) {
           throw new Error('userId and serverDB are required');
         }
         const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        if (params.platform === 'wechat') {
+          const links = (await linkModel.list()).filter(
+            (link) =>
+              link.platform === 'wechat' &&
+              (params.tenantId === undefined || link.tenantId === params.tenantId),
+          );
+          await linkModel.deleteByPlatform(params.platform, params.tenantId);
+          await Promise.all(
+            links.map((link) => disconnectWechatAccountLink(link, context.userId!)),
+          );
+          return;
+        }
         await linkModel.deleteByPlatform(params.platform, params.tenantId);
+      },
+
+      // Proactive push into the caller's own DM. The runtime already resolved
+      // Slack workspace ambiguity, so this is a straight pass-through to the
+      // platform-agnostic push entry (same one the settings UI test-push uses).
+      sendMessengerPush: async (params) => {
+        if (!context.userId || !context.serverDB) {
+          throw new Error('userId and serverDB are required to push messenger messages');
+        }
+        // The TRPC route caps this with Zod, but this runtime calls the push
+        // service directly and `BaseExecutor` dispatches params unvalidated —
+        // so without this guard the advertised limit would hold on the client
+        // path and silently vanish on the server path (the Cloud default).
+        // Rejecting beats truncating: a half-delivered notification reads as
+        // complete to the recipient, while an error lets the agent summarize
+        // or split and retry.
+        if (params.content.length > MESSENGER_PUSH_CONTENT_MAX_LENGTH) {
+          throw new Error(
+            `Message content is ${params.content.length} characters, exceeding the ${MESSENGER_PUSH_CONTENT_MAX_LENGTH}-character limit. Summarize or split it before pushing.`,
+          );
+        }
+        const result = await sendMessengerPush({
+          content: params.content,
+          platform: params.platform,
+          serverDB: context.serverDB,
+          tenantId: params.tenantId,
+          userId: context.userId,
+        });
+        return { remaining: result.remaining, status: result.status };
       },
     };
 
-    return new MessageExecutionRuntime({ botProvider, service });
+    return new MessageExecutionRuntime({
+      botProvider,
+      resolveImages: createMessageImageStore({
+        agentId: context.agentId,
+        serverDB,
+        userId,
+        workspaceId: context.workspaceId,
+      }),
+      service,
+    });
   },
   identifier: MessageToolIdentifier,
 };

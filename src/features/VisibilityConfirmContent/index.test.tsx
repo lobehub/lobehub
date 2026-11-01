@@ -2,23 +2,9 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import VisibilityConfirmContent from './index';
-
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Flexbox: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="content-shell">{children}</div>
-  ),
-  Icon: ({ size }: { icon: unknown; size?: number }) => (
-    <span data-icon-size={size} data-testid="icon" />
-  ),
-}));
 
 describe('VisibilityConfirmContent', () => {
   it('renders 3 makePrivate items in escalation order with an irreversible suffix on the last', () => {
@@ -38,5 +24,13 @@ describe('VisibilityConfirmContent', () => {
     expect(screen.getByText('visibilityConfirm.publish.itemReversible')).toBeTruthy();
     expect(screen.getByText('visibilityConfirm.publish.itemLoaded')).toBeTruthy();
     expect(screen.getAllByText('visibilityConfirm.irreversible')).toHaveLength(1);
+  });
+
+  // Publishing no longer asks for member permissions up front —
+  // the resource lands on the workspace default and the owner tunes it later
+  // from the resource's own "Member Permissions" entry.
+  it('does not render a member-permission select when publishing', () => {
+    render(<VisibilityConfirmContent variant="publish" />);
+    expect(screen.queryByText('permission.generalAccess.label')).toBeNull();
   });
 });

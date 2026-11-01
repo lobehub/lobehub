@@ -5,10 +5,21 @@ import { isSameTabTarget, normalizeTabScope, resolveTabScope, tabTargetId } from
 describe('desktop tab scope', () => {
   it('marks known top-level desktop routes as personal scope', () => {
     expect(resolveTabScope('/agent/personal-agent')).toEqual({ type: 'personal' });
-    expect(resolveTabScope('/fleet')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/apps')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/settings/profile')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/verify/run_1')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/invite/abc')).toEqual({ type: 'personal' });
+  });
+
+  // Regression: mirrored routes missing from the personal segment list used to
+  // resolve as a phantom `workspace:<segment>` scope, so entering a project
+  // page scope-swapped the tab and replayed stale tabs from that bucket.
+  it('marks project, agents and goal routes as personal scope, not phantom workspaces', () => {
+    expect(resolveTabScope('/project/prj_1/topic/tpc_1')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/project/prj_1/acceptance')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/projects')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/agents')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/goal/goal_1')).toEqual({ type: 'personal' });
   });
 
   it('uses the first segment as workspace scope for workspace-prefixed URLs', () => {

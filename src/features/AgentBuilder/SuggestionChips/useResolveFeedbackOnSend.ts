@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { conversationSelectors, useConversationStore } from '@/features/Conversation';
+import { useSingleton } from '@/hooks/useSingleton';
 
 import { useBuilderSuggestionFeedbackStore } from './feedbackStore';
 
@@ -19,20 +20,20 @@ export const useResolveFeedbackOnSend = () => {
   const resolveOnSend = useBuilderSuggestionFeedbackStore((s) => s.resolveOnSend);
 
   const initializedRef = useRef(false);
-  const seenIdsRef = useRef<Set<string>>(new Set());
+  const seenIds = useSingleton(() => new Set<string>());
 
   useEffect(() => {
     if (!initializedRef.current) {
       initializedRef.current = true;
-      for (const m of messages) seenIdsRef.current.add(m.id);
+      for (const m of messages) seenIds.add(m.id);
       return;
     }
 
-    const newUserMessage = messages.find((m) => m.role === 'user' && !seenIdsRef.current.has(m.id));
-    for (const m of messages) seenIdsRef.current.add(m.id);
+    const newUserMessage = messages.find((m) => m.role === 'user' && !seenIds.has(m.id));
+    for (const m of messages) seenIds.add(m.id);
 
     if (newUserMessage && typeof newUserMessage.content === 'string') {
       resolveOnSend(newUserMessage.content);
     }
-  }, [messages, resolveOnSend]);
+  }, [messages, resolveOnSend, seenIds]);
 };

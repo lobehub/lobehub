@@ -1,9 +1,8 @@
 'use client';
 
 import { nanoid } from '@lobechat/utils';
-import { Flexbox } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, Flexbox, toast } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { MessageCirclePlusIcon } from 'lucide-react';
 import type { CSSProperties, PointerEvent, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -11,8 +10,9 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
-import { useFileStore } from '@/store/file';
+import { fileChatSelectors, useFileStore } from '@/store/file';
 
+import { useConversationStore } from '../../../store';
 import {
   createTextSelectionContext,
   getRangeFirstLineRect,
@@ -33,25 +33,22 @@ interface TextSelectionActionLayerProps {
   disabled?: boolean;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  root: css`
-    display: contents;
-  `,
-  toolbar: css`
-    position: fixed;
-    z-index: 10000;
-    transform: translate(-50%, -100%);
-
-    padding: 4px;
-    border: 1px solid light-dark(rgb(229 231 235), rgb(64 64 64));
-    border-radius: 999px;
-
-    background: light-dark(#fff, #1f1f1f);
-    box-shadow:
-      0 8px 24px rgb(0 0 0 / 12%),
-      0 2px 8px rgb(0 0 0 / 8%);
-  `,
-}));
+const styles = stylex.create({
+  root: { display: 'contents' },
+  toolbar: {
+    position: 'fixed',
+    zIndex: 10000,
+    transform: 'translate(-50%, -100%)',
+    padding: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'light-dark(rgb(229 231 235), rgb(64 64 64))',
+    borderRadius: '999px',
+    backgroundColor: 'light-dark(#fff, #1f1f1f)',
+    backgroundImage: 'none',
+    boxShadow: '0 8px 24px rgb(0 0 0 / 12%), 0 2px 8px rgb(0 0 0 / 8%)',
+  },
+});
 
 const focusChatInputSoon = () => {
   window.setTimeout(() => {
@@ -67,6 +64,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const [activeSelection, setActiveSelection] = useState<ActiveSelection | null>(null);
 
+  const composerTarget = useConversationStore((s) => s.composerTarget);
   const addChatContextSelection = useFileStore((s) => s.addChatContextSelection);
 
   const hideToolbar = useCallback(() => {
@@ -79,7 +77,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
   }, [hideToolbar]);
 
   const updateSelection = useCallback(() => {
-    if (disabled) {
+    if (disabled || !composerTarget.writable) {
       hideToolbar();
       return;
     }
@@ -114,7 +112,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
       position: getSelectionToolbarPosition(rect, window.innerWidth),
       text,
     });
-  }, [disabled, hideToolbar]);
+  }, [composerTarget.writable, disabled, hideToolbar]);
 
   const scheduleSelectionUpdate = useCallback(() => {
     window.setTimeout(updateSelection, 0);
@@ -144,9 +142,11 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
 
   const addSelectionToConversation = useCallback(() => {
     const text = activeSelection?.text;
-    if (!text) return;
+    if (!text || !composerTarget.writable) return;
 
-    const currentSelections = useFileStore.getState().chatContextSelections;
+    const currentSelections = fileChatSelectors.chatContextSelections(composerTarget.contextKey)(
+      useFileStore.getState(),
+    );
     const existing = currentSelections.find((item) => isSameTextSelectionContext(item, text));
     const context =
       existing ??
@@ -156,9 +156,9 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
         title: t('textSelection.title'),
       });
 
-    addChatContextSelection(context);
+    addChatContextSelection({ contextKey: composerTarget.contextKey, selection: context });
     toast.success(t('textSelection.added'));
-  }, [activeSelection?.text, addChatContextSelection, t]);
+  }, [activeSelection?.text, addChatContextSelection, composerTarget, t]);
 
   const handleAddToConversation = useCallback(() => {
     addSelectionToConversation();
@@ -180,7 +180,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
 
   return (
     <div
-      className={styles.root}
+      {...stylex.props(styles.root)}
       ref={rootRef}
       onKeyUp={scheduleSelectionUpdate}
       onPointerUp={scheduleSelectionUpdate}
@@ -191,7 +191,7 @@ const TextSelectionActionLayer = memo<TextSelectionActionLayerProps>(({ children
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.toolbar}
+            className={stylex.props(styles.toolbar).className}
             gap={2}
             ref={toolbarRef}
             style={toolbarStyle}

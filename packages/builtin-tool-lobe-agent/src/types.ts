@@ -1,7 +1,7 @@
 export const LobeAgentIdentifier = 'lobe-agent';
 
 export const LobeAgentApiName = {
-  analyzeVisualMedia: 'analyzeVisualMedia',
+  analyzeMedia: 'analyzeMedia',
   askUserQuestion: 'askUserQuestion',
   callSubAgent: 'callSubAgent',
   clearTodos: 'clearTodos',
@@ -9,6 +9,7 @@ export const LobeAgentApiName = {
   createTodos: 'createTodos',
   updatePlan: 'updatePlan',
   updateTodos: 'updateTodos',
+  vent: 'vent',
 } as const;
 
 export type LobeAgentApiNameType = (typeof LobeAgentApiName)[keyof typeof LobeAgentApiName];
@@ -25,21 +26,106 @@ export type {
   AskUserQuestionOption,
 } from '@lobechat/builtin-tool-user-interaction';
 
-export interface AnalyzeVisualMediaParams {
+// ==================== Vent ====================
+
+/**
+ * Friction categories an agent may vent about. These describe blockers in the
+ * agent's own working conditions, reported back to the platform builders — not
+ * user-facing answers.
+ */
+export const VENT_CATEGORIES = [
+  'missing_tool',
+  'schema_mismatch',
+  'doc_conflict',
+  'platform_bug',
+  'env_limitation',
+  'other',
+] as const;
+
+/** Severity describing how badly the friction blocked the task. */
+export const VENT_SEVERITIES = ['low', 'medium', 'high'] as const;
+
+/** Evidence reference type accepted alongside a vent. */
+export const VENT_EVIDENCE_REF_TYPES = [
+  'tool_call',
+  'message',
+  'operation',
+  'topic',
+  'task',
+  'source',
+] as const;
+
+/** Friction category reported by a running agent. */
+export type VentCategory = (typeof VENT_CATEGORIES)[number];
+
+/** Severity assigned by the running agent to one vent. */
+export type VentSeverity = (typeof VENT_SEVERITIES)[number];
+
+/** Evidence reference type accepted alongside a vent. */
+export type VentEvidenceRefType = (typeof VENT_EVIDENCE_REF_TYPES)[number];
+
+/** Optional reference that grounds one vent report. */
+export interface VentEvidenceRef {
+  /** Stable evidence identifier in its source domain. */
+  id: string;
+  /** Optional short note explaining why this evidence matters. */
+  summary?: string;
+  /** Evidence object type. */
+  type: VentEvidenceRefType;
+}
+
+/** Parameters for the vent API. */
+export interface VentParams {
+  /** How many times the agent failed at this before venting. */
+  attempts?: number;
+  /** Friction category the vent is about. */
+  category: VentCategory;
+  /** What happened, what was expected, and what is blocked. */
+  details: string;
+  /** Evidence references that ground the report. */
+  evidenceRefs?: VentEvidenceRef[];
+  /** Severity describing how badly the friction blocked the task. */
+  severity: VentSeverity;
+  /** One-line summary of the friction. */
+  summary: string;
+  /** Tool / API / surface involved, when one specific component is to blame. */
+  toolName?: string;
+}
+
+export type VentRejectionReason =
+  'duplicate' | 'empty_content' | 'invalid_category' | 'invalid_severity' | 'rate_limited';
+
+export type VentStateReason = VentRejectionReason | 'missing_context' | 'runtime_error' | null;
+
+/** State persisted on the vent tool message for inspector display. */
+export interface VentState {
+  /** Friction category for inspector display. */
+  category?: VentCategory;
+  /** Rejection or runtime reason. */
+  reason?: VentStateReason;
+  /** Whether the vent crossed the recording boundary. */
+  recorded: boolean;
+  /** Severity for inspector display. */
+  severity?: VentSeverity;
+  /** Stable vent id for recorded reports. */
+  ventId?: null | string;
+}
+
+export interface AnalyzeMediaParams {
   question: string;
   refs?: string[];
   urls?: string[];
 }
 
-export interface AnalyzeVisualMediaFileSummary {
+export interface AnalyzeMediaFileSummary {
   id?: string;
   name: string;
   ref: string;
-  type: 'image' | 'video';
+  type: 'audio' | 'image' | 'video';
 }
 
-export interface AnalyzeVisualMediaState {
-  files?: AnalyzeVisualMediaFileSummary[];
+export interface AnalyzeMediaState {
+  files?: AnalyzeMediaFileSummary[];
   model?: string;
   provider?: string;
   trigger?: string;
@@ -56,7 +142,19 @@ export interface CallSubAgentParams {
   description: string;
   inheritMessages?: boolean;
   instruction: string;
+  /**
+   * Start the sub-agent and return right away instead of waiting for it. The
+   * parent keeps working; when the sub-agent finishes, its result reaches the
+   * parent as a new message (waking it up if its turn has already ended).
+   */
+  runInBackground?: boolean;
   runInClient?: boolean;
+  /**
+   * Id of an earlier sub-agent (from its result's `<sub_agent id>` trailer).
+   * When set, `instruction` is sent as a new turn to that same sub-agent, which
+   * keeps its previous history, instead of starting a fresh one.
+   */
+  subAgentId?: string;
   timeout?: number;
 }
 
@@ -64,6 +162,17 @@ export interface CallSubAgentParams {
 export interface SubAgentRunStats {
   /** Model the sub-agent ran on */
   model?: string;
+  /**
+   * Cost of the sub-agent run. Carried here (rather than only on the child's own
+   * messages) because the parent's usage tray sums per-message usage, and the
+   * sub-agent's messages live in an isolation thread the parent never loads —
+   * this tool message is where the child's spend enters the parent's ledger.
+   */
+  totalCost?: number;
+  /** Input tokens consumed by the sub-agent run */
+  totalInputTokens?: number;
+  /** Output tokens produced by the sub-agent run */
+  totalOutputTokens?: number;
   /** Total tokens consumed by the sub-agent run */
   totalTokens?: number;
   /** Number of tool calls the sub-agent made */
@@ -78,6 +187,36 @@ export interface SubAgentRunStats {
  * Inspector row.
  */
 export interface CallSubAgentState extends SubAgentRunStats {
+  /**
+   * Started with `runInBackground`: the tool result is only the start receipt,
+   * and the sub-agent's answer is delivered to the parent as a separate
+   * message. The completion bridge reads this to choose that delivery instead
+   * of backfilling the result and resuming a parked parent.
+   */
+  background?: boolean;
+  /**
+   * When the finished background result was handed to the parent. Unset while
+   * the result is still waiting for the parent's conversation to go idle.
+   */
+  deliveredAt?: string;
+  /**
+   * Live totals streamed from the running sub-agent, patched into the store in
+   * memory only (never persisted). Held in its own key so it can't be mistaken
+   * for the authoritative flat stats, which are written exactly once — by the
+   * completion bridge — when the run finishes.
+   */
+  progress?: SubAgentRunStats;
+  /**
+   * Final answer of a background run, held here for its delivery to the parent
+   * — the tool result itself stays the start receipt the parent already read.
+   */
+  result?: string;
+  /**
+   * Who a background run's answer is delivered as: the named `callAgent`
+   * target, or the parent itself (with the call's description) for a clone.
+   */
+  sender?: { agentId: string; name: string };
+  status?: 'pending' | 'completed' | 'error';
   threadId: string;
 }
 
@@ -139,8 +278,12 @@ export interface TodoUpdateOperation {
   status?: TodoStatus;
   /** For 'add': the text to add */
   text?: string;
-  /** Operation type */
-  type: TodoUpdateOperationType;
+  /**
+   * Operation type. Required by the manifest schema, but weak
+   * instruction-following models omit it in practice, so the runtime infers it
+   * from the other fields when the intent is unambiguous.
+   */
+  type?: TodoUpdateOperationType;
 }
 
 /**

@@ -1,8 +1,7 @@
 'use client';
 
 import { ChatInput, ChatInputActionBar, SendButton } from '@lobehub/editor/react';
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, TextArea } from '@lobehub/ui';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { memo } from 'react';
 

@@ -1,9 +1,12 @@
-import { toast } from '@lobehub/ui/base-ui';
+import type { ChatContextContent } from '@lobechat/types';
+import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { notification } from '@/components/AntdStaticMethods';
+import { UnreadableServerResponseError } from '@/libs/trpc/client/unreadableServerResponse';
 import { fileService } from '@/services/file';
+import { ragService } from '@/services/rag';
+import { shareChatService } from '@/services/shareChat';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { useFileStore as useStore } from '../../store';
@@ -22,19 +25,9 @@ const mockAgentMode = ({
   vi.spyOn(agentByIdSelectors, 'isAgentHeterogeneousById').mockReturnValue(() => heterogeneous);
 };
 
-vi.mock('zustand/traditional');
-
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: {
-    error: vi.fn(),
-  },
-}));
-
-// Mock necessary modules and functions
-vi.mock('@/components/AntdStaticMethods', () => ({
-  notification: {
-    error: vi.fn(),
-  },
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
 
 vi.mock('@/services/rag', () => ({
@@ -43,8 +36,25 @@ vi.mock('@/services/rag', () => ({
   },
 }));
 
+const { mockUploadShareVisitorFile } = vi.hoisted(() => ({
+  mockUploadShareVisitorFile: vi.fn(),
+}));
+vi.mock('./shareVisitorUpload', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  uploadShareVisitorFile: mockUploadShareVisitorFile,
+}));
+
+vi.mock('@/services/shareChat', () => ({
+  shareChatService: {
+    removeFile: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
 vi.mock('i18next', () => ({
-  t: (key: string, options?: { reason?: string }) => {
+  t: (
+    key: string,
+    options?: { message?: string; reason?: string; requestId?: string; status?: number },
+  ) => {
     if (key === 'upload.permissionDenied') {
       return 'You do not have permission to upload files in this workspace.';
     }
@@ -52,6 +62,12 @@ vi.mock('i18next', () => ({
     if (key === 'upload.uploadFailed') return 'File upload failed.';
 
     if (key === 'upload.unknownError') return `Error reason: ${options?.reason}`;
+
+    if (key === 'upload.serviceUnavailable') return 'The upload service is unavailable.';
+
+    if (key === 'response.withRequestDetail') {
+      return `${options?.message} (HTTP ${options?.status} · Request ID: ${options?.requestId})`;
+    }
 
     return key;
   },
@@ -77,6 +93,112 @@ beforeEach(() => {
 });
 
 describe('useFileStore:chat', () => {
+  it('isolates context selections by conversation key', () => {
+    const { result } = renderHook(() => useStore());
+    const sharedIdSelectionA: ChatContextContent = {
+      content: 'selection A',
+      id: 'shared-selection',
+      type: 'text',
+    };
+    const sharedIdSelectionB: ChatContextContent = {
+      content: 'selection B',
+      id: 'shared-selection',
+      type: 'text',
+    };
+
+    act(() => {
+      useStore.setState({ chatContextSelectionsByContext: {} });
+      result.current.addChatContextSelection({
+        contextKey: 'topic-a',
+        selection: sharedIdSelectionA,
+      });
+      result.current.addChatContextSelection({
+        contextKey: 'topic-b',
+        selection: sharedIdSelectionB,
+      });
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      'topic-a': [sharedIdSelectionA],
+      'topic-b': [sharedIdSelectionB],
+    });
+
+    act(() => {
+      result.current.removeChatContextSelection({
+        contextKey: 'topic-a',
+        id: sharedIdSelectionA.id,
+      });
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      'topic-b': [sharedIdSelectionB],
+    });
+
+    act(() => {
+      result.current.clearChatContextSelections('topic-b');
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({});
+  });
+
+  it('moves context selections to a new conversation key without overwriting the target', () => {
+    const { result } = renderHook(() => useStore());
+    const sourceSelection: ChatContextContent = {
+      content: 'source selection',
+      id: 'shared-selection',
+      type: 'text',
+    };
+    const targetSelection: ChatContextContent = {
+      content: 'stale target selection',
+      id: 'shared-selection',
+      type: 'text',
+    };
+    const targetOnlySelection: ChatContextContent = {
+      content: 'target only',
+      id: 'target-only',
+      type: 'text',
+    };
+
+    act(() => {
+      useStore.setState({
+        chatContextSelectionsByContext: {
+          'topic-new': [sourceSelection],
+          'topic-real': [targetSelection, targetOnlySelection],
+        },
+      });
+      result.current.moveChatContextSelections('topic-new', 'topic-real');
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      'topic-real': [sourceSelection, targetOnlySelection],
+    });
+  });
+
+  it('restores submitted selections without overwriting context added while sending', () => {
+    const { result } = renderHook(() => useStore());
+    const submittedSelection: ChatContextContent = {
+      content: 'submitted selection',
+      id: 'submitted',
+      type: 'text',
+    };
+    const newerSelection: ChatContextContent = {
+      content: 'newer selection',
+      id: 'newer',
+      type: 'text',
+    };
+
+    act(() => {
+      useStore.setState({
+        chatContextSelectionsByContext: { topic: [newerSelection] },
+      });
+      result.current.restoreChatContextSelections('topic', [submittedSelection]);
+    });
+
+    expect(result.current.chatContextSelectionsByContext).toEqual({
+      topic: [submittedSelection, newerSelection],
+    });
+  });
+
   it('clearChatUploadFileList should clear the inputFilesList', () => {
     const { result } = renderHook(() => useStore());
 
@@ -91,6 +213,40 @@ describe('useFileStore:chat', () => {
     });
 
     expect(result.current.chatUploadFileList).toEqual([]);
+  });
+
+  it('clears only submitted uploads while retaining newer files and their status', () => {
+    const { result } = renderHook(() => useStore());
+    const newerFile = { id: 'new', status: 'uploading' };
+    act(() => {
+      useStore.setState({ chatUploadFileList: [{ id: 'submitted' }, newerFile] as any });
+      result.current.clearChatUploadFileList(['submitted']);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+    act(() => {
+      result.current.clearChatUploadFileList([]);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+  });
+
+  it('restoreChatUploadFileList puts cleared uploads back without duplicating newer drafts', () => {
+    const { result } = renderHook(() => useStore());
+    const submittedFile = { id: 'submitted', status: 'success' };
+    const newerFile = { id: 'new', status: 'uploading' };
+
+    // The composer cleared everything on send; a fresh draft arrived while the
+    // rejected send was still unwinding.
+    act(() => {
+      useStore.setState({ chatUploadFileList: [newerFile] as any });
+      result.current.restoreChatUploadFileList([submittedFile, newerFile] as any);
+    });
+
+    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
+
+    act(() => {
+      result.current.restoreChatUploadFileList([]);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
   });
 
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {
@@ -170,7 +326,7 @@ describe('useFileStore:chat', () => {
     expect(uploadWithProgress).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a permission denied description when upload is rejected by RBAC', async () => {
+  it('keeps a permission-denied upload in place with a retryable error', async () => {
     mockAgentMode({ enableAgentMode: false, heterogeneous: false });
 
     const { result } = renderHook(() => useStore());
@@ -185,13 +341,161 @@ describe('useFileStore:chat', () => {
       await result.current.uploadChatFiles([file], AGENT_ID);
     });
 
-    expect(notification.error).toHaveBeenCalledWith({
-      description: 'You do not have permission to upload files in this workspace.',
-      message: 'File upload failed.',
+    expect(result.current.chatUploadFileList).toEqual([
+      expect.objectContaining({
+        agentId: AGENT_ID,
+        error: 'You do not have permission to upload files in this workspace.',
+        id: 'test.txt',
+        status: 'error',
+      }),
+    ]);
+  });
+
+  // Regression: a gateway HTML error page answered the upload API and the card
+  // showed `Error reason: Unexpected token '<', "<!doctype "... is not valid JSON`.
+  it('shows the upload-unavailable copy with the request id of an HTML error page', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const file = new File(['docx'], 'report.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+
+    // tRPC wraps an error thrown by the link's fetch as the client error's cause.
+    vi.spyOn(result.current, 'uploadWithProgress').mockRejectedValue(
+      new Error('wrapped', {
+        cause: new UnreadableServerResponseError({ requestId: 'a4f7-SJC', status: 502 }),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.uploadChatFiles([file], AGENT_ID);
+    });
+
+    expect(result.current.chatUploadFileList).toEqual([
+      expect.objectContaining({
+        error: 'The upload service is unavailable. (HTTP 502 · Request ID: a4f7-SJC)',
+        id: 'report.docx',
+        status: 'error',
+      }),
+    ]);
+  });
+
+  describe('uploadChatFiles as an agent-share visitor', () => {
+    const SHARE_ID = 'share-1';
+
+    it('routes the upload through the share path, tags the draft with shareId, and skips the visitor-side parse', async () => {
+      // The visitor's agent store never holds the creator's agent, so the
+      // mode selectors would say "agent mode" here only by accident.
+      mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+      mockUploadShareVisitorFile.mockResolvedValue({ id: 'file-share', url: 'https://s3/doc' });
+      const { result } = renderHook(() => useStore());
+      const uploadWithProgress = vi.spyOn(result.current, 'uploadWithProgress');
+      const file = new File(['test'], 'notes.pdf', { type: 'application/pdf' });
+
+      await act(async () => {
+        await result.current.uploadChatFiles([file], AGENT_ID, { shareId: SHARE_ID });
+      });
+
+      expect(mockUploadShareVisitorFile).toHaveBeenCalledWith(
+        expect.objectContaining({ file, shareId: SHARE_ID }),
+      );
+      expect(uploadWithProgress).not.toHaveBeenCalled();
+      // Creator-owned row: the visitor's `document.parseFileContent` could not
+      // reach it; the run parses it on the creator's account instead.
+      expect(ragService.parseFileContent).not.toHaveBeenCalled();
+      expect(result.current.chatUploadFileList).toEqual([
+        expect.objectContaining({ agentId: AGENT_ID, id: 'notes.pdf', shareId: SHARE_ID }),
+      ]);
+    });
+
+    it('always enforces the chat file-type whitelist on the share path', async () => {
+      mockAgentMode({ enableAgentMode: true, heterogeneous: true });
+      const { result } = renderHook(() => useStore());
+      const file = new File(['x'], 'tool.exe', { type: 'application/octet-stream' });
+
+      await act(async () => {
+        await result.current.uploadChatFiles([file], AGENT_ID, { shareId: SHARE_ID });
+      });
+
+      expect(mockUploadShareVisitorFile).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalled();
+      expect(result.current.chatUploadFileList).toEqual([]);
+    });
+
+    it('rejects a file over SHARE_VISITOR_MAX_FILE_SIZE before any request', async () => {
+      mockAgentMode({ enableAgentMode: false, heterogeneous: false });
+      const { result } = renderHook(() => useStore());
+      const big = new File([''], 'big.pdf', { type: 'application/pdf' });
+      Object.defineProperty(big, 'size', { value: 33 * 1024 * 1024 });
+
+      await act(async () => {
+        await result.current.uploadChatFiles([big], AGENT_ID, { shareId: SHARE_ID });
+      });
+
+      expect(mockUploadShareVisitorFile).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('share.visitor.upload.fileTooLarge');
+      expect(result.current.chatUploadFileList).toEqual([]);
+    });
+
+    it("surfaces the creator's storage block as share copy, not the visitor's own plan", async () => {
+      mockAgentMode({ enableAgentMode: false, heterogeneous: false });
+      mockUploadShareVisitorFile.mockRejectedValue(new Error('storage_block:upgrade_required'));
+      const { result } = renderHook(() => useStore());
+      const file = new File(['test'], 'notes.pdf', { type: 'application/pdf' });
+
+      await act(async () => {
+        await result.current.uploadChatFiles([file], AGENT_ID, { shareId: SHARE_ID });
+      });
+
+      expect(result.current.chatUploadFileList).toEqual([
+        expect.objectContaining({
+          error: 'share.visitor.upload.creatorStorageBlocked',
+          id: 'notes.pdf',
+          status: 'error',
+        }),
+      ]);
     });
   });
 
   describe('removeChatUploadFile', () => {
+    it('removes a share-uploaded draft through the share endpoint, not the visitor file API', async () => {
+      const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        useStore.setState({
+          chatUploadFileList: [{ id: 'file-1', shareId: 'share-1', status: 'success' }] as any,
+        });
+      });
+
+      await act(async () => {
+        await result.current.removeChatUploadFile('file-1');
+      });
+
+      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(shareChatService.removeFile).toHaveBeenCalledWith('share-1', 'file-1');
+      expect(removeFile).not.toHaveBeenCalled();
+    });
+
+    it('drops an unsettled share draft locally without calling the share endpoint', async () => {
+      const { result } = renderHook(() => useStore());
+
+      act(() => {
+        // Still keyed by file name: nothing exists server-side to delete.
+        useStore.setState({
+          chatUploadFileList: [{ id: 'cat.png', shareId: 'share-1', status: 'error' }] as any,
+        });
+      });
+
+      await act(async () => {
+        await result.current.removeChatUploadFile('cat.png');
+      });
+
+      expect(result.current.chatUploadFileList).toEqual([]);
+      expect(shareChatService.removeFile).not.toHaveBeenCalled();
+    });
+
     it('deletes the underlying file for a normal uploaded item', async () => {
       const removeFile = vi.spyOn(fileService, 'removeFile').mockResolvedValue(undefined);
       const { result } = renderHook(() => useStore());

@@ -4,6 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { useRef } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import type { ResourceQueryParams } from '@/types/resource';
 
 import ListViewDropZone from './ListViewDropZone';
@@ -26,7 +27,10 @@ const ListView = ({ isLoading, isValidating, queryParams }: ListViewProps) => {
     isValidating,
     queryParams,
   });
-  const showUploader = queryParams.visibility !== 'private';
+  // Personal account has only one uploader (the user themselves), so hide the
+  // column entirely there — it only makes sense in a workspace with multiple members.
+  const activeWorkspaceId = useActiveWorkspaceId();
+  const showUploader = !!activeWorkspaceId && queryParams.visibility !== 'private';
 
   if (showSkeleton)
     return <ListViewSkeleton columnWidths={columnWidths} showUploader={showUploader} />;

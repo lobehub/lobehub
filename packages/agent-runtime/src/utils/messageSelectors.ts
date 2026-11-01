@@ -1,4 +1,5 @@
-import type { StepActivatedSkill, UIChatMessage } from '@lobechat/types';
+import type { StepActivatedSkill, StepContextTodos, UIChatMessage } from '@lobechat/types';
+import { isNonEmptyString, isPlainRecord } from './object';
 
 /**
  * Wire-format tool identifiers that carry skill activations in their
@@ -153,6 +154,52 @@ const collectToolInvocations = (msg: UIChatMessage): ToolInvocation[] => {
   return invocations;
 };
 
+const isTodoItem = (value: unknown): value is StepContextTodos['items'][number] =>
+  isPlainRecord(value) &&
+  typeof value.text === 'string' &&
+  (value.status === 'todo' || value.status === 'processing' || value.status === 'completed');
+
+/** Normalize persisted canonical and legacy TODO states without guessing alternate fields. */
+export const normalizeTodosState = (
+  value: unknown,
+  fallbackUpdatedAt: string,
+): StepContextTodos | undefined => {
+  const items = Array.isArray(value)
+    ? value
+    : isPlainRecord(value) && Array.isArray(value.items)
+      ? value.items
+      : undefined;
+
+  if (!items || !items.every(isTodoItem)) return undefined;
+
+  const updatedAt =
+    isPlainRecord(value) && isNonEmptyString(value.updatedAt)
+      ? value.updatedAt
+      : fallbackUpdatedAt;
+
+  return { items, updatedAt };
+};
+
+/** Select the newest valid exact `pluginState.todos` state across flat and grouped messages. */
+export const extractTodosFromMessages = (
+  messages: UIChatMessage[],
+): StepContextTodos | undefined => {
+  const fallbackUpdatedAt = new Date().toISOString();
+
+  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
+    const invocations = collectToolInvocations(messages[messageIndex]);
+    for (let invocationIndex = invocations.length - 1; invocationIndex >= 0; invocationIndex--) {
+      const state = invocations[invocationIndex].state;
+      if (!isPlainRecord(state) || !Object.hasOwn(state, 'todos')) continue;
+
+      const todos = normalizeTodosState(state.todos, fallbackUpdatedAt);
+      if (todos !== undefined) return todos;
+    }
+  }
+
+  return undefined;
+};
+
 /**
  * Accumulate activated skills from all activateSkill / activateTools tool
  * messages. Skills once activated remain active for the rest of the
@@ -226,4 +273,32 @@ export const extractActivatedSkillsFromMessages = (
   }
 
   return skillsMap.size > 0 ? [...skillsMap.values()] : undefined;
+};
+
+/**
+ * Accumulate tool identifiers activated by lobe-activator across conversation
+ * turns. A new operation uses these identifiers to restore its step-level tool
+ * state, keeping discovered tools callable after the operation boundary.
+ */
+export const extractActivatedToolIdsFromMessages = (
+  messages: UIChatMessage[],
+): string[] | undefined => {
+  const toolIds = new Set<string>();
+
+  for (const msg of messages) {
+    for (const invocation of collectToolInvocations(msg)) {
+      if (
+        invocation.identifier !== ACTIVATOR_IDENTIFIER ||
+        invocation.apiName !== 'activateTools' ||
+        !Array.isArray(invocation.state?.activatedTools)
+      )
+        continue;
+
+      for (const tool of invocation.state.activatedTools as Array<{ identifier?: string }>) {
+        if (tool.identifier) toolIds.add(tool.identifier);
+      }
+    }
+  }
+
+  return toolIds.size > 0 ? [...toolIds] : undefined;
 };

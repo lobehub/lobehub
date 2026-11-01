@@ -1,10 +1,11 @@
+import { CLIENT_VERSION_HEADER, CURRENT_VERSION } from '@lobechat/const';
 import { act } from '@testing-library/react';
 import { ModelProvider } from 'model-bank';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useUserStore } from '@/store/user';
 
-import { getProviderAuthPayload } from '../_auth';
+import { createHeaderWithAuth, getProviderAuthPayload } from '../_auth';
 
 // Mock data for different providers
 const mockZhiPuAPIKey = 'zhipu-api-key';
@@ -15,9 +16,6 @@ const mockMistralAPIKey = 'mistral-api-key';
 const mockOpenRouterAPIKey = 'openrouter-api-key';
 const mockTogetherAIAPIKey = 'togetherai-api-key';
 
-// mock the traditional zustand
-vi.mock('zustand/traditional');
-
 const mockCryptoValue = (value: number) => {
   vi.stubGlobal('crypto', {
     getRandomValues: vi.fn((array: Uint32Array) => {
@@ -27,6 +25,29 @@ const mockCryptoValue = (value: number) => {
     }),
   });
 };
+
+describe('createHeaderWithAuth', () => {
+  it('should include the current web client version', async () => {
+    const headers = await createHeaderWithAuth();
+
+    expect(headers).toEqual({
+      [CLIENT_VERSION_HEADER]: CURRENT_VERSION,
+    });
+  });
+
+  it('should preserve request headers without allowing a client version override', async () => {
+    const headers = await createHeaderWithAuth({
+      headers: {
+        'X-Lobe-Client-Version': 'spoofed',
+        'Content-Type': 'application/json',
+      },
+    });
+    const normalizedHeaders = new Headers(headers);
+
+    expect(normalizedHeaders.get(CLIENT_VERSION_HEADER)).toBe(CURRENT_VERSION);
+    expect(normalizedHeaders.get('content-type')).toBe('application/json');
+  });
+});
 
 const setModelProviderConfig = (provider: string, config: any) => {
   useUserStore.setState({

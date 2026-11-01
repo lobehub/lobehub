@@ -10,11 +10,12 @@ import {
   Tag as AntTag,
   Tag,
   Text,
+  toast,
   Tooltip,
   TooltipGroup,
 } from '@lobehub/ui';
-import { App } from 'antd';
-import { createStaticStyles, cx } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   AlertTriangle,
   ClockIcon,
@@ -63,59 +64,39 @@ const getStatusTagColor = (status?: AgentStatus) => {
   }
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    author: css`
-      color: ${cssVar.colorTextDescription};
-    `,
-    desc: css`
-      flex: 1;
-      margin: 0 !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    footer: css`
-      margin-block-start: 16px;
-      border-block-start: 1px dashed ${cssVar.colorBorder};
-      background: ${cssVar.colorBgContainer};
-    `,
-    moreButton: css`
-      position: absolute;
-      z-index: 10;
-      inset-block-start: 12px;
-      inset-inline-end: 12px;
-
-      opacity: 0;
-
-      transition: opacity 0.2s;
-    `,
-    secondaryDesc: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
-    `,
-    statTag: css`
-      border-radius: 4px;
-
-      font-family: ${cssVar.fontFamilyCode};
-      font-size: 11px;
-      color: ${cssVar.colorTextSecondary};
-
-      background: ${cssVar.colorFillTertiary};
-    `,
-    title: css`
-      margin: 0 !important;
-      font-size: 16px !important;
-      font-weight: 500 !important;
-
-      &:hover {
-        color: ${cssVar.colorLink};
-      }
-    `,
-    wrapper: css`
-      &:hover .more-button {
-        opacity: 1;
-      }
-    `,
-  };
+const styles = stylex.create({
+  desc: { flex: '1', margin: '0', color: cssVar.colorTextSecondary },
+  footer: {
+    marginBlockStart: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorder,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  moreButton: {
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '12px',
+    insetInlineEnd: '12px',
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    transition: 'opacity 0.2s',
+  },
+  secondaryDesc: { fontSize: '12px', color: cssVar.colorTextDescription },
+  statTag: {
+    borderRadius: '4px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  title: {
+    margin: '0',
+    fontSize: '16px',
+    fontWeight: 500,
+    color: { 'default': null, ':hover': cssVar.colorLink },
+  },
 });
 
 type UserAgentCardProps = DiscoverAssistantItem;
@@ -136,7 +117,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
   }) => {
     const { t } = useTranslation(['discover', 'setting']);
     const navigate = useWorkspaceAwareNavigate();
-    const { message } = App.useApp();
+
     const { isOwner, onStatusChange } = useUserDetailContext();
     const { allowed: canCreate } = usePermission('create_content');
     const { allowed: canEdit } = usePermission('edit_own_content');
@@ -179,7 +160,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
           });
 
           if (!marketAgent) {
-            message.error(t('setting:myAgents.errors.fetchFailed'));
+            toast.error(t('setting:myAgents.errors.fetchFailed'));
             return;
           }
 
@@ -208,11 +189,11 @@ const UserAgentCard = memo<UserAgentCardProps>(
         }
       } catch (error) {
         console.error('[UserAgentCard] handleEdit error:', error);
-        message.error(t('setting:myAgents.errors.editFailed'));
+        toast.error(t('setting:myAgents.errors.editFailed'));
       } finally {
         setIsEditLoading(false);
       }
-    }, [canCreate, canEdit, identifier, navigate, createAgent, refreshAgentList, message, t]);
+    }, [canCreate, canEdit, identifier, navigate, createAgent, refreshAgentList, t]);
 
     const handleStatusAction = useCallback(
       (action: 'deprecate') => {
@@ -254,7 +235,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     return (
       <Block
         clickable
-        className={styles.wrapper}
+        className={stylex.props(stylex.defaultMarker()).className}
         height={'100%'}
         variant={'outlined'}
         width={'100%'}
@@ -268,7 +249,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
         {isOwner && !isUnderReview && (
           <div onClick={stopPropagation}>
             <DropdownMenu items={menuItems as any}>
-              <div className={cx('more-button', styles.moreButton)}>
+              <div {...stylex.props(styles.moreButton)}>
                 <Icon icon={MoreVerticalIcon} size={16} style={{ cursor: 'pointer' }} />
               </div>
             </DropdownMenu>
@@ -309,7 +290,12 @@ const UserAgentCard = memo<UserAgentCardProps>(
                   to={link}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Text ellipsis as={'h3'} className={styles.title} style={{ flex: 1 }}>
+                  <Text
+                    ellipsis
+                    as={'h3'}
+                    className={stylex.props(styles.title).className}
+                    style={{ flex: 1 }}
+                  >
                     {title}
                   </Text>
                 </WorkspaceLink>
@@ -332,7 +318,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
         <Flexbox flex={1} gap={12} paddingInline={16}>
           <Text
             as={'p'}
-            className={styles.desc}
+            className={stylex.props(styles.desc).className}
             ellipsis={{
               rows: 3,
             }}
@@ -346,7 +332,10 @@ const UserAgentCard = memo<UserAgentCardProps>(
                 styles={{ root: { pointerEvents: 'none' } }}
                 title={t('assistants.tokenUsage')}
               >
-                <Tag className={styles.statTag} icon={<Icon icon={CoinsIcon} />}>
+                <Tag
+                  className={stylex.props(styles.statTag).className}
+                  icon={<Icon icon={CoinsIcon} />}
+                >
                   {formatIntergerNumber(tokenUsage)}
                 </Tag>
               </Tooltip>
@@ -356,7 +345,10 @@ const UserAgentCard = memo<UserAgentCardProps>(
                   styles={{ root: { pointerEvents: 'none' } }}
                   title={t('fork.forksCount', { count: forkCount })}
                 >
-                  <Tag className={styles.statTag} icon={<Icon icon={GitForkIcon} />}>
+                  <Tag
+                    className={stylex.props(styles.statTag).className}
+                    icon={<Icon icon={GitForkIcon} />}
+                  >
                     {formatIntergerNumber(forkCount)}
                   </Tag>
                 </Tooltip>
@@ -367,19 +359,22 @@ const UserAgentCard = memo<UserAgentCardProps>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.footer}
+          className={stylex.props(styles.footer).className}
           justify={'space-between'}
           padding={16}
         >
           <Flexbox
             horizontal
             align={'center'}
-            className={styles.secondaryDesc}
+            className={stylex.props(styles.secondaryDesc).className}
             justify={'space-between'}
           >
             <Flexbox horizontal align={'center'} gap={4}>
               <Icon icon={ClockIcon} size={14} />
-              <PublishedTime className={styles.secondaryDesc} date={createdAt} />
+              <PublishedTime
+                className={stylex.props(styles.secondaryDesc).className}
+                date={createdAt}
+              />
             </Flexbox>
             {category && t(`category.assistant.${category}` as any)}
           </Flexbox>

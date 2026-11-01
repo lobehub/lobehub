@@ -1,10 +1,9 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Select } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { Button, Flexbox, Select, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { customAlphabet } from 'nanoid/non-secure';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,54 +15,51 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
+import { ensureAgentMarketSkillsAndWarn } from '@/services/ensureAgentMarketSkills';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 
 import { useDetailContext } from '../../DetailProvider';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  buttonGroup: css`
-    width: 100%;
-  `,
-  forkButton: css`
-    flex: 1;
-    width: unset;
-    border-start-start-radius: 0 !important;
-    border-end-start-radius: 0 !important;
-  `,
+const styles = stylex.create({
+  buttonGroup: { width: '100%' },
+  forkButton: {
+    flex: '1',
+    width: 'unset',
+    borderStartStartRadius: '0',
+    borderEndStartRadius: '0',
+  },
   // Match Button type="primary" on the right so the two halves read as one
   // pill. (colorPrimary bg + colorBgLayout text) auto-flips with the theme:
   // dark bg + near-white text in light theme, white bg + near-black text
   // in dark theme. We use colorBgLayout directly instead of the
   // semantically-named colorTextLightSolid because the cssVar proxy doesn't
   // pick up LobeHub's JS-level override of that token.
-  visibilitySelect: css`
-    width: 130px;
-    border-color: ${cssVar.colorPrimary} !important;
-    border-inline-end-width: 0 !important;
-    border-start-end-radius: 0 !important;
-    border-end-end-radius: 0 !important;
-
-    color: ${cssVar.colorBgLayout} !important;
-
-    background: ${cssVar.colorPrimary} !important;
-
-    & svg {
-      color: ${cssVar.colorBgLayout};
-    }
-
-    &:hover:not([data-disabled]) {
-      border-color: ${cssVar.colorPrimaryHover} !important;
-      background: ${cssVar.colorPrimaryHover} !important;
-    }
-
-    &:active:not([data-disabled]) {
-      border-color: ${cssVar.colorPrimaryActive} !important;
-      background: ${cssVar.colorPrimaryActive} !important;
-    }
-  `,
-}));
+  visibilitySelect: {
+    width: '130px',
+    borderColor: cssVar.colorPrimary,
+    borderInlineEndWidth: '0',
+    borderStartEndRadius: '0',
+    borderEndEndRadius: '0',
+    color: cssVar.colorBgLayout,
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+  },
+  // Hover / active feedback; skipped while the select is disabled.
+  visibilitySelectInteractive: {
+    borderColor: {
+      'default': cssVar.colorPrimary,
+      ':hover': cssVar.colorPrimaryHover,
+      ':active': cssVar.colorPrimaryActive,
+    },
+    backgroundColor: {
+      'default': cssVar.colorPrimary,
+      ':hover': cssVar.colorPrimaryHover,
+      ':active': cssVar.colorPrimaryActive,
+    },
+  },
+});
 
 /**
  * Generate a market identifier (8-character lowercase alphanumeric string)
@@ -82,7 +78,7 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
   const [isLoading, setIsLoading] = useState(false);
   const createAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
   const { isAuthenticated, signIn } = useMarketAuth();
@@ -122,7 +118,7 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
 
       if (existingAgentId) {
         // User has already forked this agent, navigate to existing fork
-        message.info(t('fork.alreadyForked'));
+        toast.info(t('fork.alreadyForked'));
         navigate(AGENT_CHAT_URL(existingAgentId, mobile));
         return;
       }
@@ -201,13 +197,17 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
         source: location.pathname,
       });
 
-      message.success(t('fork.success'));
+      toast.success(t('fork.success'));
 
-      // Step 6: Navigate to chat
+      // Step 6: Install the Market skills the agent references. The agent already
+      // exists, so this never throws and only ever adds a non-blocking warning.
+      await ensureAgentMarketSkillsAndWarn(config.plugins);
+
+      // Step 7: Navigate to chat
       navigate(AGENT_CHAT_URL(result!.agentId, mobile));
     } catch (error: any) {
       console.error('Fork failed:', error);
-      message.error(t('fork.failed'));
+      toast.error(t('fork.failed'));
     } finally {
       setIsLoading(false);
     }
@@ -219,7 +219,7 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
     return (
       <Button
         block
-        className={styles.buttonGroup}
+        className={stylex.props(styles.buttonGroup).className}
         disabled={!canCreate}
         loading={isLoading}
         size={'large'}
@@ -239,19 +239,27 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
     { label: t('fork.visibilityPublic'), value: 'public' },
   ];
 
+  const isVisibilityDisabled = !canCreate || isLoading;
+
   return (
-    <Flexbox horizontal className={styles.buttonGroup} gap={0}>
+    <Flexbox horizontal className={stylex.props(styles.buttonGroup).className} gap={0}>
       <Select
-        className={styles.visibilitySelect}
-        disabled={!canCreate || isLoading}
+        disabled={isVisibilityDisabled}
         options={visibilityOptions}
         size={'large'}
+        suffixIconProps={{ color: cssVar.colorBgLayout }}
         value={visibility}
+        className={
+          stylex.props(
+            styles.visibilitySelect,
+            !isVisibilityDisabled && styles.visibilitySelectInteractive,
+          ).className
+        }
         onChange={(v) => setVisibility(v as ForkTarget)}
       />
       <Button
         block
-        className={styles.forkButton}
+        className={stylex.props(styles.forkButton).className}
         disabled={!canCreate}
         loading={isLoading}
         size={'large'}

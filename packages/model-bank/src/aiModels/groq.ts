@@ -26,6 +26,75 @@ const groqChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'Qwen3.8 27B is a compact 27B multimodal (vision + text) model with thinking and instruct modes, frontier-level agentic coding, long-horizon tool use, and near-instant responses on Groq.',
+    displayName: 'Qwen3.8 27B',
+    enabled: true,
+    family: 'qwen',
+    generation: 'qwen3.8',
+    id: 'qwen/qwen3.8-27b',
+    maxOutput: 16_384,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-08-14',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'Qwen3.6 27B is an open-source dense model with strong performance in reasoning, coding, and general capabilities. It supports thinking mode by default, offering balanced performance and efficiency.',
+    displayName: 'Qwen3.6 27B',
+    family: 'qwen',
+    generation: 'qwen3.6',
+    id: 'qwen/qwen3.6-27b',
+    maxOutput: 16_384,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-23',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 196_608,
+    description:
+      'MiniMax M2.7 is a 229B-parameter MoE model (~10B active) built for agentic workflows and real-world software engineering. It interleaves thinking with actions across multi-step tasks and is available on Groq for Enterprise customers.',
+    displayName: 'MiniMax M2.7',
+    family: 'minimax',
+    generation: 'minimax-m2.7',
+    id: 'minimaxai/minimax-m2.7',
+    maxOutput: 131_072,
+    releasedAt: '2026-03-18',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -43,6 +112,9 @@ const groqChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-08-06',
+    settings: {
+      extendParams: ['reasoningEffort'],
+    },
     type: 'chat',
   },
   {
@@ -66,82 +138,8 @@ const groqChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-08-06',
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 131_072,
-    displayName: 'Llama 4 Scout (17Bx16E)',
-    enabled: true,
-    family: 'llama',
-    generation: 'llama-4',
-    id: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    knowledgeCutoff: '2024-08',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.11, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.34, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    displayName: 'Qwen3 32B',
-    family: 'qwen',
-    generation: 'qwen3',
-    id: 'qwen/qwen3-32b',
-    maxOutput: 40_960,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.29, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.59, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Llama 3.1 8B is a high-efficiency model with fast text generation, ideal for large-scale, cost-efficient use cases.',
-    displayName: 'Llama 3.1 8B Instant',
-    family: 'llama',
-    generation: 'llama-3.1',
-    id: 'llama-3.1-8b-instant',
-    knowledgeCutoff: '2023-12',
-    maxOutput: 131_072,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Meta Llama 3.3 is a multilingual LLM with 70B parameters (text in/text out), offering pre-trained and instruction-tuned variants. The instruction-tuned text-only model is optimized for multilingual dialogue use cases and outperforms many available open and closed chat models on common industry benchmarks.',
-    displayName: 'Llama 3.3 70B Versatile',
-    family: 'llama',
-    generation: 'llama-3.3',
-    id: 'llama-3.3-70b-versatile',
-    knowledgeCutoff: '2023-12',
-    maxOutput: 32_768,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.59, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.79, strategy: 'fixed', unit: 'millionTokens' },
-      ],
+    settings: {
+      extendParams: ['reasoningEffort'],
     },
     type: 'chat',
   },

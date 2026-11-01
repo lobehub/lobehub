@@ -1,12 +1,11 @@
-import type {
-  ToulminVerdict,
-  VerifyCheckItem,
-  VerifyRubricConfig,
-  VerifyRunContext,
-  VerifyRunMetadata,
-  VerifyRunScenario,
-} from '@lobechat/types';
 import {
+  acceptanceStatuses,
+  acceptanceSubjectTypes,
+  acceptanceVisibilities,
+  reviewAdjudications,
+  reviewPredictionActions,
+  reviewPredictionStatuses,
+  reviewProposalEdits,
   verifierTypes,
   verifyCheckResultStatuses,
   verifyEvidenceCapturedBy,
@@ -16,9 +15,29 @@ import {
   verifyRunStatuses,
   verifyUserDecisions,
   verifyVerdicts,
+  verifyVisibilities,
+} from '@lobechat/const/verify';
+import type {
+  AcceptanceConfig,
+  AcceptanceMetadata,
+  AcceptanceReviewAnnotation,
+  AcceptanceVisualRender,
+  ToulminVerdict,
+  VerifyCheckDecisionDetail,
+  VerifyCheckDefinition,
+  VerifyCheckItem,
+  VerifyCheckResultMetadata,
+  VerifyFlowSnapshot,
+  VerifyRubricConfig,
+  VerifyRunContext,
+  VerifyRunDecisionDetail,
+  VerifyRunMetadata,
+  VerifyRunScenario,
 } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -35,6 +54,7 @@ import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agentOperations } from './agentOperations';
 import { documents, files } from './file';
 import { llmGenerationTracing } from './llmGenerationTracing';
+import { projects } from './project';
 import { users } from './user';
 import { workspaces } from './workspace';
 
@@ -59,6 +79,10 @@ export const verifyCriteria = pgTable(
 
     /** One-sentence summary of what this criterion verifies. */
     description: text('description'),
+
+    definition: jsonb('definition').$type<VerifyCheckDefinition>(),
+    tags: text('tags').array().notNull().default([]),
+    archivedAt: timestamptz('archived_at'),
 
     /** Default blocking behaviour; a snapshot item may override it. */
     required: boolean('required').default(true).notNull(),
@@ -174,7 +198,7 @@ export const verifyCheckResults = pgTable(
     id: uuid('id').defaultRandom().primaryKey().notNull(),
 
     /**
-     * The verification session this result belongs to (the grouping key). The
+     * The verification round this result belongs to (the grouping key). The
      * plan snapshot lives on verify_runs.plan; results relate to its items via
      * check_item_id. Nullable as an additive column; the verify pipeline always
      * sets it.
@@ -183,7 +207,7 @@ export const verifyCheckResults = pgTable(
 
     /**
      * Denormalized direct link to the Agent Run, retained for the agent pipeline;
-     * null for standalone sessions. The canonical run link is `verify_runs`
+     * null for standalone rounds. The canonical run link is `verify_runs`
      * (addressed via verifyRunId) — this is convenience only, hence `set null`.
      */
     operationId: text('operation_id').references(() => agentOperations.id, {
@@ -200,6 +224,9 @@ export const verifyCheckResults = pgTable(
 
     /** Stable relation key → verify_runs.plan.items[].id (never the array index). */
     checkItemId: text('check_item_id').notNull(),
+    sourceCriterionId: uuid('source_criterion_id').references(() => verifyCriteria.id, {
+      onDelete: 'set null',
+    }),
 
     // ---- Flattened item snapshot (denormalized for analytics) ----
     checkItemTitle: text('check_item_title'),
@@ -231,13 +258,20 @@ export const verifyCheckResults = pgTable(
     toulmin: jsonb('toulmin').$type<ToulminVerdict>(),
 
     /** Generic result extension bag. Shape is intentionally unknown until verifier payloads stabilize. */
-    metadata: jsonb('metadata').$type<unknown>(),
+    metadata: jsonb('metadata').$type<VerifyCheckResultMetadata>(),
 
     /** Forward-looking remediation hint, seeded into auto_repair. */
     suggestion: text('suggestion'),
 
     // ---- Data flywheel ----
     userDecision: text('user_decision', { enum: verifyUserDecisions }),
+    /**
+     * Provenance + feedback behind the decision (note, circled evidence
+     * regions, who/when) — the check-level mirror of
+     * `verify_runs.decision_detail`. The `user_decision` verb stays the
+     * queryable field; this bag is what the next verify round reads.
+     */
+    userDecisionDetail: jsonb('user_decision_detail').$type<VerifyCheckDecisionDetail>(),
     isFalsePositive: boolean('is_false_positive'),
     isFalseNegative: boolean('is_false_negative'),
 
@@ -251,6 +285,7 @@ export const verifyCheckResults = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
+    index('verify_check_results_criterion_created_idx').on(t.sourceCriterionId, t.createdAt),
     index('verify_check_results_verify_run_id_idx').on(t.verifyRunId),
     index('verify_check_results_operation_id_idx').on(t.operationId),
     index('verify_check_results_user_id_idx').on(t.userId),
@@ -294,9 +329,12 @@ export const verifyEvidence = pgTable(
     /** Medium of the artifact (screenshot / gif / video / text / dom_snapshot / transcript). */
     type: text('type', { enum: verifyEvidenceTypes }).notNull(),
 
-    // ---- Payload: exactly one of `content` (inline text) or `fileId` (stored artifact) ----
+    // ---- Payload: exactly one of inline content, document, or stored file ----
     /** Inline payload for small text evidence (dom snapshot / console log / transcript). */
     content: text('content'),
+
+    /** LobeHub document used as evidence. Agent-document binding ids are never stored here. */
+    documentId: text('document_id').references(() => documents.id, { onDelete: 'set null' }),
 
     /**
      * Stored artifact (screenshot / gif / video, or large text persisted to storage).
@@ -325,6 +363,7 @@ export const verifyEvidence = pgTable(
   },
   (t) => [
     index('verify_evidence_check_result_id_idx').on(t.checkResultId),
+    index('verify_evidence_document_id_idx').on(t.documentId),
     index('verify_evidence_file_id_idx').on(t.fileId),
     index('verify_evidence_user_id_idx').on(t.userId),
     index('verify_evidence_workspace_id_idx').on(t.workspaceId),
@@ -332,7 +371,93 @@ export const verifyEvidence = pgTable(
 );
 
 // ============================================
-// 6. verify_reports — LLM-generated delivery-verification narrative for a run
+// 6. acceptances — business-level aggregate for one subject's acceptance lifecycle
+// ============================================
+export const acceptances = pgTable(
+  'acceptances',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Workspace this acceptance belongs to — scopes listing and cascades on workspace delete. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /** Project grouping captured from the accepted task/topic; deleted projects become ungrouped. */
+    projectId: text('project_id').references(() => projects.id, { onDelete: 'set null' }),
+
+    /**
+     * Polymorphic accepted object. No FK on purpose: an acceptance may target task,
+     * topic, document, standalone delivery, or future subject types without
+     * reshaping this aggregate.
+     * Subject existence/ownership is validated in the service that creates it.
+     */
+    subjectType: text('subject_type', { enum: acceptanceSubjectTypes }).notNull(),
+    subjectId: text('subject_id').notNull(),
+
+    /** User-facing acceptance lifecycle state. */
+    status: text('status', { enum: acceptanceStatuses }).default('pending').notNull(),
+
+    /**
+     * Read visibility beyond the creator. The DB default matches the personal
+     * scope (`public` — the page is meant to be linked from PRs/reports);
+     * workspace-scoped creation overrides to `private` in the model, so org
+     * data stays member-gated unless deliberately opened up.
+     */
+    visibility: text('visibility', { enum: acceptanceVisibilities }).default('public').notNull(),
+
+    /** One-sentence acceptance requirement the user configured for this subject. */
+    requirement: text('requirement'),
+
+    /** Policy/config snapshot used when instantiating verify rounds for this acceptance. */
+    config: jsonb('config').$type<AcceptanceConfig>().default({}),
+
+    // No root/current/latest-report pointers: all three are derivable from the
+    // round chain via the verify_runs (acceptance_id, round_index) unique index —
+    // root = min round, current = max round, latest report = report of the
+    // highest round that has one. A denormalized pointer would only add a
+    // write-time sync burden and a staleness bug surface for no read win at this
+    // (per-user, bounded) list scale.
+
+    /**
+     * AI-filled visualization for the acceptance report. The html payload is
+     * model-produced: viewers MUST render it in a sandboxed iframe, never
+     * inject it into the host document.
+     */
+    visualRender: jsonb('visual_render').$type<AcceptanceVisualRender>(),
+
+    /** Generic aggregate extension bag for future subject-specific state. */
+    metadata: jsonb('metadata').$type<AcceptanceMetadata>(),
+
+    completedAt: timestamptz('completed_at'),
+    ...timestamps,
+  },
+  (t) => [
+    index('acceptances_user_id_idx').on(t.userId),
+    index('acceptances_workspace_id_idx').on(t.workspaceId),
+    index('acceptances_project_id_idx').on(t.projectId),
+    index('acceptances_subject_idx').on(t.subjectType, t.subjectId),
+    index('acceptances_status_idx').on(t.status),
+    index('acceptances_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
+    // One acceptance per subject in personal scope.
+    uniqueIndex('acceptances_personal_subject_unique')
+      .on(t.userId, t.subjectType, t.subjectId)
+      .where(sql`${t.workspaceId} IS NULL`),
+    // One acceptance per subject in workspace scope.
+    uniqueIndex('acceptances_workspace_subject_unique')
+      .on(t.workspaceId, t.subjectType, t.subjectId)
+      .where(sql`${t.workspaceId} IS NOT NULL`),
+  ],
+);
+
+export type NewAcceptance = typeof acceptances.$inferInsert;
+export type AcceptanceItem = typeof acceptances.$inferSelect;
+
+// ============================================
+// 7. verify_reports — LLM-generated delivery-verification narrative for a run
 // ============================================
 export const verifyReports = pgTable(
   'verify_reports',
@@ -340,7 +465,7 @@ export const verifyReports = pgTable(
     id: uuid('id').defaultRandom().primaryKey().notNull(),
 
     /**
-     * The verification session this report summarizes (the grouping key). One
+     * The verification round this report summarizes (the grouping key). One
      * report per run (regenerating overwrites in place via the unique index).
      * Nullable as an additive column; the report writer always sets it.
      */
@@ -348,7 +473,7 @@ export const verifyReports = pgTable(
 
     /**
      * Denormalized direct link to the Agent Run, retained for the agent pipeline;
-     * null for standalone sessions. Canonical run link is `verify_runs` — this is
+     * null for standalone rounds. Canonical run link is `verify_runs` — this is
      * convenience only, hence `set null`.
      */
     operationId: text('operation_id').references(() => agentOperations.id, {
@@ -389,7 +514,7 @@ export const verifyReports = pgTable(
     createdAt: timestamptz('created_at').notNull().defaultNow(),
   },
   (t) => [
-    // One report per verification session — regenerating overwrites in place.
+    // One report per verification round — regenerating overwrites in place.
     uniqueIndex('verify_reports_verify_run_id_unique').on(t.verifyRunId),
     index('verify_reports_operation_id_idx').on(t.operationId),
     index('verify_reports_user_id_idx').on(t.userId),
@@ -398,8 +523,8 @@ export const verifyReports = pgTable(
 );
 
 // ============================================
-// 7. verify_runs — a verification session (the run-anchor that decouples the
-//    chain from agent_operations)
+// 8. verify_runs — a verification round / attempt (the run-anchor that decouples
+//     the chain from agent_operations)
 // ============================================
 // The verify chain used to hang off agent_operations: the plan lived on
 // `agent_operations.verify_plan` and results/reports keyed on `operation_id`.
@@ -407,12 +532,11 @@ export const verifyReports = pgTable(
 // agent-testing harness ingesting results) — to mint a fake Agent Run, polluting
 // the operation analytics with rows that carry no real execution trace.
 //
-// `verify_runs` is the session entity instead: it owns the plan snapshot + the
-// rollup status and is what results/reports/evidence will anchor to. The link to
-// a real Agent Run is an OPTIONAL FK (`operation_id`) — set when verifying an
-// agent run, null for standalone sessions. Repointing verify_check_results /
-// verify_reports onto `verify_run_id` lands in a follow-up; this migration only
-// introduces the table.
+// `verify_runs` is the round/attempt entity instead: it owns the plan snapshot +
+// the rollup status and is what check results / evidence anchor to. A business
+// acceptance can aggregate several verify runs across repair iterations; the link
+// to a real Agent Run is still an OPTIONAL FK (`operation_id`) — set when verifying
+// an agent run, null for standalone rounds.
 export const verifyRuns = pgTable(
   'verify_runs',
   {
@@ -423,29 +547,49 @@ export const verifyRuns = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
-    /** Workspace this session belongs to — scopes listing and cascades on workspace delete. */
+    /** Workspace this round belongs to — scopes listing and cascades on workspace delete. */
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
-     * Optional link to the Agent Run this session verifies. Null for standalone
-     * sessions (e.g. agent-testing). `set null` so deleting the run keeps the
-     * verification session and its results/report alive.
+     * Optional business-level acceptance aggregate this verify round belongs to.
+     * Null keeps standalone rounds (e.g. agent-testing) and legacy rows valid.
+     */
+    acceptanceId: uuid('acceptance_id').references(() => acceptances.id, {
+      onDelete: 'set null',
+    }),
+
+    /** Display / ordering index of this round inside an acceptance chain. */
+    roundIndex: integer('round_index'),
+
+    /**
+     * Optional link to the Agent Run this round verifies. Null for standalone
+     * rounds (e.g. agent-testing). `set null` so deleting the run keeps the
+     * verification round and its results/report alive.
      */
     operationId: text('operation_id').references(() => agentOperations.id, {
       onDelete: 'set null',
     }),
 
-    /** What produced this session — drives provenance + analytics filtering. */
+    /** What produced this round — drives provenance + analytics filtering. */
     source: text('source', { enum: verifyRunSources }).default('agent').notNull(),
 
     /**
-     * What kind of thing this session verifies (e.g. `coding`). Drives how the
+     * Read visibility of this round's report page beyond its creator. The DB
+     * default matches the personal scope (`public` — report URLs are meant to
+     * be linked from PRs); workspace-scoped creation overrides to `private` in
+     * the model, and attaching to an acceptance inherits the aggregate's
+     * setting so rounds never leak past their umbrella.
+     */
+    visibility: text('visibility', { enum: verifyVisibilities }).default('public').notNull(),
+
+    /**
+     * What kind of thing this round verifies (e.g. `coding`). Drives how the
      * report renders its scope header + scenario-specific detail. Null for
      * legacy/agent runs that predate scenarios.
      */
     scenario: text('scenario').$type<VerifyRunScenario>(),
 
-    /** Human-readable session title (report title / test name). */
+    /** Human-readable round title (report title / test name). */
     title: text('title'),
     /** The delivery goal being verified. */
     goal: text('goal'),
@@ -465,28 +609,194 @@ export const verifyRuns = pgTable(
     metadata: jsonb('metadata').$type<VerifyRunMetadata>(),
 
     /**
-     * Immutable check-plan snapshot for this session (instantiated from rubrics /
+     * Immutable check-plan snapshot for this round (instantiated from rubrics /
      * criteria / agent-generated / ingested). Results relate to its items via
      * check_item_id. Moved here off `agent_operations.verify_plan`.
      */
     plan: jsonb('plan').$type<VerifyCheckItem[]>(),
+    /** Frozen graphs for this round; historical views never resolve current graph rows. */
+    flowSnapshots: jsonb('flow_snapshots').$type<VerifyFlowSnapshot[]>(),
     /** When the plan was confirmed (frozen). */
     planConfirmedAt: timestamptz('plan_confirmed_at'),
 
-    /** Denormalized rollup of the session's verify pipeline state. */
+    /** Denormalized rollup of the round's verify pipeline state. */
     status: text('status', { enum: verifyRunStatuses }),
+
+    /**
+     * The user's acceptance decision on THIS round — the human verdict that
+     * drives the acceptance loop (`accept` closes it, `reject` seeds the next
+     * repair round). Per-round because every delivered round can be judged
+     * again, so the trail lives here, not on a single aggregate pointer.
+     *
+     * Free-form text, not an enum column: the decision vocabulary is expected to
+     * grow (e.g. `accept-with-reservation`) and we don't want a migration for a
+     * new verb. Null until the user decides.
+     */
+    userDecision: text('user_decision'),
+
+    /**
+     * Provenance of that decision — comment, attachments, who and when. One bag
+     * so the decision can carry richer evidence without new columns; the
+     * `userDecision` verb stays the queryable field.
+     */
+    decisionDetail: jsonb('decision_detail').$type<VerifyRunDecisionDetail>(),
 
     ...timestamps,
   },
   (t) => [
     index('verify_runs_user_id_idx').on(t.userId),
     index('verify_runs_workspace_id_idx').on(t.workspaceId),
-    // At most one verification session per Agent Run; NULLs are distinct in a
-    // unique index, so standalone (operation-less) sessions stay unconstrained.
+    index('verify_runs_acceptance_id_idx').on(t.acceptanceId),
+    uniqueIndex('verify_runs_acceptance_round_unique').on(t.acceptanceId, t.roundIndex),
+    // A run linked to an acceptance MUST carry a round index. Without this, the
+    // unique index above cannot order the chain: Postgres treats NULLs as
+    // distinct, so several null-round rows could pile onto one acceptance. Both
+    // columns stay nullable for standalone/legacy runs (neither set).
+    check(
+      'verify_runs_acceptance_requires_round',
+      sql`${t.acceptanceId} IS NULL OR ${t.roundIndex} IS NOT NULL`,
+    ),
+    // At most one verification round per Agent Run; NULLs are distinct in a
+    // unique index, so standalone (operation-less) rounds stay unconstrained.
     uniqueIndex('verify_runs_operation_id_unique').on(t.operationId),
     index('verify_runs_source_idx').on(t.source),
+    index('verify_runs_user_decision_idx').on(t.userDecision),
   ],
 );
 
 export type NewVerifyRun = typeof verifyRuns.$inferInsert;
 export type VerifyRunItem = typeof verifyRuns.$inferSelect;
+
+// ============================================
+// 9. verify_review_predictions — an automated reviewer's opinion on a check
+// ============================================
+// A *shadow* lane, deliberately not folded into `verify_check_results`. Two
+// reasons it is its own table rather than another jsonb bag on that row:
+//
+//  1. Cardinality: one check result accumulates many opinions — one per model ×
+//     prompt version — and they must stay individually queryable to compare
+//     versions. A bag would force read-modify-write on the hot result row and
+//     lose the ability to filter by model.
+//  2. Provenance: the human's decision on `verify_check_results.user_decision`
+//     is the single ground truth. Keeping the model's opinion physically
+//     elsewhere makes it structurally impossible for a prediction to be mistaken
+//     for a human label — including by a future aggregation query nobody has
+//     written yet.
+export const verifyReviewPredictions = pgTable(
+  'verify_review_predictions',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    /** The check result being reviewed; an opinion dies with the result it judges. */
+    checkResultId: uuid('check_result_id')
+      .references(() => verifyCheckResults.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Workspace this prediction belongs to (mirrors the result) — scopes listing + cascade. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    /**
+     * The producer, split the same way every other model reference in the repo
+     * is (`{ provider, model }`) rather than one glued string — an opinion has
+     * to be filterable by provider on its own when comparing versions.
+     */
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    /** Bumped whenever the judging prompt changes, so old opinions stay attributable. */
+    promptVersion: text('prompt_version').notNull(),
+
+    /**
+     * How the attempt ended. Mirrors the `status` / `verdict` split on
+     * `verify_check_results`: a row records that a review was ATTEMPTED, and
+     * only `judged` carries an opinion.
+     *
+     * Without it, four situations collapse into "no row" — the model passed the
+     * check, there was no frame to look at, the call failed, or nobody asked.
+     * Only the first is the model's opinion, so miss rate would have no
+     * denominator, and a provider outage would be indistinguishable from the
+     * model approving everything.
+     */
+    status: text('status', { enum: reviewPredictionStatuses }).notNull(),
+
+    /**
+     * The verdict — NULL unless `status` is `judged`. Never `ignore`, which is a
+     * statement about the reviewer's priorities rather than about the delivery.
+     */
+    action: text('action', { enum: reviewPredictionActions }),
+
+    /**
+     * Why a `skipped` / `errored` attempt produced no verdict — and, on a
+     * `judged` row, which artifacts the request had to withhold from the model
+     * (frames past the cap, unreadable media, unresolved payloads). A verdict
+     * reached while part of the evidence was invisible is not comparable to one
+     * reached on the whole check, so the caveat travels with the row.
+     */
+    statusReason: text('status_reason'),
+
+    /**
+     * Model self-reported 0–1. Stored, but NOT yet trusted as a gate: in the
+     * offline baseline the Gemini models emitted 0.95–1.0 on essentially every
+     * row, so a threshold over this column would pass everything. Calibrate per
+     * model before wiring it to any automatic behaviour.
+     */
+    confidence: numeric('confidence', { mode: 'number', precision: 3, scale: 2 }),
+
+    /** One-line justification — this is what the reviewer actually reads. */
+    comment: text('comment'),
+    /** Full reasoning. Kept for training data, not surfaced in the collapsed card. */
+    rationale: text('rationale'),
+
+    /** Circled regions, same shape as the human's `AcceptanceReviewAnnotation`. */
+    annotations: jsonb('annotations').$type<AcceptanceReviewAnnotation[]>(),
+
+    // ---- The reviewer's answer ----
+    // Lives on the proposal, not on the check's decision detail, because two of
+    // the three answers leave the check UNJUDGED: dismissing a proposal says
+    // nothing about whether the delivery passes, so there is no decision row to
+    // hang it off. Keeping all three here also means one query returns the
+    // full agreement picture per model version.
+    adjudication: text('adjudication', { enum: reviewAdjudications }),
+    /** For a confirmed proposal: how much the reviewer changed before submitting. */
+    adjudicationEdit: text('adjudication_edit', { enum: reviewProposalEdits }),
+    adjudicatedAt: timestamptz('adjudicated_at'),
+
+    // ---- Operational telemetry, for cost/latency tracking per model version ----
+    latencyMs: integer('latency_ms'),
+    promptTokens: integer('prompt_tokens'),
+    completionTokens: integer('completion_tokens'),
+
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('verify_review_predictions_check_result_id_idx').on(t.checkResultId),
+    index('verify_review_predictions_user_id_idx').on(t.userId),
+    index('verify_review_predictions_workspace_id_idx').on(t.workspaceId),
+    index('verify_review_predictions_model_idx').on(t.provider, t.model),
+    // One opinion per (result, provider+model, prompt version): a retry or a concurrent
+    // worker must update in place rather than stack a second row, or the
+    // agreement stats would double-count whichever check happened to be retried.
+    uniqueIndex('verify_review_predictions_result_model_prompt_unique').on(
+      t.checkResultId,
+      t.provider,
+      t.model,
+      t.promptVersion,
+    ),
+    // `status` and `action` only mean anything together: a `judged` row without a
+    // verdict, or a `skipped` row that still carries one, would both be counted
+    // by the agreement stats as an opinion nobody formed. The column enums are
+    // type-level only in drizzle — they emit no constraint — so this is the one
+    // place the pairing is actually enforced.
+    check(
+      'verify_review_predictions_action_matches_status',
+      sql`(${t.status} = 'judged') = (${t.action} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export type NewVerifyReviewPrediction = typeof verifyReviewPredictions.$inferInsert;
+export type VerifyReviewPredictionItem = typeof verifyReviewPredictions.$inferSelect;
