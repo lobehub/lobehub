@@ -13,7 +13,8 @@ const styles = stylex.create({
     paddingInline: '12px',
     borderRadius: '8px',
     transition: 'background 0.12s ease',
-    background: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
   },
   optionCheck: { flexShrink: 0, color: cssVar.colorPrimary },
   optionDescription: { fontSize: '12px', lineHeight: 1.45, color: cssVar.colorTextSecondary },
@@ -29,12 +30,14 @@ const styles = stylex.create({
     lineHeight: '22px',
     color: cssVar.colorTextSecondary,
     textAlign: 'center',
-    background: cssVar.colorFillTertiary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
   },
   optionHighlighted: { boxShadow: `inset 0 0 0 1px ${cssVar.colorBorder}` },
   optionLabel: { fontWeight: 500 },
   optionSelected: {
-    background: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillTertiary },
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: 'none',
   },
   recommendedBadge: {
     flexShrink: 0,
@@ -44,7 +47,8 @@ const styles = stylex.create({
     fontSize: '11px',
     lineHeight: '18px',
     color: cssVar.colorTextSecondary,
-    background: cssVar.colorFillSecondary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
   },
 });
 
