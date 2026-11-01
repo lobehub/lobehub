@@ -53,6 +53,15 @@ export const LINEAR_OPEN_ISSUE_STATE_TYPES: LinearIssueStateType[] = [
   'started',
 ];
 
+/**
+ * States the import dialog starts with: open issues plus completed ones, so a
+ * team moving over keeps its history. Canceled issues stay out by default.
+ */
+export const LINEAR_DEFAULT_IMPORT_STATE_TYPES: LinearIssueStateType[] = [
+  ...LINEAR_OPEN_ISSUE_STATE_TYPES,
+  'completed',
+];
+
 /** Providers a task can be linked to through `task_external_links`. */
 export type TaskExternalProvider = 'linear';
 
