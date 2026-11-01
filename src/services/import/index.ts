@@ -14,18 +14,36 @@ class ImportService {
     await useUserStore.getState().importAppSettings(settings);
   };
 
-  importData = async (data: ImporterEntryData, callbacks?: OnImportCallbacks): Promise<void> => {
-    const handleError = (e: unknown) => {
-      callbacks?.onStageChange?.(ImportStage.Error);
-      const error = e as DefaultErrorShape;
+  private createErrorHandler = (callbacks?: OnImportCallbacks) => (e: unknown) => {
+    callbacks?.onStageChange?.(ImportStage.Error);
+    const error = e as any;
 
-      callbacks?.onError?.({
-        code: error.data.code,
-        httpStatus: error.data.httpStatus,
-        message: error.message,
-        path: error.data.path,
-      });
-    };
+    callbacks?.onError?.({
+      code: error?.data?.code || error?.code || 'IMPORT_FAILED',
+      httpStatus: error?.data?.httpStatus || error?.httpStatus || 500,
+      message: error?.message || 'Import failed',
+      path: error?.data?.path || error?.path,
+    });
+  };
+
+  private handleResult = (
+    result: any,
+    time: number,
+    callbacks?: OnImportCallbacks,
+    handleError?: (e: unknown) => void,
+  ) => {
+    if (result && 'success' in result && !result.success) {
+      handleError?.(result.error);
+      return;
+    }
+
+    const duration = Date.now() - time;
+    callbacks?.onStageChange?.(ImportStage.Success);
+    callbacks?.onSuccess?.(result.results, duration);
+  };
+
+  importData = async (data: ImporterEntryData, callbacks?: OnImportCallbacks): Promise<void> => {
+    const handleError = this.createErrorHandler(callbacks);
 
     const totalLength =
       (data.messages?.length || 0) +
@@ -38,10 +56,7 @@ class ImportService {
       const time = Date.now();
       try {
         const result = await lambdaClient.importer.importByPost.mutate({ data });
-        const duration = Date.now() - time;
-
-        callbacks?.onStageChange?.(ImportStage.Success);
-        callbacks?.onSuccess?.(result.results, duration);
+        this.handleResult(result, time, callbacks, handleError);
       } catch (e) {
         handleError(e);
       }
@@ -60,18 +75,7 @@ class ImportService {
     },
   ): Promise<void> => {
     const { callbacks } = options || {};
-
-    const handleError = (e: unknown) => {
-      callbacks?.onStageChange?.(ImportStage.Error);
-      const error = e as DefaultErrorShape;
-
-      callbacks?.onError?.({
-        code: error.data.code,
-        httpStatus: error.data.httpStatus,
-        message: error.message,
-        path: error.data.path,
-      });
-    };
+    const handleError = this.createErrorHandler(callbacks);
 
     const totalLength = Object.values(data.data)
       .map((d) => d.length)
@@ -82,10 +86,7 @@ class ImportService {
       const time = Date.now();
       try {
         const result = await lambdaClient.importer.importPgByPost.mutate(data);
-        const duration = Date.now() - time;
-
-        callbacks?.onStageChange?.(ImportStage.Success);
-        callbacks?.onSuccess?.(result.results, duration);
+        this.handleResult(result, time, callbacks, handleError);
       } catch (e) {
         handleError(e);
       }
@@ -114,7 +115,8 @@ class ImportService {
         pathname: `import_config/${filename}`,
       });
       pathname = result.data.path;
-    } catch {
+    } catch (e) {
+      handleError(e);
       throw new Error('Upload Error');
     }
 
@@ -122,9 +124,7 @@ class ImportService {
     const time = Date.now();
     try {
       const result = await lambdaClient.importer.importByFile.mutate({ pathname });
-      const duration = Date.now() - time;
-      callbacks?.onStageChange?.(ImportStage.Success);
-      callbacks?.onSuccess?.(result.results, duration);
+      this.handleResult(result, time, callbacks, handleError);
     } catch (e) {
       handleError(e);
     }
