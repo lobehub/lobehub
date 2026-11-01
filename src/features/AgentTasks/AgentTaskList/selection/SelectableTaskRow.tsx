@@ -5,6 +5,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import type { MouseEvent, ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useTaskSelectionStore } from './store';
 
@@ -36,6 +37,8 @@ const styles = stylex.create({
 interface SelectableTaskRowProps {
   children: ReactNode;
   id: string;
+  /** Names the row's checkbox for assistive technology, e.g. "T-12 Fix login". */
+  label: string;
   /** Selectable ids of the list, top to bottom — the Shift+click range. */
   order: () => readonly string[];
 }
@@ -45,10 +48,11 @@ interface SelectableTaskRowProps {
  * always once anything is selected), ⌘/Ctrl+click to toggle and Shift+click to
  * select a range. A plain click keeps opening the task.
  */
-const SelectableTaskRow = memo<SelectableTaskRowProps>(({ children, id, order }) => {
+const SelectableTaskRow = memo<SelectableTaskRowProps>(({ children, id, label, order }) => {
   const selected = useTaskSelectionStore((s) => s.selectedIds.includes(id));
   const selecting = useTaskSelectionStore((s) => s.selectedIds.length > 0);
   const frozen = useTaskSelectionStore((s) => !!s.progress);
+  const { t } = useTranslation('chat');
   const [hovered, setHovered] = useState(false);
 
   const handleClickCapture = useCallback(
@@ -86,7 +90,12 @@ const SelectableTaskRow = memo<SelectableTaskRowProps>(({ children, id, order })
         data-testid={'task-row-checkbox'}
         onClickCapture={handleCheck}
       >
-        <Checkbox checked={selected} disabled={frozen} size={16} />
+        <Checkbox
+          aria-label={t('taskList.bulk.selectTask', { task: label })}
+          checked={selected}
+          disabled={frozen}
+          size={16}
+        />
       </div>
       {children}
     </div>

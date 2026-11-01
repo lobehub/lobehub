@@ -316,7 +316,13 @@ const TaskList = memo<TaskListProps>((props) => {
             {item.row.isParentContext ? (
               <AgentTaskItem routeScope={routeScope} task={item.row.task} />
             ) : (
-              <SelectableTaskRow id={item.row.task.id} order={getSelectionOrder}>
+              <SelectableTaskRow
+                id={item.row.task.id}
+                order={getSelectionOrder}
+                label={[item.row.task.identifier, item.row.task.name?.trim()]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
                 <AgentTaskItem routeScope={routeScope} task={item.row.task} />
               </SelectableTaskRow>
             )}

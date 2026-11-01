@@ -2644,6 +2644,7 @@
   "taskList.bulk.search.placeholder": "输入命令…",
   "taskList.bulk.search.priority": "设置优先级…",
   "taskList.bulk.search.status": "修改状态…",
+  "taskList.bulk.selectTask": "选择 {{task}}",
   "taskList.bulk.selected_one": "已选择 {{count}} 项",
   "taskList.bulk.selected_other": "已选择 {{count}} 项",
   "taskList.bulk.setPriority": "设置优先级…",

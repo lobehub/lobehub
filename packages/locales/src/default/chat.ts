@@ -3112,6 +3112,7 @@ export default {
   'taskList.bulk.search.placeholder': 'Type a command…',
   'taskList.bulk.search.priority': 'Set priority…',
   'taskList.bulk.search.status': 'Change status…',
+  'taskList.bulk.selectTask': 'Select {{task}}',
   'taskList.bulk.selected_one': '{{count}} selected',
   'taskList.bulk.selected_other': '{{count}} selected',
   'taskList.bulk.setPriority': 'Set priority…',
