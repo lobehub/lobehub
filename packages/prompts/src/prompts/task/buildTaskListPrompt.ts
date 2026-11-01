@@ -20,7 +20,7 @@ export const buildTaskListPrompt = (input: BuildTaskListPromptInput, now?: Date)
   const lines: string[] = [
     '<task_list>',
     filtered
-      ? `<hint>The user is currently viewing the tasks list page with a filter applied. These are the ${shown} task(s) matching that filter, not every task. Use them for questions about the filtered view; call listTasks only for tasks outside it.</hint>`
+      ? `<hint>The user is currently viewing the tasks list page with a filter applied. These are the ${shown} task(s) matching that filter, not every task; tasks outside the filter are not listed here.</hint>`
       : `<hint>The user is currently viewing the tasks list page. These are the ${shown} task(s) displayed in the UI. Do NOT call listTasks to re-fetch them.</hint>`,
     ...buildTaskManagerDefaultsBlock(input),
   ];

@@ -96,6 +96,7 @@ describe('buildTaskListPrompt', () => {
     );
     expect(result).toContain('with a filter applied');
     expect(result).toContain('not every task');
-    expect(result).not.toContain('Do NOT call listTasks');
+    expect(result).toContain('tasks outside the filter are not listed here');
+    expect(result).not.toContain('listTasks');
   });
 });
