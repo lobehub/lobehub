@@ -1,0 +1,13 @@
+.lobe-quota-account-manager-modal-2f1ccb6d-radio-group {
+  width: 100%;
+}
+
+/* Targets the RadioGroup's own label / text DOM, which has no className hook. */
+.lobe-quota-account-manager-modal-2f1ccb6d-radio-group > label {
+  width: 100%;
+}
+
+.lobe-quota-account-manager-modal-2f1ccb6d-radio-group > label > span:last-child {
+  flex: 1;
+  min-width: 0;
+}

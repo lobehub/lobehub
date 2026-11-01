@@ -1,12 +1,13 @@
 'use client';
 
+import './Section.css';
+
 import { Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 import SkeletonBar from '../Bar';
-import moduleStyles from './Section.module.css';
 
 const styles = stylex.create({
   divider: {
@@ -88,7 +89,7 @@ const Group = ({
   withDesc = true,
 }: SettingsSectionSkeletonGroup) => (
   <Form.Group
-    className={moduleStyles.group}
+    className={'lobe-section-96565f37-group'}
     collapsible={false}
     variant={'filled'}
     title={
