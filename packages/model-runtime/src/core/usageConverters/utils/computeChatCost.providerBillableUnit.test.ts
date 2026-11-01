@@ -5,7 +5,7 @@ import { computeChatCost } from './computeChatCost';
 
 describe('computeChatCost with providerBillableUnit units', () => {
   const pricing: Pricing = {
-    units: [{ name: 'providerBillableUnit', rate: 1.16, strategy: 'fixed', unit: 'unit' }],
+    units: [{ name: 'providerBillableUnit', rate: 1.5, strategy: 'fixed', unit: 'unit' }],
   };
 
   it('bills provider-reported units at the per-unit USD rate', () => {
@@ -14,7 +14,7 @@ describe('computeChatCost with providerBillableUnit units', () => {
 
     expect(result?.breakdown).toHaveLength(1);
     expect(result?.breakdown[0]).toMatchObject({ quantity: 0.04 });
-    expect(result?.totalCost).toBe(0.0464);
+    expect(result?.totalCost).toBe(0.06);
   });
 
   it('ignores token counts for unit-billed pricing', () => {

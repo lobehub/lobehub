@@ -10,8 +10,8 @@ vi.mock('@fal-ai/client', () => ({ createFalClient: vi.fn() }));
 vi.mock('../../utils/getModelPricing', () => ({ getModelPricing: vi.fn() }));
 
 const unitPricing: Pricing = {
-  approximatePricePerImage: 0.0464,
-  units: [{ name: 'providerBillableUnit', rate: 1.16, strategy: 'fixed', unit: 'unit' }],
+  approximatePricePerImage: 0.06,
+  units: [{ name: 'providerBillableUnit', rate: 1.5, strategy: 'fixed', unit: 'unit' }],
 };
 
 /**
@@ -56,7 +56,7 @@ describe('LobeFalAI createImage billable units', () => {
     });
 
     expect(getModelPricing).toHaveBeenCalledWith('gpt-image-2', 'lobehub', pricingContext);
-    expect(result.modelUsage).toEqual({ cost: 0.0464, providerBillableUnits: 0.04 });
+    expect(result.modelUsage).toEqual({ cost: 0.06, providerBillableUnits: 0.04 });
   });
 
   it('omits usage when the card does not bill provider units', async () => {
@@ -78,7 +78,7 @@ describe('LobeFalAI createImage billable units', () => {
 
     const result = await new LobeFalAI({ apiKey: 'k', id: 'lobehub' }).createImage(payload);
 
-    expect(result.modelUsage).toEqual({ cost: 0.0464 });
+    expect(result.modelUsage).toEqual({ cost: 0.06 });
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('no x-fal-billable-units header'),
     );
