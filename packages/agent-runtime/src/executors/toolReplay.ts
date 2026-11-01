@@ -47,6 +47,7 @@ export const resolveToolReplay = async ({
         executionTime: message.metadata?.toolExecutionTimeMs ?? 0,
         state: message.pluginState,
         stop: message.metadata?.toolResultStop,
+        workRegistration: message.metadata?.toolWorkRegistration,
         success:
           message.metadata?.toolResultSuccess ??
           (!message.pluginError &&

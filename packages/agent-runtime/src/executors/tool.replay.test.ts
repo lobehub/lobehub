@@ -1,8 +1,14 @@
-import type { ChatToolPayload, CreateMessageParams, UIChatMessage } from '@lobechat/types';
+import type {
+  ChatToolPayload,
+  CreateMessageParams,
+  UIChatMessage,
+  WorkRegistrationIntent,
+} from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentRuntimeHost, ToolRunExecution } from '../transport';
 import type { AgentInstruction, AgentState } from '../types';
+import { omitToolWorkRegistration } from '../utils/redactResultForEvents';
 import { callTool, callToolsBatch } from './tool';
 
 const call: ChatToolPayload = {
@@ -34,7 +40,7 @@ const fixture = (rows: Partial<UIChatMessage>[] = []) => {
         stored.find((row) => row.tool_call_id === id && row.parentId === parentId)?.id,
     ),
     getToolMessage: vi.fn(async (id: string) => stored.find((row) => row.id === id)),
-    query: vi.fn(async () => structuredClone(stored)),
+    query: vi.fn(async () => structuredClone(stored).map(omitToolWorkRegistration)),
     updateToolIntervention: vi.fn(),
     updateToolMessage: vi.fn(async (id: string, value: Partial<UIChatMessage>) => {
       const row = stored.find((row) => row.id === id)!;
@@ -165,6 +171,81 @@ describe.each(['single', 'batch'] as const)('%s tool step redelivery', (mode) =>
     expect(f.stored).toHaveLength(1);
     expect(f.tools.run).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    {
+      action: 'register',
+      document: { documentId: 'docs-one', changeType: 'created', toolName: 'createDocument' },
+      type: 'document',
+    },
+    {
+      args: { title: 'original title' },
+      data: { url: 'https://example.com/items/42', body: 'untruncated result' },
+      provider: 'example',
+      toolName: 'createItem',
+      type: 'skill',
+    },
+  ] satisfies WorkRegistrationIntent[])(
+    'replays a durable %s Work intent after registration is interrupted',
+    async (intent) => {
+      const f = fixture();
+      const registerWork = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('worker stopped'))
+        .mockResolvedValue(undefined);
+      f.host.transports.tools!.registerWork = registerWork;
+      f.tools.run.mockResolvedValue({
+        attempts: 1,
+        result: {
+          content: 'truncated result',
+          executionTime: 20,
+          success: true,
+          workRegistration: intent,
+        },
+      });
+      if (mode === 'batch') await expect(execute(f)).rejects.toThrow('worker stopped');
+      else await execute(f);
+      expect(f.stored).toHaveLength(1);
+      const persisted = structuredClone(f.stored);
+      // A new host has only the committed message, not the first execution's intent.
+      const resumed = fixture(persisted);
+      resumed.host.transports.tools!.registerWork = registerWork;
+      const result = await execute(resumed);
+      expect(resumed.tools.run).not.toHaveBeenCalled();
+      expect(registerWork).toHaveBeenCalledTimes(2);
+      expect(registerWork.mock.calls[1][0]).toMatchObject({
+        intent,
+        sourceMessageId: persisted[0].id,
+        sourceToolCallId: call.id,
+        state: registerWork.mock.calls[0][0].state,
+      });
+      if (intent.type === 'skill') {
+        expect(result.events).not.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              result: expect.objectContaining({ workRegistration: intent }),
+            }),
+          ]),
+        );
+        expect(JSON.stringify(result.newState.messages)).not.toContain('untruncated result');
+      }
+    },
+  );
+
+  it.each(['constructor', '__proto__'])(
+    'executes provider call id %s as an own key',
+    async (id) => {
+      const f = fixture();
+      const originalId = call.id;
+      call.id = id;
+      try {
+        await execute(f);
+        expect(f.tools.run).toHaveBeenCalledOnce();
+      } finally {
+        call.id = originalId;
+      }
+    },
+  );
 
   it('reuses a completed empty result with persisted execution metadata', async () => {
     const f = fixture([

@@ -46,6 +46,7 @@ export const toolResultMetadata = (result: ToolRunResult) => ({
   toolExecutionTimeMs: result.executionTime ?? 0,
   toolResultStop: result.stop ?? false,
   toolResultSuccess: result.success,
+  ...(result.workRegistration && { toolWorkRegistration: result.workRegistration }),
 });
 
 export const persistToolResultMetadata = async (

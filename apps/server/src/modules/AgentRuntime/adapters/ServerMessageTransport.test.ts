@@ -25,6 +25,32 @@ const createUniqueViolation = (constraint: string) => {
 };
 
 describe('ServerMessageTransport', () => {
+  it('keeps the complete Work intent readable while excluding it from runtime message queries', async () => {
+    const intent = {
+      type: 'skill' as const,
+      provider: 'example',
+      toolName: 'create',
+      data: { body: 'raw payload' },
+    };
+    const row = {
+      id: 'tool-1',
+      role: 'tool',
+      content: 'truncated',
+      metadata: { operationId: 'op', toolWorkRegistration: intent },
+    };
+    const model = {
+      query: vi.fn().mockResolvedValue([row]),
+      findById: vi.fn().mockResolvedValue(row),
+      findMessagePlugin: vi.fn().mockResolvedValue({ toolCallId: 'call-1' }),
+    } as unknown as MessageModel;
+    const transport = new ServerMessageTransport(model);
+    expect((await transport.getToolMessage('tool-1'))?.metadata?.toolWorkRegistration).toEqual(
+      intent,
+    );
+    expect((await transport.query())[0].metadata).toEqual({ operationId: 'op' });
+    expect(row.metadata.toolWorkRegistration).toEqual(intent);
+  });
+
   it('reads both halves of a durable tool result instead of only its message row', async () => {
     const messageModel = {
       findById: vi.fn().mockResolvedValue({

@@ -39,6 +39,29 @@ describe('ClientMessageTransport', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps raw Work intents available to replay but outside runtime conversation messages', async () => {
+    const store = createStore();
+    const intent = {
+      type: 'skill' as const,
+      provider: 'example',
+      toolName: 'create',
+      data: { body: 'raw payload' },
+    };
+    const row = {
+      id: 'tool-1',
+      role: 'tool',
+      content: 'truncated',
+      metadata: { operationId: 'op', toolWorkRegistration: intent },
+    };
+    store.dbMessagesMap['message-key'] = [row as any];
+    const transport = new ClientMessageTransport(() => store, 'message-key', 'operation-1');
+    expect((await transport.getToolMessage('tool-1'))?.metadata?.toolWorkRegistration).toEqual(
+      intent,
+    );
+    expect((await transport.query())[0].metadata).toEqual({ operationId: 'op' });
+    expect(row.metadata.toolWorkRegistration).toEqual(intent);
+  });
+
   describe('query', () => {
     const projectedRow = {
       content: '',

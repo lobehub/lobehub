@@ -6,6 +6,7 @@ import type {
   RuntimeToolMessage,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
+import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import type {
   ChatMessagePluginError,
   CreateMessageParams,
@@ -96,7 +97,7 @@ export class ClientMessageTransport implements MessageTransport {
     _params?: QueryMessagesInput,
     _options?: QueryMessagesOptions,
   ): Promise<UIChatMessage[]> {
-    return this.withStoredToolPayloads(this.getMessages());
+    return (await this.withStoredToolPayloads(this.getMessages())).map(omitToolWorkRegistration);
   }
 
   async update(id: string, params: Partial<UpdateMessageParams>): Promise<void> {

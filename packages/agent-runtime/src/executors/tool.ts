@@ -758,7 +758,10 @@ export const callToolsBatch =
     const parentMessageId = payload.parentMessageId as string;
     const toolsCalling = payload.toolsCalling as ChatToolPayload[];
     // Batch human approval resumes onto rows the approval pause already created.
-    const existingToolMessageIds = { ...payload.existingToolMessageIds } as Record<string, string>;
+    const existingToolMessageIds: Record<string, string> = Object.assign(
+      Object.create(null),
+      payload.existingToolMessageIds,
+    );
     const tools = requireToolTransport(host);
     const events: AgentEvent[] = [];
     const clientTools: ChatToolPayload[] = [];
