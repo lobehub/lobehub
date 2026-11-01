@@ -39,16 +39,22 @@ export const requestSignOff = async (ctx: GoalServiceContext, graph: GoalGraphSn
   await ctx.briefs.openSignOff(graph.goal, acceptance.id);
 };
 
-const SIGNED_OFF_ARCHIVABLE_TASK_STATUSES = new Set(['canceled', 'completed']);
+const SIGNED_OFF_ARCHIVABLE_TASK_STATUSES = ['canceled', 'completed'];
 
 /**
  * The owner signed the Goal off (accepted its Goal-level acceptance), so its
  * finished Tasks are done with: archive them instead of leaving the owner to
- * clear them by hand. Conservative on purpose — only a signed-off `achieved`
- * Goal, only Tasks that are completed or canceled, and only through the
- * guarded archive write, which keeps anything running or scheduled live. An
- * unfinished Task stays where its owner can see it, and every archived one
- * can be restored on its own.
+ * clear them by hand. Conservative on purpose — only an `achieved` Goal whose
+ * Goal-level acceptance is `accepted`, only Tasks that are completed or
+ * canceled, and only through the guarded archive write, which keeps anything
+ * running or scheduled live. An unfinished Task stays where its owner can see
+ * it, and every archived one can be restored on its own.
+ *
+ * The sign-off and the `achieved` transition can land in either order — the
+ * sign-off is asked for before the Goal turns terminal — so both call this and
+ * whichever comes second does the work. The finished-status check sits in the
+ * archive UPDATE itself, so a Task reopened for changes after this read is
+ * never archived again.
  *
  * `taskId` is the signed acceptance's Task; anything other than a Goal-level
  * acceptance archives nothing. Returns the archived Task ids.
@@ -66,6 +72,8 @@ export const archiveSignedOffTasks = async (
       node.kind === 'task' && node.taskId === taskId && node.title === GOAL_ACCEPTANCE_TASK_TITLE,
   );
   if (!isGoalAcceptance) return [];
+  const acceptances = await ctx.acceptanceService.acceptanceModel.findBySubjects('task', [taskId]);
+  if (!acceptances.some((acceptance) => acceptance.status === 'accepted')) return [];
 
   const taskIds = [
     ...new Set(
@@ -75,8 +83,11 @@ export const archiveSignedOffTasks = async (
   const archiveModel = new TaskArchiveModel(ctx.db, ctx.userId, ctx.workspaceId);
   const archived: string[] = [];
   for (const task of await ctx.taskModel.findByIds(taskIds)) {
-    if (task.archivedAt || !SIGNED_OFF_ARCHIVABLE_TASK_STATUSES.has(task.status)) continue;
-    if (await archiveModel.archive(task.id)) archived.push(task.id);
+    if (task.archivedAt || !SIGNED_OFF_ARCHIVABLE_TASK_STATUSES.includes(task.status)) continue;
+    const written = await archiveModel.archive(task.id, {
+      onlyStatuses: SIGNED_OFF_ARCHIVABLE_TASK_STATUSES,
+    });
+    if (written) archived.push(task.id);
   }
   return archived;
 };

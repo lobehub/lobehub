@@ -191,6 +191,7 @@ export class GoalService {
       },
       answerClarifications: (...args) => self.answerClarifications(...args),
       answerReleaseGate: (...args) => self.answerReleaseGate(...args),
+      archiveSignedOffTasks: (...args) => self.archiveSignedOffTasks(...args),
       attachTaskDeliverables: (...args) => self.attachTaskDeliverables(...args),
       bindTopic: (...args) => self.bindTopic(...args),
       get briefs() {

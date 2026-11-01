@@ -315,8 +315,10 @@ export const reopenForChanges = async (
   const reason = comment ? `Changes requested: ${comment}` : 'Changes requested';
   // A sign-off archived the Goal's finished Tasks (`archiveSignedOffTasks`);
   // the runner refuses an archived Task, so the one being reworked comes back.
-  await new TaskArchiveModel(ctx.db, ctx.userId, ctx.workspaceId).unarchive(taskId);
+  // Leave `completed` first: that archive only matches a finished Task, so one
+  // racing this reopen either lands before the unarchive or matches nothing.
   await ctx.taskModel.updateStatus(taskId, 'backlog', { error: null });
+  await new TaskArchiveModel(ctx.db, ctx.userId, ctx.workspaceId).unarchive(taskId);
   await ctx.graphModel.updateNodeStatus(goal.id, node.id, 'active', reason);
   await ctx.goalModel.update(goal.id, {
     config: {
