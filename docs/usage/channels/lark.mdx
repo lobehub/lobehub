@@ -29,7 +29,51 @@ LobeHub supports two connection modes for Lark bots:
 - **WebSocket (Recommended)** — Persistent connection using Lark's official long-lived client. Events are delivered in real time; no public webhook URL is required, so this works out of the box even without a publicly reachable server. This is the default mode for new bots.
 - **Webhook** — HTTP callbacks to an Event Subscription URL. Use this mode if you prefer a stateless callback setup or your app already has an Event Subscription URL configured on the Lark Open Platform.
 
-> **Note:** The steps below (Step 4) that configure an **Event Subscription URL** on the Lark Open Platform only apply to **Webhook mode**. Skip them if you are using the default **WebSocket** mode.
+> **Note:** Both modes require a message event subscription. Quick creation presets permissions and events; manually created apps need these configured separately. Only **Webhook mode** needs an **Event Subscription URL**; **WebSocket mode** uses the long-connection subscription method.
+
+## Quick Create a Lark Agent App (Recommended)
+
+For a new bot, use the agent app shortcut on the Lark Open Platform. It presets permissions and events for an agent app. This creates the Lark app; you still choose the agent it connects to in LobeHub.
+
+<Steps>
+  ### Open Quick Creation
+
+  Sign in to the [Lark Open Platform](https://open.larksuite.com/app). At the top of the app list, find **Built for agents. Ready to connect.** and click **Create**.
+
+  ![Lark Open Platform agent app banner with the Create button](https://app.lobehub.com/f/file_bJQtafLrKIjL)
+
+  ### Choose an Avatar and Name
+
+  On **Create a Lark app for your agent**, select an **Avatar** and enter a **Name**, such as "Lobehub Weekly Helper". Click **Create** and wait for the automatic configuration to finish.
+
+  ![Lark agent app creation form with an avatar and the name Lobehub Weekly Helper](https://app.lobehub.com/f/file_5nzE06PzNsqi)
+
+  ### Copy App Credentials
+
+  On the **App created** page, copy **App ID** and **App Secret**. Keep the App Secret private: do not send it to a group chat or include it in a public screenshot.
+
+  ![Lark App created page showing App ID with App Secret hidden](https://app.lobehub.com/f/file_5P7dVZyinqXa)
+
+  ### Connect to LobeHub
+
+  Open the agent you want to connect in LobeHub, then go to **Settings** → **Channels** → **Lark**. Enter the **App ID** and **App Secret** you copied. Keep the default **WebSocket** connection mode under **Advanced Settings** and click **Save Configuration**.
+
+  WebSocket mode does not need an Event Subscription URL, Verification Token, or Encrypt Key. You do not need to add existing preset permissions or events again. If a tool later reports a missing permission, grant the corresponding permission as prompted.
+
+  ### Open the App and Test
+
+  Follow the Lark page prompts to confirm the app is published and available. Complete administrator approval first if your organization requires it. Click **Open App** and send the bot a message to confirm that your LobeHub agent replies.
+
+  If it does not reply, check that the bot capability is enabled, the event subscription uses a long connection, `im.message.receive_v1` is included, and the channel configuration has been saved in LobeHub. See Troubleshooting below for further checks.
+</Steps>
+
+The screenshots show the international Lark interface at open.larksuite.com with an example app named "Lobehub Weekly Helper". Use your own app name.
+
+Once connected, you do not need to repeat the manual creation steps below. Continue with **Step 7: Set Your Platform Identity** and **Access Policies**. If quick creation is unavailable, you are configuring an existing app, or you choose Webhook mode, use the manual setup below.
+
+## Manual Setup (Alternative)
+
+The following steps cover creating an enterprise app from scratch. For an existing app, start at the step you need to complete or change. For a quick-created app, check only missing configuration; do not create the app again.
 
 ## Step 1: Create a Lark App
 
@@ -75,8 +119,10 @@ LobeHub supports two connection modes for Lark bots:
         "contact:user.employee_id:readonly",
         "event:ip_list",
         "im:chat.members:bot_access",
+        "im:chat:readonly",
         "im:message",
         "im:message.group_at_msg:readonly",
+        "im:message.group_msg",
         "im:message.p2p_msg:readonly",
         "im:message:readonly",
         "im:message:send_as_bot",
@@ -116,30 +162,33 @@ LobeHub supports two connection modes for Lark bots:
 
   In **Advanced Settings**, choose the **Connection Mode**:
 
-  - **WebSocket** (default) — Recommended for new bots; skip to Step 5.
-  - **Webhook** — For apps with an existing Event Subscription URL on the Lark Open Platform; continue to the next steps.
+  - **WebSocket** (default) — Recommended for new bots. After saving, continue to Step 4 and enable long-connection event delivery on the Lark Open Platform.
+  - **Webhook** — For apps with a public callback endpoint. After saving, copy the Event Subscription URL and configure the callback in Step 4.
 
-  > You don't need to fill in **Verification Token** or **Encrypt Key** at this point — you can set them up after configuring the Event Subscription in Step 4 (Webhook mode only).
+  > **Verification Token** and **Encrypt Key** are only used in Webhook mode. You can leave them empty for now and fill them in after configuring the callback in Step 4.
 
-  ### Save Configuration (Webhook Only)
+  ### Save Configuration
 
-  Click **Save Configuration**. In **Webhook mode**, an **Event Subscription URL** will be displayed after saving. Copy this URL — you will need it in the next step. In **WebSocket mode**, the bot connects automatically and no URL is generated.
+  Click **Save Configuration**. WebSocket mode immediately attempts to establish the long connection. Webhook mode displays an **Event Subscription URL**; copy it for the next step.
 
   ![](/blog/assets0a25d3ffb02d35f6f28cdfa9da2dccd8.webp)
 </Steps>
 
-## Step 4: Set Up Event Subscription in Lark (Webhook Only)
+## Step 4: Set Up Event Subscription in Lark
 
-> Skip this step if you are using WebSocket mode (default).
+Complete this step for either connection mode. Without an event subscription, the bot cannot receive messages.
 
 <Steps>
   ### Open Event Subscription Settings
 
   Go back to your app in the Lark Developer Portal. Navigate to **Event Subscription**.
 
-  ### Configure the Request URL
+  ### Select the Subscription Method
 
-  Paste the **Event Subscription URL** you copied from LobeHub into the **Request URL** field. The platform will verify the endpoint automatically.
+  Follow the path that matches the connection mode selected in LobeHub:
+
+  - **WebSocket (recommended)** — Select **Use long connection to receive events** and save. Make sure the channel configuration has already been saved in LobeHub and the bot remains connected. No public Request URL is required.
+  - **Webhook** — Select **Send events to developer server**, paste the **Event Subscription URL** copied from LobeHub into the **Request URL** field, and let the platform verify the endpoint.
 
   ### Add the Message Event
 
@@ -151,9 +200,9 @@ LobeHub supports two connection modes for Lark bots:
 
   ![](/blog/assets313dfd5108d6fade542c846a87e2aa5a.webp)
 
-  ### (Recommended) Fill in Verification Token and Encrypt Key
+  ### Configure Webhook Security (Webhook Only)
 
-  After configuring Event Subscription, you can find the **Verification Token** and **Encrypt Key** at the top of the Event Subscription page under **Encryption Strategy**.
+  If you use Webhook mode, find the **Verification Token** and **Encrypt Key** at the top of the Event Subscription page under **Encryption Strategy**. WebSocket mode does not use these fields.
 
   Go back to LobeHub's channel settings and fill in:
 
@@ -231,7 +280,7 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 | **App ID**                 | Yes      | Your Lark app's App ID (`cli_xxx`)                                                                     |
 | **App Secret**             | Yes      | Your Lark app's App Secret                                                                             |
 | **Connection Mode**        | No       | `websocket` (default) or `webhook`. Choose based on whether your app can accept a public webhook URL   |
-| **Verification Token**     | No       | Verifies webhook event source (recommended)                                                            |
+| **Verification Token**     | No       | Verifies the event source in Webhook mode (recommended)                                                |
 | **Encrypt Key**            | No       | Decrypts encrypted event payloads (Webhook mode only)                                                  |
 | **Event Subscription URL** | —        | Auto-generated after saving in Webhook mode; paste into Lark Developer Portal                          |
 | **Allowed User IDs**       | No       | Comma- or whitespace-separated Lark `open_id` values. Global gate — applies to DMs and group @mentions |
@@ -241,7 +290,8 @@ See the [Channels overview](/docs/usage/channels/overview#direct-message-policy)
 
 ## Troubleshooting
 
-- **Bot not connecting (WebSocket mode):** Verify the App ID and App Secret are correct, and that the bot capability is enabled with the `im.message.receive_v1` event registered.
+- **Bot not connecting (WebSocket mode):** Verify the App ID and App Secret are correct and that the LobeHub service can reach the Lark Open Platform.
+- **Connected but not receiving messages (WebSocket mode):** Confirm the Lark subscription method is **Use long connection to receive events**, `im.message.receive_v1` is added, and an app version containing those changes has been published.
 - **Event Subscription URL verification failed (Webhook mode):** Ensure you saved the configuration in LobeHub first, and the URL was copied correctly.
 - **Bot not responding:** Verify the app is published and approved, the bot capability is enabled, and the `im.message.receive_v1` event is subscribed.
 - **Bot ignores DMs:** Open **Advanced Settings** in LobeHub and check **DM Policy**. If it is `Disabled`, switch to `Open` or `Allowlist`. If it is `Allowlist`, confirm the sender's `open_id` is listed in **Allowed User IDs**.

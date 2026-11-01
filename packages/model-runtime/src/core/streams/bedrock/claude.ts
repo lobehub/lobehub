@@ -33,6 +33,9 @@ export const AWSBedrockClaudeStream = (
         streamStack,
       }),
     )
-    .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
+    .pipeThrough(
+      // Same Messages event contract as `AnthropicStream`: closing without a terminal event is a truncation.
+      createSSEProtocolTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
+    )
     .pipeThrough(createCallbacksTransformer(options?.callbacks));
 };

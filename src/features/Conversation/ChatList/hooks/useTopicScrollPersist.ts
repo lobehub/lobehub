@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { VListHandle } from 'virtua';
 
 import { AT_BOTTOM_THRESHOLD } from '../components/AutoScroll/const';
+import type { ResolvedMessageDeepLink } from '../utils/messageDeepLink';
 import {
   isDraftPromotionKey,
   loadScrollSnapshot,
@@ -10,29 +11,99 @@ import {
   pruneScrollSnapshots,
   saveScrollSnapshot,
 } from '../utils/scrollSnapshotStore';
+import { settleScrollTarget } from '../utils/settleScrollTarget';
 
 const FLUSH_THROTTLE_MS = 200;
+const DEEP_LINK_MAX_ATTEMPTS = 30;
+const DEEP_LINK_RETRY_MS = 16;
 // Cap polling for virtua's scrollSize to settle so we don't loop forever when
 // the saved offset is unreachable (e.g. messages were trimmed since save).
 const RESTORE_MAX_FRAMES = 30;
+// The bottom restore keeps jumping until the list height has been stable this
+// long — virtua's own settle window for imperative scrolls, since measuring a
+// row and re-rendering the list can take more than one frame.
+const BOTTOM_SETTLE_QUIET_MS = 150;
+// Upper bound while a streaming reply keeps growing; auto-scroll follows after.
+const BOTTOM_SETTLE_MAX_MS = 1000;
+const USER_SCROLL_INPUT_EVENTS = ['keydown', 'pointerdown', 'touchstart', 'wheel'] as const;
 
-interface PendingWrite {
+interface ScrollPosition {
+  anchorId?: string;
+  anchorOffset?: number;
   atBottom: boolean;
-  key: string;
   offset: number;
 }
 
+interface PendingWrite extends ScrollPosition {
+  key: string;
+}
+
+export type InitialScrollPosition = 'bottom' | 'top';
+
 interface UseTopicScrollPersistOptions {
+  containerRef?: RefObject<HTMLDivElement | null>;
   contextKey: string;
-  dataSourceLength: number;
+  /** Message row ids, in message-index space. */
+  dataSource: string[];
+  /**
+   * Returns the VList scroll element. Snapshot and bottom restores write its
+   * `scrollTop` directly: virtua's `scrollTo` / `scrollToIndex` keep
+   * re-applying their target on every item resize within 150ms, so a restore
+   * that lands while a reply is streaming would pin the viewport and override
+   * the user's own scrolling until the stream ends.
+   */
+  getScroller: () => HTMLElement | null;
   /**
    * Number of synthetic rows prepended to the VList before the messages
-   * (e.g. the headerSlot spacer). Added when targeting the last message so
-   * scrollToIndex lands on the right virtua row.
+   * (e.g. the headerSlot spacer). Added when targeting a deep-linked message
+   * so scrollToIndex lands on the right virtua row.
    */
   headerOffset?: number;
+  /**
+   * Where a topic opens when there is no deep link. `bottom` restores the saved
+   * position, or the end of the conversation; `top` always opens at the start.
+   */
+  initialPosition?: InitialScrollPosition;
+  messageDeepLink?: ResolvedMessageDeepLink;
   virtuaRef: RefObject<VListHandle | null>;
 }
+
+const findDeepLinkElement = (
+  container: HTMLDivElement,
+  messageId: string,
+  displayMessageId: string,
+) => {
+  const document = container.ownerDocument;
+  const exactCandidateIds = [messageId, `${messageId}__answer`, `${messageId}__workflow`];
+
+  for (const id of exactCandidateIds) {
+    const element = document.getElementById(id);
+    if (element && container.contains(element)) return { element, exact: true };
+  }
+
+  const messageElements = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'));
+  const exactMessageElement = messageElements.find(
+    (element) => element.dataset.messageId === messageId,
+  );
+  if (exactMessageElement) return { element: exactMessageElement, exact: true };
+
+  if (messageId === displayMessageId) return;
+
+  const fallbackCandidateIds = [
+    displayMessageId,
+    `${displayMessageId}__answer`,
+    `${displayMessageId}__workflow`,
+  ];
+  for (const id of fallbackCandidateIds) {
+    const element = document.getElementById(id);
+    if (element && container.contains(element)) return { element, exact: false };
+  }
+
+  const displayMessageElement = messageElements.find(
+    (element) => element.dataset.messageId === displayMessageId,
+  );
+  return displayMessageElement ? { element: displayMessageElement, exact: false } : undefined;
+};
 
 /**
  * Persists per-topic chat scroll position to localStorage.
@@ -46,9 +117,13 @@ interface UseTopicScrollPersistOptions {
  * contextKey-change branch, preserving scroll instead of restoring.
  */
 export const useTopicScrollPersist = ({
+  containerRef,
   contextKey,
-  dataSourceLength,
+  dataSource,
+  getScroller,
   headerOffset = 0,
+  initialPosition = 'bottom',
+  messageDeepLink,
   virtuaRef,
 }: UseTopicScrollPersistOptions) => {
   const pendingWriteRef = useRef<PendingWrite | null>(null);
@@ -58,12 +133,13 @@ export const useTopicScrollPersist = ({
   // (cleared after each throttled flush), this survives idle reading so a
   // leave-time re-stamp can refresh `savedAt` even when the user hasn't
   // scrolled — see `persistFresh`.
-  const lastKnownRef = useRef<{ atBottom: boolean; offset: number } | null>(null);
+  const lastKnownRef = useRef<ScrollPosition | null>(null);
   // Initial mount counts as a "key change" so the first restore attempt fires.
   const needsRestoreRef = useRef(true);
   const prevContextKeyRef = useRef(contextKey);
-  const dataSourceLengthRef = useRef(dataSourceLength);
-  dataSourceLengthRef.current = dataSourceLength;
+  const dataSourceLength = dataSource.length;
+  const dataSourceRef = useRef(dataSource);
+  dataSourceRef.current = dataSource;
   // Mirror the active key so unmount / beforeunload handlers (bound once) can
   // re-stamp the topic the user is actually leaving.
   const contextKeyRef = useRef(contextKey);
@@ -73,6 +149,28 @@ export const useTopicScrollPersist = ({
   // recordScroll and overwrite the snapshot — typically with offset 0 when
   // virtua clamps the target, locking the user at the top on every revisit.
   const restoringRef = useRef(false);
+  const handledDeepLinkRef = useRef<string | undefined>(undefined);
+  const restoreSequenceRef = useRef(0);
+
+  const resolvePosition = useCallback(
+    (offset: number, atBottom: boolean): ScrollPosition => {
+      const ref = virtuaRef.current;
+      const messages = dataSourceRef.current;
+      if (!ref || messages.length === 0) return { atBottom, offset };
+
+      const messageIndex = Math.min(
+        Math.max(ref.findItemIndex(offset) - headerOffset, 0),
+        messages.length - 1,
+      );
+      return {
+        anchorId: messages[messageIndex],
+        anchorOffset: offset - ref.getItemOffset(headerOffset + messageIndex),
+        atBottom,
+        offset,
+      };
+    },
+    [headerOffset, virtuaRef],
+  );
 
   const flushNow = useCallback(() => {
     if (flushTimerRef.current) {
@@ -81,26 +179,24 @@ export const useTopicScrollPersist = ({
     }
     const pending = pendingWriteRef.current;
     if (!pending) return;
-    saveScrollSnapshot(pending.key, {
-      atBottom: pending.atBottom,
-      offset: pending.offset,
-      savedAt: Date.now(),
-    });
+    const { key, ...position } = pending;
+    saveScrollSnapshot(key, { ...position, savedAt: Date.now() });
     pendingWriteRef.current = null;
   }, []);
 
   const recordScroll = useCallback(
     (offset: number, atBottom: boolean) => {
       if (restoringRef.current) return;
-      lastKnownRef.current = { atBottom, offset };
-      pendingWriteRef.current = { atBottom, key: contextKey, offset };
+      const position = resolvePosition(offset, atBottom);
+      lastKnownRef.current = position;
+      pendingWriteRef.current = { ...position, key: contextKey };
       if (flushTimerRef.current) return;
       flushTimerRef.current = setTimeout(() => {
         flushTimerRef.current = null;
         flushNow();
       }, FLUSH_THROTTLE_MS);
     },
-    [contextKey, flushNow],
+    [contextKey, flushNow, resolvePosition],
   );
 
   // Re-stamp the last known position for `key` with a fresh `savedAt`. Called
@@ -117,7 +213,7 @@ export const useTopicScrollPersist = ({
     pendingWriteRef.current = null;
     const last = lastKnownRef.current;
     if (!last) return;
-    saveScrollSnapshot(key, { atBottom: last.atBottom, offset: last.offset, savedAt: Date.now() });
+    saveScrollSnapshot(key, { ...last, savedAt: Date.now() });
   }, []);
 
   // On contextKey change: re-stamp the previous key with the latest position,
@@ -140,7 +236,7 @@ export const useTopicScrollPersist = ({
       migrateScrollSnapshot(prevKey, contextKey);
       // If data hasn't rendered yet, leave the default first-mount restore
       // (scroll-to-bottom) in place — there's nothing to preserve.
-      if (dataSourceLengthRef.current > 0) {
+      if (dataSourceRef.current.length > 0) {
         needsRestoreRef.current = false;
       }
       return;
@@ -152,17 +248,25 @@ export const useTopicScrollPersist = ({
   // Restore (or fall back to scroll-to-bottom) once data is available for
   // the active contextKey. Re-runs on contextKey or data length change.
   useEffect(() => {
-    if (!needsRestoreRef.current) return;
+    const deepLinkKey = messageDeepLink
+      ? `${contextKey}:${messageDeepLink.navigationKey}`
+      : undefined;
+    const shouldHandleDeepLink = !!messageDeepLink && handledDeepLinkRef.current !== deepLinkKey;
+
+    if (!needsRestoreRef.current && !shouldHandleDeepLink) return;
     if (!virtuaRef.current || dataSourceLength === 0) return;
 
     needsRestoreRef.current = false;
     restoringRef.current = true;
+    const restoreSequence = ++restoreSequenceRef.current;
 
     // After two rAFs the programmatic scroll's onScroll volley has flushed, so
     // we can re-enable recording and record where the restore landed.
     const finalize = (convergeSnapshot: boolean) => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
+          if (restoreSequenceRef.current !== restoreSequence) return;
+
           const ref = virtuaRef.current;
           if (ref) {
             const isAtBottom =
@@ -170,16 +274,13 @@ export const useTopicScrollPersist = ({
             // Seed the last-known position from where the restore actually
             // landed so a later leave-time re-stamp (persistFresh) has a
             // position to refresh even if the user reads without scrolling.
-            lastKnownRef.current = { atBottom: isAtBottom, offset: ref.scrollOffset };
+            const landed = resolvePosition(ref.scrollOffset, isAtBottom);
+            lastKnownRef.current = landed;
             if (convergeSnapshot) {
               // Target was unreachable — persist the actual landing position so
               // the snapshot self-heals and future revisits don't burn the
               // polling budget.
-              pendingWriteRef.current = {
-                atBottom: isAtBottom,
-                key: contextKey,
-                offset: ref.scrollOffset,
-              };
+              pendingWriteRef.current = { ...landed, key: contextKey };
               flushNow();
             }
           }
@@ -188,12 +289,132 @@ export const useTopicScrollPersist = ({
       });
     };
 
-    const snapshot = loadScrollSnapshot(contextKey);
-    const targetOffset = snapshot && !snapshot.atBottom ? snapshot.offset : null;
+    if (shouldHandleDeepLink && messageDeepLink) {
+      const targetDeepLink = messageDeepLink;
+      handledDeepLinkRef.current = deepLinkKey;
+      virtuaRef.current.scrollToIndex(headerOffset + targetDeepLink.index, { align: 'center' });
 
-    if (targetOffset === null) {
-      virtuaRef.current.scrollToIndex(headerOffset + dataSourceLength - 1, { align: 'end' });
+      const container = containerRef?.current;
+      if (!container) {
+        targetDeepLink.onHandled?.();
+        finalize(false);
+        return;
+      }
+
+      // `scrollToIndex` first mounts the virtual row. Wait until its real DOM
+      // node exists, then center the exact nested assistant block when
+      // available. Timer polling keeps this progressing when Chromium suspends
+      // animation frames for a non-painting view, while still allowing virtua
+      // to measure between attempts.
+      let attempts = 0;
+      const locateTarget = () => {
+        if (restoreSequenceRef.current !== restoreSequence) return;
+
+        const ref = virtuaRef.current;
+        if (!ref) {
+          restoringRef.current = false;
+          return;
+        }
+
+        const targetMatch = findDeepLinkElement(
+          container,
+          targetDeepLink.id,
+          targetDeepLink.displayMessageId,
+        );
+        if (targetMatch?.exact) {
+          targetMatch.element.scrollIntoView({ block: 'center' });
+          targetDeepLink.onHandled?.();
+          finalize(false);
+          return;
+        }
+
+        if (attempts >= DEEP_LINK_MAX_ATTEMPTS) {
+          // A nested message can be absent while its process fold is collapsed
+          // or its compressed group is showing the summary tab. Keep the hash
+          // pending instead of consuming the deep link at the owning row, so a
+          // later render can retry the exact target.
+          handledDeepLinkRef.current = undefined;
+          targetMatch?.element.scrollIntoView({ block: 'center' });
+          finalize(false);
+          return;
+        }
+
+        attempts += 1;
+        ref.scrollToIndex(headerOffset + targetDeepLink.index, { align: 'center' });
+        setTimeout(locateTarget, DEEP_LINK_RETRY_MS);
+      };
+      setTimeout(locateTarget, DEEP_LINK_RETRY_MS);
+      return;
+    }
+
+    if (initialPosition === 'top') {
+      const scroller = getScroller();
+      if (scroller) scroller.scrollTop = 0;
       finalize(false);
+      return;
+    }
+
+    const snapshot = loadScrollSnapshot(contextKey);
+    const anchorIndex =
+      snapshot && !snapshot.atBottom && snapshot.anchorId
+        ? dataSourceRef.current.indexOf(snapshot.anchorId)
+        : -1;
+
+    if (!snapshot || anchorIndex < 0) {
+      const scroller = getScroller();
+      if (!scroller) {
+        restoringRef.current = false;
+        return;
+      }
+
+      // Jump to the end every frame until the list height stops changing, so
+      // rows that virtua measures after the first jump still end up in view.
+      // Any user scroll input ends it at once, and the time cap bounds it while
+      // a streaming reply keeps growing; streaming auto-scroll follows after.
+      let interrupted = false;
+      const interrupt = () => {
+        interrupted = true;
+      };
+      for (const type of USER_SCROLL_INPUT_EVENTS) {
+        scroller.addEventListener(type, interrupt, { passive: true });
+      }
+      const stopListening = () => {
+        for (const type of USER_SCROLL_INPUT_EVENTS) {
+          scroller.removeEventListener(type, interrupt);
+        }
+      };
+
+      const startedAt = Date.now();
+      let lastChangeAt = startedAt;
+      let lastScrollHeight = -1;
+      const settleAtBottom = () => {
+        if (restoreSequenceRef.current !== restoreSequence) {
+          stopListening();
+          return;
+        }
+        if (interrupted) {
+          stopListening();
+          finalize(false);
+          return;
+        }
+
+        scroller.scrollTop = scroller.scrollHeight;
+        const now = Date.now();
+        if (scroller.scrollHeight !== lastScrollHeight) {
+          lastScrollHeight = scroller.scrollHeight;
+          lastChangeAt = now;
+        }
+        if (
+          now - lastChangeAt >= BOTTOM_SETTLE_QUIET_MS ||
+          now - startedAt >= BOTTOM_SETTLE_MAX_MS
+        ) {
+          stopListening();
+          finalize(false);
+          return;
+        }
+        requestAnimationFrame(settleAtBottom);
+      };
+      settleAtBottom();
       return;
     }
 
@@ -202,25 +423,98 @@ export const useTopicScrollPersist = ({
     // freshly-mounted VList. A single rAF isn't enough — only the viewport-
     // visible items have laid out by then, and ResizeObserver hasn't reported
     // below-the-fold heights yet.
+    const anchorOffset = snapshot.anchorOffset ?? 0;
+    const estimatedTarget = (ref: VListHandle) =>
+      ref.getItemOffset(headerOffset + anchorIndex) + anchorOffset;
+    const findAnchorRow = () =>
+      containerRef?.current?.querySelector<HTMLElement>(`[data-index="${anchorIndex}"]`) ?? null;
+    // Once the anchor row is on screen its laid-out position is the truth;
+    // virtua's offsets still count the unmeasured rows above at their estimate.
+    const anchorTarget = (ref: VListHandle) => {
+      const row = findAnchorRow();
+      const scroller = getScroller();
+      if (!row || !scroller) return estimatedTarget(ref);
+      return (
+        scroller.scrollTop +
+        row.getBoundingClientRect().top -
+        scroller.getBoundingClientRect().top +
+        anchorOffset
+      );
+    };
     let attempts = 0;
     const tryScroll = () => {
+      if (restoreSequenceRef.current !== restoreSequence) return;
+
       const ref = virtuaRef.current;
       if (!ref) {
         restoringRef.current = false;
         return;
       }
+      const targetOffset = estimatedTarget(ref);
       const required = targetOffset + ref.viewportSize;
       const cappedOut = attempts >= RESTORE_MAX_FRAMES;
       if (ref.scrollSize >= required || cappedOut) {
-        ref.scrollTo(targetOffset);
-        finalize(cappedOut);
+        const scroller = getScroller();
+        if (!scroller) return finalize(cappedOut);
+        const aimAt = (target: number) => {
+          scroller.scrollTop = target;
+          lastKnownRef.current = resolvePosition(target, false);
+        };
+        const settleOnAnchor = () => {
+          const ref = virtuaRef.current;
+          if (!ref || restoreSequenceRef.current !== restoreSequence) return;
+          const target = anchorTarget(ref);
+          aimAt(target);
+          // Rows above the anchor start at virtua's estimated size; as they are
+          // measured the anchor moves, so keep re-aiming until it holds still.
+          settleScrollTarget({
+            aimAt,
+            initialTarget: target,
+            isStale: () => restoreSequenceRef.current !== restoreSequence,
+            maxMs: BOTTOM_SETTLE_MAX_MS,
+            onDone: () => finalize(cappedOut),
+            quietMs: BOTTOM_SETTLE_QUIET_MS,
+            readTarget: () => (virtuaRef.current ? anchorTarget(virtuaRef.current) : undefined),
+            scroller,
+            stopEvents: USER_SCROLL_INPUT_EVENTS,
+          });
+        };
+
+        // Aiming more than a viewport into the anchor leaves the anchor row
+        // itself outside virtua's render window, so the aim rests on estimated
+        // heights and a tall reply lands a round late. Chase the row's start
+        // until it renders, then aim from where it actually is.
+        if (anchorOffset <= ref.viewportSize) return settleOnAnchor();
+        let anchorFrames = 0;
+        const revealAnchorRow = () => {
+          if (restoreSequenceRef.current !== restoreSequence) return;
+          const current = virtuaRef.current;
+          if (findAnchorRow() || !current || ++anchorFrames >= RESTORE_MAX_FRAMES) {
+            settleOnAnchor();
+            return;
+          }
+          aimAt(current.getItemOffset(headerOffset + anchorIndex));
+          requestAnimationFrame(revealAnchorRow);
+        };
+        revealAnchorRow();
         return;
       }
       attempts += 1;
       requestAnimationFrame(tryScroll);
     };
     requestAnimationFrame(tryScroll);
-  }, [contextKey, dataSourceLength, flushNow, headerOffset, virtuaRef]);
+  }, [
+    containerRef,
+    contextKey,
+    dataSourceLength,
+    flushNow,
+    getScroller,
+    headerOffset,
+    initialPosition,
+    messageDeepLink,
+    resolvePosition,
+    virtuaRef,
+  ]);
 
   // One-shot housekeeping: drop expired entries and enforce the cap.
   useEffect(() => {

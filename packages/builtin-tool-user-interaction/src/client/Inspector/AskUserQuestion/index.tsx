@@ -3,7 +3,7 @@
 import { normalizeAskUserQuestions } from '@lobechat/shared-tool-ui/ask-user';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -53,14 +53,10 @@ export const AskUserQuestionInspector = memo<BuiltinInspectorProps<AskUserQuesti
     }
 
     return (
-      <div
-        data-testid="ask-user-question-inspector"
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
-        <span>{label}</span>
+      <div className={inspectorTextStyles.root} data-testid="ask-user-question-inspector">
+        <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+          {label}
+        </span>
         {summary && <span className={styles.chip}>{summary}</span>}
       </div>
     );

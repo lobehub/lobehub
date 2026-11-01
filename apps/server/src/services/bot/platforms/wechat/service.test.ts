@@ -165,6 +165,47 @@ describe('WechatMessageService.sendMessage', () => {
     expect(api.sendItem).toHaveBeenCalledTimes(1);
   });
 
+  it('reports an attachment whose bytes could not be fetched instead of swallowing it', async () => {
+    // Regression: the runtime returned `success: true` while the file never
+    // left the server, so the model told the user "see attached".
+    const api = makeApi();
+    const service = new WechatMessageService(api as any, 'app-1');
+    const error = new TypeError('fetch failed');
+    (error as any).cause = new TypeError('Invalid IP address: undefined');
+    vi.mocked(fetch).mockRejectedValueOnce(error);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const result = await service.sendMessage({
+        attachments: [
+          { fetchUrl: 'https://app.example.com/f/file_1', name: 'report.docx', type: 'file' },
+        ],
+        channelId: 'user-3@im.wechat',
+        content: 'docx attached',
+        platform: 'wechat',
+      });
+
+      expect(api.sendMessage).toHaveBeenCalledTimes(1);
+      expect(api.sendItem).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        attachmentFailures: [
+          {
+            detail: 'fetch failed: fetch failed (Invalid IP address: undefined)',
+            name: 'report.docx',
+            reason: 'source-unavailable',
+            type: 'file',
+          },
+        ],
+        attachmentsDelivered: 0,
+        channelId: 'user-3@im.wechat',
+        platform: 'wechat',
+      });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('report.docx'));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it('fetches attachments delivered as fetchUrl', async () => {
     const api = makeApi();
     const service = new WechatMessageService(api as any, 'app-1');

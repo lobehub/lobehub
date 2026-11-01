@@ -11,6 +11,7 @@ import {
   scanOperationFileEdits,
 } from '@lobechat/builtin-tools/fileEditScan';
 import type { WorkVersionCumulativeUsage, WorkVersionMetadata } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -22,6 +23,7 @@ import { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 
 import { UNEXECUTED_INTERVENTION_STATUSES } from './constants';
+import { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 import { registerShellWorks } from './shellWorkRegistration';
 
 const log = debug('lobe-server:file-work-registration');
@@ -37,6 +39,15 @@ interface FileProvenance {
 }
 
 export interface RegisterWorksForOperationParams {
+  /**
+   * Set for an Agent Share visitor's run (`principal.actor.shareVisitor`).
+   * Every Work registered by this scan is then stamped with the share scope of
+   * the completing operation's topic, and the exported entity files carry the
+   * matching file provenance — both fenced off from the creator's ordinary
+   * surfaces. Runs execute under the CREATOR's `userId`, so this marker is
+   * the only thing distinguishing a visitor's output from the creator's own.
+   */
+  agentShareVisitor?: ShareVisitorWorkIdentity | null;
   /**
    * The round's final assistant message. When the shell Work scan registers a
    * Work, the anchor stamp (`metadata.work.rootOperationId`) is merged onto this
@@ -71,6 +82,8 @@ export interface RegisterWorksForOperationParams {
  * also fold in the shell Work scan (see `registerShellWorks`).
  */
 export interface WorksRegistrationOutcome {
+  /** Assistant message successfully anchored by the shell scan, including its fallback. */
+  anchorMessageId?: string;
   /** Entity files + shell-scanned external entities this completion tried to register. */
   attempted: number;
   /** How many of `attempted` did not end up registered this round. */
@@ -312,8 +325,8 @@ export const registerWorksForOperation = async (
   // spawned AFTER its parent already reached a terminal state and ran its tree
   // scan, so the parent will never scan again and the repair's edits would be
   // lost. Distinguish by the parent's status:
-  //   - parent still active (idle / running / parked — waiting_for_human or
-  //     waiting_for_async_tool) → it will scan the whole
+  //   - parent still active (idle / running / parked — waiting_for_human,
+  //     waiting_for_async_tool or waiting_for_client) → it will scan the whole
   //     subtree on its own completion, so no-op here to avoid the duplicate.
   //   - parent already terminal (done / error / interrupted) → register this
   //     op's OWN edits (a legitimately new version for the repair), scanning
@@ -322,12 +335,7 @@ export const registerWorksForOperation = async (
   if (completingOp.parentOperationId) {
     const parentOp = await operationModel.findById(completingOp.parentOperationId);
     const parentStatus = parentOp?.status;
-    const parentActive =
-      !parentStatus ||
-      parentStatus === 'idle' ||
-      parentStatus === 'running' ||
-      parentStatus === 'waiting_for_human' ||
-      parentStatus === 'waiting_for_async_tool';
+    const parentActive = !parentStatus || isAgentOperationInFlight(parentStatus);
     if (parentActive) {
       log(
         '[%s] Skipping file Work registration: parent operation is still active (%s)',
@@ -341,7 +349,22 @@ export const registerWorksForOperation = async (
 
   const topicId = completingOp.topicId;
 
-  const messageModel = new MessageModel(serverDB, userId, workspaceId);
+  // `topicId` is guaranteed above, so a share run always resolves to a real scope.
+  const accessScope = resolveRunWorkAccessScope({
+    shareVisitor: params.agentShareVisitor,
+    topicId,
+  });
+  if (accessScope === null) {
+    log('[%s] Skipping file Work registration: share visitor run has no topic', operationId);
+    return { attempted: 0, failed: 0 };
+  }
+
+  // A share visitor's tool rows live under a topic with a non-null `senderId`,
+  // which `MessageModel.ownership()` excludes by default — without the opt-in
+  // the scan (and the anchor stamp below) silently sees nothing for that run.
+  const messageModel = new MessageModel(serverDB, userId, workspaceId, undefined, {
+    includeShareVisitor: Boolean(params.agentShareVisitor),
+  });
   const records = await collectOperationRecords(messageModel, scanTree);
   if (records.length === 0) {
     log(
@@ -374,7 +397,7 @@ export const registerWorksForOperation = async (
     return undefined;
   };
 
-  const workModel = new WorkModel(serverDB, userId, workspaceId);
+  const workModel = new WorkModel(serverDB, userId, workspaceId, accessScope);
 
   // The whole operation's spend/usage is attached to each version registered
   // this round (an operation-level, not per-file, figure — the scanner can't
@@ -421,6 +444,7 @@ export const registerWorksForOperation = async (
   // runs — without the stamp a registered Work never renders below the message.
   // `messageModel.update` deep-merges metadata, so re-stamping an anchor the
   // finalizer already wrote (same rootOperationId) is a no-op.
+  let stampedAnchorMessageId: string | undefined;
   if (shellOutcome.registered > 0) {
     let anchorMessageId = params.assistantMessageId ?? null;
     if (!anchorMessageId && shellOutcome.anchorCandidateMessageId) {
@@ -449,6 +473,8 @@ export const registerWorksForOperation = async (
       if (!stamp.success) {
         shellOutcome.failed += 1;
         log('[%s] Failed to stamp work anchor on %s', operationId, anchorMessageId);
+      } else {
+        stampedAnchorMessageId = anchorMessageId;
       }
     } else {
       // No resolvable anchor at all: the Work row exists but nothing would
@@ -516,7 +542,11 @@ export const registerWorksForOperation = async (
   );
   if (entities.length === 0) {
     log('[%s] Skipping file Work registration: no sandbox-backed entity candidates', operationId);
-    return { attempted: shellOutcome.attempted, failed: shellOutcome.failed };
+    return {
+      ...(stampedAnchorMessageId ? { anchorMessageId: stampedAnchorMessageId } : {}),
+      attempted: shellOutcome.attempted,
+      failed: shellOutcome.failed,
+    };
   }
 
   // The sandbox is derived from userId + topicId and outlives the operation, so
@@ -588,6 +618,19 @@ export const registerWorksForOperation = async (
         // Display name = basename (clean download filename); storage key uses the
         // unique `storageName` so the object is never clobbered.
         const exported = await sandboxService.exportAndUploadFile(entry.path, basename, {
+          // A visitor's exported file gets the same share provenance the
+          // upload path stamps (see `shareChat.createFile`), so it never
+          // surfaces in the creator's library while `/f/:id` stays openable.
+          ...(params.agentShareVisitor
+            ? {
+                metadata: {
+                  agentShare: {
+                    shareId: params.agentShareVisitor.shareId,
+                    visitorUserId: params.agentShareVisitor.visitorUserId,
+                  },
+                },
+              }
+            : {}),
           storageName,
         });
         if (!exported.success) {
@@ -660,6 +703,7 @@ export const registerWorksForOperation = async (
     (result) => result.status === 'rejected' || result.value === 'failed',
   ).length;
   return {
+    ...(stampedAnchorMessageId ? { anchorMessageId: stampedAnchorMessageId } : {}),
     attempted: entities.length + shellOutcome.attempted,
     failed: failed + shellOutcome.failed,
   };

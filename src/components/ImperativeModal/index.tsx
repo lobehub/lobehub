@@ -6,7 +6,7 @@ import {
   type ImperativeModalProps as BaseImperativeModalProps,
   ModalFooter,
   type ModalInstance,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';

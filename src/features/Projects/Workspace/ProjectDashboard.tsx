@@ -1,10 +1,19 @@
 'use client';
 
 import type { TaskStatus, WorkSummaryItem } from '@lobechat/types';
-import { Block, Center, Empty, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Progress,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import {
   BadgeCheckIcon,
   CheckCircle2Icon,
@@ -19,20 +28,21 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
+import { ArticleSkeleton } from '@/components/Skeleton';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import {
   getProjectAcceptancePath,
   getProjectGoalsPath,
+  getProjectSettingsPath,
   getProjectTasksPath,
 } from '@/features/Projects/Layout/navigation';
 import WorkSummaryCard from '@/features/Work/WorkSummaryCard';
 import { useOpenWork } from '@/features/WorkGallery/useOpenWork';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useClientDataSWR } from '@/libs/swr';
-import { workKeys } from '@/libs/swr/keys';
-import { workService } from '@/services/work';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 import type { ProjectDetail } from '@/store/project';
+import { useWorkStore, workActions, workSelectors } from '@/store/work';
 
 const styles = createStaticStyles(({ css }) => ({
   attention: css`
@@ -90,6 +100,27 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 16px;
     background: color-mix(in srgb, ${cssVar.colorBgContainer} 78%, transparent);
   `,
+  summaryLink: css`
+    cursor: pointer;
+
+    display: flex;
+    justify-content: space-between;
+
+    margin-inline: -6px;
+    padding-block: 2px;
+    padding-inline: 6px;
+    border: none;
+    border-radius: 6px;
+
+    font: inherit;
+
+    background: transparent;
+
+    &:hover,
+    &:focus-visible {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
   section: css`
     padding-block: 18px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -106,9 +137,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const TERMINAL_STATUSES = new Set<TaskStatus | string>(['canceled', 'completed']);
+const EMPTY_WORKS: WorkSummaryItem[] = [];
 const ATTENTION_STATUSES = new Set<TaskStatus | string>(['failed', 'paused']);
-const isGoalTask = (task: NonNullable<ProjectDetail['tasks']>[number]) => Boolean(task.goal);
-
 interface ProjectDashboardProps {
   detail: ProjectDetail;
   projectId: string;
@@ -142,26 +172,25 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
   const workspaceId = useActiveWorkspaceId();
   const goalScope = `project:${projectId}`;
   const goals = useGoalStore(goalSelectors.goalList(goalScope));
+  const goalListView = useGoalStore(goalSelectors.goalListView(goalScope));
   const goalSWR = useGoalStore((s) => s.useFetchGoals)(undefined, projectId);
   const coordinatorAgentId = detail.project.coordinatorAgentId;
   const projectReference = detail.project.slug ?? projectId;
-  const workSWR = useClientDataSWR(
-    coordinatorAgentId
-      ? workKeys.workspace(workspaceId, `project:${projectId}:${coordinatorAgentId}`)
-      : null,
-    () =>
-      workService.listByWorkspace({
-        limit: 4,
-        originAgentId: coordinatorAgentId,
-      }),
+  const agentWorksParams = useMemo(
+    () => (coordinatorAgentId ? { originAgentId: coordinatorAgentId, workspaceId } : null),
+    [coordinatorAgentId, workspaceId],
   );
+  const workSync = workActions.useFetchAgentWorks(agentWorksParams);
+  // `undefined` while nothing is painted yet; the stored copy paints first.
+  const storedWorks = useWorkStore(workSelectors.agentWorks(coordinatorAgentId));
 
-  const tasks = (detail.tasks ?? []).filter((task) => !isGoalTask(task));
+  const tasks = detail.tasks ?? [];
   const activeTasks = tasks.filter((task) => !TERMINAL_STATUSES.has(task.status)).slice(0, 5);
   const attentionTasks = tasks.filter((task) => ATTENTION_STATUSES.has(task.status)).slice(0, 3);
-  const completedGoals = goals.filter((goal) => goal.status === 'completed').length;
+  const completedGoals = goals.filter(({ goal }) => goal.status === 'achieved').length;
   const progress = goals.length ? Math.round((completedGoals / goals.length) * 100) : 0;
-  const works = workSWR.data?.items ?? [];
+  const works = storedWorks ?? EMPTY_WORKS;
+  const worksPending = !!coordinatorAgentId && storedWorks === undefined;
   const goalPreview = useMemo(() => goals.slice(0, 3), [goals]);
 
   return (
@@ -169,14 +198,14 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
       <Flexbox className={styles.main} gap={24}>
         <Flexbox gap={12}>
           <SectionTitle title={t('overview.goalProgress')} />
-          {goalSWR.error ? (
+          {goalSWR.error && goalListView === undefined ? (
             <AsyncError
               error={goalSWR.error}
               variant={'inline'}
               onRetry={() => void goalSWR.mutate()}
             />
-          ) : goalSWR.isLoading && goals.length === 0 ? (
-            <Skeleton active paragraph={{ rows: 4 }} />
+          ) : goalSWR.isLoading ? (
+            <ArticleSkeleton rows={4} />
           ) : goals.length === 0 ? (
             <Block padding={24} variant={'outlined'}>
               <Center gap={10}>
@@ -202,16 +231,16 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
               </Flexbox>
               <Progress percent={progress} showInfo={false} />
               <div className={styles.goalGrid}>
-                {goalPreview.map((goal) => (
+                {goalPreview.map(({ goal }) => (
                   <Flexbox className={styles.goal} gap={5} key={goal.id}>
                     <Flexbox horizontal align={'center'} gap={6}>
                       <Icon
-                        color={goal.status === 'completed' ? cssVar.colorSuccess : undefined}
-                        icon={goal.status === 'completed' ? CheckCircle2Icon : CircleDotIcon}
+                        color={goal.status === 'achieved' ? cssVar.colorSuccess : undefined}
+                        icon={goal.status === 'achieved' ? CheckCircle2Icon : CircleDotIcon}
                         size={15}
                       />
                       <Text ellipsis weight={500}>
-                        {goal.name || goal.instruction}
+                        {goal.title}
                       </Text>
                     </Flexbox>
                     <Text fontSize={12} type={'secondary'}>
@@ -247,7 +276,7 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
                     {t(`goals.status.${task.status}`, { defaultValue: task.status })}
                   </Tag>
                 }
-                onClick={() => navigate(`/task/${task.id}`)}
+                onClick={() => navigate(taskDetailPath(task.identifier, undefined, task.name))}
               />
             ))
           )}
@@ -255,14 +284,16 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
 
         <Flexbox className={styles.section} gap={12}>
           <SectionTitle count={works.length} title={t('overview.latestWorks')} />
-          {workSWR.error ? (
+          {workSync.error && worksPending ? (
             <AsyncError
-              error={workSWR.error}
+              error={workSync.error}
               variant={'inline'}
-              onRetry={() => void workSWR.mutate()}
+              onRetry={() => void workSync.revalidate()}
             />
-          ) : workSWR.isLoading ? (
-            <Skeleton active paragraph={{ rows: 4 }} />
+          ) : worksPending ? (
+            // Before the stored copy is read, paint nothing rather than a
+            // skeleton that the cached cards replace a frame later.
+            workSync.isHydrated && <ArticleSkeleton rows={4} />
           ) : works.length === 0 ? (
             <Empty
               description={t('overview.worksEmptyDescription')}
@@ -319,14 +350,22 @@ const ProjectDashboard = memo<ProjectDashboardProps>(({ detail, projectId }) => 
             <Text type={'secondary'}>{t('sections.tasks')}</Text>
             <Text>{tasks.length}</Text>
           </Flexbox>
-          <Flexbox horizontal justify={'space-between'}>
+          <button
+            className={styles.summaryLink}
+            type={'button'}
+            onClick={() => navigate(getProjectSettingsPath(projectReference, 'members'))}
+          >
             <Text type={'secondary'}>{t('sections.agents')}</Text>
             <Text>{detail.agents?.length ?? 0}</Text>
-          </Flexbox>
-          <Flexbox horizontal justify={'space-between'}>
+          </button>
+          <button
+            className={styles.summaryLink}
+            type={'button'}
+            onClick={() => navigate(getProjectSettingsPath(projectReference, 'knowledge'))}
+          >
             <Text type={'secondary'}>{t('sections.knowledgeBases')}</Text>
             <Text>{detail.knowledgeBases?.length ?? 0}</Text>
-          </Flexbox>
+          </button>
         </Flexbox>
       </Flexbox>
     </div>

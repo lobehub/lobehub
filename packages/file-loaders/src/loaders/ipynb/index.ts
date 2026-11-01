@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
 
+import { sniffBinaryBuffer } from '@lobechat/utils/isBinaryContent';
 import debug from 'debug';
 
 import type { DocumentPage, FileLoaderInterface } from '../../types';
-import { sniffBinaryBuffer } from '../../utils/isBinaryContent';
 
 const log = debug('file-loaders:ipynb');
 
@@ -51,7 +51,8 @@ interface Notebook {
  * make the scan quadratic over the remaining text.
  */
 const ANSI_RE =
-  /\u001B\[[\d:;?]*[\u0020-\u002F]*[\u0040-\u007E]|\u001B\][^\u0007\u001B\u009C]{0,256}(?:\u0007|\u001B\\)?|\u001B[\u0021-\u002F]{0,2}[\u0030-\u007E]|\u001B|\u0007|\u009C/g;
+  // eslint-disable-next-line no-control-regex
+  /\u001B\[[\d:;?]*[\u0020-\u002F]*[\u0040-\u007E]|\u001B\][^\u0007\u001B\u009C]{0,256}(?:\u0007|\u001B\\)?|\u001B[\u0021-\u002F]{0,2}[\u0030-\u007E]|[\u001B\u0007\u009C]/g;
 /**
  * RFC 2397 data URIs: the scheme is case-insensitive, the media type and
  * any number of `;attribute=value` parameters use the RFC 2045 token
@@ -62,6 +63,7 @@ const ANSI_RE =
  */
 const MIME_TOKEN = '[^\\s()<>@,;:\\\\"/\\[\\]?=]+';
 const DATA_URI_RE = new RegExp(
+  // eslint-disable-next-line regexp/no-useless-escape, regexp/no-dupe-characters-character-class
   `data:(${MIME_TOKEN}/${MIME_TOKEN})?(?:;${MIME_TOKEN}=${MIME_TOKEN})*;base64,([\\d+/=A-Za-z]{256,})`,
   'gi',
 );
@@ -75,7 +77,7 @@ const DATA_URI_RE = new RegExp(
 const BASE64_RUN_RE = /[\d+/=A-Za-z]{32,}(?:(?:"[\s,]*"|\\n|\r?\n)+[\d+/=A-Za-z]{32,})*/g;
 /** The same separator runs, captured, so a split keeps them byte for byte. */
 const BASE64_SEPARATOR_RE = /((?:"[\s,]*"|\\n|\r?\n)+)/;
-const NON_BASE64_RE = /[^\d+/=A-Za-z]/g;
+const NON_BASE64_RE = /[^\d+/=A-Z]/gi;
 const BASE64_SCRUB_THRESHOLD = 1024;
 
 /**

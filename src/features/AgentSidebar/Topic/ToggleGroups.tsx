@@ -13,6 +13,7 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentTopicGroupMode } from './hooks/useAgentTopicGroupMode';
+import { useScopedSidebarTopics } from './useScopedTopics';
 
 const ToggleGroups = memo(() => {
   const { t } = useTranslation('topic');
@@ -31,7 +32,14 @@ const ToggleGroups = memo(() => {
       ),
     [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
   );
-  const groupTopics = useChatStore(groupSelector, isEqual);
+  const agentGroups = useChatStore(groupSelector, isEqual);
+  const scoped = useScopedSidebarTopics(
+    topicPageSize,
+    topicSortBy,
+    topicGroupMode,
+    topicIncludeCompleted,
+  );
+  const groupTopics = scoped.scope ? scoped.groups : agentGroups;
 
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
   const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);

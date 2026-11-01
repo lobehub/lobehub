@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import i18next from 'i18next';
 
 import { localFileService } from './localFileService';
@@ -15,13 +15,22 @@ export interface DesktopExportResult {
   filePath?: string;
 }
 
+export interface DesktopExportFileOptions extends DesktopExportOptions {
+  /** Save-dialog filter, e.g. `{ extensions: ['html'], name: 'HTML' }`. */
+  filter: { extensions: string[]; name: string };
+}
+
 class DesktopExportService {
   async exportMarkdown(options: DesktopExportOptions): Promise<DesktopExportResult> {
-    const { content, dialogTitle, fileName, successTitle } = options;
+    return this.exportFile({ ...options, filter: { extensions: ['md'], name: 'Markdown' } });
+  }
+
+  async exportFile(options: DesktopExportFileOptions): Promise<DesktopExportResult> {
+    const { content, dialogTitle, fileName, filter, successTitle } = options;
 
     const result = await localFileService.showSaveDialog({
       defaultPath: fileName,
-      filters: [{ extensions: ['md'], name: 'Markdown' }],
+      filters: [filter],
       title: dialogTitle || i18next.t('pageEditor.exportDialogTitle', { ns: 'file' }),
     });
 

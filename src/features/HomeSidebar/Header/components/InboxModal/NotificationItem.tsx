@@ -2,23 +2,32 @@
 
 import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
 import type { NotificationMetadata } from '@lobechat/types';
-import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Button, ContextMenuTrigger, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Avatar,
+  Block,
+  Button,
+  ContextMenuTrigger,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
 import { ArchiveIcon, BellIcon, ImageIcon, MegaphoneIcon, VideoIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { ProductLogo } from '@/components/Branding';
-import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 
 import { formatNotificationRelativeTime } from './formatNotificationRelativeTime';
-import { getNotificationAgentId } from './getNotificationAgentId';
 import { createNotificationDetailModal } from './NotificationDetailModal';
 import { toNotificationPreview } from './toNotificationPreview';
+import { useNotificationAgentMeta } from './useNotificationAgentMeta';
 
 const styles = createStaticStyles(({ css }) => ({
   unreadDot: css`
@@ -74,8 +83,7 @@ const NotificationItem = memo<NotificationItemProps>(
     const dateLocale = i18n.resolvedLanguage || i18n.language;
     const preview = useMemo(() => toNotificationPreview(content), [content]);
     const actor = metadata?.actor;
-    const agentId = useMemo(() => getNotificationAgentId(actionUrl), [actionUrl]);
-    const agent = useAgentDisplayMeta(agentId, { fallbackToDefault: false });
+    const agent = useNotificationAgentMeta(actionUrl, metadata);
 
     const handleMarkAsRead = useCallback(() => {
       if (!isRead) onMarkAsRead(id);
@@ -150,11 +158,12 @@ const NotificationItem = memo<NotificationItemProps>(
                 style={{ flex: 'none' }}
               />
             ) : agent ? (
-              <Avatar
-                emojiScaleWithBackground
+              <AgentAvatar
+                agentId={agent.id}
                 alt={agent.title}
                 avatar={agent.avatar}
                 background={agent.backgroundColor}
+                name={agent.title}
                 shape="circle"
                 size={32}
                 style={{ flex: 'none' }}

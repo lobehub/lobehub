@@ -1,15 +1,15 @@
 'use client';
 
-import { memo, Suspense } from 'react';
+import { memo } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
 import ExperienceList from '@/features/SelfLearning/ExperienceList';
+import SelfLearningSurfaceGate from '@/features/SelfLearning/SurfaceGate';
 
 /** The complete lesson list of one direction — every habit, nothing folded. */
 const AgentSelfLearningExperiencePage = memo(() => (
-  <Suspense fallback={<Loading debugId={'SelfLearningExperience'} />}>
+  <SelfLearningSurfaceGate>
     <ExperienceList />
-  </Suspense>
+  </SelfLearningSurfaceGate>
 ));
 
 export default AgentSelfLearningExperiencePage;

@@ -1,6 +1,8 @@
 export default {
   'agent_cron_job_completed': 'Your scheduled task "{{jobName}}" completed successfully.',
   'agent_cron_job_completed_title': 'Scheduled task completed',
+  'agent_cron_job_completed_with_summary':
+    'Your scheduled task "{{jobName}}" completed successfully.\n\n{{summary}}',
   'agent_cron_job_failed':
     'Your scheduled task "{{jobName}}" failed. Open the task to see the full error.',
   'agent_cron_job_failed_insufficient_budget':
@@ -10,8 +12,18 @@ export default {
     'Your scheduled task "{{jobName}}" was paused after {{count}} consecutive failures. Review the error and resume it when ready.',
   'agent_cron_job_failed_paused_title': 'Scheduled task paused',
   'agent_cron_job_failed_title': 'Scheduled task failed',
+  'agent_intervention_required': '{{agent}} needs your input: {{summary}}',
+  'agent_intervention_required_title': '{{agent}} needs your review',
   'agent_run_completed': '{{preview}}',
   'agent_run_completed_title': 'Agent task completed',
+  'agent_task_run_failed': 'Your task "{{jobName}}" failed. Open the task to see the full error.',
+  'agent_task_run_failed_heartbeat_timeout':
+    'Your task "{{jobName}}" stopped responding and was marked as failed. Open the task to run it again.',
+  'agent_task_run_failed_heartbeat_timeout_title': 'Task timed out',
+  'agent_task_run_failed_insufficient_budget':
+    'Your task "{{jobName}}" couldn\'t run because your account is out of credits. Top up or upgrade your plan to continue.',
+  'agent_task_run_failed_insufficient_budget_title': 'Task failed: insufficient credits',
+  'agent_task_run_failed_title': 'Task failed',
   'agent_transfer_reassigned':
     'A workspace owner transferred your agent "{{agentTitle}}" to {{recipientLabel}}.',
   'agent_transfer_reassigned_title': 'Agent reassigned',
@@ -36,6 +48,14 @@ export default {
   'category.schedule': 'Scheduled tasks',
   'category.system': 'System notifications',
   'category.workspace': 'Workspace updates',
+  'checkout_abandoned_subscription':
+    'You started upgrading to {{plan}} but did not finish checkout. Your upgrade is still available whenever you are ready.',
+  'checkout_abandoned_subscription_action': 'Finish upgrade',
+  'checkout_abandoned_subscription_title': 'Your upgrade is unfinished',
+  'checkout_abandoned_topup':
+    'Your credit top-up was not completed, so no credits were added. You can finish it anytime from the credits page.',
+  'checkout_abandoned_topup_action': 'Top up credits',
+  'checkout_abandoned_topup_title': 'Your credit top-up is unfinished',
   'credit_balance_low':
     'Your credit balance is running low — about {{balance}} in credits remaining. Turn on auto top-up so your balance refills automatically and your work is never interrupted.',
   'credit_balance_low_action': 'Set up auto top-up',
@@ -86,6 +106,24 @@ export default {
   'storage_overage_cap_reached':
     'Your storage pay-as-you-go monthly cap of ${{monthlyCap}} has been reached. Estimated charges this cycle are ${{estimatedCycleCharge}}. New uploads beyond your included storage will be blocked until the next billing cycle or until you increase the cap.',
   'storage_overage_cap_reached_title': 'Storage pay-as-you-go cap reached',
+  'document_comment_activity': '{{actorLabel}} commented on your document "{{documentTitle}}".',
+  'document_comment_activity_replied':
+    '{{actorLabel}} replied to your comment in "{{documentTitle}}".',
+  'document_comment_activity_replied_title': 'New reply to your comment',
+  'document_comment_activity_title': 'New comment on your document',
+  'document_comment_activity_thread':
+    '{{actorLabel}} replied in a comment thread you\'re part of in "{{documentTitle}}".',
+  'document_comment_activity_thread_title': 'New reply in your comment thread',
+  'document_comment_mentioned': '{{actorLabel}} mentioned you in a comment on "{{documentTitle}}".',
+  'document_comment_mentioned_title': 'You were mentioned in a document comment',
+  'document_mentioned': '{{actorLabel}} mentioned you in "{{documentTitle}}".',
+  'document_mentioned_title': 'You were mentioned in a document',
+  'document_liked': '{{actorLabel}} liked your document "{{documentTitle}}".',
+  'document_liked_title': 'Someone liked your document',
+  'subscription_one_time_expired':
+    'Your one-time {{plan}} plan has ended and your account is now on the Free plan. Renew {{plan}} to get your benefits back.',
+  'subscription_one_time_expired_action': 'Renew {{plan}}',
+  'subscription_one_time_expired_title': 'Your {{plan}} plan has ended',
   'subscription_payment_failed':
     'Your subscription renewal payment failed. Please update your payment method to keep your subscription active.',
   'subscription_payment_failed_action': 'Update payment method',
@@ -101,6 +139,12 @@ export default {
   'subscription_renewed':
     'Your {{plan}} subscription has renewed and your subscription credits were reset for the new billing cycle.',
   'subscription_renewed_title': 'Subscription renewed',
+  'task_assigned': '{{actorLabel}} assigned you the task "{{taskTitle}}".',
+  'task_assigned_title': "You've been assigned a task",
+  'task_comment_activity': '{{actorLabel}} commented on the task "{{taskTitle}}".',
+  'task_comment_activity_title': 'New comment on your task',
+  'task_comment_mentioned': '{{actorLabel}} mentioned you in a comment on task "{{taskTitle}}".',
+  'task_comment_mentioned_title': 'You were mentioned in a task comment',
   'topic_comment_activity': '{{actorLabel}} commented in a topic you participate in.',
   'topic_comment_activity_message': '{{actorLabel}} commented on your message.',
   'topic_comment_activity_message_title': 'New comment on your message',

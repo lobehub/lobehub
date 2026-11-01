@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from 'react';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useIsWorkspaceOwner } from '@/business/client/hooks/useIsWorkspaceOwner';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import {
@@ -10,68 +9,43 @@ import {
 } from '@/features/ResourceManager/store/selectors';
 import { useEventCallback } from '@/hooks/useEventCallback';
 import { useFileStore } from '@/store/file';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
 interface ExplorerSelectionOptions {
   data: ExplorerSelectableItem[];
   hasMore: boolean;
+  /** Size of the listed pool; defaults to the folder list's total. */
+  total?: number;
 }
 
 interface ExplorerSelectableItem {
   id: string;
-  userId?: string | null;
 }
 
-export const isExplorerItemSelectable = ({
-  activeWorkspaceId,
-  currentUserId,
-  isWorkspaceOwner,
-  itemUserId,
-}: {
-  activeWorkspaceId?: string | null;
-  currentUserId?: string | null;
-  isWorkspaceOwner: boolean;
-  itemUserId?: string | null;
-}) =>
-  !activeWorkspaceId ||
-  isWorkspaceOwner ||
-  (!!currentUserId && !!itemUserId && currentUserId === itemUserId);
+export const isExplorerItemSelectable = (_item?: ExplorerSelectableItem) => true;
 
 export const useExplorerSelectionEligibility = () => {
-  const activeWorkspaceId = useActiveWorkspaceId();
   const isWorkspaceOwner = useIsWorkspaceOwner();
-  const currentUserId = useUserStore(userProfileSelectors.userId);
-
-  const isItemSelectable = useCallback(
-    (item: ExplorerSelectableItem) =>
-      isExplorerItemSelectable({
-        activeWorkspaceId,
-        currentUserId,
-        isWorkspaceOwner,
-        itemUserId: item.userId,
-      }),
-    [activeWorkspaceId, currentUserId, isWorkspaceOwner],
-  );
 
   return {
-    isItemSelectable,
-    isWorkspaceMember: !!activeWorkspaceId && !isWorkspaceOwner,
+    isItemSelectable: isExplorerItemSelectable,
     isWorkspaceOwner,
   };
 };
 
-export const useExplorerSelectionSummary = ({ data, hasMore }: ExplorerSelectionOptions) => {
+export const useExplorerSelectionSummary = ({
+  data,
+  hasMore,
+  total: poolTotal,
+}: ExplorerSelectionOptions) => {
   const [selectAllState, selectedFileIds, selectionTotal] = useResourceManagerStore((s) => [
     s.selectAllState,
     s.selectedFileIds,
     s.selectionTotal,
   ]);
-  const { isItemSelectable, isWorkspaceMember, isWorkspaceOwner } =
-    useExplorerSelectionEligibility();
+  const { isItemSelectable, isWorkspaceOwner } = useExplorerSelectionEligibility();
   const selectableData = useMemo(() => data.filter(isItemSelectable), [data, isItemSelectable]);
-  const total = useFileStore((s) => s.total);
-  const effectiveTotal = selectionTotal ?? total;
+  const listTotal = useFileStore((s) => s.total);
+  const effectiveTotal = selectionTotal ?? poolTotal ?? listTotal;
   const selectedCount = useMemo(
     () =>
       getExplorerSelectedCount({
@@ -96,7 +70,6 @@ export const useExplorerSelectionSummary = ({ data, hasMore }: ExplorerSelection
   return {
     ...uiState,
     hasSelectableItems: selectableData.length > 0,
-    isWorkspaceMember,
     isWorkspaceOwner,
     selectableCount: selectableData.length,
     selectedCount,

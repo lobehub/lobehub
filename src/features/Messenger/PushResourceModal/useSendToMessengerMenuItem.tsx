@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { type ItemType } from 'antd/es/menu/interface';
-import { cssVar } from 'antd-style';
+import type { ItemType } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { SendIcon, Settings2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -10,6 +9,7 @@ import useSWR from 'swr';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import {
   type MessengerPlatform,
@@ -43,14 +43,18 @@ export const useSendToMessengerMenuItem = ({
 }: UseSendToMessengerMenuItemParams): ItemType | null => {
   const { t } = useTranslation(['components', 'common']);
   const navigate = useWorkspaceAwareNavigate();
+  // Messenger bots only exist on business deployments; elsewhere the entry
+  // would lead to a settings page that is hidden.
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const active = enabled && enableBusinessFeatures;
 
   const platformsSWR = useSWR(
-    enabled ? messengerKeys.availablePlatforms() : null,
+    active ? messengerKeys.availablePlatforms() : null,
     () => messengerService.availablePlatforms(),
     { revalidateOnFocus: false },
   );
   const linksSWR = useSWR(
-    enabled ? messengerKeys.listMyLinks() : null,
+    active ? messengerKeys.listMyLinks() : null,
     () => messengerService.listMyLinks(),
     { revalidateOnFocus: false },
   );
@@ -69,7 +73,7 @@ export const useSendToMessengerMenuItem = ({
     (installationsSWR.data ?? []).map((i) => [i.tenantId, i.tenantName]),
   );
 
-  if (!enabled) return null;
+  if (!active) return null;
 
   let children: ItemType[];
 

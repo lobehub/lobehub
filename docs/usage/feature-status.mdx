@@ -1,0 +1,73 @@
+---
+title: Feature Status and Availability
+description: Learn what Alpha, Labs, Cloud, and Desktop mean and what to check when a feature is missing.
+tags:
+  - LobeHub
+  - Feature Status
+  - Alpha
+  - Labs
+  - Cloud
+  - Desktop
+---
+
+# Feature Status and Availability
+
+Feature labels help you understand how ready a feature is, where to enable it, and where to use it.
+
+## What the Labels Mean
+
+| Label | Meaning | Usage notes |
+| --- | --- | --- |
+| **Alpha** | An early-stage feature | Availability can be limited. Interfaces and behavior can change |
+| **Labs** | A settings area for optional experimental features | Enable a feature here when its guide directs you to Labs |
+| **Cloud** | The managed LobeHub service and its hosted capabilities | Check plan requirements and the selected execution device |
+| **Desktop** | The installed application for macOS, Windows, or Linux | Local tools depend on operating-system support and permissions. Some tasks require cloud services |
+
+**Cloud and Desktop are not opposites.** The desktop app can use Cloud services and cloud models. A web conversation can control a connected execution device.
+
+The chat interface, model endpoint, and tool execution device can be different. See [Execution Devices](/docs/usage/agent/execution-devices).
+
+## Projects: Alpha
+
+Projects is in **Alpha** for project-level work organization. Availability can be limited, and its interface and behavior can change.
+
+You can also organize your work with [Topics](/docs/usage/agent/topic), [Tasks](/docs/usage/getting-started/task), [Pages](/docs/usage/getting-started/page), and the [Resource Library](/docs/usage/getting-started/resource).
+
+## Labs and Release History
+
+The [May 31, 2026 changelog](/changelog/2026-05-31-drag-and-drop-skills) described Platform Agents as Beta, available through **Settings → Advanced → Labs**.
+
+The [June 8, 2026 changelog](/changelog/2026-06-08-connectors) renamed Platform Agents to **Connect Agents** and expanded execution-device selection.
+
+Menu names and available switches can differ by version. If a feature is missing, use the checklist in “When a Feature Is Missing.”
+
+## Cloud, Desktop, and Tool Access
+
+| Capability | What it offers | Usage notes |
+| --- | --- | --- |
+| **Desktop work layout** | Work panel beside chat, plus desktop tabs that retain their state | Use the panel beside chat and tabs to switch between tasks |
+| **Local MCP connectors** | Desktop can install and run connectors on your computer or local network | Dependencies, device connectivity, and permissions still apply |
+| **Browser pairing** | A browser tab can pair as an execution device without a desktop app | Available tools differ from those on a desktop device |
+| **Local model inference** | A local runtime can serve model requests | Other workflow steps can still use cloud services |
+
+See [Get LobeHub](/docs/usage/getting-started/get-lobehub), [Execution Devices](/docs/usage/agent/execution-devices), and [Model Providers](/docs/usage/providers) for the relevant requirements.
+
+## When a Feature Is Missing
+
+1. Check the app version and its release notes.
+2. Check your personal account and its applicable plan requirements.
+3. If the feature guide names a Labs switch, check that specific setting.
+4. Check required models, Connectors, permissions, and execution devices.
+5. For self-hosted deployments, check the corresponding [deployment guide](/docs/self-hosting/start).
+
+## Related Releases
+
+{/* Reviewed September 14, 2026. Available local changelogs end August 3, 2026. These sources do not establish a complete plan/platform matrix or a Projects entry point. */}
+
+- [April 20, 2026: work panel beside the conversation](/changelog/2026-04-20-daily-brief)
+- [May 31, 2026: Beta, Labs, and execution-device selection](/changelog/2026-05-31-drag-and-drop-skills)
+- [June 8, 2026: Connectors and Connect Agents](/changelog/2026-06-08-connectors)
+- [June 15, 2026: browser pairing](/changelog/2026-06-15-browser-pairing)
+- [August 3, 2026: desktop tabs and local MCP connectors](/changelog/2026-08-03-home-dashboard)
+- [Official downloads](https://lobehub.com/downloads): platform download options
+

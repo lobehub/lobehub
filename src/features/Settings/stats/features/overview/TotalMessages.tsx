@@ -15,10 +15,19 @@ import TotalCard from './ShareButton/TotalCard';
 
 const TotalMessages = memo<{ inShare?: boolean; mobile?: boolean }>(({ inShare }) => {
   const { t } = useTranslation('auth');
-  const { data, isLoading, error, mutate } = useClientDataSWR(statsKeys.messages(), async () => ({
-    count: await messageService.countMessages(),
-    prevCount: await messageService.countMessages({ endDate: lastMonth().format('YYYY-MM-DD') }),
-  }));
+  const { data, isLoading, error, mutate } = useClientDataSWR(statsKeys.messages(), async () => {
+    // The total is a planner estimate, but the last-month baseline is derived
+    // from it with an exact count of this month's messages (cheap — date-
+    // bounded) rather than a second estimate: without multicolumn statistics
+    // the planner can badly misjudge a user×date predicate, which would turn
+    // the growth percentage next to the number into noise.
+    const count = await messageService.countMessages({ approximate: true });
+    const sinceLastMonth = await messageService.countMessages({
+      startDate: lastMonth().add(1, 'day').format('YYYY-MM-DD'),
+    });
+
+    return { count, prevCount: Math.max(count - sinceLastMonth, 0) };
+  });
 
   if (inShare)
     return (

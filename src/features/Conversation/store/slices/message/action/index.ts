@@ -1,5 +1,5 @@
 import { shouldDropUnsupportedClaudeAssistantPrefill } from '@lobechat/model-runtime/providers/anthropic/modelId';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 import type { StateCreator } from 'zustand';
 
@@ -59,7 +59,7 @@ export const messageSlice: StateCreator<
   addAIMessage: async (content: string) => {
     const state = get();
     const { context, hooks } = state;
-    const { agentId, topicId, threadId } = context;
+    const { agentId, groupId, topicId, threadId } = context;
 
     // Get parent message ID
     const displayMessages = state.displayMessages;
@@ -67,6 +67,7 @@ export const messageSlice: StateCreator<
 
     const id = await state.createMessage({
       agentId,
+      ...(groupId ? { groupId } : {}),
       content,
       parentId,
       role: 'assistant',
@@ -104,7 +105,7 @@ export const messageSlice: StateCreator<
   addUserMessage: async ({ message, fileList }) => {
     const state = get();
     const { context, hooks } = state;
-    const { agentId, topicId, threadId } = context;
+    const { agentId, groupId, topicId, threadId } = context;
 
     // Get parent message ID
     const displayMessages = state.displayMessages;
@@ -112,6 +113,7 @@ export const messageSlice: StateCreator<
 
     const id = await state.createMessage({
       agentId,
+      ...(groupId ? { groupId } : {}),
       content: message,
       files: fileList,
       parentId,

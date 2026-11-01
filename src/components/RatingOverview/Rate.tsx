@@ -1,53 +1,15 @@
-import { ConfigProvider, Rate as AntdRate, type RateProps as AntdRateProps } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Rate as BaseRate, type RateProps } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-const styles = createStaticStyles(({ css }) => {
-  return {
-    rate: css`
-      display: flex;
-      align-items: center;
+import { sx } from '@/styles/sx';
 
-      .ant-rate-star {
-        margin: 0 !important;
-      }
-    `,
-  };
+const styles = stylex.create({
+  rate: { display: 'flex' },
 });
 
-interface RateProps extends Omit<AntdRateProps, 'size'> {
-  color?: string;
-  gap?: number;
-  size?: number;
-}
-
-const Rate = memo<RateProps>(
-  ({ gap, style, className, size = 16, color = cssVar.colorWarning, ...props }) => {
-    return (
-      <ConfigProvider
-        theme={{
-          components: {
-            Rate: {
-              starBg: cssVar.colorFill,
-              starColor: color,
-              starSize: size,
-            },
-          },
-        }}
-      >
-        <AntdRate
-          allowHalf
-          disabled
-          className={cx(styles.rate, className)}
-          style={{
-            gap: gap || size / 2,
-            ...style,
-          }}
-          {...props}
-        />
-      </ConfigProvider>
-    );
-  },
-);
+const Rate = memo<RateProps>(({ className, size = 16, ...props }) => (
+  <BaseRate allowHalf readOnly size={size} {...sx([styles.rate], className)} {...props} />
+));
 
 export default Rate;

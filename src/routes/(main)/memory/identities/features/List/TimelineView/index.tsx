@@ -1,7 +1,7 @@
 import { type IdentityListItem } from '@lobechat/types';
 import { memo } from 'react';
 
-import { useUserMemoryStore } from '@/store/userMemory';
+import { identitySelectors, useUserMemoryStore } from '@/store/userMemory';
 
 import { TimelineView as GenericTimelineView } from '../../../../features/TimeLineView';
 import { PeriodHeader, TimelineItemWrapper } from '../../../../features/TimeLineView/PeriodGroup';
@@ -15,14 +15,17 @@ interface TimelineViewProps {
 
 const TimelineView = memo<TimelineViewProps>(({ identities, isLoading, onClick }) => {
   const loadMoreIdentities = useUserMemoryStore((s) => s.loadMoreIdentities);
-  const identitiesHasMore = useUserMemoryStore((s) => s.identitiesHasMore);
+  const identitiesHasMore = useUserMemoryStore(identitySelectors.identitiesHasMore);
+  const isLoadingMore = useUserMemoryStore(identitySelectors.identitiesIsLoadingMore);
+  const loadMoreError = useUserMemoryStore(identitySelectors.identitiesLoadMoreError);
 
   return (
     <GenericTimelineView
       data={identities}
       groupBy="month"
       hasMore={identitiesHasMore}
-      isLoading={isLoading}
+      isLoading={isLoading || isLoadingMore}
+      loadMoreError={loadMoreError}
       renderHeader={(periodKey) => <PeriodHeader groupBy="month" periodKey={periodKey} />}
       getDateForGrouping={(identity) =>
         identity.episodicDate || identity.capturedAt || identity.createdAt

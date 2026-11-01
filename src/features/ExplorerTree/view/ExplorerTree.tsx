@@ -1,19 +1,30 @@
 'use client';
 
-import type {
-  FileTreeDirectoryHandle,
-  FileTreeItemHandle,
-  FileTreeOptions,
-  FileTreeRowDecoration,
+import {
+  FileTree as FileTreeModel,
+  type FileTreeDirectoryHandle,
+  type FileTreeItemHandle,
+  type FileTreeOptions,
+  type FileTreeRowDecoration,
 } from '@pierre/trees';
-import { FileTree as PierreFileTree, useFileTree, useFileTreeSelection } from '@pierre/trees/react';
-import type { DragEvent, ForwardedRef, MouseEvent } from 'react';
-import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react';
+import { FileTree as PierreFileTree, useFileTreeSelection } from '@pierre/trees/react';
+import debug from 'debug';
+import type { DragEvent, KeyboardEvent, MouseEvent } from 'react';
+import {
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { useSingleton } from '@/hooks/useSingleton';
 
 import { arrayEqual, normalizeTree, remapIdsToPaths, remapPathsToIds } from '../adapter';
 import { extractName, toCanonicalTreePath } from '../adapter/path';
+import { buildSortSignature, createPathComparator } from '../adapter/sort';
+import { cssString } from '../folderIconStyle';
 import type {
   ExplorerTreeHandle,
   ExplorerTreeMoveEvent,
@@ -21,15 +32,53 @@ import type {
   ExplorerTreeProps,
 } from '../types';
 import { openExplorerContextMenu } from './ContextMenu';
+import { getItemPathFromEventPath, isItemToggleEventPath } from './eventPath';
+import NameInputHint from './NameInputHint';
+import { type PendingCreate, useInlineNameEdit } from './useInlineNameEdit';
+
+const log = debug('lobe-explorer-tree');
 
 const asDirectory = (
   handle: FileTreeItemHandle | null | undefined,
 ): FileTreeDirectoryHandle | null =>
   handle && handle.isDirectory() ? (handle as FileTreeDirectoryHandle) : null;
 
-type ExplorerTreeHostEvent = DragEvent<HTMLElement> | MouseEvent<HTMLElement>;
+// @pierre/trees walks a lookup path segment by segment and asks for each
+// intermediate node's directory child index *before* checking that the node is
+// a directory, so looking up `a/b` while `a` is a file throws
+// "Unknown directory child index for node N" instead of reporting "not found"
+// (path-store/src/canonical.ts, findNodeIdBySegments). Our id → path map can sit
+// a beat behind the store — the tree applies renames and drops optimistically,
+// and a data refresh can turn a folder into a file under the same name — so a
+// stale lookup has to degrade to null instead of taking down the whole route.
+const FILE_APPEARANCE_STYLE_ATTRIBUTE = 'data-explorer-file-appearance';
 
-const isHTMLElement = (target: EventTarget): target is HTMLElement => target instanceof HTMLElement;
+/**
+ * Per-row rules for folder nodes drawn as files. `unsafeCSS` is fixed when the
+ * tree is constructed, but these rows change with the data (a document turns
+ * into a parent when its first child lands), so the rules are keyed on each
+ * row's path and rewritten into the shadow root whenever the nodes change.
+ */
+export const buildFileAppearanceCSS = (paths: string[], declarations: string): string =>
+  paths.length === 0
+    ? ''
+    : `${paths
+        .map(
+          (path) =>
+            `[data-item-type='folder'][data-item-path="${cssString(path)}"] [data-item-section='content']::before`,
+        )
+        .join(',\n')} {\n${declarations}\n}`;
+
+const getItemSafely = (model: FileTreeModel, path: string): FileTreeItemHandle | null => {
+  try {
+    return model.getItem(path);
+  } catch (error) {
+    log('dropping unresolvable path %s: %O', path, error);
+    return null;
+  }
+};
+
+type ExplorerTreeHostEvent = DragEvent<HTMLElement> | MouseEvent<HTMLElement>;
 
 const getComposedPath = (event: ExplorerTreeHostEvent): EventTarget[] => {
   const path = event.nativeEvent.composedPath();
@@ -40,28 +89,21 @@ const getComposedPath = (event: ExplorerTreeHostEvent): EventTarget[] => {
   );
 };
 
-export const getItemPathFromEventPath = (path: EventTarget[]): string | null => {
-  for (const target of path) {
-    if (!isHTMLElement(target)) continue;
-    const flattenedSegmentPath = target.getAttribute('data-item-flattened-subitem');
-    if (flattenedSegmentPath) return flattenedSegmentPath;
-    if (target.dataset.type !== 'item') continue;
-    const path = target.dataset.itemPath;
-    if (path) return path;
-  }
-
-  return null;
-};
+export { getItemPathFromEventPath } from './eventPath';
 
 const getItemPathFromHostEvent = (event: ExplorerTreeHostEvent): string | null =>
   getItemPathFromEventPath(getComposedPath(event));
 
-function ExplorerTreeInner<TData>(
-  props: ExplorerTreeProps<TData>,
-  ref: ForwardedRef<ExplorerTreeHandle>,
-) {
+interface ExplorerTreeInnerProps<TData> extends ExplorerTreeProps<TData> {
+  /** Remounts this component, and with it the underlying tree model. */
+  requestTreeRebuild: () => void;
+}
+
+function ExplorerTreeInner<TData>(props: ExplorerTreeInnerProps<TData>) {
   const propsRef = useRef(props);
   propsRef.current = props;
+
+  const { ref, requestTreeRebuild } = props;
 
   const adapterRef = useSingleton(() => ({
     current: normalizeTree(props.nodes),
@@ -73,6 +115,11 @@ function ExplorerTreeInner<TData>(
   );
   const suppressModelEventsRef = useRef(false);
   const renamingRef = useRef(false);
+  const pendingCreateRef = useRef<PendingCreate | null>(null);
+  // The sibling order the model currently draws (see buildSortSignature).
+  const drawnSortSignatureRef = useSingleton(() => ({
+    current: buildSortSignature(adapterRef.current, props.sort),
+  }));
 
   const initialOptions = useMemo((): FileTreeOptions => {
     const initial = adapterRef.current;
@@ -92,6 +139,7 @@ function ExplorerTreeInner<TData>(
 
     return {
       density: props.density,
+      flattenEmptyDirectories: props.flattenEmptyDirectories,
       dragAndDrop: {
         canDrag: (paths) => {
           const fn = propsRef.current.canDrag;
@@ -151,7 +199,12 @@ function ExplorerTreeInner<TData>(
             targetId,
             targetNode: targetId ? (a.nodeById.get(targetId) ?? null) : null,
           };
-          void onMove(moveEvent);
+          void Promise.resolve(onMove(moveEvent)).then(
+            (result) => {
+              if (result === false) resyncRef.current();
+            },
+            () => resyncRef.current(),
+          );
         },
       },
       icons: {
@@ -171,9 +224,16 @@ function ExplorerTreeInner<TData>(
       },
       overscan: props.overscan,
       paths: initial.paths,
+      ...(props.sort && {
+        sort: createPathComparator(
+          () => adapterRef.current,
+          () => propsRef.current.sort,
+        ),
+      }),
       renaming: {
         canRename: (item) => {
           const path = toCanonicalTreePath(item.path, item.isFolder);
+          if (pendingCreateRef.current?.path === path) return true;
           const node = adapterRef.current.nodeById.get(adapterRef.current.idByPath.get(path) ?? '');
           if (!node) return false;
           const fn = propsRef.current.canRename;
@@ -192,12 +252,20 @@ function ExplorerTreeInner<TData>(
           renamingNodeRef.current = node;
           const newName = extractName(destinationPath);
           const result = propsRef.current.onCommitRename?.(node, newName);
-          if (result && typeof (result as Promise<void>).then === 'function') {
-            (result as Promise<void>).finally(() => {
-              renamingNodeRef.current = null;
-              renamingRef.current = false;
-            });
+          if (result && typeof (result as Promise<boolean | void>).then === 'function') {
+            (result as Promise<boolean | void>)
+              .then(
+                (value) => {
+                  if (value === false) resyncRef.current();
+                },
+                () => resyncRef.current(),
+              )
+              .finally(() => {
+                renamingNodeRef.current = null;
+                renamingRef.current = false;
+              });
           } else {
+            if (result === false) queueMicrotask(() => resyncRef.current());
             renamingNodeRef.current = null;
             renamingRef.current = false;
           }
@@ -220,7 +288,49 @@ function ExplorerTreeInner<TData>(
   }, []);
 
   const renamingNodeRef = useRef<ExplorerTreeNode<TData> | null>(null);
-  const { model } = useFileTree(initialOptions);
+  // Not `useFileTree`: it destroys the model in an effect cleanup, which also
+  // runs when an <Activity> ancestor hides the tree (the working sidebar). On
+  // reveal the tree kept using the destroyed model and fell back to the paths it
+  // was created with. The model holds no global listeners, so garbage collection
+  // releases it after a real unmount, and <PierreFileTree> detaches its DOM.
+  const model = useSingleton(() => new FileTreeModel(initialOptions));
+
+  // Drops whatever the tree applied optimistically (rename, drop, new row) by
+  // re-applying the current nodes, keeping expansion, selection and focus.
+  const resync = useCallback(() => {
+    const a = adapterRef.current;
+    const expandedPaths: string[] = [];
+    for (const path of a.paths) {
+      if (asDirectory(getItemSafely(model, path))?.isExpanded()) expandedPaths.push(path);
+    }
+    const selectedPaths = model.getSelectedPaths().filter((path) => a.idByPath.has(path));
+    const focusedPath = model.getFocusedPath();
+    pendingCreateRef.current = null;
+    suppressModelEventsRef.current = true;
+    try {
+      for (const path of model.getSelectedPaths()) {
+        if (!a.idByPath.has(path)) getItemSafely(model, path)?.deselect();
+      }
+      model.resetPaths(a.paths, { initialExpandedPaths: expandedPaths });
+      for (const path of selectedPaths) getItemSafely(model, path)?.select();
+      if (focusedPath && a.idByPath.has(focusedPath)) model.focusPath(focusedPath);
+    } catch (error) {
+      log('resync failed, rebuilding the tree: %O', error);
+      requestTreeRebuild();
+    } finally {
+      suppressModelEventsRef.current = false;
+    }
+  }, [adapterRef, model, requestTreeRebuild]);
+  const resyncRef = useRef(resync);
+  resyncRef.current = resync;
+
+  const { hint, selectRenameStem, startCreating } = useInlineNameEdit({
+    adapterRef,
+    model,
+    pendingCreateRef,
+    propsRef,
+    resync,
+  });
 
   // Observe selection changes so external consumers see updates without needing to pass a selection listener.
   useFileTreeSelection(model);
@@ -239,7 +349,7 @@ function ExplorerTreeInner<TData>(
       const a = adapterRef.current;
       const nextExpanded: string[] = [];
       for (const [id, path] of a.pathById) {
-        const dir = asDirectory(model.getItem(path));
+        const dir = asDirectory(getItemSafely(model, path));
         if (dir?.isExpanded()) nextExpanded.push(id);
       }
       // Fire only when set differs; cheap comparison via sorted join
@@ -267,11 +377,11 @@ function ExplorerTreeInner<TData>(
     suppressModelEventsRef.current = true;
     try {
       for (const path of currentSelectedPaths) {
-        if (!nextSelectedPathSet.has(path)) model.getItem(path)?.deselect();
+        if (!nextSelectedPathSet.has(path)) getItemSafely(model, path)?.deselect();
       }
       const currentSelectedPathSet = new Set(currentSelectedPaths);
       for (const path of nextSelectedPaths) {
-        if (!currentSelectedPathSet.has(path)) model.getItem(path)?.select();
+        if (!currentSelectedPathSet.has(path)) getItemSafely(model, path)?.select();
       }
     } finally {
       suppressModelEventsRef.current = false;
@@ -286,7 +396,7 @@ function ExplorerTreeInner<TData>(
     const nextExpandedIds: string[] = [];
     const directoryEntries: { dir: FileTreeDirectoryHandle; shouldExpand: boolean }[] = [];
     for (const [id, path] of a.pathById) {
-      const dir = asDirectory(model.getItem(path));
+      const dir = asDirectory(getItemSafely(model, path));
       if (!dir) continue;
       const shouldExpand = nextExpandedIdSet.has(id);
       if (shouldExpand) nextExpandedIds.push(id);
@@ -322,11 +432,11 @@ function ExplorerTreeInner<TData>(
           suppressModelEventsRef.current = true;
           try {
             for (const path of currentSelectedPaths) {
-              if (!nextSelectedPathSet.has(path)) model.getItem(path)?.deselect();
+              if (!nextSelectedPathSet.has(path)) getItemSafely(model, path)?.deselect();
             }
             const currentSelectedPathSet = new Set(currentSelectedPaths);
             for (const path of nextSelectedPaths) {
-              if (!currentSelectedPathSet.has(path)) model.getItem(path)?.select();
+              if (!currentSelectedPathSet.has(path)) getItemSafely(model, path)?.select();
             }
           } finally {
             suppressModelEventsRef.current = false;
@@ -340,7 +450,7 @@ function ExplorerTreeInner<TData>(
         const nextExpandedIds: string[] = [];
         const directoryEntries: { dir: FileTreeDirectoryHandle; shouldExpand: boolean }[] = [];
         for (const [id, path] of next.pathById) {
-          const dir = asDirectory(model.getItem(path));
+          const dir = asDirectory(getItemSafely(model, path));
           if (!dir) continue;
           const shouldExpand = nextExpandedIdSet.has(id);
           if (shouldExpand) nextExpandedIds.push(id);
@@ -363,7 +473,7 @@ function ExplorerTreeInner<TData>(
     if (!nextExpandedIds) {
       nextExpandedIds = [];
       for (const [id, path] of prev.pathById) {
-        const dir = asDirectory(model.getItem(path));
+        const dir = asDirectory(getItemSafely(model, path));
         if (dir?.isExpanded()) nextExpandedIds.push(id);
       }
     }
@@ -383,20 +493,91 @@ function ExplorerTreeInner<TData>(
     lastEmittedSelectedIds.current = remapPathsToIds(nextSelectedPaths, next.idByPath);
     suppressModelEventsRef.current = true;
     try {
+      // resetPaths resolves the *previous* selection against the new store, so a
+      // selected path whose ancestor stops being a directory makes that internal
+      // lookup throw (see getItemSafely). Drop those against the still-matching
+      // old store first — selection is re-applied from nextSelectedPaths below.
+      const survivingSelectedPaths = new Set(nextSelectedPaths);
+      for (const path of model.getSelectedPaths()) {
+        if (!survivingSelectedPaths.has(path)) getItemSafely(model, path)?.deselect();
+      }
       model.resetPaths(next.paths, {
         initialExpandedPaths,
       });
+      drawnSortSignatureRef.current = buildSortSignature(next, propsRef.current.sort);
       for (const path of nextSelectedPaths) {
-        model.getItem(path)?.select();
+        getItemSafely(model, path)?.select();
       }
       if (focusedId) {
         const path = next.pathById.get(focusedId);
         if (path) model.focusPath(path);
       }
+    } catch (error) {
+      // The tree keeps more internal paths than we can clear through its public
+      // API (selection anchor, renaming row, focused row), and any of them can
+      // still trip the lookup above mid-reset, leaving the model half-swapped.
+      // Rebuild it from scratch instead of letting the error kill the route.
+      log('resetPaths failed, rebuilding the tree: %O', error);
+      requestTreeRebuild();
     } finally {
       suppressModelEventsRef.current = false;
     }
-  }, [adapterRef, props.nodes, model]);
+  }, [adapterRef, drawnSortSignatureRef, props.nodes, model, requestTreeRebuild]);
+
+  // Runs after the nodes effect above. The tree only sorts when it rebuilds its
+  // paths, so a new comparator, or data that reorders rows under unchanged
+  // paths (a document edited while sorting by update time), needs a re-apply.
+  useLayoutEffect(() => {
+    const signature = buildSortSignature(adapterRef.current, props.sort);
+    if (signature === drawnSortSignatureRef.current) return;
+    // Re-applying would drop an open name input; retry on the next change.
+    if (renamingRef.current || pendingCreateRef.current) return;
+    resyncRef.current();
+    drawnSortSignatureRef.current = signature;
+  }, [adapterRef, drawnSortSignatureRef, props.nodes, props.sort]);
+
+  // Runs after the nodes effect above, so it reads the paths just applied. On
+  // first mount the shadow root can attach a frame after this effect, so the
+  // write retries for a few frames instead of silently skipping.
+  useLayoutEffect(() => {
+    const declarations = props.fileAppearanceCSS;
+    const a = adapterRef.current;
+    const paths = declarations
+      ? [...a.nodeById.values()]
+          .filter((node) => node.isFolder && node.appearance === 'file')
+          .flatMap((node) => a.pathById.get(node.id) ?? [])
+      : [];
+    const css = declarations ? buildFileAppearanceCSS(paths, declarations) : '';
+
+    const apply = (): boolean => {
+      const shadowRoot = model.getFileTreeContainer()?.shadowRoot;
+      if (!shadowRoot) return false;
+      let style = shadowRoot.querySelector<HTMLStyleElement>(
+        `style[${FILE_APPEARANCE_STYLE_ATTRIBUTE}]`,
+      );
+      if (!css) {
+        style?.remove();
+        return true;
+      }
+      if (!style) {
+        style = document.createElement('style');
+        style.setAttribute(FILE_APPEARANCE_STYLE_ATTRIBUTE, '');
+        shadowRoot.append(style);
+      }
+      if (style.textContent !== css) style.textContent = css;
+      return true;
+    };
+
+    if (apply()) return;
+    let frame = 0;
+    let attempts = 10;
+    const retry = () => {
+      attempts -= 1;
+      if (!apply() && attempts > 0) frame = requestAnimationFrame(retry);
+    };
+    frame = requestAnimationFrame(retry);
+    return () => cancelAnimationFrame(frame);
+  }, [adapterRef, model, props.fileAppearanceCSS, props.nodes]);
 
   useImperativeHandle(
     ref,
@@ -404,17 +585,25 @@ function ExplorerTreeInner<TData>(
       deselect: (id) => {
         const path = adapterRef.current.pathById.get(id);
         if (!path) return;
-        model.getItem(path)?.deselect();
+        getItemSafely(model, path)?.deselect();
       },
       focus: (id) => {
         const path = adapterRef.current.pathById.get(id);
-        if (path) model.focusPath(path);
+        // focusPath resolves the path the same way getItem does, so a handle
+        // here means the follow-up call can no longer throw on a stale path.
+        if (!path || !getItemSafely(model, path)) return;
+        model.focusPath(path);
+      },
+      getFocusedId: () => {
+        const path = model.getFocusedPath();
+        return path ? (adapterRef.current.idByPath.get(path) ?? null) : null;
       },
       getSelectedIds: () => remapPathsToIds(model.getSelectedPaths(), adapterRef.current.idByPath),
+      resync,
       select: (id, opts) => {
         const path = adapterRef.current.pathById.get(id);
         if (!path) return;
-        const item = model.getItem(path);
+        const item = getItemSafely(model, path);
         if (!item) return;
         if (opts?.additive) item.toggleSelect();
         else item.select();
@@ -423,28 +612,35 @@ function ExplorerTreeInner<TData>(
         const want = new Set(ids);
         const a = adapterRef.current;
         for (const [nodeId, path] of a.pathById) {
-          const dir = asDirectory(model.getItem(path));
+          const dir = asDirectory(getItemSafely(model, path));
           if (!dir) continue;
           const shouldExpand = want.has(nodeId);
           if (shouldExpand && !dir.isExpanded()) dir.expand();
           else if (!shouldExpand && dir.isExpanded()) dir.collapse();
         }
       },
+      startCreating,
       startRenaming: (id) => {
         const path = adapterRef.current.pathById.get(id);
-        if (!path) return;
+        if (!path || !getItemSafely(model, path)) return;
         renamingRef.current = true;
-        model.startRenaming(path);
+        if (model.startRenaming(path)) selectRenameStem(path.endsWith('/'));
       },
     }),
-    [adapterRef, model],
+    [adapterRef, model, resync, selectRenameStem, startCreating],
   );
 
   const handleContextMenu = (event: MouseEvent<HTMLElement>) => {
     const fn = propsRef.current.getContextMenuItems;
-    if (!fn) return;
     const itemPath = getItemPathFromHostEvent(event);
-    if (!itemPath) return;
+    if (!itemPath) {
+      const blankItems = propsRef.current.getBlankContextMenuItems?.();
+      if (!blankItems || blankItems.length === 0) return;
+      event.preventDefault();
+      openExplorerContextMenu(blankItems);
+      return;
+    }
+    if (!fn) return;
     const a = adapterRef.current;
     const id = a.idByPath.get(itemPath);
     if (!id) return;
@@ -457,8 +653,6 @@ function ExplorerTreeInner<TData>(
   };
 
   const handleClick = (event: MouseEvent<HTMLElement>) => {
-    const onNodeClick = propsRef.current.onNodeClick;
-    if (!onNodeClick) return;
     const itemPath = getItemPathFromHostEvent(event);
     if (!itemPath) return;
     const a = adapterRef.current;
@@ -466,7 +660,17 @@ function ExplorerTreeInner<TData>(
     if (!id) return;
     const node = a.nodeById.get(id);
     if (!node) return;
-    onNodeClick(node, event);
+    // The tree toggles any container on a row click, before the click reaches
+    // this host listener. A file-appearance container opens on click instead, so
+    // only its chevron may expand or collapse it: undo the row-click toggle.
+    if (
+      node.isFolder &&
+      node.appearance === 'file' &&
+      !isItemToggleEventPath(getComposedPath(event))
+    ) {
+      asDirectory(getItemSafely(model, itemPath))?.toggle();
+    }
+    propsRef.current.onNodeClick?.(node, event);
   };
 
   const handleDropCapture = (event: DragEvent<HTMLElement>) => {
@@ -497,22 +701,60 @@ function ExplorerTreeInner<TData>(
     onNodeDragStart(node, event);
   };
 
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    const onTreeKeyDown = propsRef.current.onTreeKeyDown;
+    if (!onTreeKeyDown) return;
+    // Keys typed into the rename or search input belong to that input.
+    const [origin] = event.nativeEvent.composedPath();
+    if (origin instanceof HTMLInputElement || origin instanceof HTMLTextAreaElement) return;
+    const a = adapterRef.current;
+    const toNode = (path: string) => a.nodeById.get(a.idByPath.get(path) ?? '');
+    const focusedPath = model.getFocusedPath();
+    const handled = onTreeKeyDown(event, {
+      focusedNode: (focusedPath && toNode(focusedPath)) || null,
+      selectedNodes: model
+        .getSelectedPaths()
+        .map(toNode)
+        .filter((node): node is ExplorerTreeNode<TData> => !!node),
+    });
+    if (!handled) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   return (
-    <PierreFileTree
-      className={props.className}
-      header={props.header}
-      model={model}
-      style={props.style}
-      onClick={handleClick}
-      onContextMenu={handleContextMenu}
-      onDragStart={handleDragStart}
-      onDropCapture={handleDropCapture}
-    />
+    <>
+      <PierreFileTree
+        className={props.className}
+        header={props.header}
+        model={model}
+        style={props.style}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        onDragStart={handleDragStart}
+        onDropCapture={handleDropCapture}
+        onKeyDown={handleKeyDown}
+      />
+      {hint && <NameInputHint hint={hint} />}
+    </>
   );
 }
 
-const ExplorerTree = forwardRef(ExplorerTreeInner) as <TData>(
-  props: ExplorerTreeProps<TData> & { ref?: ForwardedRef<ExplorerTreeHandle> },
-) => ReturnType<typeof ExplorerTreeInner>;
+// Owns the escape hatch for an unusable tree model: bumping the generation
+// remounts the inner component, which builds a fresh model from the current
+// paths. Kept in a parent so the inner component can ask for its own remount.
+function ExplorerTree<TData>({ ref, ...props }: ExplorerTreeProps<TData>) {
+  const [generation, setGeneration] = useState(0);
+  const requestTreeRebuild = useCallback(() => setGeneration((value) => value + 1), []);
+
+  return (
+    <ExplorerTreeInner
+      key={generation}
+      {...props}
+      ref={ref}
+      requestTreeRebuild={requestTreeRebuild}
+    />
+  );
+}
 
 export default ExplorerTree;

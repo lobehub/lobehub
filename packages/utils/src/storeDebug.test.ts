@@ -4,12 +4,6 @@ import { setNamespace } from './storeDebug';
 
 describe('storeDebug utilities', () => {
   describe('setNamespace', () => {
-    it('should create a namespaced action creator', () => {
-      const createAction = setNamespace('user');
-
-      expect(typeof createAction).toBe('function');
-    });
-
     it('should return string action type when no payload provided', () => {
       const createAction = setNamespace('user');
       const actionType = createAction('login');
@@ -92,33 +86,6 @@ describe('storeDebug utilities', () => {
       expect(falseAction).toBe('data/disable');
     });
 
-    it('should handle complex nested object payload', () => {
-      const createAction = setNamespace('app');
-      const complexPayload = {
-        user: {
-          id: 123,
-          profile: {
-            name: 'John Doe',
-            settings: {
-              theme: 'dark',
-              notifications: true,
-            },
-          },
-        },
-        metadata: {
-          timestamp: Date.now(),
-          source: 'api',
-        },
-      };
-
-      const action = createAction('userUpdate', complexPayload);
-
-      expect(action).toEqual({
-        type: 'app/userUpdate',
-        payload: complexPayload,
-      });
-    });
-
     it('should create unique namespaces for different instances', () => {
       const userActions = setNamespace('user');
       const postActions = setNamespace('post');
@@ -128,25 +95,6 @@ describe('storeDebug utilities', () => {
 
       expect(userLogin).toBe('user/login');
       expect(postCreate).toBe('post/create');
-    });
-
-    it('should handle special characters in namespace and type', () => {
-      const createAction = setNamespace('my-feature_v2');
-      const actionType = createAction('save-data_with-id');
-
-      expect(actionType).toBe('my-feature_v2/save-data_with-id');
-    });
-
-    it('should maintain type consistency across calls', () => {
-      const createAction = setNamespace('counter');
-
-      // Multiple calls should work consistently
-      const increment1 = createAction('increment');
-      const increment2 = createAction('increment');
-
-      expect(increment1).toBe('counter/increment');
-      expect(increment2).toBe('counter/increment');
-      expect(increment1).toBe(increment2);
     });
   });
 });

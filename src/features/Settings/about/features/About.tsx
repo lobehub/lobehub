@@ -2,9 +2,8 @@
 
 import { SiDiscord, SiGithub, SiRss, SiX, SiYoutube } from '@icons-pack/react-simple-icons';
 import { BRANDING_EMAIL, BRANDING_NAME, SOCIAL_URL } from '@lobechat/business-const';
-import { Flexbox, Form } from '@lobehub/ui';
-import { Divider } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Divider, Flexbox } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/form';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,7 +28,6 @@ const About = memo<{ mobile?: boolean }>(({ mobile }) => {
   return (
     <Form.Group
       collapsible={false}
-      gap={16}
       style={{ maxWidth: '1024px', width: '100%' }}
       title={`${t('about')} ${BRANDING_NAME}`}
       variant={'filled'}

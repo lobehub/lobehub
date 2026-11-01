@@ -18,6 +18,16 @@ export const SKILL_DRAG_MIME = 'application/x-lobe-skill';
  */
 export const AGENT_SKILLS_IDENTIFIER_PREFIX = 'agent-skills:';
 
+/**
+ * Identifier prefix for skills in the user's own library (`documents` bundles
+ * owned by the user and bound to no agent). Any run can activate one by this
+ * identifier; a run that lists it in its plugins gets it injected.
+ */
+export const USER_SKILLS_IDENTIFIER_PREFIX = 'user-skills:';
+
+export const buildUserSkillIdentifier = (name: string): string =>
+  `${USER_SKILLS_IDENTIFIER_PREFIX}${name}`;
+
 export const buildAgentSkillIdentifier = (filename: string): string =>
   `${AGENT_SKILLS_IDENTIFIER_PREFIX}${filename}`;
 

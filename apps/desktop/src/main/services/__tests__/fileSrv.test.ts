@@ -18,16 +18,6 @@ vi.mock('@/const/dir', () => ({
   LOCAL_STORAGE_URL_PREFIX: '/lobe-desktop-file',
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
-
 // Mock file-system utilities
 vi.mock('@/utils/file-system', () => ({
   makeSureDirExist: vi.fn(),

@@ -11,8 +11,8 @@ describe('parseAgentConfig', () => {
     });
 
     it('parses nested fields correctly', () => {
-      const envStr = 'tts.sttLocale=en-US';
-      const expected = { tts: { sttLocale: 'en-US' } };
+      const envStr = 'tts.ttsService=openai';
+      const expected = { tts: { ttsService: 'openai' } };
       expect(parseAgentConfig(envStr)).toEqual(expected);
     });
 

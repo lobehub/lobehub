@@ -15,6 +15,11 @@ import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
+import type * as AgentReferenceModule from '@/server/services/agent/resolveReference';
+import {
+  InboxNotProvisionedError,
+  resolveAgentReference,
+} from '@/server/services/agent/resolveReference';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
@@ -30,6 +35,11 @@ import {
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 import { agentRouter } from '../agent';
+
+vi.mock('@/server/services/agent/resolveReference', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentReferenceModule>()),
+  resolveAgentReference: vi.fn(),
+}));
 
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
 vi.mock('../_helpers/workspaceAgentGuard', () => ({
@@ -88,31 +98,41 @@ vi.mock('@/server/services/workspacePermission', () => ({
 // The serverDatabase middleware replaces ctx.serverDB with this. The chain is
 // awaitable-empty so the restricted-KB lookups resolve to "no restrictions".
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({
-    select: vi.fn(() => ({
-      from: vi.fn(() => {
-        const whereResult = () => Promise.resolve([]);
+  getServerDB: vi.fn(function () {
+    return {
+      select: vi.fn(function () {
         return {
-          innerJoin: vi.fn(() => ({ where: vi.fn(whereResult) })),
-          where: vi.fn(whereResult),
+          from: vi.fn(function () {
+            const whereResult = () => Promise.resolve([]);
+            return {
+              innerJoin: vi.fn(function () {
+                return { where: vi.fn(whereResult) };
+              }),
+              where: vi.fn(whereResult),
+            };
+          }),
         };
       }),
-    })),
-  })),
+    };
+  }),
 }));
 
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanEditResource: vi.fn(),
   assertCanPerformResourceAction: vi.fn(),
-  buildResourcePermissionState: vi.fn((params: any) => ({
-    ...params,
-    generalAccess: params.accessLevel === 'edit' ? 'editor' : 'viewer',
-  })),
+  buildResourcePermissionState: vi.fn(function (params: any) {
+    return {
+      ...params,
+      generalAccess: params.accessLevel === 'edit' ? 'editor' : 'viewer',
+    };
+  }),
   canPerformResourceAction: vi.fn(),
   getResourceMeta: vi.fn(),
   // `resourceConfigGuard` classifies collaborative builtins to exempt them from the
   // parent-group cap; without this export the guard throws before any assertion.
-  isCollaborativeBuiltinAgent: vi.fn(() => false),
+  isCollaborativeBuiltinAgent: vi.fn(function () {
+    return false;
+  }),
 }));
 
 describe('agentRouter', () => {
@@ -130,6 +150,11 @@ describe('agentRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(resolveAgentReference).mockImplementation(async (id) => {
+      if (id === INBOX_SESSION_ID)
+        throw new TRPCError({ cause: new InboxNotProvisionedError(), code: 'NOT_FOUND' });
+      return { agentId: id, sessionId: null };
+    });
     vi.mocked(assertCanPerformResourceAction).mockResolvedValue();
     vi.mocked(isWorkspacePrimaryOwner).mockResolvedValue(false);
     vi.mocked(getResourceMeta).mockResolvedValue({
@@ -143,12 +168,16 @@ describe('agentRouter', () => {
       removeAll: vi.fn(),
       setAccessLevel: vi.fn(),
     };
-    vi.mocked(ResourcePermissionModel).mockImplementation(() => resourcePermissionModelMock);
+    vi.mocked(ResourcePermissionModel).mockImplementation(function () {
+      return resourcePermissionModelMock;
+    });
     workspaceUserSettingsModelMock = {
       getPreference: vi.fn().mockResolvedValue({}),
       updatePreference: vi.fn(),
     };
-    vi.mocked(WorkspaceUserSettingsModel).mockImplementation(() => workspaceUserSettingsModelMock);
+    vi.mocked(WorkspaceUserSettingsModel).mockImplementation(function () {
+      return workspaceUserSettingsModelMock;
+    });
 
     agentModelMock = {
       createAgentFiles: vi.fn(),
@@ -161,41 +190,56 @@ describe('agentRouter', () => {
       getAgentAssignedKnowledge: vi.fn(),
       getAgentVisibility: vi.fn().mockResolvedValue(null),
       publishToWorkspace: vi.fn(),
+      resolveIdBySlug: vi.fn().mockResolvedValue(null),
       toggleFile: vi.fn(),
       toggleKnowledgeBase: vi.fn(),
       update: vi.fn(),
     };
-    vi.mocked(AgentModel).mockImplementation(() => agentModelMock);
+    vi.mocked(AgentModel).mockImplementation(function () {
+      return agentModelMock;
+    });
 
     taskModelMock = {
       countTasksBlockingAgentDemotion: vi.fn().mockResolvedValue(0),
     };
-    vi.mocked(TaskModel).mockImplementation(() => taskModelMock);
+    vi.mocked(TaskModel).mockImplementation(function () {
+      return taskModelMock;
+    });
 
     chatGroupModelMock = {
       countGroupsBlockingAgentDemotion: vi.fn().mockResolvedValue(0),
     };
-    vi.mocked(ChatGroupModel).mockImplementation(() => chatGroupModelMock);
+    vi.mocked(ChatGroupModel).mockImplementation(function () {
+      return chatGroupModelMock;
+    });
 
     sessionModelMock = {
       findByIdOrSlug: vi.fn(),
     };
-    vi.mocked(SessionModel).mockImplementation(() => sessionModelMock);
+    vi.mocked(SessionModel).mockImplementation(function () {
+      return sessionModelMock;
+    });
 
     fileModelMock = {
       query: vi.fn(),
     };
-    vi.mocked(FileModel).mockImplementation(() => fileModelMock);
+    vi.mocked(FileModel).mockImplementation(function () {
+      return fileModelMock;
+    });
 
     knowledgeBaseModelMock = {
       query: vi.fn(),
     };
-    vi.mocked(KnowledgeBaseModel).mockImplementation(() => knowledgeBaseModelMock);
+    vi.mocked(KnowledgeBaseModel).mockImplementation(function () {
+      return knowledgeBaseModelMock;
+    });
 
     agentServiceMock = {
       createInbox: vi.fn(),
     };
-    vi.mocked(AgentService).mockImplementation(() => agentServiceMock);
+    vi.mocked(AgentService).mockImplementation(function () {
+      return agentServiceMock;
+    });
 
     mockCtx = {
       userId,
@@ -218,7 +262,7 @@ describe('agentRouter', () => {
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
     });
 
-    it('should create inbox session if user exists but no inbox session', async () => {
+    it('provisions the builtin inbox when no legacy inbox exists', async () => {
       const mockUser = { id: userId };
       const mockSession = { id: 'inboxSessionId' };
 
@@ -226,24 +270,30 @@ describe('agentRouter', () => {
       sessionModelMock.findByIdOrSlug
         .mockResolvedValueOnce(undefined)
         .mockResolvedValueOnce(mockSession);
-      agentModelMock.findBySessionId.mockResolvedValue(DEFAULT_AGENT_CONFIG);
+      agentServiceMock.getBuiltinAgent = vi.fn().mockResolvedValue(DEFAULT_AGENT_CONFIG);
 
       const caller = agentRouter.createCaller(mockCtx);
       const result = await caller.getAgentConfig({ sessionId: INBOX_SESSION_ID });
 
-      expect(agentServiceMock.createInbox).toHaveBeenCalled();
+      expect(agentServiceMock.getBuiltinAgent).toHaveBeenCalledWith(INBOX_SESSION_ID);
+      expect(agentServiceMock.createInbox).not.toHaveBeenCalled();
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
     });
 
     it('should find agent by session id if session exists', async () => {
       const mockSession = { id: 'session1' };
       sessionModelMock.findByIdOrSlug.mockResolvedValue(mockSession);
-      agentModelMock.findBySessionId.mockResolvedValue(DEFAULT_AGENT_CONFIG);
+      agentServiceMock.getAgentConfigById = vi.fn().mockResolvedValue(DEFAULT_AGENT_CONFIG);
 
       const caller = agentRouter.createCaller(mockCtx);
       const result = await caller.getAgentConfig({ sessionId: 'session1' });
 
-      expect(agentModelMock.findBySessionId).toHaveBeenCalledWith('session1');
+      expect(resolveAgentReference).toHaveBeenCalledWith(
+        'session1',
+        expect.anything(),
+        userId,
+        undefined,
+      );
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
     });
   });
@@ -813,6 +863,22 @@ describe('agentRouter', () => {
     const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
 
     describe('updateAgentConfig write guard', () => {
+      it('accepts explicit device replacement ids outside the persisted config', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ success: true });
+        const value = {
+          agencyConfig: { workingDirByDevice: { 'device-a': { path: '/new-project' } } },
+        };
+        const result = await agentRouter.createCaller(mockCtx).updateAgentConfig({
+          agentId: 'agent-1',
+          replaceWorkingDirDeviceIds: ['device-a'],
+          value,
+        });
+        expect(result).toEqual({ success: true });
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', value, [
+          'device-a',
+        ]);
+      });
+
       it('rejects the update when general access is use-only for the caller', async () => {
         agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
         const { TRPCError } = await import('@trpc/server');
@@ -862,9 +928,13 @@ describe('agentRouter', () => {
             value: { agencyConfig: { boundDeviceId: 'device-1', [policyKey]: 'fixed' } },
           });
 
-          expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', {
-            agencyConfig: { boundDeviceId: 'device-1' },
-          });
+          expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+            'agent-1',
+            {
+              agencyConfig: { boundDeviceId: 'device-1' },
+            },
+            undefined,
+          );
         },
       );
 
@@ -884,9 +954,13 @@ describe('agentRouter', () => {
           },
         });
 
-        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', {
-          agencyConfig: { boundDeviceId: 'device-1' },
-        });
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          {
+            agencyConfig: { boundDeviceId: 'device-1' },
+          },
+          undefined,
+        );
       });
 
       it('preserves policy updates from the agent creator', async () => {
@@ -899,7 +973,11 @@ describe('agentRouter', () => {
         await caller.updateAgentConfig({ agentId: 'agent-1', value });
 
         expect(isWorkspacePrimaryOwner).not.toHaveBeenCalled();
-        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', value);
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          value,
+          undefined,
+        );
       });
 
       it('preserves policy updates from the workspace primary owner', async () => {
@@ -911,7 +989,11 @@ describe('agentRouter', () => {
         const caller = agentRouter.createCaller(wsCtx());
         await caller.updateAgentConfig({ agentId: 'agent-1', value });
 
-        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', value);
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          value,
+          undefined,
+        );
       });
 
       it('allows the update when no other member holds the lock', async () => {
@@ -924,9 +1006,13 @@ describe('agentRouter', () => {
         const caller = agentRouter.createCaller(wsCtx());
         await caller.updateAgentConfig({ agentId: 'agent-1', value: { systemRole: 'x' } });
 
-        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', {
-          systemRole: 'x',
-        });
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          {
+            systemRole: 'x',
+          },
+          undefined,
+        );
       });
 
       it('does not check the lock for personal (non-workspace) agents', async () => {
@@ -1018,6 +1104,35 @@ describe('agentRouter', () => {
 
         expect(publishResourceEventMock).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe('resolveAgentRoute (released-client compatibility)', () => {
+    it('treats an id-shaped param as an own agent without touching the database', async () => {
+      const caller = agentRouter.createCaller(mockCtx);
+      const result = await caller.resolveAgentRoute({ slugOrId: 'agt_abc123' });
+
+      expect(result).toEqual({ agentId: 'agt_abc123', kind: 'own' });
+      expect(agentModelMock.resolveIdBySlug).not.toHaveBeenCalled();
+    });
+
+    it('resolves an own agent slug to its id', async () => {
+      agentModelMock.resolveIdBySlug.mockResolvedValue('agt_from_slug');
+
+      const caller = agentRouter.createCaller(mockCtx);
+      const result = await caller.resolveAgentRoute({ slugOrId: 'my-bot' });
+
+      expect(result).toEqual({ agentId: 'agt_from_slug', kind: 'own' });
+    });
+
+    // The lookup is ownership-scoped, so a stranger's slug is indistinguishable
+    // from a missing one and this resolver cannot become a slug oracle.
+    it('reports not found when no agent of the caller claims the slug', async () => {
+      agentModelMock.resolveIdBySlug.mockResolvedValue(null);
+
+      const caller = agentRouter.createCaller(mockCtx);
+
+      expect(await caller.resolveAgentRoute({ slugOrId: 'nope' })).toEqual({ kind: 'notFound' });
     });
   });
 });

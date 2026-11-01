@@ -50,6 +50,8 @@ const npmShim = (packagePath: string) =>
   `@ECHO off\r\n"%dp0%\\node.exe"  "%dp0%\\${packagePath}" %*\r\n`;
 
 const noErr = null;
+const DROID_ACP_HELP = `Usage: droid exec [options]
+  --output-format <format>  Output format (ACP modes)`;
 const TRAE_ACP_HELP = `Start the ACP server
 Usage: trae-cli acp serve [flags]
   -y, --yolo   Enable YOLO mode`;
@@ -328,6 +330,31 @@ describe('cliAgentBinaries', () => {
       });
     });
 
+    it('detects Factory Droid by its ACP capability', async () => {
+      callExecFile('/Users/test/.local/bin/droid\n');
+      callExecFile('0.206.0');
+      callExecFile(DROID_ACP_HELP);
+
+      const { droidBinary } = await import('../cliAgentBinaries');
+      await expect(droidBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/droid',
+        version: '0.206.0',
+      });
+    });
+
+    it('detects Devin through the shared version probe', async () => {
+      callExecFile('/Users/test/.local/bin/devin\n');
+      callExecFile('devin 3000.4.25 (7e8e528a)');
+
+      const { devinBinary } = await import('../cliAgentBinaries');
+      await expect(devinBinary.detect()).resolves.toMatchObject({
+        available: true,
+        path: '/Users/test/.local/bin/devin',
+        version: '3000.4.25',
+      });
+    });
+
     it('detects the official TRAE CLI by its ACP capability', async () => {
       callExecFile('/Users/test/.local/bin/traecli\n');
       callExecFile('trae-cli version 0.120.52');
@@ -426,13 +453,15 @@ describe('cliAgentBinaries', () => {
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(true);
-        expect(status.path).toBe('/Applications/ChatGPT.app/Contents/Resources/codex');
+        expect(status.path).toBe(
+          '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex',
+        );
         expect(status.version).toBe('0.138.0');
 
         expect(execFileMock).toHaveBeenCalledTimes(2);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');
         expect(execFileMock.mock.calls[1]![0]).toBe(
-          '/Applications/ChatGPT.app/Contents/Resources/codex',
+          '/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex',
         );
       } finally {
         process.env.PATH = originalPath;
@@ -449,17 +478,15 @@ describe('cliAgentBinaries', () => {
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        callExecFileError(new Error('ENOENT')); // /Applications/ChatGPT.app
-        callExecFileError(new Error('ENOENT')); // ~/Applications/ChatGPT.app
-        callExecFileError(new Error('ENOENT')); // /Applications/Codex.app
-        callExecFileError(new Error('ENOENT')); // ~/Applications/Codex.app
+        // ChatGPT.app (two layouts) + Codex.app × /Applications and ~/Applications
+        for (let i = 0; i < 6; i++) callExecFileError(new Error('ENOENT'));
 
         const { codexBinary } = await import('../cliAgentBinaries');
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(false);
-        expect(execFileMock).toHaveBeenCalledTimes(5);
-        expect(execFileMock.mock.calls[4]![0]).toBe(
+        expect(execFileMock).toHaveBeenCalledTimes(7);
+        expect(execFileMock.mock.calls[6]![0]).toBe(
           path.join(os.homedir(), 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex'),
         );
       } finally {

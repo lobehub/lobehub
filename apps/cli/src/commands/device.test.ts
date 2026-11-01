@@ -14,6 +14,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       removeWorkspaceDevice: { mutate: vi.fn() },
       status: { query: vi.fn() },
     },
+    workspace: { list: { query: vi.fn() } },
   },
 }));
 
@@ -26,10 +27,6 @@ const { mockConfirm } = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../utils/logger', () => ({
-  log: { debug: vi.fn(), error: vi.fn(), heartbeat: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  setVerbose: vi.fn(),
-}));
 vi.mock('../utils/format', async (importOriginal) => {
   const actual = await importOriginal<typeof FormatUtils>();
   return { ...actual, confirm: mockConfirm };
@@ -44,6 +41,9 @@ describe('device command', () => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     mockConfirm.mockReset();
+    mockTrpcClient.workspace.list.query.mockResolvedValue([
+      { id: 'ws-abc', name: 'Acme', slug: 'acme' },
+    ]);
     for (const method of Object.values(mockTrpcClient.device)) {
       for (const fn of Object.values(method)) {
         (fn as ReturnType<typeof vi.fn>).mockReset();
@@ -197,7 +197,7 @@ describe('device command', () => {
       expect(mockTrpcClient.device.removeDevice.mutate).not.toHaveBeenCalled();
     });
 
-    it('should resolve the client under the workspace context when --workspace is set', async () => {
+    it('should resolve a --workspace slug to its id before acting', async () => {
       mockTrpcClient.device.listDevices.query.mockResolvedValue([
         { deviceId: 'ws1', scope: 'workspace' },
       ]);
@@ -212,7 +212,7 @@ describe('device command', () => {
         'ws1',
         '--yes',
         '--workspace',
-        'ws-abc',
+        'acme',
       ]);
 
       expect(mockGetTrpcClient).toHaveBeenCalledWith('ws-abc');

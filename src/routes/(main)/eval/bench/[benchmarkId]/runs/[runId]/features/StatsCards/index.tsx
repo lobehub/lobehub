@@ -2,8 +2,7 @@
 
 import type { EvalRunMetrics } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { CheckCircle2, Clock, DollarSign, Hash } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,14 +17,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   grid: css`
     display: grid;
-    gap: 16px;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
   `,
   // Pass rate hero — the run's headline outcome, given the most visual weight.
   hero: css`
     padding: 20px;
     border-radius: ${cssVar.borderRadiusLG};
-
     background: ${cssVar.colorFillQuaternary};
   `,
   heroValue: css`
@@ -52,9 +50,7 @@ const styles = createStaticStyles(({ css }) => ({
   progressFill: css`
     height: 100%;
     border-radius: 999px;
-
     background: ${cssVar.colorSuccess};
-
     transition: width 0.3s ease;
 
     @media (prefers-reduced-motion: reduce) {

@@ -5,7 +5,7 @@
  * whether a target agent is fit for a job — typically "can this agent fix a bug
  * in a real codebase?". For a normal model-backed agent the answer lives in
  * `model` / `provider` / `plugins`. For a **heterogeneous** agent (an external
- * CLI/runtime such as Claude Code, CodeBuddy, Codex, OpenCode, Pi, or Qoder)
+ * CLI/runtime such as Claude Code, CodeBuddy, Codex, Droid, OpenCode, Pi, or Qoder)
  * those fields are misleading: the agent brings its own toolset and ignores
  * the plugin list, so we must instead
  * describe what the external runtime is and what it can do.
@@ -29,7 +29,7 @@ interface HeteroTypeProfile {
   /** Friendly product name. */
   displayName: string;
   /** Local child-process CLI vs. an agent dispatched to a remote device. */
-  kind: 'cli' | 'remote';
+  kind: 'cli' | 'remote' | 'runtime';
 }
 
 const CODING_CAPABILITIES = [
@@ -74,6 +74,27 @@ const HETERO_PROFILES: Record<HeteroType, HeteroTypeProfile> = {
     description:
       'Cursor — an autonomous CLI coding agent with filesystem and shell access that completes software-engineering tasks autonomously.',
     displayName: 'Cursor',
+    kind: 'cli',
+  },
+  'deepseek-harness': {
+    capabilities: [...CODING_CAPABILITIES, 'subagents'],
+    description:
+      'DeepSeek Harness — LobeHub’s built-in DeepSeek agent runtime. It can inspect and modify a working directory, run shell commands, use structured tools, and delegate work to subagents without requiring an external CLI installation.',
+    displayName: 'DeepSeek Harness',
+    kind: 'runtime',
+  },
+  'droid': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      "Factory Droid — Factory's autonomous coding agent. It can inspect and edit a working directory, run shell commands and tests, search code, and complete multi-step software-engineering tasks through its built-in tools.",
+    displayName: 'Factory Droid',
+    kind: 'cli',
+  },
+  'devin': {
+    capabilities: CODING_CAPABILITIES,
+    description:
+      'Devin — Cognition’s autonomous local coding agent with filesystem and shell access that completes software-engineering tasks through its own tools and models.',
+    displayName: 'Devin',
     kind: 'cli',
   },
   'grok-build': {
@@ -157,8 +178,8 @@ export interface HeteroAgentRuntimeDescriptor {
   displayName: string;
   /** Where the agent executes. */
   executionTarget?: DeviceExecutionTarget;
-  /** Local CLI child-process vs. remote device runtime. */
-  kind: 'cli' | 'remote';
+  /** External CLI, bundled local runtime, or remote device runtime. */
+  kind: 'cli' | 'remote' | 'runtime';
   /** Runtime type identifier (e.g. `claude-code`, `codex`). */
   type: HeteroType;
 }

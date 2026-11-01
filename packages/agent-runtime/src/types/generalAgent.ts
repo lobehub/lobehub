@@ -6,6 +6,8 @@ import {
   type RuntimeAdditionalContextFragment,
 } from '@lobechat/types';
 
+import type { AgentState } from './state';
+
 export interface GeneralAgentCallLLMInstructionPayload {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   allowedToolNames?: string[];
@@ -15,6 +17,11 @@ export interface GeneralAgentCallLLMInstructionPayload {
    * placeholder must be filled by this LLM turn rather than orphaned.
    */
   assistantMessageId?: string;
+  /**
+   * Attachments the context engine sends as a preview plus file id, planned by
+   * `shouldCompress` so attachment text fits under the compression threshold.
+   */
+  attachmentPreviewFileIds?: string[];
   /** Force create a new assistant message (e.g., after compression) */
   createAssistantMessage?: boolean;
   isFirstMessage?: boolean;
@@ -108,18 +115,7 @@ export interface GeneralAgentConfig {
    * When not provided, defaults to [createSecurityBlacklistGlobalAudit()]
    */
   globalInterventionAudits?: GlobalInterventionAuditConfig[];
-  modelRuntimeConfig?: {
-    /**
-     * Compression model configuration
-     * Used for context compression tasks
-     */
-    compressionModel?: {
-      model: string;
-      provider: string;
-    };
-    model: string;
-    provider: string;
-  };
+  modelRuntimeConfig?: AgentState['modelRuntimeConfig'];
   operationId: string;
   /** Phase-level tools exposed to this agent run. Falls back to AgentState.tools. */
   tools?: any[];

@@ -1,6 +1,8 @@
 import type { BriefArtifacts } from '../brief';
-import type { GoalItem } from '../goal';
 import type { ChatFileItem } from '../message/ui/chat';
+
+export * from './archive';
+export * from './execution';
 
 // ── Task type aliases ──
 
@@ -9,7 +11,54 @@ export type TaskStatus =
 
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
-export type TaskActivityType = 'brief' | 'comment' | 'created' | 'topic';
+export type TaskActivityType =
+  'assignment' | 'brief' | 'comment' | 'created' | 'property' | 'topic';
+
+/**
+ * Persisted event kinds in `task_activities`. Kept as a plain union (the column
+ * is `text`) so onboarding a new event — status, priority, … — is a type-only
+ * change with no migration.
+ */
+export type TaskActivityLogType =
+  'assignee_agent' | 'assignee_user' | 'automation' | 'priority' | 'status';
+
+/**
+ * Payload of a `task_activities` row: what the slot moved between.
+ * Assignee events carry ids (`fromId` / `toId`); a status event carries the
+ * status strings themselves (`from` / `to`).
+ */
+export interface TaskActivityLogPayload {
+  /**
+   * Who kind of party made the change, recorded at write time. The actor
+   * columns are `ON DELETE SET NULL` foreign keys, so once the user or agent
+   * is deleted this is the only trace that somebody — not the system — did
+   * it. Absent on rows written before it was introduced; treated as system.
+   */
+  actorKind?: 'agent' | 'system' | 'user';
+  from?: TaskActivityValue;
+  fromId?: string | null;
+  to?: TaskActivityValue;
+  toId?: string | null;
+}
+
+/**
+ * The automation columns as one logical value. Turning a schedule on rewrites
+ * mode + pattern + timezone in a single save; logging each column would put
+ * three lines in the feed for one decision.
+ */
+export interface TaskAutomationSnapshot {
+  heartbeatInterval: number | null;
+  /** `config.schedule.maxExecutions`; null = unlimited. Part of the schedule a user edits. */
+  maxExecutions: number | null;
+  mode: TaskAutomationMode | null;
+  schedulePattern: string | null;
+  scheduleTimezone: string | null;
+}
+
+export type TaskActivityValue = number | string | TaskAutomationSnapshot | null;
+
+/** Which assignee slot an `assignment` activity describes. */
+export type TaskAssignmentKind = 'agent' | 'member';
 
 // null = no automation
 export type TaskAutomationMode = 'heartbeat' | 'schedule';
@@ -24,18 +73,69 @@ export type TaskAutomationMode = 'heartbeat' | 'schedule';
  *                 scheduling state, nor count against the maxExecutions quota.
  * - `schedule`  — a cron `schedule` tick fired the run.
  * - `heartbeat` — a heartbeat interval tick fired the run.
- * - `goal`      — the goal outer loop spawned this round after a failed verify.
+ * - `goal`      — the Goal coordinator started this Work attempt.
  *                 Like `manual`, it never counts against automation quotas.
  */
 export type TaskRunTrigger = 'manual' | 'schedule' | 'heartbeat' | 'goal';
 
+/**
+ * A clarifying question the intent reader wants answered before an agent
+ * starts. Only raised when different answers change what gets delivered.
+ */
+export interface TaskIntentClarification {
+  /** What concretely changes depending on the answer. */
+  impact?: string;
+  /** Enumerable candidate answers, offered as one-tap chips. */
+  options?: string[];
+  question: string;
+}
+
+/**
+ * What the intent reader understood from the raw text typed into the task
+ * composer. Purely advisory — nothing here is persisted until the user (or the
+ * auto path, for an unambiguous request) confirms it.
+ */
+export interface TaskIntentAnalysis {
+  clarifications: TaskIntentClarification[];
+  /** How sure the reader is the brief can go to an executor as-is. */
+  confidence: 'high' | 'medium' | 'low';
+  /** Whether this is a single delivery or a standing goal. */
+  kind: 'task' | 'goal';
+  kindReason?: string;
+  /** The request rewritten as a full brief, without added scope. */
+  refinedInstruction: string;
+  /** One sentence, addressed to the user: the outcome that was understood. */
+  summary: string;
+  title: string;
+}
+
+/**
+ * The brief produced after the user answers, replacing the pre-answer reading.
+ * A second pass is needed because the first one was written while those details
+ * were still open, so it names them as gaps the answers have since closed.
+ */
+export interface TaskInstructionSynthesis {
+  instruction: string;
+  title: string;
+}
+
 // ── Config types ──
+
+/** Stable identity with the label snapshot written to the legacy selection. */
+export interface CheckpointTaskRef {
+  id: string;
+  identifier: string;
+}
 
 export interface CheckpointConfig {
   onAgentRequest?: boolean;
   tasks?: {
+    /** Persisted identifiers for old readers; write boundaries accept TaskRefs. */
     afterIds?: string[];
+    afterTasks?: CheckpointTaskRef[];
+    /** Persisted identifiers for old readers; write boundaries accept TaskRefs. */
     beforeIds?: string[];
+    beforeTasks?: CheckpointTaskRef[];
   };
   topic?: {
     after?: boolean;
@@ -135,7 +235,8 @@ export interface TaskTopicHandoff {
    */
   briefDecision?: BriefDecision;
   /**
-   * Raw last assistant message of the run, captured on completion.
+   * Raw output of the run, captured on completion: its last assistant message,
+   * or its earlier report when that message was only a trailing remark.
    * Shown on the run card alongside the LLM-synthesized `summary` so the feed
    * surfaces the actual run output, not only the summary.
    */
@@ -156,6 +257,9 @@ export interface TaskSchedulerContext {
   consecutiveFailures?: number;
   // ISO timestamp when the latest tick was scheduled. Informational only.
   scheduledAt?: string;
+  // ISO timestamp opening the current schedule window: `maxExecutions` counts
+  // schedule runs since it, and the dispatcher never fires an earlier occurrence.
+  scheduleStartedAt?: string;
   // QStash messageId (or LocalScheduler scheduleId) for the next tick. Used to
   // cancel when the user wants an interval change to take effect immediately.
   tickMessageId?: string;
@@ -231,8 +335,15 @@ export interface TaskParticipant {
   type: 'user' | 'agent';
 }
 
+export interface TaskSubtaskProgress {
+  completed: number;
+  total: number;
+}
+
 export interface TaskItem {
   accessedAt: Date;
+  /** Set when the user archives the task; archived tasks are hidden from lists by default. */
+  archivedAt: Date | null;
   assigneeAgentId: string | null;
   assigneeUserId: string | null;
   automationMode: TaskAutomationMode | null;
@@ -246,12 +357,6 @@ export interface TaskItem {
   description: string | null;
   editorData: unknown;
   error: string | null;
-  /**
-   * The goal entity bound to this task (`goals.subjectType='task'`), attached
-   * by list/detail reads. Presence marks a goal-driven task; the goal owns its
-   * budget, requirement and lifecycle status.
-   */
-  goal?: GoalItem | null;
   heartbeatInterval: number | null;
   heartbeatTimeout: number | null;
   id: string;
@@ -269,6 +374,8 @@ export interface TaskItem {
   sortOrder: number | null;
   startedAt: Date | null;
   status: string;
+  /** Lightweight recursive descendant progress attached by task list reads. */
+  subtaskProgress?: TaskSubtaskProgress;
   totalRunCost?: number | null;
   totalRunDuration?: number | null;
   totalTopics: number | null;
@@ -286,6 +393,7 @@ export type TaskListItem = TaskItem & {
 
 export interface NewTask {
   accessedAt?: Date;
+  archivedAt?: Date | null;
   assigneeAgentId?: string | null;
   assigneeUserId?: string | null;
   automationMode?: TaskAutomationMode | null;
@@ -337,11 +445,19 @@ export interface TaskDetailSubtaskRunningTopic {
 }
 
 export interface TaskDetailSubtask {
+  /** ISO time the subtask was archived; null when it is not archived. */
+  archivedAt?: string | null;
   assignee?: TaskDetailSubtaskAssignee | null;
+  /** Human assignee (workspace member). Coexists with `assignee` (agent). */
+  assigneeUserId?: string | null;
   automationMode?: TaskAutomationMode | null;
   blockedBy?: string;
+  blockedById?: string;
   children?: TaskDetailSubtask[];
+  /** Creator of the subtask; with `visibility`, gates who it can be assigned to. */
+  createdByUserId?: string;
   heartbeat?: { interval?: number | null };
+  id?: string;
   identifier: string;
   name?: string | null;
   priority?: number | null;
@@ -349,6 +465,7 @@ export interface TaskDetailSubtask {
   schedule?: { pattern?: string | null; timezone?: string | null };
   status: string;
   updatedAt?: string;
+  visibility?: 'private' | 'public';
 }
 
 export interface TaskDetailWorkspaceNode {
@@ -372,6 +489,13 @@ export interface TaskDetailActivityAuthor {
   id: string;
   name?: string | null;
   type: 'agent' | 'user';
+  /**
+   * The id is recorded but no live row backs it — deleted, or owned by someone
+   * else and filtered out of this viewer's scope. Distinct from a resolved row
+   * whose display name happens to be empty, and from no author at all (which
+   * means the system acted). Collapsing the three misattributes history.
+   */
+  unresolved?: boolean;
 }
 
 export interface TaskDetailActivityAgent {
@@ -389,6 +513,16 @@ export interface TaskDetailActivity {
   agent?: TaskDetailActivityAgent | null;
   agentId?: string | null;
   artifacts?: BriefArtifacts | null;
+  /**
+   * Assignment-only: which assignee slot changed and what it moved between.
+   * `null` on either side means "unassigned"; `author` carries who made the
+   * change.
+   */
+  assignment?: {
+    from?: TaskDetailActivityAuthor | null;
+    kind: TaskAssignmentKind;
+    to?: TaskDetailActivityAuthor | null;
+  };
   author?: TaskDetailActivityAuthor;
   briefType?: string;
   /**
@@ -415,6 +549,19 @@ export interface TaskDetailActivity {
    */
   operationId?: string | null;
   priority?: string | null;
+  /**
+   * Property-only: a field a person (or an agent acting for them) changed.
+   * System transitions — the runner starting or finishing a run — are not
+   * logged; the run row already carries them.
+   */
+  propertyChange?:
+    | {
+        field: 'automation';
+        from: TaskAutomationSnapshot | null;
+        to: TaskAutomationSnapshot | null;
+      }
+    | { field: 'priority'; from: number | null; to: number | null }
+    | { field: 'status'; from: TaskStatus | null; to: TaskStatus };
   readAt?: string | null;
   resolvedAction?: string | null;
   resolvedAt?: string | null;
@@ -426,6 +573,7 @@ export interface TaskDetailActivity {
    */
   runningOperation?: {
     assistantMessageId: string;
+    heteroType?: string | null;
     operationId: string;
     scope?: string;
     threadId?: string | null;
@@ -443,7 +591,7 @@ export interface TaskDetailActivity {
   time?: string;
   title?: string;
   topicId?: string | null;
-  /** Topic-only: what opened this round — `goal` marks a loop-spawned rerun. */
+  /** Topic-only: what opened this round — `goal` marks a coordinator-started attempt. */
   trigger?: TaskRunTrigger | null;
   type: TaskActivityType;
   userId?: string | null;
@@ -470,6 +618,8 @@ export interface TaskRunVerifySummary {
 export interface TaskDetailData {
   activities?: TaskDetailActivity[];
   agentId?: string | null;
+  /** ISO time the user archived the task; null when it is not archived. */
+  archivedAt?: string | null;
   // null/undefined = no automation configured
   automationMode?: TaskAutomationMode | null;
   checkpoint?: CheckpointConfig;
@@ -477,15 +627,15 @@ export interface TaskDetailData {
   createdAt?: string;
   /** Creator of the task; used by the UI to gate creator-only actions (e.g. make private). */
   createdByUserId?: string | null;
-  dependencies?: Array<{ dependsOn: string; type: string }>;
+  dependencies?: Array<{ dependsOn: string; dependsOnId?: string; type: string }>;
   description?: string | null;
   /** Rich-editor JSON state for the instruction; preserves details markdown drops (image size, etc.). */
   editorData?: unknown;
   error?: string | null;
   /** Files attached to the task instruction (persistent context for every run). */
   files?: ChatFileItem[];
-  /** The goal entity carried by this task (`goals` row); null when not a goal task. */
-  goal?: GoalItem | null;
+  /** The goal this task (or its nearest goal-bound ancestor) belongs to; null when none. */
+  goal?: { id: string; title: string } | null;
   // heartbeat.interval: periodic execution interval | heartbeat.timeout+lastAt: watchdog monitoring (detects stuck tasks)
   heartbeat?: {
     interval?: number | null;
@@ -499,7 +649,7 @@ export interface TaskDetailData {
   identifier: string;
   instruction: string;
   name?: string | null;
-  parent?: { agentId?: string | null; identifier: string; name: string | null } | null;
+  parent?: { id?: string; agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;
   schedule?: {
     maxExecutions?: number | null;

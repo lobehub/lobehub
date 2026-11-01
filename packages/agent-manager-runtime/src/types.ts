@@ -1,4 +1,10 @@
-import type { HeterogeneousProviderConfig, LobeAgentConfig, MetaData } from '@lobechat/types';
+import type {
+  AssistantMarketSource,
+  DiscoverAssistantDetail,
+  HeterogeneousProviderConfig,
+  LobeAgentConfig,
+  MetaData,
+} from '@lobechat/types';
 import type { PartialDeep } from 'type-fest';
 
 // ==================== Service Interfaces ====================
@@ -8,18 +14,25 @@ import type { PartialDeep } from 'type-fest';
  * Can be implemented by client-side or server-side services
  */
 export interface IAgentService {
-  countAgents: (params?: { keyword?: string }) => Promise<number>;
+  countAgents: (params?: { includeInbox?: boolean; keyword?: string }) => Promise<number>;
   createAgent: (params: { config: Record<string, unknown> }) => Promise<{
     agentId?: string;
   }>;
   duplicateAgent: (agentId: string, newTitle?: string) => Promise<{ agentId: string } | null>;
   getAgentConfigById: (agentId: string) => Promise<LobeAgentConfig | null>;
-  queryAgents: (params: { keyword?: string; limit?: number; offset?: number }) => Promise<
+  queryAgents: (params: {
+    includeInbox?: boolean;
+    keyword?: string;
+    limit?: number;
+    offset?: number;
+  }) => Promise<
     Array<{
       avatar?: string | null;
       backgroundColor?: string | null;
       description?: string | null;
+      heteroType?: HeterogeneousProviderConfig['type'];
       id: string;
+      name?: string | null;
       title?: string | null;
     }>
   >;
@@ -30,6 +43,12 @@ export interface IAgentService {
  * Interface for discover/marketplace service operations
  */
 export interface IDiscoverService {
+  getAssistantDetail?: (params: {
+    identifier: string;
+    locale?: string;
+    source?: AssistantMarketSource;
+    version?: string;
+  }) => Promise<DiscoverAssistantDetail | undefined>;
   getAssistantList: (params: { category?: string; pageSize?: number; q?: string }) => Promise<{
     items: Array<{
       avatar?: string;
@@ -150,6 +169,8 @@ export interface AgentSearchItem {
   heteroType?: HeterogeneousProviderConfig['type'];
   id: string;
   isMarket?: boolean;
+  /** User-facing display name; `title` is the agent's role */
+  name?: string;
   title?: string;
 }
 

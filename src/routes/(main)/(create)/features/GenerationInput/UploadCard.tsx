@@ -1,8 +1,6 @@
 'use client';
 
-import { ActionIcon, Block } from '@lobehub/ui';
-import { Spin } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { ActionIcon, Block, createStaticStyles, cssVar, cx, Spin } from '@lobehub/ui';
 import { Plus, X } from 'lucide-react';
 import type { ChangeEvent, CSSProperties } from 'react';
 import { memo, useCallback, useRef, useState } from 'react';
@@ -87,6 +85,24 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
     height: 100%;
     border-radius: 3px;
   `,
+  badge: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 4;
+    inset-block-end: 4px;
+    inset-inline-start: 4px;
+
+    padding-block: 1px;
+    padding-inline: 4px;
+    border-radius: 4px;
+
+    font-size: 10px;
+    line-height: 14px;
+    color: ${cssVar.colorWhite};
+
+    background: ${cssVar.colorBgMask};
+  `,
   label: css`
     padding-inline: 4px;
 
@@ -119,17 +135,17 @@ export const uploadCardStyles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgMask};
 
-    /* antd resets the Spin's own color to colorText (near-black in the light
-       theme) and the percent ring's stroke is \`currentcolor\`, so it smears into
-       the dark mask. The mask is a dark scrim in both themes — override the Spin
-       color to white for contrast. */
-    .ant-spin {
+    /* The mask is a dark scrim in both themes, so the spinner needs a fixed
+       white rather than a theme-following token. */
+    svg {
       color: ${cssVar.colorWhite};
     }
   `,
 }));
 
 interface UploadCardProps {
+  /** Short tag drawn on the filled preview, e.g. "Image 1" for prompt references. */
+  badge?: string;
   className?: string;
   closeClassName?: string;
   imageUrl?: string | null;
@@ -153,6 +169,7 @@ interface UploadCardProps {
 
 const UploadCard = memo<UploadCardProps>(
   ({
+    badge,
     imageUrl,
     label,
     loading = false,
@@ -271,9 +288,10 @@ const UploadCard = memo<UploadCardProps>(
                 src={uploadPreview || imageUrl!}
                 style={{ objectFit: 'cover' }}
               />
+              {badge && !uploading && <span className={uploadCardStyles.badge}>{badge}</span>}
               {uploading && (
                 <div className={uploadCardStyles.uploadOverlay}>
-                  <Spin percent={'auto'} size="small" />
+                  <Spin size="small" />
                 </div>
               )}
             </div>

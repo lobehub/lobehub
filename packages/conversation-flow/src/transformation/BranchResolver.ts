@@ -1,4 +1,5 @@
 import type { IdNode, Message } from '../types';
+import { toTime } from '../utils/timestamp';
 
 /**
  * BranchResolver - Handles branch resolution logic
@@ -39,6 +40,10 @@ export class BranchResolver {
       }
       // Invalid index (> children.length), ignore and continue to other strategies
     }
+
+    // A lone child is the answer every strategy below lands on; skip their
+    // subtree walks, which made long single-path chains quadratic.
+    if (idNode.children.length === 1) return idNode.children[0].id;
 
     // Priority 2: A persisted user descendant proves which historical branch the
     // user actually continued. Prefer the newest such descendant before the
@@ -94,6 +99,10 @@ export class BranchResolver {
       // Invalid index (> metadataBranchIds.length), ignore and continue to other strategies
     }
 
+    // A lone child is the answer every strategy below lands on; skip their
+    // subtree walks, which made long single-path chains quadratic.
+    if (childIds.length === 1) return childIds[0];
+
     // Priority 2: Prefer the branch that the user most recently continued.
     const latestUserBranchId = this.findBranchContainingLatestUser(
       childIds,
@@ -143,7 +152,7 @@ export class BranchResolver {
         if (descendant?.threadId) continue;
 
         if (descendant?.role === 'user') {
-          const timestamp = descendant.createdAt;
+          const timestamp = toTime(descendant.createdAt);
           if (timestamp > latestTimestamp) {
             latestTimestamp = timestamp;
             selectedBranchId = branchId;

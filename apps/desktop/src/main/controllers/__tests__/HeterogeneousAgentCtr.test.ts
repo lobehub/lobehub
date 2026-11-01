@@ -1,19 +1,60 @@
 import { EventEmitter } from 'node:events';
 import { existsSync, statSync } from 'node:fs';
-import { access, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
-import type { CodexQuotaSnapshot } from '@lobechat/electron-client-ipc';
+import type { CodexQuotaSnapshot, KimiCodeQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
+import {
+  HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
+  lobeHubCliGuide,
+  lobeHubCliGuideBlock,
+} from '@lobechat/heterogeneous-agents/protocol';
+import type * as spawnModule from '@lobechat/heterogeneous-agents/spawn';
 import { AcpRpcResponseError } from '@lobechat/heterogeneous-agents/spawn';
 // `electron` is mocked below; this binding is the mock object so tests can
 // flip `isPackaged` to exercise the packaged-build tracing gate.
 import { app as electronAppMock } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as heteroCliProcessModule from '../../utils/heteroCliProcess';
 import HeterogeneousAgentCtr, { redactPromptArgs } from '../HeterogeneousAgentImpl';
+
+/**
+ * A fresh CLI session's serialized prompt leads with the `lh` introduction (Claude
+ * Code loads it as a skill instead); a resumed one (`startSession({ resumeSessionId })`) does not.
+ */
+const cliGuideBlock = { text: lobeHubCliGuide, type: 'text' };
+
+/**
+ * Process-table access used by interrupted-run reaping. Real by default; a
+ * test that needs a specific liveness answer sets an override.
+ */
+const heteroProcessOverrides: {
+  isProcessAlive?: (pid: number) => boolean;
+  killProcessTreeByPid?: (pid: number, signal: NodeJS.Signals) => void;
+  readProcessIdentity?: (pid: number) => Promise<{ commandLine?: string; status: string }>;
+  waitForProcessExit?: (pid: number, timeoutMs: number) => Promise<boolean>;
+} = {};
+
+vi.mock('@/utils/heteroCliProcess', async (importOriginal) => {
+  const actual = await importOriginal<typeof heteroCliProcessModule>();
+  return {
+    ...actual,
+    isProcessAlive: (...args: Parameters<typeof actual.isProcessAlive>) =>
+      (heteroProcessOverrides.isProcessAlive ?? actual.isProcessAlive)(...args),
+    killProcessTreeByPid: (...args: Parameters<typeof actual.killProcessTreeByPid>) =>
+      (heteroProcessOverrides.killProcessTreeByPid ?? actual.killProcessTreeByPid)(...args),
+    readProcessIdentity: (...args: Parameters<typeof actual.readProcessIdentity>) =>
+      (heteroProcessOverrides.readProcessIdentity ?? actual.readProcessIdentity)(
+        ...(args as [number]),
+      ),
+    waitForProcessExit: (...args: Parameters<typeof actual.waitForProcessExit>) =>
+      (heteroProcessOverrides.waitForProcessExit ?? actual.waitForProcessExit)(...args),
+  };
+});
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof os>('node:os');
@@ -85,11 +126,13 @@ const { loggerInfoMock } = vi.hoisted(() => ({
 
 const {
   beginServerDefaultOperationMock,
+  describeServerDefaultModelMock,
   getProviderBindingRuntimeMock,
   getServerDefaultEndpointMock,
   settleServerDefaultOperationMock,
 } = vi.hoisted(() => ({
   beginServerDefaultOperationMock: vi.fn(),
+  describeServerDefaultModelMock: vi.fn(),
   getProviderBindingRuntimeMock: vi.fn(),
   getServerDefaultEndpointMock: vi.fn(),
   settleServerDefaultOperationMock: vi.fn(),
@@ -97,6 +140,7 @@ const {
 
 vi.mock('@/modules/heterogeneousAgent/providerBindingPort', () => ({
   beginServerDefaultOperation: beginServerDefaultOperationMock,
+  describeServerDefaultModel: describeServerDefaultModelMock,
   getProviderBindingRuntime: getProviderBindingRuntimeMock,
   getServerDefaultEndpoint: getServerDefaultEndpointMock,
   settleServerDefaultOperation: settleServerDefaultOperationMock,
@@ -110,6 +154,7 @@ vi.mock('electron', () => ({
     getPath: vi.fn((name: string) => (name === 'desktop' ? FAKE_DESKTOP_PATH : `/fake/${name}`)),
     isPackaged: false,
     on: vi.fn(),
+    quit: vi.fn(),
   },
   ipcMain: { handle: vi.fn() },
 }));
@@ -125,6 +170,7 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 const {
+  claudeSdkSessionAfterSpawnMock,
   claudeSdkSessionCloseMock,
   claudeSdkSessionConstructMock,
   codexAppServerCanReuse,
@@ -142,6 +188,18 @@ const {
   cursorAcpSessionConstructMock,
   cursorAcpSessionInterruptMock,
   cursorAcpSessionRunMock,
+  droidAcpSessionCloseMock,
+  droidAcpSessionConstructMock,
+  droidAcpSessionInterruptMock,
+  droidAcpSessionRunMock,
+  devinAcpSessionCloseMock,
+  devinAcpSessionConstructMock,
+  devinAcpSessionInterruptMock,
+  devinAcpSessionRunMock,
+  dshDetectMock,
+  dshDisposeMock,
+  dshPromptMock,
+  dshSpawnMock,
   grokAcpSessionCloseMock,
   grokAcpSessionConstructMock,
   grokAcpSessionInterruptMock,
@@ -150,7 +208,13 @@ const {
   traeAcpSessionConstructMock,
   traeAcpSessionInterruptMock,
   traeAcpSessionRunMock,
+  piRpcSessionAbortMock,
+  piRpcSessionCloseMock,
+  piRpcSessionConstructMock,
+  piRpcSessionRebindMock,
+  piRpcSessionRunMock,
 } = vi.hoisted(() => ({
+  claudeSdkSessionAfterSpawnMock: vi.fn(async () => {}),
   claudeSdkSessionCloseMock: vi.fn(),
   claudeSdkSessionConstructMock: vi.fn(),
   codexAppServerCanReuse: { value: true },
@@ -168,6 +232,18 @@ const {
   cursorAcpSessionConstructMock: vi.fn(),
   cursorAcpSessionInterruptMock: vi.fn(),
   cursorAcpSessionRunMock: vi.fn(),
+  droidAcpSessionCloseMock: vi.fn(),
+  droidAcpSessionConstructMock: vi.fn(),
+  droidAcpSessionInterruptMock: vi.fn(),
+  droidAcpSessionRunMock: vi.fn(),
+  devinAcpSessionCloseMock: vi.fn(),
+  devinAcpSessionConstructMock: vi.fn(),
+  devinAcpSessionInterruptMock: vi.fn(),
+  devinAcpSessionRunMock: vi.fn(),
+  dshDetectMock: vi.fn(),
+  dshDisposeMock: vi.fn(),
+  dshPromptMock: vi.fn(),
+  dshSpawnMock: vi.fn(),
   grokAcpSessionCloseMock: vi.fn(),
   grokAcpSessionConstructMock: vi.fn(),
   grokAcpSessionInterruptMock: vi.fn(),
@@ -176,10 +252,21 @@ const {
   traeAcpSessionConstructMock: vi.fn(),
   traeAcpSessionInterruptMock: vi.fn(),
   traeAcpSessionRunMock: vi.fn(),
+  piRpcSessionAbortMock: vi.fn(),
+  piRpcSessionCloseMock: vi.fn(),
+  piRpcSessionConstructMock: vi.fn(),
+  piRpcSessionRebindMock: vi.fn(),
+  piRpcSessionRunMock: vi.fn(),
+}));
+
+const { ensureResumeTranscriptMock, readClaudeCodeSessionCostMock } = vi.hoisted(() => ({
+  ensureResumeTranscriptMock: vi.fn(async () => ({ path: '', written: false })),
+  readClaudeCodeSessionCostMock: vi.fn(async (): Promise<number | undefined> => undefined),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>();
+  const { createCodexAppServerMocks } = await import('./testUtils');
+  const actual = await importOriginal<typeof spawnModule>();
 
   class MockClaudeAgentSdkSession {
     constructor(private readonly options: any) {
@@ -192,6 +279,13 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
 
     async run() {
       const now = Date.now();
+      // The real session hands the CLI child it spawns to its host here.
+      this.options.onProcessSpawn?.({
+        args: ['/usr/local/bin/claude', '-p', '--output-format', 'stream-json'],
+        command: '/usr/local/bin/claude',
+        pid: 99_001,
+      });
+      await claudeSdkSessionAfterSpawnMock();
       this.options.onRuntimeStatus({
         activeTasks: [
           {
@@ -222,94 +316,6 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
         sessionId: this.options.sessionId,
         state: 'closed',
         transport: 'claude-sdk',
-      });
-    }
-  }
-
-  class MockCodexAppServerClient {
-    constructor(options: any) {
-      codexAppServerClientConstructMock(options);
-    }
-
-    canReuseFor() {
-      return codexAppServerCanReuse.value;
-    }
-
-    get hasConsumers() {
-      return codexAppServerConsumerCount.value > 0;
-    }
-
-    close() {
-      codexAppServerClientCloseMock();
-    }
-  }
-
-  class MockCodexThreadSession {
-    canFallbackToExec = true;
-    private closed = false;
-
-    constructor(private readonly options: any) {
-      codexAppServerConsumerCount.value += 1;
-      codexAppServerConstructMock(options);
-    }
-
-    close() {
-      if (!this.closed) {
-        this.closed = true;
-        codexAppServerConsumerCount.value -= 1;
-      }
-      codexAppServerCloseMock();
-    }
-
-    async interrupt() {
-      return codexAppServerInterruptMock();
-    }
-
-    async run(runOptions: any) {
-      codexAppServerRunMock(runOptions);
-      if (codexAppServerShouldFailResume.value && this.options.initialThreadId) {
-        this.canFallbackToExec = false;
-        const error = new Error('Thread not found');
-        error.name = 'CodexAppServerConnectionError';
-        throw error;
-      }
-      if (codexAppServerShouldFallback.value) {
-        const error = new Error('Method not found: initialize');
-        error.name = 'CodexAppServerConnectionError';
-        throw error;
-      }
-
-      const now = Date.now();
-      this.canFallbackToExec = false;
-      if (codexAppServerShouldFailAfterThread.value) {
-        const error = new Error('Codex app-server disconnected');
-        error.name = 'CodexAppServerConnectionError';
-        throw error;
-      }
-      this.options.onRuntimeStatus({
-        activeTasks: [],
-        lastEventAt: now,
-        operationId: runOptions.operationId,
-        sessionId: this.options.sessionId,
-        state: 'running',
-        transport: 'codex-app-server',
-      });
-      this.options.onSessionId('thread_app_server');
-      await this.options.onEvents([
-        {
-          data: { reason: 'complete', transport: 'codex-app-server' },
-          operationId: runOptions.operationId,
-          stepIndex: 0,
-          timestamp: now,
-          type: 'agent_runtime_end',
-        },
-      ]);
-      this.options.onRuntimeStatus({
-        activeTasks: [],
-        lastEventAt: now,
-        sessionId: this.options.sessionId,
-        state: 'closed',
-        transport: 'codex-app-server',
       });
     }
   }
@@ -379,6 +385,54 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockDevinAcpSession {
+    constructor(private readonly options: any) {
+      devinAcpSessionConstructMock(options);
+    }
+
+    close() {
+      devinAcpSessionCloseMock();
+    }
+
+    interrupt() {
+      devinAcpSessionInterruptMock();
+    }
+
+    async run() {
+      if (devinAcpSessionRunMock.getMockImplementation()) {
+        return devinAcpSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'devin-acp',
+      });
+      this.options.onSessionId('devin-session-1');
+      this.options.onModel?.('claude-sonnet-4-6-thinking');
+      await this.options.onEvents([
+        {
+          data: { stopReason: 'end_turn' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'closed',
+        transport: 'devin-acp',
+      });
+    }
+  }
+
   class MockTraeAcpSession {
     constructor(private readonly options: any) {
       traeAcpSessionConstructMock(options);
@@ -426,17 +480,112 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
     }
   }
 
+  class MockDroidAcpSession {
+    constructor(private readonly options: any) {
+      droidAcpSessionConstructMock(options);
+    }
+
+    close() {
+      droidAcpSessionCloseMock();
+    }
+
+    interrupt() {
+      droidAcpSessionInterruptMock();
+    }
+
+    async run() {
+      if (droidAcpSessionRunMock.getMockImplementation()) {
+        return droidAcpSessionRunMock(this.options);
+      }
+      const now = Date.now();
+      this.options.onRuntimeStatus({
+        activeTasks: [],
+        lastEventAt: now,
+        operationId: this.options.operationId,
+        sessionId: this.options.sessionId,
+        state: 'running',
+        transport: 'droid-acp',
+      });
+      this.options.onSessionId('droid_session_1');
+      await this.options.onEvents([
+        {
+          data: { stopReason: 'end_turn' },
+          operationId: this.options.operationId,
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+    }
+  }
+
   return {
     ...actual,
+    ensureClaudeCodeResumeTranscript: ensureResumeTranscriptMock,
+    readClaudeCodeSessionCost: readClaudeCodeSessionCostMock,
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
-    CodexAppServerClient: MockCodexAppServerClient,
-    CodexThreadSession: MockCodexThreadSession,
+    ...createCodexAppServerMocks(actual, {
+      codexAppServerCanReuse,
+      codexAppServerClientCloseMock,
+      codexAppServerClientConstructMock,
+      codexAppServerCloseMock,
+      codexAppServerConsumerCount,
+      codexAppServerConstructMock,
+      codexAppServerInterruptMock,
+      codexAppServerRunMock,
+      codexAppServerShouldFailAfterThread,
+      codexAppServerShouldFailResume,
+      codexAppServerShouldFallback,
+    }),
     CursorAcpSession: MockCursorAcpSession,
+    DroidAcpSession: MockDroidAcpSession,
+    DevinAcpSession: MockDevinAcpSession,
+    detectDshCommand: dshDetectMock,
+    spawnDshAcpSession: dshSpawnMock,
     isCodexAppServerCompatibilityError: (error: Error) =>
       error.name === 'CodexAppServerConnectionError',
     GrokAcpSession: MockGrokAcpSession,
     TraeAcpSession: MockTraeAcpSession,
   };
+});
+
+vi.mock('@lobechat/heterogeneous-agents/rpc', async (importOriginal) => {
+  class MockPiRpcSession {
+    isReusable = true;
+    constructor(private readonly options: any) {
+      piRpcSessionConstructMock(options);
+    }
+
+    async abort() {
+      return piRpcSessionAbortMock();
+    }
+
+    async close() {
+      piRpcSessionCloseMock();
+    }
+
+    rebind(callbacks: any) {
+      piRpcSessionRebindMock(callbacks);
+    }
+
+    async run(prompt: { text: string }) {
+      const result = piRpcSessionRunMock(this.options, prompt);
+      if (result) return result;
+      const now = Date.now();
+      this.options.onSessionId('pi_sess_1');
+      await this.options.onEvents([
+        {
+          data: { reason: 'complete', transport: 'pi-rpc' },
+          stepIndex: 0,
+          timestamp: now,
+          type: 'agent_runtime_end',
+        },
+      ]);
+      return { aborted: false };
+    }
+  }
+
+  return { ...(await importOriginal<object>()), PiRpcSession: MockPiRpcSession };
 });
 
 const { consumeCodexRateLimitResetCreditMock, fetchCodexQuotaMock } = vi.hoisted(() => ({
@@ -449,11 +598,21 @@ vi.mock('@/modules/heterogeneousAgent/codexQuota', () => ({
   fetchCodexQuota: fetchCodexQuotaMock,
 }));
 
+const { fetchKimiCodeQuotaMock } = vi.hoisted(() => ({
+  fetchKimiCodeQuotaMock: vi.fn(),
+}));
+
+vi.mock('@/modules/heterogeneousAgent/kimiCodeQuota', () => ({
+  fetchKimiCodeQuota: fetchKimiCodeQuotaMock,
+}));
+
 // Captures the most recent spawn() call so sendPrompt tests can assert on argv.
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
-const { execFileMock } = vi.hoisted(() => ({
+const { execFileMock, onSpawnMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
+  /** Runs inside the spawn mock, so a test can move the clock across a spawn. */
+  onSpawnMock: vi.fn(),
 }));
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
@@ -463,6 +622,7 @@ vi.mock('node:child_process', async (importOriginal) => {
     execFile: execFileMock,
     spawn: (command: string, args: string[], options: any) => {
       spawnCalls.push({ args, command, options });
+      onSpawnMock();
       nextFakeProc?.__start?.();
       return nextFakeProc;
     },
@@ -532,6 +692,10 @@ describe('HeterogeneousAgentCtr', () => {
     appStoragePath = await mkdtemp(path.join(os.tmpdir(), 'lobehub-hetero-'));
     consumeCodexRateLimitResetCreditMock.mockReset();
     fetchCodexQuotaMock.mockReset();
+    fetchKimiCodeQuotaMock.mockReset();
+    onSpawnMock.mockReset();
+    claudeSdkSessionAfterSpawnMock.mockReset();
+    claudeSdkSessionAfterSpawnMock.mockImplementation(async () => {});
     claudeSdkSessionCloseMock.mockReset();
     claudeSdkSessionConstructMock.mockReset();
     codexAppServerCanReuse.value = true;
@@ -549,6 +713,27 @@ describe('HeterogeneousAgentCtr', () => {
     cursorAcpSessionConstructMock.mockReset();
     cursorAcpSessionInterruptMock.mockReset();
     cursorAcpSessionRunMock.mockReset();
+    devinAcpSessionCloseMock.mockReset();
+    devinAcpSessionConstructMock.mockReset();
+    devinAcpSessionInterruptMock.mockReset();
+    devinAcpSessionRunMock.mockReset();
+    dshDetectMock.mockReset();
+    dshDetectMock.mockResolvedValue({
+      available: true,
+      path: '/usr/local/bin/dsh',
+      resolvedPathEnv: '/usr/local/bin:/usr/bin',
+      version: '0.2.0-rc.2',
+    });
+    dshDisposeMock.mockReset();
+    dshDisposeMock.mockResolvedValue(undefined);
+    dshPromptMock.mockReset();
+    dshSpawnMock.mockReset();
+    dshSpawnMock.mockReturnValue({ dispose: dshDisposeMock, prompt: dshPromptMock });
+    dshPromptMock.mockImplementation(async function* () {
+      // The session's pipeline already stamps the operation onto each event.
+      yield { data: { text: 'DSH UI OK' }, operationId: 'op-dsh', type: 'content_delta' };
+      yield { data: { reason: 'complete' }, operationId: 'op-dsh', type: 'agent_runtime_end' };
+    });
     grokAcpSessionCloseMock.mockReset();
     grokAcpSessionConstructMock.mockReset();
     grokAcpSessionInterruptMock.mockReset();
@@ -598,6 +783,8 @@ describe('HeterogeneousAgentCtr', () => {
         settings: { sdkType: 'openai', supportResponsesApi: true },
       },
     });
+    describeServerDefaultModelMock.mockReset();
+    describeServerDefaultModelMock.mockResolvedValue(undefined);
     getServerDefaultEndpointMock.mockReset();
     getServerDefaultEndpointMock.mockResolvedValue('https://app.example.com');
     settleServerDefaultOperationMock.mockReset();
@@ -606,20 +793,141 @@ describe('HeterogeneousAgentCtr', () => {
     traeAcpSessionConstructMock.mockReset();
     traeAcpSessionInterruptMock.mockReset();
     traeAcpSessionRunMock.mockReset();
+    piRpcSessionAbortMock.mockReset();
+    piRpcSessionCloseMock.mockReset();
+    piRpcSessionConstructMock.mockReset();
+    piRpcSessionRebindMock.mockReset();
+    piRpcSessionRunMock.mockReset();
+    droidAcpSessionCloseMock.mockReset();
+    droidAcpSessionConstructMock.mockReset();
+    droidAcpSessionInterruptMock.mockReset();
+    droidAcpSessionRunMock.mockReset();
     mockGetAllWindows.mockReset();
     platformMock.mockReturnValue('linux');
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(statSync).mockReturnValue(asDirectory);
     delete process.env.LOBE_CLAUDE_CODE_SDK;
     delete process.env.LOBE_CODEX_APP_SERVER;
+    delete process.env.LOBE_PI_RPC_IDLE_TIMEOUT_MS;
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     if (originalClaudeSdkLabEnv === undefined) delete process.env.LOBE_CLAUDE_CODE_SDK;
     else process.env.LOBE_CLAUDE_CODE_SDK = originalClaudeSdkLabEnv;
     if (originalCodexAppServerLabEnv === undefined) delete process.env.LOBE_CODEX_APP_SERVER;
     else process.env.LOBE_CODEX_APP_SERVER = originalCodexAppServerLabEnv;
     await rm(appStoragePath, { force: true, recursive: true });
+  });
+
+  describe('cancelSession', () => {
+    /**
+     * @example A replacement local Codex turn starts only after the interrupted CLI exits.
+     */
+    it('does not resolve CLI cancellation until the native process exits', async () => {
+      // ROOT CAUSE:
+      //
+      // cancelSession previously sent SIGINT and returned immediately. “Send now”
+      // could then start a second `codex exec resume` while the first process still
+      // owned the thread writer.
+      //
+      // Before: signal the child and schedule a detached escalation timer.
+      // After: signal, await exit, and synchronously escalate after a bounded wait.
+      const { proc } = createFakeProc();
+      proc.__start = vi.fn();
+      proc.exitCode = null;
+      proc.signalCode = null;
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+      });
+      const prompt = ctr.sendPrompt({
+        operationId: 'op-cancel-wait',
+        prompt: 'sleep 60',
+        sessionId,
+      });
+      await vi.waitFor(() => expect(spawnCalls).toHaveLength(1));
+
+      let cancellationSettled = false;
+      const cancellation = ctr.cancelSession({ sessionId }).then(() => {
+        cancellationSettled = true;
+      });
+      await Promise.resolve();
+
+      expect(cancellationSettled).toBe(false);
+
+      proc.stdout.end();
+      proc.stderr.end();
+      proc.signalCode = 'SIGINT';
+      proc.emit('exit', null, 'SIGINT');
+
+      await cancellation;
+      await prompt;
+    });
+
+    /**
+     * @example A wedged native process ignores both graceful and forced termination.
+     */
+    it('rejects cancellation when process exit is not observed after SIGKILL', async () => {
+      // ROOT CAUSE:
+      //
+      // cancelSession awaited the post-SIGKILL timeout but discarded its false
+      // result. Callers therefore started replacement turns even though the old
+      // process could still own the native Codex thread writer.
+      //
+      // Before: await forcedExit; return undefined.
+      // After: throw when forcedExit resolves false.
+      const processKill = vi.spyOn(process, 'kill').mockReturnValue(true);
+
+      try {
+        const { proc } = createFakeProc();
+        proc.__start = vi.fn();
+        proc.exitCode = null;
+        proc.pid = 4242;
+        proc.signalCode = null;
+        nextFakeProc = proc;
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as unknown as ConstructorParameters<typeof HeterogeneousAgentCtr>[0]);
+        const { sessionId } = await ctr.startSession({
+          agentType: 'codex',
+          command: 'codex',
+        });
+        const spawnCount = spawnCalls.length;
+        const prompt = ctr.sendPrompt({
+          operationId: 'op-cancel-timeout',
+          prompt: 'ignore termination',
+          sessionId,
+        });
+        await vi.waitFor(() => expect(spawnCalls).toHaveLength(spawnCount + 1));
+
+        vi.useFakeTimers();
+        const cancellation = expect(ctr.cancelSession({ sessionId })).rejects.toThrow(
+          `Session ${sessionId} did not exit after SIGKILL`,
+        );
+        await vi.advanceTimersByTimeAsync(4000);
+        await cancellation;
+
+        expect(processKill).toHaveBeenNthCalledWith(1, -4242, 'SIGINT');
+        expect(processKill).toHaveBeenNthCalledWith(2, -4242, 'SIGKILL');
+
+        vi.useRealTimers();
+        proc.stdout.end();
+        proc.stderr.end();
+        proc.signalCode = 'SIGKILL';
+        proc.emit('exit', null, 'SIGKILL');
+        await prompt;
+      } finally {
+        processKill.mockRestore();
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('image cache (delegates to shared `normalizeImage`)', () => {
@@ -919,6 +1227,265 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('getKimiCodeQuota', () => {
+    it('passes env and kimiCodeHomePath through to the quota sampler', async () => {
+      const quota = {
+        error: null,
+        extraUsage: null,
+        monthly: null,
+        monthlyCode: null,
+        provider: 'kimi-code',
+        session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: 1,
+        weekly: null,
+      } satisfies KimiCodeQuotaSnapshot;
+      fetchKimiCodeQuotaMock.mockResolvedValue(quota);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const params = {
+        env: { KIMI_CODE_HOME: '/tmp/kimi-code-home' },
+        kimiCodeHomePath: '/tmp/kimi-code-home',
+      };
+
+      await expect(ctr.getKimiCodeQuota(params)).resolves.toEqual(quota);
+      expect(fetchKimiCodeQuotaMock).toHaveBeenCalledWith({
+        env: { KIMI_CODE_HOME: '/tmp/kimi-code-home' },
+        kimiCodeHomePath: '/tmp/kimi-code-home',
+      });
+    });
+
+    it('reuses automatic quota reads while explicit refresh bypasses the cache', async () => {
+      const quota = {
+        error: null,
+        extraUsage: null,
+        monthly: null,
+        monthlyCode: null,
+        provider: 'kimi-code',
+        session: { resetsAt: null, usedPercent: 8, windowMinutes: 300 },
+        status: 'ok',
+        updatedAt: Date.now(),
+        weekly: null,
+      } satisfies KimiCodeQuotaSnapshot;
+      fetchKimiCodeQuotaMock.mockResolvedValue(quota);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const params = { env: { KIMI_CODE_HOME: '/tmp/kimi-code-home' } };
+
+      await ctr.getKimiCodeQuota(params);
+      await ctr.getKimiCodeQuota(params);
+
+      expect(fetchKimiCodeQuotaMock).toHaveBeenCalledTimes(1);
+
+      await ctr.getKimiCodeQuota({ ...params, force: true });
+
+      expect(fetchKimiCodeQuotaMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('sendPrompt (deepseek-harness)', () => {
+    it('drives the installed dsh CLI acp profile and broadcasts unified stream events', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        args: ['--config', '/custom/dsh.json'],
+        command: '',
+        cwd: '/workspace',
+        env: { DEEPSEEK_API_KEY: 'test-key' },
+        initialModel: 'deepseek-chat',
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-dsh',
+        prompt: 'hello',
+        sessionId,
+        systemContext: 'follow project rules',
+      });
+
+      expect(dshDetectMock).toHaveBeenCalledWith(
+        'dsh',
+        expect.objectContaining({ DEEPSEEK_API_KEY: 'test-key' }),
+      );
+      expect(dshSpawnMock.mock.calls[0][0].args).toEqual(['--config', '/custom/dsh.json']);
+      expect(dshSpawnMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: '/usr/local/bin/dsh',
+          cwd: '/workspace',
+          env: expect.objectContaining({
+            DEEPSEEK_API_KEY: 'test-key',
+            PATH: '/usr/local/bin:/usr/bin',
+          }),
+          model: 'deepseek-chat',
+          operationId: 'op-dsh',
+          resumeSessionId: undefined,
+        }),
+      );
+      expect(dshPromptMock).toHaveBeenCalledWith(
+        `follow project rules\n\n${lobeHubCliGuide}\n\nhello`,
+      );
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentEvent',
+        expect.objectContaining({
+          event: expect.objectContaining({ operationId: 'op-dsh', type: 'content_delta' }),
+          sessionId,
+        }),
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+      expect(dshDisposeMock).toHaveBeenCalledOnce();
+    });
+
+    it('does not re-send the session introduction when resuming a dsh session', async () => {
+      mockGetAllWindows.mockReturnValue([]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+        resumeSessionId: 'dsh-prev',
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-dsh',
+        prompt: 'next turn',
+        sessionId,
+        systemContext: 'follow project rules',
+      });
+
+      expect(dshSpawnMock).toHaveBeenCalledWith(
+        expect.objectContaining({ resumeSessionId: 'dsh-prev' }),
+      );
+      expect(dshPromptMock).toHaveBeenCalledWith('follow project rules\n\nnext turn');
+    });
+
+    it('records the harness session id so the next turn resumes it', async () => {
+      mockGetAllWindows.mockReturnValue([]);
+      dshSpawnMock.mockImplementationOnce((options: { onSessionId: (id: string) => void }) => ({
+        dispose: dshDisposeMock,
+        prompt: async function* () {
+          options.onSessionId('dsh-session-new');
+          yield {
+            data: {},
+            operationId: 'op-dsh',
+            stepIndex: 0,
+            timestamp: 0,
+            type: 'stream_start',
+          };
+        },
+      }));
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-dsh', prompt: 'hello', sessionId });
+
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toMatchObject({
+        agentSessionId: 'dsh-session-new',
+      });
+    });
+
+    it('fails the turn with an install hint when the dsh CLI is missing', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
+      dshDetectMock.mockResolvedValueOnce({ available: false, error: 'not found' });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+        initialModel: 'deepseek-chat',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-dsh', prompt: 'hello', sessionId }),
+      ).rejects.toThrow(/npm i -g @deepseek-ai\/dsh/);
+      expect(dshSpawnMock).not.toHaveBeenCalled();
+    });
+
+    it('fails the turn with the update hint when the installed dsh is too old', async () => {
+      mockGetAllWindows.mockReturnValue([]);
+      dshDetectMock.mockResolvedValueOnce({
+        available: false,
+        error: 'DeepSeek Harness CLI 0.0.1 is too old; LobeHub needs 0.2.0 or newer.',
+        path: '/Users/me/.local/bin/dsh',
+        version: '0.0.1',
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-dsh', prompt: 'hello', sessionId }),
+      ).rejects.toThrow('DeepSeek Harness CLI 0.0.1 is too old; LobeHub needs 0.2.0 or newer.');
+      expect(dshSpawnMock).not.toHaveBeenCalled();
+    });
+
+    it('does not launch the runtime when Stop lands before it starts', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+        initialModel: 'deepseek-chat',
+      });
+
+      let finishDetect!: () => void;
+      dshDetectMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishDetect = () =>
+              resolve({
+                available: true,
+                path: '/usr/local/bin/dsh',
+                resolvedPathEnv: '/usr/local/bin:/usr/bin',
+              });
+          }),
+      );
+
+      const sending = ctr.sendPrompt({ operationId: 'op-dsh', prompt: 'hello', sessionId });
+      await vi.waitFor(() => expect(dshDetectMock).toHaveBeenCalled());
+      // No handle exists yet, so cancel can only record the intent.
+      await ctr.cancelSession({ sessionId });
+      finishDetect();
+      await sending;
+
+      expect(dshPromptMock).not.toHaveBeenCalled();
+      expect(dshDisposeMock).toHaveBeenCalledOnce();
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+  });
+
   describe('sendPrompt (claude-code)', () => {
     beforeEach(() => {
       spawnCalls.length = 0;
@@ -934,11 +1501,17 @@ describe('HeterogeneousAgentCtr', () => {
         systemContext: string;
       }> = {},
     ) => {
+      // These argv/stream fixtures need no wall-clock session-completion grace.
+      if (!vi.isFakeTimers()) {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        vi.setTimerTickMode('nextTimerAsync');
+      }
       const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
 
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
+        binaryManager: { detect: async () => ({ available: true, version: '2.1.301' }) },
         storeManager: { get: vi.fn() },
       } as any);
       const { sessionId } = await ctr.startSession({
@@ -969,13 +1542,40 @@ describe('HeterogeneousAgentCtr', () => {
       const line = writes[0].trimEnd();
       expect(line.endsWith('\n') || writes[0].endsWith('\n')).toBe(true);
       const msg = JSON.parse(line);
+      expect(cliArgs).toContain('--plugin-dir');
       expect(msg).toMatchObject({
-        message: {
-          content: [{ text: prompt, type: 'text' }],
-          role: 'user',
-        },
+        message: { content: [{ text: prompt, type: 'text' }], role: 'user' },
         type: 'user',
       });
+    });
+
+    it('re-introduces the CLI when this turn rebuilt a garbage-collected transcript', async () => {
+      // `--resume` keeps working because the transcript was rebuilt, but it is
+      // made of persisted chat rows, which never carried the introduction. Skills
+      // are disabled here, so the guide cannot ride along as one.
+      ensureResumeTranscriptMock.mockResolvedValueOnce({ path: '/tmp/t.jsonl', written: true });
+
+      const { writes } = await runSendPrompt(
+        'carry on',
+        { args: ['--disable-slash-commands'], cwd: '/work/dir', resumeSessionId: 'sess-gc' },
+        [],
+        { resumeReplayMessages: [{ content: 'earlier', role: 'user' }] } as any,
+      );
+
+      const msg = JSON.parse(writes[0].trimEnd());
+      expect(msg.message.content).toEqual([cliGuideBlock, { text: 'carry on', type: 'text' }]);
+    });
+
+    it('does not re-introduce the CLI when the transcript did not need rebuilding', async () => {
+      const { writes } = await runSendPrompt(
+        'carry on',
+        { cwd: '/work/dir', resumeSessionId: 'sess-live' },
+        [],
+        { resumeReplayMessages: [{ content: 'earlier', role: 'user' }] } as any,
+      );
+
+      const msg = JSON.parse(writes[0].trimEnd());
+      expect(msg.message.content).toEqual([{ text: 'carry on', type: 'text' }]);
     });
 
     it('places system context before the user prompt in stream-json content blocks', async () => {
@@ -1081,6 +1681,83 @@ describe('HeterogeneousAgentCtr', () => {
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
+    it('stamps the replay floor before the CLI can record its prompt', async () => {
+      // `startedAt` is the floor a transcript replay is matched against. Taken
+      // after the spawn, the CLI could append this turn's prompt record first
+      // and recovery would then reject its own turn.
+      const start = new Date('2026-09-22T10:00:00.000Z');
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        vi.setSystemTime(start);
+        onSpawnMock.mockImplementation(() => {
+          vi.setSystemTime(new Date(start.getTime() + 5000));
+        });
+        nextFakeProc = createFakeProc().proc;
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const { sessionId } = await ctr.startSession({
+          agentType: 'claude-code',
+          command: 'claude',
+        });
+
+        await ctr.sendPrompt({
+          operationId: 'op-floor',
+          prompt: 'do the thing',
+          sessionId,
+          topicId: 'topic-floor',
+        });
+
+        const ledger = JSON.parse(
+          await readFile(path.join(appStoragePath, 'heteroAgent', 'inflight-runs.json'), 'utf8'),
+        ).runs;
+        expect(ledger).toHaveLength(1);
+        // The spawn jumped the clock 5s; a floor taken after it would land there.
+        expect(Date.parse(ledger[0].startedAt)).toBeLessThan(start.getTime() + 5000);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('records the SDK-spawned CLI child on the recovery ledger', async () => {
+      // The SDK launches a real Claude executable: a hard crash leaves an
+      // orphan that keeps writing the transcript a replay would read, and a
+      // PID-less ledger entry looks safe to recover next to it.
+      process.env.LOBE_CLAUDE_CODE_SDK = '1';
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'claude-code',
+        command: 'claude',
+      });
+
+      let ledgerDuringRun: any[] = [];
+      claudeSdkSessionAfterSpawnMock.mockImplementation(async () => {
+        ledgerDuringRun = JSON.parse(
+          await readFile(path.join(appStoragePath, 'heteroAgent', 'inflight-runs.json'), 'utf8'),
+        ).runs;
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-sdk-ledger',
+        prompt: 'watch ci',
+        sessionId,
+        topicId: 'topic-sdk',
+      });
+
+      expect(ledgerDuringRun).toEqual([
+        expect.objectContaining({
+          agentType: 'claude-code',
+          command: 'claude',
+          pid: 99_001,
+          topicId: 'topic-sdk',
+        }),
+      ]);
+    });
+
     it('does not start the Claude SDK when server-default execution is cancelled during preparation', async () => {
       process.env.LOBE_CLAUDE_CODE_SDK = '1';
       const ctr = new HeterogeneousAgentCtr({
@@ -1125,21 +1802,6 @@ describe('HeterogeneousAgentCtr', () => {
         operationId: 'op-cancel-sdk-preparation',
         result: 'error',
       });
-    });
-
-    it.each([
-      '-flag-looking-prompt',
-      '--help please',
-      '- dash at start',
-      '-p -- mixed',
-      'normal prompt with -dash- inside',
-    ])('accepts dash-containing prompt without leaking to argv: %s', async (prompt) => {
-      const { cliArgs, writes } = await runSendPrompt(prompt);
-
-      expect(cliArgs).not.toContain(prompt);
-      expect(writes).toHaveLength(1);
-      const msg = JSON.parse(writes[0].trimEnd());
-      expect(msg.message.content[0].text).toBe(prompt);
     });
 
     it('falls back to the user Desktop when no cwd is supplied', async () => {
@@ -1195,8 +1857,8 @@ describe('HeterogeneousAgentCtr', () => {
         expect(options.env).not.toHaveProperty('ANTHROPIC_API_KEY');
         expect(options.env).not.toHaveProperty('ANTHROPIC_AUTH_TOKEN');
         expect(options.env).not.toHaveProperty('ANTHROPIC_BASE_URL');
-        // Unrelated inherited vars must still pass through.
-        expect(options.env.PATH).toBe(process.env.PATH);
+        // Unrelated inherited vars pass through, behind the bundled CLI's dir.
+        expect(options.env.PATH).toBe(`/fake/userData/bin${path.delimiter}${process.env.PATH}`);
       } finally {
         for (const [key, value] of Object.entries(original)) {
           if (value === undefined) delete process.env[key];
@@ -1222,14 +1884,14 @@ describe('HeterogeneousAgentCtr', () => {
       }
     });
 
-    it('disables CodeBuddy background tasks in the spawned environment', async () => {
-      const { cliArgs, options } = await runSendPrompt('hello', {
-        agentType: 'codebuddy',
-        command: 'codebuddy',
-      });
-
+    // without MCP_CONNECTION_NONBLOCKING the first turn misses claude.ai connectors.
+    it.each([
+      ['codebuddy', 'codebuddy', 'CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS', '1'],
+      ['claude-code', 'claude', 'MCP_CONNECTION_NONBLOCKING', 'false'],
+    ])('applies the %s preset env', async (agentType, command, key, value) => {
+      const { cliArgs, options } = await runSendPrompt('hello', { agentType, command });
       expect(cliArgs).toContain('--include-partial-messages');
-      expect(options.env.CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS).toBe('1');
+      expect(options.env[key]).toBe(value);
     });
 
     it('passes the selected model to the native CodeBuddy process', async () => {
@@ -1241,6 +1903,32 @@ describe('HeterogeneousAgentCtr', () => {
 
       expect(cliArgs).toContain('--model');
       expect(cliArgs[cliArgs.indexOf('--model') + 1]).toBe('gpt-5.4');
+    });
+
+    it("emits a resumed run's own cost over the session baseline", async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
+      readClaudeCodeSessionCostMock.mockResolvedValueOnce(69.67);
+
+      const { options } = await runSendPrompt('carry on', { resumeSessionId: 'sess-live' }, [
+        `${JSON.stringify({ session_id: 'sess-live', subtype: 'init', type: 'system' })}\n`,
+        `${JSON.stringify({
+          is_error: false,
+          result: 'done',
+          total_cost_usd: 76.43,
+          type: 'result',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        })}\n`,
+      ]);
+
+      expect(readClaudeCodeSessionCostMock).toHaveBeenCalledWith(
+        expect.objectContaining({ home: options.env.HOME, sessionId: 'sess-live' }),
+      );
+      const resultUsage = send.mock.calls
+        .filter(([channel]) => channel === 'heteroAgentEvent')
+        .map(([, payload]) => payload.event)
+        .find((event) => event.type === 'step_complete' && event.data?.phase === 'result_usage');
+      expect(resultUsage?.data.costUsd).toBeCloseTo(6.76);
     });
 
     it('captures the Claude Code session id from stream-json init events', async () => {
@@ -1446,6 +2134,195 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('sendPrompt (devin ACP)', () => {
+    beforeEach(() => {
+      spawnCalls.length = 0;
+      execFileMock.mockReset();
+    });
+
+    it('routes Devin through ACP and persists its native session and model', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'devin',
+        args: ['--model', 'claude-sonnet-4-6-thinking'],
+        command: 'devin',
+        initialModel: 'claude-sonnet-4-6-thinking',
+        resumeSessionId: 'devin-session-old',
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-devin',
+        prompt: 'private user request',
+        sessionId,
+        systemContext: 'private selected workspace context',
+      });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(devinAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--model', 'claude-sonnet-4-6-thinking'],
+          askUserBridge: expect.any(Object),
+          clientVersion: '1.0.0-test',
+          commandPath: 'devin',
+          cwd: FAKE_DESKTOP_PATH,
+          initialModel: 'claude-sonnet-4-6-thinking',
+          operationId: 'op-devin',
+          prompt: [
+            { text: 'private selected workspace context', type: 'text' },
+            { text: 'private user request', type: 'text' },
+          ],
+          resumeSessionId: 'devin-session-old',
+          sessionId,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'devin-session-1',
+      });
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentRuntimeStatus',
+        expect.objectContaining({ state: 'running', transport: 'devin-acp' }),
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('forwards Devin permission choices through the intervention bridge', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      let receivedAnswer: unknown;
+      devinAcpSessionRunMock.mockImplementation(async (options) => {
+        receivedAnswer = await options.askUserBridge.pending({
+          arguments: {
+            questions: [
+              {
+                header: 'Permission required',
+                multiSelect: false,
+                options: [{ label: 'Allow' }, { label: 'Reject' }],
+                question: 'Run tests?',
+              },
+            ],
+          },
+          toolCallId: 'devin-permission-1',
+        });
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'devin', command: 'devin' });
+      const run = ctr.sendPrompt({ operationId: 'op-devin-question', prompt: 'work', sessionId });
+
+      await vi.waitFor(() =>
+        expect(send).toHaveBeenCalledWith(
+          'heteroAgentEvent',
+          expect.objectContaining({
+            event: expect.objectContaining({
+              data: expect.objectContaining({
+                identifier: 'devin',
+                provider: 'devin',
+                toolCallId: 'devin-permission-1',
+              }),
+              type: 'agent_intervention_request',
+            }),
+            sessionId,
+          }),
+        ),
+      );
+      await ctr.submitIntervention({
+        operationId: 'op-devin-question',
+        result: { 'Run tests?': 'Allow' },
+        toolCallId: 'devin-permission-1',
+      });
+      await run;
+
+      expect(receivedAnswer).toEqual({ result: { 'Run tests?': 'Allow' } });
+    });
+
+    it('classifies a missing resumed Devin ACP session', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const missingSessionError = new AcpRpcResponseError('session/load', {
+        code: -32_016,
+        data: {
+          'cognition.ai/errorKind': 'session_not_found',
+          'cognition.ai/retryable': false,
+        },
+        message: 'Session not found',
+      });
+      devinAcpSessionRunMock.mockRejectedValue(missingSessionError);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'devin',
+        command: 'devin',
+        cwd: '/Users/fake/projects/repo',
+        resumeSessionId: 'missing-devin-session',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-devin-resume', prompt: 'continue', sessionId }),
+      ).rejects.toThrow(
+        'The saved Devin session could not be found, so a new conversation will start.',
+      );
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: expect.objectContaining({
+          agentType: 'devin',
+          code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+          command: 'devin',
+          resumeSessionId: 'missing-devin-session',
+        }),
+        sessionId,
+      });
+    });
+
+    it.each([
+      ['cancelSession', devinAcpSessionInterruptMock],
+      ['stopSession', devinAcpSessionCloseMock],
+    ] as const)('%s delegates to the active Devin ACP session', async (action, expectedMock) => {
+      let resolveRun: (() => void) | undefined;
+      devinAcpSessionRunMock.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveRun = resolve;
+          }),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'devin', command: 'devin' });
+      const run = ctr.sendPrompt({ operationId: 'op-devin', prompt: 'work', sessionId });
+      await vi.waitFor(() => expect(devinAcpSessionConstructMock).toHaveBeenCalledOnce());
+
+      await ctr[action]({ sessionId });
+
+      expect(expectedMock).toHaveBeenCalledOnce();
+      resolveRun?.();
+      await run;
+    });
+  });
+
   describe('sendPrompt (grok-build ACP)', () => {
     beforeEach(() => {
       spawnCalls.length = 0;
@@ -1487,6 +2364,7 @@ describe('HeterogeneousAgentCtr', () => {
           operationId: 'op-grok',
           prompt: [
             { text: 'selected context', type: 'text' },
+            cliGuideBlock,
             { text: 'implement this', type: 'text' },
           ],
           sessionId,
@@ -1511,6 +2389,68 @@ describe('HeterogeneousAgentCtr', () => {
         }),
       );
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('launches provider-bound Grok with a managed secret-free profile', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'grok-build',
+        args: ['--model', 'stale-model', '--effort', 'high'],
+        command: 'grok',
+        env: {
+          GROK_CODE_XAI_API_KEY: 'stale-legacy-key',
+          GROK_CONFIG: 'untrusted',
+          XAI_API_KEY: 'stale-key',
+        },
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
+      });
+
+      const originalLegacyApiKey = process.env.GROK_CODE_XAI_API_KEY;
+      const originalXaiApiKey = process.env.XAI_API_KEY;
+      process.env.GROK_CODE_XAI_API_KEY = 'inherited-legacy-key';
+      process.env.XAI_API_KEY = 'inherited-xai-key';
+      try {
+        await ctr.sendPrompt({ operationId: 'op-grok-provider', prompt: 'hello', sessionId });
+      } finally {
+        if (originalLegacyApiKey === undefined) delete process.env.GROK_CODE_XAI_API_KEY;
+        else process.env.GROK_CODE_XAI_API_KEY = originalLegacyApiKey;
+        if (originalXaiApiKey === undefined) delete process.env.XAI_API_KEY;
+        else process.env.XAI_API_KEY = originalXaiApiKey;
+      }
+
+      const options = grokAcpSessionConstructMock.mock.calls.at(-1)?.[0];
+      expect(options.args).toEqual([
+        '--effort',
+        'high',
+        '--model',
+        expect.stringMatching(/^lobehub-provider-[\da-f]{16}$/),
+      ]);
+      expect(options.env).toEqual(
+        expect.objectContaining({
+          GROK_CONFIG: '',
+          GROK_DEFAULT_MODEL: '',
+          GROK_HOME: expect.stringContaining('/heteroAgent/bindings/grok-build/'),
+          LOBEHUB_GROK_API_KEY: 'provider-secret',
+        }),
+      );
+      expect(options.env).not.toHaveProperty('GROK_CODE_XAI_API_KEY');
+      expect(options.env).not.toHaveProperty('XAI_API_KEY');
+
+      const bindingsDir = path.join(appStoragePath, 'heteroAgent', 'bindings', 'grok-build');
+      const [bindingDir] = await readdir(bindingsDir);
+      const config = await readFile(path.join(bindingsDir, bindingDir, 'config.toml'), 'utf8');
+      expect(config).toContain('model = "gpt-test"');
+      expect(config).toContain('base_url = "https://api.openai.com/v1"');
+      expect(config).toContain('api_backend = "responses"');
+      expect(config).not.toContain('provider-secret');
+      expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('provider-secret');
+      expect(await readdir(path.join(appStoragePath, 'heteroAgent', 'runs'))).toEqual([]);
     });
 
     it.each([
@@ -1677,6 +2617,174 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('sendPrompt (kimi-code provider binding)', () => {
+    let originalKimiBaseURL: string | undefined;
+
+    beforeEach(() => {
+      originalKimiBaseURL = process.env.KIMI_MODEL_BASE_URL;
+      process.env.KIMI_MODEL_BASE_URL = 'https://stale-or-attacker.example/v1';
+      spawnCalls.length = 0;
+      execFileMock.mockReset();
+      getProviderBindingRuntimeMock.mockResolvedValue({
+        enabled: true,
+        runtimeConfig: {
+          config: {},
+          keyVaults: {
+            apiKey: 'kimi-provider-secret',
+            baseURL: 'https://gateway.example.com/v1/',
+          },
+          settings: { sdkType: 'openai' },
+        },
+      });
+    });
+
+    afterEach(() => {
+      if (originalKimiBaseURL === undefined) delete process.env.KIMI_MODEL_BASE_URL;
+      else process.env.KIMI_MODEL_BASE_URL = originalKimiBaseURL;
+    });
+
+    it('requires Kimi Code 0.6.0 for provider binding but not subscription mode', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: true, version: '0.5.0' });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        binaryManager: { detect },
+        storeManager: { get: vi.fn() },
+      } as any);
+      const providerSession = await ctr.startSession({
+        agentType: 'kimi-code',
+        command: 'kimi',
+        providerBinding: {
+          apiConfig: { model: 'upstream-model', providerId: 'custom-openai' },
+          kind: 'provider',
+        },
+      });
+
+      await expect(
+        ctr.sendPrompt({
+          operationId: 'op-kimi-old-provider',
+          prompt: 'provider prompt',
+          sessionId: providerSession.sessionId,
+        }),
+      ).rejects.toThrow(
+        'Kimi Code 0.6.0 or newer is required to use a LobeHub provider. Installed version: 0.5.0.',
+      );
+      expect(spawnCalls).toHaveLength(0);
+
+      nextFakeProc = createFakeProc().proc;
+      const subscriptionSession = await ctr.startSession({
+        agentType: 'kimi-code',
+        command: 'kimi',
+      });
+      await ctr.sendPrompt({
+        operationId: 'op-kimi-old-subscription',
+        prompt: 'subscription prompt',
+        sessionId: subscriptionSession.sessionId,
+      });
+
+      expect(spawnCalls).toHaveLength(1);
+    });
+
+    it('keeps the env-only binding across fresh and resumed runs without persisting the key', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const providerBinding = {
+        apiConfig: { model: 'upstream-model', providerId: 'custom-openai' },
+        kind: 'provider' as const,
+      };
+
+      nextFakeProc = createFakeProc().proc;
+      const fresh = await ctr.startSession({
+        agentType: 'kimi-code',
+        args: [
+          '--continue',
+          '-c',
+          '-C',
+          '--model',
+          'stale-model',
+          '--session=stale-session',
+          '--verbose',
+        ],
+        command: 'kimi',
+        env: {
+          KIMI_CODE_HOME: '/user/kimi',
+          KIMI_MODEL_API_KEY: 'stale-key',
+          KIMI_MODEL_BASE_URL: 'https://stale.example.com',
+        },
+        providerBinding,
+      });
+      await ctr.sendPrompt({
+        operationId: 'op-kimi-fresh',
+        prompt: 'fresh private prompt',
+        sessionId: fresh.sessionId,
+      });
+
+      expect(spawnCalls[0].args).toEqual([
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--prompt',
+        `${lobeHubCliGuide}\n\nfresh private prompt`,
+      ]);
+      expect(spawnCalls[0].options.env).toEqual(
+        expect.objectContaining({
+          KIMI_CODE_HOME: expect.stringContaining('/heteroAgent/bindings/kimi-code/'),
+          KIMI_MODEL_API_KEY: expect.any(String),
+          KIMI_MODEL_BASE_URL: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/v1$/),
+          KIMI_MODEL_NAME: 'upstream-model',
+          KIMI_MODEL_PROVIDER_TYPE: 'openai',
+          NO_PROXY: expect.stringContaining('127.0.0.1'),
+          no_proxy: expect.stringContaining('127.0.0.1'),
+        }),
+      );
+
+      nextFakeProc = createFakeProc().proc;
+      const resumed = await ctr.startSession({
+        agentType: 'kimi-code',
+        command: 'kimi',
+        providerBinding: { ...providerBinding, resumeBindingKey: fresh.providerBindingKey },
+        resumeSessionId: 'kimi-native-session',
+      });
+      await ctr.sendPrompt({
+        operationId: 'op-kimi-resume',
+        prompt: 'resume private prompt',
+        sessionId: resumed.sessionId,
+      });
+
+      expect(spawnCalls[1].args).toEqual([
+        '--output-format',
+        'stream-json',
+        '--session',
+        'kimi-native-session',
+        '--prompt',
+        'resume private prompt',
+      ]);
+      expect(spawnCalls[1].options.env).toEqual(
+        expect.objectContaining({
+          KIMI_MODEL_API_KEY: expect.any(String),
+          KIMI_MODEL_BASE_URL: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/v1$/),
+          KIMI_MODEL_NAME: 'upstream-model',
+          KIMI_MODEL_PROVIDER_TYPE: 'openai',
+        }),
+      );
+      expect(spawnCalls[0].options.env.KIMI_MODEL_API_KEY).not.toBe('kimi-provider-secret');
+      expect(spawnCalls[1].options.env.KIMI_MODEL_API_KEY).not.toBe('kimi-provider-secret');
+      expect(spawnCalls.flatMap(({ args }) => args)).not.toContain('kimi-provider-secret');
+      expect(JSON.stringify(spawnCalls)).not.toContain('kimi-provider-secret');
+      expect(JSON.stringify(spawnCalls)).not.toContain('stale-or-attacker.example');
+      expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('kimi-provider-secret');
+
+      const bindingsRoot = path.join(appStoragePath, 'heteroAgent', 'bindings', 'kimi-code');
+      const [bindingDir] = await readdir(bindingsRoot);
+      const profileFiles = await readdir(path.join(bindingsRoot, bindingDir));
+      expect(profileFiles).toEqual(['.lobehub-last-used']);
+      expect(
+        await readFile(path.join(bindingsRoot, bindingDir, '.lobehub-last-used'), 'utf8'),
+      ).not.toContain('kimi-provider-secret');
+    });
+  });
+
   describe('sendPrompt (codex)', () => {
     beforeEach(() => {
       spawnCalls.length = 0;
@@ -1693,6 +2801,11 @@ describe('HeterogeneousAgentCtr', () => {
       }> = {},
       storeGet?: (key: string, defaultValue?: any) => any,
     ) => {
+      // These argv/stream fixtures need no wall-clock session-completion grace.
+      if (!vi.isFakeTimers()) {
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+        vi.setTimerTickMode('nextTimerAsync');
+      }
       const { proc, writes } = createFakeProc({ stdoutLines });
       nextFakeProc = proc;
 
@@ -1711,9 +2824,68 @@ describe('HeterogeneousAgentCtr', () => {
       return { cliArgs, command, ctr, options, sessionId, writes };
     };
 
-    it('identifies Codex when beginning a server-default operation', async () => {
+    it.each(['codex', 'opencode'] as const)('runs %s via relay', async (agentType) => {
       const { proc } = createFakeProc();
       nextFakeProc = proc;
+      const relayInvocation = {
+        acceptedAt: '2026-09-01T00:00:00.000Z',
+        agentType,
+        ingress: 'openai-responses',
+        model: 'gpt-5.4',
+        operationId: 'op-server-default',
+        provider: 'lobehub',
+      };
+      settleServerDefaultOperationMock.mockResolvedValueOnce({
+        relayInvocation,
+        success: true,
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType,
+        command: agentType,
+        providerBinding: {
+          apiConfig: { model: 'gpt-5.4', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      const settlement = await ctr.sendPrompt({
+        agentId: 'agent-1',
+        operationId: 'op-server-default',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+      expect(beginServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentId: 'agent-1',
+        agentType,
+        model: 'gpt-5.4',
+        operationId: 'op-server-default',
+        topicId: 'topic-1',
+      });
+      expect(spawnCalls[0].args.join(' ')).toContain('lobehub/gpt-5.4');
+      const key = agentType === 'codex' ? 'LOBEHUB_HETERO_TOKEN' : 'LOBEHUB_OPENCODE_API_KEY';
+      expect(spawnCalls[0].options.env[key]).toBe('operation-token');
+      expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        cancelled: false,
+        operationId: 'op-server-default',
+        result: 'done',
+      });
+      expect(settlement).toEqual({ relayInvocation, success: true });
+    });
+
+    it('describes a non-OpenAI server-default model to Codex from the deployment card', async () => {
+      nextFakeProc = createFakeProc().proc;
+      describeServerDefaultModelMock.mockResolvedValueOnce({
+        abilities: { reasoning: false, vision: false },
+        contextWindowTokens: 262_144,
+        displayName: 'Kimi K3',
+        model: 'kimi-k3',
+        nativeResponses: false,
+      });
       const ctr = new HeterogeneousAgentCtr({
         appStoragePath,
         storeManager: { get: vi.fn() },
@@ -1722,30 +2894,148 @@ describe('HeterogeneousAgentCtr', () => {
         agentType: 'codex',
         command: 'codex',
         providerBinding: {
-          apiConfig: { model: 'gpt-5.4', source: 'server-default' },
+          apiConfig: { model: 'kimi-k3', source: 'server-default' },
           kind: 'server-default',
         },
       });
 
       await ctr.sendPrompt({
-        agentId: 'agent-1',
-        operationId: 'op-server-default',
+        operationId: 'op-server-default-kimi-codex',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(describeServerDefaultModelMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentType: 'codex',
+        model: 'kimi-k3',
+      });
+      const catalog = JSON.parse(
+        await readFile(path.join(spawnCalls[0].options.env.CODEX_HOME, 'models.json'), 'utf8'),
+      );
+      expect(catalog.models[0]).toMatchObject({
+        context_window: 262_144,
+        display_name: 'Kimi K3',
+        slug: 'lobehub/kimi-k3',
+      });
+    });
+
+    it('still launches server-default Codex when the model card cannot be read', async () => {
+      nextFakeProc = createFakeProc().proc;
+      describeServerDefaultModelMock.mockRejectedValueOnce(new Error('offline'));
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: {
+          apiConfig: { model: 'kimi-k3', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-server-default-kimi-codex-offline',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--model', 'lobehub/kimi-k3']));
+    });
+
+    it('injects a Kimi operation token into its Anthropic credential env', async () => {
+      nextFakeProc = createFakeProc().proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'kimi-code',
+        command: 'kimi',
+        providerBinding: {
+          apiConfig: { model: 'kimi-k2.6', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-server-default-kimi',
         prompt: 'hello',
         sessionId,
         topicId: 'topic-1',
       });
 
       expect(beginServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
-        agentId: 'agent-1',
-        agentType: 'codex',
-        model: 'gpt-5.4',
-        operationId: 'op-server-default',
+        agentId: undefined,
+        agentType: 'kimi-code',
+        model: 'kimi-k2.6',
+        operationId: 'op-server-default-kimi',
         topicId: 'topic-1',
       });
-      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--model', 'lobehub/gpt-5.4']));
+      expect(spawnCalls[0]).toMatchObject({
+        command: 'kimi',
+        options: {
+          env: {
+            KIMI_MODEL_API_KEY: 'operation-token',
+            KIMI_MODEL_BASE_URL: 'https://app.example.com/api/v1/anthropic',
+            KIMI_MODEL_NAME: 'lobehub/kimi-k2.6',
+            KIMI_MODEL_PROVIDER_TYPE: 'anthropic',
+          },
+        },
+      });
       expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
         cancelled: false,
-        operationId: 'op-server-default',
+        operationId: 'op-server-default-kimi',
+        result: 'done',
+      });
+    });
+
+    it('injects a Pi operation token into its Responses credential env', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+        providerBinding: {
+          apiConfig: { model: 'kimi-k2.6', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-server-default-pi',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(beginServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentId: undefined,
+        agentType: 'pi',
+        model: 'kimi-k2.6',
+        operationId: 'op-server-default-pi',
+        topicId: 'topic-1',
+      });
+      expect(piRpcSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: expect.arrayContaining([
+            '--provider',
+            'lobehub-server-default',
+            '--model',
+            'lobehub/kimi-k2.6',
+          ]),
+          env: expect.objectContaining({ LOBEHUB_PI_API_KEY: 'operation-token' }),
+        }),
+      );
+      expect(spawnCalls).toHaveLength(0);
+      expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        cancelled: false,
+        operationId: 'op-server-default-pi',
         result: 'done',
       });
     });
@@ -1862,7 +3152,7 @@ describe('HeterogeneousAgentCtr', () => {
         ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
       ).rejects.toThrow('Codex CLI was not found');
 
-      expect(detect).toHaveBeenCalledWith('codex', true);
+      expect(detect).toHaveBeenCalledWith('codex');
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -2050,7 +3340,7 @@ describe('HeterogeneousAgentCtr', () => {
       ).rejects.toThrow('Codex CLI was not found');
 
       expect(statSync).toHaveBeenCalledWith(FAKE_DESKTOP_PATH, expect.anything());
-      expect(detect).toHaveBeenCalledWith('codex', true);
+      expect(detect).toHaveBeenCalledWith('codex');
     });
 
     it('reports a missing working directory instead of claiming the Codex CLI is missing', async () => {
@@ -2076,83 +3366,6 @@ describe('HeterogeneousAgentCtr', () => {
       ).rejects.toThrow(`Working directory does not exist: ${missingCwd}`);
 
       expect(detect).not.toHaveBeenCalled();
-      expect(spawnCalls).toHaveLength(0);
-    });
-
-    it('fails fast when Claude Code CLI is unavailable instead of attempting spawn', async () => {
-      const detect = vi.fn().mockResolvedValue({ available: false });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-        binaryManager: { detect },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'claude-code',
-        command: 'claude',
-      });
-
-      await expect(
-        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
-      ).rejects.toThrow('Claude Code CLI was not found');
-
-      expect(detect).toHaveBeenCalledWith('claude', true);
-      expect(spawnCalls).toHaveLength(0);
-    });
-
-    it('fails fast with CodeBuddy install guidance when CodeBuddy is unavailable', async () => {
-      const detect = vi.fn().mockResolvedValue({ available: false });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-        binaryManager: { detect },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codebuddy',
-        command: 'codebuddy',
-      });
-
-      await expect(
-        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
-      ).rejects.toThrow('CodeBuddy CLI was not found');
-
-      expect(detect).toHaveBeenCalledWith('codebuddy', true);
-      expect(spawnCalls).toHaveLength(0);
-    });
-
-    it('fails fast with AMP-specific install guidance when AMP is unavailable', async () => {
-      const detect = vi.fn().mockResolvedValue({ available: false });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-        binaryManager: { detect },
-      } as any);
-      const { sessionId } = await ctr.startSession({ agentType: 'amp', command: 'amp' });
-
-      await expect(
-        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
-      ).rejects.toThrow('Amp CLI was not found');
-
-      expect(detect).toHaveBeenCalledWith('amp', true);
-      expect(spawnCalls).toHaveLength(0);
-    });
-
-    it('fails fast with OpenCode install guidance when OpenCode is unavailable', async () => {
-      const detect = vi.fn().mockResolvedValue({ available: false });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-        binaryManager: { detect },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'opencode',
-        command: 'opencode',
-      });
-
-      await expect(
-        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
-      ).rejects.toThrow('OpenCode CLI was not found');
-
-      expect(detect).toHaveBeenCalledWith('opencode', true);
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -2218,9 +3431,7 @@ describe('HeterogeneousAgentCtr', () => {
     });
 
     it('carries the detector login-shell PATH into the spawn env for `env node` shims', async () => {
-      // `codex` resolved via the login-shell PATH (mise/nvm). Spawning the
-      // absolute shim under the leaner inherited PATH would fail at its
-      // `#!/usr/bin/env node` shebang — the resolved PATH must reach the child.
+      // A login-shell-resolved shim needs that PATH for its `#!/usr/bin/env node` shebang.
       const resolvedPath = '/Users/h/.local/share/mise/shims/codex';
       const searchPath = '/Users/h/.local/share/mise/shims:/usr/bin:/bin';
       const detect = vi
@@ -2238,7 +3449,9 @@ describe('HeterogeneousAgentCtr', () => {
       await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
 
       expect(spawnCalls[0].command).toBe(resolvedPath);
-      expect(spawnCalls[0].options.env.PATH).toBe(searchPath);
+      expect(spawnCalls[0].options.env.PATH).toBe(
+        `/fake/userData/bin${path.delimiter}${searchPath}`,
+      );
     });
 
     it('keeps an explicit path-like command for spawn instead of the detector result', async () => {
@@ -2291,7 +3504,7 @@ describe('HeterogeneousAgentCtr', () => {
       );
       expect(cliArgs).not.toContain('--full-auto');
       expect(cliArgs).not.toContain('-');
-      expect(writes).toEqual([prompt]);
+      expect(writes).toEqual([`${lobeHubCliGuide}\n\n${prompt}`]);
     });
 
     it('uses Codex app-server lab instead of spawning codex exec', async () => {
@@ -2335,7 +3548,7 @@ describe('HeterogeneousAgentCtr', () => {
       );
       expect(codexAppServerRunMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          input: [{ text: 'stream this', text_elements: [], type: 'text' }],
+          input: [{ text: `${lobeHubCliGuide}\n\nstream this`, text_elements: [], type: 'text' }],
           operationId: 'op-test',
         }),
       );
@@ -2343,29 +3556,6 @@ describe('HeterogeneousAgentCtr', () => {
         agentSessionId: 'thread_app_server',
       });
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
-    });
-
-    it('reuses one native app-server client for multiple new Codex sessions', async () => {
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const first = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
-      const second = await ctr.startSession({
-        agentType: 'codex',
-        command: 'codex',
-        useCodexAppServer: true,
-      });
-
-      await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
-      await ctr.sendPrompt({ operationId: 'op-2', prompt: 'second', sessionId: second.sessionId });
-
-      expect(codexAppServerClientConstructMock).toHaveBeenCalledTimes(1);
-      expect(codexAppServerConstructMock).toHaveBeenCalledTimes(2);
     });
 
     it('reuses one native thread session across multiple turns', async () => {
@@ -2633,7 +3823,7 @@ describe('HeterogeneousAgentCtr', () => {
         systemContext: 'selected code context',
       });
 
-      expect(writes).toEqual(['selected code context\n\nuser task']);
+      expect(writes).toEqual([`selected code context\n\n${lobeHubCliGuide}\n\nuser task`]);
     });
 
     it('materializes image attachments into local files and forwards them via --image', async () => {
@@ -2663,7 +3853,7 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(
         Promise.all(imagePaths.map((filePath) => readFile(filePath, 'utf8'))),
       ).resolves.toEqual(['PNG_TEST', 'JPEG_TEST']);
-      expect(writes).toEqual(['describe these screenshots']);
+      expect(writes).toEqual([`${lobeHubCliGuide}\n\ndescribe these screenshots`]);
     });
 
     it('normalizes parameterized image MIME types before choosing the CLI file extension', async () => {
@@ -2791,7 +3981,9 @@ describe('HeterogeneousAgentCtr', () => {
         await expect(readFile(path.join(traceRoot, '.last-live-trace'), 'utf8')).resolves.toBe(
           `${traceDir}\n`,
         );
-        await expect(readFile(path.join(traceDir, 'stdin.txt'), 'utf8')).resolves.toBe(prompt);
+        await expect(readFile(path.join(traceDir, 'stdin.txt'), 'utf8')).resolves.toBe(
+          `${lobeHubCliGuide}\n\n${prompt}`,
+        );
         await expect(readFile(path.join(traceDir, 'stdout.jsonl'), 'utf8')).resolves.toBe(rawLine);
         await expect(readFile(path.join(traceDir, 'stderr.log'), 'utf8')).resolves.toBe('');
         await expect(readFile(path.join(traceDir, 'exit.json'), 'utf8')).resolves.toContain(
@@ -2805,7 +3997,7 @@ describe('HeterogeneousAgentCtr', () => {
           command: 'codex',
           cwd: appStoragePath,
           sessionId,
-          stdinBytes: Buffer.byteLength(prompt),
+          stdinBytes: Buffer.byteLength(`${lobeHubCliGuide}\n\n${prompt}`),
           stdoutFile: 'stdout.jsonl',
         });
         expect(meta.args).not.toContain('-');
@@ -3004,6 +4196,112 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('sendPrompt (droid)', () => {
+    it('routes Factory Droid through ACP and persists the native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'droid',
+        args: ['--tag', 'lobe'],
+        command: 'droid',
+        initialModel: 'gpt-5.4',
+        resumeSessionId: 'droid_session_old',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-droid', prompt: 'inspect this repo', sessionId });
+
+      expect(spawnCalls).toHaveLength(0);
+      expect(droidAcpSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--tag', 'lobe'],
+          clientVersion: '1.0.0-test',
+          commandPath: 'droid',
+          cwd: FAKE_DESKTOP_PATH,
+          initialModel: 'gpt-5.4',
+          operationId: 'op-droid',
+          prompt: [{ text: 'inspect this repo', type: 'text' }],
+          resumeSessionId: 'droid_session_old',
+          sessionId,
+        }),
+      );
+      await expect(ctr.getSessionInfo({ sessionId })).resolves.toEqual({
+        agentSessionId: 'droid_session_1',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentRuntimeStatus', {
+        activeTasks: [],
+        lastEventAt: expect.any(Number),
+        operationId: 'op-droid',
+        sessionId,
+        state: 'running',
+        transport: 'droid-acp',
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('classifies a missing Droid ACP session for resume fallback', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const missingSessionError = new AcpRpcResponseError('session/load', {
+        code: -32_603,
+        data: { details: 'Session missing-droid-session not found' },
+        message: 'Failed to load session',
+      });
+      droidAcpSessionRunMock.mockImplementation(async (options) => {
+        await options.onStderr('Droid ACP diagnostic\n');
+        throw missingSessionError;
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'droid',
+        command: 'droid',
+        cwd: '/Users/fake/projects/repo',
+        resumeSessionId: 'missing-droid-session',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-droid-resume', prompt: 'continue', sessionId }),
+      ).rejects.toThrow(
+        'The saved Factory Droid session could not be found, so a new conversation will start.',
+      );
+
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionError', {
+        error: {
+          agentType: 'droid',
+          code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+          command: 'droid',
+          details: {
+            code: -32_603,
+            data: { details: 'Session missing-droid-session not found' },
+          },
+          message:
+            'The saved Factory Droid session could not be found, so a new conversation will start.',
+          resumeSessionId: 'missing-droid-session',
+          stderr: missingSessionError.message,
+          workingDirectory: '/Users/fake/projects/repo',
+        },
+        sessionId,
+      });
+      expect(send).not.toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+  });
+
   describe('sendPrompt (trae)', () => {
     it('routes TRAE through ACP and persists the native session id', async () => {
       const send = vi.fn();
@@ -3055,6 +4353,175 @@ describe('HeterogeneousAgentCtr', () => {
       expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
     });
 
+    it('launches a provider-bound TRAE session with invocation-local config and existing auth', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'trae',
+        args: ['--model', 'stale-model', '--profile', 'personal', '--permission-mode', 'auto'],
+        command: 'traecli',
+        env: {
+          LOBEHUB_TRAE_API_KEY: 'stale-host-key',
+          OPENAI_API_KEY: 'stale-openai-key',
+          TRAE_HOME: '/user/trae',
+        },
+        initialModel: 'stale-native-model',
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-trae-provider', prompt: 'hello', sessionId });
+
+      const options = traeAcpSessionConstructMock.mock.calls.at(-1)?.[0];
+      expect(options.args).toEqual([
+        '--permission-mode',
+        'auto',
+        '-c',
+        'model="gpt-test"',
+        '-c',
+        'model_provider="lobehub"',
+        '-c',
+        'model_providers.lobehub.name="LobeHub Provider"',
+        '-c',
+        'model_providers.lobehub.base_url="https://api.openai.com/v1"',
+        '-c',
+        'model_providers.lobehub.env_key="LOBEHUB_TRAE_API_KEY"',
+        '-c',
+        'model_providers.lobehub.wire_api="responses"',
+        '-c',
+        'model_providers.lobehub.requires_openai_auth=false',
+      ]);
+      expect(options.initialModel).toBeUndefined();
+      expect(options.env).toEqual(
+        expect.objectContaining({
+          LOBEHUB_TRAE_API_KEY: 'provider-secret',
+          TRAE_HOME: '/user/trae',
+        }),
+      );
+      expect(options.env).not.toHaveProperty('OPENAI_API_KEY');
+      expect(options.args.join(' ')).not.toContain('provider-secret');
+
+      const bindingsDir = path.join(appStoragePath, 'heteroAgent', 'bindings', 'trae');
+      const [bindingDir] = await readdir(bindingsDir);
+      expect(await readdir(path.join(bindingsDir, bindingDir))).toEqual(['.lobehub-last-used']);
+      expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('provider-secret');
+      expect(await readdir(path.join(appStoragePath, 'heteroAgent', 'runs'))).toEqual([]);
+    });
+
+    it('uses invocation-local TRAE config and existing auth for server-default runs', async () => {
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'trae',
+        command: 'traecli',
+        env: {
+          LOBEHUB_TRAE_API_KEY: 'stale-host-key',
+          OPENAI_API_KEY: 'stale-openai-key',
+          TRAE_HOME: '/user/trae',
+        },
+        providerBinding: {
+          apiConfig: { model: 'gpt-5.4', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-trae-server-default',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(beginServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentId: undefined,
+        agentType: 'trae',
+        model: 'gpt-5.4',
+        operationId: 'op-trae-server-default',
+        topicId: 'topic-1',
+      });
+      const options = traeAcpSessionConstructMock.mock.calls.at(-1)?.[0];
+      expect(options.args).toEqual([
+        '-c',
+        'model="lobehub/gpt-5.4"',
+        '-c',
+        'model_provider="lobehub"',
+        '-c',
+        'model_providers.lobehub.name="LobeHub Provider"',
+        '-c',
+        'model_providers.lobehub.base_url="https://app.example.com/api/v1/openai/v1"',
+        '-c',
+        'model_providers.lobehub.env_key="LOBEHUB_TRAE_API_KEY"',
+        '-c',
+        'model_providers.lobehub.wire_api="responses"',
+        '-c',
+        'model_providers.lobehub.requires_openai_auth=false',
+      ]);
+      expect(options.env).toEqual(
+        expect.objectContaining({
+          LOBEHUB_TRAE_API_KEY: 'operation-token',
+          TRAE_HOME: '/user/trae',
+        }),
+      );
+      expect(options.env).not.toHaveProperty('OPENAI_API_KEY');
+      expect(options.args.join(' ')).not.toContain('operation-token');
+
+      const bindingsDir = path.join(appStoragePath, 'heteroAgent', 'bindings', 'trae');
+      const [bindingDir] = await readdir(bindingsDir);
+      expect(await readdir(path.join(bindingsDir, bindingDir))).toEqual(['.lobehub-last-used']);
+      expect(JSON.stringify(loggerInfoMock.mock.calls)).not.toContain('operation-token');
+      expect(settleServerDefaultOperationMock).toHaveBeenCalledWith(expect.any(Object), {
+        cancelled: false,
+        operationId: 'op-trae-server-default',
+        result: 'done',
+      });
+    });
+
+    it('requires TRAE CLI 0.201.2 for provider binding but not subscription mode', async () => {
+      const detect = vi.fn().mockResolvedValue({ available: true, version: '0.201.1' });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        binaryManager: { detect },
+        storeManager: { get: vi.fn() },
+      } as any);
+      const providerSession = await ctr.startSession({
+        agentType: 'trae',
+        command: 'traecli',
+        providerBinding: {
+          apiConfig: { model: 'gpt-test', providerId: 'openai' },
+          kind: 'provider',
+        },
+      });
+
+      await expect(
+        ctr.sendPrompt({
+          operationId: 'op-trae-old-provider',
+          prompt: 'provider prompt',
+          sessionId: providerSession.sessionId,
+        }),
+      ).rejects.toThrow(
+        'TRAE CLI 0.201.2 or newer is required to use a LobeHub provider. Installed version: 0.201.1.',
+      );
+      expect(traeAcpSessionConstructMock).not.toHaveBeenCalled();
+
+      const subscriptionSession = await ctr.startSession({
+        agentType: 'trae',
+        command: 'traecli',
+      });
+      await ctr.sendPrompt({
+        operationId: 'op-trae-old-subscription',
+        prompt: 'subscription prompt',
+        sessionId: subscriptionSession.sessionId,
+      });
+
+      expect(traeAcpSessionConstructMock).toHaveBeenCalledOnce();
+    });
+
     it('classifies authentication diagnostics emitted only on ACP stderr', async () => {
       const send = vi.fn();
       mockGetAllWindows.mockReturnValue([
@@ -3091,6 +4558,265 @@ describe('HeterogeneousAgentCtr', () => {
     });
   });
 
+  describe('sendPrompt (pi rpc)', () => {
+    it('routes pi prompts through the RPC transport with resume args and captures the native session id', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        args: ['--provider', 'anthropic'],
+        command: 'pi',
+        resumeSessionId: 'prev_sess',
+      });
+
+      await ctr.sendPrompt({ operationId: 'op-pi', prompt: 'hello pi', sessionId });
+
+      expect(piRpcSessionConstructMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--skill', expect.stringContaining('SKILL.md'), '--provider', 'anthropic'],
+          commandPath: 'pi',
+          operationId: 'op-pi',
+          resumeSessionId: 'prev_sess',
+          uploadImage: expect.any(Function),
+        }),
+      );
+      expect(spawnCalls).toHaveLength(0);
+      // Native session id captured for the next turn's resume.
+      const sessionInfo = await ctr.getSessionInfo({ sessionId });
+      expect(sessionInfo.agentSessionId).toBe('pi_sess_1');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it('waits for RPC cancellation instead of killing the process tree', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      let resolveRun: ((result: { aborted: boolean }) => void) | undefined;
+      piRpcSessionRunMock.mockImplementation(
+        () =>
+          new Promise<{ aborted: boolean }>((resolve) => {
+            resolveRun = resolve;
+          }),
+      );
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+      });
+
+      const sendPromise = ctr.sendPrompt({ operationId: 'op-pi-abort', prompt: 'work', sessionId });
+      await vi.waitFor(() => expect(piRpcSessionConstructMock).toHaveBeenCalled());
+
+      let finishAbort!: () => void;
+      piRpcSessionAbortMock.mockReturnValue(
+        new Promise<void>((resolve) => (finishAbort = resolve)),
+      );
+      const confirmed = vi.fn();
+      const cancellation = ctr.cancelSession({ sessionId }).then(confirmed);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(piRpcSessionAbortMock).toHaveBeenCalled();
+      expect(confirmed).not.toHaveBeenCalled();
+      expect(spawnCalls).toHaveLength(0);
+      // The run resolves as aborted → the session completes, not errors.
+      resolveRun?.({ aborted: true });
+      await sendPromise;
+      finishAbort();
+      await cancellation;
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', { sessionId });
+    });
+
+    it.each(['cancelSession', 'stopSession'] as const)(
+      'does not confirm %s when Pi shutdown fails',
+      async (method) => {
+        let finishRun!: (result: { aborted: boolean }) => void;
+        piRpcSessionRunMock.mockReturnValue(
+          new Promise<{ aborted: boolean }>((resolve) => (finishRun = resolve)),
+        );
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
+        const run = ctr.sendPrompt({ operationId: 'op-pi', prompt: 'work', sessionId });
+        await vi.waitFor(() => expect(piRpcSessionRunMock).toHaveBeenCalled());
+        piRpcSessionAbortMock.mockRejectedValue(new Error('still alive after SIGKILL'));
+
+        await expect(ctr[method]({ sessionId })).rejects.toThrow('still alive after SIGKILL');
+
+        finishRun({ aborted: true });
+        await run;
+      },
+    );
+
+    it('reuses the pooled process across turns of the same conversation', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      // Turn 1: no native id yet → spawn a fresh process.
+      const env = { LOBEHUB_AGENT_ID: 'agent-pi', LOBEHUB_TOPIC_ID: 'topic-pi' };
+      const first = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+        env: { ...env, LOBEHUB_OPERATION_ID: 'op-1' },
+      });
+      await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
+      await ctr.stopSession({ sessionId: first.sessionId });
+
+      expect(piRpcSessionRunMock.mock.calls[0][1]).toEqual({ text: 'first' });
+      // Resume must reuse the same process and keep the next user turn clean.
+      const second = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+        env: { ...env, LOBEHUB_OPERATION_ID: 'op-2' },
+        resumeSessionId: 'pi_sess_1',
+      });
+      await ctr.sendPrompt({ operationId: 'op-2', prompt: 'second', sessionId: second.sessionId });
+      await ctr.stopSession({ sessionId: second.sessionId });
+
+      expect(piRpcSessionConstructMock).toHaveBeenCalledTimes(1);
+      expect(piRpcSessionRunMock.mock.calls[1][1]).toEqual({ text: 'second' });
+      expect(piRpcSessionConstructMock.mock.calls[0][0].shellOperationId).toBe('op-1');
+      expect(piRpcSessionRebindMock.mock.calls[0][0].shellOperationId).toBe('op-2');
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', {
+        sessionId: first.sessionId,
+      });
+      expect(send).toHaveBeenCalledWith('heteroAgentSessionComplete', {
+        sessionId: second.sessionId,
+      });
+    });
+
+    it.each([
+      {
+        firstOptions: { args: ['--provider', 'anthropic'] },
+        secondOptions: { args: ['--provider', 'openai'] },
+      },
+      {
+        firstOptions: { env: { PI_ACCEPTANCE_CONFIG: 'first' } },
+        secondOptions: { env: { PI_ACCEPTANCE_CONFIG: 'second' } },
+      },
+      {
+        firstOptions: { env: { LOBEHUB_TOPIC_ID: 'topic-1' } },
+        secondOptions: { env: { LOBEHUB_TOPIC_ID: 'topic-2' } },
+      },
+    ])(
+      'spawns fresh when runtime options change between turns: $secondOptions',
+      async ({ firstOptions, secondOptions }) => {
+        const send = vi.fn();
+        mockGetAllWindows.mockReturnValue([
+          {
+            isDestroyed: () => false,
+            webContents: { send },
+          },
+        ]);
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+
+        // Turn 1 with one runtime configuration.
+        const first = await ctr.startSession({
+          ...firstOptions,
+          agentType: 'pi',
+          command: 'pi',
+        });
+        await ctr.sendPrompt({ operationId: 'op-1', prompt: 'first', sessionId: first.sessionId });
+        await ctr.stopSession({ sessionId: first.sessionId });
+
+        // A changed argument or explicit env value must invalidate the pool hit.
+        const second = await ctr.startSession({
+          ...secondOptions,
+          agentType: 'pi',
+          command: 'pi',
+          resumeSessionId: 'pi_sess_1',
+        });
+        await ctr.sendPrompt({
+          operationId: 'op-2',
+          prompt: 'second',
+          sessionId: second.sessionId,
+        });
+        await ctr.stopSession({ sessionId: second.sessionId });
+
+        expect(piRpcSessionConstructMock).toHaveBeenCalledTimes(2);
+      },
+    );
+
+    it('reaps an idle pooled pi process after the grace window', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      process.env.LOBE_PI_RPC_IDLE_TIMEOUT_MS = '60';
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
+      await ctr.sendPrompt({ operationId: 'op-idle', prompt: 'x', sessionId });
+
+      // The process is released to the pool; after the idle window it is
+      // closed (graceful EOF) even though no IPC session references it.
+      await vi.waitFor(() => expect(piRpcSessionCloseMock).toHaveBeenCalled(), { timeout: 2_000 });
+    });
+
+    it('surfaces pi RPC failures as session errors without a json fallback', async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([
+        {
+          isDestroyed: () => false,
+          webContents: { send },
+        },
+      ]);
+      piRpcSessionRunMock.mockRejectedValue(new Error('pi RPC exited unexpectedly (code 1)'));
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'pi',
+        command: 'pi',
+      });
+
+      await expect(
+        ctr.sendPrompt({ operationId: 'op-pi-err', prompt: 'x', sessionId }),
+      ).rejects.toThrow('pi RPC exited unexpectedly');
+      expect(send).toHaveBeenCalledWith(
+        'heteroAgentSessionError',
+        expect.objectContaining({ sessionId }),
+      );
+      // No spawn of `pi --mode json` happened — pi is RPC-only.
+      expect(spawnCalls).toHaveLength(0);
+    });
+  });
+
   describe('pre-launch cancellation for local transports', () => {
     beforeEach(() => {
       spawnCalls.length = 0;
@@ -3123,11 +4849,27 @@ describe('HeterogeneousAgentCtr', () => {
         useCodexAppServer: false,
       },
       {
+        agentType: 'devin',
+        command: 'devin',
+        constructMock: devinAcpSessionConstructMock,
+        label: 'Devin ACP',
+        runMock: devinAcpSessionRunMock,
+        useCodexAppServer: false,
+      },
+      {
         agentType: 'trae',
         command: 'traecli',
         constructMock: traeAcpSessionConstructMock,
         label: 'TRAE ACP',
         runMock: traeAcpSessionRunMock,
+        useCodexAppServer: false,
+      },
+      {
+        agentType: 'pi',
+        command: 'pi',
+        constructMock: piRpcSessionConstructMock,
+        label: 'Pi RPC',
+        runMock: piRpcSessionRunMock,
         useCodexAppServer: false,
       },
     ] as const)(
@@ -3194,6 +4936,8 @@ describe('HeterogeneousAgentCtr', () => {
       const stdin = new EventEmitter() as any;
       stdin.end = vi.fn();
       stdin.write = vi.fn(() => true);
+      proc.kill = vi.fn(() => true);
+      proc.pid = 4321;
       proc.stdin = stdin;
       return proc;
     };
@@ -3218,7 +4962,7 @@ describe('HeterogeneousAgentCtr', () => {
       const [spawnCall] = spawnCalls;
       expect(spawnCall.command).toBe(process.execPath);
       expect(spawnCall.args.slice(0, 7)).toEqual([
-        '/fake/cli/dist/index.js',
+        path.normalize('/fake/cli/dist/index.js'),
         'hetero',
         'exec',
         '--type',
@@ -3227,9 +4971,11 @@ describe('HeterogeneousAgentCtr', () => {
         'op-gateway',
       ]);
       expect(spawnCall.options.cwd).toBe(process.cwd());
+      expect(spawnCall.options.windowsHide).toBe(true);
       expect(spawnCall.options.env).toEqual(
         expect.objectContaining({
           ELECTRON_RUN_AS_NODE: '1',
+          [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
           LOBEHUB_ASSISTANT_MESSAGE_ID: 'asst-gateway',
           LOBEHUB_JWT: 'device-jwt',
           LOBEHUB_SERVER: 'https://server.example.com',
@@ -3244,6 +4990,44 @@ describe('HeterogeneousAgentCtr', () => {
       expect(proc.stdin.write).toHaveBeenCalledOnce();
       expect(proc.stdin.end).toHaveBeenCalledOnce();
     });
+
+    it.each([undefined, 'agt_dispatched'])(
+      'replaces launcher identity with dispatched agent %s',
+      async (agentId) => {
+        for (const key of [
+          'AGENT',
+          'TASK',
+          'OPERATION',
+          'TOPIC',
+          'WORKSPACE',
+          'ASSISTANT_MESSAGE',
+        ]) {
+          vi.stubEnv(`LOBEHUB_${key}_ID`, `launcher-${key}`);
+        }
+        try {
+          const proc = createGatewayCliProc();
+          nextFakeProc = proc;
+          const ctr = new HeterogeneousAgentCtr({
+            appStoragePath,
+            storeManager: { get: vi.fn() },
+          } as any);
+
+          const ack = ctr.spawnLhHeteroExec({ ...params, agentId, assistantMessageId: undefined });
+          proc.emit('spawn');
+          await expect(ack).resolves.toEqual({ status: 'accepted' });
+
+          const env = spawnCalls[0].options.env;
+          expect(env.LOBEHUB_AGENT_ID).toBe(agentId);
+          expect(env.LOBEHUB_OPERATION_ID).toBe(params.operationId);
+          expect(env.LOBEHUB_TOPIC_ID).toBe(params.topicId);
+          for (const key of ['TASK', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
+            expect(env).not.toHaveProperty(`LOBEHUB_${key}_ID`);
+          }
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      },
+    );
 
     it('forwards the topic workspace as LOBEHUB_WORKSPACE_ID for ingest', async () => {
       const proc = createGatewayCliProc();
@@ -3287,6 +5071,9 @@ describe('HeterogeneousAgentCtr', () => {
           ],
           resumeFallback: [
             { text: 'workspace rules\n\nprevious conversation', type: 'text' },
+            // Native resume failed, so the retry opens a session that has never
+            // seen the introduction the first turn delivered.
+            lobeHubCliGuideBlock,
             { text: 'inspect the repository', type: 'text' },
           ],
         }),
@@ -3342,7 +5129,7 @@ describe('HeterogeneousAgentCtr', () => {
       } as any);
 
       await expect(ctr.spawnLhHeteroExec(params)).resolves.toEqual({
-        reason: 'Embedded CLI not found at /fake/cli/dist/index.js',
+        reason: `Embedded CLI not found at ${path.normalize('/fake/cli/dist/index.js')}`,
         status: 'rejected',
       });
       expect(spawnCalls).toHaveLength(0);
@@ -3378,6 +5165,70 @@ describe('HeterogeneousAgentCtr', () => {
       await expect(ack).resolves.toEqual({ status: 'accepted' });
 
       expect(() => proc.stdin.emit('error', new Error('write EPIPE'))).not.toThrow();
+    });
+
+    /**
+     * @example A replacement waits until operation A's process group exits before operation B starts.
+     */
+    it('waits for the complete gateway CLI process group before confirming cancellation', async () => {
+      // ROOT CAUSE:
+      //
+      // Device-dispatched Codex wrappers were not registered by operation id, so
+      // server cancellation returned while the native thread still had an active
+      // writer. A replacement resume then failed with `already has an active writer`.
+      //
+      // Before: spawnLhHeteroExec acknowledged the child and discarded its handle.
+      // After: cancelLhHeteroExec signals the wrapper-owned process group and
+      // resolves only after the complete group disappears.
+      vi.useFakeTimers();
+      let groupAlive = true;
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+        if (signal === 'SIGKILL') groupAlive = false;
+        if (signal === 0 && !groupAlive) {
+          throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        }
+        return true;
+      });
+      const proc = createGatewayCliProc();
+      nextFakeProc = proc;
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+
+      try {
+        const ack = ctr.spawnLhHeteroExec(params);
+        proc.emit('spawn');
+        await ack;
+
+        let cancellationSettled = false;
+        const cancellation = ctr
+          .cancelLhHeteroExec({ operationId: params.operationId })
+          .then((result) => {
+            cancellationSettled = true;
+            return result;
+          });
+        await Promise.resolve();
+
+        expect(killSpy).toHaveBeenCalledWith(-4321, 'SIGINT');
+        expect(cancellationSettled).toBe(false);
+
+        // The wrapper can exit while a native agent or tool descendant remains.
+        proc.emit('exit', 130, 'SIGINT');
+        await vi.advanceTimersByTimeAsync(1950);
+        expect(cancellationSettled).toBe(false);
+
+        await vi.advanceTimersByTimeAsync(100);
+        expect(killSpy).toHaveBeenCalledWith(-4321, 'SIGKILL');
+        await expect(cancellation).resolves.toEqual({
+          exited: true,
+          pid: 4321,
+          signal: 'SIGINT',
+        });
+      } finally {
+        killSpy.mockRestore();
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -3415,6 +5266,87 @@ describe('HeterogeneousAgentCtr', () => {
       mockGetAllWindows.mockReset();
       mockGetAllWindows.mockReturnValue([]);
     });
+
+    it.each(['uploaded', 'failed'])(
+      'recovers desktop Codex images from the spawned profile (%s)',
+      async (mode) => {
+        const startedAt = Date.now();
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(startedAt);
+        const codexHome = path.join(appStoragePath, 'isolated-codex');
+        const dir = path.join(codexHome, 'sessions', '2026', '10', '08');
+        await mkdir(dir, { recursive: true });
+        await writeFile(
+          path.join(dir, 'rollout-desktop-images.jsonl'),
+          [
+            {
+              timestamp: new Date(startedAt + 1000).toISOString(),
+              type: 'event_msg',
+              payload: { type: 'task_started' },
+            },
+            {
+              type: 'response_item',
+              payload: {
+                type: 'custom_tool_call_output',
+                call_id: 'dog-image',
+                output: [{ type: 'input_image', image_url: 'data:image/png;base64,AAAA' }],
+              },
+            },
+          ]
+            .map((record) => JSON.stringify(record))
+            .join('\n') + '\n',
+        );
+        // The CLI starts its turn before the pipeline is constructed.
+        onSpawnMock.mockImplementation(() => vi.setSystemTime(startedAt + 5000));
+        nextFakeProc = createFakeProc({
+          stdoutLines: [
+            { type: 'thread.started', thread_id: 'desktop-images' },
+            { type: 'turn.started' },
+            { type: 'item.completed', item: { id: 'reply', type: 'agent_message', text: 'Done.' } },
+            { type: 'turn.completed' },
+          ].map((record) => JSON.stringify(record) + '\n'),
+        }).proc;
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const upload = vi.fn(async () => {
+          if (mode === 'failed') throw new Error('Upload rejected');
+          return { fileId: 'file-dog', url: 'https://cdn/dog.png' };
+        });
+        Object.assign(ctr, { uploadResultImage: upload });
+        try {
+          const { sessionId } = await ctr.startSession({
+            agentType: 'codex',
+            command: 'codex',
+            env: { CODEX_HOME: codexHome },
+          });
+          await ctr.sendPrompt({
+            operationId: 'op-desktop-images',
+            prompt: 'draw a dog',
+            sessionId,
+          });
+          const events = broadcasts
+            .filter((b) => b.channel === 'heteroAgentEvent')
+            .map((b) => b.data.event);
+          const results = events.filter((event) => event.type === 'tool_result');
+          expect(results).toHaveLength(1);
+          expect(results[0].data).toMatchObject({
+            toolCallId: 'dog-image',
+            content:
+              mode === 'uploaded' ? '![image/png](https://cdn/dog.png)' : '[Image: image/png]',
+          });
+          expect(upload).toHaveBeenCalledOnce();
+          expect(JSON.stringify(events)).not.toContain('AAAA');
+          expect(
+            events.some((event) => event.type === 'stream_chunk' && event.data.content === 'Done.'),
+          ).toBe(true);
+        } finally {
+          onSpawnMock.mockReset();
+          vi.useRealTimers();
+        }
+      },
+    );
 
     it('delivers pipeline.flush() events BEFORE heteroAgentSessionComplete even when proc exit precedes stdout end', async () => {
       // Codex `item.started` for a tool — adapter buffers it as a pending
@@ -3524,80 +5456,6 @@ describe('HeterogeneousAgentCtr', () => {
       expect(errorIdx).toBeGreaterThan(-1);
       expect(errorIdx).toBeLessThan(completeIdx);
       expect(runtimeEnd).toBeUndefined();
-    });
-
-    it('delivers late final Codex stdout chunks BEFORE heteroAgentSessionComplete', async () => {
-      const threadStarted = `${JSON.stringify({ thread_id: 't1', type: 'thread.started' })}\n`;
-      const turnStarted = `${JSON.stringify({ type: 'turn.started' })}\n`;
-      const finalMessage = `${JSON.stringify({
-        item: {
-          id: 'item_103',
-          text: 'Final report after late stdout.',
-          type: 'agent_message',
-        },
-        type: 'item.completed',
-      })}\n`;
-      const turnCompleted = `${JSON.stringify({
-        type: 'turn.completed',
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })}\n`;
-
-      const proc = new EventEmitter() as any;
-      const stdout = new PassThrough();
-      const stderr = new PassThrough();
-      proc.stdout = stdout;
-      proc.stderr = stderr;
-      proc.stdin = {
-        end: vi.fn(),
-        write: vi.fn((_chunk: any, cb?: () => void) => {
-          cb?.();
-          return true;
-        }),
-      };
-      proc.kill = vi.fn();
-      proc.killed = false;
-      proc.__start = () => {
-        setImmediate(() => {
-          stdout.write(threadStarted);
-          stdout.write(turnStarted);
-          stderr.end();
-          proc.emit('exit', 0);
-          setImmediate(() => {
-            stdout.write(finalMessage);
-            stdout.write(turnCompleted);
-            stdout.end();
-          });
-        });
-      };
-      nextFakeProc = proc;
-
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
-      const sendStartedAt = Date.now();
-      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
-      const sendDurationMs = Date.now() - sendStartedAt;
-
-      const completeIdx = broadcasts.findIndex((b) => b.channel === 'heteroAgentSessionComplete');
-      const finalChunkIdx = broadcasts.findIndex(
-        (b) =>
-          b.channel === 'heteroAgentEvent' &&
-          (b.data as any)?.event?.type === 'stream_chunk' &&
-          (b.data as any)?.event?.data?.content === 'Final report after late stdout.',
-      );
-      const runtimeEndIdx = broadcasts.findIndex(
-        (b) =>
-          b.channel === 'heteroAgentEvent' && (b.data as any)?.event?.type === 'agent_runtime_end',
-      );
-
-      expect(completeIdx).toBeGreaterThan(-1);
-      expect(finalChunkIdx).toBeGreaterThan(-1);
-      expect(runtimeEndIdx).toBeGreaterThan(-1);
-      expect(finalChunkIdx).toBeLessThan(completeIdx);
-      expect(runtimeEndIdx).toBeLessThan(completeIdx);
-      expect(sendDurationMs).toBeGreaterThanOrEqual(900);
     });
 
     it('serializes AskUserQuestion bridge events behind already-queued stdout tool events', async () => {
@@ -3734,12 +5592,92 @@ describe('HeterogeneousAgentCtr', () => {
     const captureRegisteredHandler = (
       registerSpy: ReturnType<typeof vi.fn> | ReturnType<typeof vi.spyOn>,
       eventName: string,
-    ): (() => void) => {
+    ): ((event?: { preventDefault: () => void }) => void) => {
       const calls = (registerSpy as any).mock.calls as Array<[string, () => void]>;
       const match = calls.findLast(([evt]) => evt === eventName);
       if (!match) throw new Error(`no handler registered for "${eventName}"`);
       return match[1];
     };
+
+    it('holds quit until both an unpooled Pi run and the pool have closed', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      electron.app.quit.mockClear();
+      vi.spyOn(process, 'on').mockImplementation(() => process);
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'pi', command: 'pi' });
+      const session = (ctr as any).sessions.get(sessionId);
+      let finishActive!: () => void;
+      let finishPool!: () => void;
+      const close = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishActive = resolve;
+          }),
+      );
+      session.piRpcSession = { close };
+      vi.spyOn((ctr as any).piRpcPool, 'closeAll').mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finishPool = resolve;
+          }),
+      );
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      const event = { preventDefault: vi.fn() };
+      beforeQuit(event);
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      expect(close).toHaveBeenCalledOnce();
+      expect(session.cancelledByUs).toBe(true);
+      beforeQuit(event);
+      expect(close).toHaveBeenCalledOnce();
+      finishActive();
+      await Promise.resolve();
+      expect(electron.app.quit).not.toHaveBeenCalled();
+      finishPool();
+      await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+      event.preventDefault.mockClear();
+      beforeQuit(event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('before-quit waits for a running DSH runtime to dispose before quitting', async () => {
+      const electron = (await import('electron')) as any;
+      electron.app.on.mockClear();
+      electron.app.quit.mockClear();
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'deepseek-harness',
+        command: '',
+        cwd: '/workspace',
+      });
+      const session = (ctr as any).sessions.get(sessionId);
+      let finishDispose!: () => void;
+      const dispose = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishDispose = resolve;
+          }),
+      );
+      session.dshSession = { dispose, prompt: dshPromptMock };
+
+      ctr.afterAppReady();
+      const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
+      beforeQuit({ preventDefault: vi.fn() });
+
+      expect(dispose).toHaveBeenCalledOnce();
+      expect(session.cancelledByUs).toBe(true);
+      await Promise.resolve();
+      expect(electron.app.quit).not.toHaveBeenCalled();
+      finishDispose();
+      await vi.waitFor(() => expect(electron.app.quit).toHaveBeenCalledOnce());
+    });
 
     it('before-quit closes a running TRAE ACP session', async () => {
       const electron = (await import('electron')) as any;
@@ -3754,7 +5692,7 @@ describe('HeterogeneousAgentCtr', () => {
 
       ctr.afterAppReady();
       const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
-      beforeQuit();
+      beforeQuit({ preventDefault: vi.fn() });
 
       expect(traeAcpSessionCloseMock).toHaveBeenCalledOnce();
       expect(session.cancelledByUs).toBe(true);
@@ -3775,7 +5713,7 @@ describe('HeterogeneousAgentCtr', () => {
 
       ctr.afterAppReady();
       const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
-      beforeQuit();
+      beforeQuit({ preventDefault: vi.fn() });
 
       await expect(access(fileA)).rejects.toThrow();
       await expect(access(fileB)).rejects.toThrow();
@@ -3811,28 +5749,6 @@ describe('HeterogeneousAgentCtr', () => {
       processExitSpy.mockRestore();
     });
 
-    it('SIGINT handler unlinks pending intervention temp configs (Ctrl-C path)', async () => {
-      const electron = (await import('electron')) as any;
-      electron.app.on.mockClear();
-      const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
-      const processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const file = await seedPendingIntervention(ctr, 'opSigint');
-
-      ctr.afterAppReady();
-      const sigint = captureRegisteredHandler(processOnSpy, 'SIGINT');
-      sigint();
-
-      await expect(access(file)).rejects.toThrow();
-
-      processOnSpy.mockRestore();
-      processExitSpy.mockRestore();
-    });
-
     it('cleanup is idempotent — already-deleted files do not throw', async () => {
       const electron = (await import('electron')) as any;
       electron.app.on.mockClear();
@@ -3849,7 +5765,126 @@ describe('HeterogeneousAgentCtr', () => {
 
       ctr.afterAppReady();
       const beforeQuit = captureRegisteredHandler(electron.app.on, 'before-quit');
-      expect(() => beforeQuit()).not.toThrow();
+      expect(() => beforeQuit({ preventDefault: vi.fn() })).not.toThrow();
+    });
+  });
+
+  describe('listInterruptedRuns', () => {
+    const DEAD_PID = 2_147_483_000;
+
+    const ledgerPath = () => path.join(appStoragePath, 'heteroAgent', 'inflight-runs.json');
+
+    const seedLedger = async (runs: Record<string, unknown>[]) => {
+      await mkdir(path.dirname(ledgerPath()), { recursive: true });
+      await writeFile(ledgerPath(), JSON.stringify({ runs, version: 1 }), 'utf8');
+    };
+
+    const readLedger = async () =>
+      JSON.parse(await readFile(ledgerPath(), 'utf8')).runs as Record<string, any>[];
+
+    const entry = (extra?: Record<string, unknown>) => ({
+      agentType: 'claude-code',
+      ipcSessionId: 'ipc-1',
+      operationId: 'op-1',
+      pid: DEAD_PID,
+      startedAt: new Date().toISOString(),
+      topicId: 'topic-1',
+      ...extra,
+    });
+
+    const createCtr = () =>
+      new HeterogeneousAgentCtr({ appStoragePath, storeManager: { get: vi.fn() } } as any);
+
+    beforeEach(() => {
+      for (const key of Object.keys(heteroProcessOverrides)) {
+        delete (heteroProcessOverrides as Record<string, unknown>)[key];
+      }
+    });
+
+    it('keeps a claimed run on the ledger until the renderer releases it', async () => {
+      // Recovery spans several renderer steps (reap, probe, replay, settle).
+      // Consuming the entry here would leave the topic stranded if the app
+      // died again half way through, with no token left to retry it.
+      await seedLedger([entry()]);
+      const ctr = createCtr();
+
+      expect(await ctr.listInterruptedRuns({})).toEqual([
+        expect.objectContaining({ claimCount: 1, ipcSessionId: 'ipc-1' }),
+      ]);
+      expect(await readLedger()).toEqual([expect.objectContaining({ claimCount: 1 })]);
+
+      await ctr.releaseInterruptedRun({ ipcSessionId: 'ipc-1' });
+      expect(await readLedger()).toEqual([]);
+    });
+
+    it('reaps an expired run before handing its topic over for cleanup', async () => {
+      // Age only makes the transcript stale; it says nothing about the
+      // process. An orphan hung in a long-running tool is still out there.
+      const killed: [number, NodeJS.Signals][] = [];
+      heteroProcessOverrides.isProcessAlive = () => true;
+      heteroProcessOverrides.readProcessIdentity = async () => ({
+        commandLine: '/usr/local/bin/claude -p --output-format stream-json',
+        status: 'found',
+      });
+      heteroProcessOverrides.killProcessTreeByPid = (pid, signal) => killed.push([pid, signal]);
+      heteroProcessOverrides.waitForProcessExit = async () => true;
+
+      await seedLedger([
+        entry({
+          command: 'claude',
+          pid: 4321,
+          startedAt: new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString(),
+        }),
+      ]);
+
+      const runs = await createCtr().listInterruptedRuns({});
+
+      expect(runs).toEqual([expect.objectContaining({ expired: true, ipcSessionId: 'ipc-1' })]);
+      expect(killed).toEqual([[4321, 'SIGTERM']]);
+      // Spent: nothing is left to claim a second time.
+      expect(await readLedger()).toEqual([]);
+    });
+
+    it('withholds a run whose process survived, leaving the entry for the next launch', async () => {
+      heteroProcessOverrides.isProcessAlive = () => true;
+      heteroProcessOverrides.readProcessIdentity = async () => ({
+        commandLine: '/usr/local/bin/claude -p --output-format stream-json',
+        status: 'found',
+      });
+      heteroProcessOverrides.killProcessTreeByPid = () => {};
+      heteroProcessOverrides.waitForProcessExit = async () => false;
+
+      await seedLedger([entry({ command: 'claude', pid: 4321 })]);
+
+      expect(await createCtr().listInterruptedRuns({})).toEqual([]);
+      expect(await readLedger()).toEqual([expect.objectContaining({ claimCount: 1 })]);
+    });
+
+    it('puts a withheld run back when stopping its live session released the claim', async () => {
+      // Reaping a session this process still holds goes through `stopSession`,
+      // which releases the ledger entry as part of stopping it. A stop that
+      // cannot confirm the child died would otherwise leave the topic stranded
+      // with nothing to retry.
+      heteroProcessOverrides.waitForProcessExit = async () => false;
+      await seedLedger([entry({ command: 'claude', pid: 4321 })]);
+      const ctr = createCtr();
+      (ctr as any).sessions.set('ipc-1', {
+        agentType: 'claude-code',
+        command: 'claude',
+        sessionId: 'ipc-1',
+      });
+
+      expect(await ctr.listInterruptedRuns({})).toEqual([]);
+      expect(await readLedger()).toEqual([expect.objectContaining({ ipcSessionId: 'ipc-1' })]);
+    });
+
+    it('leaves a run recorded by another account on the ledger, unclaimed', async () => {
+      await seedLedger([entry({ userId: 'someone-else' })]);
+
+      expect(await createCtr().listInterruptedRuns({ userId: 'me' })).toEqual([]);
+      const ledger = await readLedger();
+      expect(ledger).toHaveLength(1);
+      expect(ledger[0].claimCount).toBeUndefined();
     });
   });
 });

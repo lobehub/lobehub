@@ -2,8 +2,7 @@
 
 import type { WorkSummaryItem } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { Flexbox, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Tag, Text } from '@lobehub/ui';
 import { CheckCircle2Icon, GitPullRequestIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

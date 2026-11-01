@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { asrRouter } from '../asr';
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => ({})),
+  getServerDB: vi.fn(function () {
+    return {};
+  }),
 }));
 
 const transcribeMock = vi.fn();
@@ -14,12 +16,16 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 const findByIdMock = vi.fn();
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({ findById: findByIdMock })),
+  FileModel: vi.fn(function () {
+    return { findById: findByIdMock };
+  }),
 }));
 
 const getFileByteArrayMock = vi.fn();
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({ getFileByteArray: getFileByteArrayMock })),
+  FileService: vi.fn(function () {
+    return { getFileByteArray: getFileByteArrayMock };
+  }),
 }));
 
 const caller = asrRouter.createCaller({ jwtPayload: { userId: 'u1' }, userId: 'u1' } as any);
@@ -48,6 +54,19 @@ describe('asrRouter.transcribe', () => {
     expect(payload.file).toBeInstanceOf(File);
     expect(payload.fileName).toBe('clip.mp3');
     expect(await payload.file.text()).toBe('audio-bytes');
+  });
+
+  it('tags the request with the ASR trigger for route attempts and hooks', async () => {
+    await caller.transcribe({
+      audioBase64: Buffer.from('audio-bytes').toString('base64'),
+      model: 'gemini-3.5-transcribe',
+      provider: 'lobehub',
+    });
+
+    expect(transcribeMock.mock.calls[0][1]).toEqual({
+      metadata: { trigger: 'asr' },
+      user: 'u1',
+    });
   });
 
   it('resolves a fileId by downloading the bytes from storage', async () => {

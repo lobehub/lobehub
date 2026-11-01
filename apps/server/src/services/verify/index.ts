@@ -5,6 +5,12 @@ export {
   planCheckIdRemap,
 } from './acceptanceMerge';
 export {
+  previewAcceptancePurge,
+  purgeAcceptance,
+  type PurgePreview,
+  purgeVerifyRun,
+} from './acceptancePurge';
+export {
   type AcceptanceCheckHistoryEntry,
   type AcceptanceCheckReviewEvent,
   type AcceptanceCheckReviewOverlay,
@@ -18,22 +24,22 @@ export {
 export { createVerifierAgentRunner } from './agentVerifier';
 export { mapWithConcurrency } from './concurrency';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
-export { createEvidenceFileResolver, type EvidenceFileMeta } from './evidenceFiles';
+export {
+  createEvidenceFileResolver,
+  type EvidenceFileMeta,
+  resolveEvidenceFiles,
+  type TerminalArtifactLink,
+} from './evidenceFiles';
+export { prepareEvidenceRows } from './evidenceIntake';
+export { evidenceTypeForStoredFile } from './evidenceMedium';
 export {
   type ExecuteVerifyParams,
   type VerifierAgentRunner,
   VerifyExecutorService,
 } from './executor';
 export { computeFalseFlags, VerifyFeedbackService } from './feedbackService';
-export { DEFAULT_GOAL_MAX_ROUNDS, resolveGoalRoundBudget } from './goalBudget';
-export {
-  goalExhaustedBriefCopy,
-  type GoalLoopOutcome,
-  goalReadyForReviewBriefCopy,
-  maybeContinueGoalLoop,
-  syncGoalToolState,
-} from './goalLoop';
 export { runVerifyOnCompletion } from './lifecycle';
+export { resolveLiveRoundForItem } from './liveRound';
 export {
   isHeterogeneousVerifyProvider,
   resolveVerifyModelConfig,
@@ -47,8 +53,10 @@ export {
   type RepairSpawner,
   VerifyRepairService,
 } from './repairService';
+export { settleFailedRepair } from './repairTerminal';
 export { type GenerateReportParams, VerifyReporterService } from './reporter';
 export {
+  isCurrentReviewPrediction,
   type PredictReviewParams,
   REVIEW_PREDICT_CONCURRENCY,
   shouldSurfaceProposal,
@@ -58,4 +66,5 @@ export { driveTaskFromVerify, finalizeVerifyRun } from './settle';
 export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';
 export { sweepStuckVerifyRuns, type VerifySweepOutcome } from './sweep';
+export { resolveEvidenceMetadata } from './terminalEvidence';
 export { settleVerifierCheckFromTerminal } from './verifierTerminal';

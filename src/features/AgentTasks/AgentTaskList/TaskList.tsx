@@ -1,37 +1,60 @@
-import { Accordion, AccordionItem, Block, Center, Empty, Flexbox, Text } from '@lobehub/ui';
-import { Divider } from 'antd';
-import { cssVar } from 'antd-style';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionRoot,
+  AccordionTrigger,
+  Block,
+  Center,
+  cssVar,
+  Divider,
+  Empty,
+  Flexbox,
+  Text,
+} from '@lobehub/ui';
 import { ClipboardCheckIcon } from 'lucide-react';
-import { Fragment, memo, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { Components } from 'react-virtuoso';
+import { Virtuoso } from 'react-virtuoso';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
+import { COMPLETE_TASK_LIST_MAX_ITEMS } from '@/store/task/slices/list/action';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import type { TaskItemRouteScope } from '../features/AgentTaskItem';
 import AgentTaskItem from '../features/AgentTaskItem';
-import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions, TaskRow } from './listViewOptions';
+import type { TaskGroupBy, TaskGroupMeta, TaskListViewOptions } from './listViewOptions';
 import {
   buildTaskRows,
   collapseSubTasks,
   compareTaskItems,
   groupTaskItems,
-  HIDDEN_WHEN_COMPLETED_STATUSES,
+  isTaskHiddenByCompletedFilter,
 } from './listViewOptions';
+import SelectableTaskRow from './selection/SelectableTaskRow';
+import { useTaskSelectionStore } from './selection/store';
+import TaskBulkActionBar from './selection/TaskBulkActionBar';
+import { isEditableTarget } from './selection/taskSelectionModel';
+import { useSelectionScope } from './selection/useSelectionScope';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
+import type { TaskListGroupEntry, TaskListVirtualItem } from './taskListVirtualModel';
+import { flattenTaskListEntries } from './taskListVirtualModel';
 import TaskRowIndent from './TaskRowIndent';
+import { useClosestScrollParent } from './useClosestScrollParent';
 
 interface TaskListProps {
   /**
-   * Settled signal — truthy once the current scope's list has loaded into the
-   * store, `undefined` while unsettled. Derived from the store's
-   * `isTaskListInit` (not raw SWR `data`) so it resets in lockstep with `tasks`
-   * on a scope/visibility switch and never disagrees with the empty signal.
+   * Settled signal — truthy once the list behind `queryKey` has a value in the
+   * store, `undefined` while unsettled. Derived from the same entry as the rows,
+   * so it never disagrees with the empty signal.
    */
   data?: unknown;
+  /** Call to action under the empty state, e.g. creating the collection's first task. */
+  emptyAction?: ReactNode;
   emptyDescription?: string;
   /** Thrown error from the list SWR — surfaced as a failure state, not a skeleton. */
   error?: unknown;
@@ -42,36 +65,25 @@ interface TaskListProps {
   onRetry?: () => void;
   onShowHiddenCompleted?: () => void;
   options: TaskListViewOptions;
+  /** Store entry of the list to render (`useFetchTaskList().queryKey`) when `items` is absent. */
+  queryKey?: string;
   routeScope?: TaskItemRouteScope;
+  /**
+   * Identity of the collection behind `items` (tab, sub-scope, page, owner).
+   * The selection is dropped whenever it changes; without it every items-backed
+   * collection shares one scope, and a task present in two of them would stay
+   * selected across the switch.
+   */
+  selectionScope?: string;
 }
 
-const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUSES);
-
-const renderTaskRows = (rows: TaskRow[], sub?: boolean, routeScope?: TaskItemRouteScope) =>
-  rows.map((row, index) => {
-    // A nested child belongs to the row above it, so no rule is drawn between
-    // them — the divider only separates one top-level task from the next.
-    const showDivider = !sub && rows[index + 1] && rows[index + 1].depth === 0;
-
-    return (
-      <Fragment key={`${row.isParentContext ? 'context:' : ''}${row.task.identifier}`}>
-        <TaskRowIndent depth={row.depth} muted={row.isParentContext}>
-          <AgentTaskItem routeScope={routeScope} task={row.task} />
-        </TaskRowIndent>
-        {showDivider && <Divider dashed style={{ margin: 0 }} />}
-      </Fragment>
-    );
-  });
-
-const renderTaskListBlock = (rows: TaskRow[], sub?: boolean, routeScope?: TaskItemRouteScope) => (
-  <Block gap={sub ? 0 : 2} padding={2} variant={'borderless'}>
-    {renderTaskRows(rows, sub, routeScope)}
-  </Block>
-);
+/** Row height the window sizes itself by before it has measured real rows. */
+const DEFAULT_ROW_HEIGHT = 52;
 
 const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>([
   'assignee',
   'automationMode',
+  'member',
   'none',
   'priority',
   'status',
@@ -88,32 +100,85 @@ const renderGroupTitle = (group: TaskGroupMeta, count: number, sub?: boolean) =>
     <Text fontSize={12} type={'secondary'}>
       {count}
     </Text>
-    {sub ? (
-      <Divider style={{ margin: 0, borderColor: cssVar.colorBorder }} />
-    ) : (
-      <Flexbox flex={1} />
-    )}
+    {sub ? <Divider style={{ borderColor: cssVar.colorBorder, flex: 1 }} /> : <Flexbox flex={1} />}
   </Flexbox>
 );
 
+/**
+ * Group / sub-group header as a standalone (context-free) AccordionItem so the
+ * virtual list keeps the Accordion look while owning the expand state itself.
+ * It renders no content: the rows it opens are the sibling virtual items.
+ */
+const TaskGroupHeader = memo<{
+  item: Extract<TaskListVirtualItem, { kind: 'group' | 'subGroup' }>;
+  onToggle: (key: string) => void;
+}>(({ item, onToggle }) => {
+  const sub = item.kind === 'subGroup';
+  return (
+    <div style={{ paddingTop: item.first ? 0 : sub ? 6 : 16 }}>
+      <AccordionRoot
+        indicatorPlacement={'end'}
+        value={item.collapsed ? [] : [item.key]}
+        variant={sub ? 'borderless' : 'filled'}
+        onValueChange={() => onToggle(item.key)}
+      >
+        <AccordionItem value={item.key}>
+          <AccordionHeader>
+            <AccordionTrigger style={{ paddingBlock: sub ? 6 : 8, paddingInline: 14 }}>
+              {renderGroupTitle(item.meta, item.count, sub)}
+            </AccordionTrigger>
+          </AccordionHeader>
+        </AccordionItem>
+      </AccordionRoot>
+    </div>
+  );
+});
+
+interface TaskListVirtualContext {
+  footer: ReactNode;
+}
+
+const TaskListFooter = ({ context }: { context?: TaskListVirtualContext }) => (
+  <>{context?.footer}</>
+);
+
+const VIRTUAL_LIST_COMPONENTS: Components<TaskListVirtualItem, TaskListVirtualContext> = {
+  Footer: TaskListFooter,
+};
+
 const TaskList = memo<TaskListProps>((props) => {
-  const { data, error, isLoading, items, onRetry, onShowHiddenCompleted, options, routeScope } =
-    props;
+  const {
+    data,
+    error,
+    isLoading,
+    items,
+    onRetry,
+    onShowHiddenCompleted,
+    options,
+    queryKey,
+    routeScope,
+  } = props;
   const { t } = useTranslation('chat');
-  const storeTasks = useTaskStore(taskListSelectors.taskList);
+  const storeTasks = useTaskStore(taskListSelectors.taskList(queryKey));
+  const storeTasksTotal = useTaskStore(taskListSelectors.taskListTotal(queryKey));
   const tasks = items ?? storeTasks;
+  // The store list is fetched in full up to a ceiling; past it the server's
+  // `total` still counts every task, so say the list is a subset rather than
+  // let the missing rows vanish silently. Alternate collections (`items`)
+  // paginate on their own.
+  const isTruncated = !items && storeTasksTotal > COMPLETE_TASK_LIST_MAX_ITEMS;
   const groupBy = normalizeGroupBy(options.groupBy, 'status');
   const subGroupBy = normalizeGroupBy(options.subGroupBy, 'none');
   const effectiveSubGroupBy = groupBy === 'none' ? 'none' : subGroupBy;
   const unfinishedTasks = useMemo(
     () =>
-      options.hideCompleted
-        ? tasks.filter((task) => !HIDDEN_COMPLETED_STATUS_SET.has(task.status))
-        : tasks,
-    [tasks, options.hideCompleted],
+      options.completedTasks === 'all'
+        ? tasks
+        : tasks.filter((task) => !isTaskHiddenByCompletedFilter(task, options.completedTasks)),
+    [tasks, options.completedTasks],
   );
   // Only the completed/canceled cut feeds the "hidden by display options"
-  // footer — its "Show" action clears `hideCompleted`, so folding the sub-task
+  // footer — its "Show" action resets `completedTasks` to 'all', so folding the sub-task
   // count in would promise a reveal that toggle doesn't deliver.
   const hiddenCount = tasks.length - unfinishedTasks.length;
   const visibleTasks = useMemo(
@@ -125,7 +190,7 @@ const TaskList = memo<TaskListProps>((props) => {
   // resolve into a context row.
   const taskById = useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const nested = options.showSubTasks && options.nestedSubTasks;
-  const groupedTaskEntries = useMemo(() => {
+  const groupedTaskEntries = useMemo((): TaskListGroupEntry[] => {
     const compare = (a: (typeof visibleTasks)[number], b: (typeof visibleTasks)[number]) =>
       compareTaskItems(a, b, options);
     const toRows = (items: typeof visibleTasks) =>
@@ -140,12 +205,7 @@ const TaskList = memo<TaskListProps>((props) => {
 
     return primaryGroups.map(([meta, groupedTasks]) => {
       if (effectiveSubGroupBy === 'none') {
-        return {
-          count: groupedTasks.length,
-          meta,
-          rows: toRows(groupedTasks),
-          subGroups: [] as Array<{ count: number; meta: TaskGroupMeta; rows: TaskRow[] }>,
-        };
+        return { count: groupedTasks.length, meta, rows: toRows(groupedTasks), subGroups: [] };
       }
 
       return {
@@ -163,13 +223,124 @@ const TaskList = memo<TaskListProps>((props) => {
     });
   }, [effectiveSubGroupBy, groupBy, nested, options, taskById, visibleTasks]);
 
+  // Collapse state lives here (not in the Accordion) because headers and rows
+  // are flattened into one virtual list; a collapsed key simply drops its rows
+  // from that list. Keys survive a re-group only when the group keys do.
+  const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleCollapsed = useCallback((key: string) => {
+    setCollapsedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  // Selectable rows in display order, collapsed groups included (⌘A selects
+  // every task the current view shows, not only the expanded ones). Grey
+  // parent-context rows only give a nested child its place; they are not part
+  // of the view's result set.
+  const selectableIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const entry of groupedTaskEntries) {
+      const rows =
+        entry.subGroups.length > 0 ? entry.subGroups.flatMap((sub) => sub.rows) : entry.rows;
+      for (const row of rows) if (!row.isParentContext) ids.add(row.task.id);
+    }
+    return [...ids];
+  }, [groupedTaskEntries]);
+  const listRef = useRef<HTMLDivElement>(null);
+  const selectableIdsRef = useRef(selectableIds);
+  selectableIdsRef.current = selectableIds;
+  const getSelectionOrder = useCallback(() => selectableIdsRef.current, []);
+
+  // A selection never outlives the rows it names: prune on every list change,
+  // and drop it when this list (or its collection) goes away.
+  useEffect(() => {
+    useTaskSelectionStore.getState().prune(new Set(selectableIds));
+  }, [selectableIds]);
+  const selectionScope = props.selectionScope ?? (items ? 'items' : (queryKey ?? ''));
+  useSelectionScope(selectionScope);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isEditableTarget(event.target)) return;
+      // Only when nothing else holds focus, or focus is on the list itself:
+      // ⌘A over a side panel's text keeps selecting that text, and Esc inside
+      // a drawer or popover stays theirs.
+      const target = event.target as Node | null;
+      const onList = !!target && !!listRef.current?.contains(target);
+      if (target !== document.body && !onList) return;
+      const selection = useTaskSelectionStore.getState();
+      if (
+        event.key.toLowerCase() === 'a' &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey
+      ) {
+        if (selectableIdsRef.current.length === 0) return;
+        event.preventDefault();
+        selection.selectAll(selectableIdsRef.current);
+        return;
+      }
+      if (event.key === 'Escape' && selection.selectedIds.length > 0 && !selection.progress) {
+        event.preventDefault();
+        selection.clear();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const virtualItems = useMemo(
+    () =>
+      flattenTaskListEntries(groupedTaskEntries, {
+        collapsed: collapsedKeys,
+        grouped: groupBy !== 'none',
+      }),
+    [collapsedKeys, groupBy, groupedTaskEntries],
+  );
+
+  // The page scrolls in an ancestor (`WideScreenContainer`'s wrapper), with the
+  // inline composer above this list. Windowing against that ancestor keeps the
+  // page layout intact instead of nesting a second scroller.
+  const { ref: anchorRef, scrollParent } = useClosestScrollParent();
+
+  const renderItem = useCallback(
+    (_index: number, item: TaskListVirtualItem) => {
+      if (item.kind !== 'row') return <TaskGroupHeader item={item} onToggle={toggleCollapsed} />;
+      return (
+        // Matches the 2px row gap the former Block wrapper gave the list.
+        <div style={{ paddingBlock: 1, paddingInline: 2 }}>
+          <TaskRowIndent depth={item.row.depth} muted={item.row.isParentContext}>
+            {item.row.isParentContext ? (
+              <AgentTaskItem routeScope={routeScope} task={item.row.task} />
+            ) : (
+              <SelectableTaskRow
+                id={item.row.task.id}
+                order={getSelectionOrder}
+                label={[item.row.task.identifier, item.row.task.name?.trim()]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <AgentTaskItem routeScope={routeScope} task={item.row.task} />
+              </SelectableTaskRow>
+            )}
+          </TaskRowIndent>
+          {item.showDivider && <Divider dashed style={{ margin: 0 }} />}
+        </div>
+      );
+    },
+    [getSelectionOrder, routeScope, toggleCollapsed],
+  );
+
   const skeleton = (
     <Block gap={2} padding={2} variant={'borderless'}>
       {Array.from({ length: 5 }).map((_, index) => (
-        <Fragment key={`task-skeleton-${index}`}>
+        <div key={`task-skeleton-${index}`}>
           <TaskItemSkeleton />
           {index !== 4 && <Divider dashed style={{ margin: 0 }} />}
-        </Fragment>
+        </div>
       ))}
     </Block>
   );
@@ -177,6 +348,7 @@ const TaskList = memo<TaskListProps>((props) => {
   const emptyState = (
     <Center height={'80vh'} width={'100%'}>
       <Empty
+        action={props.emptyAction}
         description={props.emptyDescription ?? t('taskList.empty')}
         icon={ClipboardCheckIcon}
       />
@@ -204,56 +376,13 @@ const TaskList = memo<TaskListProps>((props) => {
     </Flexbox>
   );
 
-  const content =
-    groupBy === 'none' ? (
-      <>
-        {renderTaskListBlock(groupedTaskEntries[0]?.rows ?? [], false, routeScope)}
-        {hiddenFooter}
-      </>
-    ) : (
-      <>
-        <Accordion gap={16}>
-          {groupedTaskEntries.map((group) => {
-            return (
-              <AccordionItem
-                defaultExpand
-                indicatorPlacement={'end'}
-                itemKey={`group-${group.meta.key}`}
-                key={group.meta.key}
-                paddingBlock={8}
-                paddingInline={14}
-                title={renderGroupTitle(group.meta, group.count)}
-                variant={'filled'}
-                styles={{
-                  header: { marginBottom: 8 },
-                }}
-              >
-                {group.subGroups.length > 0 ? (
-                  <Accordion gap={6}>
-                    {group.subGroups.map((subGroup) => (
-                      <AccordionItem
-                        defaultExpand
-                        indicatorPlacement={'end'}
-                        itemKey={`sub-${group.meta.key}-${subGroup.meta.key}`}
-                        key={`${group.meta.key}-${subGroup.meta.key}`}
-                        paddingBlock={6}
-                        paddingInline={14}
-                        title={renderGroupTitle(subGroup.meta, subGroup.count, true)}
-                      >
-                        {renderTaskListBlock(subGroup.rows, true, routeScope)}
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                ) : (
-                  renderTaskListBlock(group.rows, false, routeScope)
-                )}
-              </AccordionItem>
-            );
-          })}
-        </Accordion>
-        {hiddenFooter}
-      </>
-    );
+  const truncatedFooter = isTruncated && (
+    <Flexbox horizontal align={'center'} justify={'center'} paddingBlock={16}>
+      <Text fontSize={13} type={'secondary'}>
+        {t('taskList.truncated', { loaded: tasks.length, total: storeTasksTotal })}
+      </Text>
+    </Flexbox>
+  );
 
   // Error is gated ahead of empty by AsyncBoundary, so a failed fetch shows a
   // Retry block instead of the "no tasks" empty. `data` is the
@@ -269,7 +398,32 @@ const TaskList = memo<TaskListProps>((props) => {
       loading={skeleton}
       onRetry={onRetry}
     >
-      {content}
+      <div ref={listRef} style={{ width: '100%' }}>
+        <TaskBulkActionBar tasks={tasks} />
+        <div ref={anchorRef} style={{ width: '100%' }}>
+          {scrollParent && (
+            <Virtuoso
+              // Footer belongs to the window so it follows the last rendered row
+              // rather than sitting under an unrendered tail.
+              components={VIRTUAL_LIST_COMPONENTS}
+              computeItemKey={(_index, item) => item.key}
+              customScrollParent={scrollParent}
+              data={virtualItems}
+              defaultItemHeight={DEFAULT_ROW_HEIGHT}
+              increaseViewportBy={{ bottom: 600, top: 600 }}
+              itemContent={renderItem}
+              context={{
+                footer: (
+                  <>
+                    {hiddenFooter}
+                    {truncatedFooter}
+                  </>
+                ),
+              }}
+            />
+          )}
+        </div>
+      </div>
     </AsyncBoundary>
   );
 });

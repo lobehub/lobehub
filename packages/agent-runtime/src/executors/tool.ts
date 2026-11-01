@@ -14,14 +14,25 @@ import type {
   AgentState,
   InstructionExecutor,
 } from '../types';
-import { extractActivatedSkillsFromMessages, extractTodosFromMessages } from '../utils';
+import {
+  extractActivatedSkillsFromMessages,
+  extractTodosFromMessages,
+  redactResultForEvents,
+} from '../utils';
+import { selectEffectiveToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
 import { settleAbortedToolRows } from './abortedToolRows';
+import {
+  createToolMessage,
+  isBlockedBeforeExecution,
+  isPersistFatal,
+  persistToolResultMetadata,
+  publishError,
+  updateExistingToolMessage,
+} from './toolPersistence';
+import { resolveToolReplay } from './toolReplay';
 
 const TOOL_EXECUTION_PHASE = 'tool_execution';
-const TOOL_MESSAGE_PERSIST_PHASE = 'tool_message_persist';
 const DEFAULT_TOOL_MAX_RETRIES = 2;
-
-const persistFatalErrors = new WeakSet<object>();
 
 interface ToolResultEntry {
   data: ToolRunResult;
@@ -43,52 +54,6 @@ interface ToolResultEntry {
 
 const nowIso = () => new Date().toISOString();
 
-/**
- * Skill work-registration intents carry the UNTRUNCATED tool payload
- * (`data`/`args`) solely for server-side Work registration, which reads it
- * off the in-process `executionResult` before anything leaves the executor.
- * Strip it from every copy that DOES leave: realtime `tool_end` stream events
- * (clients only read `workRegistration` as a presence flag, see
- * gatewayEventHandler) and the recorded step `tool_result` events
- * (AgentStateManager serializes those into Redis, where the raw payload would
- * bloat the capped event blob).
- */
-const redactResultForEvents = (result: ToolRunResult): ToolRunResult =>
-  result.workRegistration?.type === 'skill'
-    ? { ...result, workRegistration: { ...result.workRegistration, args: undefined, data: null } }
-    : result;
-
-const markPersistFatal = <T>(error: T): T => {
-  if (error && typeof error === 'object') persistFatalErrors.add(error);
-  return error;
-};
-
-const isPersistFatal = (error: unknown) =>
-  !!error && typeof error === 'object' && persistFatalErrors.has(error);
-
-const getErrorType = (error: unknown): string | undefined => {
-  if (!error || typeof error !== 'object') return;
-
-  const value = (error as { errorType?: unknown; name?: unknown; type?: unknown }).errorType;
-  if (typeof value === 'string' || typeof value === 'number') return String(value);
-
-  const type = (error as { type?: unknown }).type;
-  if (typeof type === 'string' || typeof type === 'number') return String(type);
-
-  const name = error instanceof Error ? error.name : undefined;
-  return name || undefined;
-};
-
-const getErrorMessage = (error: unknown): string => {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error) return error;
-  if (error && typeof error === 'object') {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message) return message;
-  }
-  return 'Unknown error';
-};
-
 const requireToolTransport = (host: AgentRuntimeHost) => {
   const tools = host.transports.tools;
   if (!tools) {
@@ -100,7 +65,7 @@ const requireToolTransport = (host: AgentRuntimeHost) => {
 const toolNameOf = (tool: ChatToolPayload) => `${tool.identifier}/${tool.apiName}`;
 
 const resolveToolSource = (state: AgentState, tool: ChatToolPayload): string | undefined =>
-  state.operationToolSet?.sourceMap?.[tool.identifier] ?? state.toolSourceMap?.[tool.identifier];
+  selectToolSourceMap(state)[tool.identifier];
 
 const parseToolArgs = (tool: ChatToolPayload): Record<string, unknown> => {
   try {
@@ -120,14 +85,70 @@ const parseToolArgs = (tool: ChatToolPayload): Record<string, unknown> => {
   }
 };
 
-const buildEffectiveManifestMap = (state: AgentState): Record<string, any> => ({
-  ...(state.operationToolSet?.manifestMap ?? state.toolManifestMap),
-  ...Object.fromEntries(
-    (state.activatedStepTools ?? [])
-      .filter((activation) => activation.manifest)
-      .map((activation) => [activation.id, activation.manifest!]),
-  ),
-});
+const buildEffectiveManifestMap = (state: AgentState): Record<string, any> =>
+  selectEffectiveToolManifestMap(state);
+/**
+ * Resource an API call mutates, read from the argument its manifest names in
+ * `serializeBy`. Undefined when the API declares none or the argument is not a
+ * non-empty string.
+ */
+const readSerializeKey = (tool: ChatToolPayload, argName: string): string | undefined => {
+  try {
+    const value = JSON.parse(tool.arguments || '{}')?.[argName];
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Split a batch into lanes. Calls within a lane run one after another in
+ * emission order; lanes run concurrently. The flags live on the manifest API
+ * entry, so they are read from the same effective map the run context exposes
+ * to executors.
+ *
+ * - every call to an API marked `ordered` shares one lane;
+ * - calls to one tool that name the same resource through `serializeBy` (the
+ *   same file path) share a lane, across that tool's APIs;
+ * - everything else gets a lane of its own.
+ */
+const planBatchLanes = (
+  state: AgentState,
+  toolsCalling: ChatToolPayload[],
+): ChatToolPayload[][] => {
+  const manifestMap = buildEffectiveManifestMap(state);
+  const ordered: ChatToolPayload[] = [];
+  const serialized = new Map<string, ChatToolPayload[]>();
+  const lanes: ChatToolPayload[][] = [ordered];
+
+  for (const tool of toolsCalling) {
+    const apis = manifestMap[tool.identifier]?.api as
+      Array<{ name?: string; ordered?: boolean; serializeBy?: string }> | undefined;
+    const api = apis?.find((item) => item.name === tool.apiName);
+
+    if (api?.ordered === true) {
+      ordered.push(tool);
+      continue;
+    }
+
+    const resource = api?.serializeBy ? readSerializeKey(tool, api.serializeBy) : undefined;
+    if (resource === undefined) {
+      lanes.push([tool]);
+      continue;
+    }
+
+    const key = `${tool.identifier}\u0000${resource}`;
+    const lane = serialized.get(key);
+    if (lane) lane.push(tool);
+    else {
+      const created = [tool];
+      serialized.set(key, created);
+      lanes.push(created);
+    }
+  }
+
+  return lanes.filter((lane) => lane.length > 0);
+};
 
 const resolveCallIndex = (state: AgentState, toolName: string) => {
   const existingToolStats = state.usage?.tools?.byTool?.find((tool) => tool.name === toolName);
@@ -155,13 +176,13 @@ const createRunContext = ({
 }): ToolRunContext => {
   const toolName = toolNameOf(tool);
   const toolSource = resolveToolSource(state, tool);
-  const agentConfig = state.metadata?.agentConfig as
+  const agentConfig = state.world?.agent as
     { chatConfig?: { toolResultMaxLength?: number } } | undefined;
 
   return {
     abortSignal: host.operation.abortSignal,
     activatedSkills: extractActivatedSkillsFromMessages(state.messages),
-    agentId: host.operation.agentId ?? state.metadata?.agentId,
+    agentId: host.operation.agentId ?? state.origin?.agentId,
     assistantMessageId: parentMessageId,
     callIndex: resolveCallIndex(state, toolName),
     // Todo state is reconstructed from message history for the same reason the
@@ -170,8 +191,8 @@ const createRunContext = ({
     // tool-execution side must not treat it as the source of truth.
     currentTodos: extractTodosFromMessages(state.messages)?.items,
     effectiveManifestMap: buildEffectiveManifestMap(state),
-    groupId: host.operation.groupId ?? state.metadata?.groupId,
-    messageId: state.metadata?.sourceMessageId,
+    groupId: host.operation.groupId ?? state.origin?.groupId,
+    messageId: state.origin?.sourceMessageId,
     mode,
     operationId: host.operation.operationId,
     parentMessageId,
@@ -180,13 +201,13 @@ const createRunContext = ({
     state,
     stepIndex: host.operation.stepIndex,
     stepContext,
-    threadId: host.operation.threadId ?? state.metadata?.threadId,
+    threadId: host.operation.threadId ?? state.origin?.threadId,
     toolMessageId,
     toolName,
     toolResultMaxLength: agentConfig?.chatConfig?.toolResultMaxLength,
     toolSource,
-    topicId: host.operation.topicId ?? state.metadata?.topicId,
-    workspaceId: state.metadata?.workspaceId ?? host.operation.workspaceId,
+    topicId: host.operation.topicId ?? state.origin?.topicId,
+    workspaceId: state.origin?.workspaceId ?? host.operation.workspaceId,
   };
 };
 
@@ -307,25 +328,6 @@ const settleAbortedCall = async ({
   };
 };
 
-const publishError = async (host: AgentRuntimeHost, error: unknown, phase: string) => {
-  const { stepIndex } = host.operation;
-
-  if (host.transports.stream.publishError) {
-    await host.transports.stream.publishError({ error, phase, stepIndex });
-    return;
-  }
-
-  await host.transports.stream.publishEvent({
-    data: {
-      error: getErrorMessage(error),
-      errorType: getErrorType(error),
-      phase,
-    },
-    stepIndex,
-    type: 'error',
-  });
-};
-
 /**
  * A deferred tool's runtime has already created the row its result will be
  * backfilled into (e.g. `callSubAgent`'s pending placeholder) and hands the id
@@ -378,6 +380,22 @@ const pauseForTools = async ({
   };
   newState.pendingToolsCalling = toolsCalling;
 
+  // Same rule as the human-approval pause: an approve resume seeds an assistant
+  // placeholder for its first `call_llm`, but an approved async tool (a group
+  // member task, a sub-agent) parks the run instead. The server-side resume
+  // writes its own reply once the tool lands, so the seed would stay behind as
+  // an empty "…" sibling that hides that reply. A client-tool pause keeps it:
+  // its result resumes this same turn and fills the seed.
+  if (reason === 'async_tool' && newState.pendingAssistantMessageId) {
+    const orphanId = newState.pendingAssistantMessageId;
+    newState.pendingAssistantMessageId = undefined;
+    try {
+      await host.transports.messages.deleteMessage(orphanId);
+    } catch {
+      // leaving the placeholder is cosmetic; parking correctly is not
+    }
+  }
+
   return {
     events: [
       {
@@ -389,69 +407,6 @@ const pauseForTools = async ({
     ],
     newState,
   };
-};
-
-const createToolMessage = async ({
-  host,
-  parentMessageId,
-  result,
-  state,
-  tool,
-}: {
-  host: AgentRuntimeHost;
-  parentMessageId: string;
-  result: ToolRunResult;
-  state: AgentState;
-  tool: ChatToolPayload;
-}) => {
-  try {
-    const agentId = host.operation.agentId ?? state.metadata?.agentId;
-    if (!agentId) {
-      throw new Error(
-        `[call_tool] Missing agentId for tool message (op=${host.operation.operationId})`,
-      );
-    }
-
-    return await host.transports.messages.createToolMessage({
-      agentId,
-      content: result.content,
-      groupId: host.operation.groupId ?? state.metadata?.groupId ?? undefined,
-      metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
-      parentId: parentMessageId,
-      plugin: tool as any,
-      pluginError: result.error,
-      pluginState: result.state,
-      role: 'tool',
-      threadId: host.operation.threadId ?? state.metadata?.threadId,
-      tool_call_id: tool.id,
-      topicId: host.operation.topicId ?? state.metadata?.topicId,
-    });
-  } catch (error) {
-    await publishError(host, error, TOOL_MESSAGE_PERSIST_PHASE);
-    throw markPersistFatal(error);
-  }
-};
-
-const updateExistingToolMessage = async ({
-  host,
-  result,
-  toolMessageId,
-}: {
-  host: AgentRuntimeHost;
-  result: ToolRunResult;
-  toolMessageId: string;
-}) => {
-  try {
-    await host.transports.messages.updateToolMessage(toolMessageId, {
-      content: result.content,
-      metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
-      pluginError: result.error,
-      pluginState: result.state,
-    });
-  } catch (error) {
-    await publishError(host, error, TOOL_MESSAGE_PERSIST_PHASE);
-    throw markPersistFatal(error);
-  }
 };
 
 const persistActivatedTools = ({
@@ -472,16 +427,21 @@ const persistActivatedTools = ({
       Array<{ identifier: string }> | undefined;
     if (!discoveredTools?.length) continue;
 
+    // The set is updated inside the filter, not after mapping the batch: two
+    // results in the same step (or one result listing the same tool twice)
+    // would otherwise both pass and be appended twice.
     const newActivations = discoveredTools
-      .filter((tool) => !existingIds.has(tool.identifier))
+      .filter((tool) => {
+        if (existingIds.has(tool.identifier)) return false;
+        existingIds.add(tool.identifier);
+        return true;
+      })
       .map((tool) => ({
         activatedAtStep: stepCount,
         id: tool.identifier,
         manifest: effectiveManifestMap[tool.identifier],
         source: 'discovery' as const,
       }));
-
-    for (const activation of newActivations) existingIds.add(activation.id);
 
     if (newActivations.length > 0) {
       newState.activatedStepTools = [...(newState.activatedStepTools ?? []), ...newActivations];
@@ -496,15 +456,21 @@ export const callTool =
     const tools = requireToolTransport(host);
     const tool = payload.toolCalling;
     const events: AgentEvent[] = [];
+    const replay = await resolveToolReplay({
+      existingToolMessageId: payload.skipCreateToolMessage ? payload.parentMessageId : undefined,
+      host,
+      parentMessageId: payload.parentMessageId,
+      tool,
+    });
     const runContext = createRunContext({
       host,
       mode: 'single',
       parentMessageId: payload.parentMessageId,
-      reuseExistingMessage: payload.skipCreateToolMessage,
+      reuseExistingMessage: !!replay.toolMessageId,
       state,
       stepContext: runtimeContext?.stepContext,
       tool,
-      toolMessageId: payload.skipCreateToolMessage ? payload.parentMessageId : undefined,
+      toolMessageId: replay.toolMessageId,
     });
 
     await host.transports.stream.publishEvent({
@@ -513,55 +479,43 @@ export const callTool =
       type: 'tool_start',
     });
 
-    if (runContext.toolSource === 'client' && !tools.canRunClientTools) {
-      // Parking is only meaningful if something will come back for it. Once the
-      // operation is aborted nothing resumes this run, so the pause would leave
-      // the call with no row at all — settle it instead.
-      if (host.operation.abortSignal?.aborted) {
-        return settleAbortedCall({
-          events,
-          existingToolMessageId: payload.skipCreateToolMessage
-            ? payload.parentMessageId
-            : undefined,
-          host,
-          parentMessageId: payload.parentMessageId,
-          state,
-          tool,
-        });
-      }
-
-      const paused = await pauseForTools({
-        host,
-        instruction,
-        reason: 'client_tool_execution',
-        state,
-        toolsCalling: [tool],
-      });
-
-      // Stop can arrive while the chunk is being published. Do not return a
-      // parked state after that asynchronous gap: no client result will ever
-      // resume an operation that has already been interrupted.
-      if (host.operation.abortSignal?.aborted) {
-        return settleAbortedCall({
-          events,
-          existingToolMessageId: payload.skipCreateToolMessage
-            ? payload.parentMessageId
-            : undefined,
-          host,
-          parentMessageId: payload.parentMessageId,
-          state,
-          tool,
-        });
-      }
-
-      return paused;
-    }
-
     try {
-      const execution = await raceToolAbort(
-        () => tools.run(tool, runContext),
-        host.operation.abortSignal,
-      );
+      const intercepted =
+        replay.execution ??
+        (await raceToolAbort(
+          () => tools.beforeToolCall?.(tool, runContext) ?? Promise.resolve(undefined),
+          host.operation.abortSignal,
+        ));
+      if (!replay.execution && host.operation.abortSignal?.aborted) throw new ToolAbortedError();
+      if (!intercepted && runContext.toolSource === 'client' && !tools.canRunClientTools) {
+        const paused = await pauseForTools({
+          host,
+          instruction,
+          reason: 'client_tool_execution',
+          state,
+          toolsCalling: [tool],
+        });
+
+        // Stop can arrive while the chunk is being published. Do not return a
+        // parked state after that asynchronous gap: no client result will ever
+        // resume an operation that has already been interrupted.
+        if (host.operation.abortSignal?.aborted) {
+          return settleAbortedCall({
+            events,
+            existingToolMessageId: replay.toolMessageId,
+            host,
+            parentMessageId: payload.parentMessageId,
+            state,
+            tool,
+          });
+        }
+
+        return paused;
+      }
+
+      const execution =
+        intercepted ??
+        (await raceToolAbort(() => tools.run(tool, runContext), host.operation.abortSignal));
 
       if (execution.interrupted) {
         // The transport bailed after creating its optimistic row but before a
@@ -569,9 +523,7 @@ export const callTool =
         // used to strand the tool_call_id with no row at all.
         return settleAbortedCall({
           events,
-          existingToolMessageId: payload.skipCreateToolMessage
-            ? payload.parentMessageId
-            : undefined,
+          existingToolMessageId: replay.toolMessageId,
           host,
           parentMessageId: payload.parentMessageId,
           state,
@@ -599,7 +551,9 @@ export const callTool =
           executionTime,
           isSuccess,
           attempts: execution.attempts,
-          maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
+          maxAttempts: isBlockedBeforeExecution(executionResult)
+            ? 0
+            : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
           payload,
           phase: TOOL_EXECUTION_PHASE,
           result: redactResultForEvents(executionResult),
@@ -612,22 +566,36 @@ export const callTool =
       if (execution.toolMessageId) {
         toolMessageId = execution.toolMessageId;
         if (!execution.resultPersisted) {
-          await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+          await updateExistingToolMessage({
+            host,
+            result: executionResult,
+            toolMessageId,
+            resultBlocked: execution.resultBlocked,
+          });
         }
-      } else if (payload.skipCreateToolMessage) {
-        toolMessageId = payload.parentMessageId;
-        await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+      } else if (replay.toolMessageId) {
+        toolMessageId = replay.toolMessageId;
+        await updateExistingToolMessage({
+          host,
+          result: executionResult,
+          toolMessageId,
+          resultBlocked: execution.resultBlocked,
+        });
       } else {
         const toolMessage = await createToolMessage({
           host,
           parentMessageId: payload.parentMessageId,
           result: executionResult,
+          resultBlocked: execution.resultBlocked,
           state,
           tool,
         });
         toolMessageId = toolMessage.id;
       }
 
+      if (execution.resultPersisted && !replay.execution) {
+        await persistToolResultMetadata(host, toolMessageId, executionResult);
+      }
       const newState = structuredClone(state);
       if (execution.resultPersisted) {
         newState.messages = await host.transports.messages.query({
@@ -637,13 +605,25 @@ export const callTool =
           topicId: runContext.topicId,
         });
       } else {
-        newState.messages.push({
+        /**
+         * Preserve the durable row id in the in-memory turn. The next gateway
+         * step uses message ids to rebuild media refs before its DB rehydrate,
+         * and an id-less tool result makes that safety gate keep the stale
+         * snapshot instead.
+         */
+        const toolMessage = {
           content: executionResult.content,
+          id: toolMessageId,
           plugin: tool,
           pluginState: executionResult.state,
           role: 'tool',
           tool_call_id: tool.id,
-        });
+        };
+        const existingIndex = newState.messages.findIndex(
+          (message) => message.id === toolMessageId,
+        );
+        if (existingIndex >= 0) newState.messages[existingIndex] = toolMessage;
+        else newState.messages.push(toolMessage);
       }
       newState.lastModified = nowIso();
 
@@ -653,7 +633,9 @@ export const callTool =
         type: 'tool_result',
       });
 
-      const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
+      const toolCost = isBlockedBeforeExecution(executionResult)
+        ? 0
+        : (tools.getCost?.(runContext.toolName) ?? 0);
       const { usage, cost } = UsageCounter.accumulateTool({
         cost: newState.cost,
         executionTime,
@@ -715,6 +697,9 @@ export const callTool =
         nextContext: {
           payload: {
             data: executionResult,
+            // Server-observed span vs the device's own — their difference is
+            // the dispatch overhead, which only the trace can show after the fact.
+            deviceExecutionTime: execution.result.deviceExecutionTime,
             executionTime,
             isSuccess,
             parentMessageId: toolMessageId,
@@ -746,9 +731,7 @@ export const callTool =
       if (isOperationAbort(error, host.operation.abortSignal)) {
         return settleAbortedCall({
           events,
-          existingToolMessageId: payload.skipCreateToolMessage
-            ? payload.parentMessageId
-            : undefined,
+          existingToolMessageId: replay.toolMessageId,
           host,
           parentMessageId: payload.parentMessageId,
           state,
@@ -775,14 +758,37 @@ export const callToolsBatch =
     const parentMessageId = payload.parentMessageId as string;
     const toolsCalling = payload.toolsCalling as ChatToolPayload[];
     // Batch human approval resumes onto rows the approval pause already created.
-    const existingToolMessageIds = (payload.existingToolMessageIds ?? {}) as Record<string, string>;
+    const existingToolMessageIds: Record<string, string> = Object.assign(
+      Object.create(null),
+      payload.existingToolMessageIds,
+    );
     const tools = requireToolTransport(host);
     const events: AgentEvent[] = [];
     const clientTools: ChatToolPayload[] = [];
     const serverTools: ChatToolPayload[] = [];
 
+    const replays = new Map(
+      await Promise.all(
+        toolsCalling.map(async (tool) => {
+          const replay = await resolveToolReplay({
+            existingToolMessageId: existingToolMessageIds[tool.id],
+            host,
+            parentMessageId,
+            tool,
+          });
+          if (replay.toolMessageId) existingToolMessageIds[tool.id] = replay.toolMessageId;
+          return [tool.id, replay] as const;
+        }),
+      ),
+    );
+
     for (const tool of toolsCalling) {
-      if (resolveToolSource(state, tool) === 'client' && !tools.canRunClientTools)
+      if (
+        !replays.get(tool.id)?.execution &&
+        !tools.beforeToolCall &&
+        resolveToolSource(state, tool) === 'client' &&
+        !tools.canRunClientTools
+      )
         clientTools.push(tool);
       else serverTools.push(tool);
     }
@@ -842,133 +848,178 @@ export const callToolsBatch =
     const deferredToolMessageIds: Record<string, string> = {};
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
 
-    await Promise.all(
-      toolsToExecute.map(async (tool) => {
-        const existingMessageId = existingToolMessageIds[tool.id];
-        const runContext = createRunContext({
-          host,
-          mode: 'batch',
-          parentMessageId,
-          reuseExistingMessage: !!existingMessageId,
-          state,
-          stepContext: runtimeContext?.stepContext,
-          tool,
-          toolMessageId: existingMessageId,
-        });
+    const runOne = async (tool: ChatToolPayload) => {
+      const existingMessageId = Object.hasOwn(existingToolMessageIds, tool.id)
+        ? existingToolMessageIds[tool.id]
+        : undefined;
+      const runContext = createRunContext({
+        host,
+        mode: 'batch',
+        parentMessageId,
+        reuseExistingMessage: !!existingMessageId,
+        state,
+        stepContext: runtimeContext?.stepContext,
+        tool,
+        toolMessageId: existingMessageId,
+      });
+
+      await host.transports.stream.publishEvent({
+        data: { parentMessageId, toolCalling: tool },
+        stepIndex: host.operation.stepIndex,
+        type: 'tool_start',
+      });
+
+      try {
+        const intercepted =
+          replays.get(tool.id)?.execution ??
+          (await raceToolAbort(
+            () => tools.beforeToolCall?.(tool, runContext) ?? Promise.resolve(undefined),
+            host.operation.abortSignal,
+          ));
+        if (!replays.get(tool.id)?.execution && host.operation.abortSignal?.aborted)
+          throw new ToolAbortedError();
+        if (!intercepted && runContext.toolSource === 'client' && !tools.canRunClientTools) {
+          clientTools.push(tool);
+          return;
+        }
+        const execution =
+          intercepted ??
+          (await raceToolAbort(() => tools.run(tool, runContext), host.operation.abortSignal));
+
+        if (execution.interrupted) {
+          abortedTools.push(tool);
+          return;
+        }
+
+        if (execution.result.deferred) {
+          deferredTools.push(tool);
+          const deferredId = deferredToolMessageId(execution.result);
+          if (deferredId) deferredToolMessageIds[tool.id] = deferredId;
+          return;
+        }
+
+        const executionResult = execution.result;
+        const executionTime = executionResult.executionTime ?? 0;
+        const isSuccess = executionResult.success;
 
         await host.transports.stream.publishEvent({
-          data: { parentMessageId, toolCalling: tool },
-          stepIndex: host.operation.stepIndex,
-          type: 'tool_start',
-        });
-
-        try {
-          const execution = await raceToolAbort(
-            () => tools.run(tool, runContext),
-            host.operation.abortSignal,
-          );
-
-          if (execution.interrupted) {
-            abortedTools.push(tool);
-            return;
-          }
-
-          if (execution.result.deferred) {
-            deferredTools.push(tool);
-            const deferredId = deferredToolMessageId(execution.result);
-            if (deferredId) deferredToolMessageIds[tool.id] = deferredId;
-            return;
-          }
-
-          const executionResult = execution.result;
-          const executionTime = executionResult.executionTime ?? 0;
-          const isSuccess = executionResult.success;
-
-          await host.transports.stream.publishEvent({
-            data: {
-              executionTime,
-              isSuccess,
-              attempts: execution.attempts,
-              maxAttempts: (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
-              payload: { parentMessageId, toolCalling: tool },
-              phase: TOOL_EXECUTION_PHASE,
-              result: redactResultForEvents(executionResult),
-            },
-            stepIndex: host.operation.stepIndex,
-            type: 'tool_end',
-          });
-
-          let toolMessageId: string;
-          if (execution.toolMessageId) {
-            toolMessageId = execution.toolMessageId;
-            if (!execution.resultPersisted) {
-              await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
-            }
-          } else if (existingMessageId) {
-            // Batch approval resume: fill the pending placeholder in place.
-            // Creating a fresh row here would leave the approved-but-empty
-            // original stranded under the same assistant.
-            toolMessageId = existingMessageId;
-            await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
-          } else {
-            const toolMessage = await createToolMessage({
-              host,
-              parentMessageId,
-              result: executionResult,
-              state,
-              tool,
-            });
-            toolMessageId = toolMessage.id;
-          }
-
-          // `sourceMessageId` + `workRegistration` are carried so the
-          // post-batch accumulate loop can persist the Work version ONCE with
-          // this call's cumulative cost (known only then).
-          const resultEntry: ToolResultEntry = {
-            data: executionResult,
+          data: {
             executionTime,
             isSuccess,
-            sourceMessageId: toolMessageId,
-            toolCall: tool,
-            toolCallId: tool.id,
-            workRegistration: executionResult.workRegistration,
-          };
-
-          events.push({
-            id: tool.id,
+            attempts: execution.attempts,
+            maxAttempts: isBlockedBeforeExecution(executionResult)
+              ? 0
+              : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
+            payload: { parentMessageId, toolCalling: tool },
+            phase: TOOL_EXECUTION_PHASE,
             result: redactResultForEvents(executionResult),
-            type: 'tool_result',
-          });
+          },
+          stepIndex: host.operation.stepIndex,
+          type: 'tool_end',
+        });
 
-          const toolCost = tools.getCost?.(runContext.toolName) ?? 0;
-          resultEntry.usageParams = {
-            executionTime,
-            success: isSuccess,
-            toolCost,
-            toolName: runContext.toolName,
-          };
-          toolResults.push(resultEntry);
-        } catch (error) {
-          if (isPersistFatal(error)) throw error;
-
-          // Abort is not a tool failure — see `callTool`. Siblings that already
-          // finished keep their real results; this one is collected for the
-          // aborted-row settle after the batch.
-          if (isOperationAbort(error, host.operation.abortSignal)) {
-            abortedTools.push(tool);
-            return;
+        let toolMessageId: string;
+        if (execution.toolMessageId) {
+          toolMessageId = execution.toolMessageId;
+          if (!execution.resultPersisted) {
+            await updateExistingToolMessage({
+              host,
+              result: executionResult,
+              toolMessageId,
+              resultBlocked: execution.resultBlocked,
+            });
           }
-
-          await tools.handleError?.(tool, error, runContext);
-          await publishError(host, error, TOOL_EXECUTION_PHASE);
-
-          events.push({ error, type: 'error' });
+        } else if (existingMessageId) {
+          // Batch approval resume: fill the pending placeholder in place.
+          // Creating a fresh row here would leave the approved-but-empty
+          // original stranded under the same assistant.
+          toolMessageId = existingMessageId;
+          await updateExistingToolMessage({
+            host,
+            result: executionResult,
+            toolMessageId,
+            resultBlocked: execution.resultBlocked,
+          });
+        } else {
+          const toolMessage = await createToolMessage({
+            host,
+            parentMessageId,
+            result: executionResult,
+            resultBlocked: execution.resultBlocked,
+            state,
+            tool,
+          });
+          toolMessageId = toolMessage.id;
         }
+
+        if (execution.resultPersisted && !replays.get(tool.id)?.execution) {
+          await persistToolResultMetadata(host, toolMessageId, executionResult);
+        }
+
+        // `sourceMessageId` + `workRegistration` are carried so the
+        // post-batch accumulate loop can persist the Work version ONCE with
+        // this call's cumulative cost (known only then).
+        const resultEntry: ToolResultEntry = {
+          data: executionResult,
+          executionTime,
+          isSuccess,
+          sourceMessageId: toolMessageId,
+          toolCall: tool,
+          toolCallId: tool.id,
+          workRegistration: executionResult.workRegistration,
+        };
+
+        events.push({
+          id: tool.id,
+          result: redactResultForEvents(executionResult),
+          type: 'tool_result',
+        });
+
+        const toolCost = isBlockedBeforeExecution(executionResult)
+          ? 0
+          : (tools.getCost?.(runContext.toolName) ?? 0);
+        resultEntry.usageParams = {
+          executionTime,
+          success: isSuccess,
+          toolCost,
+          toolName: runContext.toolName,
+        };
+        toolResults.push(resultEntry);
+      } catch (error) {
+        if (isPersistFatal(error)) throw error;
+
+        // Abort is not a tool failure — see `callTool`. Siblings that already
+        // finished keep their real results; this one is collected for the
+        // aborted-row settle after the batch.
+        if (isOperationAbort(error, host.operation.abortSignal)) {
+          abortedTools.push(tool);
+          return;
+        }
+
+        await tools.handleError?.(tool, error, runContext);
+        await publishError(host, error, TOOL_EXECUTION_PHASE);
+
+        events.push({ error, type: 'error' });
+      }
+    };
+
+    // Calls to an API marked `ordered` (posting successive chat messages) run
+    // one after another in the order the model emitted them: handing them to
+    // the platform concurrently let the channel keep whichever request landed
+    // first, so a report emitted as nine sends arrived shuffled. Calls that
+    // mutate the same resource (`serializeBy`, e.g. several edits to one file)
+    // queue the same way: devices that apply them concurrently read one
+    // snapshot and keep only the last write, while each call reports success.
+    // Each chain runs alongside everything else, so a read-only sibling never
+    // waits on it.
+    await Promise.all(
+      planBatchLanes(state, toolsToExecute).map(async (lane) => {
+        for (const tool of lane) await runOne(tool);
       }),
     );
 
-    // Client tools in a mixed batch never entered `toolsToExecute` — they were
-    // waiting for the pause below to hand them to the client. Once the operation
+    // Allowed client tools are waiting for the pause below to hand them to the
+    // client; they have not launched any work. Once the operation
     // is aborted that pause parks calls into a run nothing will resume, so their
     // tool_call_ids would keep no rows at all. Settle them alongside the ones
     // caught mid-flight, and skip the pause entirely.
@@ -1032,10 +1083,10 @@ export const callToolsBatch =
 
     newState.messages = await host.transports.messages.query(
       {
-        agentId: state.metadata?.agentId,
-        groupId: state.metadata?.groupId,
-        threadId: state.metadata?.threadId,
-        topicId: state.metadata?.topicId,
+        agentId: state.origin?.agentId,
+        groupId: state.origin?.groupId,
+        threadId: state.origin?.threadId,
+        topicId: state.origin?.topicId,
       },
       { flatten: true, resolveAssetUrls: true },
     );

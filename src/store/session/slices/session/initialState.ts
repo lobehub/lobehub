@@ -18,9 +18,7 @@ export interface SessionState {
    */
   isAgentPinned: boolean;
   isSearching: boolean;
-  isSessionsFirstFetchFinished: boolean;
   pinnedSessions: LobeSessions;
-  searchKeywords: string;
   /**
    * @title Session ID being renamed
    * @description Used to control the display state of the session rename modal
@@ -44,9 +42,7 @@ export const initialSessionState: SessionState = {
   defaultSessions: [],
   isAgentPinned: false,
   isSearching: false,
-  isSessionsFirstFetchFinished: false,
   pinnedSessions: [],
-  searchKeywords: '',
   sessionRenamingId: null,
   sessionUpdatingId: null,
   sessions: [],

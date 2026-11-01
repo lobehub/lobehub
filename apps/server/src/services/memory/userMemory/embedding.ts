@@ -1,10 +1,10 @@
 import { DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS } from '@lobechat/const';
 import type { ModelRuntime } from '@lobechat/model-runtime';
-import { RequestTrigger } from '@lobechat/types';
+import { RequestTrigger, type SpendOrigin } from '@lobechat/types';
 
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
-import { trimBasedOnBatchProbe } from '@/utils/chunkers';
 import { encodeAsync } from '@/utils/tokenizer';
+import { resolveEmbeddingTokenLimit, trimEmbeddingInput } from '@/utils/tokenizer/embedding';
 
 export interface UserMemoryEmbeddingRuntime {
   /**
@@ -40,6 +40,13 @@ export interface EmbedUserMemoryTextsParams {
    */
   source: string;
   /**
+   * Origin attribution for the embedding spend. A shared-agent visitor run
+   * supplies it so the embedding is billed to the shared agent instead of
+   * disappearing into the creator's plain memory usage; its `trigger`
+   * overrides the default {@link RequestTrigger.Memory}.
+   */
+  spendOrigin?: SpendOrigin;
+  /**
    * User id passed to runtime billing/tracing metadata.
    */
   userId: string;
@@ -64,8 +71,7 @@ export const embedUserMemoryTexts = async (
   params: EmbedUserMemoryTextsParams,
 ): Promise<Array<number[] | undefined>> => {
   const { embedding } = parseMemoryExtractionConfig();
-  // TODO: Prefer model-bank capability metadata for the embedding input window when available.
-  const tokenLimit = embedding.contextLimit;
+  const tokenLimit = resolveEmbeddingTokenLimit(params.model, embedding.contextLimit);
   const requests: Array<{ index: number; text: string }> = [];
 
   for (const [index, value] of params.input.entries()) {
@@ -74,7 +80,7 @@ export const embedUserMemoryTexts = async (
     const trimmedValue = value.trim();
     if (!trimmedValue) continue;
 
-    const text = tokenLimit ? await trimBasedOnBatchProbe(trimmedValue, tokenLimit) : trimmedValue;
+    const text = await trimEmbeddingInput(trimmedValue, params.model, tokenLimit);
     const normalizedText = text.trim();
     if (!normalizedText) continue;
 
@@ -108,7 +114,13 @@ export const embedUserMemoryTexts = async (
       input: requests.map((item) => item.text),
       model: params.model,
     },
-    { metadata: { trigger: RequestTrigger.Memory }, user: params.userId },
+    {
+      metadata: {
+        ...params.spendOrigin,
+        trigger: params.spendOrigin?.trigger ?? RequestTrigger.Memory,
+      },
+      user: params.userId,
+    },
   );
 
   for (const [requestIndex, embeddingVector] of (embeddings ?? []).entries()) {

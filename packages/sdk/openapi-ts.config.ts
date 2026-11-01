@@ -25,6 +25,35 @@ const METHOD_NAME_OVERRIDES: Record<string, string> = {
   'POST /api/v1/knowledge-bases/{id}/files/batch': 'addFiles',
   'POST /api/v1/knowledge-bases/{id}/files/move': 'moveFiles',
   'POST /api/v1/messages/replies': 'createReply',
+  // Personal-agent sub-actions: the `{method} {path}` rule would call these
+  // `createAdvance` / `createPause`, and the two memory DELETEs both reduce to
+  // `delete` (colliding into `delete2`), so each needs an explicit name.
+  'DELETE /api/v1/memories': 'deleteAll',
+  'DELETE /api/v1/memories/{category}/{id}': 'deleteEntry',
+  'GET /api/v1/memories/{category}': 'listCategory',
+  'GET /api/v1/notifications/counts': 'getCounts',
+  'POST /api/v1/goals/{id}/advance': 'advance',
+  'POST /api/v1/goals/{id}/pause': 'pause',
+  'POST /api/v1/goals/{id}/restart': 'restart',
+  'POST /api/v1/goals/{id}/resume': 'resume',
+  'POST /api/v1/notifications/archive-all': 'archiveAll',
+  'POST /api/v1/notifications/read': 'markRead',
+  'POST /api/v1/notifications/read-all': 'markAllRead',
+  'POST /api/v1/notifications/{id}/archive': 'archive',
+  'POST /api/v1/signals/source-events': 'emit',
+  'POST /api/v1/signals/trigger': 'trigger',
+  // Starting a run is a verb; the `{method} {path}` rule would call it `createRuns`.
+  'POST /api/v1/tasks/{id}/runs': 'run',
+  // Chat-group roster edits read as verbs, not `createMembers` / `deleteMembers`.
+  'DELETE /api/v1/chat-groups/{id}/members': 'removeMembers',
+  'POST /api/v1/chat-groups/{id}/members': 'addMembers',
+  // IM channel: `send` / `sync` / `markRead` read like a messaging client;
+  // push tokens are keyed by device, so PUT/DELETE are register/unregister.
+  'DELETE /api/v1/push-tokens/{deviceId}': 'unregister',
+  'GET /api/v1/im/topics/{topicId}/sync': 'sync',
+  'POST /api/v1/im/messages': 'send',
+  'POST /api/v1/im/topics/{topicId}/read': 'markRead',
+  'PUT /api/v1/push-tokens/{deviceId}': 'register',
 };
 
 const pascal = (segment: string) =>

@@ -6,6 +6,7 @@ import { MESSAGE_CACHE_VERSION } from '@/libs/swr/keys';
 import {
   clearMessageListClientCacheState,
   getMessageListFetchPolicy,
+  getMessageListWindowOlderCursor,
   invalidateMessageListClientState,
   isMessageListServerVerified,
   MESSAGE_LIST_VERIFICATION_INTERVAL,
@@ -243,5 +244,20 @@ describe('message list client cache', () => {
 
     expect(isMessageListServerVerified({ agentId: 'agent-1', topicId: 'topic-0' })).toBe(false);
     expect(isMessageListServerVerified({ agentId: 'agent-1', topicId: 'topic-500' })).toBe(true);
+  });
+});
+
+describe('window older cursor', () => {
+  it("records the cursor of the identity's latest newest-first window", async () => {
+    const cursor = { createdAt: '1970-01-01T00:00:00.010123Z', id: 'message-1' };
+    expect(getMessageListWindowOlderCursor(context)).toBeUndefined();
+
+    await runMessageListQuery(context, async () => ({ messages, olderCursor: cursor }));
+    expect(getMessageListWindowOlderCursor(context)).toEqual(cursor);
+
+    // A window that reached the topic start reports `null`.
+    invalidateMessageListClientState(() => true);
+    await runMessageListQuery(context, async () => ({ messages, olderCursor: null }));
+    expect(getMessageListWindowOlderCursor(context)).toBeNull();
   });
 });

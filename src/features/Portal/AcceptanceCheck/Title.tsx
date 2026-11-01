@@ -1,7 +1,8 @@
+import { Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAcceptanceBundle } from '@/features/Verify';
+import { checkDisplayTitle, useAcceptanceBundle } from '@/features/Acceptance';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -11,14 +12,25 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
  * with several panels open needs to tell them apart.
  */
 const Title = memo(() => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'verify']);
   const portal = useChatStore(chatPortalSelectors.acceptanceCheckPortal);
   const { data } = useAcceptanceBundle(portal?.acceptanceId ?? null);
   const check = data?.checks.find((item) => item.id === portal?.checkId);
 
-  if (!check) return t('taskDetail.acceptance.detailTitle');
+  let title: string = t('taskDetail.acceptance.detailTitle');
+  if (check) {
+    const name = checkDisplayTitle(
+      check.title,
+      t('acceptance.checks.holisticTitle', { ns: 'verify' }),
+    );
+    title = check.seq ? `C${check.seq} · ${name}` : name;
+  }
 
-  return check.seq ? `C${check.seq} · ${check.title}` : check.title;
+  return (
+    <Text ellipsis={{ tooltipWhenOverflow: true }} style={{ minWidth: 0 }}>
+      {title}
+    </Text>
+  );
 });
 
 Title.displayName = 'AcceptanceCheckPortalTitle';

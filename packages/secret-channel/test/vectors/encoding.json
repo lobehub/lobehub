@@ -1,0 +1,103 @@
+{
+  "description": "ASC length-prefixed field encoding (spec §6.4.0) and argvHash (spec §6.4.2). encodeFields(f) = u32be(n) || for each field: u32be(len(UTF-8(field))) || UTF-8(field).",
+  "generator": "spec/test-vectors/generate.ts (packages/asc-core reference implementation)",
+  "encodeFields": [
+    {
+      "fields": [],
+      "hex": "00000000"
+    },
+    {
+      "fields": [
+        ""
+      ],
+      "hex": "0000000100000000"
+    },
+    {
+      "fields": [
+        "a"
+      ],
+      "hex": "000000010000000161"
+    },
+    {
+      "fields": [
+        "a",
+        "b"
+      ],
+      "hex": "0000000200000001610000000162"
+    },
+    {
+      "fields": [
+        "a b"
+      ],
+      "hex": "0000000100000003612062"
+    },
+    {
+      "fields": [
+        "ab",
+        ""
+      ],
+      "hex": "0000000200000002616200000000"
+    },
+    {
+      "fields": [
+        "",
+        "ab"
+      ],
+      "hex": "0000000200000000000000026162"
+    },
+    {
+      "fields": [
+        "pässwörd",
+        "密码"
+      ],
+      "hex": "000000020000000a70c3a4737377c3b6726400000006e5af86e7a081"
+    }
+  ],
+  "argvHash": [
+    {
+      "argv": [
+        "/usr/bin/sudo",
+        "-A",
+        "-k",
+        "installer",
+        "-pkg",
+        "example-TEST.pkg",
+        "-target",
+        "/"
+      ],
+      "note": "reference sudo argv",
+      "preimageHex": "000000080000000d2f7573722f62696e2f7375646f000000022d41000000022d6b00000009696e7374616c6c6572000000042d706b67000000106578616d706c652d544553542e706b67000000072d746172676574000000012f",
+      "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ"
+    },
+    {
+      "argv": [
+        "echo",
+        "a b"
+      ],
+      "note": "one argument containing a space",
+      "preimageHex": "00000002000000046563686f00000003612062",
+      "argvHash": "fTSmhUppJUAAJRcZEj6HwBr6Z4gqYGwqupxlz7yI9_U"
+    },
+    {
+      "argv": [
+        "echo",
+        "a",
+        "b"
+      ],
+      "note": "two arguments; MUST differ from the previous case",
+      "preimageHex": "00000003000000046563686f00000001610000000162",
+      "argvHash": "1Q_bLVDSz5zv4yxHH4jbCXRtjS4ZBL3SfJuiwWJMpYo"
+    },
+    {
+      "argv": [
+        "git",
+        "push",
+        "origin",
+        "main"
+      ],
+      "note": "git",
+      "preimageHex": "00000004000000036769740000000470757368000000066f726967696e000000046d61696e",
+      "argvHash": "3DxLZ-MPrB9OleIj1aQ9iqSQAnk5HepWkVnDXKnVbdA"
+    }
+  ]
+}

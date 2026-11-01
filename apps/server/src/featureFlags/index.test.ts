@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { applyDevelopmentFeatureFlagDefaults } from './index';
+const { applyDevelopmentFeatureFlagDefaults } = await import('./index');
 
 afterEach(() => {
   vi.unstubAllEnvs();

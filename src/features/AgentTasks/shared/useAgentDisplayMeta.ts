@@ -1,6 +1,6 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';

@@ -1,6 +1,4 @@
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { Loader2 } from 'lucide-react';
+import { Center, createStaticStyles, cx, Flexbox, Spin } from '@lobehub/ui';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +9,7 @@ import { dotLoading } from '@/styles/loading';
 
 import { type MarkdownElementProps } from '../../type';
 import ArtifactIcon from './Icon';
+import { useArtifactCodeLength } from './useArtifactCodeLength';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   avatar: css`
@@ -61,7 +60,8 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
   const isDarkMode = useIsDark();
 
   const hasChildren = !!children;
-  const str = ((children as string) || '').toString?.();
+
+  const codeLength = useArtifactCodeLength(id, identifier);
 
   const [isGenerating, isArtifactTagClosed, openArtifact, closeArtifact] = useChatStore((s) => {
     return [
@@ -80,7 +80,7 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
     if (!hasChildren || !isGenerating) return;
 
     openArtifactUI();
-  }, [isGenerating, hasChildren, str, identifier, title, type, id, language]);
+  }, [isGenerating, hasChildren, codeLength, identifier, title, type, id, language]);
 
   return (
     <Flexbox
@@ -111,15 +111,11 @@ const Render = memo<ArtifactProps>(({ identifier, title, type, language, childre
             <Flexbox className={cx(styles.title)}>{title || t('artifact.unknownTitle')}</Flexbox>
           )}
           {hasChildren && (
-            <Flexbox horizontal className={styles.desc}>
+            <Flexbox horizontal align={'center'} className={styles.desc}>
               {identifier} ·&nbsp;
-              <Flexbox horizontal gap={2}>
-                {!isArtifactTagClosed && (
-                  <div>
-                    <Icon spin icon={Loader2} />
-                  </div>
-                )}
-                {str?.length}
+              <Flexbox horizontal align={'center'} gap={4}>
+                {!isArtifactTagClosed && <Spin size="small" />}
+                {codeLength}
               </Flexbox>
             </Flexbox>
           )}

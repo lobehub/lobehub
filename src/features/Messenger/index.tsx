@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Skeleton, Text } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, createStaticStyles, Flexbox, Skeleton, Text, toast } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
@@ -10,6 +8,7 @@ import useSWR from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import ImperativeModal from '@/components/ImperativeModal';
+import { MessengerPlatformDetailSkeleton } from '@/components/Skeleton/Settings/MessengerDetail';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
@@ -30,6 +29,7 @@ const VALID_PLATFORMS: ReadonlySet<MessengerPlatform> = new Set([
   'telegram',
   'discord',
   'wechat',
+  'linq',
 ]);
 
 const isMessengerPlatform = (value: string | undefined): value is MessengerPlatform =>
@@ -128,7 +128,9 @@ const MessengerSettings = memo(() => {
   return (
     <div className={styles.page}>
       <Flexbox gap={20}>
-        {selected && selectedMeta ? (
+        {selected && !selectedMeta && platformsSWR.isLoading ? (
+          <MessengerPlatformDetailSkeleton platform={selected} />
+        ) : selected && selectedMeta ? (
           <IntegrationDetail
             access={selectedMeta.access}
             appId={selectedMeta.appId}
@@ -146,7 +148,7 @@ const MessengerSettings = memo(() => {
               errorVariant={'block'}
               isEmpty={platforms.length === 0}
               isLoading={platformsSWR.isLoading}
-              loading={<Skeleton active paragraph={{ rows: 3 }} title={false} />}
+              loading={<Skeleton.Text rows={3} />}
               empty={
                 <div className={styles.emptyState}>{t('messenger.noPlatformsConfigured')}</div>
               }

@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
-import { memo, Suspense, useMemo } from 'react';
+import { cssVar, Flexbox } from '@lobehub/ui';
+import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -11,13 +10,12 @@ import {
 } from '@/features/AgentTransferMigration';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
+import { useMessageDeepLink } from '@/features/Conversation/ChatList/hooks/useMessageDeepLink';
 import {
   ForwardMessageDispatcher,
   MessageForwardFooter,
 } from '@/features/Conversation/MessageForward';
 import { useOperationState } from '@/hooks/useOperationState';
-import { useChatStore } from '@/store/chat';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import WelcomeChatItem from './AgentWelcome';
 import ChatHydration from './ChatHydration';
@@ -40,15 +38,10 @@ interface ConversationAreaProps {
 const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
   const { t } = useTranslation('chat');
   const context = useGroupContext();
+  const messageDeepLink = useMessageDeepLink();
 
   // Get raw dbMessages from ChatStore for this context
   // ConversationStore will parse them internally to generate displayMessages
-  const chatKey = useMemo(
-    () => messageMapKey(context),
-    [context.agentId, context.topicId, context.threadId],
-  );
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
 
   // Get operation state from ChatStore for reactive updates
   const operationState = useOperationState(context);
@@ -68,12 +61,7 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
     <ConversationProvider
       actionsBar={actionsBarConfig}
       context={context}
-      hasInitMessages={!!messages}
-      messages={messages}
       operationState={operationState}
-      onMessagesChange={(messages, ctx, meta) => {
-        replaceMessages(messages, { context: ctx, source: meta?.source });
-      }}
     >
       <Flexbox
         flex={1}
@@ -87,7 +75,7 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
         {topicPending ? (
           <TopicMigrationPlaceholder groupId={context.groupId} topicId={context.topicId} />
         ) : (
-          <ChatList welcome={<WelcomeChatItem />} />
+          <ChatList printable messageDeepLink={messageDeepLink} welcome={<WelcomeChatItem />} />
         )}
       </Flexbox>
       {topicPending ? (

@@ -140,27 +140,27 @@ describe('callConnectorToolById', () => {
     );
   });
 
-  // On a cloud deployment (device gateway configured) the server can never
-  // reach a stdio binary or a localhost/LAN endpoint — those calls must fail
-  // fast with an actionable message instead of a cryptic spawn/fetch error
-  // (#16533). Self-hosted servers (no gateway) may share a LAN with the
-  // endpoint, so the guard must NOT fire there.
-  describe('device-only endpoints on a cloud deployment', () => {
-    it('rejects a stdio connector when the device gateway is configured', async () => {
-      (deviceGateway as any).isConfigured = true;
-      const stdioConnector = {
-        ...connector,
-        mcpConnectionType: 'stdio',
-        mcpServerUrl: null,
-        mcpStdioConfig: { args: [], command: 'npx' },
-      };
-      const ctx = makeCtx([stdioConnector], [tool()]);
+  // Stdio is always device-only. Private HTTP is device-only when a gateway
+  // is configured; self-hosted servers without one can still access their LAN.
+  describe('device-only endpoints', () => {
+    it.each([false, true])(
+      'rejects a stdio connector with gateway configured: %s',
+      async (configured) => {
+        (deviceGateway as any).isConfigured = configured;
+        const stdioConnector = {
+          ...connector,
+          mcpConnectionType: 'stdio',
+          mcpServerUrl: null,
+          mcpStdioConfig: { args: [], command: 'npx' },
+        };
+        const ctx = makeCtx([stdioConnector], [tool()]);
 
-      await expect(
-        callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
-      ).rejects.toHaveProperty('code', 'BAD_REQUEST');
-      expect(mcpService.callTool).not.toHaveBeenCalled();
-    });
+        await expect(
+          callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
+        ).rejects.toHaveProperty('code', 'BAD_REQUEST');
+        expect(mcpService.callTool).not.toHaveBeenCalled();
+      },
+    );
 
     it('rejects a local/private-network HTTP connector when the device gateway is configured', async () => {
       (deviceGateway as any).isConfigured = true;

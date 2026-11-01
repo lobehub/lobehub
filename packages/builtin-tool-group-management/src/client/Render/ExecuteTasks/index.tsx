@@ -1,12 +1,19 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinRenderProps } from '@lobechat/types';
-import { Accordion, AccordionItem, Avatar, Block, Flexbox, Markdown, Text } from '@lobehub/ui';
-import { createStaticStyles, useTheme } from 'antd-style';
+import {
+  Accordion,
+  Block,
+  createStaticStyles,
+  Flexbox,
+  Markdown,
+  Text,
+  useTheme,
+} from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
@@ -87,41 +94,41 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams, unknown, 
     return (
       <Flexbox className={styles.container} gap={12}>
         {!!tasksWithAgents.length && (
-          <Accordion defaultExpandedKeys={[]} gap={0} variant={'borderless'}>
-            {tasksWithAgents.map((task, index) => (
-              <AccordionItem
-                itemKey={task.agentId || String(index)}
-                key={task.agentId || index}
-                paddingBlock={8}
-                paddingInline={4}
-                action={
-                  <div className={styles.assignee}>
-                    <Avatar
-                      avatar={task.agent?.avatar || DEFAULT_AVATAR}
-                      background={task.agent?.backgroundColor || theme.colorBgContainer}
-                      shape={'circle'}
-                      size={20}
-                    />
-                    <span>{task.agent?.title}</span>
-                  </div>
-                }
-                title={
-                  <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-                    <span className={styles.index}>{index + 1}.</span>
-                    <Text className={styles.taskTitle} weight={500}>
-                      {task.title || 'Task'}
-                    </Text>
-                  </Flexbox>
-                }
-              >
-                {task.instruction && (
-                  <Block padding={12} style={{ marginTop: 8 }} variant={'filled'}>
-                    <Text className={styles.instruction}>{task.instruction}</Text>
-                  </Block>
-                )}
-              </AccordionItem>
-            ))}
-          </Accordion>
+          <Accordion
+            defaultValue={[]}
+            gap={0}
+            variant={'borderless'}
+            items={tasksWithAgents.map((task, index) => ({
+              action: (
+                <div className={styles.assignee}>
+                  <AgentAvatar
+                    agentId={task.agentId}
+                    avatar={task.agent?.avatar}
+                    background={task.agent?.backgroundColor || theme.colorBgContainer}
+                    name={task.agent?.title}
+                    shape={'circle'}
+                    size={20}
+                  />
+                  <span>{task.agent?.title}</span>
+                </div>
+              ),
+              alwaysShowAction: true,
+              children: task.instruction && (
+                <Block padding={12} style={{ marginTop: 8 }} variant={'filled'}>
+                  <Text className={styles.instruction}>{task.instruction}</Text>
+                </Block>
+              ),
+              key: task.agentId || String(index),
+              title: (
+                <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+                  <span className={styles.index}>{index + 1}.</span>
+                  <Text className={styles.taskTitle} weight={500}>
+                    {task.title || 'Task'}
+                  </Text>
+                </Flexbox>
+              ),
+            }))}
+          />
         )}
 
         {resultContent && (

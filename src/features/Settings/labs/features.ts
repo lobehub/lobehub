@@ -1,3 +1,5 @@
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+
 import { type labPreferSelectors } from '@/store/user/slices/preference/selectors/labPrefer';
 
 /**
@@ -13,22 +15,28 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
-  | 'agentProviderBinding'
   | 'artifactDeployment'
   | 'claudeCodeSdk'
   | 'codexAppServer'
   | 'desktopSplitView'
+  | 'deviceTunnel'
+  | 'evalCapture'
+  | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
-  | 'inAppBrowser'
   | 'inputMarkdown'
   | 'messageTextSelectionActions'
   | 'oauthApps'
   | 'projects'
   | 'selfLearning'
-  | 'topicAcceptance';
+  | 'topicBugReport';
 
 export interface LabFeatureItem {
+  /**
+   * Only offered when business features are on: the experiment needs a service
+   * that a self-hosted deployment does not have, so its toggle would do nothing.
+   */
+  businessOnly?: boolean;
   /** Only rendered (and searchable) in the Electron shell */
   desktopOnly?: boolean;
   /** Lab flag, also the search anchor suffix (`labs-${flag}`) */
@@ -38,15 +46,11 @@ export interface LabFeatureItem {
   /** Extra untranslated English synonyms for the settings search index */
   searchKeywords: string[];
   stage: LabStage;
+  /** Only rendered (and searchable) for users with workspace access */
+  workspaceOnly?: boolean;
 }
 
-/**
- * Single source of truth for the lab experiments: the Labs settings page
- * renders this list (general first, then desktop-only), and the settings
- * search index derives its entries from it — adding a flag here makes it both
- * visible and searchable without a second registration.
- */
-export const LAB_FEATURES: LabFeatureItem[] = [
+const ALL_LAB_FEATURES: LabFeatureItem[] = [
   {
     flag: 'enableAgentGraphConfig',
     i18nKey: 'agentGraphConfig',
@@ -68,13 +72,40 @@ export const LAB_FEATURES: LabFeatureItem[] = [
   {
     flag: 'enableSelfLearning',
     i18nKey: 'selfLearning',
-    searchKeywords: ['self-evolving', 'self learning', 'rule base'],
+    searchKeywords: [
+      'self-evolving',
+      'self learning',
+      'rule base',
+      'rules',
+      'memory rules',
+      'delivery rules',
+      'verifier',
+    ],
     stage: 'alpha',
   },
   {
-    flag: 'enableTopicAcceptance',
-    i18nKey: 'topicAcceptance',
-    searchKeywords: ['acceptance', 'checklist'],
+    flag: 'enableEvalCapture',
+    i18nKey: 'evalCapture',
+    searchKeywords: ['eval', 'test case', 'capture', 'regression', 'benchmark'],
+    stage: 'alpha',
+  },
+  {
+    businessOnly: true,
+    flag: 'enableTopicBugReport',
+    i18nKey: 'topicBugReport',
+    searchKeywords: ['bug', 'report', 'feedback', 'issue', 'support'],
+    stage: 'alpha',
+  },
+  {
+    flag: 'enableGoals',
+    i18nKey: 'goals',
+    searchKeywords: ['goal', 'goals', 'objective'],
+    stage: 'beta',
+  },
+  {
+    flag: 'enableDeviceTunnel',
+    i18nKey: 'deviceTunnel',
+    searchKeywords: ['tunnel', 'port forwarding', 'dev server', 'localhost'],
     stage: 'alpha',
   },
   {
@@ -111,13 +142,6 @@ export const LAB_FEATURES: LabFeatureItem[] = [
   },
   {
     desktopOnly: true,
-    flag: 'enableAgentProviderBinding',
-    i18nKey: 'agentProviderBinding',
-    searchKeywords: ['agent provider binding', 'claude code api', 'codex api', 'api provider'],
-    stage: 'alpha',
-  },
-  {
-    desktopOnly: true,
     flag: 'enableClaudeCodeSdk',
     i18nKey: 'claudeCodeSdk',
     searchKeywords: ['claude code', 'claude sdk'],
@@ -139,11 +163,21 @@ export const LAB_FEATURES: LabFeatureItem[] = [
     searchKeywords: ['import session', 'claude code', 'codex'],
     stage: 'beta',
   },
-  {
-    desktopOnly: true,
-    flag: 'enableInAppBrowser',
-    i18nKey: 'inAppBrowser',
-    searchKeywords: ['in-app browser', 'inapp browser', 'embedded browser', 'browser tab'],
-    stage: 'beta',
-  },
 ];
+
+export const filterAvailableLabFeatures = (
+  features: LabFeatureItem[],
+  enableBusinessFeatures: boolean,
+): LabFeatureItem[] =>
+  features.filter((feature) => enableBusinessFeatures || !feature.businessOnly);
+
+/**
+ * Single source of truth for the lab experiments: the Labs settings page
+ * renders this list (general first, then workspace-only, then desktop-only), and the settings
+ * search index derives its entries from it — adding a flag here makes it both
+ * visible and searchable without a second registration.
+ */
+export const LAB_FEATURES: LabFeatureItem[] = filterAvailableLabFeatures(
+  ALL_LAB_FEATURES,
+  ENABLE_BUSINESS_FEATURES,
+);

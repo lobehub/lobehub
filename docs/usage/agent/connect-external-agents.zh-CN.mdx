@@ -1,0 +1,211 @@
+---
+title: 连接外部助理
+description: 将编程助理和个人助理平台接入 LobeHub，了解设备准备、安装认证、连接流程、项目上下文、权限与会话恢复。
+tags:
+  - LobeHub
+  - 外部助理
+  - 编程助理
+  - 执行设备
+  - CLI
+---
+
+# 连接外部助理
+
+LobeHub 将你的助理汇聚在同一个工作空间。除了在 LobeHub 中创建助理，你也可以接入外部编程助理和个人助理平台。
+
+从**创建助理 → 连接外部助理（Connect External Agents）**进入，将本机或其他已连接设备上的助理接入 LobeHub。你在 LobeHub 中聊天，外部助理则通过自己的软件在所选设备上运行。
+
+这不同于选择 AI 模型或添加 MCP 连接器：你接入的是一个助理运行环境，而不只是它使用的模型。
+
+## 使用条件
+
+- **可用的执行设备**：在目标电脑上使用 LobeHub 桌面应用，或通过 LobeHub CLI 连接该电脑。
+- **已安装的外部助理**：在该设备上安装对应 CLI 或平台，并检查桌面应用或 CLI 进程能否找到其可执行程序。
+- **已完成外部助理设置**：在同一设备上完成该产品要求的登录、模型配置或平台初始化。
+- **可访问的项目文件**：处理项目任务时，选择该设备上已有的工作目录，并检查相应系统权限。
+
+**显示聊天的电脑，不一定是实际运行助理的电脑。** 请在实际执行任务的电脑上完成安装和登录。
+
+连接向导扫描本机桌面环境或已连接设备，不负责创建云沙箱。使用原生 CLI 还需要桌面端或 CLI 设备连接，浏览器配对本身无法运行原生 CLI。设备准备方法见[执行设备](/zh/docs/usage/agent/execution-devices)。
+
+## 支持的外部助理
+
+接入清单包含以下 **15 种助理**：13 种编程 CLI 和 2 种个人助理平台。 每个条目均附有对应产品的官方安装或入门资料。
+
+### 编程助理
+
+| 助理 | 接入的是什么 | 官方准备方式 |
+| --- | --- | --- |
+| **Codex** | OpenAI 的终端编程助理，可读取文件、修改代码和运行命令 | 安装 Codex CLI，并完成登录。 [安装指南](https://github.com/openai/codex) |
+| **Amp** | Amp 的编程助理 CLI | 安装 CLI，并完成账号设置。 [安装指南](https://ampcode.com/docs/cli) |
+| **Claude Code** | Anthropic 的终端编程助理 | 安装 Claude Code，并完成认证。 [安装指南](https://code.claude.com/docs/en/setup) |
+| **CodeBuddy** | 腾讯的 CodeBuddy Code CLI | 安装 CLI 产品，而不只是编辑器扩展。 [安装指南](https://codebuddy.ai/docs/cli/installation) |
+| **Cursor** | Cursor 的编程助理 CLI | 按官方指南准备 Cursor CLI；仅安装编辑器不一定足够。 [安装指南](https://cursor.com/docs/cli/installation) |
+| **Factory Droid** | Factory 的 Droid 编程助理 CLI | 安装 Droid，并完成 Factory 登录。 [安装指南](https://docs.factory.ai/droid-cli/quickstart) |
+| **Devin** | Cognition 的 Devin CLI | 在执行设备上准备 CLI，而不只是创建云端 Devin 会话。 [安装指南](https://docs.devin.ai/cli) |
+| **Grok Build** | xAI 面向终端和自动化工作流的编程助理 | 完成 Grok Build 的安装与认证。 [安装指南](https://docs.x.ai/build/overview) |
+| **Kimi Code** | Moonshot AI 的 Kimi Code CLI | 安装 Kimi Code CLI，并完成初始化。 [安装指南](https://kimi.com/code/docs/en/kimi-code-cli/guides/getting-started.html) |
+| **OpenCode** | 支持多个模型服务商的开源编程助理 | 安装 OpenCode，并配置模型服务商。 [安装指南](https://opencode.ai/docs) |
+| **Pi** | 可扩展的 Pi 终端编程助理，不是 Inflection 的 Pi 聊天产品 | 安装编程助理，并配置模型访问。 [安装指南](https://pi.dev/docs/latest) |
+| **Qoder** | Qoder 的编程助理 CLI | 安装 Qoder CLI，并完成账号设置。 [安装指南](https://docs.qoder.com/cli/installation) |
+| **TRAE CLI** | 官方文档称为 TraeCode CLI 的企业版 CLI | 准备企业账号权限并安装 CLI，这是与 Trae Agent 项目不同的产品。 [安装指南](https://docs.trae.cn/cli/get-started-with-trae-cli) |
+
+### 个人助理平台
+
+| 助理 | 接入的是什么 | 官方准备方式 |
+| --- | --- | --- |
+| **OpenClaw** | 支持网关和消息渠道的自托管个人助理平台 | 在目标设备上安装 OpenClaw，并完成引导与模型配置。 [安装指南](https://docs.openclaw.ai/start/getting-started) |
+| **Hermes** | Nous Research 的 Hermes Agent，支持终端和消息渠道的个人助理 | 安装 Hermes Agent，并完成模型与平台配置。 [安装指南](https://hermes-agent.nousresearch.com/docs/getting-started/installation) |
+
+OpenClaw 和 Hermes 与编程 CLI 使用同一个连接向导。LobeHub 可以读取它们已有的助理档案，预填可用的档案信息。
+
+<Callout type="info">
+  接入清单中的产品前，请先安装对应软件，并确认账号有使用权限。操作系统支持、订阅、企业权限和地区可用性取决于外部产品。TRAE 的链接指向中文文档中的企业版 CLI 指南。
+</Callout>
+
+## 安装并准备外部助理
+
+1. 打开所选助理的官方安装或入门指南。
+2. 在实际执行任务的设备上安装所需 CLI 或平台。
+3. 在同一设备上完成登录或模型配置。
+4. 先在该产品的终端界面中运行一个简单任务，检查是否可用。
+5. 回到 LobeHub，扫描该设备。
+
+安装编辑器后，可能还需要单独安装助理 CLI。本机助理也需要单独配置，即使你已经能使用服务商的聊天网站。
+
+向导会检测已安装的助理，并在能获取版本时显示版本号。扫描完成后，请在开始任务前检查登录、模型访问和项目权限。
+
+## 在 LobeHub 中连接
+
+<Steps>
+  ### 打开连接向导
+
+  打开**创建助理**菜单，选择**连接外部助理（Connect External Agents）**。
+
+  ### 选择执行设备
+
+  在桌面端，选择**这台电脑**，使用安装在本机的助理。也可以从已连接设备列表中选择一台在线电脑。
+
+  如果没有可用设备，先通过桌面应用或 LobeHub CLI 连接设备。在团队工作空间中，请使用属于该工作空间的设备。
+
+  ### 扫描并选择助理
+
+  LobeHub 自动扫描所选设备。可用助理排在前面，能获取版本时也会显示版本号。
+
+  勾选一个或多个助理。标记为**未安装**的条目不可选择。完成安装或调整设置后，点击**重新扫描**。
+
+  ### 接入并开始对话
+
+  点击**接入**，添加选中的助理。每个选项都会在 LobeHub 中创建一个独立助理。
+
+  只选一个助理时，可以在接入前按需自定义名称和描述。选择多个助理时，会一起接入，不经过这个自定义步骤。
+
+  在成功页面中打开对话。开始第一项项目任务前，检查执行设备和工作目录。
+</Steps>
+
+向导显示三个设置步骤，但第三步是仅适用于单选助理的可选档案自定义步骤。
+
+## 工作目录
+
+对于编程任务，工作目录是**执行设备上的项目路径**，不是只用来显示聊天的电脑上的文件夹。
+
+第一项任务前，先选择设备和项目。可以从只读任务开始，例如：
+
+> 读取项目说明并总结仓库结构。不要修改文件，也不要运行安装命令。
+
+切换目录可能需要开启新的外部助理会话。聊天记录不会把运行时会话状态或项目文件迁移到另一目录或设备。
+
+OpenClaw 和 Hermes 的平台配置、工作空间、记忆和已保存上下文仍单独保留，与 LobeHub 话题分开管理。
+
+## 项目说明与技能
+
+项目说明和技能仍遵循各个外部助理的约定。例如，Claude Code 使用 `CLAUDE.md`，Codex 使用 `AGENTS.md` 提供项目指引。
+
+在 LobeHub 服务端运行的助理还可以查找项目中的 `.agents/skills`、`.claude/skills`、`AGENTS.md` 和 `CLAUDE.md`。目录存放技能，Markdown 文件存放项目说明，不是技能包。详见[执行设备](/zh/docs/usage/agent/execution-devices)。
+
+各集成可读取的文件和可用的 LobeHub 技能有所不同。请遵循所选助理的约定，并在修改前要求它读取相关项目说明。
+
+## 权限
+
+| 层级 | 控制内容 |
+| --- | --- |
+| **LobeHub 工具权限** | 已提供的连接器工具直接运行、先询问，还是关闭 |
+| **外部助理权限** | CLI 或平台自身对文件访问、命令、审批和其他操作的规则 |
+| **设备权限** | 操作系统账号和进程实际能够访问的范围 |
+
+LobeHub 连接器权限不能替代外部助理自身的权限系统。外部助理的原生命令也不一定经过 LobeHub 连接器。
+
+**工作目录不是安全沙箱。** 开始任务前，请检查助理的访问范围和审批设置。破坏性命令、发布或其他会产生实际影响的修改，应先由你审核。
+
+## 聊天中能看到什么
+
+LobeHub 在对话中显示外部助理的回复。根据集成方式和助理返回的信息，你还可能看到：
+
+- **工具调用和命令输出**：包括可用的状态与执行结果
+- **文件变更**：包括可用的差异内容
+- **计划和进度**：助理返回的任务进展
+- **询问或审批请求**：适用于集成支持对应交互的情况。
+
+可见的进度信息、控件和工具因集成而异。外部产品中的部分原生功能可能暂时无法通过 LobeHub 使用。
+
+## 会话与恢复
+
+后续工作可以继续在同一话题中进行。运行时会话能否恢复，取决于外部助理、集成方式以及原会话是否仍可用。
+
+更换设备、切换目录或遇到中断后，先检查运行状态，再继续操作。即使聊天记录仍在，也请检查原始助理会话是否已恢复。如果 LobeHub 提示已开启新会话，请重新说明必要的背景。
+
+## 常见问题
+
+| 问题 | 排查方法 |
+| --- | --- |
+| **没有执行设备** | 连接桌面应用或 LobeHub CLI。在工作空间中，还需检查设备的所属范围。 |
+| **设备离线或扫描失败** | 恢复设备连接后，重新扫描。 |
+| **助理显示未安装** | 检查是否安装在所选设备上，以及桌面应用或 CLI 进程能否找到可执行程序，然后重新扫描。 |
+| **检测到了，但无法启动** | 在该设备上直接运行助理，检查认证、模型访问、版本兼容性和账号要求。 |
+| **找不到项目** | 检查执行设备上的路径和权限，不要只检查聊天所在的电脑。 |
+| **任务中途停止** | 重试前检查输出和文件改动，不要假定已完成部分会自动回滚。 |
+| **缺少产品原生功能** | 查看集成支持的工具和控件，部分原生功能可能尚不可用。 |
+
+## 使用技巧
+
+- 在实际执行设备上准备每个助理。
+- 先运行只读任务，再开始文件修改。
+- 如果不同项目使用不同设备或目录，可分别创建助理，减少混淆。
+- 检查结果和文件变更，再决定下一步操作。
+- 如果当前集成可使用浏览器工具，网页任务和手动接手方法见[内置浏览器](/zh/docs/usage/agent/built-in-browser)。
+
+{/*
+维护备注（不展示给用户）：核验记录与参考资料。
+
+产品安装资料与连接流程核验于 **2026 年 9 月 16 日**。LobeHub 实现依据为 2026 年 9 月 14 日的仓库版本 `659db0780b263f023019337a48f23e17e77e260d`。界面文案与可用范围可能随版本变化。
+
+lobehub-flow: LobeHub：[连接向导](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/src/features/ConnectAgent/index.tsx)。
+lobehub-catalog: LobeHub：[支持清单与设备绑定](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/src/features/ConnectAgent/providers.ts)。
+lobehub-scan: LobeHub：[助理扫描](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/src/features/ConnectAgent/useAgentScan.ts)。
+lobehub-adapters: LobeHub：[编程助理适配器注册表](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/packages/heterogeneous-agents/src/registry.ts)。
+codex: OpenAI：[Codex CLI](https://github.com/openai/codex)。
+amp: Amp：[CLI 入门](https://ampcode.com/docs/cli)。
+claude: Anthropic：[Claude Code 安装](https://code.claude.com/docs/en/setup)。
+codebuddy: 腾讯 CodeBuddy：[CodeBuddy Code 安装](https://codebuddy.ai/docs/cli/installation)。
+cursor: Cursor：[CLI 安装](https://cursor.com/docs/cli/installation)。
+droid: Factory：[Droid CLI 快速开始](https://docs.factory.ai/droid-cli/quickstart)。
+devin: Cognition：[Devin CLI 快速开始](https://docs.devin.ai/cli)。
+grok: xAI：[Grok Build 概览](https://docs.x.ai/build/overview)。
+kimi: Moonshot AI：[Kimi Code CLI 入门](https://kimi.com/code/docs/en/kimi-code-cli/guides/getting-started.html)。
+opencode: OpenCode：[简介与安装](https://opencode.ai/docs)。
+pi: Pi：[编程助理文档](https://pi.dev/docs/latest)。
+qoder: Qoder：[CLI 安装与升级](https://docs.qoder.com/cli/installation)。
+trae: TRAE：[TraeCode CLI 快速开始](https://docs.trae.cn/cli/get-started-with-trae-cli)。
+openclaw: OpenClaw：[快速开始](https://docs.openclaw.ai/start/getting-started)。
+hermes: Nous Research：[Hermes Agent 安装](https://hermes-agent.nousresearch.com/docs/getting-started/installation)。
+*/}
+
+<Cards>
+  <Card href={'/zh/docs/usage/getting-started/agent'} title={'助理'} />
+
+  <Card href={'/zh/docs/usage/agent/execution-devices'} title={'执行设备'} />
+
+  <Card href={'/zh/docs/usage/community/skills-market'} title={'Skills 市场'} />
+
+  <Card href={'/zh/docs/usage/agent/built-in-browser'} title={'内置浏览器'} />
+</Cards>

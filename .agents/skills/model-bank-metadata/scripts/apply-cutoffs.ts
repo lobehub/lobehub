@@ -23,7 +23,10 @@ let touchedFiles = 0;
 let inserted = 0;
 const matchedIds = new Set<string>();
 
-for (const file of readdirSync(dir).filter((f) => f.endsWith('.ts'))) {
+for (const file of readdirSync(dir, { encoding: 'utf8', recursive: true }).filter(
+  // Providers can be directories (e.g. google/) whose cards span several files.
+  (f) => f.endsWith('.ts') && !f.endsWith('.test.ts'),
+)) {
   const path = join(dir, file);
   const lines = readFileSync(path, 'utf8').split('\n');
   const out: string[] = [];

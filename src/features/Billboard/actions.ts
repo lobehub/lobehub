@@ -1,4 +1,4 @@
-import { isDesktop, OFFICIAL_URL } from '@lobechat/const';
+import { isDesktop, isOfficialCloudServer, OFFICIAL_URL } from '@lobechat/const';
 import urlJoin from 'url-join';
 
 import { openChangelogModal } from '@/components/ChangelogModal';
@@ -22,25 +22,13 @@ export type BillboardAction = (typeof BILLBOARD_ACTIONS)[number];
 export const isBillboardAction = (value: unknown): value is BillboardAction =>
   typeof value === 'string' && (BILLBOARD_ACTIONS as readonly string[]).includes(value);
 
-const isOfficialWebOrigin = () => {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.location.origin === new URL(OFFICIAL_URL).origin;
-  } catch {
-    return false;
-  }
-};
-
 const isOnOfficialCloud = () => {
   const state = getElectronStoreState();
-  if (
-    electronSyncSelectors.isSyncActive(state) &&
-    electronSyncSelectors.storageMode(state) === 'cloud'
-  ) {
+  if (electronSyncSelectors.isSyncActive(state) && electronSyncSelectors.isOfficialServer(state)) {
     return true;
   }
 
-  return isOfficialWebOrigin();
+  return typeof window !== 'undefined' && isOfficialCloudServer(window.location.origin);
 };
 
 type BillboardActionGuard = (action: BillboardAction) => BillboardAction | null;

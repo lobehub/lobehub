@@ -56,6 +56,8 @@ export interface HeterogeneousAgentEvent {
 /** Data shape for stream_start events */
 export interface StreamStartData {
   assistantMessage?: { id: string };
+  /** Native Codex turn boundary, stable across tool-separated assistant steps. */
+  codexTurnId?: string;
   /**
    * External-trigger context for the step opened by this stream_start.
    * Set when the new step was opened in response to a repeated tool
@@ -248,10 +250,14 @@ export interface HeterogeneousToolResultImage {
   data?: string;
   /** File record id after upload to the file store. */
   fileId?: string;
+  /** Intrinsic height in pixels, read from the image header at upload time. */
+  height?: number;
   /** IANA media type, e.g. `image/png`. */
   mediaType: string;
   /** Remote URL after upload. */
   url?: string;
+  /** Intrinsic width in pixels, read from the image header at upload time. */
+  width?: number;
 }
 
 /** Data shape for tool_result events (ACP-specific) */
@@ -300,6 +306,12 @@ export interface ToolCallPayload {
  * this shape. Provider-specific shape knowledge does not leak past the adapter.
  */
 export interface UsageData {
+  /** Estimated session or turn cost in USD, if the CLI reports it. */
+  cost?: number;
+  /** Provider-native subscription credits consumed (e.g. Qoder), when the CLI
+   * bills in credits instead of reporting token counts. Not USD — keep it
+   * separate from `cost` so spend math never mixes units. */
+  credits?: number;
   /** Input tokens served from the prompt cache (cache reads). */
   inputCachedTokens?: number;
   /** Input tokens that missed the prompt cache (fresh prompt bytes). */
@@ -321,7 +333,11 @@ export interface UsageData {
  *   - `result_usage`: authoritative grand total at the end of a session
  */
 export interface StepCompleteData {
-  /** Total session cost in USD (only on `result_usage`, if the CLI reports it). */
+  /**
+   * This run's cost in USD (only on `result_usage`, if the CLI reports it).
+   * Adapters whose CLI reports a session-cumulative figure across resume
+   * (Claude Code) convert it to the run's own spend before emitting.
+   */
   costUsd?: number;
   /** Model id for this turn (only meaningful on `turn_metadata`). */
   model?: string;
@@ -379,11 +395,35 @@ export interface HeterogeneousTerminalErrorData {
  * Adapters maintain internal state (e.g., pending tool calls) to correctly
  * emit lifecycle events like tool_start / tool_end.
  */
+/**
+ * Options for reading a run's usage after the CLI exits. `env` is the child
+ * process environment, so home-resolution honors relocations like
+ * `KIMI_CODE_HOME` that only exist in the spawn env.
+ */
+export interface PostRunUsageOptions {
+  env?: Record<string, string | undefined>;
+}
+
+/** Token usage a CLI only records outside stdout, read once the run has exited. */
+export interface PostRunUsage {
+  model?: string;
+  usage: UsageData;
+}
+
 export interface AgentEventAdapter {
   /**
    * Convert a single raw event into zero or more HeterogeneousAgentEvents.
    */
   adapt: (raw: any) => HeterogeneousAgentEvent[];
+
+  /**
+   * Turn usage read after exit into events, for agents whose token usage never
+   * appears on stdout (e.g. Kimi Code logs it only to the session's
+   * wire.jsonl). Pure: the spawn pipeline reads the usage from disk and hands
+   * it over, because adapters are also bundled for the browser and must not
+   * touch the file system.
+   */
+  buildPostRunUsageEvents?: (usage: PostRunUsage) => HeterogeneousAgentEvent[];
 
   /**
    * Flush any buffered events (call at end of stream).

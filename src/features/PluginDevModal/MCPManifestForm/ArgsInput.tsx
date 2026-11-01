@@ -1,6 +1,5 @@
-import { type InputProps } from '@lobehub/ui';
-import { ActionIcon, Flexbox, Input } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Input, type InputProps } from '@lobehub/ui';
 import { Plus, X } from 'lucide-react';
 import React, { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

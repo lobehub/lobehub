@@ -3,7 +3,6 @@ import { kebabCase } from 'es-toolkit';
 import { pinyin } from 'pinyin-pro';
 
 const PROJECT_SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const PROJECT_IDENTIFIER_LENGTH = 4;
 
 export interface CreateProjectDraft {
   identifier: string;
@@ -12,13 +11,12 @@ export interface CreateProjectDraft {
 }
 
 export interface ProjectFieldSuggestions {
-  identifier: string;
   slug: string;
 }
 
 export const getProjectFieldSuggestions = (name: string): ProjectFieldSuggestions => {
   const normalizedName = name.trim();
-  if (!normalizedName) return { identifier: '', slug: '' };
+  if (!normalizedName) return { slug: '' };
 
   const transliteratedName = pinyin(normalizedName, {
     nonZh: 'consecutive',
@@ -26,16 +24,8 @@ export const getProjectFieldSuggestions = (name: string): ProjectFieldSuggestion
     type: 'array',
   }).join(' ');
   const slug = kebabCase(transliteratedName).replaceAll(/[^a-z0-9-]/g, '');
-  const parts = slug.split('-').filter(Boolean);
-  const initials = parts.map((part) => part[0]).join('');
-  const compactName = parts.join('');
-  const identifierSource = initials.length >= 3 ? initials : compactName;
-  const identifier = identifierSource
-    .slice(0, PROJECT_IDENTIFIER_LENGTH)
-    .padEnd(3, 'x')
-    .toUpperCase();
 
-  return { identifier, slug };
+  return { slug };
 };
 
 export const isProjectIdentifierValid = (identifier: string) =>
@@ -51,9 +41,10 @@ export const getCreateProjectInput = (draft: CreateProjectDraft) => {
   const name = draft.name.trim();
   const slug = draft.slug.trim().toLowerCase();
 
-  if (!name || !isProjectIdentifierValid(identifier) || !isProjectSlugValid(slug)) {
+  // The identifier is optional; left empty, tasks keep the default prefix.
+  if (!name || (identifier && !isProjectIdentifierValid(identifier)) || !isProjectSlugValid(slug)) {
     return null;
   }
 
-  return { identifier, name, ...(slug ? { slug } : {}) };
+  return { name, ...(identifier ? { identifier } : {}), ...(slug ? { slug } : {}) };
 };

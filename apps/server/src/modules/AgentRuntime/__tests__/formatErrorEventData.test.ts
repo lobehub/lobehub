@@ -1,3 +1,4 @@
+import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
@@ -154,6 +155,41 @@ describe('formatErrorEventData', () => {
 
       expect(out.errorType).toBe('ConversationParentMissing');
       expect(out.error).toBe('Conversation parent message msg_abc no longer exists.');
+    });
+
+    it.each([
+      ['ModelRefusalError', ModelRefusalError, AgentRuntimeErrorType.ModelRefusal],
+      ['ModelEmptyError', ModelEmptyError, AgentRuntimeErrorType.ModelEmptyCompletion],
+    ])('keeps %s diagnostics in the event body', (_, ErrorClass, errorType) => {
+      const diagnostics = {
+        finishReason: 'sensitive',
+        model: 'glm-5.3-flash',
+        provider: 'lobehub',
+      };
+      const out = formatErrorEventData(new ErrorClass(undefined, diagnostics), 'call_llm');
+
+      expect(out).toMatchObject({
+        body: { diagnostics },
+        errorType,
+        phase: 'call_llm',
+      });
+    });
+
+    it('keeps the provider and trace id of a provider stream error in the event body', () => {
+      const err = Object.assign(new Error('got status: RESOURCE_EXHAUSTED'), {
+        _responseBody: { traceId: 'trace-1' },
+        error: { message: 'got status: RESOURCE_EXHAUSTED', name: 'StreamChunkError' },
+        errorType: AgentRuntimeErrorType.StreamChunkError,
+        provider: 'lobehub',
+      });
+
+      const out = formatErrorEventData(err, 'llm_execution');
+
+      expect(out).toMatchObject({
+        body: { provider: 'lobehub', traceId: 'trace-1' },
+        error: 'got status: RESOURCE_EXHAUSTED',
+        errorType: AgentRuntimeErrorType.StreamChunkError,
+      });
     });
 
     it('preserves a custom errorType even when no .cause PG info exists', () => {

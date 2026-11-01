@@ -30,6 +30,10 @@ export const THINKING_TAG = 'think';
 export const LOCAL_FILE_TAG = 'localFile';
 export const SKILL_TAG = 'skill';
 export const TASK_TAG = 'task';
+/** Provider activity (CI failure, review feedback) injected into a conversation by the SCM integration. */
+export const SCM_EVENT_TAG = 'scmEvent';
+/** One goal manager planning turn: why it started, what changed since the last one, and the standing contract. */
+export const GOAL_TURN_TAG = 'goalTurn';
 export const TOOL_TAG = 'tool';
 export const USER_FEEDBACK_TAG = 'user_feedback';
 // https://regex101.com/r/TwzTkf/2

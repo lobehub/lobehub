@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { DetectedApp, OpenInAppId } from '@lobechat/electron-client-ipc';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';

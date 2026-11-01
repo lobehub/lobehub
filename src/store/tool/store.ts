@@ -22,6 +22,7 @@ import {
 } from './slices/lobehubSkillStore';
 import { createMCPPluginStoreSlice, type PluginMCPStoreAction } from './slices/mcpStore';
 import { createPluginSlice, type PluginAction } from './slices/plugin';
+import { createProjectSkillsSlice, type ProjectSkillsAction } from './slices/projectSkills';
 
 //  ===============  Aggregate createStoreFn ============ //
 
@@ -35,6 +36,7 @@ export type ToolStore = ToolStoreState &
   LobehubSkillStoreAction &
   AgentSkillsAction &
   AgentDocumentSkillsAction &
+  ProjectSkillsAction &
   ResetableStore;
 
 type ToolStoreAction = ConnectorAction &
@@ -46,6 +48,7 @@ type ToolStoreAction = ConnectorAction &
   LobehubSkillStoreAction &
   AgentSkillsAction &
   AgentDocumentSkillsAction &
+  ProjectSkillsAction &
   ResetableStore;
 
 class ToolStoreResetAction extends ResetableStoreAction<ToolStore> {
@@ -66,6 +69,7 @@ const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
     createLobehubSkillStoreSlice(...parameters),
     createAgentSkillsSlice(...parameters),
     createAgentDocumentSkillsSlice(...parameters),
+    createProjectSkillsSlice(...parameters),
     new ToolStoreResetAction(...parameters),
   ]),
 });

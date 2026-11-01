@@ -109,6 +109,13 @@ interface SelectRuntimeTypeOptions {
  * not require re-deriving the routing rules.
  *
  * Priority: `parentRuntime` > `hetero` (desktop only) > `gateway` > `client`.
+ *
+ * The agent's model provider is intentionally not an input. A provider only
+ * this device can reach (local Ollama / LM Studio, a private base URL) still
+ * runs on `gateway`: the server drives the loop and relays each LLM attempt
+ * to the client that started the run (`agent_llm_relay`, see
+ * `services/llmRelay`); tools, persistence and the loop stay on the server
+ * rather than falling back to the client runtime.
  */
 export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,

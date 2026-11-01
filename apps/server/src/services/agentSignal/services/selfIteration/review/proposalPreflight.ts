@@ -19,6 +19,8 @@ export interface SelfReviewProposalPreflightAdapters {
     /** User namespace when the caller can provide it. */
     userId?: string;
   }) => Promise<boolean>;
+  /** Reads the current prompt hash for an owned agent. */
+  readAgentPromptSnapshot?: (agentId: string) => Promise<{ promptHash: string } | undefined>;
   /** Reads current managed skill target state by agent document id. */
   readSkillTargetSnapshot: (
     skillDocumentId: string,
@@ -40,8 +42,7 @@ export interface SelfReviewProposalPreflightDenied {
 }
 
 export type SelfReviewProposalPreflightResult =
-  | SelfReviewProposalPreflightAllowed
-  | SelfReviewProposalPreflightDenied;
+  SelfReviewProposalPreflightAllowed | SelfReviewProposalPreflightDenied;
 
 /**
  * Creates approve-time preflight checks for frozen self-review proposal actions.
@@ -73,6 +74,18 @@ export const createSelfReviewProposalPreflightService = (
 
     if (action.actionType === 'consolidate_skill') {
       return checkConsolidateSkillAction(action, adapters);
+    }
+
+    if (action.actionType === 'refine_prompt') {
+      const agentId = getOperationInputString(action, 'agentId') ?? action.target?.agentId;
+      if (!agentId || action.baseSnapshot?.targetType !== 'agent_prompt') {
+        return { allowed: false, reason: 'snapshot_incomplete' };
+      }
+      const current = await adapters.readAgentPromptSnapshot?.(agentId);
+      if (!current) return { allowed: false, reason: 'target_deleted' };
+      return current.promptHash === action.baseSnapshot.promptHash
+        ? { allowed: true }
+        : { allowed: false, reason: 'content_changed' };
     }
 
     return { allowed: false, reason: 'unsupported' };

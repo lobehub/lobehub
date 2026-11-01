@@ -1,4 +1,6 @@
-import { type LobeChatDatabase } from '@lobechat/database';
+import { type LobeChatDatabase, type Transaction } from '@lobechat/database';
+import type { FileAccessScope, FileSource } from '@lobechat/types';
+import { ordinaryFileAccessScope } from '@lobechat/types';
 import { inferContentTypeFromImageUrl, nanoid, uuid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { sha256 } from 'js-sha256';
@@ -26,12 +28,15 @@ export interface FileAccessUrlItem {
  * Provides file operation services using a modular implementation approach
  */
 export class FileService {
+  private db: LobeChatDatabase;
+
   private userId: string;
   private fileModel: FileModel;
 
   private impl: FileServiceImpl;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
     this.userId = userId;
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.impl = createFileServiceModule(db);
@@ -45,6 +50,33 @@ export class FileService {
   }
 
   /**
+   * Reclaims an unreferenced upload and its exclusively owned stored object.
+   *
+   * Use when:
+   * - An import fails or its final owning document is permanently deleted.
+   *
+   * Expects:
+   * - The file is in the caller's scope and matches the requested upload source.
+   *
+   * Returns:
+   * - Void; referenced files and shared objects remain intact.
+   *
+   * Call stack:
+   * AgentDocumentsService.importFile / AgentDocumentVfsService.deletePermanently
+   *   -> {@link FileService.removeUnreferencedFile}
+   *     -> {@link FileModel.deleteUnreferenced}
+   *     -> {@link FileService.deleteFile}
+   */
+  public async removeUnreferencedFile(id: string, source: FileSource): Promise<void> {
+    const file = await this.fileModel.deleteUnreferenced(id, {
+      removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+      source,
+    });
+    // The model returns an object key only after its final file reference is removed.
+    if (file) await this.deleteFile(file.url);
+  }
+
+  /**
    * Delete files in batch
    */
   public async deleteFiles(keys: string[]) {
@@ -54,8 +86,10 @@ export class FileService {
   /**
    * Get file content
    */
-  public async getFileContent(key: string): Promise<string> {
-    return this.impl.getFileContent(key);
+  public async getFileContent(key: string, byteLength?: number): Promise<string> {
+    return byteLength === undefined
+      ? this.impl.getFileContent(key)
+      : this.impl.getFileContent(key, byteLength);
   }
 
   /**
@@ -189,15 +223,20 @@ export class FileService {
    * @param params.id - Optional custom file ID (defaults to auto-generated)
    * @returns File record and proxy URL
    */
-  public async createFileRecord(params: {
-    fileHash: string;
-    fileType: string;
-    id?: string;
-    metadata?: Record<string, unknown>;
-    name: string;
-    size: number;
-    url: string;
-  }): Promise<{ fileId: string; url: string }> {
+  public async createFileRecord(
+    params: {
+      fileHash: string;
+      fileType: string;
+      id?: string;
+      metadata?: Record<string, unknown>;
+      name: string;
+      size: number;
+      source?: FileItem['source'];
+      url: string;
+      visibility?: FileItem['visibility'];
+    },
+    trx?: Transaction,
+  ): Promise<{ fileId: string; url: string }> {
     // Check if hash already exists in globalFiles
     const existingFile = await this.fileModel.checkHash(params.fileHash);
     const { isExist } = existingFile;
@@ -226,9 +265,12 @@ export class FileService {
         metadata: params.metadata,
         name: params.name,
         size: params.size,
+        source: params.source,
         url: params.url,
+        visibility: params.visibility,
       },
       !isExist, // insertToGlobalFiles
+      trx,
     );
 
     return {
@@ -244,7 +286,7 @@ export class FileService {
    * @param fileId - File ID to delete from user's files table
    */
   public async deleteUserFileRecord(fileId: string): Promise<void> {
-    await this.fileModel.delete(fileId, false); // false = don't remove globalFiles
+    await this.fileModel.delete(fileId, { removeGlobalFile: false });
   }
 
   /**
@@ -386,6 +428,13 @@ export class FileService {
     buffer: Buffer,
     mimeType: string,
     pathname: string,
+    /**
+     * Runs inside the transaction that writes the file row, so an admission check
+     * can hold its owner lock without spanning the upload itself. The stored object
+     * is removed again when it rejects.
+     */
+    beforeRecord?: (trx: Transaction) => Promise<void>,
+    recordOptions?: Pick<FileItem, 'source' | 'visibility'>,
   ): Promise<{ fileId: string; key: string; url: string }> {
     // Use uploadBuffer with explicit contentType so S3 Content-Type matches
     // the actual bytes (e.g. PNG buffer won't get image/jpeg from .jpg pathname)
@@ -403,15 +452,33 @@ export class FileService {
     const filename = parts.pop() || name;
     const dirname = parts.join('/');
 
-    const { fileId: createdId, url } = await this.createFileRecord({
-      fileHash: hash,
-      fileType: mimeType,
-      id: fileId,
-      metadata: { date: new Date().toISOString().slice(0, 10), dirname, filename, path: pathname },
-      name,
-      size,
-      url: key,
-    });
+    const { fileId: createdId, url } = await this.db
+      .transaction(async (trx) => {
+        await beforeRecord?.(trx);
+
+        return this.createFileRecord(
+          {
+            fileHash: hash,
+            fileType: mimeType,
+            id: fileId,
+            metadata: {
+              date: new Date().toISOString().slice(0, 10),
+              dirname,
+              filename,
+              path: pathname,
+            },
+            name,
+            size,
+            url: key,
+            ...recordOptions,
+          },
+          trx,
+        );
+      })
+      .catch(async (error) => {
+        await this.deleteFile(key).catch(() => {});
+        throw error;
+      });
 
     return { fileId: createdId, key, url };
   }
@@ -474,8 +541,9 @@ export class FileService {
 
   async downloadFileToLocal(
     fileId: string,
+    accessScope: FileAccessScope = ordinaryFileAccessScope,
   ): Promise<{ cleanup: () => void; file: FileItem; filePath: string }> {
-    const file = await this.fileModel.findById(fileId);
+    const file = await this.fileModel.findById(fileId, { accessScope });
     if (!file) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
     }
@@ -487,7 +555,10 @@ export class FileService {
       console.error(e);
       // if file not found, delete it from db
       if ((e as any).Code === 'NoSuchKey') {
-        await this.fileModel.delete(fileId, serverDBEnv.REMOVE_GLOBAL_FILE);
+        await this.fileModel.delete(fileId, {
+          accessScope,
+          removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+        });
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
       }
     }

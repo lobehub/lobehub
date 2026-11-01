@@ -7,12 +7,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { RadarDimensionDatum } from './ModelRatingRadar';
 import ModelRatingRadar, { RATING_DIMENSION_ORDER } from './ModelRatingRadar';
 
-vi.mock('antd-style', () => ({
-  createStaticStyles: () =>
-    new Proxy({}, { get: (_target, prop: string) => prop }) as Record<string, string>,
-  cssVar: new Proxy({}, { get: (_target, token) => `var(--${String(token)})` }),
-}));
-
 const { radarChartProps } = vi.hoisted(() => ({ radarChartProps: vi.fn() }));
 
 vi.mock('@lobehub/charts', () => ({

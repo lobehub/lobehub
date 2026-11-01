@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CalendarClockIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';

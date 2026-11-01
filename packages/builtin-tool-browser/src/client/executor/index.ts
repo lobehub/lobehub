@@ -7,6 +7,7 @@ import type {
   BrowserNavigateArgs,
   BrowserPressArgs,
   BrowserScrollArgs,
+  BrowserSetViewportArgs,
 } from '../../types';
 import { BrowserIdentifier } from '../../types';
 
@@ -18,6 +19,7 @@ const BrowserApiEnum = {
   readPage: 'readPage' as const,
   screenshot: 'screenshot' as const,
   scroll: 'scroll' as const,
+  setViewport: 'setViewport' as const,
   snapshot: 'snapshot' as const,
 };
 
@@ -36,28 +38,8 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
   readonly identifier = BrowserIdentifier;
   protected readonly apiEnum = BrowserApiEnum;
 
-  /**
-   * Every execution path funnels through this executor (local runtime, the
-   * DesktopBrowserGatewayBridge for cloud runs, and the CC MCP bridge), so a
-   * single Labs-toggle gate here covers them all: with the in-app browser lab
-   * off, the sidebar tab is hidden and driving it would be invisible to the
-   * user.
-   */
-  private async labDisabledFailure(): Promise<BuiltinToolResult | undefined> {
-    const [{ useUserStore }, { labPreferSelectors }] = await Promise.all([
-      import('@/store/user'),
-      import('@/store/user/selectors'),
-    ]);
-    if (labPreferSelectors.enableInAppBrowser(useUserStore.getState())) return undefined;
-    return this.failure(
-      'The in-app browser is disabled. Ask the user to enable "In-App Browser" under Settings → Advanced → Labs, then retry.',
-    );
-  }
-
   navigate = async (params: BrowserNavigateArgs, ctx?: BuiltinToolContext) => {
     try {
-      const disabled = await this.labDisabledFailure();
-      if (disabled) return disabled;
       const sessionId = this.sessionIdOf(ctx);
       const { electronBrowserSidebarService } = await import('@/services/electron/browserSidebar');
 
@@ -70,10 +52,16 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
       // Let the page settle before reporting where we landed.
       await this.waitForLoad(sessionId);
       const next = await electronBrowserSidebarService.getState({ sessionId });
-      return this.success(`Opened ${next.url}${next.title ? ` — "${next.title}"` : ''}`, {
-        title: next.title,
-        url: next.url,
-      });
+      const loading = next.isLoading
+        ? ' The page is still loading (some requests have not finished); its content may be incomplete, but snapshot/readPage work now.'
+        : '';
+      return this.success(
+        `Opened ${next.url}${next.title ? ` — "${next.title}"` : ''}.${loading}`,
+        {
+          title: next.title,
+          url: next.url,
+        },
+      );
     } catch (error) {
       return this.errorResult(error);
     }
@@ -81,16 +69,23 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   snapshot = async (_params: object, ctx?: BuiltinToolContext) => {
     try {
-      const disabled = await this.labDisabledFailure();
-      if (disabled) return disabled;
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.snapshot({
         sessionId: this.sessionIdOf(ctx),
       });
-      if (!result.success || !result.snapshot)
-        return this.failure(result.error ?? 'Snapshot failed');
+      if (!result.success) return this.failure(result.error ?? 'Snapshot failed');
 
       const header = `Page: ${result.title ?? ''} (${result.url ?? ''})`;
+      // A page with nothing interactive in view (an image, a JSON response, a
+      // plain-text document) yields an empty snapshot. That is an answer, not a
+      // failure — reporting it as one sent agents into retry loops.
+      if (!result.snapshot) {
+        return this.success(
+          `${header}\nNo interactive elements (links, buttons, form fields, headings) are visible on this page. Use readPage to read its text, or screenshot to see it.`,
+          { snapshot: '', title: result.title, url: result.url },
+        );
+      }
+
       return this.success(`${header}\n${result.snapshot}`, {
         snapshot: result.snapshot,
         title: result.title,
@@ -103,8 +98,6 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   click = async (params: BrowserClickArgs, ctx?: BuiltinToolContext) => {
     try {
-      const disabled = await this.labDisabledFailure();
-      if (disabled) return disabled;
       await this.revealBrowserTab(ctx);
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.click({
@@ -126,8 +119,6 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   fill = async (params: BrowserFillArgs, ctx?: BuiltinToolContext) => {
     try {
-      const disabled = await this.labDisabledFailure();
-      if (disabled) return disabled;
       await this.revealBrowserTab(ctx);
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.fill({
@@ -148,8 +139,6 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   press = async (params: BrowserPressArgs, ctx?: BuiltinToolContext) => {
     try {
-      const disabled = await this.labDisabledFailure();
-      if (disabled) return disabled;
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.press({
         key: params.key,
@@ -162,10 +151,32 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
     }
   };
 
+  setViewport = async (params: BrowserSetViewportArgs, ctx?: BuiltinToolContext) => {
+    try {
+      const { electronBrowserControlService } = await import('@/services/electron/browserControl');
+      const result = await electronBrowserControlService.setViewport({
+        height: params.height,
+        sessionId: this.sessionIdOf(ctx),
+        width: params.width,
+      });
+      if (!result.success) return this.failure(result.error ?? 'Setting the viewport failed');
+
+      if (params.width === undefined && params.height === undefined) {
+        return this.success('Viewport reset to the browser panel size.');
+      }
+      const scale = result.scale ?? 1;
+      const fitted =
+        scale < 1
+          ? ` The panel shows it at ${Math.round(scale * 100)}%, so screenshots come out at that scale.`
+          : '';
+      return this.success(`Viewport set to ${params.width}×${params.height}.${fitted}`);
+    } catch (error) {
+      return this.errorResult(error);
+    }
+  };
+
   scroll = async (params: BrowserScrollArgs, ctx?: BuiltinToolContext) => {
     try {
-      const disabled = await this.labDisabledFailure();
-      if (disabled) return disabled;
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.scroll({
         dx: params.dx,
@@ -181,8 +192,6 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   screenshot = async (_params: object, ctx?: BuiltinToolContext) => {
     try {
-      const disabled = await this.labDisabledFailure();
-      if (disabled) return disabled;
       await this.revealBrowserTab(ctx);
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.screenshot({
@@ -202,8 +211,6 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
 
   readPage = async (_params: object, ctx?: BuiltinToolContext) => {
     try {
-      const disabled = await this.labDisabledFailure();
-      if (disabled) return disabled;
       const { electronBrowserControlService } = await import('@/services/electron/browserControl');
       const result = await electronBrowserControlService.readPage({
         sessionId: this.sessionIdOf(ctx),

@@ -6,10 +6,9 @@ import {
   Icon,
   Input,
   stopPropagation,
+  toast,
   Tooltip,
 } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
 import { Check, PaletteIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -112,7 +111,7 @@ const GroupContent = memo<GroupContentProps>(
       setNewAvatar(null);
     }, []);
 
-    const inputRef = useRef<InputRef>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
     useEffect(() => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {

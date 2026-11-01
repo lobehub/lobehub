@@ -29,10 +29,9 @@ import { type ChatThreadAction } from './slices/thread/action';
 import { ChatThreadActionImpl } from './slices/thread/action';
 import { type ChatTopicAction } from './slices/topic/action';
 import { ChatTopicActionImpl } from './slices/topic/action';
+import { subscribeJustArchivedTopic } from './slices/topic/justArchived';
 import { type ChatTranslateAction } from './slices/translate/action';
 import { ChatTranslateActionImpl } from './slices/translate/action';
-import { type ChatTTSAction } from './slices/tts/action';
-import { ChatTTSActionImpl } from './slices/tts/action';
 import { type VoiceMessageAction } from './slices/voiceMessage/action';
 import { VoiceMessageActionImpl } from './slices/voiceMessage/action';
 
@@ -42,7 +41,6 @@ export type ChatStoreAction = ChatMessageAction &
   ChatAgentRunAction &
   ChatTopicAction &
   ChatTranslateAction &
-  ChatTTSAction &
   ChatPluginAction &
   ChatBuiltinToolAction &
   ChatPortalAction &
@@ -83,7 +81,6 @@ const createStore: StateCreator<ChatStore, [['zustand/devtools', never]]> = (
       chatAgentRun(...params),
       new ChatTopicActionImpl(...params),
       new ChatTranslateActionImpl(...params),
-      new ChatTTSActionImpl(...params),
       chatToolSlice(...params),
       chatPlugin(...params),
       new ChatPortalActionImpl(...params),
@@ -103,6 +100,8 @@ export const useChatStore = createWithEqualityFn<ChatStore>()(
   subscribeWithSelector(devtools(createStore)),
   shallow,
 );
+
+subscribeJustArchivedTopic(useChatStore);
 
 expose('chat', useChatStore);
 
