@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockResponse } from '../../test-utils';
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
+import {
+  isRetryableCrawlError,
+  NetworkConnectionError,
+  PageNotFoundError,
+  TimeoutError,
+} from '../../utils/errorType';
 import { outcrawl } from '../outcrawl';
 
 // Mock dependencies
@@ -127,18 +132,24 @@ describe('outcrawl crawler', () => {
     expect(result).toBeUndefined();
   });
 
-  it('should throw PageNotFoundError when the target page answers 404', async () => {
-    process.env.OUTCRAWL_API_KEY = 'test-api-key';
+  it.each([404, 410])(
+    'should throw a non-retryable PageNotFoundError when the target page answers %i',
+    async (statusCode) => {
+      process.env.OUTCRAWL_API_KEY = 'test-api-key';
 
-    const mockResponse = createMockResponse({ markdown, metadata: {}, statusCode: 404 });
+      // Long enough markdown that it would otherwise be returned as a successful crawl
+      const mockResponse = createMockResponse({ markdown, metadata: {}, statusCode });
 
-    const { withTimeout } = await import('../../utils/withTimeout');
-    vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
+      const { withTimeout } = await import('../../utils/withTimeout');
+      vi.mocked(withTimeout).mockResolvedValue(mockResponse as any);
 
-    await expect(outcrawl('https://example.com', { filterOptions: {} })).rejects.toThrow(
-      PageNotFoundError,
-    );
-  });
+      const error = await outcrawl('https://example.com', { filterOptions: {} }).catch((e) => e);
+
+      expect(error).toBeInstanceOf(PageNotFoundError);
+      expect(error.status).toBe(statusCode);
+      expect(isRetryableCrawlError(error)).toBe(false);
+    },
+  );
 
   it('should throw PageNotFoundError for 404 status', async () => {
     process.env.OUTCRAWL_API_KEY = 'test-api-key';

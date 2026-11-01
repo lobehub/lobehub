@@ -55,9 +55,10 @@ export const outcrawl: CrawlImpl = async (url) => {
 
   const data = await parseJSONResponse<OutcrawlScrapeResponse>(res, 'Outcrawl');
 
-  // Outcrawl answers 200 and reports the target page's own status in `statusCode`
-  if (data.statusCode === 404) {
-    throw new PageNotFoundError('Not Found');
+  // Outcrawl answers 200 and reports the target page's own status in `statusCode`.
+  // A target 404/410 is the page's final answer, so keep its status and don't retry.
+  if (data.statusCode === 404 || data.statusCode === 410) {
+    throw new PageNotFoundError(data.statusCode === 410 ? 'Gone' : 'Not Found', data.statusCode);
   }
 
   // Check if content is empty or too short
