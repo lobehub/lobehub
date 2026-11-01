@@ -34,22 +34,69 @@ const DEFAULT_MAX_CRITERIA = 4;
  */
 const GOAL_PLAN_MAX_ATTEMPTS = 3;
 
+type EvidenceType = (typeof VERIFY_EVIDENCE_TYPES)[number];
+
+/**
+ * Models often put a modality (`image`, `document`, …) where the evidence type
+ * belongs — most of all when the goal itself contains an image. One such tag
+ * used to reject the whole draft, so translate it to the closest evidence type.
+ */
+const EVIDENCE_TYPE_BY_MODALITY: Record<(typeof VERIFY_EVIDENCE_MODALITIES)[number], EvidenceType> =
+  {
+    audio: 'audio',
+    document: 'markdown',
+    image: 'screenshot',
+    structured: 'text',
+    text: 'text',
+    video: 'video',
+  };
+
+const pickEnum = <T extends string>(values: readonly T[], value: unknown): T | undefined =>
+  values.includes(value as T) ? (value as T) : undefined;
+
+/**
+ * Keep a drafted evidence requirement usable instead of failing the plan:
+ * map modality-style types, drop invalid optional tags, and drop an entry whose
+ * type cannot be recognised at all. The criterion itself is kept either way.
+ */
+const normalizeEvidenceItem = (item: unknown) => {
+  if (!item || typeof item !== 'object') return undefined;
+  const { hint, modality, scope, type } = item as Record<string, unknown>;
+  const modalityFromType = pickEnum(VERIFY_EVIDENCE_MODALITIES, type);
+  const evidenceType =
+    pickEnum(VERIFY_EVIDENCE_TYPES, type) ??
+    (modalityFromType ? EVIDENCE_TYPE_BY_MODALITY[modalityFromType] : undefined);
+  if (!evidenceType) return undefined;
+
+  return {
+    hint: typeof hint === 'string' ? hint : undefined,
+    modality: pickEnum(VERIFY_EVIDENCE_MODALITIES, modality) ?? modalityFromType,
+    scope: pickEnum(VERIFY_EVIDENCE_SCOPES, scope),
+    type: evidenceType,
+  };
+};
+
+const requiredEvidenceSchema = z.preprocess(
+  (value) => (Array.isArray(value) ? value.map(normalizeEvidenceItem).filter(Boolean) : value),
+  z
+    .array(
+      z.object({
+        hint: z.string().optional(),
+        modality: z.enum(VERIFY_EVIDENCE_MODALITIES).optional(),
+        scope: z.enum(VERIFY_EVIDENCE_SCOPES).optional(),
+        type: z.enum(VERIFY_EVIDENCE_TYPES),
+      }),
+    )
+    .optional(),
+);
+
 const generatedCriteriaSchema = z.object({
   criteria: z.array(
     z.object({
       description: z.string().optional(),
       instruction: z.string().optional(),
       onFail: z.enum(VERIFY_ON_FAIL_ACTIONS).optional(),
-      requiredEvidence: z
-        .array(
-          z.object({
-            hint: z.string().optional(),
-            modality: z.enum(VERIFY_EVIDENCE_MODALITIES).optional(),
-            scope: z.enum(VERIFY_EVIDENCE_SCOPES).optional(),
-            type: z.enum(VERIFY_EVIDENCE_TYPES),
-          }),
-        )
-        .optional(),
+      requiredEvidence: requiredEvidenceSchema,
       required: z.boolean().optional(),
       title: z.string(),
       verifierType: z.enum(VERIFY_VERIFIER_TYPES),

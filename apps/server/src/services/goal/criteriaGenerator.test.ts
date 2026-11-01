@@ -80,7 +80,7 @@ describe('GoalCriteriaGeneratorService', () => {
     );
   });
 
-  it('rejects criteria containing evidence values outside the supported enums', async () => {
+  it('drops evidence values outside the supported enums but keeps the criterion', async () => {
     generateObject.mockResolvedValue({
       criteria: [
         {
@@ -101,7 +101,63 @@ describe('GoalCriteriaGeneratorService', () => {
 
     await expect(
       new GoalCriteriaGeneratorService({} as any, 'user-1').generate({ goal: 'Ship it' }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual([
+      {
+        description: 'The release is visible',
+        instruction: 'Inspect the release.',
+        onFail: 'auto_repair',
+        required: true,
+        requiredEvidence: [],
+        title: 'Release shipped',
+        verifierType: 'agent',
+      },
+    ]);
+    expect(generateObject).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps modality-style evidence types from an image goal instead of failing the draft', async () => {
+    // Shape the real goal model returned for a goal whose content is only an image.
+    generateObject.mockResolvedValue({
+      criteria: [
+        {
+          requiredEvidence: [
+            { hint: 'Design mockup', modality: 'image', scope: 'task_artifacts', type: 'image' },
+            { hint: 'Spec notes', scope: 'deliverable', type: 'document' },
+            { hint: 'Page DOM', modality: 'structured', type: 'dom_snapshot' },
+          ],
+          title: 'Page matches the mockup',
+          verifierType: 'agent',
+        },
+      ],
+      instruction: 'Build the landing page shown in the mockup.',
+      title: 'Landing page from mockup',
+    });
+
+    await expect(
+      new GoalCriteriaGeneratorService({} as any, 'user-1').generatePlan({
+        goal: '![aquafit-landing-mockup.png](https://example.com/mockup.png)',
+      }),
+    ).resolves.toEqual({
+      criteria: [
+        {
+          requiredEvidence: [
+            {
+              hint: 'Design mockup',
+              modality: 'image',
+              scope: 'task_artifacts',
+              type: 'screenshot',
+            },
+            { hint: 'Spec notes', modality: 'document', scope: 'deliverable', type: 'markdown' },
+            { hint: 'Page DOM', modality: 'structured', type: 'dom_snapshot' },
+          ],
+          title: 'Page matches the mockup',
+          verifierType: 'agent',
+        },
+      ],
+      instruction: 'Build the landing page shown in the mockup.',
+      title: 'Landing page from mockup',
+    });
+    expect(generateObject).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the array response for existing callers while exposing the full generated plan', async () => {
