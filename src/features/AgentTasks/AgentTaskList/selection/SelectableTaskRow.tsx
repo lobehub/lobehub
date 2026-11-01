@@ -48,6 +48,7 @@ interface SelectableTaskRowProps {
 const SelectableTaskRow = memo<SelectableTaskRowProps>(({ children, id, order }) => {
   const selected = useTaskSelectionStore((s) => s.selectedIds.includes(id));
   const selecting = useTaskSelectionStore((s) => s.selectedIds.length > 0);
+  const frozen = useTaskSelectionStore((s) => !!s.progress);
   const [hovered, setHovered] = useState(false);
 
   const handleClickCapture = useCallback(
@@ -85,7 +86,7 @@ const SelectableTaskRow = memo<SelectableTaskRowProps>(({ children, id, order })
         data-testid={'task-row-checkbox'}
         onClickCapture={handleCheck}
       >
-        <Checkbox checked={selected} size={16} />
+        <Checkbox checked={selected} disabled={frozen} size={16} />
       </div>
       {children}
     </div>

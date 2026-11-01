@@ -15,6 +15,12 @@ interface TaskSelectionState {
   /** A batch is in flight: `done` of `total` tasks sent so far. */
   progress?: { done: number; total: number };
   selectedIds: readonly string[];
+  /**
+   * Selectable rows of the list on screen, as last reported by `prune`. A batch
+   * only ever writes ids from this set back into the selection, so ids from a
+   * list or page that is no longer shown can never become invisibly selected.
+   */
+  visibleIds: ReadonlySet<string>;
 }
 
 interface TaskSelectionActions {
@@ -28,6 +34,7 @@ interface TaskSelectionActions {
 }
 
 const EMPTY: readonly string[] = [];
+const EMPTY_SET: ReadonlySet<string> = new Set();
 
 /**
  * Multi-select of the task list. One list is on screen at a time, so a single
@@ -41,6 +48,9 @@ export const useTaskSelectionStore = create<TaskSelectionState & TaskSelectionAc
       anchorId: undefined,
       generation: state.generation + 1,
       panelOpen: false,
+      // A batch still in flight belongs to the selection being dropped: the
+      // list that comes next must not show its progress or stay frozen by it.
+      progress: undefined,
       selectedIds: EMPTY,
     })),
   generation: 0,
@@ -48,15 +58,28 @@ export const useTaskSelectionStore = create<TaskSelectionState & TaskSelectionAc
   prune: (visibleIds) =>
     set((state) => {
       const selectedIds = pruneSelection(state.selectedIds, visibleIds);
-      if (selectedIds === state.selectedIds) return state;
-      return { panelOpen: state.panelOpen && selectedIds.length > 0, selectedIds };
+      if (selectedIds === state.selectedIds) return { visibleIds };
+      return { panelOpen: state.panelOpen && selectedIds.length > 0, selectedIds, visibleIds };
     }),
-  selectAll: (order) => set({ anchorId: order[0], selectedIds: [...order] }),
+  // While a batch runs the selection is frozen: the batch acts on the ids it
+  // snapshotted and writes the outcome back when it ends, so a change made in
+  // between would be silently overwritten.
+  selectAll: (order) =>
+    set((state) => (state.progress ? state : { anchorId: order[0], selectedIds: [...order] })),
   selectRange: (order, id) =>
-    set((state) => ({ selectedIds: selectRange(order, state.selectedIds, state.anchorId, id) })),
+    set((state) =>
+      state.progress
+        ? state
+        : { selectedIds: selectRange(order, state.selectedIds, state.anchorId, id) },
+    ),
   selectedIds: EMPTY,
   setPanelOpen: (panelOpen) => set((state) => ({ panelOpen: panelOpen && !state.progress })),
   setProgress: (progress) => set({ panelOpen: false, progress }),
   toggle: (id) =>
-    set((state) => ({ anchorId: id, selectedIds: toggleSelection(state.selectedIds, id) })),
+    set((state) =>
+      state.progress
+        ? state
+        : { anchorId: id, selectedIds: toggleSelection(state.selectedIds, id) },
+    ),
+  visibleIds: EMPTY_SET,
 }));

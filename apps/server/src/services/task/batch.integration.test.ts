@@ -9,6 +9,7 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { agents, taskActivities, tasks, users } from '@/database/schemas';
 
@@ -237,6 +238,23 @@ describe('TaskBatchService (real PostgreSQL)', () => {
       const restored = await service.archive([idle.id, running.id], false);
       expect(restored.updated).toEqual([idle.id]);
       expect((await model.findById(idle.id))?.archivedAt).toBeNull();
+    });
+  });
+
+  describe('archive (goals)', () => {
+    it('skips tasks an open goal still owns and archives the rest', async () => {
+      const [carrier, loose] = await createTasks(2);
+      await new GoalModel(db, userId).create({
+        subjectId: carrier.id,
+        subjectType: 'task',
+        title: 'Open goal',
+      });
+
+      const result = await service.archive([carrier.id, loose.id], true);
+
+      expect(result.updated).toEqual([loose.id]);
+      expect(result.skipped).toEqual([{ id: carrier.id, reason: 'inGoal' }]);
+      expect((await model.findById(carrier.id))?.archivedAt).toBeNull();
     });
   });
 

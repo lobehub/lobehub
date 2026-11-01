@@ -33,6 +33,7 @@ afterEach(() => {
 describe('useTaskBatchActions', () => {
   it('keeps the failed tasks selected for a retry', async () => {
     batchUpdate.mockResolvedValue(partialFailure);
+    useTaskSelectionStore.getState().prune(new Set(['a', 'b', 'c']));
     useTaskSelectionStore.getState().selectAll(['a', 'b']);
     const { result } = renderHook(() => useTaskBatchActions());
 
@@ -58,11 +59,60 @@ describe('useTaskBatchActions', () => {
       useTaskSelectionStore.getState().clear();
       useTaskSelectionStore.getState().toggle('other-list-task');
     });
+    // The new list is neither frozen nor showing the old batch's progress.
+    expect(useTaskSelectionStore.getState().progress).toBeUndefined();
     await act(async () => {
       resolve(partialFailure);
       await pending;
     });
 
     expect(useTaskSelectionStore.getState().selectedIds).toEqual(['other-list-task']);
+  });
+
+  it('does not bring back ids of a page or scope the reused list no longer shows', async () => {
+    let resolve!: (value: typeof partialFailure) => void;
+    batchUpdate.mockReturnValue(new Promise((r) => (resolve = r)));
+    useTaskSelectionStore.getState().prune(new Set(['a', 'b']));
+    useTaskSelectionStore.getState().selectAll(['a', 'b']);
+    const { result } = renderHook(() => useTaskBatchActions());
+
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.run({ kind: 'update', patch: { priority: 1 } });
+    });
+    // Same TaskList instance, next page: only the prune runs, no clear().
+    act(() => useTaskSelectionStore.getState().prune(new Set(['x', 'y'])));
+    await act(async () => {
+      resolve(partialFailure);
+      await pending;
+    });
+
+    expect(useTaskSelectionStore.getState().selectedIds).toEqual([]);
+  });
+
+  it('freezes the selection while the batch runs', async () => {
+    let resolve!: (value: typeof partialFailure) => void;
+    batchUpdate.mockReturnValue(new Promise((r) => (resolve = r)));
+    useTaskSelectionStore.getState().prune(new Set(['a', 'b', 'c']));
+    useTaskSelectionStore.getState().selectAll(['a', 'b']);
+    const { result } = renderHook(() => useTaskBatchActions());
+
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.run({ kind: 'update', patch: { priority: 1 } });
+    });
+    act(() => {
+      const store = useTaskSelectionStore.getState();
+      store.toggle('c');
+      store.selectAll(['a', 'b', 'c']);
+      store.selectRange(['a', 'b', 'c'], 'c');
+    });
+    expect(useTaskSelectionStore.getState().selectedIds).toEqual(['a', 'b']);
+
+    await act(async () => {
+      resolve(partialFailure);
+      await pending;
+    });
+    expect(useTaskSelectionStore.getState().selectedIds).toEqual(['b']);
   });
 });

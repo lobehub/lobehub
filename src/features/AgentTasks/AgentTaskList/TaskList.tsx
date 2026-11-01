@@ -275,7 +275,7 @@ const TaskList = memo<TaskListProps>((props) => {
         selection.selectAll(selectableIdsRef.current);
         return;
       }
-      if (event.key === 'Escape' && selection.selectedIds.length > 0) {
+      if (event.key === 'Escape' && selection.selectedIds.length > 0 && !selection.progress) {
         event.preventDefault();
         selection.clear();
       }

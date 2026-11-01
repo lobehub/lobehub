@@ -48,7 +48,13 @@ export const useTaskBatchActions = () => {
 
   const run = useCallback(
     async (action: TaskBatchAction) => {
-      const { generation, progress, selectedIds, setProgress } = useTaskSelectionStore.getState();
+      const { generation, progress, selectedIds } = useTaskSelectionStore.getState();
+      // Progress belongs to the selection this batch started from; once that
+      // is cleared (list left, Esc) later updates must not reach the new list.
+      const setProgress = (next?: { done: number; total: number }) => {
+        const store = useTaskSelectionStore.getState();
+        if (store.generation === generation) store.setProgress(next);
+      };
       // One batch at a time: a second action must not race the first.
       if (progress) return;
       const ids = [...selectedIds];
@@ -107,10 +113,12 @@ export const useTaskBatchActions = () => {
       if (selection.generation !== generation) return;
       if (failedCount > 0) {
         // Keep exactly what still needs attention selected.
+        // Only rows the list on screen still shows: after a page or scope change
+        // the old ids are not visible, and must not come back selected.
         const done = new Set([...updated, ...skipped.map((item) => item.id)]);
         useTaskSelectionStore.setState({
           panelOpen: false,
-          selectedIds: ids.filter((id) => !done.has(id)),
+          selectedIds: ids.filter((id) => !done.has(id) && selection.visibleIds.has(id)),
         });
       } else {
         selection.clear();

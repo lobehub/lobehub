@@ -13,7 +13,7 @@ import { EditLockService } from '@/server/services/editLock';
 
 import { AiAgentService } from '../aiAgent';
 import { TaskRunnerService } from '../taskRunner';
-import { assertArchivedTaskStaysIdle, assertNotInOpenGoal } from './archiveGuard';
+import { assertArchivedTaskStaysIdle, findTasksInOpenGoals } from './archiveGuard';
 import { notifyAssignedBestEffort } from './assignmentNotification';
 import type { TaskBatchStatus } from './batchLimits';
 import { TaskService } from './index';
@@ -462,25 +462,14 @@ export class TaskBatchService {
       return result;
     }
 
-    const inGoal = await pMap(
+    // One bulk lookup for the whole selection, not one goal probe per task.
+    const inGoal = await findTasksInOpenGoals(
+      this.db,
+      { userId: this.userId, workspaceId: this.workspaceId },
       candidates,
-      async (task) => {
-        try {
-          await assertNotInOpenGoal(
-            this.db,
-            { userId: this.userId, workspaceId: this.workspaceId },
-            task,
-          );
-          return false;
-        } catch (error) {
-          if (error instanceof TRPCError && error.code === 'CONFLICT') return true;
-          throw error;
-        }
-      },
-      { concurrency: BATCH_CHECK_CONCURRENCY },
     );
-    const eligible = candidates.filter((task, index) => {
-      if (!inGoal[index]) return true;
+    const eligible = candidates.filter((task) => {
+      if (!inGoal.has(task.id)) return true;
       result.skipped.push({ id: task.id, reason: 'inGoal' });
       return false;
     });

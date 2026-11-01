@@ -9,7 +9,11 @@ import { TaskModel } from '@/database/models/task';
 import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { goals, tasks, users } from '@/database/schemas';
 
-import { assertNotInOpenGoal, writeKeepingArchivedIdle } from './archiveGuard';
+import {
+  assertNotInOpenGoal,
+  findTasksInOpenGoals,
+  writeKeepingArchivedIdle,
+} from './archiveGuard';
 
 const userId = 'archive-guard-integration-user';
 
@@ -110,6 +114,51 @@ describe('writeKeepingArchivedIdle (real PostgreSQL)', () => {
         assertNotInOpenGoal(db, { userId }, { ...done, status: 'completed' }),
       ).resolves.toBeUndefined();
       await expect(assertNotInOpenGoal(db, { userId }, loose)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('findTasksInOpenGoals', () => {
+    it('agrees with assertNotInOpenGoal for carriers, descendants, finished and closed-goal tasks', async () => {
+      const model = new TaskModel(db, userId);
+      const carrier = await model.create({ instruction: 'Open goal carrier' });
+      await new GoalModel(db, userId).create({
+        subjectId: carrier.id,
+        subjectType: 'task',
+        title: 'Open goal',
+      });
+      const child = await model.create({ instruction: 'Child', parentTaskId: carrier.id });
+      const grandchild = await model.create({ instruction: 'Grandchild', parentTaskId: child.id });
+      const closedCarrier = await model.create({ instruction: 'Closed goal carrier' });
+      const closed = await new GoalModel(db, userId).create({
+        subjectId: closedCarrier.id,
+        subjectType: 'task',
+        title: 'Closed goal',
+      });
+      await db.update(goals).set({ status: 'achieved' }).where(eq(goals.id, closed.id));
+      const loose = await model.create({ instruction: 'Loose task' });
+      const finished = {
+        ...(await model.create({ instruction: 'Finished' })),
+        status: 'completed',
+      };
+      await new GoalModel(db, userId).create({
+        subjectId: finished.id,
+        subjectType: 'task',
+        title: 'Open goal on finished task',
+      });
+
+      const all = [carrier, child, grandchild, closedCarrier, loose, finished];
+      const blocked = await findTasksInOpenGoals(db, { userId }, all);
+
+      expect([...blocked].sort()).toEqual([carrier.id, child.id, grandchild.id].sort());
+      // Same answer as the single-task guard, task by task.
+      for (const task of all) {
+        const single = await assertNotInOpenGoal(db, { userId }, task).then(
+          () => false,
+          () => true,
+        );
+        expect(single).toBe(blocked.has(task.id));
+      }
+      expect(await findTasksInOpenGoals(db, { userId }, [])).toEqual(new Set());
     });
   });
 });
