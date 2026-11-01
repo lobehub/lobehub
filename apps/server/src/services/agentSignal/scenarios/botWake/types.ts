@@ -239,7 +239,14 @@ export interface WakeRules {
    * The bot's duties: what its owner made it responsible for, as free text. A message nobody
    * addressed to the bot that falls within them may wake it. Without `text` the judge is not run.
    */
-  duties: WakeClassifierRules & { text?: string };
+  duties: WakeClassifierRules & {
+    /**
+     * Score the judge's `helpful` answer must reach to wake the bot when the duty score does not:
+     * an open question nobody answered that the bot can settle.
+     */
+    helpfulThreshold: number;
+    text?: string;
+  };
   /** Follow-up wakes without the bot speaking before it stays quiet; 0 = no limit. */
   maxSilentWakes: number;
   /** The owner posted in the channel within this many seconds: stay quiet. 0 disables. */
@@ -276,7 +283,12 @@ export interface BotWakeConfig {
    * within it (`threshold`). `mode` is an operator override, such as `shadow` to only score it.
    * Off while there is no text.
    */
-  duties?: { mode?: WakePolicyMode; text?: string; threshold?: number };
+  duties?: {
+    helpfulThreshold?: number;
+    mode?: WakePolicyMode;
+    text?: string;
+    threshold?: number;
+  };
   enabled?: boolean;
   /**
    * Mode of the rule policies (internal rules and the owner's structured rules). `off` disables

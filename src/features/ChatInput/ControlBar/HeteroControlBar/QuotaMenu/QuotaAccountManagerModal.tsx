@@ -2,11 +2,13 @@
 
 import { isDesktop } from '@lobechat/const';
 import { currentUtilization, isWeeklyAllLimit } from '@lobechat/heterogeneous-agents/quota';
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  DropdownMenu,
+  Flexbox,
+  Icon,
   Input,
   type ModalInstance,
   RadioGroup,

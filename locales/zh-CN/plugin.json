@@ -7,6 +7,7 @@
   "builtins.builtin-dashboard.apiName.dryRunWidget": "试运行组件",
   "builtins.builtin-dashboard.apiName.getWidgetRuns": "查看组件运行记录",
   "builtins.builtin-dashboard.apiName.listDashboards": "列出看板",
+  "builtins.builtin-dashboard.apiName.listWidgetPresets": "浏览组件预设",
   "builtins.builtin-dashboard.apiName.requestPublish": "发布组件",
   "builtins.builtin-dashboard.apiName.updateDashboard": "更新看板",
   "builtins.builtin-dashboard.apiName.updateWidgetDraft": "更新组件草稿",

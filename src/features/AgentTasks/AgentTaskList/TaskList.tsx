@@ -13,7 +13,7 @@ import {
 } from '@lobehub/ui';
 import { ClipboardCheckIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Components } from 'react-virtuoso';
 import { Virtuoso } from 'react-virtuoso';
@@ -34,6 +34,11 @@ import {
   groupTaskItems,
   isTaskHiddenByCompletedFilter,
 } from './listViewOptions';
+import SelectableTaskRow from './selection/SelectableTaskRow';
+import { useTaskSelectionStore } from './selection/store';
+import TaskBulkActionBar from './selection/TaskBulkActionBar';
+import { isEditableTarget } from './selection/taskSelectionModel';
+import { useSelectionScope } from './selection/useSelectionScope';
 import TaskGroupLabel from './TaskGroupLabel';
 import TaskItemSkeleton from './TaskItemSkeleton';
 import type { TaskListGroupEntry, TaskListVirtualItem } from './taskListVirtualModel';
@@ -63,6 +68,13 @@ interface TaskListProps {
   /** Store entry of the list to render (`useFetchTaskList().queryKey`) when `items` is absent. */
   queryKey?: string;
   routeScope?: TaskItemRouteScope;
+  /**
+   * Identity of the collection behind `items` (tab, sub-scope, page, owner).
+   * The selection is dropped whenever it changes; without it every items-backed
+   * collection shares one scope, and a task present in two of them would stay
+   * selected across the switch.
+   */
+  selectionScope?: string;
 }
 
 /** Row height the window sizes itself by before it has measured real rows. */
@@ -224,6 +236,62 @@ const TaskList = memo<TaskListProps>((props) => {
     });
   }, []);
 
+  // Selectable rows in display order, collapsed groups included (⌘A selects
+  // every task the current view shows, not only the expanded ones). Grey
+  // parent-context rows only give a nested child its place; they are not part
+  // of the view's result set.
+  const selectableIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const entry of groupedTaskEntries) {
+      const rows =
+        entry.subGroups.length > 0 ? entry.subGroups.flatMap((sub) => sub.rows) : entry.rows;
+      for (const row of rows) if (!row.isParentContext) ids.add(row.task.id);
+    }
+    return [...ids];
+  }, [groupedTaskEntries]);
+  const listRef = useRef<HTMLDivElement>(null);
+  const selectableIdsRef = useRef(selectableIds);
+  selectableIdsRef.current = selectableIds;
+  const getSelectionOrder = useCallback(() => selectableIdsRef.current, []);
+
+  // A selection never outlives the rows it names: prune on every list change,
+  // and drop it when this list (or its collection) goes away.
+  useEffect(() => {
+    useTaskSelectionStore.getState().prune(new Set(selectableIds));
+  }, [selectableIds]);
+  const selectionScope = props.selectionScope ?? (items ? 'items' : (queryKey ?? ''));
+  useSelectionScope(selectionScope);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isEditableTarget(event.target)) return;
+      // Only when nothing else holds focus, or focus is on the list itself:
+      // ⌘A over a side panel's text keeps selecting that text, and Esc inside
+      // a drawer or popover stays theirs.
+      const target = event.target as Node | null;
+      const onList = !!target && !!listRef.current?.contains(target);
+      if (target !== document.body && !onList) return;
+      const selection = useTaskSelectionStore.getState();
+      if (
+        event.key.toLowerCase() === 'a' &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        !event.altKey
+      ) {
+        if (selectableIdsRef.current.length === 0) return;
+        event.preventDefault();
+        selection.selectAll(selectableIdsRef.current);
+        return;
+      }
+      if (event.key === 'Escape' && selection.selectedIds.length > 0 && !selection.progress) {
+        event.preventDefault();
+        selection.clear();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const virtualItems = useMemo(
     () =>
       flattenTaskListEntries(groupedTaskEntries, {
@@ -245,13 +313,25 @@ const TaskList = memo<TaskListProps>((props) => {
         // Matches the 2px row gap the former Block wrapper gave the list.
         <div style={{ paddingBlock: 1, paddingInline: 2 }}>
           <TaskRowIndent depth={item.row.depth} muted={item.row.isParentContext}>
-            <AgentTaskItem routeScope={routeScope} task={item.row.task} />
+            {item.row.isParentContext ? (
+              <AgentTaskItem routeScope={routeScope} task={item.row.task} />
+            ) : (
+              <SelectableTaskRow
+                id={item.row.task.id}
+                order={getSelectionOrder}
+                label={[item.row.task.identifier, item.row.task.name?.trim()]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <AgentTaskItem routeScope={routeScope} task={item.row.task} />
+              </SelectableTaskRow>
+            )}
           </TaskRowIndent>
           {item.showDivider && <Divider dashed style={{ margin: 0 }} />}
         </div>
       );
     },
-    [routeScope, toggleCollapsed],
+    [getSelectionOrder, routeScope, toggleCollapsed],
   );
 
   const skeleton = (
@@ -318,28 +398,31 @@ const TaskList = memo<TaskListProps>((props) => {
       loading={skeleton}
       onRetry={onRetry}
     >
-      <div ref={anchorRef} style={{ width: '100%' }}>
-        {scrollParent && (
-          <Virtuoso
-            // Footer belongs to the window so it follows the last rendered row
-            // rather than sitting under an unrendered tail.
-            components={VIRTUAL_LIST_COMPONENTS}
-            computeItemKey={(_index, item) => item.key}
-            customScrollParent={scrollParent}
-            data={virtualItems}
-            defaultItemHeight={DEFAULT_ROW_HEIGHT}
-            increaseViewportBy={{ bottom: 600, top: 600 }}
-            itemContent={renderItem}
-            context={{
-              footer: (
-                <>
-                  {hiddenFooter}
-                  {truncatedFooter}
-                </>
-              ),
-            }}
-          />
-        )}
+      <div ref={listRef} style={{ width: '100%' }}>
+        <TaskBulkActionBar tasks={tasks} />
+        <div ref={anchorRef} style={{ width: '100%' }}>
+          {scrollParent && (
+            <Virtuoso
+              // Footer belongs to the window so it follows the last rendered row
+              // rather than sitting under an unrendered tail.
+              components={VIRTUAL_LIST_COMPONENTS}
+              computeItemKey={(_index, item) => item.key}
+              customScrollParent={scrollParent}
+              data={virtualItems}
+              defaultItemHeight={DEFAULT_ROW_HEIGHT}
+              increaseViewportBy={{ bottom: 600, top: 600 }}
+              itemContent={renderItem}
+              context={{
+                footer: (
+                  <>
+                    {hiddenFooter}
+                    {truncatedFooter}
+                  </>
+                ),
+              }}
+            />
+          )}
+        </div>
       </div>
     </AsyncBoundary>
   );

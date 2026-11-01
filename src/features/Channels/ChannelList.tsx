@@ -15,11 +15,12 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   Archive,
   ArchiveRestore,
   Copy,
-  GitBranch,
   Hash,
   MoreHorizontal,
   PencilLine,
@@ -51,6 +52,46 @@ import { useChannelEvents } from './useChannelEvents';
 import { useRemoveChannel } from './useRemoveChannel';
 import { useThreadMenu } from './useThreadMenu';
 
+// The connector runs down from the centre of the Channel's 18px icon (4px row padding + half
+// its 28px slot) and bends into each thread row, the way Discord nests threads. A 2px line
+// centres on that axis; Chromium floors fractional border widths, so 1.5px drew as 1px.
+const SPINE_X = 17;
+
+const styles = stylex.create({
+  thread: {
+    position: 'relative',
+    paddingInlineStart: 32,
+  },
+  // colorTextQuaternary is solid (unlike the fill tokens), so the elbow drawn over the spine never
+  // shows a darker overlap; colorBorder vanished against the dark sidebar.
+  spine: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlock: -1,
+    insetInlineStart: SPINE_X,
+    borderInlineStartColor: cssVar.colorTextQuaternary,
+    borderInlineStartStyle: 'solid',
+    borderInlineStartWidth: 2,
+  },
+  elbow: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockStart: -1,
+    insetBlockEnd: '50%',
+    insetInlineStart: SPINE_X,
+    width: 11,
+    borderBlockEndColor: cssVar.colorTextQuaternary,
+    borderBlockEndStyle: 'solid',
+    borderBlockEndWidth: 2,
+    borderInlineStartColor: cssVar.colorTextQuaternary,
+    borderInlineStartStyle: 'solid',
+    borderInlineStartWidth: 2,
+    borderEndStartRadius: 8,
+  },
+  // The first thread reaches up under the Channel's icon.
+  firstElbow: { insetBlockStart: -8 },
+});
+
 const ChannelThreads = ({
   channelId,
   projectId,
@@ -66,44 +107,52 @@ const ChannelThreads = ({
   const threadMenu = useThreadMenu();
   // The open Channel's page already loads this view; the sidebar only reads it.
   const detail = useChannelStore(channelSelectors.detail({ channelId, threadId: null }));
-  if (!detail?.threads.length) return null;
+  // Archived threads stay reachable from their root message, out of the sidebar.
+  const shown = (detail?.threads ?? [])
+    .map((thread, index) => ({ index, thread }))
+    .filter(({ thread }) => thread.status !== 'archived' || thread.id === threadId);
+  if (!detail || !shown.length) return null;
 
   return (
-    <Flexbox aria-label={t('thread')} gap={1} paddingBlock={1} style={{ paddingInlineStart: 20 }}>
-      {detail.threads.map((thread, index) => {
+    <Flexbox aria-label={t('thread')} gap={1} paddingBlock={1}>
+      {shown.map(({ thread, index }, position) => {
         const path = channelPath(channelId, thread.id, projectId);
         const active = thread.id === threadId;
-        // Archived threads stay reachable from their root message, out of the sidebar.
-        if (thread.status === 'archived' && !active) return null;
         const items = threadMenu(detail.channel, thread);
         return (
-          <NavItem
-            active={active}
-            aria-current={active ? 'page' : undefined}
-            contextMenuItems={items.length ? () => items : undefined}
-            href={buildWorkspaceAwarePath(path, slug)}
-            icon={GitBranch}
-            iconSize={14}
-            key={thread.id}
-            actions={
-              items.length
-                ? () => (
-                    <DropdownMenu items={items}>
-                      <ActionIcon
-                        icon={MoreHorizontal}
-                        size="small"
-                        title={t('more', { ns: 'common' })}
-                      />
-                    </DropdownMenu>
-                  )
-                : undefined
-            }
-            title={
-              threadTitle(detail.messages.find((message) => message.id === thread.rootMessageId)) ||
-              `${t('thread')} ${index + 1}`
-            }
-            onClick={() => navigate(path)}
-          />
+          <div key={thread.id} {...stylex.props(styles.thread)}>
+            {position < shown.length - 1 && <span aria-hidden {...stylex.props(styles.spine)} />}
+            <span
+              aria-hidden
+              {...stylex.props(styles.elbow, position === 0 && styles.firstElbow)}
+            />
+            <NavItem
+              active={active}
+              aria-current={active ? 'page' : undefined}
+              contextMenuItems={items.length ? () => items : undefined}
+              href={buildWorkspaceAwarePath(path, slug)}
+              paddingInline={8}
+              actions={
+                items.length
+                  ? () => (
+                      <DropdownMenu items={items}>
+                        <ActionIcon
+                          icon={MoreHorizontal}
+                          size="small"
+                          title={t('more', { ns: 'common' })}
+                        />
+                      </DropdownMenu>
+                    )
+                  : undefined
+              }
+              title={
+                threadTitle(
+                  detail.messages.find((message) => message.id === thread.rootMessageId),
+                ) || `${t('thread')} ${index + 1}`
+              }
+              onClick={() => navigate(path)}
+            />
+          </div>
         );
       })}
     </Flexbox>

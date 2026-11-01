@@ -1,4 +1,4 @@
-import { Center, Flexbox, Spin, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import { Hash } from 'lucide-react';
@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import NotFound from '@/components/404';
+import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import NavHeader from '@/features/NavHeader';
 import { channelActions, channelSelectors, useChannelStore } from '@/store/channel';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -111,11 +112,7 @@ function EnabledChannelPage() {
 export default function ChannelPage() {
   const ready = useServerConfigStore((s) => s.serverConfigInit);
   const enabled = useServerConfigStore(serverConfigSelectors.enableChannels);
-  if (!ready)
-    return (
-      <Center height="100%">
-        <Spin />
-      </Center>
-    );
+  // Continue the route skeleton while the flag resolves instead of swapping to a spinner.
+  if (!ready) return <RouteLoading />;
   return enabled ? <EnabledChannelPage /> : <NotFound />;
 }
