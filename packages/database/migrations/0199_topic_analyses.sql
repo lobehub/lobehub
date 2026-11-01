@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS "topic_analyses" (
 	"intent" text,
 	"outcome" text,
 	"labels" jsonb,
+	"metadata" jsonb,
 	"model" text,
 	"provider" text,
 	"topic_model" text,

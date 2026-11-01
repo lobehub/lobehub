@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "39c01523-e017-4ed2-8695-4c22a06b6153",
+  "id": "15428217-3557-46ba-8f4f-431a23829ead",
   "policies": {},
   "prevId": "2abb741e-cd71-49d5-baa4-0563f57e3a75",
   "roles": {},
@@ -38043,6 +38043,12 @@
         },
         "labels": {
           "name": "labels",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false

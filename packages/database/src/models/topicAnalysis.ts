@@ -67,6 +67,7 @@ export class TopicAnalysisModel {
       intent: result.intent ?? null,
       labels: result.labels ?? null,
       lastMessageId,
+      metadata: result.metadata ?? null,
       lastMessageUpdatedAt,
       model: result.model,
       outcome: result.outcome ?? null,

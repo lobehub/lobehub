@@ -8,8 +8,10 @@ export interface TopicAnalysisResult {
   category: string;
   /** What the user wanted back, e.g. information vs. a produced result. */
   intent?: string | null;
-  /** Additional dimensions that do not need their own column. */
+  /** Additional classification dimensions that do not need their own column. */
   labels?: Record<string, unknown>;
+  /** How the analysis was produced (prompt version, inputs, timings), not what it concluded. */
+  metadata?: Record<string, unknown>;
   model: string;
   /** Whether the user's goal was reached. */
   outcome?: string | null;

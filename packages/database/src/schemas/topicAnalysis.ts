@@ -30,7 +30,10 @@ export const topicAnalyses = pgTable(
     secondaryCategory: text('secondary_category'),
     intent: text('intent'),
     outcome: text('outcome'),
+    /** Extra classification dimensions. */
     labels: jsonb('labels').$type<Record<string, unknown>>(),
+    /** How the analysis was produced (e.g. prompt version), kept apart from what it concluded. */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
 
     /** Model and provider that produced this analysis. */
     model: text('model'),
