@@ -95,8 +95,12 @@ async function getScrollSnapshot(world: CustomWorld): Promise<ScrollSnapshot | n
   });
 }
 
-async function sendPrompt(world: CustomWorld, prompt: string, response: string): Promise<void> {
-  llmMockManager.setResponse(prompt, response);
+async function sendPrompt(world: CustomWorld, basePrompt: string, response: string): Promise<void> {
+  // Replies live on the endpoint every Cucumber worker shares (the agent run
+  // calls the model from the server), and scenarios register the same prompt
+  // with different stream timings. Scope the prompt to this worker.
+  const prompt = `${basePrompt} #${process.env.CUCUMBER_WORKER_ID ?? '0'}`;
+  await llmMockManager.setResponse(prompt, response);
 
   const existingMessageIds = new Set(
     await world.page

@@ -3,7 +3,6 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
-import { aiChatService } from '@/services/aiChat';
 import { getPendingTopicRepos, setPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { type ProjectDirectory, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 import { getSessionStoreState } from '@/store/session';
@@ -58,7 +57,6 @@ beforeEach(() => {
 
   act(() => {
     useChatStore.setState({
-      executeClientAgent: vi.fn(),
       mainInputEditor: null,
       refreshMessages: vi.fn(),
       refreshTopic: vi.fn(),
@@ -306,37 +304,5 @@ describe('sendMessage in a project without a directory', () => {
       .find((topic) => topic.id === params.optimisticTopic.id);
     expect(optimisticRow?.projectId).toBe('prj-1');
     expect(optimisticRow?.projectWorkingDirectoryId).toBeUndefined();
-  });
-
-  it('creates the client-runtime topic inside the staged project', async () => {
-    setupMockSelectors({ agentConfig: {} });
-    const agentId = TEST_IDS.SESSION_ID;
-    const sendMessageInServerSpy = vi
-      .spyOn(aiChatService, 'sendMessageInServer')
-      .mockRejectedValue(new Error('stop after the request is built'));
-
-    act(() => {
-      useChatStore.setState({
-        activeAgentId: agentId,
-        activeTopicId: undefined,
-        isGatewayModeEnabled: () => false,
-        pendingNewTopicDirectory: { agentId, projectId: 'prj-1' },
-      });
-    });
-
-    const { result } = renderHook(() => useChatStore());
-    await act(async () => {
-      await result.current.sendMessage({
-        context: { agentId, threadId: null, topicId: null },
-        message: 'Start in the project',
-      });
-    });
-
-    expect(sendMessageInServerSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ newTopic: expect.objectContaining({ projectId: 'prj-1' }) }),
-      expect.any(AbortController),
-    );
-    // The refused first send hands the project back to the blank draft.
-    expect(result.current.pendingNewTopicDirectory).toEqual({ agentId, projectId: 'prj-1' });
   });
 });

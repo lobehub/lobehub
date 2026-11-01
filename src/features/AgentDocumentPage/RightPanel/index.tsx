@@ -66,7 +66,7 @@ const AgentDocumentSidebarContent = memo(() => {
   const agencyConfig = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
   );
-  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled();
   const isWorkspaceAgent = useAgentStore((s) =>
     agentId ? agentByIdSelectors.isWorkspaceAgentById(agentId)(s) : false,
   );

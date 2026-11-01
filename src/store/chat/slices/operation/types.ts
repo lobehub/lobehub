@@ -108,23 +108,6 @@ export interface OperationCancelContext {
 }
 
 /**
- * Callback to execute after AgentRuntime completes
- */
-export type AfterCompletionCallback = () => void | Promise<void>;
-
-/**
- * Runtime hooks that can be registered during operation execution
- */
-export interface RuntimeHooks {
-  /**
-   * Callbacks to execute after AgentRuntime completes
-   * Used for actions that should happen after current execution finishes
-   * to avoid race conditions with message updates
-   */
-  afterCompletionCallbacks?: AfterCompletionCallback[];
-}
-
-/**
  * Operation metadata
  */
 export interface OperationMetadata {
@@ -183,9 +166,6 @@ export interface OperationMetadata {
     total: number;
     percentage?: number;
   };
-
-  // Runtime hooks (collected during execution, executed after completion)
-  runtimeHooks?: RuntimeHooks;
 
   /**
    * Server-side operation id reported by the agent gateway for this local
@@ -327,7 +307,7 @@ export interface QueuedMessage {
   filesPreview?: QueuedFile[];
   /** Mirrors SendMessageParams.forceRuntime so a queued task-topic follow-up
    *  keeps its gateway pin when the queue drains. */
-  forceRuntime?: 'client' | 'gateway' | 'hetero';
+  forceRuntime?: 'gateway' | 'hetero';
   id: string;
   interruptMode: 'soft' | 'hard';
   metadata?: MessageMetadata;
@@ -364,7 +344,7 @@ export interface MergedQueuedMessage {
   editorData?: Record<string, any>;
   files: string[];
   filesPreview: QueuedFile[];
-  forceRuntime?: 'client' | 'gateway' | 'hetero';
+  forceRuntime?: 'gateway' | 'hetero';
   metadata?: MessageMetadata;
 }
 

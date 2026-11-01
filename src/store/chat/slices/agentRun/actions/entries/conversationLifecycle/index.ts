@@ -1,5 +1,4 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management';
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
@@ -99,10 +98,6 @@ import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { topicListFilterOf } from '@/store/chat/slices/topic/projection';
 import { resolveTopicHeteroPin } from '@/store/chat/slices/topic/selectors';
 import { type ChatStore } from '@/store/chat/store';
-import {
-  mergeAgentRuntimeInitialContexts,
-  resolveActiveTopicDocumentInitialContext,
-} from '@/store/chat/utils/activeTopicDocumentContext';
 import { hasRunningCompressionOperation } from '@/store/chat/utils/compression';
 import { isLocalOnlyMessage } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -133,7 +128,7 @@ import {
   parseSingleAgentMentionDirectRoute,
   processCommands,
 } from '../commandBus';
-import { pageConversationNeedsGateway, preparePageConversation } from '../pageConversation';
+import { preparePageConversation } from '../pageConversation';
 import { mergePartialPersistedMessages, resolveSendResponseMessages } from '../persistedMessages';
 import { resolveExistingTopicForRun } from '../resolveExistingTopic';
 import { resolveProjectDirectoryRun } from '../resolveProjectDirectoryRun';
@@ -328,7 +323,7 @@ export class ConversationLifecycleActionImpl {
     };
 
     let editorData = inputEditorData;
-    const { executeClientAgent, mainInputEditor } = this.#get();
+    const { mainInputEditor } = this.#get();
     // `inputEditor` names the editor that owns this send. An explicit `null`
     // means "this send has no composer editor": an embedded reply (a task run's
     // inline follow-up) must not fall back to ChatStore's global editor, which
@@ -430,8 +425,7 @@ export class ConversationLifecycleActionImpl {
     );
     const { workspaceScoped } = topicBinding;
     let { agencyConfig } = topicBinding;
-    const isGatewayMode =
-      this.#get().isGatewayModeEnabled(agentId) || pageConversationNeedsGateway(context);
+    const isGatewayMode = this.#get().isGatewayModeEnabled();
     const boundTopic = context.topicId
       ? topicSelectors.getTopicById(context.topicId)(this.#get())
       : undefined;
@@ -468,7 +462,6 @@ export class ConversationLifecycleActionImpl {
       boundDeviceId: agencyConfig?.boundDeviceId,
       executionTarget: agencyConfig?.executionTarget,
       heterogeneousProvider,
-      isGatewayMode,
       isWorkspaceAgent: !!agent?.workspaceId,
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
@@ -1767,9 +1760,45 @@ export class ConversationLifecycleActionImpl {
       };
     }
 
-    // ── Gateway mode: skip sendMessageInServer, let execAgentTask handle everything ──
-    if (runtimeType === 'gateway' && !directMentionRoute) {
+    // Persist selected skill/tool context into user message content so it
+    // survives across turns. The direct-mention persist path stores both; the
+    // gateway run (the server persists the user row from `message`) stores only
+    // the tool context, because the server injects selected skill bodies from
+    // `selectedSkillIds` and would otherwise send them twice.
+    // Deduplicate: skip skills/tools already @mentioned in earlier messages (via editorData).
+    const previouslyMentionedSkills = new Set<string>();
+    const previouslyMentionedTools = new Set<string>();
+
+    for (const m of messages) {
+      if (m.role !== 'user') continue;
+      for (const s of parseSelectedSkillsFromEditorData(m.editorData ?? undefined)) {
+        previouslyMentionedSkills.add(s.identifier);
+      }
+      for (const t of parseSelectedToolsFromEditorData(m.editorData ?? undefined)) {
+        previouslyMentionedTools.add(t.identifier);
+      }
+    }
+    const skillsContext = formatSelectedSkillsContext(
+      enrichedSelectedSkills.filter((s) => !previouslyMentionedSkills.has(s.identifier)),
+    );
+    const toolsContext = formatSelectedToolsContext(
+      enrichedSelectedTools.filter((t) => !previouslyMentionedTools.has(t.identifier)),
+    );
+    const withContext = (...parts: (string | null)[]) => {
+      const suffix = parts.filter(Boolean).join('\n');
+      return suffix ? `${message}\n\n${suffix}` : message;
+    };
+    const persistedContent = withContext(skillsContext, toolsContext);
+
+    // ── Gateway: skip sendMessageInServer, let execAgentTask handle everything ──
+    if (!directMentionRoute) {
       try {
+        // A plain agent only runs on the Agent Gateway. A deployment that keeps
+        // `AGENT_GATEWAY_URL` but turned Gateway mode off (ENABLE_AGENT_GATEWAY=0)
+        // has no runtime for it; hetero device / remote dispatch still goes out.
+        if (!heterogeneousProvider && !isGatewayMode)
+          throw new Error(t('gateway.notConfigured', { ns: 'chat' }));
+
         // Pass `sendMessage` as `parentOperationId` so executeGatewayAgent
         // completes it the instant phase-1 init finishes (after the child
         // `execServerAgentRuntime` op starts). Without this hand-off the
@@ -1794,7 +1823,7 @@ export class ConversationLifecycleActionImpl {
             : operationContext,
           messageContext: operationContext,
           fileIds: fileIdList,
-          message,
+          message: withContext(toolsContext),
           // The server persists the user row on this path, so the steer mark
           // of a directly-steered send ("send now") must travel with the request.
           metadata: (metadata as Pick<MessageMetadata, 'steer'> | undefined)?.steer
@@ -1918,7 +1947,7 @@ export class ConversationLifecycleActionImpl {
       }
     }
 
-    // ── Client mode: send via server API then run agent locally ──
+    // ── Direct @agent route: persist the turn, then run the mentioned agent ──
     let data: SendMessageServerResponse | undefined;
     const isCreatedTopicResponse = (response?: SendMessageServerResponse) =>
       Boolean(
@@ -1931,31 +1960,6 @@ export class ConversationLifecycleActionImpl {
 
       const topicId = operationContext.topicId;
 
-      // Persist selected skill/tool context into user message content so it survives across turns.
-      // Deduplicate: skip skills/tools already @mentioned in earlier messages (via editorData).
-      const previouslyMentionedSkills = new Set<string>();
-      const previouslyMentionedTools = new Set<string>();
-
-      for (const m of messages) {
-        if (m.role !== 'user') continue;
-        for (const s of parseSelectedSkillsFromEditorData(m.editorData ?? undefined)) {
-          previouslyMentionedSkills.add(s.identifier);
-        }
-        for (const t of parseSelectedToolsFromEditorData(m.editorData ?? undefined)) {
-          previouslyMentionedTools.add(t.identifier);
-        }
-      }
-      const dedupedSkills = enrichedSelectedSkills.filter(
-        (s) => !previouslyMentionedSkills.has(s.identifier),
-      );
-      const dedupedTools = enrichedSelectedTools.filter(
-        (t) => !previouslyMentionedTools.has(t.identifier),
-      );
-
-      const skillContext = formatSelectedSkillsContext(dedupedSkills);
-      const toolContext = formatSelectedToolsContext(dedupedTools);
-      const contextSuffix = [skillContext, toolContext].filter(Boolean).join('\n');
-      const persistedContent = contextSuffix ? `${message}\n\n${contextSuffix}` : message;
       data = await aiChatService.sendMessageInServer(
         {
           newUserMessage: {
@@ -2246,7 +2250,7 @@ export class ConversationLifecycleActionImpl {
       }
     }
 
-    // ── AI execution (client mode) ──
+    // ── Direct @agent execution ──
     {
       let sendOperationHandedOff = false;
       const handoffSendOperation = () => {
@@ -2260,67 +2264,18 @@ export class ConversationLifecycleActionImpl {
       };
 
       try {
-        if (directMentionRoute) {
-          const directMentionRun = executeDirectMention(
-            {
-              context: execContext,
-              instruction: message,
-              parentOperationId: operationId,
-              runtimeType: runtimeType === 'gateway' ? 'gateway' : 'client',
-              sourceMessageId: data.assistantMessageId,
-              targetAgentId: agentId,
-            },
-            this.#get,
-          );
-          handoffSendOperation();
-          await directMentionRun;
-        } else {
-          const displayMessages = displayMessageSelectors
-            .getDisplayMessagesByKey(messageMapKey(execContext))(this.#get())
-            .filter((item) => !isLocalOnlyMessage(item));
-
-          // When agents are @mentioned, inject a slim callAgent-only manifest
-          // so the AI can delegate directly without activating the full agent-management tool
-          const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
-          const activeTopicDocumentInitialContext =
-            await resolveActiveTopicDocumentInitialContext(execContext);
-
-          const hasInitialContext = hasMentionedAgents || !!injectedManifests;
-
-          // Note: selectedSkills and selectedTools are NOT passed here — they are
-          // persisted into the user message content above so they survive across
-          // turns without re-injection.
-          const agentRuntimeInitialContext = hasInitialContext
-            ? {
-                initialContext: {
-                  // Only inject mentionedAgents in non-group context to avoid
-                  // group @member mentions (including ALL_MEMBERS) leaking into agent-management
-                  ...(hasMentionedAgents ? { mentionedAgents } : undefined),
-                  ...(injectedManifests ? { injectedManifests } : undefined),
-                },
-                phase: 'init' as const,
-              }
-            : undefined;
-          const mergedAgentRuntimeInitialContext = mergeAgentRuntimeInitialContexts(
-            activeTopicDocumentInitialContext,
-            agentRuntimeInitialContext,
-          );
-
-          const clientRun = executeClientAgent({
+        const directMentionRun = executeDirectMention(
+          {
             context: execContext,
-            initialContext: mergedAgentRuntimeInitialContext,
-            metadata: requestMetadata,
-            messages: displayMessages,
-            parentMessageId: data.assistantMessageId,
-            parentMessageType: 'assistant',
+            instruction: message,
             parentOperationId: operationId,
-            inPortalThread: !!data.createdThreadId,
-            skipCreateFirstMessage: true,
-            userMessageId: data.userMessageId,
-          });
-          handoffSendOperation();
-          await clientRun;
-        }
+            sourceMessageId: data.assistantMessageId,
+            targetAgentId: agentId,
+          },
+          this.#get,
+        );
+        handoffSendOperation();
+        await directMentionRun;
 
         const userFiles = dbMessageSelectors
           .dbUserFiles(this.#get())

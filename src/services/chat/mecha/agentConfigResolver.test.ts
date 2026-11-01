@@ -730,7 +730,7 @@ describe('resolveAgentConfig', () => {
             systemRole: 'Inbox system role',
           }));
 
-        // Call WITHOUT plugins parameter - this is how internal_createAgentState calls it
+        // Call WITHOUT plugins parameter
         const result = resolveAgentConfig({ agentId: 'inbox-agent' });
 
         // Verify getAgentRuntimeConfig received basePlugins as fallback

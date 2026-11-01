@@ -3,23 +3,11 @@ import { t } from 'i18next';
 
 import { useDocumentStore } from '@/store/document';
 import { preparePageForAgent } from '@/store/document/preparePageForAgent';
-import { getServerConfigStoreState } from '@/store/serverConfig';
 
 interface PageSendContext {
   documentId?: string;
   scope?: string | null;
 }
-
-/**
- * Page tools only run on the server runtime, so a page conversation takes
- * Gateway Mode whenever the deployment has a gateway, regardless of the
- * user's opt-out.
- */
-export const pageConversationNeedsGateway = (context: PageSendContext) => {
-  if (context.scope !== 'page') return false;
-  const serverConfig = getServerConfigStoreState()?.serverConfig;
-  return !!serverConfig?.agentGatewayUrl && !!serverConfig.enableGatewayMode;
-};
 
 /**
  * Gets the open page ready before a page-scoped send and returns the document

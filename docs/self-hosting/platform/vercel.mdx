@@ -21,6 +21,10 @@ This article will detail how to deploy the server database version of LobeHub on
   - When configuring the environment variables required for the server-side database, make sure to fill in all of them before deployment, otherwise you may encounter database migration issues!
 </Callout>
 
+<Callout type="warning">
+  LobeHub 2.3 and later need an Agent Gateway to run Agents, and on Vercel also queue mode (Upstash QStash and Redis). Set both up before deploying or upgrading: see [Upgrade to LobeHub 2.3 with the Agent Gateway](/docs/self-hosting/migration/v2/agent-gateway).
+</Callout>
+
 ## 1. Configure the Database
 
 <Steps>

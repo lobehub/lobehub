@@ -12,7 +12,7 @@ export interface TopicHoverEnv {
   hasLocalMessages: (row: TopicHoverRow) => boolean;
   hasPreview: (topicId: string) => boolean;
   hasReadingPosition: (row: TopicHoverRow) => boolean;
-  // Browser-run agents read whole 1000-row pages, which a hover must not trigger.
+  // Unprojected (protocol v1) reads return whole 1000-row pages, which a hover must not trigger.
   isProjectedRead: (agentId: string) => boolean;
   isRunning: (row: TopicHoverRow) => boolean;
 }

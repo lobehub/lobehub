@@ -1,0 +1,167 @@
+---
+title: Upgrade to LobeHub 2.3 with the Agent Gateway
+description: >-
+  LobeHub 2.3 runs every Agent on the server through the Agent Gateway. Learn
+  what to configure before upgrading a self-hosted deployment from an earlier
+  version.
+tags:
+  - LobeHub 2.3
+  - Migration
+  - Agent Gateway
+  - Self-hosting
+---
+
+# Upgrade to LobeHub 2.3 with the Agent Gateway
+
+Starting with LobeHub 2.3, Agents run only on the server, and the Agent Gateway streams their output to the browser. The browser no longer runs Agents or calls model Providers itself. A deployment without an Agent Gateway cannot run Agents.
+
+Set up the gateway before you upgrade. If you upgrade first, every Agent message fails with:
+
+> This deployment has no Agent Gateway configured, so agents can't run. Ask your administrator to enable the Agent Gateway
+
+## What Changed
+
+| Area                                             | Before 2.3                                               | 2.3 and later                                                                                                                                             |
+| ------------------------------------------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Where Agents run                                 | In the browser, unless Gateway Mode was fully configured | Always on the server                                                                                                                                      |
+| Agent Gateway                                    | Optional; an incomplete setup fell back to the browser   | Required                                                                                                                                                  |
+| Providers only the user's device can reach       | The browser called them directly                         | The server sends each call to the user's open LobeHub tab through the gateway, and the tab runs it. This needs `lobehub-gateway` 0.5.0 or later and Redis |
+| No open LobeHub tab (bots, scheduled tasks, CLI) | —                                                        | A call to a device-only Provider waits up to one minute for a tab, then fails with a clear error                                                          |
+| Translation, topic titles, prompt rewriting      | Called from the browser                                  | Called from the server                                                                                                                                    |
+
+Cloud Providers such as OpenAI or DeepSeek are called from the server, as before. Their behavior does not change.
+
+## Check Your Deployment
+
+- **Docker Compose, 2.2.18 to 2.2.x**: your `docker-compose.yml` already has the `gateway` service. If `.env` already holds the gateway settings and `docker logs lobehub` prints no `ACTION REQUIRED` warning, you only need to [update the gateway image](#docker-compose). Otherwise follow all of [Docker Compose](#docker-compose).
+- **Docker Compose, 2.2.17 or earlier**: follow [Docker Compose](#docker-compose).
+- **Single Docker container or another long-running server**: follow [Other Deployments](#other-deployments).
+- **Vercel or another serverless platform**: follow [Other Deployments](#other-deployments), including [Turn on queue mode](#turn-on-queue-mode-serverless-only).
+
+## Docker Compose
+
+<Steps>
+  ### Add the gateway settings
+
+  Follow [Upgrading an Existing Deployment](/docs/self-hosting/platform/docker-compose#upgrading-an-existing-deployment). It downloads the new `docker-compose.yml`, adds the gateway variables and `JWKS_PUBLIC_KEY` to `.env`, and replaces the example `JWKS_KEY` if you still use it.
+
+  ### Make sure the gateway image is 0.5.0 or later
+
+  ```sh
+  grep 'lobehub-gateway:' docker-compose.yml
+  ```
+
+  The output should be `ghcr.io/lobehub/lobehub-gateway:0.5.0` or later. If it shows `0.3.2`, download `docker-compose.yml` again, or change the tag by hand. 0.3.2 runs Agents but cannot run local models on the user's device.
+
+  ### Recreate the stack
+
+  ```sh
+  docker compose pull
+  docker compose up -d --force-recreate
+  ```
+</Steps>
+
+Then [verify the upgrade](#verify-the-upgrade).
+
+## Other Deployments
+
+Run the gateway as a long-running service the browser can reach, such as a Docker container on a VPS, then point LobeHub at it.
+
+<Steps>
+  ### Prepare the values
+
+  - A service token shared by LobeHub and the gateway: `openssl rand -hex 32`
+  - `JWKS_PUBLIC_KEY`: the public half of your `JWKS_KEY`. With `JWKS_KEY` exported in your shell, run:
+
+  ```sh
+  docker run --rm -e JWKS_KEY="$JWKS_KEY" --entrypoint /bin/node lobehub/lobehub -e 'const {d,p,q,dp,dq,qi,...pub}=JSON.parse(process.env.JWKS_KEY).keys[0];console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[pub]}))'
+  ```
+
+  ### Start the gateway
+
+  ```sh
+  docker run -d --name lobe-gateway --restart always \
+    -p 8787:8787 -p 8788:8788 \
+    -e SERVICE_TOKEN='<service token>' \
+    -e JWKS_PUBLIC_KEY='<JWKS_PUBLIC_KEY value>' \
+    -e LOBE_API_BASE_URL='https://lobehub.example.com' \
+    ghcr.io/lobehub/lobehub-gateway:0.5.0
+  ```
+
+  - `LOBE_API_BASE_URL` is your LobeHub address as reached by the gateway.
+  - Port `8787` is the Agent Gateway. Put it behind HTTPS with WebSocket upgrades and long read timeouts enabled, for example `https://gateway.example.com`.
+  - Port `8788` is the device gateway for `lh connect`. Leave it closed if you don't use it.
+
+  ### Configure LobeHub
+
+  Add these environment variables to LobeHub and redeploy:
+
+  ```env
+  ENABLE_AGENT_GATEWAY=1
+  # Gateway address as reached by the browser
+  AGENT_GATEWAY_URL=https://gateway.example.com
+  # Same value as SERVICE_TOKEN on the gateway
+  AGENT_GATEWAY_SERVICE_TOKEN=<service token>
+  # Required for local models on the user's device, and for queue mode
+  REDIS_URL=redis://your-redis-host:6379
+  ```
+
+  Gateway Mode stays off unless all three of `ENABLE_AGENT_GATEWAY`, `AGENT_GATEWAY_URL`, and `AGENT_GATEWAY_SERVICE_TOKEN` are set. If LobeHub reaches the gateway at a different address than the browser does, also set `AGENT_GATEWAY_INTERNAL_URL`. See [Environment Variables](/docs/self-hosting/environment-variables/basic) and [Redis](/docs/self-hosting/advanced/redis).
+
+  ### Turn on queue mode (serverless only)
+
+  Skip this step on a long-running server such as Docker. On Vercel and other serverless platforms it is required.
+
+  By default LobeHub runs each Agent step inside the server process. A serverless function stops once it returns its response, so the Agent stops partway through. Queue mode schedules every step as its own request through [Upstash QStash](https://upstash.com/docs/qstash), which calls back `/api/agent/run` on your deployment.
+
+  Create a QStash project in the [Upstash Console](https://console.upstash.com/qstash), then add:
+
+  ```env
+  AGENT_RUNTIME_MODE=queue
+  QSTASH_TOKEN=<QStash token>
+  QSTASH_CURRENT_SIGNING_KEY=<current signing key>
+  QSTASH_NEXT_SIGNING_KEY=<next signing key>
+  ```
+
+  - `REDIS_URL` from the previous step is required: queue mode keeps each run's state in Redis between steps.
+  - `APP_URL` must be your public HTTPS address, such as `https://lobehub.example.com`. QStash sends each step there, so it cannot be `localhost` or a private network address.
+  - Set both signing keys. Without them, `/api/agent/run` accepts unsigned requests, so anyone who can reach your deployment can drive Agent runs.
+</Steps>
+
+## Verify the Upgrade
+
+1. Run `docker logs lobehub` (Docker) or open your platform's logs. There is no `ACTION REQUIRED: Gateway Mode configuration needs attention` warning.
+2. Open LobeHub and send a message to any Agent. The reply streams in.
+3. If you use Ollama or LM Studio on your own computer, send a message to an Agent that uses it. The reply streams in while the LobeHub tab stays open.
+
+## Local Models
+
+These Providers run on the user's device:
+
+- Ollama, LM Studio, and Unsloth, unless **Use Client Request Mode** is turned off in the Provider's settings
+- A Provider with a custom API proxy address and no API key, or with **Use Client Request Mode** turned on
+
+Keep in mind:
+
+- Keep a LobeHub tab open while an Agent uses one of these Providers. The server sends each model call to that tab, and the tab calls the Provider. Bots, scheduled tasks, and `lh agent run` started without an open tab wait up to one minute, then fail. Set `AGENT_LLM_RELAY_CLIENT_WAIT_MS` (milliseconds) to change the wait.
+- If Ollama runs where the LobeHub server can reach it, let the server call it instead: set `OLLAMA_PROXY_URL`, such as `http://host.docker.internal:11434` inside Docker. Ollama then runs on the server by default, and no tab is needed. See [Ollama](/docs/self-hosting/examples/ollama).
+- Agent requests with all built-in tools enabled use roughly 24k to 34k tokens. Load LM Studio models with a context length of at least 32k, or turn off tools the Agent doesn't need.
+- `FEATURE_FLAGS=-agent_llm_relay` turns off sending calls to the tab. The server then calls every Provider itself, so `localhost` on the user's device is no longer reachable.
+
+## FAQ
+
+#### Every message fails with "This deployment has no Agent Gateway configured"
+
+One of `ENABLE_AGENT_GATEWAY`, `AGENT_GATEWAY_URL`, or `AGENT_GATEWAY_SERVICE_TOKEN` is missing on LobeHub. Add it and redeploy.
+
+#### The message is sent, but no reply appears
+
+The browser cannot open its WebSocket connection to `AGENT_GATEWAY_URL`, or the gateway rejects the session. Check that the address is reachable from the browser, that your reverse proxy allows WebSocket upgrades, and that `JWKS_PUBLIC_KEY` on the gateway was derived from the `JWKS_KEY` LobeHub uses now.
+
+#### On Vercel, Agents stop before they finish
+
+Queue mode is off. Set `AGENT_RUNTIME_MODE=queue` and the QStash variables in [Turn on queue mode](#turn-on-queue-mode-serverless-only), then redeploy.
+
+#### Agent runs stop when the gateway restarts
+
+The gateway keeps its state in memory. Runs in progress are interrupted when it restarts; send the message again.

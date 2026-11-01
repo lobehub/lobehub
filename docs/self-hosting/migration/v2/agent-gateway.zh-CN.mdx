@@ -1,0 +1,164 @@
+---
+title: 升级到 LobeHub 2.3：配置 Agent Gateway
+description: LobeHub 2.3 起所有智能体都通过 Agent Gateway 在服务端运行。了解从早期版本升级自部署实例前需要完成的配置。
+tags:
+  - LobeHub 2.3
+  - 迁移
+  - Agent Gateway
+  - 自部署
+---
+
+# 升级到 LobeHub 2.3：配置 Agent Gateway
+
+从 LobeHub 2.3 开始，智能体只在服务端运行，由 Agent Gateway 把输出实时推送到浏览器。浏览器不再自己运行智能体，也不再直接请求模型服务商。没有配置 Agent Gateway 的部署无法运行智能体。
+
+请先配置好网关再升级。如果先升级，每条发给智能体的消息都会失败，并提示：
+
+> 当前部署未配置 Agent Gateway，无法运行助理。请联系管理员启用 Agent Gateway
+
+## 有哪些变化
+
+| 方面                              | 2.3 之前                     | 2.3 及之后                                                                      |
+| ------------------------------- | -------------------------- | ---------------------------------------------------------------------------- |
+| 智能体在哪里运行                        | 在浏览器中运行，除非完整配置了 Gateway 模式 | 始终在服务端运行                                                                     |
+| Agent Gateway                   | 可选；配置不完整时退回浏览器运行           | 必须配置                                                                         |
+| 只有用户自己设备能访问的服务商                 | 由浏览器直接请求                   | 服务端通过网关把每次调用发给用户打开的 LobeHub 标签页，由标签页执行。需要 `lobehub-gateway` 0.5.0 及以上和 Redis |
+| 没有打开的 LobeHub 标签页（机器人、定时任务、CLI） | —                          | 调用只能在设备上访问的服务商时，最多等待 1 分钟，没有标签页接手就给出明确的错误                                    |
+| 翻译、话题标题、提示词改写                   | 由浏览器发起                     | 由服务端发起                                                                       |
+
+OpenAI、DeepSeek 等云端服务商和以前一样由服务端请求，行为不变。
+
+## 确认你的部署方式
+
+- **Docker Compose，2.2.18 到 2.2.x**：你的 `docker-compose.yml` 已经包含 `gateway` 服务。如果 `.env` 里已有网关配置，且 `docker logs lobehub` 没有打印 `ACTION REQUIRED` 告警，只需[更新网关镜像](#docker-compose)；否则按 [Docker Compose](#docker-compose) 完整操作。
+- **Docker Compose，2.2.17 及更早**：按 [Docker Compose](#docker-compose) 操作。
+- **单个 Docker 容器或其他常驻运行的服务器**：按 [其他部署方式](#其他部署方式) 操作。
+- **Vercel 或其他 Serverless 平台**：按 [其他部署方式](#其他部署方式) 操作，并完成其中的 [开启队列模式](#开启队列模式仅-serverless)。
+
+## Docker Compose
+
+<Steps>
+  ### 添加网关配置
+
+  按 [升级已有部署](/zh/docs/self-hosting/platform/docker-compose#升级已有部署) 操作：下载新的 `docker-compose.yml`，把网关变量和 `JWKS_PUBLIC_KEY` 写入 `.env`；如果你还在用示例里的 `JWKS_KEY`，一并替换。
+
+  ### 确认网关镜像是 0.5.0 及以上
+
+  ```sh
+  grep 'lobehub-gateway:' docker-compose.yml
+  ```
+
+  输出应为 `ghcr.io/lobehub/lobehub-gateway:0.5.0` 或更高版本。如果显示 `0.3.2`，重新下载 `docker-compose.yml`，或手动改掉版本号。0.3.2 能运行智能体，但无法使用用户设备上的本地模型。
+
+  ### 重建服务
+
+  ```sh
+  docker compose pull
+  docker compose up -d --force-recreate
+  ```
+</Steps>
+
+然后[验证升级结果](#验证升级结果)。
+
+## 其他部署方式
+
+把网关作为常驻服务运行在浏览器能访问到的地方，例如 VPS 上的 Docker 容器，再让 LobeHub 指向它。
+
+<Steps>
+  ### 准备配置值
+
+  - LobeHub 与网关共用的服务令牌：`openssl rand -hex 32`
+  - `JWKS_PUBLIC_KEY`：`JWKS_KEY` 的公钥部分。在 shell 中导出 `JWKS_KEY` 后运行：
+
+  ```sh
+  docker run --rm -e JWKS_KEY="$JWKS_KEY" --entrypoint /bin/node lobehub/lobehub -e 'const {d,p,q,dp,dq,qi,...pub}=JSON.parse(process.env.JWKS_KEY).keys[0];console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[pub]}))'
+  ```
+
+  ### 启动网关
+
+  ```sh
+  docker run -d --name lobe-gateway --restart always \
+    -p 8787:8787 -p 8788:8788 \
+    -e SERVICE_TOKEN='<服务令牌>' \
+    -e JWKS_PUBLIC_KEY='<JWKS_PUBLIC_KEY 的值>' \
+    -e LOBE_API_BASE_URL='https://lobehub.example.com' \
+    ghcr.io/lobehub/lobehub-gateway:0.5.0
+  ```
+
+  - `LOBE_API_BASE_URL` 是网关访问 LobeHub 用的地址。
+  - `8787` 端口是 Agent Gateway。请在前面配置 HTTPS，开启 WebSocket 升级和较长的读取超时，例如 `https://gateway.example.com`。
+  - `8788` 端口是给 `lh connect` 用的设备网关，不用的话可以不开放。
+
+  ### 配置 LobeHub
+
+  给 LobeHub 添加以下环境变量并重新部署：
+
+  ```env
+  ENABLE_AGENT_GATEWAY=1
+  # 浏览器访问网关用的地址
+  AGENT_GATEWAY_URL=https://gateway.example.com
+  # 与网关的 SERVICE_TOKEN 相同
+  AGENT_GATEWAY_SERVICE_TOKEN=<服务令牌>
+  # 使用用户设备上的本地模型和队列模式时必需
+  REDIS_URL=redis://your-redis-host:6379
+  ```
+
+  `ENABLE_AGENT_GATEWAY`、`AGENT_GATEWAY_URL`、`AGENT_GATEWAY_SERVICE_TOKEN` 三项都设置后，Gateway 模式才会开启。如果 LobeHub 访问网关的地址和浏览器不同，再设置 `AGENT_GATEWAY_INTERNAL_URL`。详见 [环境变量](/zh/docs/self-hosting/environment-variables/basic) 和 [Redis](/zh/docs/self-hosting/advanced/redis)。
+
+  ### 开启队列模式（仅 Serverless）
+
+  Docker 等常驻运行的服务器跳过这一步；Vercel 和其他 Serverless 平台必须配置。
+
+  默认情况下，LobeHub 在服务端进程内逐步运行智能体。Serverless 函数返回响应后就会停止，智能体会在中途停下。队列模式通过 [Upstash QStash](https://upstash.com/docs/qstash) 把每一步作为单独的请求调度，由 QStash 回调你部署上的 `/api/agent/run`。
+
+  在 [Upstash 控制台](https://console.upstash.com/qstash) 创建 QStash 项目，然后添加：
+
+  ```env
+  AGENT_RUNTIME_MODE=queue
+  QSTASH_TOKEN=<QStash 令牌>
+  QSTASH_CURRENT_SIGNING_KEY=<当前签名密钥>
+  QSTASH_NEXT_SIGNING_KEY=<下一个签名密钥>
+  ```
+
+  - 上一步的 `REDIS_URL` 是必需的：队列模式在两步之间把运行状态保存在 Redis 中。
+  - `APP_URL` 必须是公网可访问的 HTTPS 地址，例如 `https://lobehub.example.com`。QStash 会把每一步发到这个地址，所以不能是 `localhost` 或内网地址。
+  - 两个签名密钥都要设置。缺少它们时，`/api/agent/run` 会接受未签名的请求，任何能访问你部署的人都能驱动智能体运行。
+</Steps>
+
+## 验证升级结果
+
+1. 运行 `docker logs lobehub`（Docker）或打开所在平台的日志，没有 `ACTION REQUIRED: Gateway Mode configuration needs attention` 告警。
+2. 打开 LobeHub，给任意智能体发一条消息，回复正常流式输出。
+3. 如果你在自己电脑上用 Ollama 或 LM Studio，给使用它的智能体发一条消息。保持 LobeHub 标签页打开，回复正常流式输出。
+
+## 本地模型
+
+以下服务商在用户设备上运行：
+
+- Ollama、LM Studio、Unsloth，除非在服务商设置中关闭了 **使用客户端请求模式**
+- 填写了自定义 API 代理地址但没有填 API Key 的服务商，或开启了 **使用客户端请求模式** 的服务商
+
+需要注意：
+
+- 智能体使用这些服务商时，请保持 LobeHub 标签页打开。服务端会把每次模型调用发给这个标签页，由标签页请求服务商。在没有打开标签页时由机器人、定时任务或 `lh agent run` 发起的运行，最多等待 1 分钟后失败。可以用 `AGENT_LLM_RELAY_CLIENT_WAIT_MS`（毫秒）调整等待时长。
+- 如果 Ollama 运行在 LobeHub 服务端能访问的地方，可以改由服务端请求：设置 `OLLAMA_PROXY_URL`，例如 Docker 中的 `http://host.docker.internal:11434`。这样 Ollama 默认由服务端请求，不需要打开标签页。详见 [Ollama](/zh/docs/self-hosting/examples/ollama)。
+- 启用全部内置工具时，一次智能体请求约 2.4 万到 3.4 万 token。在 LM Studio 中加载模型时，上下文长度请设为 32k 及以上，或关掉智能体用不到的工具。
+- `FEATURE_FLAGS=-agent_llm_relay` 会停止把调用发给标签页。之后所有服务商都由服务端请求，用户设备上的 `localhost` 将无法访问。
+
+## 常见问题
+
+#### 每条消息都提示「当前部署未配置 Agent Gateway」
+
+LobeHub 缺少 `ENABLE_AGENT_GATEWAY`、`AGENT_GATEWAY_URL` 或 `AGENT_GATEWAY_SERVICE_TOKEN` 中的某一项。补上后重新部署。
+
+#### 消息发出去了，但没有回复
+
+浏览器无法与 `AGENT_GATEWAY_URL` 建立 WebSocket 连接，或者网关拒绝了会话。请确认浏览器能访问这个地址、反向代理允许 WebSocket 升级，并且网关上的 `JWKS_PUBLIC_KEY` 是由 LobeHub 当前使用的 `JWKS_KEY` 推导出来的。
+
+#### 在 Vercel 上，智能体运行到一半就停了
+
+没有开启队列模式。按 [开启队列模式](#开启队列模式仅-serverless) 设置 `AGENT_RUNTIME_MODE=queue` 和 QStash 相关变量，然后重新部署。
+
+#### 网关重启后，正在进行的运行中断了
+
+网关把状态保存在内存中，重启会中断正在进行的运行。重新发送消息即可。

@@ -11,46 +11,12 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 /**
  * Which agent runtime should handle an operation.
  *
- * - `client`: in-browser AgentRuntime (default)
- * - `gateway`: cloud sandbox via Gateway WebSocket
+ * - `gateway`: the server runs the agent loop and streams it over the Agent
+ *   Gateway WebSocket (default). LLM calls to providers only this device can
+ *   reach are relayed back to the requesting tab (`services/llmRelay`).
  * - `hetero`: heterogeneous CLI agent (Claude Code, Codex, …) via desktop IPC or sandbox
  */
-export type AgentRuntimeType = 'client' | 'gateway' | 'hetero';
-
-/**
- * Unified intent for a non-hetero, non-group sub-agent invocation.
- *
- * All three caller patterns (`callSubAgent` / `callAgent` / `@agent`) map
- * their parameters into this shape before handing off to
- * `dispatchNonHeteroSubAgent`. Runtime routing is entirely the dispatcher's
- * responsibility — callers only declare *what* they want, not *how* to run it.
- *
- * Excluded from this contract:
- * - Hetero agents (handled by the heterogeneous pipeline)
- * - Group orchestration (handled by `groupOrchestration.triggerSpeak`)
- * - Async task mode (handled by the `execSubAgent` executor via state.type)
- */
-export interface AgentInvocationIntent {
-  /**
-   * Instruction delivered to the sub-agent.
-   * In client mode it is injected as a virtual user message prepended to the
-   * existing message history. In gateway mode it becomes the `message` param
-   * of `executeGatewayAgent` (i.e. a real user message on the server).
-   */
-  instruction: string;
-  /**
-   * Which invocation pattern produced this intent.
-   * Preserved for logging / debugging; has no effect on runtime selection.
-   */
-  kind: 'callAgent' | 'callSubAgent' | 'mention';
-  /**
-   * ID of the tool result message that triggered this invocation.
-   * Used as `parentMessageId` by the client executor.
-   */
-  parentMessageId: string;
-  /** Target agent to execute. */
-  targetAgentId: string;
-}
+export type AgentRuntimeType = 'gateway' | 'hetero';
 
 export interface RuntimeSelectionContext {
   /** Device bound by the execution switcher. Used when desktop `local` syncs to web. */
@@ -68,8 +34,6 @@ export interface RuntimeSelectionContext {
   executionTarget?: DeviceExecutionTarget;
   /** Per-agent heterogeneous provider config (desktop only — takes priority over gateway). */
   heterogeneousProvider?: HeterogeneousProviderConfig;
-  /** Result of `chatStore.isGatewayModeEnabled()`. */
-  isGatewayMode: boolean;
   /**
    * The agent is workspace-scoped (`agent.workspaceId` set), regardless of
    * authorship or per-member overrides. Unlike `workspaceScoped`, this stays
@@ -108,14 +72,15 @@ interface SelectRuntimeTypeOptions {
  * resume, continue, sub-agent dispatch, …) so adding a new entry point does
  * not require re-deriving the routing rules.
  *
- * Priority: `parentRuntime` > `hetero` (desktop only) > `gateway` > `client`.
+ * Priority: `parentRuntime` > `hetero` (desktop only) > `gateway`.
  *
  * The agent's model provider is intentionally not an input. A provider only
  * this device can reach (local Ollama / LM Studio, a private base URL) still
  * runs on `gateway`: the server drives the loop and relays each LLM attempt
  * to the client that started the run (`agent_llm_relay`, see
- * `services/llmRelay`); tools, persistence and the loop stay on the server
- * rather than falling back to the client runtime.
+ * `services/llmRelay`); tools, persistence and the loop stay on the server.
+ * There is no in-browser runtime: a deployment without an Agent Gateway
+ * cannot run agents (`executeGatewayAgent` reports the missing gateway).
  */
 export const selectRuntimeType = (
   ctx: RuntimeSelectionContext,
@@ -186,6 +151,5 @@ export const selectRuntimeType = (
     );
     return target === 'local' ? 'hetero' : 'gateway';
   }
-  if (ctx.isGatewayMode) return 'gateway';
-  return 'client';
+  return 'gateway';
 };

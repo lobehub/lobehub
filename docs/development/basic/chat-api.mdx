@@ -26,7 +26,7 @@ For CLI, public API, or TypeScript SDK integration, start with [Choose a Develop
 
 ## Scope
 
-The diagram below focuses on the client-side Agent loop. See [Client-Side vs Server-Side Execution](#client-side-vs-server-side-execution) for server execution. Different transports and execution scenarios do not necessarily follow an identical path.
+The diagram below follows an Agent run. The Agent loop always runs on the server and streams to the browser over the Agent Gateway WebSocket; see [Server-Side Execution and the Agent Gateway](#server-side-execution-and-the-agent-gateway). Different transports and execution scenarios do not necessarily follow an identical path.
 
 Here, a "preset task" is an internal helper that calls a model directly. It is not a user-created Task or Scheduled automation. For user-facing work records, see [Task](/docs/usage/getting-started/task).
 
@@ -35,47 +35,51 @@ Here, a "preset task" is an internal helper that calls a model directly. It is n
 ```mermaid
 sequenceDiagram
     participant Client as Frontend Client
-    participant AgentLoop as Agent Runtime Loop
-    participant ChatService as ChatService
-    participant ChatAPI as Backend Chat API
+    participant Gateway as Agent Gateway (WebSocket)
+    participant AgentLoop as Server Agent Runtime Loop
     participant ModelRuntime as Model Runtime
     participant ModelProvider as Model Provider API
     participant ToolExecution as Tool Execution Layer
+    participant ChatAPI as Backend Chat API
 
-    Client->>AgentLoop: sendMessage()
-    Note over AgentLoop: Create GeneralChatAgent + AgentRuntime
+    Client->>AgentLoop: sendMessage() → aiAgent.execAgent (tRPC)
+    Note over AgentLoop: AgentRuntimeService creates the operation<br/>(GeneralChatAgent + AgentRuntime)
+    AgentLoop-->>Client: operationId + Gateway token
+    Client->>Gateway: executeGatewayAgent() connects WebSocket
 
-    loop Agent Plan-Execute Loop
+    loop Agent Plan-Execute Loop (server)
         AgentLoop->>AgentLoop: Agent decides next instruction
 
         alt call_llm instruction
-            AgentLoop->>ChatService: getChatCompletion
-            Note over ChatService: Context engineering
-            ChatService->>ChatAPI: POST /webapi/chat/[provider]
-            ChatAPI->>ModelRuntime: Initialize ModelRuntime
+            Note over AgentLoop: Context engineering (server)
+            AgentLoop->>ModelRuntime: Initialize ModelRuntime
             ModelRuntime->>ModelProvider: Chat completion request
-            ModelProvider-->>ChatService: Stream back SSE response
-            ChatService-->>Client: onMessageHandle callback
+            ModelProvider-->>AgentLoop: Streaming response
+            AgentLoop-->>Gateway: Stream events
+            Gateway-->>Client: Stream events (render message)
 
         else call_tool instruction
             AgentLoop->>ToolExecution: Execute tool
-            Note over ToolExecution: Builtin / MCP / Plugin
+            Note over ToolExecution: Builtin / MCP / Plugin<br/>(browser-only tools via tool_execute)
             ToolExecution-->>AgentLoop: Return tool result
 
         else request_human_* instruction
-            AgentLoop-->>Client: Request user intervention
-            Client->>AgentLoop: User feedback
+            AgentLoop-->>Gateway: Request user intervention
+            Gateway-->>Client: Intervention event
+            Client->>AgentLoop: User feedback (processHumanIntervention)
 
         else finish instruction
-            AgentLoop-->>Client: onFinish callback
+            AgentLoop-->>Gateway: Terminal event
+            Gateway-->>Client: Operation finished
         end
     end
 
-    Note over Client,ModelProvider: Preset task scenario (bypasses Agent loop)
-    Client->>ChatService: fetchPresetTaskResult
-    ChatService->>ChatAPI: Send preset task request
-    ChatAPI-->>ChatService: Return task result
-    ChatService-->>Client: Return result via callback
+    Note over Client,ChatAPI: Preset task scenario (bypasses Agent loop)
+    Client->>ChatAPI: fetchPresetTaskResult → POST /webapi/chat/[provider]
+    ChatAPI->>ModelRuntime: Initialize ModelRuntime
+    ModelRuntime->>ModelProvider: Chat completion request
+    ModelProvider-->>ChatAPI: Streaming response
+    ChatAPI-->>Client: Return result via callback
 ```
 
 ## Main Process Steps
@@ -85,23 +89,33 @@ sequenceDiagram
 After the user sends a message, `sendMessage()`
 (`src/store/chat/slices/agentRun/actions/entries/conversationLifecycle.ts`)
 creates the user message and assistant message placeholder,
-then calls `executeClientAgent()`.
+then calls `executeGatewayAgent()`
+(`src/store/chat/slices/agentRun/actions/transports/gateway/gateway.ts`).
+It starts the run on the server through the `aiAgent.execAgent` tRPC route
+(`apps/server/src/routers/lambda/aiAgent.ts`) and subscribes to the
+operation's events over the Agent Gateway WebSocket.
+
+If the deployment has no Agent Gateway configured, the send fails with
+"This deployment has no Agent Gateway configured…". There is no browser-side
+fallback.
 
 ### 2. Agent Runtime Drives the Loop
 
-The client-side Agent chat flow described here is driven by the `AgentRuntime.step()` loop. Preset tasks described below call the model directly and bypass this loop.
+The Agent chat flow is driven by the `AgentRuntime.step()` loop on the server. Preset tasks described below call the model directly and bypass this loop.
 
 **Initialization**
-(`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`):
+(`AgentRuntimeService.createOperation()` in
+`apps/server/src/services/agentRuntime/AgentRuntimeService/executeStep/index.ts`):
 
 1. Resolve agent config (model, provider, plugin list, etc.)
-2. Create the tool registry via `createAgentToolsEngine()`
+2. Create the tool registry (`apps/server/src/modules/Mecha/AgentToolsEngine/`)
 3. Create `GeneralChatAgent` (the "brain" that decides
    what to do next) and `AgentRuntime` (the "engine"
    that executes instructions)
-4. Bind the shared package executors to client transports via `createClientRuntimeExecutors()`
+4. Bind the shared package executors to server transports via `createRuntimeExecutors()`
+   (`apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts`)
 
-**Execution Loop**:
+**Execution Loop** (`AgentRuntimeService.executeStep()`):
 
 ```ts
 while (state.status !== 'done' && state.status !== 'error') {
@@ -122,29 +136,30 @@ executor:
 - `request_human_approve` / `request_human_prompt` /
   `request_human_select`: Request user intervention
 
-### 3. Frontend Processes LLM Request
+### 3. Server Prepares the LLM Request
 
 When the Agent issues a `call_llm` instruction,
-the executor calls ChatService:
+the server-side executor prepares the request:
 
-- `src/services/chat/index.ts` preprocesses messages,
-  tools, and parameters
-- Modules under `src/services/chat/mecha/` perform
+- Modules under `apps/server/src/modules/Mecha/` perform
   context engineering, including agent config resolution,
   model parameter resolution, MCP context injection, etc.
-- Calls `getChatCompletion` to prepare request parameters
-- Uses `fetchSSE` from the `@lobechat/fetch-sse` package
-  to send the request to the backend API
+- `initModelRuntimeFromDB` (`apps/server/src/modules/ModelRuntime/index.ts`)
+  reads the user's provider config from the database
+  and initializes ModelRuntime
 
-### 4. Backend Processes Request
+### 4. Providers Only the User's Device Can Reach
 
-- `src/app/(backend)/webapi/chat/[provider]/route.ts`
-  receives the request
-- Calls `initModelRuntimeFromDB` to read user's provider
-  config from the database and initialize ModelRuntime
-- A tRPC route `apps/server/src/routers/lambda/aiChat.ts`
-  also exists for server-side message sending
-  and structured output scenarios
+A provider only the user's device can reach (Ollama, LM Studio,
+or a provider with "client fetch" enabled) is still called by the server
+loop, but that single LLM call is relayed to the browser tab that started
+the run:
+
+- The server sends an `llm_execute` event over the Agent Gateway
+  (`apps/server/src/modules/AgentRuntime/llmRelay/`)
+- The browser executes the call and streams the result back
+  (`src/services/llmRelay/`)
+- The loop itself, tool calls, and persistence stay on the server
 
 ### 5. Model Call and Response Processing
 
@@ -152,12 +167,11 @@ the executor calls ChatService:
   (`packages/model-runtime/src/core/ModelRuntime.ts`)
   calls the respective model provider's API
   and returns a streaming response
-- Frontend processes the streaming response via
-  `fetchSSE` and
-  [fetchEventSource](https://github.com/Azure/fetch-event-source)
-- Handles different types of events
-  (text, tool calls, reasoning, etc.)
-- Passes results back to client through callback functions
+- The server loop handles different types of events
+  (text, tool calls, reasoning, etc.), persists the message,
+  and publishes stream events to the Agent Gateway
+- The browser receives them over the WebSocket and updates the message
+  (`src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts`)
 
 ### 6. Tool Calling Scenario
 
@@ -165,19 +179,21 @@ When the AI model returns a `tool_calls` field in its
 response, the Agent issues a `call_tool` instruction.
 LobeHub supports three types of tools:
 
-**Builtin Tools**: Tools built into the application,
-executed directly via local executors.
+The server dispatches tool calls through `ToolExecutionService`
+(`apps/server/src/services/toolExecution/index.ts`).
 
-- Frontend executes them directly on the client
-  via the `invokeBuiltinTool` method
+**Builtin Tools**: Tools built into the application,
+executed by server-side executors.
+
+- Server runtimes live in
+  `apps/server/src/services/toolExecution/serverRuntimes/`
 - Includes built-in features like search,
-  DALL-E image generation, etc.
+  image generation, etc.
 
 **MCP Tools**: External tools connected via
 [Model Context Protocol](https://modelcontextprotocol.io/).
 
-- Frontend calls `MCPService` (`src/services/mcp.ts`)
-  via the `invokeMCPTypePlugin` method
+- The server calls the MCP server through `MCPService`
 - Supports three connection modes:
   stdio, HTTP (streamable-http/SSE), and cloud (Composio)
 - MCP tool registration and discovery is managed
@@ -188,27 +204,30 @@ invoked via API gateway.
 This system is expected to be gradually deprecated
 in favor of the MCP tool system.
 
-- Frontend calls them via the
-  `invokeBuiltinTool` method
-- Retrieves plugin settings and manifest,
-  creates authentication headers,
-  and sends requests to the plugin gateway
+**Browser-only tools**: A tool that can only run on the user's
+device (for example a local-system tool or a device-only MCP server)
+is sent to the browser as a `tool_execute` event over the Agent Gateway
+(`apps/server/src/modules/AgentRuntime/dispatchClientTool.ts`).
+The browser runs it
+(`src/store/chat/slices/agentRun/actions/transports/client/clientToolExecution.ts`)
+and sends the result back; the server waits for it and continues the loop.
 
 After tool execution completes, results are written to
 the message and returned to the Agent loop.
 The Agent then calls the LLM again to generate
 the final response based on tool results.
-The tool dispatch logic is in
-`src/store/chat/slices/plugin/actions/pluginTypes.ts`.
 
 ### 7. Preset Task Processing
 
 Preset tasks are predefined functions typically triggered
 when users perform specific actions
 (bypassing the Agent Runtime loop, calling LLM directly).
-These tasks use the `fetchPresetTaskResult` method,
-which is similar to the normal chat flow
-but uses specially designed prompt chains.
+These tasks use the `fetchPresetTaskResult` method
+(`src/services/chat/index.ts`), which POSTs to
+`/webapi/chat/[provider]`
+(`src/app/(backend)/webapi/chat/[provider]/route.ts`)
+with specially designed prompt chains. The server makes the model call,
+or relays it to the browser for a provider only the user's device can reach.
 
 **Execution Timing**:
 
@@ -324,26 +343,30 @@ translateMessage: async (id, targetLang) => {
 ### 8. Completion
 
 When the Agent issues a `finish` instruction,
-the loop ends, and the `onFinish` callback is called
-with the complete response result.
+the loop ends on the server, and the Agent Gateway delivers the
+terminal event to the browser, which finalizes the message.
 
-## Client-Side vs Server-Side Execution
+## Server-Side Execution and the Agent Gateway
 
-The Agent Runtime loop execution location
-depends on the scenario:
+Every Agent run executes on the server; the browser never runs
+the Agent Runtime loop:
 
-- **Client-side loop** (browser): Regular 1:1 chat,
-  continue generation, group orchestration decisions.
-  The loop runs in the browser, entry point is
-  `executeClientAgent()`
-  (`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`)
-- **Server-side loop** (queue/local):
-  Group chat supervisor agent, sub-agent tasks,
-  API/Cron triggers. The loop runs on the server,
-  streaming events to the client via SSE, entry point is
-  `AgentRuntimeService.executeStep()`
-  (`apps/server/src/services/agentRuntime/AgentRuntimeService/executeStep/index.ts`),
-  tRPC route at `apps/server/src/routers/lambda/aiAgent.ts`
+- **Entry point**: the `aiAgent.execAgent` tRPC route
+  (`apps/server/src/routers/lambda/aiAgent.ts`) starts the operation,
+  and `AgentRuntimeService.executeStep()`
+  (`apps/server/src/services/agentRuntime/AgentRuntimeService/executeStep/index.ts`)
+  runs each step. Regular 1:1 chat, continue generation, group chat,
+  sub-agent tasks, and API/Cron triggers all use this loop.
+- **Streaming**: the server publishes step events to the Agent Gateway,
+  and the browser subscribes over WebSocket through `executeGatewayAgent()`
+  (`src/store/chat/slices/agentRun/actions/transports/gateway/gateway.ts`).
+- **Device-only work**: browser-only tools (`tool_execute`) and LLM calls to
+  providers only the user's device can reach (`llm_execute`) are relayed to
+  the browser tab one call at a time; the loop stays on the server.
+- **Gateway required**: without an Agent Gateway configured, Agents cannot
+  run at all. Preset tasks call `/webapi/chat/[provider]` directly, so they
+  still work for providers the server can reach; relaying a device-only
+  provider also goes through the Agent Gateway.
 
 ## Model Runtime
 

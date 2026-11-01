@@ -29,20 +29,7 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
 
   // ==================== Communication Coordination ====================
 
-  speak = async (params: SpeakParams, ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
-    // Register afterCompletion callback to trigger orchestration after AgentRuntime completes
-    // This avoids race conditions with message updates
-    if (ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
-      ctx.registerAfterCompletion(() =>
-        ctx.groupOrchestration!.triggerSpeak({
-          agentId: params.agentId,
-          instruction: params.instruction,
-          skipCallSupervisor: params.skipCallSupervisor,
-          supervisorAgentId: ctx.agentId!,
-        }),
-      );
-    }
-
+  speak = async (params: SpeakParams, _ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
     // Returns stop: true to indicate the supervisor should stop and let agent respond
     return {
       content: `Triggered agent "${params.agentId}" to respond.`,
@@ -59,22 +46,8 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
 
   broadcast = async (
     params: BroadcastParams,
-    ctx: BuiltinToolContext,
+    _ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    // Register afterCompletion callback to trigger orchestration after AgentRuntime completes
-    // This avoids race conditions with message updates
-    if (ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
-      ctx.registerAfterCompletion(() =>
-        ctx.groupOrchestration!.triggerBroadcast({
-          agentIds: params.agentIds,
-          instruction: params.instruction,
-          skipCallSupervisor: params.skipCallSupervisor,
-          supervisorAgentId: ctx.agentId!,
-          toolMessageId: ctx.messageId, // Pass tool message ID for correct parent-child relationship
-        }),
-      );
-    }
-
     // Returns stop: true to trigger multiple agents to respond in parallel
     // metadata.agentCouncil marks this tool message for parallel display in conversation-flow
     return {
@@ -93,20 +66,8 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
 
   delegate = async (
     params: DelegateParams,
-    ctx: BuiltinToolContext,
+    _ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    // Register afterCompletion callback to trigger orchestration after AgentRuntime completes
-    // This avoids race conditions with message updates
-    if (ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
-      ctx.registerAfterCompletion(() =>
-        ctx.groupOrchestration!.triggerDelegate({
-          agentId: params.agentId,
-          reason: params.reason,
-          supervisorAgentId: ctx.agentId!,
-        }),
-      );
-    }
-
     // The supervisor exits and delegated agent takes control
     return {
       content: `Delegated conversation control to agent "${params.agentId}".`,
@@ -124,25 +85,9 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
 
   executeAgentTask = async (
     params: ExecuteTaskParams,
-    ctx: BuiltinToolContext,
+    _ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     const { agentId, instruction, timeout, skipCallSupervisor, runInClient } = params;
-
-    // Register afterCompletion callback to trigger async task execution after AgentRuntime completes
-    // This follows the same pattern as speak/broadcast - trigger mode, not blocking
-    if (ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
-      ctx.registerAfterCompletion(() =>
-        ctx.groupOrchestration!.triggerExecuteTask({
-          agentId,
-          instruction,
-          runInClient,
-          skipCallSupervisor,
-          supervisorAgentId: ctx.agentId!,
-          timeout,
-          toolMessageId: ctx.messageId,
-        }),
-      );
-    }
 
     // Returns stop: true to indicate the supervisor should stop and let the task execute
     return {
@@ -162,21 +107,8 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
 
   executeAgentTasks = async (
     params: ExecuteTasksParams,
-    ctx: BuiltinToolContext,
+    _ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    // Register afterCompletion callback to trigger parallel task execution after AgentRuntime completes
-    // This follows the same pattern as executeAgentTask - trigger mode, not blocking
-    if (ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
-      ctx.registerAfterCompletion(() =>
-        ctx.groupOrchestration!.triggerExecuteTasks({
-          skipCallSupervisor: params.skipCallSupervisor,
-          supervisorAgentId: ctx.agentId!,
-          tasks: params.tasks,
-          toolMessageId: ctx.messageId,
-        }),
-      );
-    }
-
     const agentIds = params.tasks.map((t) => t.agentId).join(', ');
 
     // Returns stop: true to indicate the supervisor should stop and let the tasks execute
