@@ -150,8 +150,22 @@ export class TaskTopicModel {
       )
       .returning();
 
-    for (const topic of canceled) {
-      if (topic.topicId) await this.markTopicEnded(topic.topicId, 'canceled');
+    // One statement for every ended topic: callers run this inside a
+    // transaction holding task row locks, so a per-topic loop would stretch
+    // those locks over hundreds of sequential writes in a large batch.
+    const topicIds = canceled
+      .map((topic) => topic.topicId)
+      .filter((topicId): topicId is string => !!topicId);
+    if (topicIds.length > 0) {
+      await this.db
+        .update(topics)
+        .set({ completedAt: new Date() })
+        .where(
+          and(
+            inArray(topics.id, topicIds),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+          ),
+        );
     }
 
     return canceled;

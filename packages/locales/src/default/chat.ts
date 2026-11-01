@@ -3092,6 +3092,10 @@ export default {
   'taskList.bulk.deleteConfirm.title_other': 'Delete {{count}} tasks?',
   'taskList.bulk.noResults': 'No matching actions',
   'taskList.bulk.progress': 'Updating {{done}} / {{total}}…',
+  'taskList.bulk.refreshFailed.desc':
+    'The changes were saved, but the list could not refresh and may show outdated tasks.',
+  'taskList.bulk.refreshFailed.retry': 'Refresh',
+  'taskList.bulk.refreshFailed.title': 'List not refreshed',
   'taskList.bulk.result.deleted_one': '{{count}} task deleted',
   'taskList.bulk.result.deleted_other': '{{count}} tasks deleted',
   'taskList.bulk.result.error': 'The batch action failed. Try again.',

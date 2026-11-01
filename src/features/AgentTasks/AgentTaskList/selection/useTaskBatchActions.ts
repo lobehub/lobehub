@@ -75,7 +75,22 @@ export const useTaskBatchActions = () => {
       } catch (error) {
         requestError = error;
       }
-      await refreshTaskList().catch(() => undefined);
+      // The batch is committed whatever happens here; a failed refresh only
+      // means the list on screen is stale, so say that (with a retry) instead
+      // of hiding it behind the success toast.
+      await refreshTaskList().catch((error: unknown) => {
+        console.error('[task batch] list refresh failed after a committed batch', error);
+        const retry = () => {
+          void refreshTaskList().catch((retryError: unknown) => {
+            console.error('[task batch] list refresh retry failed', retryError);
+          });
+        };
+        toast.warning({
+          actions: [{ label: t('taskList.bulk.refreshFailed.retry'), onClick: retry }],
+          description: t('taskList.bulk.refreshFailed.desc'),
+          title: t('taskList.bulk.refreshFailed.title'),
+        });
+      });
       setProgress(undefined);
 
       const { failed, skipped, updated } = mergeOutcomes(outcomes);

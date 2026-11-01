@@ -5,16 +5,22 @@ import { useTaskSelectionStore } from './store';
 import { useTaskBatchActions } from './useTaskBatchActions';
 
 const batchUpdate = vi.fn();
+const refreshTaskList = vi.fn(async () => {});
+const toastWarning = vi.fn();
 
 vi.mock('@/services/task', () => ({
   taskService: { batchUpdate: (...args: unknown[]) => batchUpdate(...args) },
 }));
 vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (s: { refreshTaskList: () => Promise<void> }) => unknown) =>
-    selector({ refreshTaskList: async () => {} }),
+    selector({ refreshTaskList }),
 }));
 vi.mock('@lobehub/ui', () => ({
-  toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+    warning: (...args: unknown[]) => toastWarning(...args),
+  },
 }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -22,6 +28,9 @@ const partialFailure = { failed: [{ error: 'boom', id: 'b' }], skipped: [], upda
 
 beforeEach(() => {
   batchUpdate.mockReset();
+  refreshTaskList.mockReset();
+  refreshTaskList.mockResolvedValue(undefined);
+  toastWarning.mockReset();
   useTaskSelectionStore.getState().clear();
   useTaskSelectionStore.setState({ progress: undefined });
 });
@@ -114,5 +123,26 @@ describe('useTaskBatchActions', () => {
       await pending;
     });
     expect(useTaskSelectionStore.getState().selectedIds).toEqual(['b']);
+  });
+
+  it('reports a failed list refresh after a committed batch, with a retry', async () => {
+    batchUpdate.mockResolvedValue({ failed: [], skipped: [], updated: ['a', 'b'] });
+    refreshTaskList.mockRejectedValueOnce(new Error('network down'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    useTaskSelectionStore.getState().prune(new Set(['a', 'b']));
+    useTaskSelectionStore.getState().selectAll(['a', 'b']);
+    const { result } = renderHook(() => useTaskBatchActions());
+
+    await act(() => result.current.run({ kind: 'update', patch: { priority: 1 } }));
+
+    const refreshWarning = toastWarning.mock.calls.find(
+      ([arg]) => typeof arg === 'object' && arg?.title === 'taskList.bulk.refreshFailed.title',
+    );
+    expect(refreshWarning).toBeDefined();
+    // The batch itself was committed: its selection is done.
+    expect(useTaskSelectionStore.getState().selectedIds).toEqual([]);
+
+    refreshWarning![0].actions[0].onClick();
+    expect(refreshTaskList).toHaveBeenCalledTimes(2);
   });
 });
