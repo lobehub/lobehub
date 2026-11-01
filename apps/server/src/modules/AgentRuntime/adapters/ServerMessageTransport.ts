@@ -4,6 +4,7 @@ import type {
   QueryMessagesInput,
   QueryMessagesOptions,
   RuntimeMessageRef,
+  RuntimeToolMessage,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
 import { parse } from '@lobechat/conversation-flow';
@@ -113,6 +114,25 @@ export class ServerMessageTransport implements MessageTransport {
           topicId: message.topicId,
         }
       : undefined;
+  }
+
+  async getToolMessage(id: string): Promise<RuntimeToolMessage | undefined> {
+    const [message, plugin] = await Promise.all([
+      this.messageModel.findById(id),
+      this.messageModel.findMessagePlugin(id),
+    ]);
+    if (!message || message.role !== 'tool' || !plugin) return undefined;
+    return {
+      content: message.content ?? '',
+      id: message.id,
+      metadata: message.metadata ?? undefined,
+      parentId: message.parentId,
+      pluginError: plugin.error,
+      pluginIntervention: plugin.intervention,
+      pluginState: plugin.state,
+      role: 'tool',
+      tool_call_id: plugin.toolCallId,
+    };
   }
 
   async query(

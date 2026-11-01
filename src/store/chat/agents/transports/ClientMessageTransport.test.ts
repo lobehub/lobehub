@@ -53,6 +53,18 @@ describe('ClientMessageTransport', () => {
       return store;
     };
 
+    it('refuses to treat an unavailable projected result as a pending tool', async () => {
+      vi.spyOn(messageService, 'getToolResultPayloads').mockResolvedValue({});
+      const transport = new ClientMessageTransport(
+        () => storeWith([projectedRow]),
+        'message-key',
+        'operation-1',
+      );
+      await expect(transport.getToolMessage('tool-1')).rejects.toThrow(
+        'Cannot restore tool result',
+      );
+    });
+
     it('refills a projected tool payload before the list becomes a context', async () => {
       const fetchPayloads = vi
         .spyOn(messageService, 'getToolResultPayloads')

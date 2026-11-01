@@ -386,6 +386,8 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // conversation, and the run outcome. The card header + jump link read this.
   taskCallback: MessageTaskCallbackSchema.optional(),
   toolExecutionTimeMs: z.number().optional(),
+  toolResultSuccess: z.boolean().optional(),
+  toolResultStop: z.boolean().optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
   // role='verify' card: which Agent Run (agent_operations.id) it renders.
   verifyOperationId: z.string().optional(),
@@ -690,6 +692,9 @@ export interface MessageMetadata {
    * Tool execution time for tool messages (ms)
    */
   toolExecutionTimeMs?: number;
+  toolResultStop?: boolean;
+  /** Terminal tool-result flags retained for step redelivery. */
+  toolResultSuccess?: boolean;
   /** @deprecated use the top-level message `usage` field instead */
   totalInputTokens?: number;
   /** @deprecated use the top-level message `usage` field instead */

@@ -25,6 +25,28 @@ const createUniqueViolation = (constraint: string) => {
 };
 
 describe('ServerMessageTransport', () => {
+  it('reads both halves of a durable tool result instead of only its message row', async () => {
+    const messageModel = {
+      findById: vi.fn().mockResolvedValue({
+        content: 'Created document',
+        id: 'tool-1',
+        parentId: 'assistant-1',
+        role: 'tool',
+      }),
+      findMessagePlugin: vi.fn().mockResolvedValue({
+        state: { documentId: 'docs-1' },
+        toolCallId: 'call-1',
+      }),
+    } as unknown as MessageModel;
+    expect(await new ServerMessageTransport(messageModel).getToolMessage('tool-1')).toMatchObject({
+      content: 'Created document',
+      id: 'tool-1',
+      parentId: 'assistant-1',
+      pluginState: { documentId: 'docs-1' },
+      tool_call_id: 'call-1',
+    });
+  });
+
   it('returns the first assistant message when the same idempotency key is delivered twice', async () => {
     const existingMessage = {
       agentId: 'agent-1',

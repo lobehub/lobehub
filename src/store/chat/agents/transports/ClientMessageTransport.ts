@@ -3,6 +3,7 @@ import type {
   QueryMessagesInput,
   QueryMessagesOptions,
   RuntimeMessageRef,
+  RuntimeToolMessage,
   UpdateToolMessageInput,
 } from '@lobechat/agent-runtime';
 import type {
@@ -80,6 +81,15 @@ export class ClientMessageTransport implements MessageTransport {
     }
 
     return undefined;
+  }
+
+  async getToolMessage(id: string): Promise<RuntimeToolMessage | undefined> {
+    const messages = await this.withStoredToolPayloads(this.getMessages());
+    const message = messages.find((message) => message.id === id && message.role === 'tool');
+    if (message?.payloadOmitted && !this.storedToolPayloads.has(id)) {
+      throw new Error(`Cannot restore tool result for ${id}`);
+    }
+    return message;
   }
 
   async query(
