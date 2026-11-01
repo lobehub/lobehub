@@ -47,14 +47,15 @@ import type { AgentTextBlock } from './types';
  *   desktop client-mode run is handed the app's own sign-in as
  *   `LOBEHUB_JWT_FILE` (older desktops left it to the machine's `lh login`,
  *   which `lh` now names as the fix when it is missing). The
- *   device-dispatch paths (desktop gateway, `lh connect`) put the run's narrow
- *   `hetero-operation` token in `LOBEHUB_JWT`, which `oidcAuth` refuses on every
- *   user-scoped endpoint. `lh topic view` reads through an operation route
- *   instead, as the run's own principal, limited to this conversation and the
- *   ones the user names in it (`topic.getTopicTranscriptOperation`) — so the
- *   most common request needs no other credential. For the rest, `lh` retries
- *   those refusals with the machine's stored login itself when that login is
- *   the same account
+ *   device-dispatch paths (desktop gateway, `lh connect`) put the run's
+ *   `hetero-operation` token in `LOBEHUB_JWT`. Minted with `caller:act`, it
+ *   acts on user-scoped endpoints as the user who started the run, only in the
+ *   run's workspace and only while the run lasts; `oidcAuth` refuses a token
+ *   without it there. `lh topic view` reads through an operation route first,
+ *   as the run's own principal, limited to this conversation and the ones the
+ *   user names in it (`topic.getTopicTranscriptOperation`). For refusals of a
+ *   token without `caller:act` (an older server), `lh` retries with the
+ *   machine's stored login itself when that login is the same account
  *   (`apps/cli/src/api/operationTokenFallback.ts`), so the guide no longer
  *   teaches the agent to clear the variable — which also borrowed the login of
  *   whoever enrolled a shared workspace device, and was applied to errors it
