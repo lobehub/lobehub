@@ -26,6 +26,13 @@ export const DRIVE_DOWNLOAD_TIMEOUT_MS = 180_000;
 /** How long the link the browser follows stays valid. */
 export const DRIVE_DOWNLOAD_URL_EXPIRES_IN = 15 * 60;
 
+/**
+ * Where the transient copies go, one folder per UTC day
+ * (`sandbox-drive-downloads/2026-11-01/<uuid>`), which is what lets them be
+ * swept by date without a record of each one.
+ */
+export const DRIVE_DOWNLOAD_PREFIX = 'sandbox-drive-downloads/';
+
 /** Marks the one line of the command's output that is its answer. */
 const RESULT_MARKER = 'LOBE_DRIVE_DOWNLOAD_RESULT ';
 
@@ -34,20 +41,29 @@ const RESULT_MARKER = 'LOBE_DRIVE_DOWNLOAD_RESULT ';
  * to the upload URL, from inside a sandbox session the drive is mounted in.
  *
  * The working directory is the drive's root, which is what every relative
- * path here is resolved against. The script never leaves it: the target is
- * resolved through any link and refused when it lands outside, links inside a
- * folder are left out rather than followed, and the hidden directories the
- * caller names are skipped as if they were not there. The archive is built in
- * `/tmp`, never on the drive, so it costs the drive no quota.
+ * path here is resolved against. Other members and sandboxes may be changing
+ * the drive while this runs, so nothing is checked by name and then read by
+ * name: the target is opened one component at a time beneath the root with
+ * `O_NOFOLLOW`, a folder is walked with `os.fwalk` (directory descriptors, no
+ * links followed), and each file is read through the descriptor it was opened
+ * as. A link anywhere is never followed — the target that is or passes through
+ * one is refused, and one inside a folder is left out. The hidden directories
+ * the caller names are skipped as if they were not there.
+ *
+ * Anything that cannot be read fails the download rather than leaving a hole
+ * in an archive that claims to be complete. The archive is built in `/tmp`,
+ * never on the drive, so it costs the drive no quota.
  *
  * It prints exactly one {@link RESULT_MARKER} line, success or not, and always
  * exits 0: a non-zero exit would read as "the command could not run" and lose
  * the reason.
  */
 const SCRIPT = String.raw`
-import base64, json, mimetypes, os, stat, sys, tempfile, urllib.error, urllib.request, zipfile
+import base64, errno, json, mimetypes, os, posixpath, shutil, stat, sys, tempfile, time, urllib.error, urllib.request, zipfile
 
 MARKER = ${JSON.stringify(RESULT_MARKER)}
+NOFOLLOW = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+NOT_THERE = (errno.ENOENT, errno.ENOTDIR, errno.ELOOP)
 
 def done(**result):
     sys.stdout.write(MARKER + json.dumps(result) + "\n")
@@ -55,83 +71,132 @@ def done(**result):
     sys.exit(0)
 
 params = json.loads(base64.b64decode(os.environ["LOBE_DRIVE_DOWNLOAD"]).decode("utf-8"))
-root = os.path.realpath(os.getcwd())
-
-def within(path, parent):
-    return path == parent or path.startswith(parent.rstrip(os.sep) + os.sep)
-
-hidden = [os.path.realpath(os.path.join(root, entry)) for entry in params.get("hidden", [])]
-
-def is_hidden(path):
-    return any(within(path, entry) for entry in hidden)
-
-target = os.path.realpath(os.path.join(root, params["path"]))
-if target == root or not within(target, root) or is_hidden(target) or not os.path.exists(target):
-    done(ok=False, code="NOT_FOUND")
-
 max_bytes = int(params["maxBytes"])
 max_files = int(params["maxFiles"])
-upload_path = None
+
+def within(path, parent):
+    return path == parent or path.startswith(parent + "/")
+
+hidden = [posixpath.normpath(entry) for entry in params.get("hidden", [])]
+
+def is_hidden(rel):
+    return any(within(rel, entry) for entry in hidden)
+
+target = posixpath.normpath(params["path"])
+if target in ("", ".") or target.startswith("/") or target == ".." or target.startswith("../") or is_hidden(target):
+    done(ok=False, code="NOT_FOUND")
+
+root_fd = os.open(".", os.O_RDONLY | os.O_DIRECTORY)
+
+def open_beneath(rel):
+    """Opens a path under the root without following a link at any component."""
+    parts = rel.split("/")
+    fd = os.dup(root_fd)
+    try:
+        for part in parts[:-1]:
+            child = os.open(part, NOFOLLOW | os.O_DIRECTORY, dir_fd=fd)
+            os.close(fd)
+            fd = child
+        return os.open(parts[-1], NOFOLLOW, dir_fd=fd)
+    finally:
+        os.close(fd)
+
+try:
+    target_fd = open_beneath(target)
+except OSError as error:
+    done(ok=False, code="NOT_FOUND" if error.errno in NOT_THERE else "READ_FAILED")
+
+def read_failed(rel, error):
+    done(ok=False, code="READ_FAILED", path=rel, message=str(error)[:200])
+
+def raise_error(error):
+    raise error
+
+def walk():
+    """The folder's directories, each with its regular files' (name, stat), hidden ones left out."""
+    for current, dirnames, filenames, dir_fd in os.fwalk(".", dir_fd=target_fd, follow_symlinks=False, onerror=raise_error):
+        sub = posixpath.normpath(current)
+        rel = target if sub == "." else posixpath.join(target, sub)
+        dirnames[:] = sorted(name for name in dirnames if not is_hidden(posixpath.join(rel, name)))
+        files = []
+        for name in sorted(filenames):
+            try:
+                info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+            except OSError as error:
+                read_failed(posixpath.join(rel, name), error)
+            # Links and special files are not content of the folder.
+            if stat.S_ISREG(info.st_mode):
+                files.append((name, info))
+        yield rel, dirnames, files, dir_fd
+
+def zip_info(name, info):
+    entry = zipfile.ZipInfo(name, date_time=time.localtime(max(info.st_mtime, 315532800))[:6])
+    entry.external_attr = (info.st_mode & 0xFFFF) << 16
+    return entry
+
+upload_fd = None
 cleanup = None
 
 try:
-    if os.path.isdir(target):
-        base = os.path.dirname(target)
-        files = []
-        empty_dirs = []
+    info = os.fstat(target_fd)
+    if stat.S_ISDIR(info.st_mode):
         total = 0
-        for current, dirnames, filenames in os.walk(target, followlinks=False):
-            dirnames[:] = sorted(
-                name for name in dirnames
-                if not os.path.islink(os.path.join(current, name))
-                and not is_hidden(os.path.join(current, name))
-            )
-            regular = []
-            for name in sorted(filenames):
-                path = os.path.join(current, name)
-                try:
-                    info = os.lstat(path)
-                except OSError:
-                    continue
-                if not stat.S_ISREG(info.st_mode):
-                    continue
-                regular.append(path)
-                total += info.st_size
-            if not regular and not dirnames:
-                empty_dirs.append(current)
-            files.extend(regular)
-            if total > max_bytes or len(files) > max_files:
-                done(ok=False, code="TOO_LARGE", bytes=total, files=len(files))
+        count = 0
+        try:
+            for _, _, files, _ in walk():
+                count += len(files)
+                total += sum(entry.st_size for _, entry in files)
+                if total > max_bytes or count > max_files:
+                    done(ok=False, code="TOO_LARGE", bytes=total, files=count)
+        except OSError as error:
+            read_failed(target, error)
 
-        tmp_dir = "/tmp" if os.path.isdir("/tmp") else None
-        handle, upload_path = tempfile.mkstemp(dir=tmp_dir, suffix=".zip")
+        base = posixpath.dirname(target)
+        handle, cleanup = tempfile.mkstemp(dir="/tmp" if os.path.isdir("/tmp") else None, suffix=".zip")
         os.close(handle)
-        cleanup = upload_path
-        with zipfile.ZipFile(upload_path, "w", zipfile.ZIP_DEFLATED, allowZip64=True, compresslevel=1) as archive:
-            for directory in empty_dirs:
-                archive.write(directory, os.path.relpath(directory, base) + "/")
-            for path in files:
-                try:
-                    archive.write(path, os.path.relpath(path, base))
-                except OSError:
-                    continue
+        with zipfile.ZipFile(cleanup, "w", zipfile.ZIP_DEFLATED, allowZip64=True, compresslevel=1) as archive:
+            try:
+                for rel, dirnames, files, dir_fd in walk():
+                    name = posixpath.relpath(rel, base) if base else rel
+                    if not files and not dirnames:
+                        archive.writestr(zip_info(name + "/", os.fstat(dir_fd)), b"")
+                    for file_name, _ in files:
+                        path = posixpath.join(rel, file_name)
+                        try:
+                            fd = os.open(file_name, NOFOLLOW, dir_fd=dir_fd)
+                        except OSError as error:
+                            # Became a link since it was listed: still not followed.
+                            if error.errno == errno.ELOOP:
+                                continue
+                            read_failed(path, error)
+                        with os.fdopen(fd, "rb") as source:
+                            current = os.fstat(source.fileno())
+                            if not stat.S_ISREG(current.st_mode):
+                                continue
+                            entry = zip_info(posixpath.join(name, file_name), current)
+                            entry.compress_type = zipfile.ZIP_DEFLATED
+                            with archive.open(entry, "w", force_zip64=True) as sink:
+                                shutil.copyfileobj(source, sink, 1024 * 1024)
+            except OSError as error:
+                read_failed(target, error)
+        upload_fd = os.open(cleanup, os.O_RDONLY)
         content_type = "application/zip"
         kind = "directory"
-    else:
-        info = os.stat(target)
-        if not stat.S_ISREG(info.st_mode):
-            done(ok=False, code="NOT_FOUND")
+    elif stat.S_ISREG(info.st_mode):
         if info.st_size > max_bytes:
             done(ok=False, code="TOO_LARGE", bytes=info.st_size, files=1)
-        upload_path = target
+        upload_fd = target_fd
         content_type = mimetypes.guess_type(target)[0] or "application/octet-stream"
         kind = "file"
+    else:
+        done(ok=False, code="NOT_FOUND")
 
-    size = os.path.getsize(upload_path)
+    size = os.fstat(upload_fd).st_size
     headers = dict(params.get("headers") or {})
     headers["Content-Length"] = str(size)
     headers["Content-Type"] = content_type
-    with open(upload_path, "rb") as body:
+    with os.fdopen(upload_fd, "rb") as body:
+        upload_fd = None
         request = urllib.request.Request(params["uploadUrl"], data=body, headers=headers, method="PUT")
         try:
             with urllib.request.urlopen(request, timeout=170) as response:
@@ -183,7 +248,11 @@ export const buildDriveDownloadCommand = ({
 
 export type DriveDownloadOutcome =
   | { contentType: string; kind: 'directory' | 'file'; ok: true; size: number }
-  | { bytes?: number; code: 'NOT_FOUND' | 'TOO_LARGE' | 'UPLOAD_FAILED'; ok: false };
+  | {
+      bytes?: number;
+      code: 'NOT_FOUND' | 'READ_FAILED' | 'TOO_LARGE' | 'UPLOAD_FAILED';
+      ok: false;
+    };
 
 /** The script's answer, or `undefined` when it never printed one (it did not run, or died). */
 export const parseDriveDownloadOutput = (stdout: string): DriveDownloadOutcome | undefined => {
@@ -222,11 +291,57 @@ export interface PrepareDriveDownloadParams {
   fileService: {
     createDownloadUrl: (url: string, fileName: string, expiresIn?: number) => Promise<string>;
     createPreSignedUpload: (key: string) => Promise<PreSignedUpload>;
+    deleteFile: (key: string) => Promise<unknown>;
+    deleteFiles: (keys: string[]) => Promise<unknown>;
+    listFileKeys: (prefix: string, limit?: number) => Promise<string[]>;
   };
   hidden: string[];
+  now?: Date;
   path: string;
   sandbox: Pick<SandboxService, 'callTool' | 'capabilities'>;
 }
+
+const dayOf = (date: Date) => date.toISOString().slice(0, 10);
+
+/**
+ * The copies from before yesterday (UTC). Their links lasted
+ * {@link DRIVE_DOWNLOAD_URL_EXPIRES_IN}, so nobody can still be fetching them;
+ * keeping yesterday's too means a link handed out just before midnight is
+ * never pulled out from under its download.
+ */
+export const expiredDriveDownloadKeys = (keys: string[], now: Date) => {
+  const yesterday = new Date(now);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const cutoff = dayOf(yesterday);
+
+  return keys.filter((key) => {
+    const day = key.slice(DRIVE_DOWNLOAD_PREFIX.length, DRIVE_DOWNLOAD_PREFIX.length + 10);
+    return key.startsWith(DRIVE_DOWNLOAD_PREFIX) && /^\d{4}-\d{2}-\d{2}$/.test(day) && day < cutoff;
+  });
+};
+
+/**
+ * Deletes expired copies, a page at a time. Keys sort by day, so the oldest
+ * come first and every download clears up to a page of what earlier ones
+ * left. Best-effort: a bucket that refuses listing or deleting must not cost
+ * the person their download. A storage lifecycle rule on the prefix does the
+ * same job more cheaply where one is configured; this keeps a deployment
+ * without one from growing without bound.
+ */
+const sweepExpiredDownloads = async (
+  fileService: PrepareDriveDownloadParams['fileService'],
+  now: Date,
+) => {
+  try {
+    const expired = expiredDriveDownloadKeys(
+      await fileService.listFileKeys(DRIVE_DOWNLOAD_PREFIX),
+      now,
+    );
+    if (expired.length > 0) await fileService.deleteFiles(expired);
+  } catch (error) {
+    log('sweeping expired drive downloads failed: %O', error);
+  }
+};
 
 /**
  * Puts one file or folder of the drive where the browser can fetch it, and
@@ -235,49 +350,62 @@ export interface PrepareDriveDownloadParams {
  * The drive is only mounted inside a sandbox, so the bytes are read there and
  * uploaded from there straight to object storage; nothing passes through this
  * server. The object is a transient copy, not a library file: no file record
- * is made, so a download never shows up among the user's resources.
+ * is made, so a download never shows up among the user's resources. A copy
+ * that never gets a link is deleted at once; the rest are swept once expired.
  */
 export const prepareDriveDownload = async ({
   fileService,
   hidden,
+  now = new Date(),
   path,
   sandbox,
 }: PrepareDriveDownloadParams) => {
   if (!sandbox.capabilities.shell) throw new DriveDownloadError('DOWNLOAD_UNAVAILABLE');
 
-  const today = new Date().toISOString().split('T')[0];
-  const key = `sandbox-drive-downloads/${today}/${randomUUID()}`;
+  const key = `${DRIVE_DOWNLOAD_PREFIX}${dayOf(now)}/${randomUUID()}`;
   const upload = await fileService.createPreSignedUpload(key);
+  // Alongside the packing, which takes far longer.
+  const sweep = sweepExpiredDownloads(fileService, now);
 
-  const result = await sandbox.callTool('runCommand', {
-    command: buildDriveDownloadCommand({
-      hidden,
-      maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
-      maxFiles: DRIVE_DOWNLOAD_MAX_FILES,
-      path,
-      uploadHeaders: upload.headers,
-      uploadUrl: upload.url,
-    }),
-    timeout: DRIVE_DOWNLOAD_TIMEOUT_MS,
-  });
+  try {
+    const result = await sandbox.callTool('runCommand', {
+      command: buildDriveDownloadCommand({
+        hidden,
+        maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
+        maxFiles: DRIVE_DOWNLOAD_MAX_FILES,
+        path,
+        uploadHeaders: upload.headers,
+        uploadUrl: upload.url,
+      }),
+      timeout: DRIVE_DOWNLOAD_TIMEOUT_MS,
+    });
 
-  const stdout = (result.result as { stdout?: unknown } | null | undefined)?.stdout;
-  const outcome = typeof stdout === 'string' ? parseDriveDownloadOutput(stdout) : undefined;
+    const stdout = (result.result as { stdout?: unknown } | null | undefined)?.stdout;
+    const outcome = typeof stdout === 'string' ? parseDriveDownloadOutput(stdout) : undefined;
 
-  if (!outcome) {
-    log('drive download produced no result: %O', result.error ?? result.result);
-    throw new DriveDownloadError('DOWNLOAD_FAILED', result.error?.message);
+    if (!outcome) {
+      log('drive download produced no result: %O', result.error ?? result.result);
+      throw new DriveDownloadError('DOWNLOAD_FAILED', result.error?.message);
+    }
+
+    if (!outcome.ok) {
+      log('drive download refused: %O', outcome);
+      if (outcome.code === 'NOT_FOUND') throw new DriveDownloadError('PATH_NOT_FOUND');
+      if (outcome.code === 'TOO_LARGE') throw new DriveDownloadError('DOWNLOAD_TOO_LARGE');
+      throw new DriveDownloadError('DOWNLOAD_FAILED', outcome.code);
+    }
+
+    const fileName = driveDownloadFileName(path, outcome.kind);
+    const url = await fileService.createDownloadUrl(key, fileName, DRIVE_DOWNLOAD_URL_EXPIRES_IN);
+
+    return { fileName, kind: outcome.kind, size: outcome.size, url };
+  } catch (error) {
+    // Whatever was uploaded before the failure is unreachable without a link.
+    await fileService.deleteFile(key).catch((cause: unknown) => {
+      log('deleting an unused drive download failed: %O', cause);
+    });
+    throw error;
+  } finally {
+    await sweep;
   }
-
-  if (!outcome.ok) {
-    log('drive download refused: %O', outcome);
-    if (outcome.code === 'NOT_FOUND') throw new DriveDownloadError('PATH_NOT_FOUND');
-    if (outcome.code === 'TOO_LARGE') throw new DriveDownloadError('DOWNLOAD_TOO_LARGE');
-    throw new DriveDownloadError('DOWNLOAD_FAILED', outcome.code);
-  }
-
-  const fileName = driveDownloadFileName(path, outcome.kind);
-  const url = await fileService.createDownloadUrl(key, fileName, DRIVE_DOWNLOAD_URL_EXPIRES_IN);
-
-  return { fileName, kind: outcome.kind, size: outcome.size, url };
 };

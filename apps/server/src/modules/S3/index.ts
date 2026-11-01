@@ -6,6 +6,7 @@ import {
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   paginateListParts,
   PutObjectCommand,
   S3Client,
@@ -123,6 +124,18 @@ export class S3 {
     }
 
     return results.at(-1)!;
+  }
+
+  /**
+   * Up to `limit` keys under `prefix`, in the bucket's lexical order — one
+   * page, never the whole listing, so a caller sweeping a prefix stays bounded.
+   */
+  public async listFileKeys(prefix: string, limit = 1000): Promise<string[]> {
+    const response = await this.client.send(
+      new ListObjectsV2Command({ Bucket: this.bucket, MaxKeys: limit, Prefix: prefix }),
+    );
+
+    return (response.Contents ?? []).flatMap((object) => (object.Key ? [object.Key] : []));
   }
 
   public async getFileContent(key: string, byteLength?: number): Promise<string> {

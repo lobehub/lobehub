@@ -84,6 +84,13 @@ export class FileService {
   }
 
   /**
+   * Up to `limit` storage keys under a prefix, in lexical order
+   */
+  public async listFileKeys(prefix: string, limit?: number): Promise<string[]> {
+    return this.impl.listFileKeys(prefix, limit);
+  }
+
+  /**
    * Get file content
    */
   public async getFileContent(key: string, byteLength?: number): Promise<string> {

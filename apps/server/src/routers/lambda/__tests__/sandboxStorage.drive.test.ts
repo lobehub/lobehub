@@ -98,6 +98,9 @@ vi.mock('@/server/services/file', () => ({
     return {
       createDownloadUrl: async (key: string, name: string) => `https://files/${key}?as=${name}`,
       createPreSignedUpload: async (key: string) => ({ url: `https://upload/${key}` }),
+      deleteFile: async () => undefined,
+      deleteFiles: async () => undefined,
+      listFileKeys: async () => [],
     };
   }),
 }));

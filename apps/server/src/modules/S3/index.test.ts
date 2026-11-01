@@ -8,6 +8,7 @@ import {
   DeleteObjectsCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   paginateListParts,
   PutObjectCommand,
   S3Client,
@@ -266,6 +267,31 @@ describe('FileS3', () => {
       mockS3ClientSend.mockRejectedValue(error);
 
       await expect(s3.deleteFile('test-key.txt')).rejects.toThrow('Delete failed');
+    });
+  });
+
+  describe('listFileKeys', () => {
+    it('lists one bounded page of keys under the prefix', async () => {
+      const s3 = new FileS3();
+      mockS3ClientSend.mockResolvedValue({
+        Contents: [{ Key: 'downloads/2026-10-30/a' }, {}, { Key: 'downloads/2026-10-31/b' }],
+      });
+
+      await expect(s3.listFileKeys('downloads/', 50)).resolves.toEqual([
+        'downloads/2026-10-30/a',
+        'downloads/2026-10-31/b',
+      ]);
+      expect(ListObjectsV2Command).toHaveBeenCalledWith({
+        Bucket: 'test-bucket',
+        MaxKeys: 50,
+        Prefix: 'downloads/',
+      });
+    });
+
+    it('answers no keys for an empty prefix', async () => {
+      mockS3ClientSend.mockResolvedValue({});
+
+      await expect(new FileS3().listFileKeys('downloads/')).resolves.toEqual([]);
     });
   });
 

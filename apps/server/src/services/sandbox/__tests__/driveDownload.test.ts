@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -141,6 +141,40 @@ describe.skipIf(!hasPython)('the drive download script', () => {
     expect(received).toHaveLength(0);
   });
 
+  it('refuses a path that passes through a link, even to a real file', async () => {
+    // `linked` points outside the drive; `linked/secret.txt` exists there.
+    await expect(run('linked/secret.txt')).resolves.toEqual({ code: 'NOT_FOUND', ok: false });
+    expect(received).toHaveLength(0);
+  });
+
+  it('packs what each file holds, read through the file itself', async () => {
+    await run('project/src');
+
+    const file = path.join(outside, 'src.zip');
+    writeFileSync(file, received[0].body);
+    const content = execFileSync('python3', [
+      '-c',
+      'import sys, zipfile; sys.stdout.write(zipfile.ZipFile(sys.argv[1]).read("src/index.ts").decode())',
+      file,
+    ]).toString();
+    expect(content).toBe('export {};');
+  });
+
+  // Root reads everything, so there is no unreadable file to make.
+  it.skipIf(process.getuid?.() === 0)(
+    'fails rather than leaving out a file it cannot read',
+    async () => {
+      chmodSync(path.join(root, 'project/src/index.ts'), 0o000);
+
+      await expect(run('project', { hidden: ['project/private'] })).resolves.toMatchObject({
+        code: 'READ_FAILED',
+        ok: false,
+        path: 'project/src/index.ts',
+      });
+      expect(received).toHaveLength(0);
+    },
+  );
+
   it('refuses a folder over the size limit before packing it', async () => {
     await expect(run('project', { maxBytes: 5 })).resolves.toMatchObject({
       code: 'TOO_LARGE',
@@ -172,6 +206,9 @@ describe('prepareDriveDownload', () => {
       headers: { 'x-amz-acl': 'public-read' },
       url: `https://upload/${key}`,
     })),
+    deleteFile: vi.fn(async () => undefined),
+    deleteFiles: vi.fn(async () => undefined),
+    listFileKeys: vi.fn(async (): Promise<string[]> => []),
   };
 
   const sandboxAnswering = (stdout: string | undefined, shell = true) => ({
@@ -185,6 +222,9 @@ describe('prepareDriveDownload', () => {
   beforeEach(() => {
     fileService.createDownloadUrl.mockClear();
     fileService.createPreSignedUpload.mockClear();
+    fileService.deleteFile.mockClear();
+    fileService.deleteFiles.mockClear();
+    fileService.listFileKeys.mockReset().mockResolvedValue([]);
   });
 
   it('answers with an attachment link named after the folder', async () => {
@@ -236,6 +276,57 @@ describe('prepareDriveDownload', () => {
       prepareDriveDownload({ fileService, hidden: [], path: 'a', sandbox }),
     ).rejects.toMatchObject({ code: expected });
     expect(fileService.createDownloadUrl).not.toHaveBeenCalled();
+  });
+
+  it('deletes the copy a failed download may have left, and keeps the failure', async () => {
+    const sandbox = sandboxAnswering(
+      'LOBE_DRIVE_DOWNLOAD_RESULT {"ok":false,"code":"UPLOAD_FAILED"}',
+    );
+
+    await expect(
+      prepareDriveDownload({ fileService, hidden: [], path: 'a', sandbox }),
+    ).rejects.toMatchObject({ code: 'DOWNLOAD_FAILED' });
+    expect(fileService.deleteFile).toHaveBeenCalledWith(
+      fileService.createPreSignedUpload.mock.calls[0][0],
+    );
+  });
+
+  it('sweeps copies from before yesterday, and keeps the download when the sweep fails', async () => {
+    const now = new Date('2026-11-02T00:30:00Z');
+    fileService.listFileKeys.mockResolvedValue([
+      'sandbox-drive-downloads/2026-10-30/a',
+      'sandbox-drive-downloads/2026-10-31/b',
+      'sandbox-drive-downloads/2026-11-01/c',
+      'sandbox-drive-downloads/2026-11-02/d',
+    ]);
+    const answer =
+      'LOBE_DRIVE_DOWNLOAD_RESULT {"ok":true,"kind":"file","size":1,"contentType":"text/plain"}';
+
+    await prepareDriveDownload({
+      fileService,
+      hidden: [],
+      now,
+      path: 'a',
+      sandbox: sandboxAnswering(answer),
+    });
+
+    expect(fileService.listFileKeys).toHaveBeenCalledWith('sandbox-drive-downloads/');
+    expect(fileService.deleteFiles).toHaveBeenCalledWith([
+      'sandbox-drive-downloads/2026-10-30/a',
+      'sandbox-drive-downloads/2026-10-31/b',
+    ]);
+    expect(fileService.deleteFile).not.toHaveBeenCalled();
+
+    fileService.listFileKeys.mockRejectedValue(new Error('AccessDenied'));
+    await expect(
+      prepareDriveDownload({
+        fileService,
+        hidden: [],
+        now,
+        path: 'a',
+        sandbox: sandboxAnswering(answer),
+      }),
+    ).resolves.toMatchObject({ fileName: 'a' });
   });
 
   it('fails when the command never answered', async () => {
