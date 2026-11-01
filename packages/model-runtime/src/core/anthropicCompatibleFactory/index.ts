@@ -754,7 +754,8 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
                 cache_creation_input_tokens: message.usage?.cache_creation_input_tokens ?? null,
                 cache_read_input_tokens: message.usage?.cache_read_input_tokens ?? null,
                 input_tokens: message.usage?.input_tokens ?? null,
-                output_tokens: 0,
+                // `message_delta.usage` is cumulative, so it repeats the full output count.
+                output_tokens: message.usage?.output_tokens ?? 0,
                 server_tool_use: message.usage?.server_tool_use ?? null,
               },
             } satisfies Anthropic.MessageStreamEvent);
