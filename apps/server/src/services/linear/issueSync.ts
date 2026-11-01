@@ -334,6 +334,9 @@ export class LinearIssueSyncService {
           toCheck.map((link) => link.externalId),
         );
         await this.syncIssues(fetched, { closeOnly: true }, result);
+        // The comments posted before Linear closed it would otherwise never
+        // be read: later runs no longer match the issue either.
+        if (options.syncComments) await this.syncComments(accessToken, fetched, result);
       }
     }
 

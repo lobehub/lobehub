@@ -652,6 +652,31 @@ describe('LinearIssueSyncService comments (real PostgreSQL)', () => {
     expect(await commentsOf('2')).toHaveLength(1);
   });
 
+  it('copies the last comments of an issue that left the filter as it closes the task', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    serveComments([]);
+    await service.syncByFilter(TOKEN, { ...filter, stateTypes: states }, { syncComments: true });
+
+    // Commented on, then completed: the open-states filter no longer lists it.
+    const done = issue({ id: '1', state: { name: 'Done', type: 'completed' } });
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    linear.getLinearIssuesByIds.mockImplementation(async () => [done]);
+    serveComments([comment({ id: 'c-final', issueId: '1' })]);
+
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result).toMatchObject({ closed: 1, commentsImported: 1 });
+    expect((await linkedTask('1'))?.status).toBe('completed');
+    expect((await commentsOf('1')).map((item) => item.content)).toEqual([
+      expect.stringContaining('Comment c-final'),
+    ]);
+  });
+
   it('leaves out issues it did not import and tasks the caller cannot see', async () => {
     const service = new LinearIssueSyncService(db, userId);
     serve([issue({ id: '1' })]);
