@@ -289,6 +289,28 @@ export const updateStatusIfCurrent = async (
   return task ?? null;
 };
 
+/**
+ * Bulk {@link updateStatusIfCurrent}: move each task to `status` only while it
+ * still has the status the caller inspected, in one statement. Returns the ids
+ * that were actually updated.
+ */
+export const updateStatusIfCurrentForIds = async (
+  ctx: TaskModelContext,
+  expected: { id: string; status: string }[],
+  status: string,
+): Promise<string[]> => {
+  if (expected.length === 0) return [];
+  const matches = expected.map(({ id, status: current }) =>
+    and(eq(tasks.id, id), eq(tasks.status, current)),
+  );
+  const updated = await ctx.db
+    .update(tasks)
+    .set({ status, updatedAt: new Date() })
+    .where(and(or(...matches), taskOwnership(ctx)))
+    .returning({ id: tasks.id });
+  return updated.map(({ id }) => id);
+};
+
 /** `context.completion.requestedByOperationId` — the run a deferred completion waits for. */
 const completionRequest = sql`${tasks.context} -> 'completion' ->> 'requestedByOperationId'`;
 const withoutCompletionRequest = sql`jsonb_set(${tasks.context}, '{completion,requestedByOperationId}', 'null'::jsonb)`;

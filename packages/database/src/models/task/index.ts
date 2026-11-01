@@ -300,6 +300,13 @@ export class TaskModel {
     return rows.updateStatusIfCurrent(this.ctx, id, currentStatus, status, extra);
   }
 
+  async updateStatusIfCurrentForIds(
+    expected: { id: string; status: string }[],
+    status: string,
+  ): Promise<string[]> {
+    return rows.updateStatusIfCurrentForIds(this.ctx, expected, status);
+  }
+
   async completeIfCompletionRequested(id: string, operationId: string): Promise<TaskItem | null> {
     return rows.completeIfCompletionRequested(this.ctx, id, operationId);
   }

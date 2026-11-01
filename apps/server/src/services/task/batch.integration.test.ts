@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import { agents, taskActivities, tasks, users } from '@/database/schemas';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
@@ -228,6 +229,48 @@ describe('TaskBatchService (real PostgreSQL)', () => {
       spy.mockRestore();
 
       expect((await model.findById(parent.id))?.status).toBe('canceled');
+    });
+
+    it('leaves a task whose run is still starting alone instead of stopping it blind', async () => {
+      const [starting, stale, idle] = await createTasks(3);
+      // Just dispatched: running, no recorded topic / operation yet.
+      await model.update(starting.id, { startedAt: new Date(), status: 'running' });
+      // A start that died long ago: past the grace window, safe to stop.
+      await model.update(stale.id, {
+        startedAt: new Date(Date.now() - 10 * 60 * 1000),
+        status: 'running',
+      });
+
+      const { result } = await service.updateStatus([starting.id, stale.id, idle.id], 'paused', {
+        userId,
+      });
+
+      expect(result.updated.sort()).toEqual([stale.id, idle.id].sort());
+      expect(result.skipped).toEqual([{ id: starting.id, reason: 'running' }]);
+      expect((await model.findById(starting.id))?.status).toBe('running');
+    });
+
+    it('skips a task that started running after the interrupt pass', async () => {
+      const [task] = await createTasks(1);
+      const original = TaskTopicModel.prototype.findRunningByTaskIds;
+      const spy = vi
+        .spyOn(TaskTopicModel.prototype, 'findRunningByTaskIds')
+        .mockImplementationOnce(async function (this: TaskTopicModel, ids: string[]) {
+          const topics = await original.call(this, ids);
+          // A run starts right after the snapshot was checked.
+          await new TaskModel(db, userId).update(task.id, {
+            startedAt: new Date(),
+            status: 'running',
+          });
+          return topics;
+        });
+
+      const { result } = await service.updateStatus([task.id], 'completed', { userId });
+      spy.mockRestore();
+
+      expect(result.updated).toEqual([]);
+      expect(result.skipped).toEqual([{ id: task.id, reason: 'running' }]);
+      expect((await model.findById(task.id))?.status).toBe('running');
     });
 
     it('does not re-open a parent completed in the same batch', async () => {

@@ -98,4 +98,24 @@ describe('task bulk model methods', () => {
     expect(await topics.findByTaskIds([])).toEqual([]);
     expect(await topics.findByTaskIds([a.id, foreign.id])).toEqual([]);
   });
+
+  it('updateStatusIfCurrentForIds moves only rows still in the inspected status', async () => {
+    const { a, b, foreign, mine, theirs } = await setup();
+    await mine.update(b.id, { status: 'completed' });
+
+    const updated = await mine.updateStatusIfCurrentForIds(
+      [
+        { id: a.id, status: 'backlog' },
+        { id: b.id, status: 'running' },
+        { id: foreign.id, status: 'backlog' },
+      ],
+      'paused',
+    );
+
+    expect(updated).toEqual([a.id]);
+    expect((await mine.findById(a.id))?.status).toBe('paused');
+    expect((await mine.findById(b.id))?.status).toBe('completed');
+    expect((await theirs.findById(foreign.id))?.status).toBe('backlog');
+    expect(await mine.updateStatusIfCurrentForIds([], 'paused')).toEqual([]);
+  });
 });

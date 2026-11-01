@@ -16,7 +16,7 @@ import { TaskRunnerService } from '../taskRunner';
 import { assertArchivedTaskStaysIdle, findTasksInOpenGoals } from './archiveGuard';
 import { notifyAssignedBestEffort } from './assignmentNotification';
 import type { TaskBatchStatus } from './batchLimits';
-import { TaskService } from './index';
+import { isTaskRunStarting, TaskService } from './index';
 import { assertAssigneeAgentBelongsToUser } from './patchValidation';
 import { interruptTaskOperation } from './utils';
 
@@ -327,9 +327,24 @@ export class TaskBatchService {
     // Leaving `running` stops the run first. A task whose run cannot be
     // interrupted is left as it is (and reported), never shown as stopped
     // while it is still executing.
-    const runningTopics = await taskTopicModel.findRunningByTaskIds(
+    const allRunningTopics = await taskTopicModel.findRunningByTaskIds(
       candidates.map((task) => task.id),
     );
+    // A run still starting (dispatched, operation not recorded yet) has
+    // nothing to interrupt; stopping its task now would leave the agent
+    // running under a task shown as stopped. Skip it, as `deleteTask` does.
+    const starting = new Set(
+      candidates
+        .filter((task) =>
+          isTaskRunStarting(
+            task,
+            allRunningTopics.filter((topic) => topic.taskId === task.id),
+          ),
+        )
+        .map((task) => task.id),
+    );
+    for (const id of starting) result.skipped.push({ id, reason: 'running' });
+    const runningTopics = allRunningTopics.filter((topic) => !starting.has(topic.taskId));
     const interruptFailed = new Set<string>();
     const failedOperations = new Set<string>();
     await pMap(
@@ -356,8 +371,11 @@ export class TaskBatchService {
       await taskTopicModel.cancelIfRunning(topic.taskId, topic.topicId).catch(() => undefined);
     }
     const targetIds = candidates
-      .filter((task) => !interruptFailed.has(task.id))
+      .filter((task) => !interruptFailed.has(task.id) && !starting.has(task.id))
       .map((task) => task.id);
+    const wasRunning = new Set(
+      candidates.filter((task) => task.status === 'running').map((task) => task.id),
+    );
 
     const extra =
       status === 'completed' || status === 'canceled' ? { completedAt: new Date() } : undefined;
@@ -372,6 +390,12 @@ export class TaskBatchService {
       const changing = locked.filter((row) => {
         if (row.status === status) {
           result.skipped.push({ id: row.id, reason: 'unchanged' });
+          return false;
+        }
+        // Started a run after the interrupt pass above: that run was never
+        // stopped, so this task is left to it rather than shown as stopped.
+        if (row.status === 'running' && !wasRunning.has(row.id)) {
+          result.skipped.push({ id: row.id, reason: 'running' });
           return false;
         }
         try {
@@ -446,24 +470,23 @@ export class TaskBatchService {
     const parents = new Map(
       (await this.taskModel.findByIds(parentIds)).map((parent) => [parent.id, parent]),
     );
-    const pausedParents = new Set<string>();
+    const toPause = new Map<string, string>();
     for (const task of completed) {
       const parent = task.parentTaskId ? parents.get(task.parentTaskId) : undefined;
-      if (!parent || pausedParents.has(parent.id)) continue;
+      if (!parent || toPause.has(parent.id)) continue;
       // A checkpoint pauses work in progress. A parent that is already closed
       // — typically completed in this same batch — must not be re-opened.
       if (FINISHED_STATUSES.has(parent.status)) continue;
-      if (this.taskModel.shouldPauseAfterComplete(parent, task)) {
-        // Compare-and-set on the status just inspected: a parent another
-        // request finished or canceled since the snapshot is left alone.
-        const paused = await this.taskModel.updateStatusIfCurrent(
-          parent.id,
-          parent.status,
-          'paused',
-        );
-        if (paused) pausedParents.add(parent.id);
-      }
+      if (this.taskModel.shouldPauseAfterComplete(parent, task))
+        toPause.set(parent.id, parent.status);
     }
+    // One compare-and-set for every parent, on the status just inspected: a
+    // parent another request finished or canceled since the snapshot is left
+    // alone.
+    await this.taskModel.updateStatusIfCurrentForIds(
+      [...toPause].map(([id, status]) => ({ id, status })),
+      'paused',
+    );
 
     const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
     await runner.cascadeOnCompletionMany(completed.map((task) => task.id));
