@@ -10,13 +10,7 @@ import { evalCaseVersionOf, getActivePluginIds } from '@lobechat/types';
 import { clampToolIdentifier } from '@lobechat/utils/clampToolIdentifier';
 import { eq, inArray, sql } from 'drizzle-orm';
 
-import {
-  agentEvalDatasets,
-  agentEvalRunTopics,
-  messagePlugins,
-  messages,
-  topics,
-} from '@/database/schemas';
+import { agentEvalRunTopics, messagePlugins, messages, topics } from '@/database/schemas';
 
 import type { CaseAgentRun } from './caseAgent';
 import { ensureCaseAgents, loadCaseAgentBase } from './caseAgent';
@@ -31,6 +25,7 @@ const EVAL_HISTORY_MESSAGE_BATCH_SIZE = 500;
 
 /** Thrown when a caller-supplied run id exists with non-equivalent create params. */
 export const RUN_CREATE_ID_CONFLICT = 'Run id already exists with different create parameters';
+export const RUN_DATASET_NOT_FOUND = 'Dataset not found';
 export const RUN_EMPTY_SELECTION = 'Select at least one test case';
 
 /** Stable JSON stringify: sorts object keys recursively, drops undefined. */
@@ -114,12 +109,9 @@ export async function createRun(
   const executionMode = isExternal ? ('external' as const) : ('internal' as const);
   // The version of the cases the run is made on: a leaderboard counts only runs on
   // the dataset's current version, since cases are edited in place.
-  const [datasetRow] = await deps.db
-    .select({ metadata: agentEvalDatasets.metadata })
-    .from(agentEvalDatasets)
-    .where(eq(agentEvalDatasets.id, datasetId))
-    .limit(1);
-  const caseVersion = evalCaseVersionOf(datasetRow?.metadata);
+  const datasetRow = await deps.datasetModel.findById(datasetId);
+  if (!datasetRow) throw new Error(RUN_DATASET_NOT_FOUND);
+  const caseVersion = evalCaseVersionOf(datasetRow.metadata);
   const config = {
     ...inputConfig,
     agentSnapshot,

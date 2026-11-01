@@ -11,7 +11,10 @@ import {
   assertRunCaseCompatibility,
   EvalCaseCompatibilityError,
 } from '@/server/services/agentEvalRun/caseCompatibility';
-import { RUN_EMPTY_SELECTION } from '@/server/services/agentEvalRun/createRun';
+import {
+  RUN_DATASET_NOT_FOUND,
+  RUN_EMPTY_SELECTION,
+} from '@/server/services/agentEvalRun/createRun';
 import { EvalResumeConflictError } from '@/server/services/agentEvalRun/resumeTarget';
 import { AgentEvalRunWorkflow } from '@/server/workflows/agentEvalRun';
 
@@ -101,6 +104,9 @@ export const runRouter = router({
         }
         if (pgError?.message === RUN_EMPTY_SELECTION) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: RUN_EMPTY_SELECTION });
+        }
+        if (pgError?.message === RUN_DATASET_NOT_FOUND) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: RUN_DATASET_NOT_FOUND });
         }
         // The id is taken by a run this caller cannot see, or by one created with
         // other parameters: say so without describing the other run.
