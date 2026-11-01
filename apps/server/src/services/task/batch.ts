@@ -28,8 +28,6 @@ const BATCH_SIDE_EFFECT_CONCURRENCY = 5;
 const BATCH_CHECK_CONCURRENCY = 20;
 
 export type TaskBatchSkipReason =
-  /** A workspace bulk delete only removes tasks the caller created. */
-  | 'forbidden'
   /** The task is part of an open goal and cannot be archived. */
   | 'inGoal'
   /** Another member is editing the task. */
@@ -542,15 +540,10 @@ export class TaskBatchService {
    * path, which interrupts the run before removing the row.
    */
   async delete(ids: string[]): Promise<TaskBatchResult> {
-    const { result, tasks: visible } = await this.loadSelection(ids);
-    // Workspace bulk actions only affect caller-created content (the
-    // `clearAll` rule, docs/usage/workspace-permissions): deleting a teammate's
-    // task stays a deliberate one-at-a-time action.
-    const tasks = visible.filter((task) => {
-      if (!this.workspaceId || task.createdByUserId === this.userId) return true;
-      result.skipped.push({ id: task.id, reason: 'forbidden' });
-      return false;
-    });
+    // Same scope as the single-task delete: any member who can edit tasks may
+    // delete a task they can see, whoever created it. The client confirms
+    // explicitly when the selection includes other members' tasks.
+    const { result, tasks } = await this.loadSelection(ids);
     const taskTopicModel = new TaskTopicModel(this.db, this.userId, this.workspaceId);
     const running = await taskTopicModel.findRunningByTaskIds(tasks.map((task) => task.id));
     const busy = new Set([
