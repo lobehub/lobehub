@@ -4710,6 +4710,13 @@ When I am ___, I need ___
   'drive.explorer.delete': 'Delete',
   'drive.explorer.moreActions': 'More actions',
   'drive.explorer.deleteTitle': 'Delete “{{name}}”?',
+  'drive.explorer.download': 'Download',
+  'drive.explorer.downloadFailed': 'Couldn’t prepare the download. Try again.',
+  'drive.explorer.downloadPreparing': 'Preparing “{{name}}” for download…',
+  'drive.explorer.downloadTooLarge': 'Over 1 GB or 50,000 files — too large to download here.',
+  'drive.explorer.downloadUnavailable':
+    'Downloading from the drive isn’t available on this server.',
+  'drive.explorer.downloadZip': 'Download as ZIP',
   'drive.explorer.deleteFolderContent':
     'The folder and everything in it are removed from the drive. Conversations working in it switch to a temporary sandbox.',
   'drive.explorer.deleteFileContent': 'The file is removed from the drive.',

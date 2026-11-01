@@ -15,6 +15,7 @@ import {
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
+  DownloadIcon,
   FolderPlusIcon,
   HardDriveIcon,
   LockIcon,
@@ -46,6 +47,7 @@ import {
   sortDriveEntries,
 } from './entryColumns';
 import { useDriveFiles, useRefreshDrive } from './useDriveData';
+import { useDriveDownload } from './useDriveDownload';
 
 /**
  * The columns after the name — size, kind, then date modified — fixed so
@@ -130,7 +132,8 @@ interface DriveExplorerProps {
 /**
  * One drive, browsed like a desktop file manager's list view: a header, then
  * each folder and file with its icon, when it changed, its size and its kind;
- * a new folder, rename and delete.
+ * a new folder, rename, delete and download — a file as it is, a folder as a
+ * zip.
  *
  * Every folder is an ordinary one. A folder a code environment initialized is
  * a checkout like any other — environments are one-time initializers — so
@@ -142,6 +145,7 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
   const [creating, setCreating] = useState(false);
   const files = useDriveFiles(drive, path);
   const refreshDrive = useRefreshDrive();
+  const download = useDriveDownload(drive);
 
   const tSetting = (key: string, options?: Record<string, unknown>) =>
     (t as (key: string, options?: Record<string, unknown>) => string)(key, {
@@ -211,6 +215,12 @@ const DriveExplorer = memo<DriveExplorerProps>(({ drive, isWorkspace, toolbarExt
       <DropdownMenu
         placement={'bottomRight'}
         items={[
+          {
+            icon: <Icon icon={DownloadIcon} />,
+            key: 'download',
+            label: t(entry.isDirectory ? 'drive.explorer.downloadZip' : 'drive.explorer.download'),
+            onClick: () => void download(entry),
+          },
           ...(entry.isDirectory
             ? [
                 {

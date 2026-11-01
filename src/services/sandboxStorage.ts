@@ -193,6 +193,14 @@ class SandboxStorageService {
     topicId?: string;
   }) => lambdaClient.sandboxStorage.readFile.query(params);
 
+  /**
+   * A link to download one file of the drive as it is, or one folder as a zip.
+   * Packing happens in a sandbox session, so this can take a while on a cold
+   * start or a large folder; callers show progress until it answers.
+   */
+  prepareDownload = async (params: { drive?: SandboxDrive; path: string }) =>
+    lambdaClient.sandboxStorage.prepareDownload.mutate(params);
+
   removeFile = async (params: {
     drive?: SandboxDrive;
     instanceId?: string;

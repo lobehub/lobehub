@@ -18,8 +18,10 @@ const log = debug('lobe-server:sandbox:market');
 const REDACTED_SANDBOX_PARAM = '[redacted]';
 // `GIT_CONFIG_VALUE_<n>` carries the clone credential an environment's
 // initializer exports for git; see `buildSandboxEnvironmentInitCommand`.
+// `LOBE_DRIVE_DOWNLOAD` carries a drive download's presigned upload URL; see
+// `buildDriveDownloadCommand`.
 const SANDBOX_AUTH_ENV_PATTERN =
-  /\b(LOBEHUB_JWT|GITHUB_TOKEN|GIT_CONFIG_VALUE_\d+)=("[^"]*"|'[^']*'|\S+)/g;
+  /\b(LOBEHUB_JWT|GITHUB_TOKEN|GIT_CONFIG_VALUE_\d+|LOBE_DRIVE_DOWNLOAD)=("[^"]*"|'[^']*'|\S+)/g;
 /**
  * Any command that writes into `~/.creds/env` (the path documented to the
  * model as where `injectCredsToSandbox` places credentials) carries
