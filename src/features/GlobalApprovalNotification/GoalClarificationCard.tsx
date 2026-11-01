@@ -1,5 +1,7 @@
 'use client';
 
+import './userRequest.css';
+
 import { ActionIcon, Button, Icon } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { ArrowUpRight, ChevronUp, Target } from 'lucide-react';
@@ -13,7 +15,6 @@ import { sx } from '@/styles/sx';
 
 import { styles } from './styles';
 import type { GoalClarificationGroup } from './usePendingGoalClarifications';
-import requestModule from './userRequest.module.css';
 
 interface GoalClarificationCardProps {
   group: GoalClarificationGroup;
@@ -67,7 +68,7 @@ const GoalClarificationCard = memo<GoalClarificationCardProps>(
 
         {group.requirement && (
           <div {...stylex.props(styles.requestContext)}>
-            <div {...sx([styles.userRequestBody], requestModule.body)}>
+            <div {...sx([styles.userRequestBody], 'lobe-user-request-bac9c8fa-body')}>
               <MarkdownMessage>{group.requirement}</MarkdownMessage>
             </div>
           </div>

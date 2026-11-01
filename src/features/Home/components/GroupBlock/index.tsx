@@ -1,3 +1,5 @@
+import './index.css';
+
 import { type FlexboxProps, type IconProps } from '@lobehub/ui';
 import { Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -10,7 +12,6 @@ import { sx } from '@/styles/sx';
 
 import CountBadge from '../CountBadge';
 import { homeType } from '../homeType';
-import moduleStyles from './index.module.css';
 
 interface GroupBlockProps extends Omit<FlexboxProps, 'title'> {
   action?: ReactNode;
@@ -104,7 +105,7 @@ const GroupBlock = memo<GroupBlockProps>(
             justify={'flex-end'}
             {...sx(
               [styles.action, (isHovered || actionAlwaysVisible) && styles.actionVisible],
-              moduleStyles.action,
+              'lobe-group-block-aeaedcc1-action',
             )}
           >
             {action}

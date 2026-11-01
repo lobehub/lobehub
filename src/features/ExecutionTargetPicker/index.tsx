@@ -1,5 +1,7 @@
 'use client';
 
+import './index.css';
+
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -8,8 +10,6 @@ import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react'
 import { memo } from 'react';
 
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
-
-import moduleStyles from './index.module.css';
 
 const styles = stylex.create({
   dotOffline: {
@@ -257,7 +257,7 @@ ExecutionTargetDeviceStatus.displayName = 'ExecutionTargetPicker.ExecutionTarget
 export const executionTargetSelectClassNames = {
   item: stylex.props(styles.selectItem).className,
   popup: stylex.props(styles.selectPopup).className,
-  value: moduleStyles.selectValue,
+  value: 'lobe-execution-target-picker-741a9616-select-value',
 };
 
 interface ExecutionTargetLabelProps {

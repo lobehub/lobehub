@@ -1,5 +1,7 @@
 'use client';
 
+import './Sections.css';
+
 import { Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -12,7 +14,6 @@ import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { sx } from '@/styles/sx';
 
 import SkeletonBar from '../Bar';
-import moduleStyles from './Sections.module.css';
 
 /** Shared head options of every section rendered as a filled `Form.Group`. */
 interface GroupHeadOptions {
@@ -159,7 +160,7 @@ const Group = ({
   titleWidth,
 }: GroupHeadOptions & { children: ReactNode; flush?: boolean }) => (
   <Form.Group
-    className={flush ? moduleStyles.flush : undefined}
+    className={flush ? 'lobe-sections-05ee388b-flush' : undefined}
     collapsible={false}
     desc={desc ? <GroupDesc /> : undefined}
     extra={extra ? <SkeletonBar height={32} width={120} /> : undefined}

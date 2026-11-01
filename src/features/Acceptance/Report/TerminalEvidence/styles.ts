@@ -1,8 +1,8 @@
+import './relational.css';
+
 import { cx } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-
-import relational from './relational.module.css';
 
 const definitions = stylex.create({
   foldHeader: {
@@ -236,7 +236,10 @@ const definitions = stylex.create({
 });
 
 export const styles = {
-  foldHeader: cx(stylex.props(definitions.foldHeader).className ?? '', relational.foldHeader),
+  foldHeader: cx(
+    stylex.props(definitions.foldHeader).className ?? '',
+    'lobe-relational-0c7e78c1-fold-header',
+  ),
   foldChevron: stylex.props(definitions.foldChevron).className ?? '',
   foldChevronOpen: stylex.props(definitions.foldChevronOpen).className ?? '',
   foldIcon: stylex.props(definitions.foldIcon).className ?? '',
@@ -248,7 +251,7 @@ export const styles = {
   command: stylex.props(definitions.command).className ?? '',
   commandText: stylex.props(definitions.commandText).className ?? '',
   commandPrompt: stylex.props(definitions.commandPrompt).className ?? '',
-  facts: cx(stylex.props(definitions.facts).className ?? '', relational.facts),
+  facts: cx(stylex.props(definitions.facts).className ?? '', 'lobe-relational-0c7e78c1-facts'),
   mono: stylex.props(definitions.mono).className ?? '',
   inlineList: stylex.props(definitions.inlineList).className ?? '',
   linkButton: stylex.props(definitions.linkButton).className ?? '',

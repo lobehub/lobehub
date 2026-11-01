@@ -1,9 +1,10 @@
+import './style.css';
+
 import { cx, Flexbox } from '@lobehub/ui';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 
 import { MAX_SIZE_DESKTOP, MIN_IMAGE_SIZE } from './style';
-import styles from './style.module.css';
 
 interface GridProps {
   children: ReactNode;
@@ -38,7 +39,7 @@ const Grid = memo<GridProps>(
     return (
       <Flexbox
         horizontal
-        className={cx(styles.container, className)}
+        className={cx('lobe-galley-grid-17c2ab70-container', className)}
         gap={gap}
         style={{
           ...cssVariables,

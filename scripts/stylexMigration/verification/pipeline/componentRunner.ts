@@ -26,6 +26,7 @@ import { compareComponents } from '../browser/compareSnapshots';
 import { collectRulesInPage } from '../browser/ruleInventory';
 import { readRuntimeCompositions } from '../browser/runtimeCompositions';
 import { captureScreenshotEvidence } from '../browser/screenshotEvidence';
+import { resolveCaptureSurfacesInPage } from '../browser/surfaces';
 import { buildComponentFixture } from '../build/buildFixtures';
 import { digestFile } from '../dependencies/dependencySnapshot';
 import type { StyleFixture } from '../fixtures/fixtureRegistry';
@@ -136,30 +137,40 @@ const applyProbe = async (
     },
     { ...probe, settleFrames: fixture.settleFrames },
   );
+  const scope = await page.evaluate(resolveCaptureSurfacesInPage, {
+    surfaces: fixture.surfaces,
+    variant: probe.variant,
+  });
   if (probe.interaction || probe.pseudo !== 'default') {
     const selector = probe.interaction
-      ? await page.evaluate(({ key, tag }) => {
-          if (!/^root(?:\.\d+)*$/.test(key)) throw new Error('INVALID_TRIGGER_KEY');
-          let element = document.querySelector('[data-case-root]');
-          for (const index of key.split('.').slice(1).map(Number))
-            element = element
-              ? [...element.children].filter(
-                  (child) => !['LINK', 'META', 'SCRIPT', 'STYLE'].includes(child.tagName),
-                )[index]
-              : null;
-          if (!element || element.tagName !== tag)
-            throw new Error('PAIRED_TRIGGER_STRUCTURE_MISMATCH');
-          const segments: string[] = [];
-          for (
-            let current: Element | null = element;
-            current?.parentElement;
-            current = current.parentElement
-          )
-            segments.unshift(
-              `:nth-child(${[...current.parentElement.children].indexOf(current) + 1})`,
-            );
-          return [':root', ...segments].join(' > ');
-        }, probe.interaction)
+      ? await page.evaluate(
+          ({ key, tag, roots }) => {
+            const surface = roots.find((root) => key.startsWith(`${root.keyPrefix}root`));
+            if (!surface) throw new Error('INVALID_TRIGGER_SURFACE');
+            const localKey = key.slice(surface.keyPrefix.length);
+            if (!/^root(?:\.\d+)*$/.test(localKey)) throw new Error('INVALID_TRIGGER_KEY');
+            let element = document.querySelector(surface.selector);
+            for (const index of localKey.split('.').slice(1).map(Number))
+              element = element
+                ? [...element.children].filter(
+                    (child) => !['LINK', 'META', 'SCRIPT', 'STYLE'].includes(child.tagName),
+                  )[index]
+                : null;
+            if (!element || element.tagName !== tag)
+              throw new Error('PAIRED_TRIGGER_STRUCTURE_MISMATCH');
+            const segments: string[] = [];
+            for (
+              let current: Element | null = element;
+              current?.parentElement;
+              current = current.parentElement
+            )
+              segments.unshift(
+                `:nth-child(${[...current.parentElement.children].indexOf(current) + 1})`,
+              );
+            return [':root', ...segments].join(' > ');
+          },
+          { ...probe.interaction, roots: scope.roots },
+        )
       : (fixture.interactionSelectors[probe.pseudo as 'hover' | 'focus-visible'] ??
         fixture.defaultInteractionSelector);
     if (!selector) throw new Error('PSEUDO_TRIGGER_CONTRACT_MISSING');
@@ -388,9 +399,12 @@ export const runFixtureComparison = async (options: {
         const captureTiming: CaptureTiming[] = [{}, {}, {}];
         const [base, aa, candidate] = await shardController.runOperation(() =>
           Promise.all(
-            pages
-              .slice(0, 3)
-              .map((entry, index) => captureComponent(entry.page, entry.cdp, captureTiming[index])),
+            pages.slice(0, 3).map((entry, index) =>
+              captureComponent(entry.page, entry.cdp, captureTiming[index], {
+                surfaces: fixture.surfaces,
+                variant: probe.variant,
+              }),
+            ),
           ),
         );
         timing.capture = performance.now() - phaseStarted;
@@ -412,7 +426,10 @@ export const runFixtureComparison = async (options: {
             applyProbe(pages[3].page, pages[3].cdp, server.origin, 'candidate', probe, fixture),
           );
           const repeated = await shardController.runOperation(() =>
-            captureComponent(pages[3].page, pages[3].cdp, (confirmationCaptureTiming = {})),
+            captureComponent(pages[3].page, pages[3].cdp, (confirmationCaptureTiming = {}), {
+              surfaces: fixture.surfaces,
+              variant: probe.variant,
+            }),
           );
           confirmation = compareComponents(aa, repeated);
           evidenceRefs.push(await saveSnapshot(repeated));
@@ -461,6 +478,7 @@ export const runFixtureComparison = async (options: {
               pages[index].page.evaluate(collectRuleWitnessesInPage, {
                 nonce: randomBytes(8).toString('hex'),
                 rules: plan.rules,
+                roots: (index === 0 ? base : candidate).scope?.roots,
               }),
             );
             ruleEvidence.push({
@@ -503,6 +521,7 @@ export const runFixtureComparison = async (options: {
               )!.observation;
               return {
                 ...(await pages[index].page.evaluate(readConditionHostInPage, {
+                  'roots': (index === 0 ? base : candidate).scope?.roots,
                   'hover': fixture.interactionSelectors.hover ?? fixture.defaultInteractionSelector,
                   'focus-visible':
                     fixture.interactionSelectors['focus-visible'] ??

@@ -1,10 +1,10 @@
+import './modelPicker.css';
+
 import type { ServerDefaultHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import * as stylex from '@stylexjs/stylex';
 import type { LobeDefaultAiModelListItem } from 'model-bank';
 
 import { ModelItemRender } from '@/components/ModelSelect';
-
-import pickerStyles from './modelPicker.module.css';
 
 export const MODEL_PICKER_STYLE = { minWidth: 200, width: 'initial' } as const;
 
@@ -32,7 +32,7 @@ export const modelPickerStyles = stylex.create({
 });
 
 /** Hides the option's model-info tags in the closed trigger (`lobe-model-info-tags`, see TAG_CLASSNAME). */
-export const modelPickerClassName = pickerStyles.picker;
+export const modelPickerClassName = 'lobe-model-picker-12e68cf8-picker';
 
 export const resolveServerDefaultModelMeta = (
   model: string,

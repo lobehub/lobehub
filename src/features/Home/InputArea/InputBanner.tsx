@@ -1,3 +1,5 @@
+import './InputBanner.css';
+
 import { ActionIcon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -7,8 +9,6 @@ import { useCallback } from 'react';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-
-import moduleStyles from './InputBanner.module.css';
 
 const styles = stylex.create({
   banner: {
@@ -89,5 +89,5 @@ export const InputBannerSegment = ({ children, dismissId }: InputBannerSegmentPr
 };
 
 export const InputBannerQueue = ({ children }: { children: ReactNode }) => (
-  <div className={moduleStyles.queue}>{children}</div>
+  <div className={'lobe-input-banner-4acbe29d-queue'}>{children}</div>
 );

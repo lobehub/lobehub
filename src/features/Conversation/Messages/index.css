@@ -1,0 +1,4 @@
+/* Prevent the antd textarea from growing too long. */
+.lobe-messages-0fc10b22-message .ant-input {
+  max-height: 900px;
+}

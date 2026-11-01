@@ -1,5 +1,7 @@
 'use client';
 
+import './userRequest.css';
+
 import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { ActionIcon, Avatar } from '@lobehub/ui';
@@ -25,7 +27,6 @@ import { sx } from '@/styles/sx';
 
 import { styles } from './styles';
 import { type GlobalApprovalGroup } from './useGlobalPendingApprovals';
-import requestModule from './userRequest.module.css';
 
 interface ApprovalCardProps {
   group: GlobalApprovalGroup;
@@ -173,7 +174,7 @@ const ApprovalCard = memo<ApprovalCardProps>(({ group, onCollapse }) => {
         <div {...stylex.props(styles.requestContext)}>
           <div {...stylex.props(styles.headerTitle)}>{topicTitle || t('globalApproval.title')}</div>
           {userRequest && (
-            <div {...sx([styles.userRequestBody], requestModule.body)}>
+            <div {...sx([styles.userRequestBody], 'lobe-user-request-bac9c8fa-body')}>
               <MarkdownMessage>{userRequest}</MarkdownMessage>
             </div>
           )}

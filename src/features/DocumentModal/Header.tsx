@@ -1,5 +1,7 @@
 'use client';
 
+import './Header.css';
+
 import {
   ActionIcon,
   Avatar,
@@ -28,7 +30,6 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
-import styles from './Header.module.css';
 import { buildDocumentModalUrl } from './url';
 
 const HEADER_HEIGHT = 44;
@@ -87,7 +88,7 @@ const DocumentModalHeader = memo(() => {
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={4}>
         {documentId && (
-          <span className={styles.shareButton}>
+          <span className={'lobe-header-ef249f99-share-button'}>
             <ShareButton documentId={documentId} />
           </span>
         )}

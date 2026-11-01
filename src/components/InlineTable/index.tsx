@@ -1,10 +1,10 @@
+import './InlineTable.css';
+
 import { Table, type TableProps } from '@lobehub/ui';
 import { cx } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 
 import { sx } from '@/styles/sx';
-
-import styles from './InlineTable.module.css';
 
 const hoverStyles = stylex.create({
   hoverToActive: {
@@ -23,7 +23,10 @@ const InlineTable = <T extends object>({
     pagination={false}
     size={'small'}
     className={
-      sx([hoverToActive && hoverStyles.hoverToActive], cx(styles.table, className)).className
+      sx(
+        [hoverToActive && hoverStyles.hoverToActive],
+        cx('lobe-inline-table-b75cf865-table', className),
+      ).className
     }
     {...rest}
   />

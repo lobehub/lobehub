@@ -1,5 +1,7 @@
 'use client';
 
+import './ResourceAccessPage.css';
+
 import { Alert, Breadcrumb, Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import * as stylex from '@stylexjs/stylex';
@@ -21,7 +23,6 @@ import { isForbiddenError } from '@/utils/forbiddenError';
 
 import { AddCollaboratorButton, CollaboratorList } from './Collaborators';
 import PolicySelect from './PolicySelect';
-import moduleStyles from './ResourceAccessPage.module.css';
 import { useAccessLevelOptions } from './useAccessLevelOptions';
 import { useResourcePermission } from './useResourcePermission';
 
@@ -149,7 +150,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
           styles={{ left: { paddingInlineStart: 24 } }}
           left={
             <Breadcrumb
-              className={moduleStyles.breadcrumb}
+              className={'lobe-resource-access-page-a367420c-breadcrumb'}
               separator={<Icon icon={ChevronRight} size={14} />}
               items={[
                 ...(resourceName
