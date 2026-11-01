@@ -206,6 +206,30 @@ describe('TaskBatchService (real PostgreSQL)', () => {
       spy.mockRestore();
     });
 
+    it('does not pause a parent that was finished after the snapshot', async () => {
+      const parent = await model.create({ instruction: 'Parent' });
+      const [child] = await createTasks(1, { parentTaskId: parent.id });
+      await model.updateCheckpointConfig(parent.id, { tasks: { afterIds: [child.identifier] } });
+      await model.update(parent.id, { status: 'running' });
+      // Another request cancels the parent between the snapshot and the pause.
+      const original = TaskModel.prototype.findByIds;
+      const spy = vi.spyOn(TaskModel.prototype, 'findByIds').mockImplementation(async function (
+        this: TaskModel,
+        ids: string[],
+      ) {
+        const rows = await original.call(this, ids);
+        if (ids.includes(parent.id)) {
+          await new TaskModel(db, userId).update(parent.id, { status: 'canceled' });
+        }
+        return rows;
+      });
+
+      await service.updateStatus([child.id], 'completed', { userId });
+      spy.mockRestore();
+
+      expect((await model.findById(parent.id))?.status).toBe('canceled');
+    });
+
     it('does not re-open a parent completed in the same batch', async () => {
       const parent = await model.create({ instruction: 'Parent' });
       const [child] = await createTasks(1, { parentTaskId: parent.id });

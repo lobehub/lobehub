@@ -454,8 +454,14 @@ export class TaskBatchService {
       // — typically completed in this same batch — must not be re-opened.
       if (FINISHED_STATUSES.has(parent.status)) continue;
       if (this.taskModel.shouldPauseAfterComplete(parent, task)) {
-        await this.taskModel.updateStatus(parent.id, 'paused');
-        pausedParents.add(parent.id);
+        // Compare-and-set on the status just inspected: a parent another
+        // request finished or canceled since the snapshot is left alone.
+        const paused = await this.taskModel.updateStatusIfCurrent(
+          parent.id,
+          parent.status,
+          'paused',
+        );
+        if (paused) pausedParents.add(parent.id);
       }
     }
 
