@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -147,8 +148,24 @@ describe('server-origin intervention with client-configured agent after reload',
       }
       expect(store.executeGatewayAgent).not.toHaveBeenCalled();
       expect(store.optimisticUpdateMessagePlugin).toHaveBeenCalled();
+      expect(operationSelectors.isMessageProcessing(toolMessageId)(useChatStore.getState())).toBe(
+        false,
+      );
     },
   );
+
+  it('clears processing when the client rejection continuation fails', async () => {
+    const store = seed();
+    sourceMutation().mockResolvedValue({ success: false } as never);
+    vi.mocked(store.executeClientAgent).mockRejectedValueOnce(new Error('client failed'));
+    await actions.rejectContinue();
+    expect(operationSelectors.isMessageProcessing(toolMessageId)(useChatStore.getState())).toBe(
+      false,
+    );
+    expect(Object.values(useChatStore.getState().operations)).toContainEqual(
+      expect.objectContaining({ status: 'failed' }),
+    );
+  });
 
   it.each(['approve', 'answer'] as const)(
     'keeps the configured Gateway legacy path for %s when the source is unavailable',

@@ -2054,7 +2054,6 @@ export class ConversationControlActionImpl {
       }
 
       const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
-
       const { operationId } = startOperation({
         type: 'rejectToolCalling',
         context: {
@@ -2113,6 +2112,7 @@ export class ConversationControlActionImpl {
           completeOperation(operationId);
           return;
         }
+        completeOperation(operationId);
       } catch (error) {
         const err = error as Error;
         console.error('[rejectAndContinueToolCalling][server] Gateway resume failed:', err);
