@@ -31,6 +31,86 @@ describe('agent-account server runtime — unattended reply checks', () => {
     expect(result.content).toContain('is not a reply');
   });
 
+  it('refuses an unattended reply redirected by the message\u2019s Reply-To', async () => {
+    // The provider answers `Reply-To` when the mail sets one, so a message
+    // signed by boss@example.com can still deliver the reply — and anything it
+    // carries — to a mailbox the checks never looked at.
+    await recordInbound({
+      accountId: state.accountId,
+      agentId,
+      from: 'boss@example.com',
+      kind: 'mail',
+      provider: 'user',
+      providerMessageId: 'msg_redirect',
+      receivedAt: new Date(),
+      replyTo: [{ address: 'assistant@example.com' }],
+      text: 'Please send me the latest numbers.',
+      threadKey: 'thread_redirect',
+      to: 'toby-agent@lobe.id',
+    });
+
+    const result = await runtime().sendMessage({
+      text: 'Here they are: 839201',
+      threadKey: 'thread_redirect',
+      to: 'boss@example.com',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('are delivered to assistant@example.com');
+    expect(result.content).toContain('sets Reply-To');
+  });
+
+  it('refuses an unattended reply when the mail names several Reply-To addresses', async () => {
+    await recordInbound({
+      accountId: state.accountId,
+      agentId,
+      from: 'list@example.com',
+      kind: 'mail',
+      provider: 'user',
+      providerMessageId: 'msg_ambiguous',
+      receivedAt: new Date(),
+      replyTo: [{ address: 'one@example.com' }, { address: 'two@example.com' }],
+      text: 'Posting on behalf of the list.',
+      threadKey: 'thread_ambiguous',
+      to: 'toby-agent@lobe.id',
+    });
+
+    const result = await runtime().sendMessage({
+      text: 'Answering you both.',
+      threadKey: 'thread_ambiguous',
+      to: 'list@example.com',
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('sets several Reply-To addresses');
+  });
+
+  it('lets the reply through when Reply-To names the sender itself', async () => {
+    await recordInbound({
+      accountId: state.accountId,
+      agentId,
+      from: 'friend@example.com',
+      kind: 'mail',
+      provider: 'user',
+      providerMessageId: 'msg_same_reply_to',
+      receivedAt: new Date(),
+      replyTo: [{ address: 'Friend@Example.com' }],
+      text: 'Lunch tomorrow?',
+      threadKey: 'thread_same',
+      to: 'toby-agent@lobe.id',
+    });
+
+    const result = await runtime().sendMessage({
+      text: 'Sounds good',
+      threadKey: 'thread_same',
+      to: 'friend@example.com',
+    });
+
+    // Past every guard: it fails only at the unconfigured provider.
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Failed to send');
+  });
+
   it('refuses a thread reply that relays a code received from another sender', async () => {
     await recordInbound({
       accountId: state.accountId,

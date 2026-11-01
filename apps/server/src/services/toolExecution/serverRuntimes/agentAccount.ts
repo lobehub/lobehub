@@ -46,6 +46,24 @@ const CODE_RELAY_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const normalizeAddress = (value: string) => value.trim().toLowerCase();
 
+/**
+ * Who a provider-side reply to `entry` actually reaches.
+ *
+ * The mail API's reply route answers the message's `Reply-To` when it sets one
+ * and the sender otherwise, so those are not always the same mailbox. Returns
+ * `undefined` when the mail names several reply targets: no single recipient
+ * can then be authorized for an unattended reply.
+ */
+const replyRecipientOf = (entry: AgentInboxEntry): string | undefined => {
+  const targets = (entry.replyTo ?? [])
+    .map((target) => target.address?.trim())
+    .filter((address): address is string => Boolean(address));
+
+  if (targets.length === 0) return entry.from;
+
+  return targets.length === 1 ? targets[0] : undefined;
+};
+
 /** How far back a wait with no cursor and no known run start looks. */
 const DEFAULT_WAIT_LOOKBACK_MS = 2 * 60 * 1000;
 /** A run that started longer ago than this does not widen the default cursor further. */
@@ -190,6 +208,22 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
       if (!replyTo) {
         return {
           refusal: `Thread ${args.threadKey} has no message from ${args.to} in this inbox, so this is not a reply. Send it without \`threadKey\` to ask the user to approve it.`,
+        };
+      }
+
+      // The reply route answers the message's `Reply-To`, not the address in
+      // its `From`. Checking only `from` would let a message signed by one
+      // address redirect the unattended reply — and any code or token it
+      // carries — to a different mailbox the checks below never looked at.
+      const deliveredTo = replyRecipientOf(replyTo);
+      if (!deliveredTo) {
+        return {
+          refusal: `The message from ${args.to} in thread ${args.threadKey} sets several Reply-To addresses, so who this reply reaches cannot be determined. Send it without \`threadKey\` to ask the user to approve it.`,
+        };
+      }
+      if (normalizeAddress(deliveredTo) !== recipient) {
+        return {
+          refusal: `Replies to ${args.to}'s message in thread ${args.threadKey} are delivered to ${deliveredTo}, because that message sets Reply-To. Reply to ${deliveredTo} instead, or send it without \`threadKey\` to ask the user to approve it.`,
         };
       }
 

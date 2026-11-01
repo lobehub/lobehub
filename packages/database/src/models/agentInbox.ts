@@ -1,4 +1,8 @@
-import type { AgentInboxSourceType, AgentMailAttachment } from '@lobechat/types';
+import type {
+  AgentInboxSourceType,
+  AgentMailAddress,
+  AgentMailAttachment,
+} from '@lobechat/types';
 import {
   and,
   asc,
@@ -63,6 +67,12 @@ export interface AgentInboxEntry {
   providerMessageId: string | null;
   readAt: Date | null;
   receivedAt: Date;
+  /**
+   * The mail's `Reply-To` addresses, empty when it sets none. A reply through
+   * the provider answers these instead of `from`, so callers that authorize a
+   * reply have to check them, not only the sender.
+   */
+  replyTo: AgentMailAddress[];
   sourceId: string;
   sourceType: AgentInboxSourceType;
   /** The item's title (a mail's subject). */
@@ -99,6 +109,11 @@ const entryColumns = {
   providerMessageId: agentMails.providerMessageId,
   readAt: agentInboxMessages.readAt,
   receivedAt: agentInboxMessages.receivedAt,
+  /**
+   * The message's `Reply-To`, which is where a provider-side reply actually
+   * goes. Empty means the reply answers the sender itself.
+   */
+  replyTo: sql<AgentMailAddress[]>`coalesce(${agentMails.replyTo}, '[]'::jsonb)`,
   sourceId: agentInboxMessages.sourceId,
   sourceType: agentInboxMessages.sourceType,
   subject: agentInboxMessages.title,
