@@ -4,7 +4,7 @@ import { TRPCClientError } from '@trpc/client';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LinearConnectionModel } from '@/database/models/linear';
+import { LinearConnectionModel, LinearSyncRuleModel } from '@/database/models/linear';
 import {
   asyncTasks,
   linearConnections,
@@ -443,6 +443,23 @@ describe('linearRouter', () => {
         await settle();
         await caller({ userId }).cancelSync({ jobId: id, projectId });
 
+        const [rule] = await caller({ userId }).listSyncRules({ projectId });
+        expect(rule).toMatchObject({ lastResult: null, lastRunAt: null });
+      });
+
+      it('marks the run failed, not successful, when the rule record cannot be written', async () => {
+        mocks.syncByFilter.mockResolvedValue(round(5, false));
+        const { id } = await startRule();
+        const recordRun = vi
+          .spyOn(LinearSyncRuleModel, 'recordRun')
+          .mockRejectedValueOnce(new Error('connection reset'));
+
+        await routerService().run(id);
+        recordRun.mockRestore();
+
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          { error: 'failed', id, status: 'error' },
+        ]);
         const [rule] = await caller({ userId }).listSyncRules({ projectId });
         expect(rule).toMatchObject({ lastResult: null, lastRunAt: null });
       });

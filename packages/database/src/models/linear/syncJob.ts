@@ -147,22 +147,25 @@ export class LinearSyncJobModel {
     projectId: string,
     taskId: string,
   ): Promise<boolean> => {
-    const stop = { error: { code: 'canceled' }, updatedAt: new Date() };
-    const target = and(eq(asyncTasks.id, taskId), projectCondition(scope, projectId));
-    const queued = await db
+    // One statement over both active states, so a round moving the job from
+    // processing to pending at the same moment cannot slip past the stop.
+    const rows = await db
       .update(asyncTasks)
-      .set({ ...stop, status: AsyncTaskStatus.Error })
-      .where(and(target, eq(asyncTasks.status, AsyncTaskStatus.Pending)))
-      .returning({ id: asyncTasks.id });
-    if (queued.length > 0) return true;
-    const running = await db
-      .update(asyncTasks)
-      .set(stop)
+      .set({
+        error: { code: 'canceled' },
+        status: sql`CASE WHEN ${asyncTasks.status} = ${AsyncTaskStatus.Pending} THEN ${AsyncTaskStatus.Error} ELSE ${asyncTasks.status} END`,
+        updatedAt: new Date(),
+      })
       .where(
-        and(target, eq(asyncTasks.status, AsyncTaskStatus.Processing), isNull(asyncTasks.error)),
+        and(
+          eq(asyncTasks.id, taskId),
+          projectCondition(scope, projectId),
+          inArray(asyncTasks.status, ACTIVE_STATUSES),
+          isNull(asyncTasks.error),
+        ),
       )
       .returning({ id: asyncTasks.id });
-    return running.length > 0;
+    return rows.length > 0;
   };
 
   /** A run of this rule that has not finished yet, if any. */

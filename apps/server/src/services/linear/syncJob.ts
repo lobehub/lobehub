@@ -164,28 +164,21 @@ export class LinearSyncJobService {
         log('heartbeat %s failed: %O', taskId, error),
       );
     }, LINEAR_SYNC_HEARTBEAT_MS);
-    // Every write below applies only while the job is still running, so a run
-    // the user stopped meanwhile stays stopped.
-    // A run stopped during this round ends as stopped, keeping its outcome.
-    const finish = async (
-      set: Parameters<typeof LinearSyncJobModel.transition>[4],
-      outcome?: LinearSyncJobMetadata,
-    ) => {
+    // Every write below applies only while the job is still running and no
+    // stop was requested; a run stopped meanwhile ends as stopped.
+    // A failed round fails the job, unless the user stopped it meanwhile:
+    // then it ends as stopped.
+    const fail = async (code: LinearSyncJobErrorCode) => {
       const duration = Date.now() - startedAt;
-      const done = await LinearSyncJobModel.transition(
+      const failed = await LinearSyncJobModel.transition(
         this.db,
         this.scope,
         taskId,
         [AsyncTaskStatus.Processing],
-        { duration, ...set },
+        { duration, error: { code }, status: AsyncTaskStatus.Error },
       );
-      if (!done) {
-        await LinearSyncJobModel.settleStopped(this.db, this.scope, taskId, {
-          duration,
-          ...(outcome ? { metadata: outcome } : {}),
-        });
-      }
-      return done;
+      if (!failed)
+        await LinearSyncJobModel.settleStopped(this.db, this.scope, taskId, { duration });
     };
     try {
       const round = await this.execute(metadata);
@@ -220,19 +213,33 @@ export class LinearSyncJobService {
         });
         if (queued) return;
       }
-      const succeeded = await finish(
-        { metadata: outcome, status: AsyncTaskStatus.Success },
-        outcome,
-      );
       // The rule shows its last finished run; a round in between, or a run
-      // stopped part-way, leaves the previous one in place.
-      if (succeeded && metadata.kind === 'rule' && metadata.ruleId) {
-        await LinearSyncRuleModel.recordRun(this.db, metadata.ruleId, this.scope, result);
+      // stopped part-way, leaves the previous one in place. The job turns
+      // successful together with that record, or neither changes and the
+      // failure below marks the job failed.
+      const succeeded = await this.db.transaction(async (tx) => {
+        const done = await LinearSyncJobModel.transition(
+          tx,
+          this.scope,
+          taskId,
+          [AsyncTaskStatus.Processing],
+          { duration: Date.now() - startedAt, metadata: outcome, status: AsyncTaskStatus.Success },
+        );
+        if (done && metadata.kind === 'rule' && metadata.ruleId) {
+          await LinearSyncRuleModel.recordRun(tx, metadata.ruleId, this.scope, result);
+        }
+        return done;
+      });
+      if (!succeeded) {
+        await LinearSyncJobModel.settleStopped(this.db, this.scope, taskId, {
+          duration: Date.now() - startedAt,
+          metadata: outcome,
+        });
       }
     } catch (error) {
       const code = toErrorCode(error);
       log('sync %s failed (%s): %O', taskId, code, error);
-      await finish({ error: { code }, status: AsyncTaskStatus.Error });
+      await fail(code);
     } finally {
       clearInterval(heartbeat);
     }
