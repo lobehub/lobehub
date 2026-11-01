@@ -382,6 +382,30 @@ describe('linearRouter', () => {
         ]);
       });
 
+      it('still runs the closing pass when the last allowed round reads to the end', async () => {
+        let page = 0;
+        mocks.syncByFilter.mockImplementation(async (_token, _filter, options) => {
+          if (!options.startAfter && page > 0) return round(0, false);
+          page += 1;
+          return page < LINEAR_SYNC_MAX_ROUNDS
+            ? round(100, true, String(page * 100))
+            : round(100, false);
+        });
+        const { id } = await startRule();
+
+        await drainHandOffs();
+
+        expect(mocks.syncByFilter).toHaveBeenCalledTimes(LINEAR_SYNC_MAX_ROUNDS + 1);
+        expect(startAfterOfCalls().at(-1)).toBeUndefined();
+        expect(await caller({ userId }).listSyncJobs({ projectId })).toMatchObject([
+          {
+            id,
+            result: { created: LINEAR_SYNC_MAX_ROUNDS * 100, truncated: false },
+            status: 'success',
+          },
+        ]);
+      });
+
       it('fails the run when the next round cannot be handed off', async () => {
         mocks.syncByFilter.mockResolvedValue(round(100, true, '100'));
         const { id } = await startRule();

@@ -78,13 +78,13 @@ export const mergeLinearSyncResults = (
 export const nextLinearSyncRound = (
   startAfter: string | undefined,
   round: LinearFilterSyncResult,
-): { cursor?: string } | undefined => {
+): { cursor?: string; sweep?: true } | undefined => {
   if (round.truncated) {
     const moved = round.resumeAfter !== undefined && round.resumeAfter !== startAfter;
     // A round that neither created nor moved on would only repeat itself.
     return round.created > 0 || moved ? { cursor: round.resumeAfter } : undefined;
   }
-  return startAfter === undefined ? undefined : {};
+  return startAfter === undefined ? undefined : { sweep: true };
 };
 
 export const toLinearSyncJobView = (
@@ -175,10 +175,15 @@ export class LinearSyncJobService {
       }
       // A rule run that hit its per-round cap goes on by itself, so the user
       // does not have to press Sync once per hundred issues.
-      const next =
-        this.continueJob && metadata.kind === 'rule' && rounds < LINEAR_SYNC_MAX_ROUNDS
+      // The closing pass from the start is not a creating round: it still
+      // runs when the creating rounds used up the cap, so a long run never
+      // ends without checking the issues it linked earlier.
+      const proposed =
+        this.continueJob && metadata.kind === 'rule'
           ? nextLinearSyncRound(metadata.cursor, round)
           : undefined;
+      const next =
+        proposed && (proposed.sweep || rounds < LINEAR_SYNC_MAX_ROUNDS) ? proposed : undefined;
       if (next) {
         log('sync %s continues (round %d, %d created so far)', taskId, rounds, result.created);
         await this.continueJob!(taskId, { ...metadata, cursor: next.cursor, result, rounds });

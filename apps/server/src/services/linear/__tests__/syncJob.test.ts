@@ -85,7 +85,7 @@ describe('nextLinearSyncRound', () => {
   });
 
   it('ends a resumed run with one pass from the start, and stops after it', () => {
-    expect(nextLinearSyncRound('a', result({ created: 5 }))).toEqual({});
+    expect(nextLinearSyncRound('a', result({ created: 5 }))).toEqual({ sweep: true });
     expect(nextLinearSyncRound(undefined, result({ created: 5 }))).toBeUndefined();
   });
 });
