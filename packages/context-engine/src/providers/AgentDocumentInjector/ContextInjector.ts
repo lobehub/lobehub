@@ -3,7 +3,7 @@ import debug from 'debug';
 import { BaseFirstUserContentProvider } from '../../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../../types';
 import type { AgentContextDocument, AgentDocumentFilterContext } from './shared';
-import { combineDocuments, getDocumentsForPositions } from './shared';
+import { combineDocuments, getDocumentsForPositions, withRunStartedAt } from './shared';
 
 const log = debug('context-engine:provider:AgentDocumentContextInjector');
 
@@ -28,7 +28,7 @@ export class AgentDocumentContextInjector extends BaseFirstUserContentProvider {
     super(options);
   }
 
-  protected buildContent(_context: PipelineContext): string | null {
+  protected buildContent(context: PipelineContext): string | null {
     if (this.config.enabled === false) return null;
 
     const docs = getDocumentsForPositions(
@@ -40,6 +40,6 @@ export class AgentDocumentContextInjector extends BaseFirstUserContentProvider {
     if (docs.length === 0) return null;
 
     log('Injecting %d agent documents before first user message', docs.length);
-    return combineDocuments(docs, this.config);
+    return combineDocuments(docs, withRunStartedAt(this.config, context.messages));
   }
 }

@@ -1,5 +1,5 @@
 import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,14 +31,9 @@ const SearchBar = memo<SearchBarProps>(({ defaultQuery, resultsNumber, searching
   const { t } = useTranslation('tool');
   return (
     <Flexbox horizontal align={'center'} distribution={'space-between'} gap={40} height={26}>
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={cx(styles.query, searching && shinyTextStyles.shinyText)}
-        gap={8}
-      >
+      <Flexbox horizontal align={'center'} className={styles.query} gap={8}>
         <Icon icon={SearchIcon} />
-        {defaultQuery}
+        <span className={cx(searching && shinyTextStyles.shinyText)}>{defaultQuery}</span>
       </Flexbox>
 
       <Flexbox horizontal align={'center'} className={styles.font}>

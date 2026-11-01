@@ -10,6 +10,9 @@ import type {
 import type { AgentSignalSourceType } from '@lobechat/agent-signal/source';
 import { createSourceEvent } from '@lobechat/agent-signal/source';
 
+import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
+
+import { acquireAgentSignalDailyBudget } from './budget';
 import type {
   AgentSignalEmitOptions,
   AgentSignalExecutionContext,
@@ -22,8 +25,12 @@ import { createDefaultAgentSignalPolicies } from './policies';
 import { createProcedurePolicyOptions } from './procedure';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
+import type { AgentSignalScenarioId, WakeDecision } from './scenarios';
+import { AGENT_SIGNAL_SCENARIO_IDS, createScenarioPolicies } from './scenarios';
 import { persistAgentSignalReceipts, projectAgentSignalReceipts } from './services/receiptService';
 import { createSelfIterationCompletionHandler } from './services/selfIteration/completion';
+import { createServerSelfReviewBriefWriter } from './services/selfIteration/review/brief';
+import { claimNightlyReviewTopics } from './services/selfIteration/review/topicQuota';
 import { emitSourceEvent } from './sources';
 import { redisPolicyStateStore } from './store/adapters/redis/policyStateStore';
 import type { AgentSignalReceiptStore, AgentSignalSourceEventStore } from './store/types';
@@ -33,6 +40,8 @@ export { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 interface ExecuteAgentSignalSourceEventOptions extends AgentSignalEmitOptions {
   receiptStore?: AgentSignalReceiptStore;
   runtimeGuardBackend?: RuntimeGuardBackend;
+  /** Scenario whose policies run. Defaults to `self-iteration`. */
+  scenario?: AgentSignalScenarioId;
   store?: AgentSignalSourceEventStore;
 }
 
@@ -62,6 +71,8 @@ export interface RuntimeBackedAgentSignalEmissionOrchestration extends AgentSign
 export interface GeneratedAgentSignalEmissionResult {
   deduped: false;
   orchestration: AgentSignalEmissionOrchestration | RuntimeBackedAgentSignalEmissionOrchestration;
+  /** Present when a non-default scenario produced the result. */
+  scenario?: { id: AgentSignalScenarioId; wakeDecision?: WakeDecision };
   source: AgentSignalSource;
   trigger: GeneratedSourceEventResult['trigger'];
 }
@@ -96,16 +107,36 @@ const createPolicyOptions = (
   options: ExecuteAgentSignalSourceEventOptions,
   procedurePolicyOptions: NonNullable<CreateDefaultAgentSignalPoliciesOptions['procedure']>,
 ): CreateDefaultAgentSignalPoliciesOptions => {
-  // Nightly review writes its Daily Brief in-run via the builtin review
-  // serverRuntime primitive, so the orchestrator no longer injects a brief
-  // writer default.
+  // Nightly review writes proposal Daily Briefs in-run via the builtin review
+  // serverRuntime primitive; the completion handler only writes the ideas brief.
   const policyOptions = options.policyOptions;
 
   return {
     completion: {
-      onSelfIterationCompleted: createSelfIterationCompletionHandler(
-        options.receiptStore ? { receiptStore: options.receiptStore } : {},
-      ),
+      onSelfIterationCompleted: async (input) => {
+        await createSelfIterationCompletionHandler({
+          // Idea-only nightly reviews get their Daily Brief from the completion
+          // path; proposal briefs are still written in-run by the review tool.
+          ideasBrief: {
+            writer: createServerSelfReviewBriefWriter(
+              context.db,
+              context.userId,
+              context.workspaceId,
+            ),
+          },
+          ...(options.receiptStore ? { receiptStore: options.receiptStore } : {}),
+        })(input);
+        await new ExpertiseIngestionService(
+          context.db,
+          context.userId,
+          context.workspaceId,
+        ).ingestSelfReview(
+          input,
+          // The nightly expertise pass shares the night's per-user topic quota with the
+          // review itself. Store-injected runs (evals, isolated tests) stay unmetered.
+          options.store ? {} : { claimNightlyTopics: claimNightlyReviewTopics },
+        );
+      },
     },
     feedbackDomainJudge: {
       db: context.db,
@@ -114,6 +145,17 @@ const createPolicyOptions = (
       workspaceId: context.workspaceId,
     },
     feedbackSatisfactionJudge: {
+      // Every satisfaction call bills the user's provider; cap it per user per day.
+      // Store-injected runs (evals, isolated tests) avoid ambient Redis by contract.
+      ...(options.store
+        ? {}
+        : {
+            classifierBudget: () =>
+              acquireAgentSignalDailyBudget({
+                kind: 'feedback-classifier',
+                userId: context.userId,
+              }),
+          }),
       db: context.db,
       ...policyOptions?.feedbackSatisfactionJudge,
       userId: context.userId,
@@ -167,11 +209,26 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
         ttlSeconds: 7 * 24 * 60 * 60,
       });
 
+    const scenarioId = options.scenario ?? AGENT_SIGNAL_SCENARIO_IDS.selfIteration;
+    let wakeDecision: WakeDecision | undefined;
+    const policies =
+      scenarioId === AGENT_SIGNAL_SCENARIO_IDS.selfIteration
+        ? createDefaultAgentSignalPolicies(
+            createPolicyOptions(context, options, procedurePolicyOptions),
+          )
+        : createScenarioPolicies(scenarioId, {
+            botWake: {
+              ...options.policyOptions?.botWake,
+              onDecision: (decision: WakeDecision) => {
+                wakeDecision = decision;
+                options.policyOptions?.botWake?.onDecision?.(decision);
+              },
+            },
+          });
+
     const runtime = await createAgentSignalRuntime({
       guardBackend: options.runtimeGuardBackend,
-      policies: createDefaultAgentSignalPolicies(
-        createPolicyOptions(context, options, procedurePolicyOptions),
-      ),
+      policies,
     });
     const runtimeResult = await runtime.emitNormalized(emission.source);
     const orchestration = buildRuntimeOrchestrationResult(emission.source, runtimeResult);
@@ -188,6 +245,9 @@ const executeAgentSignalSourceEventCore = async <TSourceType extends AgentSignal
     return {
       ...emission,
       orchestration,
+      ...(scenarioId === AGENT_SIGNAL_SCENARIO_IDS.selfIteration
+        ? {}
+        : { scenario: { id: scenarioId, ...(wakeDecision ? { wakeDecision } : {}) } }),
     };
   } catch (error) {
     if (!options.ignoreError) throw error;

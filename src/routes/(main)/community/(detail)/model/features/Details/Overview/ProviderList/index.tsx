@@ -1,14 +1,13 @@
 'use client';
 
-import { ProviderIcon } from '@lobehub/icons';
-import { ActionIcon, Block, Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, Block, cssVar, Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { BadgeCheck, BookIcon, ChevronRightIcon, KeyIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import InlineTable from '@/components/InlineTable';
+import { ProviderIcon } from '@/components/LobeIcons';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import { BASE_PROVIDER_DOC_URL } from '@/const/url';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -50,7 +49,6 @@ const ProviderList = memo(() => {
               width: 200,
             },
             {
-              dataIndex: 'model.abilities',
               key: 'abilities',
               render: (_, record) => {
                 if (!record?.model?.abilities) return '--';
@@ -60,7 +58,6 @@ const ProviderList = memo(() => {
               width: 120,
             },
             {
-              dataIndex: 'model.contextLength',
               key: 'contextLength',
               render: (_, record) =>
                 record.model?.contextWindowTokens
@@ -72,7 +69,6 @@ const ProviderList = memo(() => {
               width: 120,
             },
             {
-              dataIndex: 'model.maxOutput',
               key: 'maxOutput',
               render: (_, record) =>
                 record.model?.maxOutput
@@ -80,7 +76,6 @@ const ProviderList = memo(() => {
                   : record.model?.maxDimension
                     ? formatTokenNumber(record.model.maxDimension)
                     : '--',
-              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aValue = a.model?.maxOutput || a.model?.maxDimension || 0;
                 const bValue = b.model?.maxOutput || b.model?.maxDimension || 0;
@@ -94,15 +89,13 @@ const ProviderList = memo(() => {
               width: 120,
             },
             {
-              dataIndex: 'model.inputPrice',
               key: 'inputPrice',
               render: (_, record) => {
                 const inputRate = getTextInputUnitRate(record.model?.pricing);
                 return inputRate
-                  ? '$' + formatPriceByCurrency(inputRate, record.model.pricing?.currency)
+                  ? '$' + formatPriceByCurrency(inputRate, record.model?.pricing?.currency)
                   : '--';
               },
-              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aRate = getTextInputUnitRate(a.model?.pricing) || 0;
                 const bRate = getTextInputUnitRate(b.model?.pricing) || 0;
@@ -116,15 +109,13 @@ const ProviderList = memo(() => {
               width: 100,
             },
             {
-              dataIndex: 'model.outputPrice',
               key: 'outputPrice',
               render: (_, record) => {
                 const outputRate = getTextOutputUnitRate(record.model?.pricing);
                 return outputRate
-                  ? '$' + formatPriceByCurrency(outputRate, record.model.pricing?.currency)
+                  ? '$' + formatPriceByCurrency(outputRate, record.model?.pricing?.currency)
                   : '--';
               },
-              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aRate = getTextOutputUnitRate(a.model?.pricing) || 0;
                 const bRate = getTextOutputUnitRate(b.model?.pricing) || 0;
@@ -139,7 +130,6 @@ const ProviderList = memo(() => {
             },
             {
               align: 'right',
-              dataIndex: 'action',
               key: 'action',
               render: (_, record) => {
                 const isLobeHub = record.id === 'lobehub';

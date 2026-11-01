@@ -44,8 +44,28 @@ const CHANNEL_VERSION = '1.0.0';
 const MAX_TEXT_LENGTH = 2000;
 const POLL_TIMEOUT_MS = 40_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
+/**
+ * Budget for the CDN legs, which move the media bytes themselves.
+ *
+ * Deliberately far above `DEFAULT_TIMEOUT_MS`: that number sizes a small JSON
+ * round-trip, while these two calls push or pull megabytes to `novac2c.cdn
+ * .weixin.qq.com`. A server sitting next to the CDN finishes a 2MB upload in
+ * well under a second, so the shared 15s never showed up in local testing —
+ * but the deployed server is a continent away, where the same upload is slow
+ * enough to be aborted. The abort surfaces as a per-attachment failure, and
+ * the caller then degrades the picture to a download link: the sender sees
+ * "it sent a link again" with nothing pointing at a timeout.
+ *
+ * Telegram's sender already draws this distinction (8s for JSON calls, 60s for
+ * multipart uploads); WeChat kept one number for both.
+ */
+const MEDIA_TRANSFER_TIMEOUT_MS = 60_000;
 
 const BASE_INFO: BaseInfo = { channel_version: CHANNEL_VERSION };
+
+/** Number of iLink `sendmessage` calls needed to deliver a text payload. */
+export const getWechatTextSendCount = (text: string): number =>
+  chunkText(text, MAX_TEXT_LENGTH).length;
 
 /**
  * Generate a random X-WECHAT-UIN header value as required by the iLink API.
@@ -230,12 +250,23 @@ export class WechatApiClient {
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
     });
 
-    const { upload_param: uploadParam } = await parseResponse<{ upload_param?: string }>(
-      uploadParamResp,
-      'getuploadurl',
-    );
+    const uploadParamBody = await parseResponse<{
+      errcode?: number;
+      errmsg?: string;
+      upload_param?: string;
+    }>(uploadParamResp, 'getuploadurl');
+    const uploadParam = uploadParamBody?.upload_param;
     if (!uploadParam) {
-      throw new Error('getuploadurl returned empty upload_param');
+      // iLink can answer `ret: 0` and still hand back no upload_param (with an
+      // `errcode` / `errmsg` of its own). Carry the body along: this message
+      // is what reaches the delivery boundary and the agent's tool result, and
+      // "empty upload_param" alone diagnoses nothing.
+      throw Object.assign(
+        new Error(
+          `getuploadurl returned empty upload_param: ${JSON.stringify(uploadParamBody ?? null).slice(0, 300)}`,
+        ),
+        { code: uploadParamBody?.errcode },
+      );
     }
 
     // Step 2 + 3: upload ciphertext to CDN
@@ -246,7 +277,7 @@ export class WechatApiClient {
       body: new Uint8Array(ciphertext),
       headers: { 'Content-Type': 'application/octet-stream' },
       method: 'POST',
-      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+      signal: AbortSignal.timeout(MEDIA_TRANSFER_TIMEOUT_MS),
     });
 
     if (!cdnResp.ok) {
@@ -317,7 +348,7 @@ export class WechatApiClient {
 
     const url = `${CDN_BASE_URL}/download?encrypted_query_param=${encodeURIComponent(media.encrypt_query_param)}`;
     const response = await fetch(url, {
-      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+      signal: AbortSignal.timeout(MEDIA_TRANSFER_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -363,6 +394,7 @@ export class WechatApiClient {
 
 export interface QrCodeResponse {
   qrcode: string;
+  /** URL payload that clients must encode into a QR code for scanning. */
   qrcode_img_content: string;
 }
 

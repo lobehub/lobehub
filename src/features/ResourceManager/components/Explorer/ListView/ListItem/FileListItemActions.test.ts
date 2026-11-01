@@ -1,7 +1,7 @@
-import { render } from '@testing-library/react';
-import type { ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from '@lobehub/ui';
+import { fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import FileListItemActions, { appendTransferMenuItemsBeforeDelete } from './FileListItemActions';
 
@@ -11,10 +11,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/business/client/hooks/useFileTransferMenuItem', () => ({
   useFileTransferMenuItem: mocks.useFileTransferMenuItem,
-}));
-
-vi.mock('@/hooks/usePermission', () => ({
-  usePermission: () => ({ allowed: true }),
 }));
 
 vi.mock('../../ItemDropdown/DropdownMenu', () => ({
@@ -45,6 +41,10 @@ describe('appendTransferMenuItemsBeforeDelete', () => {
 });
 
 describe('FileListItemActions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   const baseProps = {
     id: 'resource-1',
     isCreatingFileParseTask: false,
@@ -62,5 +62,24 @@ describe('FileListItemActions', () => {
     render(React.createElement(FileListItemActions, { ...baseProps, isPage: true }));
 
     expect(mocks.useFileTransferMenuItem).toHaveBeenCalledWith('resource-1', 'document');
+  });
+
+  it('uses fileId for initial chunk parsing when the resource id is a document id', () => {
+    const parseFiles = vi.fn();
+    mocks.useFileTransferMenuItem.mockReturnValue([]);
+
+    render(
+      React.createElement(FileListItemActions, {
+        ...baseProps,
+        fileId: 'file_1',
+        id: 'docs_1',
+        isSupportedForChunking: true,
+        parseFiles,
+      }),
+    );
+
+    fireEvent.click(screen.getByText('FileManager.actions.chunking'));
+
+    expect(parseFiles).toHaveBeenCalledWith(['file_1']);
   });
 });

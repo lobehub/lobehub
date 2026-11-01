@@ -1,12 +1,11 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Icon } from '@lobehub/ui';
 import { Brain, ChartBar, Loader2, MessageSquare } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   center: css`
     position: absolute;
     inset: 0;
@@ -18,7 +17,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 40px;
     height: 40px;
     margin: auto;
-    border-radius: 50%;
+    border-radius: 999px;
 
     color: ${cssVar.colorTextSecondary};
 
@@ -36,7 +35,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   hint: css`
     margin-block-start: 24px;
-    font-size: 13px;
+    font-size: ${cssVar.fontSize};
     color: ${cssVar.colorTextQuaternary};
   `,
   icon: css`
@@ -49,7 +48,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 30px;
     height: 30px;
-    border-radius: 8px;
+    border-radius: ${cssVar.borderRadius};
   `,
   icon1: css`
     inset-block-start: 15px;
@@ -75,7 +74,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     margin: auto;
     border: 1px dashed ${cssVar.colorBorderSecondary};
-    border-radius: 50%;
+    border-radius: 999px;
   `,
   orbit1: css`
     width: 200px;
@@ -105,6 +104,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
 
     animation: orbit-spin 20s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
   spinner: css`
     @keyframes spin {
@@ -118,6 +121,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
 
     animation: spin 1.5s linear infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
   `,
 }));
 

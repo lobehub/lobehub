@@ -1,8 +1,14 @@
 'use client';
 
-import { ActionIcon, Button, Empty, Flexbox, Input, SortableList } from '@lobehub/ui';
-import { Space } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  Empty,
+  Flexbox,
+  Input,
+  SortableList,
+} from '@lobehub/ui';
 import { MessageCircle, PlusIcon, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -97,7 +103,7 @@ const OpeningQuestions = memo(() => {
   return (
     <Flexbox gap={8} width={'100%'}>
       <Flexbox gap={4} width={'100%'}>
-        <Space.Compact style={{ width: '100%' }}>
+        <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
           <Input
             disabled={disabled}
             placeholder={t('settingOpening.openingQuestions.placeholder')}
@@ -112,7 +118,7 @@ const OpeningQuestions = memo(() => {
             icon={PlusIcon}
             onClick={addQuestion}
           />
-        </Space.Compact>
+        </Flexbox>
 
         {isRepeat && (
           <p className={styles.repeatError}>{t('settingOpening.openingQuestions.repeat')}</p>

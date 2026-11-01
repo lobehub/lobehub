@@ -107,6 +107,29 @@ describe('LobeAnthropicAI', () => {
       expect(result).toBeInstanceOf(Response);
     });
 
+    it.each([
+      ['claude-opus-4-6', 'high', 'high'],
+      ['claude-haiku-4-5-20251001', 'high', undefined],
+      ['claude-sonnet-4-6', 'xhigh', undefined],
+      ['claude-opus-4-7', 'xhigh', 'xhigh'],
+    ] as const)(
+      'should map routed effort %s / %s to Anthropic output config %s',
+      async (model, reasoningEffort, expectedEffort) => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model,
+          reasoning_effort: reasoningEffort,
+        });
+
+        const payload = (instance['client'].messages.create as Mock).mock.calls[0][0];
+
+        expect(payload.output_config).toEqual(
+          expectedEffort ? { effort: expectedEffort } : undefined,
+        );
+        expect(payload).not.toHaveProperty('reasoning_effort');
+      },
+    );
+
     it('should handle system prompt correctly', async () => {
       // Arrange
       const mockStream = new ReadableStream({
@@ -884,7 +907,8 @@ describe('LobeAnthropicAI', () => {
           model: 'claude-opus-4-7',
           output_config: { effort: 'xhigh' },
           system: undefined,
-          thinking: { type: 'adaptive' },
+          // Opus 4.7 defaults `display` to `omitted`, so reasoning has to be opted into
+          thinking: { display: 'summarized', type: 'adaptive' },
           tools: undefined,
         });
       });
@@ -896,6 +920,28 @@ describe('LobeAnthropicAI', () => {
             { content: 'Partial assistant draft', role: 'assistant' },
           ],
           model: 'claude-opus-4-7',
+        };
+
+        const result = await buildDefaultAnthropicPayload(payload);
+
+        expect(result.messages).toEqual([
+          {
+            content: 'Continue this answer',
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should drop ALL stacked trailing assistant messages', async () => {
+        // Failed-run placeholder rows can stack several assistant turns at the
+        // payload tail; popping only one still triggers the prefill 400.
+        const payload: ChatStreamPayload = {
+          messages: [
+            { content: 'Continue this answer', role: 'user' },
+            { content: '...', role: 'assistant' },
+            { content: '...', role: 'assistant' },
+          ],
+          model: 'claude-opus-5',
         };
 
         const result = await buildDefaultAnthropicPayload(payload);

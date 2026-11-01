@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
+import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 
 import { HeterogeneousAgentService, HeterogeneousPersistenceHandler } from '..';
 import { __resetOperationStatesForTesting } from '../HeterogeneousPersistenceHandler';
@@ -12,8 +13,14 @@ const createSilentStreamManager = (): IStreamEventManager =>
   }) as unknown as IStreamEventManager;
 
 describe('HeterogeneousAgentService — phase 2c session id persistence + resume', () => {
-  beforeEach(() => __resetOperationStatesForTesting());
-  afterEach(() => __resetOperationStatesForTesting());
+  beforeEach(() => {
+    __resetOperationStatesForTesting();
+    vi.spyOn(CompletionLifecycle.prototype, 'completeOperation').mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    __resetOperationStatesForTesting();
+    vi.restoreAllMocks();
+  });
 
   describe('heteroFinish persists sessionId via TopicModel.updateMetadata', () => {
     it('writes the CLI session id to topic.metadata.heteroSessionId', async () => {
@@ -33,6 +40,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const handler = new HeterogeneousPersistenceHandler({
         messageModel: {
           findById: vi.fn(async () => null),
+          getLatestSpineMessageId: vi.fn(async () => null),
           listMessagePluginsByTopic: vi.fn(async () => []),
           update: vi.fn(async () => ({ success: true })),
         } as any,
@@ -58,6 +66,12 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
+        } as any,
       });
 
       await service.heteroFinish({
@@ -89,6 +103,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const handler = new HeterogeneousPersistenceHandler({
         messageModel: {
           findById: vi.fn(async () => null),
+          getLatestSpineMessageId: vi.fn(async () => null),
           listMessagePluginsByTopic: vi.fn(async () => []),
           update: vi.fn(async () => ({ success: true })),
         } as any,
@@ -112,6 +127,12 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
+        } as any,
       });
 
       await service.heteroFinish({
@@ -139,6 +160,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const handler = new HeterogeneousPersistenceHandler({
         messageModel: {
           findById: vi.fn(async () => null),
+          getLatestSpineMessageId: vi.fn(async () => null),
           listMessagePluginsByTopic: vi.fn(async () => []),
           update: vi.fn(async () => ({ success: true })),
         } as any,
@@ -163,6 +185,12 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
+        } as any,
       });
 
       // Simulate: sandbox was recycled, CC exited before emitting system.init
@@ -171,12 +199,79 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         agentType: 'claude-code',
         operationId: 'op-stale',
         result: 'error',
+        resumeSessionInvalidated: true,
         // no sessionId — CC never initialized (resume failed)
         topicId: 'topic-stale',
       });
 
       // Must clear the stale session id so the next turn starts fresh
       expect(updateMetadata).toHaveBeenCalledWith('topic-stale', { heteroSessionId: undefined });
+    });
+
+    /**
+     * @example Codex `already has an active writer` preserves the requested session token.
+     */
+    it('preserves heteroSessionId for a transient pre-init resume failure', async () => {
+      // ROOT CAUSE:
+      //
+      // If a concurrent Codex writer rejected thread/resume, no new session id
+      // was emitted. The old implementation treated every such error as a dead
+      // session and cleared the valid token, forcing the next turn to start empty.
+      //
+      // Before: error + no sessionId always wrote heteroSessionId=undefined.
+      // After: only an explicit resumeSessionInvalidated signal may clear it.
+      const updateMetadata = vi.fn(async () => undefined);
+      const findById = vi.fn(async () => ({
+        id: 'topic-busy',
+        metadata: {
+          heteroSessionId: 'codex-thread-valid',
+          runningOperation: { assistantMessageId: 'asst-busy', operationId: 'op-busy' },
+        },
+      }));
+      const handler = new HeterogeneousPersistenceHandler({
+        messageModel: {
+          findById: vi.fn(async () => null),
+          getLatestSpineMessageId: vi.fn(async () => null),
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
+        threadModel: {} as any,
+        topicModel: { findById, updateMetadata } as any,
+      });
+      await handler.ingest({
+        events: [
+          {
+            data: { chunkType: 'text', content: '' },
+            operationId: 'op-busy',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+        ],
+        operationId: 'op-busy',
+        topicId: 'topic-busy',
+      });
+      const service = new HeterogeneousAgentService({} as any, 'user-1', {
+        persistenceHandler: handler,
+        streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningOperation: vi.fn(async () => ({ status: 'settled' as const })),
+          updateMetadata,
+        } as any,
+      });
+
+      await service.heteroFinish({
+        agentType: 'codex',
+        error: { message: 'already has an active writer', type: 'AgentRuntimeError' },
+        operationId: 'op-busy',
+        result: 'error',
+        topicId: 'topic-busy',
+      });
+
+      expect(updateMetadata).not.toHaveBeenCalledWith('topic-busy', {
+        heteroSessionId: undefined,
+      });
     });
 
     it('persists sessionId even when result=error (so the next run can still resume context)', async () => {
@@ -195,6 +290,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const handler = new HeterogeneousPersistenceHandler({
         messageModel: {
           findById: vi.fn(async () => null),
+          getLatestSpineMessageId: vi.fn(async () => null),
           listMessagePluginsByTopic: vi.fn(async () => []),
           update: vi.fn(async () => ({ success: true })),
         } as any,
@@ -218,6 +314,12 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
+        } as any,
       });
 
       await service.heteroFinish({
@@ -236,7 +338,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
 
     it('topic.metadata.runningOperation is preserved (updateMetadata merges, does not replace)', async () => {
       // This contract is enforced by `TopicModel.updateMetadata` itself
-      // (verified in packages/database tests). We just assert the handler
+      // (verified in packages/database tests). We just assert the service
       // calls it with a partial — not the full metadata object.
       const updateMetadata = vi.fn(async () => undefined);
       const findById = vi.fn(async () => ({
@@ -254,6 +356,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const handler = new HeterogeneousPersistenceHandler({
         messageModel: {
           findById: vi.fn(async () => null),
+          getLatestSpineMessageId: vi.fn(async () => null),
           listMessagePluginsByTopic: vi.fn(async () => []),
           update: vi.fn(async () => ({ success: true })),
         } as any,
@@ -277,6 +380,12 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
+        } as any,
       });
 
       await service.heteroFinish({
@@ -316,6 +425,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const handler = new HeterogeneousPersistenceHandler({
         messageModel: {
           findById: vi.fn(async () => null),
+          getLatestSpineMessageId: vi.fn(async () => null),
           listMessagePluginsByTopic: vi.fn(async () => []),
           update: vi.fn(async () => ({ success: true })),
         } as any,
@@ -340,6 +450,12 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: stream,
+        topicModel: {
+          findById,
+          settleRunningStatus: vi.fn(async () => undefined),
+          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+          updateMetadata,
+        } as any,
       });
 
       // Should not throw — sessionId persistence is best-effort
@@ -355,6 +471,95 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
 
       // Terminal agent_runtime_end still published
       expect(stream.publishStreamEvent).toHaveBeenCalled();
+    });
+  });
+
+  describe('eager session-id persistence on stream_start (survives watchdog abandon)', () => {
+    it('persists heteroSessionId as soon as stream_start reports it, without waiting for heteroFinish', async () => {
+      const updateMetadata = vi.fn(async () => undefined);
+      const findById = vi.fn(async () => ({
+        agentId: null,
+        id: 'topic-abandon',
+        metadata: {
+          runningOperation: { assistantMessageId: 'asst-a', operationId: 'op-abandon' },
+        },
+      }));
+
+      const handler = new HeterogeneousPersistenceHandler({
+        messageModel: {
+          findById: vi.fn(async () => null),
+          getLatestSpineMessageId: vi.fn(async () => null),
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
+        threadModel: {} as any,
+        topicModel: { findById, updateMetadata } as any,
+      });
+
+      // Only a stream_start reporting the CC session id — NO heteroFinish. This
+      // is the inactivity-watchdog path: the run starts, emits its session id,
+      // then gets abandoned by AbandonOperationService (which never calls finish).
+      await handler.ingest({
+        events: [
+          {
+            data: { sessionId: 'cc-live-session' },
+            operationId: 'op-abandon',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_start',
+          },
+        ],
+        operationId: 'op-abandon',
+        topicId: 'topic-abandon',
+      });
+
+      // The resume token is already on topic.metadata — the next turn can resume.
+      expect(updateMetadata).toHaveBeenCalledWith('topic-abandon', {
+        heteroSessionId: 'cc-live-session',
+      });
+    });
+
+    it('does not re-write when stream_start repeats the same session id', async () => {
+      const updateMetadata = vi.fn(async () => undefined);
+      const findById = vi.fn(async () => ({
+        agentId: null,
+        id: 'topic-dedupe',
+        metadata: { runningOperation: { assistantMessageId: 'asst-d', operationId: 'op-dedupe' } },
+      }));
+
+      const handler = new HeterogeneousPersistenceHandler({
+        messageModel: {
+          findById: vi.fn(async () => null),
+          getLatestSpineMessageId: vi.fn(async () => null),
+          listMessagePluginsByTopic: vi.fn(async () => []),
+          update: vi.fn(async () => ({ success: true })),
+        } as any,
+        threadModel: {} as any,
+        topicModel: { findById, updateMetadata } as any,
+      });
+
+      await handler.ingest({
+        events: [
+          {
+            data: { sessionId: 'cc-same' },
+            operationId: 'op-dedupe',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_start',
+          },
+          {
+            data: { sessionId: 'cc-same' },
+            operationId: 'op-dedupe',
+            stepIndex: 1,
+            timestamp: 2,
+            type: 'stream_start',
+          },
+        ],
+        operationId: 'op-dedupe',
+        topicId: 'topic-dedupe',
+      });
+
+      expect(updateMetadata).toHaveBeenCalledTimes(1);
     });
   });
 

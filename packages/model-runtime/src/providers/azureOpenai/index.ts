@@ -1,25 +1,38 @@
 import debug from 'debug';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
+import { AzureOpenAI } from 'openai';
 
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
+import { refineErrorCode } from '../../errors';
+import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
+  ChatMethodOptions,
+  ChatStreamPayload,
+} from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { sanitizeError } from '../../utils/sanitizeError';
-import {
-  isResponsesAPIModel,
-  responsesAPIModels,
-  systemToUserModels,
-} from '../openai/openaiModelId';
+import { isResponsesAPIModel, responsesAPIModels, systemToUserModels } from '../openai/modelId';
 
 const azureImageLogger = debug('lobe-image:azure');
 const azureSearchContextSize = process.env.OPENAI_SEARCH_CONTEXT_SIZE;
 
+/**
+ * Azure reasoning models reject sampling/penalty params (`temperature` and friends
+ * 400 with "Unsupported parameter"). Matches GPT-5 and every later GPT generation —
+ * GPT-6 dropped the minor version (`gpt-6-astra`) but kept the same restriction.
+ *
+ * Substring matching is deliberate: Azure deployment names commonly wrap the model
+ * id (`prod-gpt-54`). The `[.-]`/end boundary keeps Azure's legacy `gpt-35-turbo`
+ * deployment name out.
+ */
 const isAzureReasoningModel = (model: string) =>
-  model.includes('gpt-5') || model.includes('o1') || model.includes('o3');
+  /gpt-[5-9](?:$|[.-])/.test(model) || model.includes('o1') || model.includes('o3');
 
 const supportsImageInputFidelity = (model: string) => /^gpt-image-1(?:$|[-.])/.test(model);
 
@@ -67,10 +80,19 @@ const normalizeAzureBaseURL = (value?: string) => {
   return url.toString().replace(/\/$/, '');
 };
 
+/**
+ * Azure's `/openai/v1` compatible surface returns 404 `DeploymentNotFound` for
+ * transcription deployments (`gpt-4o-transcribe` family), so transcription must
+ * use the classic `/openai/deployments/{deployment}/audio/transcriptions` path,
+ * which requires an explicit `api-version`.
+ * @see https://learn.microsoft.com/azure/ai-foundry/openai/reference-preview
+ */
+const AZURE_TRANSCRIPTION_API_VERSION = '2025-03-01-preview';
+
 const maskSensitiveUrl = (url: string) => {
   const regex = /^(https:\/\/)([^.]+)(\.(?:openai\.azure\.com|cognitiveservices\.azure\.com).*)$/;
 
-  return url.replace(regex, (match, protocol, subdomain, rest) => `${protocol}***${rest}`);
+  return url.replace(regex, (_match, protocol, _subdomain, rest) => `${protocol}***${rest}`);
 };
 
 const BaseAzureOpenAI = createOpenAICompatibleRuntime({
@@ -190,6 +212,8 @@ const BaseAzureOpenAI = createOpenAICompatibleRuntime({
 });
 
 export class LobeAzureOpenAI extends BaseAzureOpenAI {
+  private transcriptionClient?: AzureOpenAI;
+
   constructor(options: Record<string, any> = {}) {
     const { endpoint, ...rest } = options;
     const baseURL = normalizeAzureBaseURL(rest.baseURL ?? endpoint);
@@ -208,9 +232,49 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
     }
   }
 
+  async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
+    try {
+      return await super.transcribe(payload, options);
+    } catch (error) {
+      const payloadError = this.attachDeploymentId(error, this.getMappedModelId(payload.model));
+
+      // `handleError` reports `this.baseURL` (`/openai/v1`), but transcription went to the
+      // deployments path — report the endpoint that was actually called.
+      throw payloadError && typeof payloadError === 'object'
+        ? { ...payloadError, endpoint: maskSensitiveUrl(this.transcriptionBaseURL) }
+        : payloadError;
+    }
+  }
+
+  /** `this.baseURL` is normalized to `.../openai/v1`; deployments live under `.../openai`. */
+  private get transcriptionBaseURL() {
+    return this.baseURL.replace(/\/v1$/, '');
+  }
+
+  /**
+   * `AzureOpenAI` rewrites `/audio/transcriptions` to
+   * `/deployments/{model}/audio/transcriptions` using the request `model`
+   * (already mapped to the deployment name) and appends `api-version`.
+   *
+   * Forwards every client option the chat client received (e.g. `dangerouslyAllowBrowser`
+   * for the client BYOK runtime, `maxRetries`, `timeout`); only the endpoint and
+   * `api-version` differ.
+   */
+  protected getTranscriptionClient(): OpenAI {
+    this.transcriptionClient ??= new AzureOpenAI({
+      ...this._options,
+      apiKey: this._options.apiKey,
+      apiVersion: AZURE_TRANSCRIPTION_API_VERSION,
+      baseURL: this.transcriptionBaseURL,
+    });
+
+    return this.transcriptionClient;
+  }
+
   async createImage(payload: CreateImagePayload) {
     const { model, params } = payload;
-    azureImageLogger('Creating image with model: %s and params: %O', model, params);
+    const requestModel = this.getMappedModelId(model);
+    azureImageLogger('Creating image with model: %s and params: %O', requestModel, params);
 
     try {
       const userInput: Record<string, any> = { ...params };
@@ -244,7 +308,7 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
       const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(model);
 
       const azureImageOptions: Record<string, any> = {
-        model,
+        model: requestModel,
         n: 1,
         ...(shouldUseInputFidelity ? { input_fidelity: 'high' } : {}),
         ...userInput,
@@ -303,12 +367,24 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
       };
     }
 
+    const fallbackErrorType = normalizedError.code
+      ? AgentRuntimeErrorType.ProviderBizError
+      : AgentRuntimeErrorType.AgentRuntimeError;
+    const errorMessage =
+      typeof normalizedError.error?.message === 'string'
+        ? normalizedError.error.message
+        : normalizedError.message;
+    const refinedErrorType = refineErrorCode({
+      errorType: fallbackErrorType,
+      httpStatus: normalizedError.status,
+      message: errorMessage,
+      provider: ModelProvider.Azure,
+    });
+
     return AgentRuntimeError.chat({
       endpoint: maskSensitiveUrl(this.baseURL),
       error: sanitizeError(normalizedError),
-      errorType: normalizedError.code
-        ? AgentRuntimeErrorType.ProviderBizError
-        : AgentRuntimeErrorType.AgentRuntimeError,
+      errorType: refinedErrorType ?? fallbackErrorType,
       provider: ModelProvider.Azure,
     });
   }

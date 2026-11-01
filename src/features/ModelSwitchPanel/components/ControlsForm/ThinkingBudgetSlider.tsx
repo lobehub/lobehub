@@ -1,7 +1,8 @@
 import { Flexbox, InputNumber } from '@lobehub/ui';
-import { Slider } from 'antd';
 import { memo, useMemo } from 'react';
 import useMergeState from 'use-merge-value';
+
+import DiscreteSlider from '@/components/DiscreteSlider';
 
 // Define special value mappings
 const SPECIAL_VALUES = {
@@ -88,32 +89,22 @@ const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
     };
 
     const inputStep = useMemo(() => getStepForValue(budget), [budget]);
+    const specialLabel =
+      budget === SPECIAL_VALUES.AUTO ? 'Auto' : budget === SPECIAL_VALUES.OFF ? 'OFF' : undefined;
 
-    const marks = useMemo(() => {
-      return {
-        0: 'Auto',
-        1: 'OFF',
-        2: '128',
-        3: '512',
-        4: '1K',
-        5: '2K',
-        6: '4K',
-        7: '8K',
-        8: '16K',
-        9: '24K',
-        10: '32K',
-      };
-    }, []);
+    const options = useMemo(
+      () =>
+        ['Auto', 'OFF', '128', '512', '1K', '2K', '4K', '8K', '16K', '24K', '32K'].map(
+          (label, value) => ({ label, value }),
+        ),
+      [],
+    );
 
     return (
       <Flexbox horizontal align={'center'} gap={12} paddingInline={'4px 0'}>
         <Flexbox flex={1}>
-          <Slider
-            marks={marks}
-            max={10}
-            min={0}
-            step={null}
-            tooltip={{ open: false }}
+          <DiscreteSlider
+            options={options}
             value={sliderPosition}
             onChange={updateWithSliderPosition}
           />
@@ -123,28 +114,13 @@ const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
             changeOnWheel
             max={32_768}
             min={-1}
+            placeholder={specialLabel}
             step={inputStep}
             style={{ width: 80 }}
-            value={budget}
-            formatter={(value, _info) => {
-              if (value === SPECIAL_VALUES.AUTO) return 'Auto';
-              if (value === SPECIAL_VALUES.OFF) return 'OFF';
-              return `${value}`;
-            }}
-            parser={(value) => {
-              if (typeof value === 'string') {
-                if (value.toLowerCase() === 'auto') return SPECIAL_VALUES.AUTO;
-                if (value.toLowerCase() === 'off') return SPECIAL_VALUES.OFF;
-                return parseInt(value.replaceAll(/[^\d-]/g, ''), 10) || 0;
-              }
-              if (typeof value === 'number') {
-                return value;
-              }
-              return SPECIAL_VALUES.AUTO;
-            }}
+            value={specialLabel ? null : budget}
             onChange={(e) => {
-              if (e === null || e === undefined) return;
-              updateWithRealValue(e as number);
+              if (e === null) return;
+              updateWithRealValue(e);
             }}
           />
         </div>

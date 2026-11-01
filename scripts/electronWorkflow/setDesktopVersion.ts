@@ -28,6 +28,40 @@ const rootDir = path.resolve(__dirname, '../..');
 
 // Path to the desktop app package.json
 const desktopPackageJsonPath = path.join(rootDir, 'apps/desktop/package.json');
+
+/**
+ * Distribution identity (white-label / private builds); unset keeps upstream's.
+ *
+ * `productName` is what Electron names the per-user data directory after, and
+ * the shell reads that directory before any app code runs — so it has to be
+ * right in the packaged manifest, which is this file. Same permanence as
+ * DESKTOP_APP_ID: changing it after a release leaves existing installs on an
+ * empty profile.
+ *
+ * `name` reaches Linux packages (deb/rpm package name, WM_CLASS), so it is
+ * derived from the product name unless DESKTOP_PACKAGE_NAME pins it.
+ */
+const distributionName = process.env.DESKTOP_PRODUCT_NAME?.trim();
+const brandName = distributionName || 'LobeHub';
+
+const resolvePackageBaseName = () => {
+  if (process.env.DESKTOP_PACKAGE_NAME) return process.env.DESKTOP_PACKAGE_NAME;
+  if (!distributionName) return 'lobehub-desktop';
+
+  const slug = distributionName
+    .toLowerCase()
+    .replaceAll(/[^\da-z]+/g, '-')
+    .replaceAll(/^-|-$/g, '');
+  if (!slug) {
+    console.error(
+      `❌ DESKTOP_PRODUCT_NAME "${distributionName}" has no ASCII letters or digits to derive a package name from; set DESKTOP_PACKAGE_NAME.`,
+    );
+    process.exit(1);
+  }
+  return `${slug}-desktop`;
+};
+
+const packageBaseName = resolvePackageBaseName();
 const buildDir = path.join(rootDir, 'apps/desktop/build');
 
 // Update app icon
@@ -76,28 +110,28 @@ function updatePackageJson() {
     // Modify other fields based on releaseType
     switch (releaseType) {
       case 'stable': {
-        packageJson.productName = 'LobeHub';
-        packageJson.name = 'lobehub-desktop';
+        packageJson.productName = brandName;
+        packageJson.name = packageBaseName;
         console.log('🌟 Setting as Stable version.');
         break;
       }
       case 'beta': {
-        packageJson.productName = 'LobeHub-Beta'; // Or 'LobeHub-Beta' if preferred
-        packageJson.name = 'lobehub-desktop-beta'; // Or 'lobehub-desktop' if preferred
+        packageJson.productName = `${brandName}-Beta`;
+        packageJson.name = `${packageBaseName}-beta`;
         console.log('🧪 Setting as Beta version.');
         updateAppIcon('beta');
         break;
       }
       case 'nightly': {
-        packageJson.productName = 'LobeHub-Nightly'; // Or 'LobeHub-Nightly'
-        packageJson.name = 'lobehub-desktop-nightly'; // Or 'lobehub-desktop-nightly'
+        packageJson.productName = `${brandName}-Nightly`;
+        packageJson.name = `${packageBaseName}-nightly`;
         console.log('🌙 Setting as Nightly version.');
         updateAppIcon('nightly');
         break;
       }
       case 'canary': {
-        packageJson.productName = 'LobeHub';
-        packageJson.name = 'lobehub-desktop-canary';
+        packageJson.productName = brandName;
+        packageJson.name = `${packageBaseName}-canary`;
         console.log('🐤 Setting as Canary version (same app name and icon as stable).');
         break;
       }

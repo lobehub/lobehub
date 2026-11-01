@@ -1,8 +1,8 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 
 import { getScopePermissions } from '@/utils/rbac';
 
+import { zValidator } from '../common/validator';
 import { PermissionController } from '../controllers/permission.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireAnyPermission } from '../middleware/permission-check';

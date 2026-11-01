@@ -6,6 +6,8 @@
  * - Pin/Unpin
  * - Delete
  */
+import { randomBytes } from 'node:crypto';
+
 import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
@@ -27,7 +29,7 @@ async function createTestGroup(title: string = 'Test Group'): Promise<string> {
     await client.connect();
 
     const now = new Date().toISOString();
-    const groupId = `group_e2e_test_${Date.now()}`;
+    const groupId = `group_e2e_test_${randomBytes(6).toString('hex')}`;
 
     await client.query(
       `INSERT INTO chat_groups (id, title, user_id, created_at, updated_at)
@@ -43,6 +45,25 @@ async function createTestGroup(title: string = 'Test Group'): Promise<string> {
   }
 }
 
+async function waitForGroupItem(this: CustomWorld, groupId: string) {
+  const selector = `a[href$="/group/${groupId}"]`;
+  const groupItem = this.page.locator(selector).first();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await expect(groupItem).toBeVisible({ timeout: WAIT_TIMEOUT });
+      return { groupItem, selector };
+    } catch (error) {
+      if (attempt === 2) throw error;
+      console.log(`   ↻ Agent Group ${groupId} not visible yet, reloading Home page...`);
+      await this.page.reload({ waitUntil: 'domcontentloaded' });
+      await this.page.waitForTimeout(1000);
+    }
+  }
+
+  return { groupItem, selector };
+}
+
 // ============================================
 // Given Steps
 // ============================================
@@ -54,16 +75,15 @@ Given('用户在 Home 页面有一个 Agent Group', async function (this: Custom
 
   console.log('   📍 Step: 导航到 Home 页面...');
   await this.page.goto('/');
-  await this.page.waitForLoadState('networkidle', { timeout: 15_000 });
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
   await this.page.waitForTimeout(1000);
 
   console.log('   📍 Step: 查找新创建的 Agent Group...');
-  const groupItem = this.page.locator(`a[href="/group/${groupId}"]`).first();
-  await expect(groupItem).toBeVisible({ timeout: WAIT_TIMEOUT });
+  const { groupItem, selector } = await waitForGroupItem.call(this, groupId);
 
   const groupLabel = await groupItem.getAttribute('aria-label');
   this.testContext.targetItemId = groupLabel || groupId;
-  this.testContext.targetItemSelector = `a[href="/group/${groupId}"]`;
+  this.testContext.targetItemSelector = selector;
   this.testContext.targetType = 'group';
 
   console.log(`   ✅ 找到 Agent Group: ${groupLabel}, id: ${groupId}`);

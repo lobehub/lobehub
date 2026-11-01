@@ -27,6 +27,10 @@ const runtime = new SkillsExecutionRuntime({
         timeout: undefined,
       });
       return {
+        // Desktop commands run on the user's machine — stamp the execution env
+        // so the file-edit scanner treats produced files as device-local (the
+        // server runtime stamps the same field for gateway-dispatched runs).
+        executionEnv: 'device' as const,
         exitCode: result.exit_code ?? 1,
         output: result.stdout || result.output || '',
         stderr: result.stderr,

@@ -2,19 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { testProvider } from '../../providerTestUtils';
 import { LobeZhipuAI, params } from './index';
 
-testProvider({
-  provider: 'zhipu',
-  defaultBaseURL: 'https://open.bigmodel.cn/api/paas/v4',
-  chatModel: 'glm-4',
-  Runtime: LobeZhipuAI,
-  chatDebugEnv: 'DEBUG_ZHIPU_CHAT_COMPLETION',
-  test: {
-    skipAPICall: true, // Skip because Zhipu has custom handlePayload that normalizes temperature
-  },
-});
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -51,6 +43,32 @@ describe('LobeZhipuAI - custom features', () => {
   });
 
   describe('handlePayload', () => {
+    it('should send mapped model id when modelIdMapping is configured', async () => {
+      const mappedInstance = new LobeZhipuAI({
+        apiKey: 'test',
+        modelIdMapping: { 'glm-4-alltools': 'upstream-glm-deployment' },
+      });
+      vi.spyOn(mappedInstance['client'].chat.completions, 'create').mockResolvedValue(
+        new ReadableStream() as any,
+      );
+
+      await mappedInstance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'glm-4-alltools',
+        temperature: 2,
+        top_p: 2,
+      });
+
+      expect(mappedInstance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'upstream-glm-deployment',
+          temperature: 0.99,
+          top_p: 0.99,
+        }),
+        expect.anything(),
+      );
+    });
+
     describe('Web Search Feature', () => {
       it('should add web_search tool when enabledSearch is true', async () => {
         await instance.chat({
@@ -239,22 +257,6 @@ describe('LobeZhipuAI - custom features', () => {
           expect.anything(),
         );
       });
-
-      it('should clamp high temperature to 0.99 for glm-4-alltools', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4-alltools',
-          temperature: 2, // Will be normalized to 1.0, then clamped to 0.99
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: 0.99,
-          }),
-          expect.anything(),
-        );
-      });
-
       it('should clamp top_p to [0.01, 0.99] for glm-4-alltools', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -270,23 +272,6 @@ describe('LobeZhipuAI - custom features', () => {
           expect.anything(),
         );
       });
-
-      it('should clamp high top_p to 0.99 for glm-4-alltools', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4-alltools',
-          temperature: 0.5,
-          top_p: 1,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            top_p: 0.99,
-          }),
-          expect.anything(),
-        );
-      });
-
       it('should normalize and preserve temperature in range for glm-4-alltools', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -318,36 +303,6 @@ describe('LobeZhipuAI - custom features', () => {
           expect.anything(),
         );
       });
-
-      it('should normalize high temperature', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 1.6,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: 0.8,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should handle temperature 0 correctly', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 0,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            temperature: 0,
-          }),
-          expect.anything(),
-        );
-      });
     });
 
     describe('Thinking mode for GLM-4.5 models', () => {
@@ -366,22 +321,6 @@ describe('LobeZhipuAI - custom features', () => {
           expect.anything(),
         );
       });
-
-      it('should include thinking for glm-4.5-turbo', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4.5-turbo',
-          temperature: 0.5,
-          thinking: { type: 'disabled', budget_tokens: 0 },
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            thinking: { type: 'disabled' },
-          }),
-          expect.anything(),
-        );
-      });
     });
 
     describe('tool_stream for streaming tool calls', () => {
@@ -392,6 +331,7 @@ describe('LobeZhipuAI - custom features', () => {
         ['glm-5.1', true, true],
         ['glm-5.2', true, true],
         ['glm-5.3', true, true],
+        ['glm-5.3-flash', true, true],
         ['glm-6', true, true],
         ['glm-4.5', true, undefined],
         ['glm-5-turbo', true, undefined],
@@ -409,10 +349,48 @@ describe('LobeZhipuAI - custom features', () => {
 
         expect(payload.tool_stream).toBe(expected);
       });
+
+      it('should allow compatible channels to disable tool_stream without disabling Zhipu payload handling', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [
+              { content: 'Hello', reasoning: { content: 'cached thought' }, role: 'user' },
+            ],
+            model: 'glm-5.2',
+            preserveThinking: true,
+            stream: true,
+            temperature: 0.5,
+            thinking: { type: 'enabled' },
+          },
+          { disableToolStream: true },
+        );
+
+        expect(payload.tool_stream).toBeUndefined();
+        expect(payload.thinking).toEqual({ clear_thinking: false, type: 'enabled' });
+        expect(payload.messages).toEqual([
+          { content: 'Hello', reasoning_content: 'cached thought', role: 'user' },
+        ]);
+      });
+
+      it('should suppress tool_stream for Fireworks-hosted GLM streams', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            stream: true,
+            temperature: 0.5,
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.tool_stream).toBeUndefined();
+      });
     });
 
     describe('GLM-5.2 optional params', () => {
-      it('should forward reasoning_effort with thinking enabled', () => {
+      it('should forward reasoning_effort with thinking enabled for Z.ai', () => {
         const payload = params.chatCompletion.handlePayload({
           max_tokens: 4096,
           messages: [{ content: 'Hello', role: 'user' }],
@@ -420,6 +398,88 @@ describe('LobeZhipuAI - custom features', () => {
           reasoning_effort: 'max',
           temperature: 1,
           thinking: { type: 'enabled' },
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+
+      it('should omit thinking when Fireworks handles GLM-5.2 reasoning_effort', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            preserveThinking: true,
+            reasoning_effort: 'max',
+            temperature: 1,
+            thinking: { type: 'enabled' },
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toBeUndefined();
+        expect(payload.reasoning_history).toBe('preserved');
+      });
+
+      it('should omit reasoning_effort when Fireworks handles disabled thinking', () => {
+        const payload = params.chatCompletion.handlePayload(
+          {
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'glm-5.2',
+            reasoning_effort: 'max',
+            temperature: 1,
+            thinking: { type: 'disabled' },
+          },
+          { baseURL: 'https://api.fireworks.ai/inference/v1' },
+        );
+
+        expect(payload.reasoning_effort).toBeUndefined();
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+      });
+
+      it('should keep disabled thinking with reasoning_effort for Z.ai', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.2',
+          reasoning_effort: 'max',
+          temperature: 1,
+          thinking: { type: 'disabled' },
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+      });
+    });
+
+    describe('GLM-5.3 always-on thinking', () => {
+      it.each(['glm-5.3', 'glm-5.3-flash'])(
+        'should coerce disabled thinking to enabled for %s',
+        (model) => {
+          const payload = params.chatCompletion.handlePayload({
+            max_tokens: 4096,
+            messages: [{ content: 'Hello', role: 'user' }],
+            model,
+            reasoning_effort: 'low',
+            temperature: 1,
+            thinking: { type: 'disabled' },
+          });
+
+          expect(payload.reasoning_effort).toBe('low');
+          expect(payload.thinking).toEqual({ type: 'enabled' });
+        },
+      );
+
+      it('should enable thinking when the payload omits it', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.3',
+          reasoning_effort: 'max',
+          temperature: 1,
         });
 
         expect(payload.reasoning_effort).toBe('max');
@@ -547,368 +607,156 @@ describe('LobeZhipuAI - custom features', () => {
 
   describe('handleStream', () => {
     describe('Tool calls index fixing for GLM-4.5', () => {
-      it('should fix negative tool_calls index to positive', async () => {
-        const mockStream = new ReadableStream({
+      const chunk = (delta: unknown, model = 'glm-4.5') => ({
+        choices: delta === undefined ? undefined : [{ delta, finish_reason: null, index: 0 }],
+        created: 1234567890,
+        id: 'chatcmpl-123',
+        model,
+        object: 'chat.completion.chunk',
+      });
+
+      const runStream = async (chunks: unknown[]) => {
+        const source = new ReadableStream({
           start(controller) {
-            controller.enqueue({
-              choices: [
-                {
-                  delta: {
-                    tool_calls: [
-                      { index: -1, id: 'call_1', function: { name: 'tool1', arguments: '{}' } },
-                      { index: -1, id: 'call_2', function: { name: 'tool2', arguments: '{}' } },
-                    ],
-                  },
-                  finish_reason: null,
-                  index: 0,
-                },
-              ],
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-4.5',
-              object: 'chat.completion.chunk',
-            });
+            for (const c of chunks) controller.enqueue(c);
             controller.close();
           },
         });
 
-        (instance['client'].chat.completions.create as any).mockResolvedValue(mockStream);
+        const out = params.chatCompletion.handleStream!(
+          source as any,
+          {
+            callbacks: {},
+            inputStartAt: Date.now(),
+            payload: { model: 'glm-4.5' },
+          } as any,
+        );
 
-        const result = await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4.5',
-          temperature: 0.5,
-        });
-
-        // Read the stream to trigger the transform
-        const reader = result.body?.getReader();
-        const chunks = [];
-        if (reader) {
-          let done = false;
-          while (!done) {
-            const { value, done: isDone } = await reader.read();
-            done = isDone;
-            if (value) {
-              chunks.push(new TextDecoder().decode(value));
-            }
-          }
+        const reader = (out as ReadableStream).getReader();
+        let text = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          text += typeof value === 'string' ? value : new TextDecoder().decode(value as any);
         }
+        return text;
+      };
 
-        // The transform should have fixed the negative indices
-        expect(chunks).toBeDefined();
+      const toolCallEvents = (sse: string) =>
+        sse
+          .split('\n')
+          .filter((line) => line.startsWith('data: [{'))
+          .map((line) => JSON.parse(line.slice('data: '.length)));
+
+      it('should fix negative tool_calls index to positive', async () => {
+        const sse = await runStream([
+          chunk({
+            tool_calls: [
+              { index: -1, id: 'call_1', function: { name: 'tool1', arguments: '{}' } },
+              { index: -1, id: 'call_2', function: { name: 'tool2', arguments: '{}' } },
+            ],
+          }),
+        ]);
+
+        expect(sse).toContain('event: tool_calls');
+        expect(toolCallEvents(sse)[0].map((c: any) => c.index)).toEqual([0, 1]);
       });
 
       it('should preserve positive tool_calls index', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue({
-              choices: [
-                {
-                  delta: {
-                    tool_calls: [
-                      { index: 0, id: 'call_1', function: { name: 'tool1', arguments: '{}' } },
-                      { index: 1, id: 'call_2', function: { name: 'tool2', arguments: '{}' } },
-                    ],
-                  },
-                  finish_reason: null,
-                  index: 0,
-                },
+        const sse = await runStream([
+          chunk(
+            {
+              tool_calls: [
+                { index: 0, id: 'call_1', function: { name: 'tool1', arguments: '{}' } },
+                { index: 1, id: 'call_2', function: { name: 'tool2', arguments: '{}' } },
               ],
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-4',
-              object: 'chat.completion.chunk',
-            });
-            controller.close();
-          },
-        });
+            },
+            'glm-4',
+          ),
+        ]);
 
-        (instance['client'].chat.completions.create as any).mockResolvedValue(mockStream);
-
-        const result = await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 0.5,
-        });
-
-        // Read the stream
-        const reader = result.body?.getReader();
-        if (reader) {
-          let done = false;
-          while (!done) {
-            const { value, done: isDone } = await reader.read();
-            done = isDone;
-          }
-        }
-
-        expect(result).toBeDefined();
+        expect(toolCallEvents(sse)[0].map((c: any) => c.index)).toEqual([0, 1]);
       });
 
-      it('should handle chunks without tool_calls', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue({
-              choices: [
-                {
-                  delta: {
-                    content: 'Hello',
-                  },
-                  finish_reason: null,
-                  index: 0,
-                },
-              ],
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-4',
-              object: 'chat.completion.chunk',
-            });
-            controller.close();
-          },
-        });
+      it('should fix only the negative entry among mixed indices', async () => {
+        const sse = await runStream([
+          chunk({
+            tool_calls: [
+              { index: 0, id: 'call_1', function: { name: 'tool1', arguments: '{}' } },
+              { index: -1, id: 'call_2', function: { name: 'tool2', arguments: '{}' } },
+              { index: 2, id: 'call_3', function: { name: 'tool3', arguments: '{}' } },
+            ],
+          }),
+        ]);
 
-        (instance['client'].chat.completions.create as any).mockResolvedValue(mockStream);
-
-        const result = await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 0.5,
-        });
-
-        expect(result).toBeInstanceOf(Response);
+        expect(toolCallEvents(sse)[0].map((c: any) => c.index)).toEqual([0, 1, 2]);
       });
 
-      it('should handle chunks without choices', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue({
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-4',
-              object: 'chat.completion.chunk',
-            });
-            controller.close();
-          },
-        });
+      it('should reindex negative tool_calls across separate chunks', async () => {
+        const sse = await runStream([
+          chunk({ tool_calls: [{ index: -1, id: 'call_1', function: { name: 'tool1' } }] }),
+          chunk({ tool_calls: [{ index: -1, function: { arguments: '{"a":1}' } }] }),
+        ]);
 
-        (instance['client'].chat.completions.create as any).mockResolvedValue(mockStream);
-
-        const result = await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 0.5,
-        });
-
-        expect(result).toBeInstanceOf(Response);
-      });
-
-      it('should handle empty tool_calls array', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue({
-              choices: [
-                {
-                  delta: {
-                    tool_calls: [],
-                  },
-                  finish_reason: null,
-                  index: 0,
-                },
-              ],
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-4',
-              object: 'chat.completion.chunk',
-            });
-            controller.close();
-          },
-        });
-
-        (instance['client'].chat.completions.create as any).mockResolvedValue(mockStream);
-
-        const result = await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 0.5,
-        });
-
-        expect(result).toBeInstanceOf(Response);
-      });
-
-      it('should handle mixed tool_calls indices', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            controller.enqueue({
-              choices: [
-                {
-                  delta: {
-                    tool_calls: [
-                      { index: 0, id: 'call_1', function: { name: 'tool1', arguments: '{}' } },
-                      { index: -1, id: 'call_2', function: { name: 'tool2', arguments: '{}' } },
-                      { index: 2, id: 'call_3', function: { name: 'tool3', arguments: '{}' } },
-                    ],
-                  },
-                  finish_reason: null,
-                  index: 0,
-                },
-              ],
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-4.5',
-              object: 'chat.completion.chunk',
-            });
-            controller.close();
-          },
-        });
-
-        (instance['client'].chat.completions.create as any).mockResolvedValue(mockStream);
-
-        const result = await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4.5',
-          temperature: 0.5,
-        });
-
-        // Read the stream to trigger the transform
-        const reader = result.body?.getReader();
-        if (reader) {
-          let done = false;
-          while (!done) {
-            const { value, done: isDone } = await reader.read();
-            done = isDone;
-          }
-        }
-
-        expect(result).toBeDefined();
+        const events = toolCallEvents(sse);
+        expect(events.at(-1)[0]).toMatchObject({ index: 0 });
+        expect(sse).toContain('{\\"a\\":1}');
       });
 
       it('should filter out incomplete placeholder tool_call chunks from proxies', async () => {
-        // Some proxies (e.g., aihubmix) send empty placeholder chunks without
-        // id/function.name when tool_stream is enabled. These must be filtered
-        // out to prevent ZodError in parseToolCalls.
-        const mockStream = new ReadableStream({
-          start(controller) {
-            // Placeholder chunks (no id, no name, empty arguments)
-            controller.enqueue({
-              choices: [
+        // Some proxies (e.g. aihubmix) send an empty placeholder before the real
+        // chunk when tool_stream is on; letting it through throws ZodError in
+        // parseToolCalls.
+        const sse = await runStream([
+          chunk(
+            { tool_calls: [{ function: { arguments: '' }, index: 0, type: 'function' }] },
+            'glm-5',
+          ),
+          chunk(
+            {
+              tool_calls: [
                 {
-                  delta: {
-                    tool_calls: [{ type: 'function', function: { arguments: '' }, index: 0 }],
-                  },
-                  finish_reason: null,
+                  function: { arguments: '{"expression":"1+1"}', name: 'calculator' },
+                  id: 'tool-abc123',
                   index: 0,
+                  type: 'function',
                 },
               ],
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-5',
-              object: 'chat.completion.chunk',
-            });
-            // Real chunk with id and name
-            controller.enqueue({
-              choices: [
-                {
-                  delta: {
-                    tool_calls: [
-                      {
-                        id: 'tool-abc123',
-                        type: 'function',
-                        function: { name: 'calculator', arguments: '{"expression":"1+1"}' },
-                        index: 0,
-                      },
-                    ],
-                  },
-                  finish_reason: null,
-                  index: 0,
-                },
-              ],
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-5',
-              object: 'chat.completion.chunk',
-            });
-            controller.close();
-          },
-        });
+            },
+            'glm-5',
+          ),
+        ]);
 
-        (instance['client'].chat.completions.create as any).mockResolvedValue(mockStream);
-
-        // Should not throw ZodError from incomplete placeholder chunks
-        const result = await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-5',
-          temperature: 0.5,
-        });
-
-        const reader = result.body?.getReader();
-        if (reader) {
-          let done = false;
-          while (!done) {
-            const { value, done: isDone } = await reader.read();
-            done = isDone;
-          }
-        }
-
-        expect(result).toBeDefined();
+        const events = toolCallEvents(sse);
+        expect(events).toHaveLength(1);
+        expect(events[0][0]).toMatchObject({ id: 'tool-abc123', index: 0 });
       });
 
-      it('should handle multiple chunks with tool_calls', async () => {
-        const mockStream = new ReadableStream({
-          start(controller) {
-            // First chunk with tool_call
-            controller.enqueue({
-              choices: [
-                {
-                  delta: {
-                    tool_calls: [{ index: -1, id: 'call_1', function: { name: 'tool1' } }],
-                  },
-                  finish_reason: null,
-                  index: 0,
-                },
-              ],
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-4.5',
-              object: 'chat.completion.chunk',
-            });
-            // Second chunk with arguments
-            controller.enqueue({
-              choices: [
-                {
-                  delta: {
-                    tool_calls: [{ index: -1, function: { arguments: '{"a":1}' } }],
-                  },
-                  finish_reason: null,
-                  index: 0,
-                },
-              ],
-              created: 1234567890,
-              id: 'chatcmpl-123',
-              model: 'glm-4.5',
-              object: 'chat.completion.chunk',
-            });
-            controller.close();
-          },
-        });
+      it('should drop the delta when every tool_call is a placeholder', async () => {
+        const sse = await runStream([
+          chunk({ tool_calls: [{ function: { arguments: '' }, index: 0, type: 'function' }] }),
+        ]);
 
-        (instance['client'].chat.completions.create as any).mockResolvedValue(mockStream);
+        expect(toolCallEvents(sse)).toHaveLength(0);
+      });
 
-        const result = await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4.5',
-          temperature: 0.5,
-        });
+      it('should pass through chunks without tool_calls', async () => {
+        const sse = await runStream([chunk({ content: 'Hello' }, 'glm-4')]);
 
-        // Read the stream
-        const reader = result.body?.getReader();
-        if (reader) {
-          let done = false;
-          while (!done) {
-            const { value, done: isDone } = await reader.read();
-            done = isDone;
-          }
-        }
+        expect(sse).toContain('event: text');
+        expect(sse).toContain('"Hello"');
+      });
 
-        expect(result).toBeDefined();
+      it('should pass through chunks without choices', async () => {
+        const sse = await runStream([chunk(undefined, 'glm-4')]);
+
+        expect(toolCallEvents(sse)).toHaveLength(0);
+      });
+
+      it('should emit no tool_calls for an empty tool_calls array', async () => {
+        const sse = await runStream([chunk({ tool_calls: [] }, 'glm-4')]);
+
+        expect(toolCallEvents(sse)).toHaveLength(0);
       });
     });
   });

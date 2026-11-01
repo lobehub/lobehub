@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
+import { initialAgentArtworkSliceState } from '@/store/agent/slices/artwork/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin/initialState';
 
 import { agentByIdSelectors } from './agentByIdSelectors';
@@ -14,6 +15,7 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
 }));
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
+  ...initialAgentArtworkSliceState,
   ...initialAgentSliceState,
   ...initialBuiltinAgentSliceState,
   ...overrides,
@@ -57,10 +59,62 @@ describe('agentByIdSelectors', () => {
       expect(context.config).toMatchObject({
         chatConfig: undefined,
         model: undefined,
-        plugins: undefined,
+        // getActivePluginIds always normalizes to an array, even for a
+        // missing/undefined raw plugins field.
+        plugins: [],
         provider: undefined,
         systemRole: undefined,
       });
+    });
+
+    it('excludes disabled entries from the builder context plugins, in a mixed-shape array', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            model: 'gpt-4o',
+            plugins: ['search', { identifier: 'lobe-web-browsing', mode: 'disabled' }],
+            provider: 'openai',
+            systemRole: 'You are a helper',
+          } as any,
+        },
+      });
+
+      const context = agentByIdSelectors.getAgentBuilderContextById('agent-1')(state);
+
+      expect(context.config).toMatchObject({ plugins: ['search'] });
+    });
+  });
+
+  describe('attached knowledge', () => {
+    // Regression: the server keeps the mount row but nulls the file / library
+    // when the caller can no longer see it; rendering that row crashed the
+    // Attachments menu (FileIcon -> `filename.split` on undefined).
+    it('drops mounts whose file or library is no longer visible', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            files: [
+              { enabled: true, id: null, name: null } as any,
+              { enabled: true, id: 'file-1', name: 'Brief.pdf' } as any,
+            ],
+            knowledgeBases: [
+              { enabled: true, id: null, name: null } as any,
+              { enabled: false, id: 'kb-1', name: 'Handbook' } as any,
+            ],
+          },
+        },
+      });
+
+      expect(
+        agentByIdSelectors
+          .getAgentFilesById('agent-1')(state)
+          .map((item) => item.id),
+      ).toEqual(['file-1']);
+      expect(
+        agentByIdSelectors
+          .getAgentKnowledgeBasesById('agent-1')(state)
+          .map((item) => item.id),
+      ).toEqual(['kb-1']);
     });
   });
 
@@ -179,13 +233,62 @@ describe('agentByIdSelectors', () => {
         },
       });
 
-      expect(agentByIdSelectors.getAgentTTSVoiceById('agent-1', 'en-US')(state)).toBe('nova');
+      expect(agentByIdSelectors.getAgentTTSVoiceById('agent-1')(state)).toBe('nova');
     });
 
     it('falls back to a default voice when the agent config is missing', () => {
       const state = createState({ agentMap: {} });
 
-      expect(agentByIdSelectors.getAgentTTSVoiceById('missing', 'en-US')(state)).toBeTruthy();
+      expect(agentByIdSelectors.getAgentTTSVoiceById('missing')(state)).toBe('alloy');
+    });
+  });
+
+  describe('hasAgentConfigInScope', () => {
+    it('only treats a cached config as renderable in the scope that wrote it', () => {
+      const state = createState({
+        agentConfigReplica: { entries: {}, scope: 'user-1:workspace-a' },
+        agentMap: { 'agent-1': { title: 'From workspace A' } },
+      });
+
+      expect(agentByIdSelectors.hasAgentConfigInScope('agent-1', 'user-1:workspace-a')(state)).toBe(
+        true,
+      );
+      // After a workspace switch the entry is still in `agentMap`, but it
+      // belongs to the previous scope.
+      expect(agentByIdSelectors.hasAgentConfigInScope('agent-1', 'user-1:workspace-b')(state)).toBe(
+        false,
+      );
+      expect(agentByIdSelectors.hasAgentConfigInScope('', 'user-1:workspace-a')(state)).toBe(false);
+    });
+  });
+
+  describe('isAgentNotFoundById', () => {
+    it('returns true only for agents flagged in agentNotFoundMap', () => {
+      const state = createState({ agentNotFoundMap: { 'agent-gone': true } });
+
+      expect(agentByIdSelectors.isAgentNotFoundById('agent-gone')(state)).toBe(true);
+      expect(agentByIdSelectors.isAgentNotFoundById('agent-1')(state)).toBe(false);
+      expect(agentByIdSelectors.isAgentNotFoundById('')(state)).toBe(false);
+    });
+  });
+
+  describe('isAgentConfigLoadingById', () => {
+    it('reports loading while the config is absent from agentMap', () => {
+      const state = createState({ agentMap: {} });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-1')(state)).toBe(true);
+    });
+
+    it('settles once the config lands in agentMap', () => {
+      const state = createState({ agentMap: { 'agent-1': { id: 'agent-1' } } });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-1')(state)).toBe(false);
+    });
+
+    it('settles when the agent is marked not-found (no access / deleted)', () => {
+      const state = createState({ agentMap: {}, agentNotFoundMap: { 'agent-gone': true } });
+
+      expect(agentByIdSelectors.isAgentConfigLoadingById('agent-gone')(state)).toBe(false);
     });
   });
 });

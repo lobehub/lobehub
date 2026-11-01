@@ -73,6 +73,7 @@ const InteractionContent = memo(() => {
 
   return (
     <Consent
+      acceptanceReview={data.acceptanceReview}
       clientId={data.clientId}
       clientMetadata={data.clientMetadata}
       redirectUri={data.redirectUri}
@@ -84,12 +85,10 @@ const InteractionContent = memo(() => {
 
 InteractionContent.displayName = 'OAuthInteractionContent';
 
-const OAuthConsent = memo(() => (
+const OAuthConsent = () => (
   <OAuthGuard>
     <InteractionContent />
   </OAuthGuard>
-));
-
-OAuthConsent.displayName = 'OAuthConsent';
+);
 
 export default OAuthConsent;

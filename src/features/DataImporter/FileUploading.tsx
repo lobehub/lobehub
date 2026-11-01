@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Progress } from 'antd';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Progress } from '@lobehub/ui';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,12 +21,7 @@ export const FileUploading = memo<FileUploadingProps>(({ progress = 0, speed = 0
       <Flexbox align={'center'} gap={8} width={'100%'}>
         {t('importModal.uploading.desc')}
         <Flexbox flex={1} gap={8} width={'100%'}>
-          <Progress
-            showInfo
-            percent={progress}
-            strokeColor={cssVar.colorSuccess}
-            trailColor={cssVar.colorSuccessBg}
-          />
+          <Progress showInfo percent={progress} strokeColor={cssVar.colorSuccess} />
           <Flexbox
             horizontal
             distribution={'space-between'}

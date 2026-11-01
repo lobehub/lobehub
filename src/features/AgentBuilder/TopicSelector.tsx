@@ -1,6 +1,5 @@
 import { type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles, DropdownMenu, Flexbox } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -8,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
+import { useFetchAgentChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
@@ -36,9 +36,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('topic');
 
   // Fetch topics for the agent builder
-  const useFetchTopics = useChatStore((s) => s.useFetchTopics);
-
-  useFetchTopics(true, { agentId });
+  useFetchAgentChatTopics(agentId);
 
   const [activeTopicId, switchTopic, topics] = useChatStore((s) => [
     s.activeTopicId,
@@ -86,8 +84,13 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
   return (
     <NavHeader
       showTogglePanelButton={false}
+      styles={{ right: { flex: 'none' } }}
       left={
-        activeTopic?.title ? <span className={styles.title}>{activeTopic.title}</span> : undefined
+        activeTopic?.title ? (
+          <span className={styles.title} title={activeTopic.title}>
+            {activeTopic.title}
+          </span>
+        ) : undefined
       }
       right={
         <>
@@ -108,7 +111,11 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId, disabled }) => {
             popupProps={{ style: { maxHeight: 400, minWidth: 280, overflowY: 'auto' } }}
             triggerProps={{ disabled: disabled || isEmpty }}
           >
-            <ActionIcon disabled={disabled || isEmpty} icon={Clock3Icon} />
+            <ActionIcon
+              disabled={disabled || isEmpty}
+              icon={Clock3Icon}
+              size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            />
           </DropdownMenu>
         </>
       }

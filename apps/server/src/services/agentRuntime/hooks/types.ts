@@ -5,7 +5,12 @@
  * Hook registration, webhook delivery, and serialization types are server-specific.
  */
 
-import type { AgentHookEvent, AgentHookType } from '@lobechat/agent-runtime';
+import type { AgentHookEvent, AgentHookType, AnyHookEvent } from '@lobechat/agent-runtime';
+import type {
+  AgentHookMatcher,
+  AgentHookWebhookConfig,
+  SerializedAgentHook,
+} from '@lobechat/types';
 
 export type {
   AfterCallAgentHookEvent,
@@ -28,57 +33,42 @@ export type {
 
 // ── Server-side Hook Types ───────────────────────────────
 
-/**
- * Webhook delivery configuration for production mode
- */
-export interface AgentHookWebhook {
-  /** Custom data merged into webhook payload */
-  body?: Record<string, unknown>;
+/** Outgoing projection, enriched with the final userId's available email. */
+export type AgentHookWebhookPayload = Partial<AnyHookEvent> &
+  Record<string, unknown> & { userEmail?: string };
 
-  /** Delivery method: 'fetch' (plain HTTP) or 'qstash' (guaranteed delivery). Default: 'qstash' */
-  delivery?: 'fetch' | 'qstash';
+/** Same schema and type in memory and persisted state, including fallback and header templates. */
+export type AgentHookWebhook = AgentHookWebhookConfig;
 
-  /** Event fields to include in the webhook payload. Defaults to all serializable event fields. */
-  eventFields?: (keyof AgentHookEvent)[];
+type HookHandler = (event: AgentHookEvent) => Promise<void>;
+export type NotificationWebhook = AgentHookWebhook & {
+  onError?: 'continue';
+  responseHandling?: 'ignore';
+};
 
-  /**
-   * Behavior when QStash delivery fails (publish error or missing
-   * QSTASH_TOKEN). 'fetch' (default, legacy) retries as a plain unsigned
-   * POST; 'none' throws instead. Use 'none' for endpoints behind QStash
-   * signature auth — an unsigned fallback can never authenticate there, so
-   * it only masks the delivery failure as a silently-dropped 401.
-   */
-  fallback?: 'fetch' | 'none';
-
-  /** Webhook endpoint URL (relative or absolute) */
-  url: string;
-}
-
-/**
- * Hook definition — consumers register these with execAgent
- */
-export interface AgentHook {
-  /** Handler function for local mode (called in-process) */
-  handler: (event: AgentHookEvent) => Promise<void>;
-
-  /** Unique hook identifier (for logging, debugging, idempotency) */
+/** Control hooks are webhook-only and synchronous. Evaluated at execution entry or after the complete result, before it enters model context. */
+export type AgentHook = {
   id: string;
-
-  /** Hook lifecycle point */
-  type: AgentHookType;
-
-  /** Webhook config for production mode (if omitted, hook only works in local mode) */
-  webhook?: AgentHookWebhook;
-}
+  matcher?: AgentHookMatcher;
+} & (
+  | {
+      handler?: never;
+      type: 'beforeToolCall' | 'afterToolCall';
+      webhook: AgentHookWebhook & { delivery?: 'fetch'; responseHandling: 'toolCall' };
+    }
+  | {
+      handler: HookHandler;
+      type: AgentHookType;
+      webhook?: NotificationWebhook;
+    }
+  | {
+      handler?: never;
+      type: AgentHookType;
+      webhook: NotificationWebhook;
+    }
+);
 
 // ── Serialized Hook (for Redis persistence) ──────────────
 
-/**
- * Serialized hook config stored in AgentState.metadata._hooks
- * Only contains webhook info (handler functions can't be serialized)
- */
-export interface SerializedHook {
-  id: string;
-  type: AgentHookType;
-  webhook: AgentHookWebhook;
-}
+/** Webhook-only configuration persisted on the operation; validated again before dispatch. */
+export type SerializedHook = SerializedAgentHook;

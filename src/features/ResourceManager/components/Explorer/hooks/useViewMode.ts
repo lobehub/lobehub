@@ -1,8 +1,10 @@
 import { useCallback, useEffect } from 'react';
 
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
+import { type ViewMode } from '@/features/ResourceManager/store/initialState';
 import { parseAsStringEnum, useQueryState } from '@/hooks/useQueryParam';
-import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
-import { type ViewMode } from '@/routes/(main)/resource/features/store/initialState';
+
+import { getDefaultResourceViewMode } from '../viewMode';
 
 /**
  * Hook to manage view mode with URL query sync
@@ -11,15 +13,18 @@ import { type ViewMode } from '@/routes/(main)/resource/features/store/initialSt
  */
 export const useViewMode = (): [ViewMode, (mode: ViewMode) => void] => {
   // View mode from store
-  const [viewModeFromStore, setViewModeInStore] = useResourceManagerStore((s) => [
-    s.viewMode,
-    s.setViewMode,
-  ]);
+  const [category, libraryId, viewModeFromStore, setViewModeInStore] = useResourceManagerStore(
+    (s) => [s.category, s.libraryId, s.viewMode, s.setViewMode],
+  );
+
+  // Inside a library the category filter is not applied, so the stale home
+  // category must not leak its gallery default there.
+  const defaultViewMode = getDefaultResourceViewMode(category, libraryId);
 
   // Sync view mode with URL query parameter
   const [viewModeFromUrl, setViewModeInUrl] = useQueryState(
     'view',
-    parseAsStringEnum(['list', 'masonry'] as const).withDefault('list'),
+    parseAsStringEnum(['list', 'masonry'] as const).withDefault(defaultViewMode),
   );
 
   useEffect(() => {

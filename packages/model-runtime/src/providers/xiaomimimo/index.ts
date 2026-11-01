@@ -102,6 +102,7 @@ export const params = {
           : undefined),
       } as any;
     },
+    supportsAudioInput: true,
   },
   debug: {
     chatCompletion: () => process.env.DEBUG_XIAOMIMIMO_CHAT_COMPLETION === '1',

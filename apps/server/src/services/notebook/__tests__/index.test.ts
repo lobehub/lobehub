@@ -38,9 +38,15 @@ describe('NotebookRuntimeService', () => {
       findByTopicId: vi.fn(),
     };
 
-    vi.mocked(DocumentModel).mockImplementation(() => mockDocumentModel);
-    vi.mocked(DocumentService).mockImplementation(() => mockDocumentService);
-    vi.mocked(TopicDocumentModel).mockImplementation(() => mockTopicDocumentModel);
+    vi.mocked(DocumentModel).mockImplementation(function () {
+      return mockDocumentModel;
+    });
+    vi.mocked(DocumentService).mockImplementation(function () {
+      return mockDocumentService;
+    });
+    vi.mocked(TopicDocumentModel).mockImplementation(function () {
+      return mockTopicDocumentModel;
+    });
 
     service = new NotebookRuntimeService({ serverDB: mockDb, userId: mockUserId });
   });
@@ -182,7 +188,7 @@ describe('NotebookRuntimeService', () => {
       await service.deleteDocument('doc-1');
 
       expect(mockTopicDocumentModel.deleteByDocumentId).toHaveBeenCalledWith('doc-1');
-      expect(mockDocumentService.deleteDocument).toHaveBeenCalledWith('doc-1');
+      expect(mockDocumentService.deleteDocument).toHaveBeenCalledWith('doc-1', undefined);
     });
   });
 

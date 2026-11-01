@@ -6,17 +6,21 @@ import {
   RequestTrigger,
   type SemanticSearchSchemaType,
 } from '@lobechat/types';
-import { inArray } from 'drizzle-orm';
+import { and, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
-import { type KnowledgeBaseDocumentHit, SearchRepo } from '@/database/repositories/search';
+import type { FtsSearchKnowledgeBaseDocumentHit } from '@/database/repositories/ftsSearch';
 import { knowledgeBaseFiles } from '@/database/schemas';
+import { isFileBackedPlaceholder } from '@/database/utils/fileBackedPlaceholder';
+import { readOriginalCharCount } from '@/database/utils/parsedDocument';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { DocumentService } from '@/server/services/document';
+import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 
 export interface FileContentResult {
   content: string;
@@ -24,6 +28,8 @@ export interface FileContentResult {
   fileId: string;
   filename: string;
   metadata?: Record<string, any> | null;
+  /** Original character count when the stored text was cut at parse time. */
+  originalCharCount?: number;
   preview?: string;
   totalCharCount?: number;
   totalLineCount?: number;
@@ -31,7 +37,7 @@ export interface FileContentResult {
 
 export interface SemanticSearchForChatResult {
   chunks: ChatSemanticSearchChunk[];
-  documents: KnowledgeBaseDocumentHit[];
+  documents: FtsSearchKnowledgeBaseDocumentHit[];
   errors?: { bm25?: string; vector?: string };
   fileResults: FileSearchResult[];
   /**
@@ -86,19 +92,29 @@ export class KnowledgeBaseSearchService {
   private chunkModel: ChunkModel;
   private documentModel: DocumentModel;
   private fileModel: FileModel;
-  private searchRepo: SearchRepo;
   private documentServiceInstance?: DocumentService;
+  private callerAgentVisibility?: 'private' | 'public' | null;
 
   private workspaceId?: string;
 
-  constructor(serverDB: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(
+    serverDB: LobeChatDatabase,
+    userId: string,
+    workspaceId?: string,
+    callerAgentVisibility?: 'private' | 'public' | null,
+  ) {
     this.serverDB = serverDB;
     this.userId = userId;
     this.workspaceId = workspaceId;
+    this.callerAgentVisibility = callerAgentVisibility;
     this.chunkModel = new ChunkModel(serverDB, userId, workspaceId);
-    this.documentModel = new DocumentModel(serverDB, userId, workspaceId);
+    // Public-agent gate: `documentModel.ownership()` excludes caller-private
+    // rows, so a workspace-shared agent cannot resolve chunks back to a
+    // private document body. Chunks themselves don't yet have a visibility
+    // mirror (spec §2.3 defers that migration), so the doc-layer gate is the
+    // enforcement point today.
+    this.documentModel = new DocumentModel(serverDB, userId, workspaceId, callerAgentVisibility);
     this.fileModel = new FileModel(serverDB, userId, workspaceId);
-    this.searchRepo = new SearchRepo(serverDB, userId, workspaceId);
   }
 
   private get documentService() {
@@ -106,6 +122,7 @@ export class KnowledgeBaseSearchService {
       this.serverDB,
       this.userId,
       this.workspaceId,
+      this.callerAgentVisibility,
     );
     return this.documentServiceInstance;
   }
@@ -137,8 +154,16 @@ export class KnowledgeBaseSearchService {
 
       let finalFileIds = input.fileIds ?? [];
       if (knowledgeIds.length > 0) {
+        // Scope the knowledge-base → file resolution to the caller so a user
+        // cannot resolve another user's knowledgeBaseId to the victim's fileIds.
         const knowledgeFiles = await this.serverDB.query.knowledgeBaseFiles.findMany({
-          where: inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeIds),
+          where: and(
+            inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeIds),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              knowledgeBaseFiles,
+            ),
+          ),
         });
         finalFileIds = knowledgeFiles.map((f) => f.fileId).concat(finalFileIds);
       }
@@ -152,16 +177,27 @@ export class KnowledgeBaseSearchService {
     };
 
     // Path 2: BM25 search over KB-scoped custom/document documents
-    const bm25Path = async (): Promise<KnowledgeBaseDocumentHit[]> => {
+    const bm25Path = async (): Promise<FtsSearchKnowledgeBaseDocumentHit[]> => {
       if (knowledgeIds.length === 0) return [];
-      return this.searchRepo.searchKnowledgeBaseDocuments(input.query, knowledgeIds, topK);
+      /**
+       * BM25 results already contain snippets, so provider selection and the
+       * public-agent visibility gate must both be resolved before the search.
+       */
+      const ftsSearchRepo = await createFtsSearchRepo({
+        callerAgentVisibility: this.callerAgentVisibility,
+        db: this.serverDB,
+        userId: this.userId,
+        usage: 'knowledge_base',
+        workspaceId: this.workspaceId,
+      });
+      return ftsSearchRepo.searchKnowledgeBaseDocuments(input.query, knowledgeIds, topK);
     };
 
     const [vectorResult, bm25Result] = await Promise.allSettled([vectorPath(), bm25Path()]);
 
     const chunks: ChatSemanticSearchChunk[] =
       vectorResult.status === 'fulfilled' ? vectorResult.value : [];
-    const documents: KnowledgeBaseDocumentHit[] =
+    const documents: FtsSearchKnowledgeBaseDocumentHit[] =
       bm25Result.status === 'fulfilled' ? bm25Result.value : [];
 
     const errors: { bm25?: string; vector?: string } = {};
@@ -209,6 +245,14 @@ export class KnowledgeBaseSearchService {
               filename: `Unknown document ${id}`,
             };
           }
+          // A file uploaded into an agent's Documents panel is an empty row pointing at the
+          // original file; its text only exists once the file is parsed.
+          if (isFileBackedPlaceholder(doc)) {
+            return this.readFileContent(doc.fileId!, {
+              filename: doc.title || doc.filename || undefined,
+              resultId: id,
+            });
+          }
           const content = doc.content ?? '';
           const lines = content.split('\n');
           return {
@@ -216,6 +260,7 @@ export class KnowledgeBaseSearchService {
             fileId: id,
             filename: doc.title || doc.filename || 'Untitled',
             metadata: doc.metadata,
+            originalCharCount: readOriginalCharCount(doc.metadata),
             preview: lines.slice(0, 5).join('\n'),
             totalCharCount: content.length,
             totalLineCount: lines.length,
@@ -223,45 +268,59 @@ export class KnowledgeBaseSearchService {
         }
 
         // ---- Branch B: file_* — original file/parse path ----
-        const file = await this.fileModel.findById(id);
-        if (!file) {
-          return {
-            content: '',
-            error: 'File not found',
-            fileId: id,
-            filename: `Unknown file ${id}`,
-          };
-        }
-
-        let document: { content: string | null; metadata: Record<string, any> | null } | undefined =
-          await this.documentModel.findByFileId(id);
-
-        if (!document) {
-          try {
-            document = await this.documentService.parseFile(id);
-          } catch (error) {
-            return {
-              content: '',
-              error: `Failed to parse file: ${(error as Error).message}`,
-              fileId: id,
-              filename: file.name,
-            };
-          }
-        }
-
-        const content = document.content || '';
-        const lines = content.split('\n');
-        return {
-          content,
-          fileId: id,
-          filename: file.name,
-          metadata: document.metadata,
-          preview: lines.slice(0, 5).join('\n'),
-          totalCharCount: content.length,
-          totalLineCount: lines.length,
-        };
+        return this.readFileContent(id, { resultId: id });
       },
       { concurrency: 3 },
     );
+  }
+
+  /**
+   * Read a file's parsed text, parsing it on first read.
+   *
+   * `resultId` is echoed back as `fileId` so callers can match results to the ids they asked for.
+   */
+  private async readFileContent(
+    fileId: string,
+    { filename, resultId }: { filename?: string; resultId: string },
+  ): Promise<FileContentResult> {
+    const file = await this.fileModel.findById(fileId);
+    if (!file) {
+      return {
+        content: '',
+        error: 'File not found',
+        fileId: resultId,
+        filename: filename ?? `Unknown file ${resultId}`,
+      };
+    }
+
+    // `findByFileId` skips agent-document placeholders, so a hit is always parsed text.
+    let document: { content: string | null; metadata: Record<string, any> | null } | undefined =
+      await this.documentModel.findByFileId(fileId);
+
+    if (!document) {
+      try {
+        document = await this.documentService.parseFile(fileId);
+      } catch (error) {
+        return {
+          content: '',
+          error: `Failed to parse file: ${(error as Error).message}`,
+          fileId: resultId,
+          filename: filename ?? file.name,
+        };
+      }
+    }
+
+    const content = document.content || '';
+    const lines = content.split('\n');
+    return {
+      content,
+      fileId: resultId,
+      filename: filename ?? file.name,
+      metadata: document.metadata,
+      originalCharCount: readOriginalCharCount(document.metadata),
+      preview: lines.slice(0, 5).join('\n'),
+      totalCharCount: content.length,
+      totalLineCount: lines.length,
+    };
   }
 }

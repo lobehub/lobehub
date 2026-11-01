@@ -49,7 +49,7 @@ describe('OperationTraceRecorder', () => {
         afterStepSignalEvents: [],
         agentState: {
           messages: [],
-          metadata: { agentConfig: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
+          world: { agent: { model: 'claude-sonnet-4-6', provider: 'lobehub' } },
         },
         beforeStepSignalEvents: [],
         currentContext: { phase: 'user_input' },
@@ -76,12 +76,22 @@ describe('OperationTraceRecorder', () => {
         {
           finalState: {
             activatedStepTools: [{ id: 'kept' }],
+            expertise: {
+              contentHash: 'hash',
+              domains: [{ id: 'product-design', lessonIds: ['lesson-1'] }],
+              renderedContext: '<expertise>heavy learned context</expertise>',
+              schemaVersion: 1,
+            },
             messages: ['heavy'],
             operationToolSet: { manifestMap: {} },
             otherStateField: 'kept',
             toolManifestMap: {},
             toolSourceMap: {},
             tools: [],
+            world: {
+              agent: { systemRole: 'kept' },
+              expertise: { contentHash: 'hash', renderedContext: '<expertise/>' },
+            },
           },
           reason: 'done',
           type: 'done',
@@ -108,11 +118,14 @@ describe('OperationTraceRecorder', () => {
       const doneEvent = step.events.find((e: any) => e.type === 'done');
       expect(doneEvent.finalState.activatedStepTools).toEqual([{ id: 'kept' }]);
       expect(doneEvent.finalState.otherStateField).toBe('kept');
+      expect(doneEvent.finalState.expertise).toBeUndefined();
       expect(doneEvent.finalState.messages).toBeUndefined();
       expect(doneEvent.finalState.operationToolSet).toBeUndefined();
       expect(doneEvent.finalState.toolManifestMap).toBeUndefined();
       expect(doneEvent.finalState.toolSourceMap).toBeUndefined();
       expect(doneEvent.finalState.tools).toBeUndefined();
+      // Only the expertise snapshot leaves `world`; the rest of it is kept.
+      expect(doneEvent.finalState.world).toEqual({ agent: { systemRole: 'kept' } });
     });
 
     it('emits messagesDelta-only beyond step 0 and only stores messagesBaseline when isCompression', async () => {
@@ -186,6 +199,37 @@ describe('OperationTraceRecorder', () => {
       const step = store.savePartial.mock.calls[0][1].steps[0];
       expect(step.activatedStepToolsDelta).toEqual([{ id: 'b' }, { id: 'c' }]);
     });
+
+    it('stores per-step usage on each step instead of cumulative operation totals', async () => {
+      store.loadPartial.mockResolvedValue({ startedAt: 1, steps: [] });
+
+      await recorder.appendStep('op-usage', {
+        afterStepSignalEvents: [],
+        agentState: { messages: [] },
+        beforeStepSignalEvents: [],
+        currentContext: { phase: 'user_input' },
+        externalRetryCount: 0,
+        presentation: buildPresentation({
+          stepCost: 0.02,
+          stepInputTokens: 30,
+          stepOutputTokens: 20,
+          stepTotalTokens: 50,
+          totalCost: 0.12,
+          totalInputTokens: 300,
+          totalOutputTokens: 200,
+          totalTokens: 500,
+        }),
+        startedAt: 500,
+        stepIndex: 3,
+        stepResult: { events: [], newState: { activatedStepTools: [], messages: [] } },
+      });
+
+      const step = store.savePartial.mock.calls[0][1].steps[0];
+      expect(step.inputTokens).toBe(30);
+      expect(step.outputTokens).toBe(20);
+      expect(step.totalCost).toBe(0.02);
+      expect(step.totalTokens).toBe(50);
+    });
   });
 
   describe('finalize', () => {
@@ -219,7 +263,7 @@ describe('OperationTraceRecorder', () => {
         completionReason: 'done',
         state: {
           cost: { total: 0.5 },
-          metadata: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
+          origin: { agentId: 'agt-1', topicId: 'tpc-1', userId: 'u-1' },
           stepCount: 1,
           usage: { llm: { tokens: { total: 200 } } },
         },
@@ -263,6 +307,49 @@ describe('OperationTraceRecorder', () => {
       });
       expect(saved.error).toMatchObject({ type: 'ConversationParentMissing' });
       expect(saved.completionReason).toBe('error');
+    });
+
+    it('preserves failed LLM step type and structured error body diagnostics', async () => {
+      store.loadPartial.mockResolvedValue({
+        startedAt: 1000,
+        steps: [{ stepIndex: 0, stepType: 'call_tool' }],
+      });
+
+      await recorder.finalize('op-empty-completion', {
+        completionReason: 'error',
+        error: {
+          body: {
+            diagnostics: {
+              attempt: 1,
+              maxAttempts: 1,
+              outputTokens: 25_617,
+            },
+          },
+          message: 'Model returned an empty completion',
+          retryable: false,
+          type: 'ModelEmptyCompletion',
+        },
+        failedStep: { startedAt: 5000, stepIndex: 1, stepType: 'call_llm' },
+        state: { metadata: {}, stepCount: 1 },
+      });
+
+      const saved = store.save.mock.calls[0][0];
+      const failed = saved.steps.find((s: any) => s.stepIndex === 1);
+      expect(failed.stepType).toBe('call_llm');
+      expect(failed.events?.[0]).toMatchObject({
+        error: {
+          body: {
+            diagnostics: {
+              attempt: 1,
+              maxAttempts: 1,
+              outputTokens: 25_617,
+            },
+          },
+          type: 'ModelEmptyCompletion',
+        },
+        type: 'error',
+      });
+      expect(saved.error.body.diagnostics).toMatchObject({ attempt: 1, maxAttempts: 1 });
     });
 
     it('merges the error event into an existing step when stepIndex collides (success-path append landed before later failure)', async () => {
@@ -481,6 +568,42 @@ describe('OperationTraceRecorder', () => {
       const step = getSavedStep(2);
       expect(step.contextEngine.input).toBeUndefined();
       expect(step.contextEngine.output).toBeUndefined();
+    });
+
+    it('stores CE pipeline metadata and dedupes it independently', async () => {
+      const withMeta = {
+        input: { messages: ['hello'] },
+        metadata: { staleToolResultTrim: { savedChars: 100, trimmedMessages: 2 } },
+        output: { tokens: 42 },
+      };
+      // NB: the recorder caches the partial in memory between appendStep calls,
+      // so each call appends to the same running partial — read the last step.
+      const lastStep = () => {
+        const saved = store.savePartial.mock.calls.at(-1)![1];
+        return saved.steps.at(-1);
+      };
+
+      await appendStepWithCe(withMeta, []);
+      expect(lastStep().contextEngine.metadata).toEqual({
+        staleToolResultTrim: { savedChars: 100, trimmedMessages: 2 },
+      });
+
+      // identical metadata on the next step is stripped like input/output
+      await appendStepWithCe(withMeta, []);
+      expect(lastStep().contextEngine.metadata).toBeUndefined();
+
+      // changed metadata is kept while identical input/output are stripped
+      const changedMeta = {
+        ...withMeta,
+        metadata: { staleToolResultTrim: { savedChars: 250, trimmedMessages: 5 } },
+      };
+      await appendStepWithCe(changedMeta, []);
+      const step = lastStep();
+      expect(step.contextEngine.input).toBeUndefined();
+      expect(step.contextEngine.output).toBeUndefined();
+      expect(step.contextEngine.metadata).toEqual({
+        staleToolResultTrim: { savedChars: 250, trimmedMessages: 5 },
+      });
     });
 
     it('resolves input and output independently from different previous steps', async () => {

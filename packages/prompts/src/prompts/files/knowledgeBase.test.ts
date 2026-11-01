@@ -1,10 +1,35 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FileContent } from '../knowledgeBaseQA';
+import { FILE_INLINE_MAX_CHARS, FILE_PREVIEW_CHARS } from './file';
 import type { KnowledgeBaseInfo } from './knowledgeBase';
 import { promptAgentKnowledge } from './knowledgeBase';
 
 describe('promptAgentKnowledge', () => {
+  it('should preview oversized agent files instead of inlining them', () => {
+    const content = `${'a'.repeat(FILE_PREVIEW_CHARS)}\n${'b'.repeat(FILE_INLINE_MAX_CHARS)}`;
+    const result = promptAgentKnowledge({
+      canReadAttachment: true,
+      fileContents: [{ content, fileId: 'file1', filename: 'big.csv' }],
+    });
+
+    expect(result).toContain(
+      `<file id="file1" name="big.csv" lines="1-1" total_lines="2" total_chars="${content.length}" truncated="true">`,
+    );
+    expect(result).toContain('To continue, call readAttachment with fileId="file1" and offset=2.');
+    expect(result).not.toContain('bbbb');
+  });
+
+  it('should not promise readAttachment for oversized agent files without the tool', () => {
+    const content = `${'a'.repeat(FILE_PREVIEW_CHARS)}\n${'b'.repeat(FILE_INLINE_MAX_CHARS)}`;
+    const result = promptAgentKnowledge({
+      fileContents: [{ content, fileId: 'file1', filename: 'big.csv' }],
+    });
+
+    expect(result).toContain('Lines 2-2 were left out.');
+    expect(result).not.toContain('readAttachment');
+  });
+
   it('should return empty string when no files and no knowledge bases', () => {
     const result = promptAgentKnowledge({});
     expect(result).toBe('');

@@ -7,6 +7,10 @@ vi.mock('@/features/Conversation/Markdown', () => ({
   default: ({ children }: any) => <div data-testid="markdown-message">{children}</div>,
 }));
 
+vi.mock('../../../hooks/useStartTopicConversation', () => ({
+  useStartTopicConversation: () => undefined,
+}));
+
 vi.mock('../useMarkdown', () => ({
   useMarkdown: () => ({}),
 }));
@@ -23,30 +27,78 @@ vi.mock('./FileListViewer', () => ({
 vi.mock('./ImageFileListViewer', () => ({
   default: () => null,
 }));
-vi.mock('./PageSelections', () => ({
-  default: () => null,
-}));
 vi.mock('./VideoFileListViewer', () => ({
   default: () => null,
 }));
 vi.mock('./AudioFileListViewer', () => ({
-  default: ({ items }: any) => <div data-testid="audio-viewer">{items.length}</div>,
+  default: ({ items, messageId }: any) => (
+    <div data-message-id={messageId} data-testid="audio-viewer">
+      {items.length}
+    </div>
+  ),
 }));
 
 describe('User MessageContent', () => {
+  it('renders a bot-channel referenced message as a quote instead of raw markup', () => {
+    render(
+      <MessageContent
+        createdAt={Date.now()}
+        id={'msg-ref'}
+        role={'user'}
+        updatedAt={Date.now()}
+        content={
+          '<speaker id="1" username="jianxu" nickname="JianXu" />\n<referenced_message sender="Bob">@Lobo 帮 @Shadow Arvin 查一下明天的天气</referenced_message>\n你怎么看'
+        }
+      />,
+    );
+
+    const quote = screen.getByTestId('referenced-message');
+    expect(quote).toHaveTextContent('Bob');
+    expect(quote).toHaveTextContent('@Lobo 帮 @Shadow Arvin 查一下明天的天气');
+    expect(screen.getByTestId('markdown-message')).toHaveTextContent('你怎么看');
+    expect(document.body.textContent).not.toContain('<referenced_message');
+    expect(document.body.textContent).not.toContain('<speaker');
+  });
+
   it('should prefer rich text rendering when editorData exists', () => {
     render(
       <MessageContent
         content={'markdown-content'}
         createdAt={Date.now()}
-        editorData={{ root: { children: [], type: 'root', version: 1 } }}
         id={'msg-1'}
+        role={'user'}
+        updatedAt={Date.now()}
+        editorData={{
+          root: {
+            children: [{ children: [{ text: 'rich', type: 'text' }], type: 'paragraph' }],
+            type: 'root',
+            version: 1,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('rich-message')).toBeInTheDocument();
+    expect(screen.queryByTestId('markdown-message')).not.toBeInTheDocument();
+  });
+
+  /**
+   * Regression: an image-only message persists the composer's empty paragraph,
+   * which rendered a blank line above the images.
+   */
+  it('should not render a text body for an empty editor paragraph', () => {
+    render(
+      <MessageContent
+        content={''}
+        createdAt={Date.now()}
+        editorData={{ root: { children: [{ children: [], type: 'paragraph' }], type: 'root' } }}
+        id={'msg-image-only'}
         role={'user'}
         updatedAt={Date.now()}
       />,
     );
 
-    expect(screen.getByTestId('rich-message')).toBeInTheDocument();
+    expect(screen.queryByTestId('rich-message')).not.toBeInTheDocument();
     expect(screen.queryByTestId('markdown-message')).not.toBeInTheDocument();
   });
 
@@ -78,5 +130,33 @@ describe('User MessageContent', () => {
     );
 
     expect(screen.getByTestId('audio-viewer')).toHaveTextContent('1');
+    expect(screen.getByTestId('audio-viewer')).toHaveAttribute('data-message-id', 'msg-3');
+  });
+
+  it('should render code context selections in the user message body', () => {
+    render(
+      <MessageContent
+        content={'What does this selected code do?'}
+        createdAt={Date.now()}
+        id={'msg-4'}
+        role={'user'}
+        updatedAt={Date.now()}
+        metadata={{
+          contextSelections: [
+            {
+              content: 'const answer = 42;',
+              filePath: 'src/example.ts',
+              id: 'selection-1',
+              lineRange: { endLine: 7, startLine: 7 },
+              source: 'code',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('src/example.ts:7-7')).toBeInTheDocument();
+    expect(screen.getByText('const answer = 42;')).toBeInTheDocument();
+    expect(screen.getByText('What does this selected code do?')).toBeInTheDocument();
   });
 });

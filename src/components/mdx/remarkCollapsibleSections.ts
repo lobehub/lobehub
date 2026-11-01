@@ -8,6 +8,9 @@
  * `<collapsible-section>` element that renders collapsed by default to save
  * vertical space; "Features" stays expanded.
  *
+ * Posts are authored per locale, so the heading arrives already translated and
+ * the match runs against the localized text — see COLLAPSIBLE_HEADINGS.
+ *
  * Built for react-markdown: we emit a node with `data.hName`, so
  * mdast-util-to-hast turns it into a `<collapsible-section>` hast element, which
  * is resolved to the CollapsibleSection component via the `components` map
@@ -23,8 +26,26 @@ interface MdastNode {
   value?: string;
 }
 
-/** Section headings rendered collapsed by default (matched case-insensitively). */
-export const COLLAPSIBLE_HEADINGS = new Set(['fixes', 'improvements']);
+/**
+ * Section headings rendered collapsed by default (matched case-insensitively).
+ *
+ * Listed per locale because each post is authored in its own language: the
+ * zh-CN entries have always used 体验优化 / 问题修复, which no English keyword
+ * matches, so without these they rendered fully expanded. The "…and fixes"
+ * variants cover pre-2026-03 entries, which combine both lists under one
+ * heading; they are kept so EN and ZH collapse identically for the same post.
+ */
+export const COLLAPSIBLE_HEADINGS = new Set([
+  // en-US
+  'fixes',
+  'improvements',
+  'improvements and fixes',
+  // zh-CN
+  '问题修复',
+  '体验优化',
+  '体验优化与修复',
+  '改进与修复',
+]);
 
 const nodeToText = (node: MdastNode): string => {
   if (typeof node.value === 'string') return node.value;

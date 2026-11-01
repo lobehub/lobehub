@@ -39,6 +39,7 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
         logoUrl={clientMetadata.logo}
       />
       <AuthCard
+        centered
         subtitle={descriptionText}
         title={titleText}
         footer={
@@ -50,17 +51,16 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
           >
             {/* Adjust action URL */}
             <input name="uid" type="hidden" value={uid} />
-            <input name="choice" type="hidden" value={'accept'} />
+            <input name="consent" type="hidden" value="accept" />
             {/* Single confirmation button */}
             <Button
               block
+              data-testid="oauth-consent-accept"
               disabled={!isUserStateInit}
               htmlType="submit"
               loading={isLoading}
-              name="consent"
               size="large"
               type="primary"
-              value="accept"
             >
               {buttonText}
             </Button>
@@ -77,8 +77,8 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
             </Flexbox>
           ) : (
             <Flexbox horizontal gap={16}>
-              <Skeleton.Avatar active shape={'square'} size={40} />
-              <Skeleton.Button active />
+              <Skeleton.Avatar shape={'square'} size={40} />
+              <Skeleton height={36} />
             </Flexbox>
           )}
         </Block>

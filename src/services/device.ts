@@ -1,6 +1,19 @@
+import type {
+  DeviceBoundAgentItem,
+  DeviceEnroller,
+  DeviceRunningSummary,
+  DeviceScope,
+} from '@lobechat/types';
+
 import { lambdaClient } from '@/libs/trpc/client';
+import { type TopicListItem } from '@/services/topic';
 
 type DeviceClient = typeof lambdaClient.device;
+
+/** A running topic on a device, with the member who started it. */
+export interface DeviceRunningTopic extends TopicListItem {
+  user: DeviceEnroller | null;
+}
 
 /**
  * Single chokepoint for the `device` TRPC router. Components, hooks and stores
@@ -17,6 +30,25 @@ class DeviceService {
     return lambdaClient.device.updateDevice.mutate(input);
   }
 
+  /** Update user-editable fields of a workspace-enrolled device (workspace-scoped write). */
+  updateWorkspaceDevice(input: Parameters<DeviceClient['updateWorkspaceDevice']['mutate']>[0]) {
+    return lambdaClient.device.updateWorkspaceDevice.mutate(input);
+  }
+
+  /** Add (or move to the front) one recent working dir on a workspace device. */
+  addWorkspaceDeviceWorkingDir(
+    input: Parameters<DeviceClient['addWorkspaceDeviceWorkingDir']['mutate']>[0],
+  ) {
+    return lambdaClient.device.addWorkspaceDeviceWorkingDir.mutate(input);
+  }
+
+  /** Remove one recent working dir from a workspace device. */
+  removeWorkspaceDeviceWorkingDir(
+    input: Parameters<DeviceClient['removeWorkspaceDeviceWorkingDir']['mutate']>[0],
+  ) {
+    return lambdaClient.device.removeWorkspaceDeviceWorkingDir.mutate(input);
+  }
+
   /**
    * Check whether a path exists on a device and is a directory (via the device's
    * `statPath` RPC). Returns `null` when the device is unreachable — callers
@@ -24,6 +56,16 @@ class DeviceService {
    */
   statPath(deviceId: string, path: string) {
     return lambdaClient.device.statPath.query({ deviceId, path });
+  }
+
+  /** Browse folders on the execution device, including cursor pagination. */
+  browseDirectory(input: Parameters<DeviceClient['browseDirectory']['query']>[0]) {
+    return lambdaClient.device.browseDirectory.query(input);
+  }
+
+  /** Create a folder inside the directory a remote folder picker is browsing. */
+  createDirectory(input: Parameters<DeviceClient['createDirectory']['mutate']>[0]) {
+    return lambdaClient.device.createDirectory.mutate(input);
   }
 
   /** Probe whether an agent platform (openclaw / hermes) is available on a device. */
@@ -34,6 +76,122 @@ class DeviceService {
   /** Fetch the agent profile (title / description / avatar) from a device platform. */
   getAgentProfile(input: Parameters<DeviceClient['getAgentProfile']['query']>[0]) {
     return lambdaClient.device.getAgentProfile.query(input);
+  }
+
+  /** Scan a device for every known heterogeneous agent type in one pass. */
+  scanAgents(input: Parameters<DeviceClient['scanAgents']['query']>[0]) {
+    return lambdaClient.device.scanAgents.query(input);
+  }
+
+  /** Topics running on a device right now, and the agents routed to it. */
+  getDeviceActivity(
+    input: Parameters<DeviceClient['getDeviceActivity']['query']>[0],
+  ): Promise<{ agents: DeviceBoundAgentItem[]; runningTopics: DeviceRunningTopic[] }> {
+    // Same row shape `topicService.queryTopics` serves; its DB-side type differs
+    // only in how timestamps are declared.
+    return lambdaClient.device.getDeviceActivity.query(input) as any;
+  }
+
+  /**
+   * The device each agent runs on for the caller, resolved server-side in one
+   * read. Agents that route to no device (sandbox, none, auto, unbound) are
+   * absent from the result.
+   */
+  getAgentDeviceBindings(agentIds: string[]): Promise<Record<string, string>> {
+    return lambdaClient.device.getAgentDeviceBindings.query({ agentIds });
+  }
+
+  /** Running-topic count and the members behind it, for every device in the list. */
+  getRunningSummary(): Promise<DeviceRunningSummary[]> {
+    return lambdaClient.device.getRunningSummary.query();
+  }
+
+  /** Live tunnel links, optionally narrowed to one device. */
+  listTunnels(input?: Parameters<DeviceClient['listTunnels']['query']>[0]) {
+    return lambdaClient.device.listTunnels.query(input);
+  }
+
+  /** Expose a port on a device and get back a link, ready to open. */
+  createTunnel(input: Parameters<DeviceClient['createTunnel']['mutate']>[0]) {
+    return lambdaClient.device.createTunnel.mutate(input);
+  }
+
+  /**
+   * Mint the one-shot token that opens an existing link. Called per click:
+   * tokens are short-lived and never stored alongside the link.
+   */
+  openTunnel(input: Parameters<DeviceClient['openTunnel']['mutate']>[0]) {
+    return lambdaClient.device.openTunnel.mutate(input);
+  }
+
+  /** Ports the device is listening on; `null` when it can't answer. */
+  listListeningPorts(input: Parameters<DeviceClient['listListeningPorts']['query']>[0]) {
+    return lambdaClient.device.listListeningPorts.query(input);
+  }
+
+  /** Where the device's desktop app update stands; never starts a check. */
+  getAppUpdateState(input: Parameters<DeviceClient['getAppUpdateState']['query']>[0]) {
+    return lambdaClient.device.getAppUpdateState.query(input);
+  }
+
+  /** Start an update check on the device; a found update downloads on its own. */
+  checkAppUpdate(input: Parameters<DeviceClient['checkAppUpdate']['mutate']>[0]) {
+    return lambdaClient.device.checkAppUpdate.mutate(input);
+  }
+
+  /** Restart the device's desktop app into its downloaded update. */
+  installAppUpdate(input: Parameters<DeviceClient['installAppUpdate']['mutate']>[0]) {
+    return lambdaClient.device.installAppUpdate.mutate(input);
+  }
+
+  /** Read CLI maintenance state without checking the release registry. */
+  getCliUpdateState(input: Parameters<DeviceClient['getCliUpdateState']['query']>[0]) {
+    return lambdaClient.device.getCliUpdateState.query(input);
+  }
+
+  checkCliUpdate(input: Parameters<DeviceClient['checkCliUpdate']['mutate']>[0]) {
+    return lambdaClient.device.checkCliUpdate.mutate(input);
+  }
+
+  restartCli(input: Parameters<DeviceClient['restartCli']['mutate']>[0]) {
+    return lambdaClient.device.restartCli.mutate(input);
+  }
+
+  /**
+   * Interactive terminal on the device. `createTerminalSession` opens a PTY and
+   * the rest drive it: `writeTerminal` for input, `readTerminal` to drain
+   * output from a cursor, `resizeTerminal` when the panel changes size and
+   * `closeTerminal` to end it. Polling rather than streaming is deliberate —
+   * see `@lobechat/device-control`'s terminal types.
+   */
+  createTerminalSession(input: Parameters<DeviceClient['createTerminalSession']['mutate']>[0]) {
+    return lambdaClient.device.createTerminalSession.mutate(input);
+  }
+
+  writeTerminal(input: Parameters<DeviceClient['writeTerminal']['mutate']>[0]) {
+    return lambdaClient.device.writeTerminal.mutate(input);
+  }
+
+  readTerminal(input: Parameters<DeviceClient['readTerminal']['mutate']>[0]) {
+    return lambdaClient.device.readTerminal.mutate(input);
+  }
+
+  resizeTerminal(input: Parameters<DeviceClient['resizeTerminal']['mutate']>[0]) {
+    return lambdaClient.device.resizeTerminal.mutate(input);
+  }
+
+  closeTerminal(input: Parameters<DeviceClient['closeTerminal']['mutate']>[0]) {
+    return lambdaClient.device.closeTerminal.mutate(input);
+  }
+
+  /** The device's recent CPU / memory / load history, bucketed for charting. */
+  getMetricSeries(deviceId: string, scope?: DeviceScope) {
+    return lambdaClient.deviceMetric.getSeries.query({ deviceId, scope });
+  }
+
+  /** Revoke a link. */
+  revokeTunnel(input: Parameters<DeviceClient['revokeTunnel']['mutate']>[0]) {
+    return lambdaClient.device.revokeTunnel.mutate(input);
   }
 }
 

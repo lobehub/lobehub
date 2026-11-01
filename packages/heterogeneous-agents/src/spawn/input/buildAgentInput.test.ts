@@ -161,6 +161,37 @@ describe('buildAgentInput', () => {
     });
   });
 
+  describe('amp', () => {
+    it('uses AMP stream-json input with text and inline images', async () => {
+      const plan = await buildAgentInput('amp', [
+        { text: 'inspect', type: 'text' },
+        {
+          source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+          type: 'image',
+        },
+      ]);
+
+      expect(plan.args).toEqual([]);
+      expect(JSON.parse(plan.stdin.trim())).toEqual({
+        message: {
+          content: [
+            { text: 'inspect', type: 'text' },
+            {
+              source: {
+                data: PNG_BYTES.toString('base64'),
+                media_type: 'image/png',
+                type: 'base64',
+              },
+              type: 'image',
+            },
+          ],
+          role: 'user',
+        },
+        type: 'user',
+      });
+    });
+  });
+
   describe('codex', () => {
     it('puts text on stdin and emits no --image flags when there are no images', async () => {
       const plan = await buildAgentInput('codex', 'just text');
@@ -208,6 +239,132 @@ describe('buildAgentInput', () => {
         { cacheDir: tmp },
       );
       expect(plan.args).toEqual(['--image', filePath]);
+    });
+  });
+
+  describe('opencode', () => {
+    it('uses raw text stdin and repeatable --file flags', async () => {
+      const filePath = path.join(tmp, 'opencode.png');
+      await writeFile(filePath, PNG_BYTES);
+      const plan = await buildAgentInput('opencode', [
+        { text: 'first', type: 'text' },
+        { source: { path: filePath, type: 'path' }, type: 'image' },
+        { text: 'second', type: 'text' },
+      ]);
+
+      expect(plan).toEqual({ args: ['--file', filePath], stdin: 'first\n\nsecond' });
+    });
+
+    it('materializes base64 images through the shared path-input helper', async () => {
+      const plan = await buildAgentInput(
+        'opencode',
+        [
+          {
+            source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { cacheDir: tmp },
+      );
+      expect(plan.args[0]).toBe('--file');
+      expect(plan.args[1]).toMatch(/\.png$/);
+    });
+  });
+
+  describe('pi', () => {
+    it('rejects the legacy stdin/args input — pi is RPC-only', async () => {
+      await expect(buildAgentInput('pi', [{ text: 'first', type: 'text' }])).rejects.toThrow(
+        /RPC transport only/,
+      );
+    });
+  });
+
+  describe('qoder', () => {
+    it('uses Qoder stream-json stdin and path-based --attachment flags', async () => {
+      const filePath = path.join(tmp, 'qoder input.png');
+      await writeFile(filePath, PNG_BYTES);
+      const plan = await buildAgentInput('qoder', [
+        { text: 'first', type: 'text' },
+        { source: { path: filePath, type: 'path' }, type: 'image' },
+        { text: 'second', type: 'text' },
+      ]);
+
+      expect(plan.args).toEqual(['--attachment', filePath]);
+      expect(JSON.parse(plan.stdin.trim())).toEqual({
+        message: {
+          content: [{ text: 'first\n\nsecond', type: 'text' }],
+          role: 'user',
+        },
+        parent_tool_use_id: null,
+        type: 'user',
+      });
+    });
+
+    it('materializes base64 images instead of embedding Claude-style image blocks', async () => {
+      const plan = await buildAgentInput(
+        'qoder',
+        [
+          {
+            source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { cacheDir: tmp },
+      );
+
+      expect(plan.args[0]).toBe('--attachment');
+      expect(plan.args[1]).toMatch(/\.png$/);
+      expect(JSON.parse(plan.stdin.trim()).message.content).toEqual([]);
+    });
+  });
+
+  describe('kimi-code', () => {
+    it('puts text in the --prompt argv with no stdin', async () => {
+      await expect(buildAgentInput('kimi-code', 'hello')).resolves.toEqual({
+        args: ['--prompt', 'hello'],
+        stdin: '',
+      });
+    });
+
+    it('references a path-source image in the prompt without re-materializing', async () => {
+      const filePath = path.join(tmp, 'on-disk.png');
+      await writeFile(filePath, PNG_BYTES);
+
+      const plan = await buildAgentInput(
+        'kimi-code',
+        [
+          { text: 'what color is this?', type: 'text' },
+          { source: { path: filePath, type: 'path' }, type: 'image' },
+        ],
+        { cacheDir: tmp },
+      );
+
+      expect(plan.stdin).toBe('');
+      expect(plan.args[0]).toBe('--prompt');
+      expect(plan.args[1]).toBe(
+        `what color is this?\n\n[Image attached: ${filePath}] Use the ReadMediaFile tool to view this image.`,
+      );
+    });
+
+    it('materializes base64 images into cacheDir and references the path in the prompt', async () => {
+      const plan = await buildAgentInput(
+        'kimi-code',
+        [
+          {
+            source: { data: PNG_BYTES.toString('base64'), mediaType: 'image/png', type: 'base64' },
+            type: 'image',
+          },
+        ],
+        { cacheDir: tmp },
+      );
+
+      expect(plan.args[0]).toBe('--prompt');
+      const prompt = plan.args[1]!;
+      const match = prompt.match(/^\[Image attached: (.+\.png)\]/);
+      expect(match).not.toBeNull();
+      expect(match![1]!.startsWith(tmp)).toBe(true);
+      const written = await readFile(match![1]!);
+      expect(written.equals(PNG_BYTES)).toBe(true);
     });
   });
 

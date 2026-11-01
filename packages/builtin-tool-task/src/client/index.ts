@@ -1,12 +1,14 @@
 // Inspector components (customized tool call headers)
 export {
   AddTaskCommentInspector,
+  CreateGoalInspector,
   CreateTaskInspector,
   CreateTasksInspector,
   DeleteTaskCommentInspector,
   DeleteTaskInspector,
   EditTaskInspector,
   ListTasksInspector,
+  ListWorkspaceMembersInspector,
   RunTaskInspector,
   RunTasksInspector,
   TaskInspectors,
@@ -14,9 +16,19 @@ export {
   UpdateTaskStatusInspector,
   ViewTaskInspector,
 } from './Inspector';
+export { TaskInterventions } from './Intervention';
 
 // Render components (read-only snapshots)
-export { CreateTaskRender, CreateTasksRender, RunTasksRender, TaskRenders } from './Render';
+export {
+  CreateGoalRender,
+  CreateTaskRender,
+  CreateTasksRender,
+  EditTaskRender,
+  RunTaskRender,
+  RunTasksRender,
+  SetTaskVerifyRender,
+  TaskRenders,
+} from './Render';
 
 // Re-export manifest and types for convenience
 export { TaskIdentifier, TaskManifest } from '../manifest';

@@ -6,6 +6,7 @@ import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { WelcomeExtraProvider } from '@/features/AgentHome/WelcomeExtraContext';
+import { AgentNotFoundGuard } from '@/features/AgentNotFound';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import Conversation from '@/routes/(main)/agent/features/Conversation';
@@ -51,9 +52,11 @@ const PopupAgentQuickPage = memo(() => {
   if (!effectiveAgentId) return <Loading debugId="PopupAgentQuickPage" />;
 
   return (
-    <WelcomeExtraProvider value={welcomeExtra}>
-      <Conversation />
-    </WelcomeExtraProvider>
+    <AgentNotFoundGuard>
+      <WelcomeExtraProvider value={welcomeExtra}>
+        <Conversation />
+      </WelcomeExtraProvider>
+    </AgentNotFoundGuard>
   );
 });
 

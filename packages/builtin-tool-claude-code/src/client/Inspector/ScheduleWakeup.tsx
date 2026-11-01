@@ -2,7 +2,7 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,7 +16,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     min-width: 0;
-    max-width: 60%;
     margin-inline-start: 6px;
     padding-block: 1px;
     padding-inline: 8px;
@@ -70,8 +69,10 @@ export const ScheduleWakeupInspector = memo<BuiltinInspectorProps<ScheduleWakeup
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{reason || typeof delay === 'number' ? `${label}:` : label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>
+          {reason || typeof delay === 'number' ? `${label}:` : label}
+        </span>
         {reason && <span className={styles.chip}>{reason}</span>}
         {typeof delay === 'number' && <span className={styles.delay}>· {formatDelay(delay)}</span>}
       </div>

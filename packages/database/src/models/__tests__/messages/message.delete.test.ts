@@ -25,7 +25,6 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'message-delete-test';
 const otherUserId = 'message-delete-test-other';
 const messageModel = new MessageModel(serverDB, userId);
-const embeddingsId = uuid();
 
 beforeEach(async () => {
   // Clear tables before each test case
@@ -99,6 +98,86 @@ describe('MessageModel Delete Tests', () => {
       // Assert result
       const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
       expect(result).toHaveLength(1);
+    });
+
+    it('should clear a stale active branch index when the selected branch is deleted', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 1, collapsed: true },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessage('branch-b');
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ collapsed: true });
+    });
+
+    it('should remap the selected branch by identity when an earlier branch is deleted', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 1 },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'tool result',
+          createdAt: new Date('2026-01-01T00:00:00.500Z'),
+          id: 'tool',
+          parentId: 'parent',
+          role: 'tool',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessage('branch-a');
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ activeBranchIndex: 0 });
     });
 
     it('should update child messages parentId to deleted message parentId', async () => {
@@ -209,6 +288,86 @@ describe('MessageModel Delete Tests', () => {
       // Assert result
       const result = await serverDB.select().from(messages).where(eq(messages.id, '1'));
       expect(result).toHaveLength(1);
+    });
+
+    it('should remap the selected branch after deleting earlier branches in a batch', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 2 },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch C',
+          createdAt: new Date('2026-01-01T00:00:03.000Z'),
+          id: 'branch-c',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessages(['branch-a', 'branch-b']);
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ activeBranchIndex: 0 });
+    });
+
+    it('should preserve an optimistic branch marker when deleting a sibling', async () => {
+      await serverDB.insert(messages).values([
+        {
+          content: 'parent',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'parent',
+          metadata: { activeBranchIndex: 2 },
+          role: 'assistant',
+          userId,
+        },
+        {
+          content: 'branch A',
+          createdAt: new Date('2026-01-01T00:00:01.000Z'),
+          id: 'branch-a',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+        {
+          content: 'branch B',
+          createdAt: new Date('2026-01-01T00:00:02.000Z'),
+          id: 'branch-b',
+          parentId: 'parent',
+          role: 'user',
+          userId,
+        },
+      ]);
+
+      await messageModel.deleteMessages(['branch-a']);
+
+      const parent = await serverDB.query.messages.findFirst({
+        where: eq(messages.id, 'parent'),
+      });
+      expect(parent?.metadata).toEqual({ activeBranchIndex: 1 });
     });
 
     it('should update child messages parentId when deleting parent chain', async () => {
@@ -835,6 +994,166 @@ describe('MessageModel Delete Tests', () => {
 
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe('msg-keep-empty');
+    });
+  });
+
+  describe('agent-share visitor messages', () => {
+    // Visitor messages live under the creator's userId but are invisible to the
+    // creator, so id-less sweeps must leave them alone.
+    beforeEach(async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([{ id: 'share-agent', userId, title: 'Shared Agent' }]);
+
+        await trx.insert(topics).values([
+          { agentId: 'share-agent', id: 'creator-topic', userId },
+          { agentId: 'share-agent', id: 'visitor-topic', senderId: 'visitor-a', userId },
+        ]);
+
+        await trx.insert(messages).values([
+          {
+            agentId: 'share-agent',
+            content: 'creator message',
+            id: 'creator-msg',
+            role: 'user',
+            topicId: 'creator-topic',
+            userId,
+          },
+          {
+            agentId: 'share-agent',
+            content: 'visitor message',
+            id: 'visitor-msg',
+            role: 'user',
+            topicId: 'visitor-topic',
+            userId,
+          },
+        ]);
+      });
+    });
+
+    it('deleteAllMessages should keep visitor messages', async () => {
+      await messageModel.deleteAllMessages();
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('visitor-msg');
+    });
+
+    it('batchDeleteByAgentId should keep visitor messages', async () => {
+      await messageModel.batchDeleteByAgentId('share-agent');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0].id).toBe('visitor-msg');
+    });
+
+    it('deleteMessage should keep a visitor message', async () => {
+      // The creator can obtain a raw visitor message id out of band (data
+      // export), so naming the id must not be enough to destroy it.
+      await messageModel.deleteMessage('visitor-msg');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id).sort()).toEqual(['creator-msg', 'visitor-msg']);
+    });
+
+    it('deleteMessage should still delete the creator own message', async () => {
+      await messageModel.deleteMessage('creator-msg');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['visitor-msg']);
+    });
+
+    it('deleteMessage should delete a visitor message when the runtime opts in', async () => {
+      await messageModel.deleteMessage('visitor-msg', { includeShareVisitor: true });
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
+    });
+
+    it('deleteMessages should drop only the non-visitor ids of a mixed batch', async () => {
+      await messageModel.deleteMessages(['creator-msg', 'visitor-msg']);
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['visitor-msg']);
+    });
+
+    it('deleteMessages should delete visitor messages when the runtime opts in', async () => {
+      await messageModel.deleteMessages(['visitor-msg'], { includeShareVisitor: true });
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
+    });
+
+    it('deleteMessagesBySession should keep a visitor topic message', async () => {
+      // `removeMessagesByAssistant`/`removeMessagesByGroup` route through this
+      // sweep, so the default must exclude visitor rows just like the id-less
+      // `deleteAllMessages` sweep above.
+      await messageModel.deleteMessagesBySession(undefined, 'visitor-topic');
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id).sort()).toEqual(['creator-msg', 'visitor-msg']);
+    });
+
+    it('deleteMessagesBySession should delete a visitor topic message when the runtime opts in', async () => {
+      await messageModel.deleteMessagesBySession(undefined, 'visitor-topic', null, {
+        includeShareVisitor: true,
+      });
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining.map((m) => m.id)).toEqual(['creator-msg']);
+    });
+
+    it('findShareVisitorMessageIds should report only the visitor ids of a mixed batch', async () => {
+      // Creator-facing update RPCs diff their targets against this finder, so
+      // it must name visitor rows and stay silent about the creator's own.
+      const visitorIds = await messageModel.findShareVisitorMessageIds([
+        'creator-msg',
+        'visitor-msg',
+      ]);
+
+      expect(visitorIds).toEqual(['visitor-msg']);
+    });
+
+    it('findShareVisitorMessageIds should ignore ids that match no row', async () => {
+      const visitorIds = await messageModel.findShareVisitorMessageIds(['missing-msg']);
+
+      expect(visitorIds).toEqual([]);
+    });
+
+    it('deleting the agent still cascades visitor messages away', async () => {
+      await serverDB.delete(agents).where(eq(agents.id, 'share-agent'));
+
+      const remaining = await serverDB.query.messages.findMany({
+        where: eq(messages.userId, userId),
+      });
+
+      expect(remaining).toHaveLength(0);
     });
   });
 

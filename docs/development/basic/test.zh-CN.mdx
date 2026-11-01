@@ -469,28 +469,6 @@ it('应使用主题', () => {
 });
 ```
 
-### 使用 MSW 测试 API 调用
-
-```typescript
-import { rest } from 'msw';
-import { setupServer } from 'msw/node';
-
-const server = setupServer(
-  rest.get('/api/user', (req, res, ctx) => {
-    return res(ctx.json({ id: '1', name: 'Alice' }));
-  }),
-);
-
-beforeAll(() => server.listen());
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
-it('应获取用户数据', async () => {
-  const user = await fetchUser('1');
-  expect(user.name).toBe('Alice');
-});
-```
-
 ## 测试覆盖率
 
 ### 生成覆盖率报告

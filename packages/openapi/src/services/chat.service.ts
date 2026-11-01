@@ -1,4 +1,6 @@
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
+import { mergeModelRuntimeHooks } from '@lobechat/model-runtime';
 import type { LobeAgentChatConfig, LobeAgentConfig, UserSystemAgentConfig } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
@@ -10,6 +12,7 @@ import { agents, agentsToSessions, aiModels, aiProviders } from '@/database/sche
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { initModelRuntimeWithUserPayload } from '@/server/modules/ModelRuntime';
+import { createLLMGenerationTracingHook } from '@/server/services/llmGenerationTracing/hook';
 import { resolveSystemAgentModelConfig } from '@/server/services/systemAgent/modelConfig';
 
 import { BaseService } from '../common/base.service';
@@ -40,8 +43,24 @@ export class ChatService extends BaseService {
 
     super(db, userId, workspaceId);
     this.config = {
-      defaultModel: 'gpt-3.5-turbo',
-      defaultProvider: 'openai',
+      /**
+       * The product's own defaults, not literals of this file's own.
+       *
+       * These were `gpt-3.5-turbo` / `openai`, which no caller could change:
+       * `ChatServiceConfig` is only reachable through the constructor and the
+       * controller never passes one, so a request that named no model always
+       * asked for OpenAI. Any deployment that does not run OpenAI — including
+       * the default one, whose `DEFAULT_PROVIDER` is `deepseek` — answered
+       * such a request with a credential error naming a provider the caller
+       * never mentioned.
+       *
+       * `DEFAULT_MODEL` / `DEFAULT_PROVIDER` are what `DEFAULT_AGENT_CONFIG`
+       * and the rest of the product already resolve to, so `/api/v1/chat`
+       * without a model now behaves like the rest of the product instead of
+       * disagreeing with it.
+       */
+      defaultModel: DEFAULT_MODEL,
+      defaultProvider: DEFAULT_PROVIDER,
       timeout: 30_000,
       ...serviceConfig,
     };
@@ -184,8 +203,28 @@ export class ChatService extends BaseService {
       where: and(eq(aiProviders.id, provider), this.buildWorkspaceWhere(aiProviders)),
     });
 
-    if (!aiProviderConfigs || aiProviderConfigs.length === 0) {
+    const providerConfig = aiProviderConfigs?.[0];
+
+    /**
+     * No row, or a row that stores no key of its own.
+     *
+     * The second case is the ordinary one for a deployment whose provider
+     * credentials come from the environment rather than from per-user vaults:
+     * the row exists so the provider can be enabled and ordered in the UI,
+     * and `keyVaults` stays null. `decrypt` splits its argument on `:` as its
+     * very first statement, so passing that null through — which the `!` below
+     * used to assert away — threw `Cannot read properties of null (reading
+     * 'split')` out of every `/api/v1/chat*` call, from inside a helper whose
+     * name gives no hint that a credential lookup is what failed.
+     *
+     * Both cases mean the same thing to the caller: this provider has no
+     * user-supplied key, so hand back an empty vault and let the model runtime
+     * fall back to the environment, exactly as it already did when no row
+     * existed at all.
+     */
+    if (!providerConfig?.keyVaults) {
       this.log('info', '未找到有效的AI Provider配置，使用兜底环境变量配置', {
+        hasRow: !!providerConfig,
         provider,
         userId: this.userId,
       });
@@ -193,8 +232,7 @@ export class ChatService extends BaseService {
       return '{}';
     }
 
-    const providerConfig = aiProviderConfigs[0];
-    const { plaintext } = await gateKeeper.decrypt(providerConfig.keyVaults!);
+    const { plaintext } = await gateKeeper.decrypt(providerConfig.keyVaults);
 
     return plaintext;
   }
@@ -326,12 +364,16 @@ export class ChatService extends BaseService {
     try {
       const { apiKey } = JSON.parse(await this.getApiKey(provider));
 
-      // Create AgentRuntime instance
-      const hooks = getBusinessModelRuntimeHooks(this.userId!, provider);
+      // Create AgentRuntime instance. Pass workspaceId so workspace-key calls
+      // bill the workspace budget (not the key creator's personal budget) and
+      // trace under the workspace, matching initModelRuntimeFromDB.
+      const businessHooks = getBusinessModelRuntimeHooks(this.userId!, provider, this.workspaceId);
+      const tracingHooks = createLLMGenerationTracingHook(this.userId!, provider, this.workspaceId);
+      const hooks = mergeModelRuntimeHooks(businessHooks, tracingHooks);
       const modelRuntime = await initModelRuntimeWithUserPayload(
         provider,
         { apiKey, userId: this.userId! },
-        {},
+        this.workspaceId ? { workspaceId: this.workspaceId } : {},
         hooks,
       );
 
@@ -343,7 +385,9 @@ export class ChatService extends BaseService {
         model,
         presence_penalty: params.presence_penalty,
         stream: params.stream,
-        temperature: params.temperature || 1,
+        // `?? 1`, not `|| 1`: the schema accepts `temperature: 0`, and a falsy
+        // check would silently promote a deterministic request to temperature 1.
+        temperature: params.temperature ?? 1,
         top_p: params.top_p,
         ...options,
       };
@@ -390,8 +434,6 @@ export class ChatService extends BaseService {
     } catch (error) {
       // Improve error logging with more detailed error information
       let errorDetails: any;
-
-      console.error('error', error);
 
       if (error instanceof Error) {
         errorDetails = {
@@ -442,17 +484,13 @@ export class ChatService extends BaseService {
       targetModelId: finalModel,
     });
 
+    // Only `translate` carried a second, target-less retry here. It existed to
+    // work around the gate treating an unowned model as somebody else's, which
+    // `resolveOperationPermission` now distinguishes — so the retry can never
+    // change the outcome, and keeping it would suggest the two sibling
+    // endpoints in this file were simply missing it.
     if (!modelScopedPermission.isPermitted) {
-      const fallbackPermission = await this.resolveOperationPermission('AI_MODEL_INVOKE');
-      if (!fallbackPermission.isPermitted) {
-        throw this.createAuthorizationError(modelScopedPermission.message || '无权限操作');
-      }
-
-      this.log('warn', '模型级权限校验失败，已回退到通用模型调用权限校验', {
-        model: finalModel,
-        provider: finalProvider,
-        userId: this.userId,
-      });
+      throw this.createAuthorizationError(modelScopedPermission.message || '无权限操作');
     }
 
     this.log('info', '开始翻译文本', {

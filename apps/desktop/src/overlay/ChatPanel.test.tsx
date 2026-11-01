@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveOverlayModelSelectionPayload, shouldShowOverlayModelSelector } from './ChatPanel';
+import {
+  canSubmitOverlayPrompt,
+  resolveOverlayModelSelectionPayload,
+  shouldShowOverlayModelSelector,
+} from './ChatPanel';
 import { resolvePanelPlacement } from './panelPlacement';
 
 vi.mock('./chatPanel.css.ts', () => new Proxy({}, { get: (_, key) => String(key) }));
@@ -44,6 +48,23 @@ describe('ChatPanel', () => {
       top: 720,
       width: 420,
     });
+  });
+
+  it('allows sending a prompt without any screenshot', () => {
+    expect(canSubmitOverlayPrompt({ prompt: 'hello', selections: [] })).toBe(true);
+    expect(canSubmitOverlayPrompt({ prompt: '   ', selections: [] })).toBe(false);
+  });
+
+  it('waits for attached screenshots to finish uploading before sending', () => {
+    expect(
+      canSubmitOverlayPrompt({
+        prompt: 'hello',
+        selections: [{ uploadStatus: 'ready' }, { uploadStatus: 'uploading' }],
+      }),
+    ).toBe(false);
+    expect(
+      canSubmitOverlayPrompt({ prompt: 'hello', selections: [{ uploadStatus: 'ready' }] }),
+    ).toBe(true);
   });
 
   it('hides the model selector and omits model payload for heterogeneous agents', () => {

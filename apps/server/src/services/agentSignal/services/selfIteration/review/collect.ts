@@ -13,6 +13,7 @@ import {
 } from './intentPolicy';
 import type { SelfReviewProposalStatus } from './proposal';
 import { deriveSelfReviewSignals } from './signals';
+import type { ClaimNightlyReviewTopics } from './topicQuota';
 
 const DEFAULT_MAX_TOPICS = 30;
 const DEFAULT_MAX_MANAGED_SKILLS = 20;
@@ -64,6 +65,8 @@ export interface NightlyReviewReadInput {
   agentId: string;
   /** Maximum summaries to return from the read adapter. */
   limit?: number;
+  /** User-local calendar date (`YYYY-MM-DD`) this review covers. */
+  localDate?: string;
   /** Review window end as an ISO string. */
   reviewWindowEnd: string;
   /** Review window start as an ISO string. */
@@ -381,6 +384,8 @@ export interface SelfReviewSignal {
 export type SelfReviewSignalKind =
   | 'durable_user_preference'
   | 'frequent_tool_workflow'
+  | 'recurring_review_idea'
+  | 'repeated_user_correction'
   | 'hinted_skill_document_changed'
   | 'pending_related_proposal_exists'
   | 'repeated_tool_failure'
@@ -439,6 +444,13 @@ export interface NightlyReviewTopicDigest extends Omit<
 
 /** Read adapters used by the pure nightly review collector service. */
 export interface NightlyReviewReadAdapters {
+  /**
+   * Claims the ranked topics against the user's per-night topic quota. Refused topics are
+   * dropped from the context. Applied only when the input carries a `localDate`.
+   *
+   * @default No quota (tests and evals)
+   */
+  claimTopics?: ClaimNightlyReviewTopics;
   /** Lists review-window document activity grouped by later server adapters. */
   listDocumentActivity?: (input: NightlyReviewReadInput) => Promise<DocumentActivityDigest>;
   /** Lists existing satisfaction judgements for this agent and review window. */
@@ -463,6 +475,8 @@ export interface NightlyReviewReadAdapters {
 export interface CollectNightlyReviewContextInput {
   /** Stable agent id being reviewed. */
   agentId: string;
+  /** User-local calendar date (`YYYY-MM-DD`) this review covers. */
+  localDate?: string;
   /**
    * Maximum managed skill summaries in the returned context.
    *
@@ -521,6 +535,15 @@ export interface NightlyReviewContext {
   selfReviewSignals: SelfReviewSignal[];
   /** Ranked topic digests with evidence refs and no raw messages. */
   toolActivity: ToolActivityDigest[];
+  /**
+   * Outcome of the nightly topic quota claim, present when the quota refused any topic.
+   * `admittedTopicCount` counts topics with an id that the quota let through.
+   */
+  topicQuota?: {
+    admittedTopicCount: number;
+    reason: 'exhausted' | 'unavailable';
+    refusedTopicCount: number;
+  };
   /** Ranked topic digests with evidence refs and no raw messages. */
   topics: NightlyReviewTopicDigest[];
   /** Stable user id owning the agent. */
@@ -904,6 +927,49 @@ const getSelfFeedbackReviewCandidates = (receiptActivity: ReceiptActivityDigest)
   return rankSelfFeedbackCandidates(groupSelfFeedbackIntents(intents));
 };
 
+const getTopicDigestId = (topic: NightlyReviewTopicDigest) => topic.topicId ?? topic.id;
+
+/**
+ * Keeps only the ranked topics the user's nightly topic quota admits.
+ *
+ * Rows without a topic id (loose messages) are not topics and pass through uncounted.
+ */
+const applyNightlyTopicQuota = async (
+  rankedTopics: NightlyReviewTopicDigest[],
+  claimTopics: ClaimNightlyReviewTopics | undefined,
+  input: CollectNightlyReviewContextInput,
+): Promise<{
+  topicQuota?: NightlyReviewContext['topicQuota'];
+  topics: NightlyReviewTopicDigest[];
+}> => {
+  const topicIds = rankedTopics.map(getTopicDigestId).filter((id): id is string => !!id);
+  if (!claimTopics || !input.localDate || topicIds.length === 0) return { topics: rankedTopics };
+
+  const claim = await claimTopics({
+    localDate: input.localDate,
+    topicIds,
+    userId: input.userId,
+  });
+  const admitted = new Set(claim.admitted);
+  const topics = rankedTopics.filter((topic) => {
+    const id = getTopicDigestId(topic);
+
+    return !id || admitted.has(id);
+  });
+  const admittedTopicCount = topicIds.filter((id) => admitted.has(id)).length;
+
+  if (!claim.reason) return { topics };
+
+  return {
+    topicQuota: {
+      admittedTopicCount,
+      reason: claim.reason,
+      refusedTopicCount: topicIds.length - admittedTopicCount,
+    },
+    topics,
+  };
+};
+
 /**
  * Creates a pure nightly review collector service from digest read adapters.
  *
@@ -944,6 +1010,7 @@ export const createSelfReviewContextService = (
           const maxRelevantMemories = input.maxRelevantMemories ?? DEFAULT_MAX_RELEVANT_MEMORIES;
           const readInput = {
             agentId: input.agentId,
+            localDate: input.localDate,
             reviewWindowEnd: input.reviewWindowEnd,
             reviewWindowStart: input.reviewWindowStart,
             userId: input.userId,
@@ -981,7 +1048,15 @@ export const createSelfReviewContextService = (
             readAdapters.listProposalActivity?.(readInput) ??
               Promise.resolve(createEmptyProposalActivity()),
           ]);
-          const topics = topicRows.map(normalizeTopic).sort(compareTopics).slice(0, maxTopics);
+          const rankedTopics = topicRows
+            .map(normalizeTopic)
+            .sort(compareTopics)
+            .slice(0, maxTopics);
+          const { topicQuota, topics } = await applyNightlyTopicQuota(
+            rankedTopics,
+            readAdapters.claimTopics,
+            input,
+          );
           const selfReviewSignals = deriveSelfReviewSignals({
             documentActivity,
             feedbackActivity,
@@ -993,6 +1068,12 @@ export const createSelfReviewContextService = (
 
           span.setAttribute('agent.signal.nightly.raw_topic_count', topicRows.length);
           span.setAttribute('agent.signal.nightly.topic_count', topics.length);
+          if (topicQuota) {
+            span.setAttribute(
+              'agent.signal.nightly.topic_quota_refused_count',
+              topicQuota.refusedTopicCount,
+            );
+          }
           span.setAttribute(
             'agent.signal.nightly.high_signal_topic_count',
             topics.filter((topic) => topic.highSignalReasons.length > 0).length,
@@ -1063,6 +1144,7 @@ export const createSelfReviewContextService = (
             relevantMemories: relevantMemories.slice(0, maxRelevantMemories),
             toolActivity,
             topics,
+            ...(topicQuota ? { topicQuota } : {}),
             selfFeedbackCandidates,
           };
         } catch (error) {

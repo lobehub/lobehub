@@ -1,0 +1,97 @@
+'use client';
+
+import { type UserImageConfig } from '@lobechat/types';
+import { Flexbox, Icon, Spin, Tooltip } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
+import { CircleHelpIcon } from 'lucide-react';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { FormSliderWithInput } from '@/components/FormInput';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
+import { FORM_STYLE } from '@/const/layoutTokens';
+import { MAX_DEFAULT_IMAGE_NUM, MIN_DEFAULT_IMAGE_NUM } from '@/const/settings';
+import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
+import { usePermission } from '@/hooks/usePermission';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/slices/settings/selectors';
+
+const ImageSettings = memo(() => {
+  const { t } = useTranslation('setting');
+  const { allowed: canManageServiceModel, reason } = usePermission('manage_settings');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const imageSettings = useUserStore(settingsSelectors.currentImageSettings);
+  const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
+  const form = useForm<UserImageConfig>({
+    initialValues: imageSettings,
+    values: imageSettings,
+    onValuesChange: async (values) => {
+      if (!canManageServiceModel) return;
+
+      setIsUpdating(true);
+      try {
+        await setSettings({ image: values });
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+  });
+
+  if (!isUserStateInit) {
+    // One filled group holding the default image count slider.
+    return <SettingsSectionSkeleton groups={[{ rows: 1, titleWidth: 136 }]} />;
+  }
+
+  const items: FormGroupItem<UserImageConfig>[] = [
+    {
+      children: [
+        {
+          desc: t('settingImage.defaultCount.desc'),
+          label: (
+            <Flexbox horizontal align={'center'} gap={4}>
+              {t('settingImage.defaultCount.label')}
+              {reason && (
+                <Tooltip title={reason}>
+                  <Icon icon={CircleHelpIcon} size={14} style={{ cursor: 'help' }} />
+                </Tooltip>
+              )}
+            </Flexbox>
+          ),
+          name: 'defaultImageNum',
+          render: ({ value, onChange }) => (
+            <FormSliderWithInput
+              disabled={isUpdating || !canManageServiceModel}
+              max={MAX_DEFAULT_IMAGE_NUM}
+              min={MIN_DEFAULT_IMAGE_NUM}
+              step={1}
+              value={value}
+              onChange={onChange}
+            />
+          ),
+        },
+      ],
+      extra: isUpdating ? <Spin size="small" style={{ opacity: 0.6 }} /> : undefined,
+      title: (
+        <SettingsSearchAnchor id={'service-model-image'}>
+          {t('settingImage.defaultCount.title')}
+        </SettingsSearchAnchor>
+      ),
+    },
+  ];
+
+  return (
+    <Form
+      collapsible={false}
+      form={form}
+      items={items}
+      itemsType={'group'}
+      variant={'filled'}
+      {...FORM_STYLE}
+    />
+  );
+});
+
+ImageSettings.displayName = 'ImageSettings';
+
+export default ImageSettings;

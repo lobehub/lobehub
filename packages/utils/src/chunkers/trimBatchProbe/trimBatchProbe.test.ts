@@ -8,8 +8,12 @@ import {
   truncateByPunctuation,
 } from './trimBatchProbe';
 
+const mocks = vi.hoisted(() => ({
+  estimateTokenCount: vi.fn((str: string) => str.split(/\s+/).filter(Boolean).length),
+}));
+
 vi.mock('tokenx', () => ({
-  estimateTokenCount: (str: string) => str.split(/\s+/).filter(Boolean).length,
+  estimateTokenCount: mocks.estimateTokenCount,
 }));
 
 describe('trimBasedOnBatchProbe', () => {
@@ -153,6 +157,16 @@ describe('trimBasedOnBatchProbe', () => {
       const result = await truncateByPunctuation(text, 3);
 
       expect(result).toBe('drop these words');
+    });
+
+    it('stops after the first punctuation segment over the token limit', async () => {
+      mocks.estimateTokenCount.mockClear();
+      const text = Array.from({ length: 1024 }, (_, index) => `segment${index}.`).join(' ');
+
+      const result = await truncateByPunctuation(text, 3);
+
+      expect(result).toBe('segment1021. segment1022. segment1023.');
+      expect(mocks.estimateTokenCount).toHaveBeenCalledTimes(4);
     });
 
     it('hard truncates from tail with shrinking window', async () => {

@@ -1,7 +1,6 @@
 import type { IconType } from '@lobehub/icons';
-import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
+import { type DropdownItem, DropdownMenu, type MenuInfo, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Spin } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -154,7 +153,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     const triggerNode = children ? (
       children
     ) : loading ? (
-      <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
+      <Spin size={size} style={{ color: cssVar.colorTextDescription }} />
     ) : (
       <Tooltip title={t(`taskDetail.${meta.labelKey}` as never, { defaultValue: meta.label })}>
         <span

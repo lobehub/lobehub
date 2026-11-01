@@ -159,6 +159,10 @@ export const createServerProcedurePolicyOptions = ({
           });
         },
         enqueueSource: async (event) => {
+          // Lazy-loaded on purpose: importing `emitter` statically here pulls the
+          // agentSignal source/orchestrator graph into the self-iteration module at
+          // load time, which both couples the heavy execution core and breaks the
+          // `vi.resetModules()` re-mock boundary the integration tests rely on.
           const { enqueueAgentSignalSourceEvent } =
             await import('@/server/services/agentSignal/emitter');
 

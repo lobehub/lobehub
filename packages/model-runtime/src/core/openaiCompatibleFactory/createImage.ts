@@ -1,16 +1,27 @@
-import { imageUrlToBase64 } from '@lobechat/utils';
-import { cleanObject } from '@lobechat/utils/object';
+import { cleanObject } from '../../utils/object';
 import createDebug from 'debug';
 import type { RuntimeImageGenParamsValue } from 'model-bank';
 import type OpenAI from 'openai';
 
-import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateImageMethodOptions,
+  CreateImagePayload,
+  CreateImageResponse,
+} from '../../types/image';
 import { getModelPricing } from '../../utils/getModelPricing';
+import { referenceImageUrlToBase64 } from '../../utils/referenceImageCache';
 import { parseDataUri } from '../../utils/uriParser';
 import { convertImageUrlToFile } from '../contextBuilders/openai';
 import { convertOpenAIImageUsage } from '../usageConverters/openai';
 
 const log = createDebug('lobe-image:openai-compatible');
+
+interface CreateOpenAICompatibleImageOptions {
+  pricingContext?: CreateImageMethodOptions['pricingContext'];
+  pricingModel?: string;
+  requestModel?: string;
+  routingModel?: string;
+}
 
 /**
  * Generate images using traditional OpenAI images API (DALL-E, etc.)
@@ -19,10 +30,19 @@ async function generateByImageMode(
   client: OpenAI,
   payload: CreateImagePayload,
   provider: string,
+  imageOptions?: CreateOpenAICompatibleImageOptions,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
+  const requestModel = imageOptions?.requestModel ?? model;
+  const routingModel = imageOptions?.routingModel ?? model;
 
-  log('Creating image with model: %s and params: %O', model, params);
+  log('Creating image with model: %s and params: %O', requestModel, params);
+
+  // Both fields map to the API's single `image` input. Reject a payload carrying both instead of
+  // letting one silently overwrite the other while the generation is still billed.
+  if (params.imageUrl && params.imageUrls?.length) {
+    throw new Error('Pass reference images in either imageUrl or imageUrls, not both.');
+  }
 
   // Map parameter names, mapping imageUrls to image
   const paramsMap = new Map<RuntimeImageGenParamsValue, string>([
@@ -68,18 +88,19 @@ async function generateByImageMode(
   // https://developers.openai.com/cookbook/examples/multimodal/image-gen-models-prompting-guide
   // Match the gpt-image-1 family (including dated snapshots like
   // `gpt-image-1-2025-04-15` and the `.5` variant), but exclude the mini tier.
-  const isGptImage1Family = /^gpt-image-1(?:$|[-.])/.test(model);
-  const supportsInputFidelity = isImageEdit && isGptImage1Family && !model.includes('mini');
+  const isGptImage1Family = /^gpt-image-1(?:$|[-.])/.test(routingModel);
+  const supportsInputFidelity = isImageEdit && isGptImage1Family && !routingModel.includes('mini');
 
+  // Leave `n` to the API default (1): each generation is its own request, and
+  // strict-schema OpenAI-compatible gateways reject properties the model does not declare.
   const defaultInput = {
-    n: 1,
-    ...(model.includes('dall-e') ? { response_format: 'b64_json' } : {}),
+    ...(routingModel.includes('dall-e') ? { response_format: 'b64_json' } : {}),
     // https://platform.openai.com/docs/api-reference/images/createEdit#images_createedit-input_fidelity
     ...(supportsInputFidelity ? { input_fidelity: 'high' } : {}),
   };
 
   const options = cleanObject({
-    model,
+    model: requestModel,
     ...defaultInput,
     ...userInput,
   });
@@ -126,7 +147,14 @@ async function generateByImageMode(
     imageUrl,
     ...(img.usage
       ? {
-          modelUsage: convertOpenAIImageUsage(img.usage, await getModelPricing(model, provider)),
+          modelUsage: convertOpenAIImageUsage(
+            img.usage,
+            await getModelPricing(
+              imageOptions?.pricingModel ?? routingModel,
+              provider,
+              imageOptions?.pricingContext,
+            ),
+          ),
         }
       : {}),
   };
@@ -145,7 +173,7 @@ async function processImageUrlForChat(imageUrl: string): Promise<string> {
     return `data:${mimeType || 'image/png'};base64,${base64}`;
   } else if (type === 'url') {
     // For URL type, convert to base64 first
-    const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(imageUrl);
+    const { base64: urlBase64, mimeType: urlMimeType } = await referenceImageUrlToBase64(imageUrl);
     return `data:${urlMimeType};base64,${urlBase64}`;
   } else {
     throw new TypeError(`Currently we don't support image url: ${imageUrl}`);
@@ -158,9 +186,10 @@ async function processImageUrlForChat(imageUrl: string): Promise<string> {
 async function generateByChatModel(
   client: OpenAI,
   payload: CreateImagePayload,
+  requestModel?: string,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
-  const actualModel = model.replace(':image', ''); // Remove :image suffix
+  const actualModel = (requestModel ?? model).replace(':image', ''); // Remove :image suffix
 
   log('Creating image via chat API with model: %s and params: %O', actualModel, params);
 
@@ -172,21 +201,25 @@ async function generateByChatModel(
     },
   ];
 
-  // Add image for editing mode if provided
-  if (params.imageUrl && params.imageUrl !== null) {
-    log('Processing image URL for editing mode: %s', params.imageUrl);
-    try {
-      const processedImageUrl = await processImageUrlForChat(params.imageUrl);
-      content.push({
-        image_url: {
-          url: processedImageUrl,
-        },
-        type: 'image_url',
-      });
-      log('Successfully processed image URL for chat input');
-    } catch (error) {
-      throw new Error(`Failed to process image URL: ${error}`, { cause: error });
-    }
+  // `:image` model cards declare only `imageUrls` (CHAT_MODEL_IMAGE_GENERATION_PARAMS). Reject
+  // `imageUrl` so the caller resends in the declared field instead of generating without it.
+  if (params.imageUrl) {
+    throw new Error('Chat image models take reference images in imageUrls, not imageUrl.');
+  }
+  const referenceUrls = params.imageUrls ?? [];
+  // Download references concurrently; Promise.all keeps their order for the message content.
+  const processedImageUrls = await Promise.all(
+    referenceUrls.map(async (imageUrl) => {
+      log('Processing image URL for editing mode: %s', imageUrl);
+      try {
+        return await processImageUrlForChat(imageUrl);
+      } catch (error) {
+        throw new Error(`Failed to process image URL: ${error}`, { cause: error });
+      }
+    }),
+  );
+  for (const url of processedImageUrls) {
+    content.push({ image_url: { url }, type: 'image_url' });
   }
 
   // Call chat completion API
@@ -232,14 +265,16 @@ export async function createOpenAICompatibleImage(
   client: OpenAI,
   payload: CreateImagePayload,
   provider: string,
+  options?: CreateOpenAICompatibleImageOptions,
 ): Promise<CreateImageResponse> {
   const { model } = payload;
+  const routingModel = options?.routingModel ?? model;
 
   // Check if it's a chat model for image generation (via :image suffix)
-  if (model.endsWith(':image')) {
-    return await generateByChatModel(client, payload);
+  if (routingModel.endsWith(':image')) {
+    return await generateByChatModel(client, payload, options?.requestModel);
   }
 
   // Default to traditional images API
-  return await generateByImageMode(client, payload, provider);
+  return await generateByImageMode(client, payload, provider, options);
 }

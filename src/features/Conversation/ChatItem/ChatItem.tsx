@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { cx } from 'antd-style';
+import { agentDisplayName } from '@lobechat/types';
+import { cx, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import FollowUpChips from '../FollowUp/FollowUpChips';
@@ -12,13 +12,16 @@ import ErrorContent from './components/ErrorContent';
 import MessageContent from './components/MessageContent';
 import Title from './components/Title';
 import { styles } from './style';
-import { type ChatItemProps } from './type';
+import type { ChatItemProps } from './type';
 
 const ChatItem = memo<ChatItemProps>(
   ({
     onAvatarClick,
     avatarProps,
     customAvatarRender,
+    afterActions,
+    actionAddon,
+    agentId,
     actions,
     className,
     loading,
@@ -36,7 +39,9 @@ const ChatItem = memo<ChatItemProps>(
     onDoubleClick,
     aboveMessage,
     belowMessage,
+    headerAddon,
     showAvatar = true,
+    showHeader = true,
     titleAddon,
     disabled = false,
     id,
@@ -53,7 +58,8 @@ const ChatItem = memo<ChatItemProps>(
 
     const avatarContent = (
       <Avatar
-        alt={avatarProps?.alt || avatar.title || 'avatar'}
+        agentId={agentId}
+        alt={avatarProps?.alt || agentDisplayName(avatar, 'avatar')}
         loading={loading}
         shape={'square'}
         onClick={onAvatarClick}
@@ -75,16 +81,25 @@ const ChatItem = memo<ChatItemProps>(
         }}
         {...rest}
       >
-        <Flexbox
-          align={'center'}
-          className={'message-header'}
-          direction={isUser ? 'horizontal-reverse' : 'horizontal'}
-          gap={8}
-        >
-          {showAvatar &&
-            (customAvatarRender ? customAvatarRender(avatar, avatarContent) : avatarContent)}
-          <Title avatar={avatar} showTitle={showTitle} time={time} titleAddon={titleAddon} />
-        </Flexbox>
+        {showHeader && (
+          <Flexbox
+            align={'center'}
+            className={'message-header'}
+            direction={isUser ? 'horizontal-reverse' : 'horizontal'}
+            gap={8}
+            // The row wraps nothing, so without a cap it is sized by its content and
+            // simply overflows its lane — on a narrow viewport that is a header
+            // wider than the conversation pane (the source-topic link, a long agent
+            // name). Capped, the shrinkable addons yield to the space actually
+            // available and truncate instead.
+            style={{ maxInlineSize: '100%', minInlineSize: 0 }}
+          >
+            {showAvatar &&
+              (customAvatarRender ? customAvatarRender(avatar, avatarContent) : avatarContent)}
+            {headerAddon}
+            <Title avatar={avatar} showTitle={showTitle} time={time} titleAddon={titleAddon} />
+          </Flexbox>
+        )}
         <Flexbox
           className={'message-body'}
           gap={8}
@@ -121,7 +136,18 @@ const ChatItem = memo<ChatItemProps>(
         {id && conversationKey && (
           <FollowUpChips conversationKey={conversationKey} messageId={id} />
         )}
-        {actions && <Actions actions={actions} placement={placement} />}
+        {(actionAddon || actions) && (
+          <Actions actionAddon={actionAddon} actions={actions} placement={placement} />
+        )}
+        {afterActions && (
+          <Flexbox
+            style={{
+              width: isUser ? undefined : '100%',
+            }}
+          >
+            {afterActions}
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },

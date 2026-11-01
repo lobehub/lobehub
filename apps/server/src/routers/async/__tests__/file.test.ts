@@ -9,7 +9,7 @@ import { FileModel } from '@/database/models/file';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
-import { AsyncTaskStatus } from '@/types/asyncTask';
+import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 
 import { fileRouter } from '../file';
 
@@ -58,13 +58,27 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
     documentServiceMock = { parseFile: vi.fn() };
     chunkModelMock = { bulkCreate: vi.fn(), bulkCreateUnstructuredChunks: vi.fn() };
 
-    vi.mocked(AsyncTaskModel).mockImplementation(() => asyncTaskModelMock);
-    vi.mocked(FileModel).mockImplementation(() => fileModelMock);
-    vi.mocked(FileService).mockImplementation(() => fileServiceMock);
-    vi.mocked(ChunkService).mockImplementation(() => chunkServiceMock);
-    vi.mocked(DocumentService).mockImplementation(() => documentServiceMock);
-    vi.mocked(ChunkModel).mockImplementation(() => chunkModelMock);
-    vi.mocked(EmbeddingModel).mockImplementation(() => ({}) as any);
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return asyncTaskModelMock;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return fileModelMock;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return fileServiceMock;
+    });
+    vi.mocked(ChunkService).mockImplementation(function () {
+      return chunkServiceMock;
+    });
+    vi.mocked(DocumentService).mockImplementation(function () {
+      return documentServiceMock;
+    });
+    vi.mocked(ChunkModel).mockImplementation(function () {
+      return chunkModelMock;
+    });
+    vi.mocked(EmbeddingModel).mockImplementation(function () {
+      return {} as any;
+    });
     Reflect.set(FileModel, 'getFileById', undefined);
 
     mockCtx = { serverDB: {}, userId };
@@ -94,6 +108,29 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
         }),
       }),
     );
+  });
+
+  it('rejects oversized files before reading them into memory', async () => {
+    fileModelMock.findById.mockResolvedValue({
+      id: 'large-file',
+      name: 'large.pdf',
+      size: 64 * 1024 * 1024 + 1,
+      url: 'https://example.com/large.pdf',
+    });
+
+    const caller = fileRouter.createCaller(mockCtx);
+
+    await expect(
+      caller.parseFileToChunks({ fileId: 'large-file', taskId: 'task-large' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(fileServiceMock.getFileByteArray).not.toHaveBeenCalled();
+    expect(asyncTaskModelMock.update).toHaveBeenCalledWith('task-large', {
+      error: new AsyncTaskError(
+        AsyncTaskErrorType.FileTooLargeToParse,
+        'Files larger than 67108864 bytes cannot be parsed in memory',
+      ),
+      status: AsyncTaskStatus.Error,
+    });
   });
 
   it('skips storage fetch and returns gracefully when url is internal://', async () => {

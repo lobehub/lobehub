@@ -43,6 +43,7 @@ export const ENGINE_ICON_MAP: Record<string, string> = {
   'youtube': 'https://icons.duckduckgo.com/ip3/youtube.com.ico',
 };
 
+/** Characters of a crawled page returned to the model; longer pages end with the shared window notice. */
 export const CRAWL_CONTENT_LIMITED_COUNT = 25_000;
 
 export const SEARCH_ITEM_LIMITED_COUNT = 30;

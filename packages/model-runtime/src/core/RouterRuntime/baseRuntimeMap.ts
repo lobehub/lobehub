@@ -6,10 +6,12 @@ import { LobeCloudflareAI } from '../../providers/cloudflare';
 import { LobeDeepSeekAI } from '../../providers/deepseek';
 import { LobeFalAI } from '../../providers/fal';
 import { LobeGoogleAI } from '../../providers/google';
+import { LobeMetaAI } from '../../providers/meta';
 import { LobeMinimaxAI } from '../../providers/minimax';
 import { LobeMoonshotAI } from '../../providers/moonshot';
 import { LobeOpenAI } from '../../providers/openai';
 import { LobeQwenAI } from '../../providers/qwen';
+import { LobeTypeSafeAI } from '../../providers/typesafe';
 import { LobeVertexAI } from '../../providers/vertexai';
 import { LobeVolcengineAI } from '../../providers/volcengine';
 import { LobeXAI } from '../../providers/xai';
@@ -26,10 +28,12 @@ export const baseRuntimeMap = {
   deepseek: LobeDeepSeekAI,
   fal: LobeFalAI,
   google: LobeGoogleAI,
+  meta: LobeMetaAI,
   minimax: LobeMinimaxAI,
   moonshot: LobeMoonshotAI,
   openai: LobeOpenAI,
   qwen: LobeQwenAI,
+  typesafe: LobeTypeSafeAI,
   vertexai: LobeVertexAI,
   volcengine: LobeVolcengineAI,
   xai: LobeXAI,

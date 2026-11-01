@@ -199,6 +199,13 @@ describe('GroupRoleTransformProcessor', () => {
       expect(result.messages[0].content).toContain('</tool_result>');
       expect(result.messages[0].tool_call_id).toBeUndefined();
       expect(result.messages[0].plugin).toBeUndefined();
+      // The content is still a verbatim tool result even though the role is
+      // now `user`; PlaceholderVariablesProcessor keys off this to avoid
+      // rewriting it (and breaking the prompt-cache prefix) downstream.
+      expect(result.messages[0].foldedToolResult).toEqual({
+        apiName: 'getWeather',
+        identifier: 'weather-plugin',
+      });
     });
 
     it('should keep current agent tool messages unchanged', async () => {
@@ -513,6 +520,7 @@ describe('GroupRoleTransformProcessor', () => {
 <tool_result id="call_weather_1" name="weather-plugin.getWeather">
 {"temperature": 22, "weather": "多云", "humidity": 65}
 </tool_result>`,
+          foldedToolResult: { apiName: 'getWeather', identifier: 'weather-plugin' },
           id: 'msg_4',
           plugin: undefined,
           role: 'user',

@@ -31,7 +31,7 @@ const AuthErrorBoundary = () => {
   const { resolvedTheme } = useTheme();
 
   if (typeof window !== 'undefined' && isChunkLoadError(error)) {
-    notifyChunkError();
+    notifyChunkError(error);
   }
 
   // index.auth.html paints the body black in dark mode before React mounts
@@ -101,6 +101,10 @@ export const authRoutes: RouteObject[] = [
       {
         element: lazyElement(() => import('@/routes/auth/oauth/consent/[uid]')),
         path: 'oauth/consent/:uid',
+      },
+      {
+        element: lazyElement(() => import('@/routes/auth/oauth/error')),
+        path: 'oauth/error',
       },
       {
         element: lazyElement(() => import('@/routes/auth/oauth/device')),

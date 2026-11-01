@@ -2,9 +2,21 @@ import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
 import { resolveToken } from '../auth/resolveToken';
-import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
-import { loadSettings, normalizeUrl, saveSettings } from '../settings';
+import { CLI_PRIMARY_BIN } from '../constants/identity';
+import {
+  describeDeviceGateway,
+  describeDeviceGatewayFailure,
+  rememberGatewayOverride,
+  resolveCliDeviceGateway,
+} from '../device/gatewayEndpoint';
 import { log, setVerbose } from '../utils/logger';
+
+/**
+ * `status` answers one question — does the gateway accept this machine. When it
+ * says no, the cause is usually a layer below it (wrong gateway URL, expired
+ * login, a clock that drifted), which is what `doctor` walks through.
+ */
+const DIAGNOSE_HINT = `Run '${CLI_PRIMARY_BIN} doctor --profile connect' for a full diagnosis.`;
 
 interface StatusOptions {
   gateway?: string;
@@ -29,28 +41,32 @@ export function registerStatusCommand(program: Command) {
       if (options.verbose) setVerbose(true);
 
       const auth = await resolveToken(options);
-      const settings = loadSettings();
-      const gatewayUrl = normalizeUrl(options.gateway) || settings?.gatewayUrl;
+      // Same resolution as `connect`, against the server this token belongs to.
+      const gateway = await resolveCliDeviceGateway({
+        override: options.gateway,
+        serverUrl: auth.serverUrl,
+      });
 
-      if (!gatewayUrl && settings?.serverUrl) {
-        log.error(
-          `Current login uses custom --server ${settings?.serverUrl}. Please also provide '--gateway <url>' for the device gateway.`,
-        );
+      if (!gateway.ok) {
+        const { detail, fix } = describeDeviceGatewayFailure(gateway, auth.serverUrl);
+        log.error(`FAILED - ${detail}`);
+        log.error(fix);
         process.exit(1);
         throw new Error('process.exit');
       }
 
-      if (options.gateway && gatewayUrl) {
-        saveSettings({ ...settings, gatewayUrl });
-      }
+      rememberGatewayOverride(auth.serverUrl, gateway.endpoint);
+      log.info(`Gateway: ${describeDeviceGateway(gateway.endpoint)}`);
 
       const timeout = Number.parseInt(options.timeout || '10000', 10);
 
       const client = new GatewayClient({
         autoReconnect: false,
-        gatewayUrl: gatewayUrl || OFFICIAL_GATEWAY_URL,
+        gatewayUrl: gateway.endpoint.url,
         logger: log,
         serverUrl: auth.serverUrl,
+        // Status is a one-shot probe, not a serving connection.
+        tunnel: false,
         token: auth.token,
         tokenType: auth.tokenType,
         userId: auth.userId,
@@ -58,6 +74,7 @@ export function registerStatusCommand(program: Command) {
 
       const timer = setTimeout(() => {
         log.error('FAILED - Connection timed out');
+        log.error(DIAGNOSE_HINT);
         client.disconnect();
         process.exit(1);
       }, timeout);
@@ -72,18 +89,21 @@ export function registerStatusCommand(program: Command) {
       client.on('disconnected', () => {
         clearTimeout(timer);
         log.error('FAILED - Connection closed by server');
+        log.error(DIAGNOSE_HINT);
         process.exit(1);
       });
 
       client.on('auth_failed', (reason) => {
         clearTimeout(timer);
         log.error(`FAILED - Authentication failed: ${reason}`);
+        log.error(DIAGNOSE_HINT);
         process.exit(1);
       });
 
       client.on('auth_expired', () => {
         clearTimeout(timer);
         log.error('FAILED - Authentication expired');
+        log.error(DIAGNOSE_HINT);
         client.disconnect();
         process.exit(1);
       });

@@ -10,6 +10,7 @@ import { type AgentStoreState } from './initialState';
 import { initialState } from './initialState';
 import { type AgentSliceAction } from './slices/agent';
 import { createAgentSlice } from './slices/agent';
+import { type AgentArtworkSliceAction, createAgentArtworkSlice } from './slices/artwork';
 import { type BotSliceAction } from './slices/bot';
 import { createBotSlice } from './slices/bot';
 import { type BuiltinAgentSliceAction } from './slices/builtin';
@@ -23,6 +24,7 @@ import { createPluginSlice } from './slices/plugin';
 
 export interface AgentStore
   extends
+    AgentArtworkSliceAction,
     AgentSliceAction,
     BotSliceAction,
     BuiltinAgentSliceAction,
@@ -32,6 +34,7 @@ export interface AgentStore
     AgentStoreState {}
 
 type AgentStoreAction = AgentSliceAction &
+  AgentArtworkSliceAction &
   BotSliceAction &
   BuiltinAgentSliceAction &
   KnowledgeSliceAction &
@@ -47,6 +50,7 @@ const createStore: StateCreator<AgentStore, [['zustand/devtools', never]]> = (
 ) => ({
   ...initialState,
   ...flattenActions<AgentStoreAction>([
+    createAgentArtworkSlice(...parameters),
     createAgentSlice(...parameters),
     createBotSlice(...parameters),
     createBuiltinAgentSlice(...parameters),

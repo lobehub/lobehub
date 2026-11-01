@@ -79,14 +79,6 @@ lh bot add -a <agentId> \\
   --bot-token <xoxbToken> \\
   --signing-secret <signingSecret>
 
-# Socket Mode (WebSocket) — also pass App Token
-lh bot add -a <agentId> \\
-  --platform slack \\
-  --app-id <appId> \\
-  --bot-token <xoxbToken> \\
-  --signing-secret <signingSecret> \\
-  --app-token <xappToken>
-
 lh bot test <botId>
 lh bot connect <botId>
 \`\`\`
@@ -94,7 +86,7 @@ lh bot connect <botId>
 ## Notes
 
 - **Bot Token vs User Token**: always use the \`xoxb-\` Bot Token — never use \`xoxp-\` User Tokens unless explicitly needed
-- **Socket Mode** is recommended for development (no public URL needed) and is required if your server is behind a firewall
+- **Socket Mode** is recommended for development (no public URL needed) and is required if your server is behind a firewall. The CLI has no flag for its App-Level Token (\`xapp-\`): add the bot with the command above, then have the user paste the App-Level Token in the agent's Slack channel settings
 - Signing Secret validates that inbound webhook POST requests are genuinely from Slack
 - If you add new scopes, reinstall the app to the workspace (a banner will appear at the top of the OAuth page)
 `;

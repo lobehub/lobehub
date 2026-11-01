@@ -25,16 +25,6 @@ vi.mock('electron', () => ({
   app: mockApp,
 }));
 
-// Mock logger
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
-}));
-
 // Mock protocol utils
 vi.mock('@/utils/protocol', () => ({
   getProtocolScheme: mockGetProtocolScheme,
@@ -96,6 +86,20 @@ describe('ProtocolManager', () => {
     } as unknown as AppCore;
 
     manager = new ProtocolManager(mockAppCore);
+  });
+
+  it('queues deep links while the startup update window is blocking entry', async () => {
+    mockAppCore.startupUpdatePending = true;
+    manager.initialize();
+    openUrlHandler!(
+      { preventDefault: vi.fn() },
+      'lobehub://plugin/install?url=https://example.com',
+    );
+    expect(mockShowMainWindow).not.toHaveBeenCalled();
+    expect(mockHandleProtocolRequest).not.toHaveBeenCalled();
+    mockAppCore.startupUpdatePending = false;
+    await manager.processPendingUrls();
+    expect(mockHandleProtocolRequest).toHaveBeenCalledOnce();
   });
 
   describe('constructor', () => {

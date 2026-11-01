@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { socialService } from '@/services/social';
 import { useDiscoverStore } from '@/store/discover';
+import { socialSelectors } from '@/store/discover/selectors';
 
 interface FollowButtonProps {
   userId: number;
@@ -25,7 +26,9 @@ const FollowButton = memo<FollowButtonProps>(({ userId }) => {
     socialService.setAccessToken(session.accessToken);
   }
 
-  const { data: followStatus, mutate } = useFollowStatus(userId);
+  const { mutate, queryKey } = useFollowStatus(userId);
+  // The replica view of this entry; the sync hook only reports the fetch flags.
+  const followStatus = useDiscoverStore(socialSelectors.followStatus(queryKey));
   const isFollowing = followStatus?.isFollowing ?? false;
 
   const handleClick = async () => {

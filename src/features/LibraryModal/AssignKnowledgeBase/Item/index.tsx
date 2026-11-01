@@ -1,6 +1,6 @@
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { LockIcon } from 'lucide-react';
+import { memo, type ReactNode } from 'react';
 
 import KnowledgeIcon from '@/components/KnowledgeIcon';
 import { type KnowledgeItem } from '@/types/knowledgeBase';
@@ -25,41 +25,56 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const PluginItem = memo<KnowledgeItem>(({ id, fileType, name, type, description, enabled }) => {
-  return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      gap={8}
-      justify={'space-between'}
-      paddingBlock={12}
-      paddingInline={16}
-      style={{ position: 'relative' }}
-    >
+interface PluginItemProps extends KnowledgeItem {
+  action?: ReactNode;
+}
+
+const PluginItem = memo<PluginItemProps>(
+  ({ action, id, fileType, name, type, description, enabled, memberRestricted, visibility }) => {
+    return (
       <Flexbox
         horizontal
         align={'center'}
-        flex={1}
         gap={8}
-        style={{ overflow: 'hidden', position: 'relative' }}
+        justify={'space-between'}
+        paddingBlock={12}
+        paddingInline={16}
+        style={{ position: 'relative' }}
       >
-        <KnowledgeIcon fileType={fileType} name={name} size={{ file: 40, repo: 40 }} type={type} />
-        <Flexbox flex={1} gap={4} style={{ overflow: 'hidden', position: 'relative' }}>
-          <Flexbox horizontal align={'center'} gap={8}>
-            <Text ellipsis className={styles.title}>
-              {name}
-            </Text>
+        <Flexbox
+          horizontal
+          align={'center'}
+          flex={1}
+          gap={8}
+          style={{ overflow: 'hidden', position: 'relative' }}
+        >
+          <KnowledgeIcon
+            fileType={fileType}
+            locked={memberRestricted}
+            name={name}
+            size={{ file: 40, repo: 40 }}
+            type={type}
+          />
+          <Flexbox flex={1} gap={4} style={{ overflow: 'hidden', position: 'relative' }}>
+            <Flexbox horizontal align={'center'} gap={6}>
+              {visibility === 'private' && (
+                <Icon color={cssVar.colorTextDescription} icon={LockIcon} size={12} />
+              )}
+              <Text ellipsis className={styles.title}>
+                {name}
+              </Text>
+            </Flexbox>
+            {description && (
+              <Text ellipsis className={styles.desc}>
+                {description}
+              </Text>
+            )}
           </Flexbox>
-          {description && (
-            <Text ellipsis className={styles.desc}>
-              {description}
-            </Text>
-          )}
         </Flexbox>
+        {action === undefined ? <Actions enabled={enabled} id={id} type={type} /> : action}
       </Flexbox>
-      <Actions enabled={enabled} id={id} type={type} />
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 export default PluginItem;

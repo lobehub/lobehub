@@ -1,0 +1,824 @@
+import { randomUUID } from 'node:crypto';
+
+import { GOAL_CLARIFICATION_TITLE, type GoalStatus } from '@lobechat/const/goal';
+import type {
+  GoalDecisionOption,
+  GoalManagerPolicy,
+  GoalNodeStatus,
+  GoalRolloutPolicy,
+  GoalRolloutState,
+  GoalSupervisionState,
+  GoalUnderstanding,
+} from '@lobechat/types';
+import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+
+import type { GoalItem, NewGoal } from '../schemas/goal';
+import { goals } from '../schemas/goal';
+import { goalEdges, goalNodeDecisions, goalNodes } from '../schemas/goalGraph';
+import { tasks, taskTopics } from '../schemas/task';
+import { topics } from '../schemas/topic';
+import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/** States after which a goal's loop no longer advances. */
+const TERMINAL_GOAL_STATUSES = new Set<GoalStatus>(['achieved', 'failed', 'canceled']);
+
+/** Node states the coordinator will never pick up again. */
+const TERMINAL_NODE_STATUSES = new Set<GoalNodeStatus>(['resolved', 'rejected', 'retired']);
+
+/**
+ * Owns the `goals` table: one row per goal — an independent target entity with
+ * its own definition (title / requirement), budget and lifecycle state.
+ *
+ * Execution lives in the goal's graph, not on the goal row: the coordinator
+ * dispatches a Task per task node, and everything execution-specific (attempts,
+ * cost, acceptance) is derived from those tasks at read time.
+ */
+export class GoalModel {
+  private readonly db: LobeChatDatabase;
+  private readonly userId: string;
+  private readonly workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+  }
+
+  /**
+   * The goal owns a Goal Graph. `goal.create` always seeds a problem node and
+   * the opening Tasks, so this is exactly "not a leftover from the old
+   * task-carried flow".
+   */
+  private static hasGraphSql = sql`EXISTS (
+    SELECT 1 FROM ${goalNodes} WHERE ${goalNodes.goalId} = ${goals.id}
+  )`;
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, goals);
+
+  /** Visibility-aware task scope for recursive raw-SQL carrier aggregation. */
+  private taskOwnershipSql = (alias?: string) => {
+    const prefix = alias
+      ? sql.raw(`${alias}.`)
+      : /* v8 ignore next -- unreachable: every caller passes an alias */ sql.raw('');
+    return this.workspaceId
+      ? sql`${prefix}workspace_id = ${this.workspaceId}
+            AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})`
+      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL`;
+  };
+
+  create = async (params: Omit<NewGoal, 'userId' | 'workspaceId'>): Promise<GoalItem> => {
+    const [row] = await this.db
+      .insert(goals)
+      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
+      .returning();
+    return row;
+  };
+
+  findById = async (id: string): Promise<GoalItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.id, id), this.ownership()))
+      .limit(1);
+    return row;
+  };
+
+  /** Lock the owned Goal while committing a supervisor transition. Call inside a transaction. */
+  lockById = async (id: string): Promise<GoalItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.id, id), this.ownership()))
+      .for('update')
+      .limit(1);
+    return row;
+  };
+
+  /** The Goal Graph that owns this Task, or undefined when the task is not graph-managed. */
+  findByGraphTask = async (taskId: string): Promise<GoalItem | undefined> => {
+    const [row] = await this.db
+      .select({ goal: goals })
+      .from(goalNodes)
+      .innerJoin(goals, eq(goalNodes.goalId, goals.id))
+      .where(and(eq(goalNodes.taskId, taskId), eq(goalNodes.kind, 'task'), this.ownership()))
+      .limit(1);
+    return row?.goal;
+  };
+
+  /**
+   * Lock the unfinished goals supervised from these conversations
+   * (`subject_type = 'topic'`). Finished goals are left out: nothing dispatches
+   * for them, so the agent they were run by stays part of their record. Call
+   * inside a transaction; the locks hold the rows until it commits.
+   */
+  lockUnfinishedBySubjectTopics = async (topicIds: string[]): Promise<GoalItem[]> => {
+    if (topicIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(goals)
+      .where(
+        and(
+          eq(goals.subjectType, 'topic'),
+          inArray(goals.subjectId, topicIds),
+          notInArray(goals.status, [...TERMINAL_GOAL_STATUSES]),
+          this.ownership(),
+        ),
+      )
+      .for('update');
+  };
+
+  /** The Goal that owns a graph node, or undefined when the node is not in the caller's scope. */
+  findByNode = async (nodeId: string): Promise<GoalItem | undefined> => {
+    const [row] = await this.db
+      .select({ goal: goals })
+      .from(goalNodes)
+      .innerJoin(goals, eq(goalNodes.goalId, goals.id))
+      .where(and(eq(goalNodes.id, nodeId), this.ownership()))
+      .limit(1);
+    return row?.goal;
+  };
+
+  /**
+   * Patch only `config.pausedBy`, leaving every other key in the column alone.
+   *
+   * The coordinator writes this marker from a tick while the user edits budget
+   * and acceptance criteria on the same JSONB column from the goal page. A
+   * read-modify-write of the whole config would let whichever landed second
+   * discard the other's work — the user's new criteria, or the marker a
+   * measured-acceptance goal needs to ever reopen.
+   */
+  updatePauseReason = async (id: string, reason: string | undefined): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: reason
+          ? sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{pausedBy}', ${JSON.stringify(reason)}::jsonb)`
+          : sql`COALESCE(${goals.config}, '{}'::jsonb) - 'pausedBy'`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
+  /**
+   * Patch only `config.taskAgentId` (or drop it with `null`), for the same
+   * reason as `updatePauseReason`: a whole-config write here would race budget
+   * and acceptance edits on the same column and discard whichever landed first.
+   */
+  updateTaskAgentId = async (id: string, taskAgentId: string | null) => {
+    const [row] = await this.db
+      .update(goals)
+      .set({
+        config: taskAgentId
+          ? sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{taskAgentId}', ${JSON.stringify(taskAgentId)}::jsonb)`
+          : sql`COALESCE(${goals.config}, '{}'::jsonb) - 'taskAgentId'`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()))
+      .returning();
+    return row as GoalItem | undefined;
+  };
+
+  /**
+   * Patch only one model slot of `config` — `model`/`provider` for planning
+   * turns, `taskModel`/`taskProvider` for Tasks — or drop it with `null`, for
+   * the same reason as `updateTaskAgentId`.
+   */
+  updateModelConfig = async (
+    id: string,
+    modelConfig: { model: string; provider: string } | null,
+    slot: 'planning' | 'task' = 'planning',
+  ) => {
+    const [modelKey, providerKey] =
+      slot === 'task' ? ['taskModel', 'taskProvider'] : ['model', 'provider'];
+    const patch = modelConfig && {
+      [modelKey]: modelConfig.model,
+      [providerKey]: modelConfig.provider,
+    };
+    const [row] = await this.db
+      .update(goals)
+      .set({
+        config: patch
+          ? sql`COALESCE(${goals.config}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`
+          : sql`COALESCE(${goals.config}, '{}'::jsonb) - ${modelKey}::text - ${providerKey}::text`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()))
+      .returning();
+    return row as GoalItem | undefined;
+  };
+
+  /**
+   * Claim the queued wake for a Task waiting on a usage-window reset, so that
+   * repeated ticks before the reset (the sweep, Task events, manual advances)
+   * queue one callback instead of one each. Succeeds only when no wake is armed,
+   * the armed one already fired, or this one fires earlier; the caller queues the
+   * callback only then. Patches `config.quotaRetryWakeAt` alone, like
+   * `updatePauseReason`, in one conditional statement so concurrent ticks cannot
+   * both claim it.
+   */
+  armQuotaRetryWake = async (id: string, at: string): Promise<boolean> => {
+    const armed = sql`(${goals.config} #>> '{quotaRetryWakeAt}')::timestamptz`;
+    const rows = await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{quotaRetryWakeAt}', ${JSON.stringify(at)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(goals.id, id),
+          this.ownership(),
+          sql`(NOT (COALESCE(${goals.config}, '{}'::jsonb) ? 'quotaRetryWakeAt')
+            OR ${armed} <= NOW()
+            OR ${armed} > ${at}::timestamptz)`,
+        ),
+      )
+      .returning({ id: goals.id });
+    return rows.length > 0;
+  };
+
+  /**
+   * Patch only `config.understanding`, for the same reason as
+   * `updatePauseReason`: decomposition writes it while the user may be editing
+   * budget or acceptance on the same column.
+   */
+  updateUnderstanding = async (id: string, understanding: GoalUnderstanding): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{understanding}', ${JSON.stringify(understanding)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
+  /**
+   * Patch only `config.rolloutState`, for the same reason as
+   * `updateUnderstanding`: the coordinator writes batch progress while the user
+   * may be editing budget on the same column. Passing `null` clears the batch.
+   */
+  updateRolloutState = async (id: string, state: GoalRolloutState | null): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config:
+          state === null
+            ? sql`COALESCE(${goals.config}, '{}'::jsonb) - 'rolloutState'`
+            : sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{rolloutState}', ${JSON.stringify(state)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
+  /**
+   * Patch only `config.manager`: open the main Agent policy unless one is
+   * already there, which is kept as it is. The coordinator opens one when its
+   * own planner hands a goal over.
+   */
+  openManagerPolicy = async (id: string, policy: GoalManagerPolicy): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{manager}', COALESCE(${goals.config}->'manager', ${JSON.stringify(policy)}::jsonb))`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
+  /**
+   * Remove the policy a hand-over opened, only while it is still that one: a
+   * policy a person set or changed in the meantime has another token, or none.
+   */
+  closeHandoffManagerPolicy = async (id: string, token: string): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({ config: sql`${goals.config} - 'manager'`, updatedAt: new Date() })
+      .where(
+        and(
+          eq(goals.id, id),
+          this.ownership(),
+          sql`${goals.config}->'manager'->>'openedForHandoff' = ${token}`,
+        ),
+      );
+  };
+
+  /** Patch only `config.rollout`, so auto-detection can persist the policy. */
+  updateRolloutPolicy = async (id: string, policy: GoalRolloutPolicy): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{rollout}', ${JSON.stringify(policy)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
+  /** Compare-and-swap only the supervisor namespace; concurrent budget edits survive. */
+  updateSupervisorState = async (
+    id: string,
+    expectedRevision: number,
+    state: Omit<GoalSupervisionState, 'revision'>,
+  ): Promise<GoalSupervisionState | undefined> => {
+    const next = { ...state, revision: expectedRevision + 1 };
+    const [row] = await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{supervisorState}', ${JSON.stringify(next)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(goals.id, id),
+          this.ownership(),
+          sql`COALESCE((${goals.config}->'supervisorState'->>'revision')::integer, 0) = ${expectedRevision}`,
+        ),
+      )
+      .returning({ id: goals.id });
+    return row ? next : undefined;
+  };
+
+  update = async (id: string, value: Partial<Omit<GoalItem, 'id' | 'userId'>>) => {
+    // Policy editors may carry a pre-claim or pre-release snapshot. Runtime
+    // ownership always comes from the current row, never that snapshot, and
+    // policy edits cannot replace the concurrently written incident ledger.
+    const merged = sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt' - 'rolloutState')
+      || jsonb_strip_nulls(jsonb_build_object(
+        'planningCheckpoint', ${goals.config}->'planningCheckpoint',
+        'planningProtocol', ${goals.config}->'planningProtocol',
+        'supervisorState', ${goals.config}->'supervisorState',
+        'managerState', ${goals.config}->'managerState',
+        'understanding', ${goals.config}->'understanding',
+        'quotaRetryWakeAt', ${goals.config}->'quotaRetryWakeAt',
+        'rolloutState', ${goals.config}->'rolloutState'
+      ))`;
+    const [row] = await this.db
+      .update(goals)
+      .set({
+        ...value,
+        // The batch recipe (`rollout.spec`) is the coordinator's too: a pattern
+        // break rewrites it, and a stale snapshot must not put back the recipe
+        // that just failed. The person's own rollout settings still come from
+        // the edit; a policy the edit leaves out stays as it is.
+        ...(value.config !== undefined
+          ? {
+              config: sql`CASE WHEN NOT COALESCE(jsonb_exists(${goals.config}, 'rollout'), false) THEN ${merged}
+                ELSE jsonb_set(
+                  ${merged},
+                  '{rollout}',
+                  COALESCE(${merged}->'rollout', ${goals.config}->'rollout')
+                    || jsonb_strip_nulls(jsonb_build_object('spec', ${goals.config}->'rollout'->'spec'))
+                ) END`,
+            }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()))
+      .returning();
+    return row as GoalItem | undefined;
+  };
+
+  /** Call inside a transaction when a coordinator needs to serialize a write. */
+  findByIdForUpdate = async (id: string) => {
+    const [row] = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.id, id), this.ownership()))
+      .limit(1)
+      .for('update');
+    return row;
+  };
+
+  /** Claim a bounded planning lease without holding a connection during the model call. */
+  claimPlanning = async (id: string) =>
+    this.db.transaction(async (tx) => {
+      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const goal = await model.findByIdForUpdate(id);
+      if (!goal || !['planning', 'running'].includes(goal.status)) return undefined;
+      // A running goal without lease provenance may still have an unfenced
+      // pre-lease worker in flight. Never infer abandonment from elapsed time.
+      // See docs/development/goal-planning-lease-rollout.md before rollout/rollback.
+      if (
+        goal.status === 'running' &&
+        !goal.config?.planningProtocol &&
+        !goal.config?.planningCheckpoint
+      )
+        return undefined;
+      const now = Date.now();
+      if (
+        goal.config?.planningCheckpoint &&
+        Date.parse(goal.config.planningCheckpoint.expiresAt) > now
+      )
+        return undefined;
+      const [task] = await tx
+        .select({ id: goalNodes.id })
+        .from(goalNodes)
+        .where(and(eq(goalNodes.goalId, id), eq(goalNodes.kind, 'task')))
+        .limit(1);
+      if (task) return undefined;
+      const checkpoint = {
+        token: randomUUID(),
+        expiresAt: new Date(now + 5 * 60_000).toISOString(),
+      };
+      await tx
+        .update(goals)
+        .set({
+          config: { ...goal.config, planningCheckpoint: checkpoint, planningProtocol: 'lease-v1' },
+          startedAt: goal.startedAt ?? new Date(now),
+          status: 'running',
+          updatedAt: new Date(now),
+        })
+        .where(eq(goals.id, id));
+      return { ...checkpoint, previousStatus: goal.status };
+    });
+
+  /** A late worker must never clear a newer worker's lease or other configuration. */
+  releasePlanning = async (id: string, token: string) => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`${goals.config} - 'planningCheckpoint'`,
+      })
+      .where(
+        and(
+          eq(goals.id, id),
+          this.ownership(),
+          sql`${goals.config}->'planningCheckpoint'->>'token' = ${token}`,
+        ),
+      );
+  };
+
+  /**
+   * Advance the lifecycle state, stamping the boundary timestamps as a side
+   * effect: first entry into `running` records `startedAt`, any terminal state
+   * records `completedAt` (and re-opening a terminal goal clears it).
+   */
+  updateStatus = async (id: string, status: GoalStatus) => {
+    const existing = await this.findById(id);
+    if (!existing) return undefined;
+
+    return this.update(id, {
+      completedAt: TERMINAL_GOAL_STATUSES.has(status) ? (existing.completedAt ?? new Date()) : null,
+      startedAt: existing.startedAt ?? (status === 'running' ? new Date() : null),
+      status,
+    });
+  };
+
+  /**
+   * Every clarification the coordinator is still waiting on, across the
+   * caller's goals — what a surface outside the goal page needs to ask them.
+   * Oldest first, so the question that has waited longest is asked first.
+   */
+  listPendingClarifications = async (): Promise<PendingGoalClarificationRow[]> =>
+    this.db
+      .select({
+        agentId: goals.agentId,
+        decisionId: goalNodeDecisions.id,
+        description: goalNodes.description,
+        goalId: goals.id,
+        goalTitle: goals.title,
+        options: goalNodeDecisions.options,
+        requirement: goals.requirement,
+        question: goalNodeDecisions.question,
+      })
+      .from(goalNodeDecisions)
+      .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+      .innerJoin(goals, eq(goalNodes.goalId, goals.id))
+      .where(
+        and(
+          this.ownership(),
+          // Only a goal parked on its questions asks them; one the user paused
+          // or ended keeps its open questions without nagging about them.
+          notInArray(goals.status, ['paused', 'achieved', 'failed', 'canceled']),
+          eq(goalNodeDecisions.status, 'pending'),
+          eq(goalNodes.title, GOAL_CLARIFICATION_TITLE),
+        ),
+      )
+      // A round's questions share one transaction timestamp; the id keeps
+      // their order stable across reads so "question 1" stays question 1.
+      .orderBy(goalNodeDecisions.createdAt, goalNodeDecisions.id);
+
+  /**
+   * Every gate waiting on the person across their goals, except clarification
+   * rounds (asked as one form through `listPendingClarifications`) — what the
+   * approval island asks wherever the person is. Each row names the Task the
+   * gate was opened for, so the question can say what it is about.
+   */
+  listPendingDecisions = async (): Promise<PendingGoalDecisionRow[]> => {
+    const source = alias(goalNodes, 'gate_source');
+    return this.db
+      .select({
+        agentId: goals.agentId,
+        createdAt: goalNodeDecisions.createdAt,
+        decisionId: goalNodeDecisions.id,
+        description: goalNodes.description,
+        goalId: goals.id,
+        goalTitle: goals.title,
+        nodeId: goalNodes.id,
+        nodeTitle: goalNodes.title,
+        options: goalNodeDecisions.options,
+        question: goalNodeDecisions.question,
+        recommendedOptionId: goalNodeDecisions.recommendedOptionId,
+        // A held batch release is reviewed in its own report; the gate row
+        // carries where that report lives.
+        releaseGateAcceptanceId: sql<
+          string | null
+        >`case when ${goals.config} -> 'rolloutState' ->> 'releaseReviewNodeId' = ${goalNodes.id}::text then ${goals.config} -> 'rolloutState' ->> 'releaseGateAcceptanceId' end`,
+        sourceTaskId: source.taskId,
+        sourceTitle: source.title,
+      })
+      .from(goalNodeDecisions)
+      .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+      .innerJoin(goals, eq(goalNodes.goalId, goals.id))
+      .leftJoin(
+        goalEdges,
+        and(eq(goalEdges.targetNodeId, goalNodes.id), eq(goalEdges.kind, 'leads_to')),
+      )
+      .leftJoin(source, and(eq(source.id, goalEdges.sourceNodeId), eq(source.kind, 'task')))
+      .where(
+        and(
+          this.ownership(),
+          // A goal parked on its own batch gate is paused exactly because it
+          // waits on this answer, so its gate is still asked.
+          or(
+            notInArray(goals.status, ['paused', 'achieved', 'failed', 'canceled']),
+            and(
+              eq(goals.status, 'paused'),
+              sql`${goals.config} ->> 'pausedBy' in ('release_review', 'pattern_break')`,
+            ),
+          ),
+          eq(goalNodeDecisions.status, 'pending'),
+          eq(goalNodeDecisions.authority, 'user'),
+          // In a workspace every member can see the goal, but a gate is asked
+          // of one person. Rows from before the requester was recorded fall
+          // back to the goal's creator.
+          or(
+            eq(goalNodeDecisions.requestedUserId, this.userId),
+            and(isNull(goalNodeDecisions.requestedUserId), eq(goals.userId, this.userId)),
+          ),
+          ne(goalNodes.title, GOAL_CLARIFICATION_TITLE),
+        ),
+      )
+      .orderBy(goalNodeDecisions.createdAt, goalNodeDecisions.id);
+  };
+
+  delete = async (id: string) => {
+    return this.db.delete(goals).where(and(eq(goals.id, id), this.ownership()));
+  };
+
+  /**
+   * Open goals that nothing is currently moving — the sweep's work list.
+   *
+   * A goal qualifies when it is still open and has no task node that is both
+   * `active` and freshly touched: either nothing was ever dispatched, the
+   * completion event that should have re-entered the coordinator was lost, or a
+   * running Task outlived its operation lease and needs reclaiming. Goals with a
+   * decision gate open are excluded — only a human moves those, and ticking them
+   * would just report `waiting_human` on every sweep.
+   *
+   * Global by design (no ownership filter): the sweep runs as infrastructure and
+   * carries each goal's own `userId` / `workspaceId` into its advance.
+   */
+  static async listStalled(
+    db: LobeChatDatabase,
+    options: { limit?: number; staleBefore: Date },
+  ): Promise<GoalItem[]> {
+    const { limit = 200, staleBefore } = options;
+
+    return db
+      .select()
+      .from(goals)
+      .where(
+        and(
+          inArray(goals.status, ['planning', 'running', 'verifying']),
+          // A graph-less legacy goal has no frontier, so every sweep would
+          // tick it only to report `no_progress`. Leave it alone.
+          GoalModel.hasGraphSql,
+          // Quiet future waits must not crowd stranded Goals out of the scan.
+          // Unsettled owners still need recovery, even after submitting wait.
+          sql`(COALESCE(${goals.config} #>> '{managerState,consumed}', 'false') <> 'true'
+            OR COALESCE(${goals.config} #>> '{managerState,wait,until}', '') = ''
+            OR COALESCE(${goals.config} #>> '{managerState,wait,wake,at}', '') <> ''
+            OR (${goals.config} #>> '{managerState,wait,until}')::timestamptz <= NOW())`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${goalNodes}
+            WHERE ${goalNodes.goalId} = ${goals.id}
+              AND ${goalNodes.kind} = 'task'
+              AND ${goalNodes.status} = 'active'
+              AND ${goalNodes.updatedAt} > ${staleBefore}
+          )`,
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${goalNodeDecisions}
+            JOIN ${goalNodes} AS gate ON gate.id = ${goalNodeDecisions.nodeId}
+            WHERE gate.goal_id = ${goals.id}
+              AND ${goalNodeDecisions.status} = 'pending'
+          )`,
+        ),
+      )
+      .orderBy(desc(goals.updatedAt))
+      .limit(limit);
+  }
+
+  /**
+   * List goals with the roll-up the goal surfaces render: how much of the
+   * graph is done, how many decisions are waiting on a human, and what the
+   * whole thing has cost so far.
+   *
+   * Goal-centric on purpose. Goals used to be listed through their carrier
+   * task, which made a goal without one invisible; a Goal Graph goal is
+   * `standalone`, so the list reads the `goals` table and derives execution
+   * facts from the graph's tasks.
+   */
+  list = async (
+    options: {
+      agentId?: string;
+      limit?: number;
+      offset?: number;
+      projectId?: string;
+      statuses?: GoalStatus[];
+      /** Goals created from this conversation (`subject_type = 'topic'`). */
+      topicId?: string;
+    } = {},
+  ): Promise<{ goals: GoalListItem[]; total: number }> => {
+    const { agentId, limit = 50, offset = 0, projectId, statuses, topicId } = options;
+
+    // Only goals that actually have a graph. Rows created by the earlier
+    // task-carried flow have no `goal_nodes`, so they would render as a
+    // zero-task goal page that can never advance; they stay out of the list
+    // until something backfills them into graphs.
+    const conditions = [this.ownership(), GoalModel.hasGraphSql];
+    if (agentId) conditions.push(eq(goals.agentId, agentId));
+    if (projectId) conditions.push(eq(goals.projectId, projectId));
+    if (statuses && statuses.length > 0) conditions.push(inArray(goals.status, statuses));
+    if (topicId) conditions.push(eq(goals.subjectType, 'topic'), eq(goals.subjectId, topicId));
+
+    const [countRow] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(goals)
+      .where(and(...conditions));
+
+    const total = Number(countRow?.count ?? 0);
+    if (total === 0) return { goals: [], total };
+
+    const rows = await this.db
+      .select()
+      .from(goals)
+      .where(and(...conditions))
+      .orderBy(desc(goals.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const goalIds = rows.map((goal) => goal.id);
+    const [nodeRows, decisionRows, runStats] = await Promise.all([
+      this.db
+        .select({
+          goalId: goalNodes.goalId,
+          kind: goalNodes.kind,
+          status: goalNodes.status,
+          count: sql<number>`count(*)`,
+        })
+        .from(goalNodes)
+        .where(inArray(goalNodes.goalId, goalIds))
+        .groupBy(goalNodes.goalId, goalNodes.kind, goalNodes.status),
+      this.db
+        .select({ goalId: goalNodes.goalId, count: sql<number>`count(*)` })
+        .from(goalNodeDecisions)
+        .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+        .where(and(inArray(goalNodes.goalId, goalIds), eq(goalNodeDecisions.status, 'pending')))
+        .groupBy(goalNodes.goalId),
+      this.graphTaskRunStats(goalIds),
+    ]);
+
+    const stats = new Map<string, { findingCount: number; taskDone: number; taskTotal: number }>();
+    for (const row of nodeRows) {
+      const current = stats.get(row.goalId) ?? { findingCount: 0, taskDone: 0, taskTotal: 0 };
+      const count = Number(row.count);
+      if (row.kind === 'finding') current.findingCount += count;
+      if (row.kind === 'task') {
+        current.taskTotal += count;
+        if (TERMINAL_NODE_STATUSES.has(row.status)) current.taskDone += count;
+      }
+      stats.set(row.goalId, current);
+    }
+    const pendingByGoal = new Map(decisionRows.map((row) => [row.goalId, Number(row.count)]));
+
+    const items: GoalListItem[] = rows.map((goal) => {
+      const counts = stats.get(goal.id) ?? { findingCount: 0, taskDone: 0, taskTotal: 0 };
+      const run = runStats.get(goal.id) ?? { totalRunCost: 0, totalRunDuration: 0 };
+      return {
+        findingCount: counts.findingCount,
+        goal,
+        pendingDecisions: pendingByGoal.get(goal.id) ?? 0,
+        taskDone: counts.taskDone,
+        taskTotal: counts.taskTotal,
+        totalRunCost: run.totalRunCost,
+        totalRunDuration: run.totalRunDuration,
+      };
+    });
+
+    return { goals: items, total };
+  };
+
+  /**
+   * Cost and runtime across every task the graph dispatched, including tasks
+   * those graph tasks spawned themselves — the same subtree rule the task board
+   * uses, seeded from the task nodes instead of one carrier root.
+   */
+  private graphTaskRunStats = async (goalIds: string[]) => {
+    if (goalIds.length === 0)
+      return new Map<string, { totalRunCost: number; totalRunDuration: number }>();
+
+    const { rows } = await this.db.execute<{
+      goal_id: string;
+      total_run_cost: number;
+      total_run_duration: number;
+    }>(sql`
+      WITH RECURSIVE task_tree AS (
+        SELECT ${goalNodes.goalId} AS goal_id, ${tasks.id} AS task_id
+        FROM ${goalNodes}
+        JOIN ${tasks} ON ${tasks.id} = ${goalNodes.taskId}
+        WHERE ${inArray(goalNodes.goalId, goalIds)}
+          AND ${goalNodes.kind} = 'task'
+          AND ${this.taskOwnershipSql('tasks')}
+        UNION ALL
+        SELECT task_tree.goal_id, child.id
+        FROM ${tasks} child
+        JOIN task_tree ON child.parent_task_id = task_tree.task_id
+        WHERE ${this.taskOwnershipSql('child')}
+      )
+      SELECT
+        task_tree.goal_id,
+        coalesce(sum(${topics.totalCost}), 0) AS total_run_cost,
+        coalesce(
+          sum(extract(epoch from (${topics.completedAt} - ${taskTopics.createdAt})) * 1000)
+            filter (where ${topics.completedAt} is not null),
+          0
+        ) AS total_run_duration
+      FROM task_tree
+      LEFT JOIN ${taskTopics} ON ${taskTopics.taskId} = task_tree.task_id
+      LEFT JOIN ${topics} ON ${topics.id} = ${taskTopics.topicId}
+      GROUP BY task_tree.goal_id
+    `);
+
+    return new Map(
+      rows.map((row) => [
+        row.goal_id,
+        {
+          totalRunCost: Number(row.total_run_cost),
+          totalRunDuration: Number(row.total_run_duration),
+        },
+      ]),
+    );
+  };
+}
+
+/**
+ * A goal-list row: the goal itself plus the graph roll-up the list renders —
+ * how far the exploration got, what is blocked on a human, and what it cost.
+ */
+export interface GoalListItem {
+  findingCount: number;
+  goal: GoalItem;
+  /** Decision gates waiting on a human right now. */
+  pendingDecisions: number;
+  /** Task nodes in a terminal status (resolved / rejected / retired). */
+  taskDone: number;
+  taskTotal: number;
+  totalRunCost: number;
+  totalRunDuration: number;
+}
+
+export interface PendingGoalDecisionRow {
+  agentId: string | null;
+  createdAt: Date;
+  decisionId: string;
+  /** What the gate stands on: the coordinator's reason, the main Agent's diagnosis. */
+  description: string | null;
+  goalId: string;
+  goalTitle: string;
+  nodeId: string;
+  nodeTitle: string;
+  options: GoalDecisionOption[] | null;
+  question: string;
+  recommendedOptionId: string | null;
+  /** The review report of a held batch release; null for every other gate. */
+  releaseGateAcceptanceId: string | null;
+  /** The Task the gate was opened for; null for a goal-level question. */
+  sourceTaskId: string | null;
+  sourceTitle: string | null;
+}
+
+export interface PendingGoalClarificationRow {
+  agentId: string | null;
+  decisionId: string;
+  /** What changes with the answer (the decision node's description). */
+  description: string | null;
+  goalId: string;
+  goalTitle: string;
+  options: GoalDecisionOption[] | null;
+  question: string;
+  /** What the goal asks for, so a surface away from its page can say which goal this is. */
+  requirement: string | null;
+}

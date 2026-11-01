@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { type LobeChatDatabase } from '@lobechat/database';
-import { sessions, topics } from '@lobechat/database/schemas';
+import { messages, sessions, topics, trashItems } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { topicRouter } from '../../topic';
@@ -11,12 +11,15 @@ import { cleanupTestUser, createTestAgent, createTestContext, createTestUser } f
 // We need to mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
-// Mock next/server's after() to execute callback immediately in tests
-vi.mock('next/server', () => ({
-  after: vi.fn((callback: () => void) => callback()),
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  after: vi.fn(function (callback: () => void) {
+    return callback();
+  }),
 }));
 
 /**
@@ -30,6 +33,7 @@ vi.mock('next/server', () => ({
 describe('Topic Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;
+  let otherUserId: string | undefined;
   let testSessionId: string;
   let testAgentId: string;
 
@@ -37,6 +41,7 @@ describe('Topic Router Integration Tests', () => {
     serverDB = await getTestDB();
     testDB = serverDB;
     userId = await createTestUser(serverDB);
+    otherUserId = undefined;
 
     // Create test agent
     const { agents } = await import('@/database/schemas');
@@ -61,6 +66,7 @@ describe('Topic Router Integration Tests', () => {
 
   afterEach(async () => {
     await cleanupTestUser(serverDB, userId);
+    if (otherUserId) await cleanupTestUser(serverDB, otherUserId);
   });
 
   describe('createTopic', () => {
@@ -134,6 +140,116 @@ describe('Topic Router Integration Tests', () => {
     });
   });
 
+  describe('getTopicTranscript', () => {
+    it('returns topic metadata with exact message pagination', async () => {
+      await serverDB.insert(topics).values({
+        id: 'transcript-topic',
+        title: 'Transcript Topic',
+        userId,
+      });
+      await serverDB.insert(messages).values([
+        {
+          content: 'first',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'transcript-message-a',
+          role: 'user',
+          topicId: 'transcript-topic',
+          userId,
+        },
+        {
+          content: 'second',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'transcript-message-b',
+          role: 'assistant',
+          topicId: 'transcript-topic',
+          userId,
+        },
+        {
+          content: 'third',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          id: 'transcript-message-c',
+          role: 'tool',
+          topicId: 'transcript-topic',
+          userId,
+        },
+      ]);
+
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      const result = await caller.getTopicTranscript({
+        limit: 1,
+        offset: 1,
+        topicId: 'transcript-topic',
+      });
+
+      expect(result.topic).toMatchObject({ id: 'transcript-topic', title: 'Transcript Topic' });
+      expect(result.items).toEqual([
+        expect.objectContaining({ content: 'second', id: 'transcript-message-b' }),
+      ]);
+      expect(result.total).toBe(3);
+    });
+
+    it('does not load messages when includeMessages is false', async () => {
+      await serverDB.insert(topics).values({
+        id: 'metadata-only-topic',
+        title: 'Metadata Only',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'must not be returned',
+        id: 'metadata-only-message',
+        role: 'user',
+        topicId: 'metadata-only-topic',
+        userId,
+      });
+
+      const caller = topicRouter.createCaller(createTestContext(userId));
+      const result = await caller.getTopicTranscript({
+        includeMessages: false,
+        topicId: 'metadata-only-topic',
+      });
+
+      expect(result).toMatchObject({
+        items: [],
+        topic: { id: 'metadata-only-topic', title: 'Metadata Only' },
+        total: null,
+      });
+    });
+
+    it('rejects a missing topic instead of returning a successful empty result', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      await expect(caller.getTopicTranscript({ topicId: 'missing-topic' })).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Topic not found: missing-topic',
+      });
+    });
+
+    it('does not expose a personal topic to another authenticated user who knows its id', async () => {
+      await serverDB.insert(topics).values({
+        id: 'private-transcript-topic',
+        title: 'Private Transcript',
+        userId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'private message',
+        id: 'private-transcript-message',
+        role: 'user',
+        topicId: 'private-transcript-topic',
+        userId,
+      });
+
+      otherUserId = await createTestUser(serverDB);
+      const otherCaller = topicRouter.createCaller(createTestContext(otherUserId));
+
+      await expect(
+        otherCaller.getTopicTranscript({ topicId: 'private-transcript-topic' }),
+      ).rejects.toMatchObject({
+        code: 'NOT_FOUND',
+        message: 'Topic not found: private-transcript-topic',
+      });
+    });
+  });
+
   describe('batchCreateTopics', () => {
     it('should batch create topics with agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
@@ -167,6 +283,16 @@ describe('Topic Router Integration Tests', () => {
           type: 'agent',
         })
         .returning();
+
+      // A native agent Session has a real relationship. An unlinked shell
+      // cannot serve as an Agent alias.
+      const { agentsToSessions } = await import('@/database/schemas');
+      const anotherAgentId = await createTestAgent(serverDB, userId);
+      await serverDB.insert(agentsToSessions).values({
+        agentId: anotherAgentId,
+        sessionId: anotherSession.id,
+        userId,
+      });
 
       const result = await caller.batchCreateTopics([
         { title: 'Topic with agentId', agentId: testAgentId },
@@ -280,12 +406,20 @@ describe('Topic Router Integration Tests', () => {
         agentId: testAgentId,
       });
 
-      const remainingTopics = await serverDB
+      // Recycle bin: rows are stamped (hidden from reads), not dropped, and
+      // each one is registered as its own restorable root.
+      const liveTopics = await serverDB
+        .select()
+        .from(topics)
+        .where(and(eq(topics.sessionId, testSessionId), isNull(topics.deletedAt)));
+      expect(liveTopics).toHaveLength(0);
+      const stamped = await serverDB
         .select()
         .from(topics)
         .where(eq(topics.sessionId, testSessionId));
-
-      expect(remainingTopics).toHaveLength(0);
+      expect(stamped).toHaveLength(2);
+      expect(await serverDB.select().from(trashItems)).toHaveLength(2);
+      expect((await caller.getTopics({ agentId: testAgentId })).items).toHaveLength(0);
     });
 
     it('should batch delete topics using sessionId', async () => {
@@ -305,7 +439,7 @@ describe('Topic Router Integration Tests', () => {
       const remainingTopics = await serverDB
         .select()
         .from(topics)
-        .where(eq(topics.sessionId, testSessionId));
+        .where(and(eq(topics.sessionId, testSessionId), isNull(topics.deletedAt)));
 
       expect(remainingTopics).toHaveLength(0);
     });
@@ -326,7 +460,10 @@ describe('Topic Router Integration Tests', () => {
         agentId: testAgentId,
       });
 
-      const remainingTopics = await serverDB.select().from(topics).where(eq(topics.userId, userId));
+      const remainingTopics = await serverDB
+        .select()
+        .from(topics)
+        .where(and(eq(topics.userId, userId), isNull(topics.deletedAt)));
 
       expect(remainingTopics).toHaveLength(0);
     });
@@ -467,10 +604,10 @@ describe('Topic Router Integration Tests', () => {
         .values({ title: 'Legacy Topic', sessionId: testSessionId, agentId: null, userId })
         .returning();
 
-      // Querying the agent triggers the background backfill via after().
+      // Querying the agent triggers the background backfill after the response.
       await caller.getTopics({ agentId: testAgentId });
 
-      // Wait for the after() callback to run
+      // Wait for the scheduled callback to run.
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       const [migrated] = await serverDB.select().from(topics).where(eq(topics.id, legacyTopic.id));
@@ -715,7 +852,7 @@ describe('Topic Router Integration Tests', () => {
       const remainingTopics = await serverDB
         .select()
         .from(topics)
-        .where(eq(topics.sessionId, testSessionId));
+        .where(and(eq(topics.sessionId, testSessionId), isNull(topics.deletedAt)));
 
       expect(remainingTopics).toHaveLength(1);
       expect(remainingTopics[0].title).toBe('Topic 3');
@@ -731,9 +868,15 @@ describe('Topic Router Integration Tests', () => {
 
       await caller.removeTopic({ id: topicId });
 
-      const deletedTopic = await serverDB.select().from(topics).where(eq(topics.id, topicId));
-
-      expect(deletedTopic).toHaveLength(0);
+      // Moved to the recycle bin: still on disk with a stamp, invisible to reads.
+      const [trashed] = await serverDB.select().from(topics).where(eq(topics.id, topicId));
+      expect(trashed.deletedAt).toBeTruthy();
+      expect(await caller.getTopics({ agentId: testAgentId })).toMatchObject({ items: [] });
+      const [registry] = await serverDB
+        .select()
+        .from(trashItems)
+        .where(eq(trashItems.resourceId, topicId));
+      expect(registry).toMatchObject({ resourceType: 'topic', rootId: null, userId });
     });
 
     it('should count topics', async () => {

@@ -1,68 +1,88 @@
 'use client';
 
 import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { FileImage, FileText, FileUpIcon, FolderIcon } from 'lucide-react';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import { useDragUploadContext } from './DragUploadProvider';
-import { type DroppedFolder, useLocalDragUpload } from './useLocalDragUpload';
+import { type DroppedLocalPath, useLocalDragUpload } from './useLocalDragUpload';
 
 const BLOCK_SIZE = 48;
 const ICON_SIZE = { size: 28, strokeWidth: 1.5 };
+const OVERLAY_INSET = 28;
+const OVERLAY_BORDER_INSET = 10;
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    position: relative;
-  `,
-  content: css`
-    width: 100%;
-    height: 100%;
-    padding: 12px;
-    border: 1.5px dashed #fff;
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  desc: css`
-    font-size: 12px;
-    line-height: 18px;
-    color: #fff;
-  `,
-  icon: css`
-    border-radius: ${cssVar.borderRadiusSM};
-    color: color-mix(in srgb, ${cssVar.geekblue} 95%, black);
-    background: color-mix(in srgb, ${cssVar.geekblue} 38%, white);
-  `,
-  iconGroup: css`
-    margin-block-start: -32px;
-  `,
-  overlay: css`
-    pointer-events: none;
+const DEFAULT_TONE = {
+  iconColor: `color-mix(in srgb, ${cssVar.geekblue} 95%, black)`,
+  iconStrongBg: `color-mix(in srgb, ${cssVar.geekblue} 38%, white)`,
+  iconSoftBg: `color-mix(in srgb, ${cssVar.geekblue} 68%, white)`,
+};
 
-    position: absolute;
-    z-index: 100;
-    inset: 0;
+const LOCAL_PATH_TONE = {
+  iconColor: `color-mix(in srgb, ${cssVar.purple} 82%, black)`,
+  iconStrongBg: `color-mix(in srgb, ${cssVar.purple} 36%, white)`,
+  iconSoftBg: `color-mix(in srgb, ${cssVar.purple} 64%, white)`,
+};
 
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    background: ${cssVar.colorBgMask};
-
-    transition: all 0.2s ease-in-out;
-  `,
-  overlayContent: css`
-    padding: ${cssVar.borderRadiusLG};
-    border-radius: 12px;
-    background: ${cssVar.geekblue};
-  `,
-  title: css`
-    font-size: 16px;
-    font-weight: bold;
-    color: #fff;
-  `,
-}));
+const styles = stylex.create({
+  container: { position: 'relative' },
+  content: {
+    position: 'relative',
+    zIndex: 1,
+    boxSizing: 'border-box',
+    width: '100%',
+    height: '100%',
+    paddingBlock: '24px',
+    paddingInline: '28px',
+  },
+  desc: { fontSize: '12px', lineHeight: '18px', color: '#fff' },
+  icon: { borderRadius: cssVar.borderRadiusSM },
+  iconGroup: { marginBlockStart: '0' },
+  overlay: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 100,
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: cssVar.colorBgMask,
+    backgroundImage: 'none',
+    transition: 'all 0.2s ease-in-out',
+  },
+  overlayContent: {
+    'position': 'relative',
+    'boxSizing': 'border-box',
+    'width': 'min(460px, 72vw)',
+    'padding': `${OVERLAY_INSET}px`,
+    'borderRadius': '16px',
+    'backgroundColor': cssVar.geekblue,
+    'backgroundImage': 'none',
+    'boxShadow': `0 16px 48px color-mix(in srgb, ${cssVar.geekblue} 32%, transparent)`,
+    '::before': {
+      pointerEvents: 'none',
+      content: '""',
+      position: 'absolute',
+      inset: `${OVERLAY_BORDER_INSET}px`,
+      borderWidth: '1.5px',
+      borderStyle: 'dashed',
+      borderColor: '#fff',
+      borderRadius: cssVar.borderRadiusLG,
+    },
+  },
+  overlayContentLocalPath: {
+    backgroundColor: `color-mix(in srgb, ${cssVar.purple} 82%, ${cssVar.geekblue})`,
+    backgroundImage: 'none',
+    boxShadow: `0 16px 48px color-mix(in srgb, ${cssVar.purple} 32%, transparent)`,
+  },
+  title: { fontSize: '16px', fontWeight: 'bold', color: '#fff' },
+});
 
 export interface DragUploadZoneProps {
   /**
@@ -83,15 +103,16 @@ export interface DragUploadZoneProps {
    */
   enabledFiles?: boolean;
   /**
-   * Whether dropping a folder should route to onLocalFolders (as @mention) instead
-   * of being flattened and uploaded. Requires Electron (uses webUtils to resolve
-   * folder paths). Files in a mixed drop continue to flow through onUploadFiles.
+   * Whether dropping local files/folders should insert their filesystem paths
+   * into the chat input instead of uploading them. Requires Electron (uses
+   * webUtils to resolve paths). Unresolved items fall back to upload.
    */
-  enableLocalFolderMention?: boolean;
+  enableLocalPathReference?: boolean;
   /**
-   * Callback when top-level folders are dropped and enableLocalFolderMention is on.
+   * Callback when top-level local files/folders are dropped and local path
+   * reference mode is on.
    */
-  onLocalFolders?: (folders: DroppedFolder[]) => void | Promise<void>;
+  onLocalPaths?: (paths: DroppedLocalPath[]) => void | Promise<void>;
   /**
    * Callback when files are dropped
    */
@@ -112,8 +133,8 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     className,
     disabled = false,
     enabledFiles = true,
-    enableLocalFolderMention = false,
-    onLocalFolders,
+    enableLocalPathReference = false,
+    onLocalPaths,
     overlayMinHeight = 160,
     onUploadFiles,
     style,
@@ -126,25 +147,33 @@ const DragUploadZone = memo<DragUploadZoneProps>(
     // Local drop handler - only handles drop events
     const { getContainerProps } = useLocalDragUpload({
       disabled,
-      enableLocalFolderMention,
-      onLocalFolders,
+      enableLocalPathReference,
+      onLocalPaths,
       onUploadFiles,
     });
 
     // Show overlay when files are being dragged anywhere on the page
     const showOverlay = isDraggingGlobally && !disabled;
+    const isLocalPathReferenceOverlay = enableLocalPathReference && dragContentKind !== 'none';
 
-    // When local folder mention is on AND dragged content includes a folder,
-    // surface a folder-aware hint instead of the default upload hint.
+    // Local path reference mode has distinct copy and tone so users can tell it
+    // will insert filesystem references rather than upload files.
     const overlayCopy = useMemo(() => {
-      if (enableLocalFolderMention && dragContentKind === 'folders') {
+      if (isLocalPathReferenceOverlay) {
+        return {
+          desc: t('DragUpload.dragLocalPathDesc'),
+          showFolderIcon: dragContentKind === 'folders',
+          title: t('DragUpload.dragLocalPathTitle'),
+        };
+      }
+      if (dragContentKind === 'folders') {
         return {
           desc: t('DragUpload.dragFolderDesc'),
           showFolderIcon: true,
           title: t('DragUpload.dragFolderTitle'),
         };
       }
-      if (enableLocalFolderMention && dragContentKind === 'mixed') {
+      if (dragContentKind === 'mixed') {
         return {
           desc: t('DragUpload.dragMixedDesc'),
           showFolderIcon: true,
@@ -156,62 +185,79 @@ const DragUploadZone = memo<DragUploadZoneProps>(
         showFolderIcon: false,
         title: t(enabledFiles ? 'DragUpload.dragFileTitle' : 'DragUpload.dragTitle'),
       };
-    }, [dragContentKind, enableLocalFolderMention, enabledFiles, t]);
+    }, [dragContentKind, enabledFiles, isLocalPathReferenceOverlay, t]);
+
+    const overlayIcons = useMemo(() => {
+      if (isLocalPathReferenceOverlay && dragContentKind === 'mixed') {
+        return [FolderIcon, FileUpIcon, FileText];
+      }
+      if (overlayCopy.showFolderIcon) return [FolderIcon, FolderIcon, FolderIcon];
+      return [FileImage, FileUpIcon, FileText];
+    }, [dragContentKind, isLocalPathReferenceOverlay, overlayCopy.showFolderIcon]);
+    const tone = isLocalPathReferenceOverlay ? LOCAL_PATH_TONE : DEFAULT_TONE;
 
     return (
-      <div className={cx(styles.container, className)} style={style} {...getContainerProps()}>
+      <div {...sx([styles.container], className, style)} {...getContainerProps()}>
         {children}
         {showOverlay && (
-          <div className={styles.overlay}>
-            <div className={styles.overlayContent} style={{ minHeight: overlayMinHeight }}>
-              <Center className={styles.content} gap={8}>
-                <Flexbox horizontal className={styles.iconGroup}>
+          <div {...stylex.props(styles.overlay)}>
+            <div
+              {...sx(
+                [
+                  styles.overlayContent,
+                  isLocalPathReferenceOverlay && styles.overlayContentLocalPath,
+                ],
+                undefined,
+                { minHeight: overlayMinHeight },
+              )}
+            >
+              <Center className={stylex.props(styles.content).className} gap={8}>
+                <Flexbox horizontal className={stylex.props(styles.iconGroup).className}>
                   <Center
-                    className={styles.icon}
+                    className={stylex.props(styles.icon).className}
                     height={BLOCK_SIZE * 1.2}
                     width={BLOCK_SIZE}
                     style={{
-                      background: `color-mix(in srgb, ${cssVar.geekblue} 68%, white)`,
+                      background: tone.iconSoftBg,
+                      color: tone.iconColor,
                       transform: 'rotateZ(-20deg) translateX(8px)',
                     }}
                   >
-                    <Icon
-                      icon={overlayCopy.showFolderIcon ? FolderIcon : FileImage}
-                      size={ICON_SIZE}
-                    />
+                    <Icon icon={overlayIcons[0]} size={ICON_SIZE} />
                   </Center>
                   <Center
-                    className={styles.icon}
+                    className={stylex.props(styles.icon).className}
                     height={BLOCK_SIZE * 1.2}
                     width={BLOCK_SIZE}
                     style={{
+                      background: tone.iconStrongBg,
+                      color: tone.iconColor,
                       transform: 'translateY(-10px)',
                       zIndex: 1,
                     }}
                   >
-                    <Icon
-                      icon={overlayCopy.showFolderIcon ? FolderIcon : FileUpIcon}
-                      size={ICON_SIZE}
-                    />
+                    <Icon icon={overlayIcons[1]} size={ICON_SIZE} />
                   </Center>
                   <Center
-                    className={styles.icon}
+                    className={stylex.props(styles.icon).className}
                     height={BLOCK_SIZE * 1.2}
                     width={BLOCK_SIZE}
                     style={{
-                      background: `color-mix(in srgb, ${cssVar.geekblue} 68%, white)`,
+                      background: tone.iconSoftBg,
+                      color: tone.iconColor,
                       transform: 'rotateZ(20deg) translateX(-8px)',
                     }}
                   >
-                    <Icon
-                      icon={overlayCopy.showFolderIcon ? FolderIcon : FileText}
-                      size={ICON_SIZE}
-                    />
+                    <Icon icon={overlayIcons[2]} size={ICON_SIZE} />
                   </Center>
                 </Flexbox>
                 <Flexbox align={'center'} gap={4} style={{ textAlign: 'center' }}>
-                  <Flexbox className={styles.title}>{overlayCopy.title}</Flexbox>
-                  <Flexbox className={styles.desc}>{overlayCopy.desc}</Flexbox>
+                  <Flexbox className={stylex.props(styles.title).className}>
+                    {overlayCopy.title}
+                  </Flexbox>
+                  <Flexbox className={stylex.props(styles.desc).className}>
+                    {overlayCopy.desc}
+                  </Flexbox>
                 </Flexbox>
               </Center>
             </div>
@@ -224,7 +270,7 @@ const DragUploadZone = memo<DragUploadZoneProps>(
 
 DragUploadZone.displayName = 'DragUploadZone';
 
-export type { DroppedFolder } from './useLocalDragUpload';
+export type { DroppedLocalPath } from './useLocalDragUpload';
 export { usePasteFile } from './usePasteFile';
 export { useUploadFiles } from './useUploadFiles';
 export default DragUploadZone;

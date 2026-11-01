@@ -10,6 +10,104 @@ const bedrockChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      "Claude Haiku 5.5 is Anthropic's fastest and most cost-efficient model, built for high-volume, latency-sensitive work such as classification, extraction, routing, and subagent tasks, with adaptive thinking and adjustable effort.",
+    displayName: 'Claude Haiku 5.5',
+    enabled: true,
+    family: 'claude-haiku',
+    generation: 'claude-5.5',
+    id: 'global.anthropic.claude-haiku-5-5',
+    knowledgeCutoff: '2026-06',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.01, upTo: 100_000 },
+            { rate: 0.05, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.1, upTo: 100_000 },
+            { rate: 0.5, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.5, upTo: 100_000 },
+            { rate: 2.5, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput_cacheWrite',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.125, upTo: 100_000 },
+            { rate: 0.625, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2026-10-07',
+    // Thinking can still be disabled on Haiku 5.5 (at effort `high` or below), so the toggle stays.
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Claude Opus 5.5 is built for long-running agentic coding and knowledge work, outperforming Claude Fable 5.1 on Terminal-Bench 4.0 at a lower price than Claude Opus 5.',
+    displayName: 'Claude Opus 5.5',
+    enabled: true,
+    family: 'claude-opus',
+    generation: 'claude-5.5',
+    id: 'global.anthropic.claude-opus-5-5',
+    knowledgeCutoff: '2026-06',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 20, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-09-22',
+    // Thinking is always on for Opus 5.5, so `enableAdaptiveThinking` is omitted.
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['disableContextCaching', 'opus47Effort'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       "Claude Opus 4.7 is Anthropic's most capable generally available model for complex reasoning and agentic coding.",
     displayName: 'Claude Opus 4.7',
     enabled: true,

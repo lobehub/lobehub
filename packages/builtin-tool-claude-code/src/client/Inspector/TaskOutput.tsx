@@ -2,7 +2,7 @@
 
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,7 +16,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     min-width: 0;
-    max-width: 60%;
     margin-inline-start: 6px;
     padding-block: 1px;
     padding-inline: 8px;
@@ -50,8 +49,10 @@ export const TaskOutputInspector = memo<BuiltinInspectorProps<TaskOutputArgs>>(
     }
 
     return (
-      <div className={cx(inspectorTextStyles.root, isShiny && shinyTextStyles.shinyText)}>
-        <span>{taskId ? `${label}:` : label}</span>
+      <div className={inspectorTextStyles.root}>
+        <span className={cx(isShiny && shinyTextStyles.shinyText)}>
+          {taskId ? `${label}:` : label}
+        </span>
         {taskId && <span className={styles.chip}>{taskId}</span>}
       </div>
     );

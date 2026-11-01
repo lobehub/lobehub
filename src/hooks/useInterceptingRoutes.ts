@@ -15,10 +15,12 @@ export const useOpenChatSettings = (tab: ChatSettingsTabs = ChatSettingsTabs.Ope
 
   return useMemo(() => {
     if (isMobile)
-      return () => navigate(`/chat/settings?session=${activeAgentId}&showMobileWorkspace=true`);
+      return () => navigate(`/agent/${activeAgentId}/settings?showMobileWorkspace=true`);
 
     return () => {
-      useAgentStore.setState({ showAgentSetting: true });
+      void import('@/routes/(main)/agent/profile/features/AgentSettings').then((m) =>
+        m.openAgentSettingsModal(),
+      );
     };
   }, [activeAgentId, navigate, location.pathname, tab, isMobile]);
 };

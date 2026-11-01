@@ -15,12 +15,14 @@ const getFileContent = vi.fn();
 const deleteFile = vi.fn();
 
 vi.mock('@/server/modules/S3', () => ({
-  FileS3: vi.fn(() => ({
-    deleteFile,
-    getFileByteArray,
-    getFileContent,
-    uploadBuffer,
-  })),
+  FileS3: vi.fn(function () {
+    return {
+      deleteFile,
+      getFileByteArray,
+      getFileContent,
+      uploadBuffer,
+    };
+  }),
 }));
 
 // Imported after the mock so the constructor pulls in the stub.
@@ -67,14 +69,30 @@ describe('S3SnapshotStore.save', () => {
     expect(roundtripped).toEqual(snap);
   });
 
-  it('falls back to "unknown" when agentId or topicId is missing', async () => {
+  it('recovers agentId/topicId from the operationId when the snapshot omits them', async () => {
     const store = new S3SnapshotStore();
+    // agentId/topicId missing on the snapshot, but encoded in the operationId —
+    // the key must match what readers rebuild from the operationId, not "unknown".
     await store.save(sampleSnapshot({ agentId: undefined, topicId: undefined }));
 
     const [key] = uploadBuffer.mock.calls[0];
     expect(key).toBe(
-      'agent-traces/unknown/unknown/op_1777000000000_agt_abc_tpc_xyz_QwErTy.json.zst',
+      'agent-traces/agt_abc/tpc_xyz/op_1777000000000_agt_abc_tpc_xyz_QwErTy.json.zst',
     );
+  });
+
+  it('falls back to "unknown" only when the operationId carries no agt_/tpc_ segments', async () => {
+    const store = new S3SnapshotStore();
+    await store.save(
+      sampleSnapshot({
+        agentId: undefined,
+        operationId: 'op_legacy_no_segments',
+        topicId: undefined,
+      }),
+    );
+
+    const [key] = uploadBuffer.mock.calls[0];
+    expect(key).toBe('agent-traces/unknown/unknown/op_legacy_no_segments.json.zst');
   });
 });
 
@@ -92,6 +110,39 @@ describe('S3SnapshotStore.savePartial', () => {
 
     const roundtripped = JSON.parse((await decompressZstd(body)).toString('utf8'));
     expect(roundtripped).toEqual(partial);
+  });
+
+  it('returns the stored token and fences the next write on it', async () => {
+    uploadBuffer.mockResolvedValueOnce({ ETag: '"abc"' });
+    const store = new S3SnapshotStore();
+
+    const result = await store.savePartial('op_partial_2', {} as Partial<ExecutionSnapshot>);
+    expect(result).toEqual({ token: '"abc"' });
+
+    await store.savePartial('op_partial_2', {} as Partial<ExecutionSnapshot>, {
+      expected: '"abc"',
+    });
+    expect(uploadBuffer.mock.calls[1][4]).toMatchObject({ ifMatch: '"abc"' });
+  });
+
+  it('reports a refused conditional write instead of throwing', async () => {
+    uploadBuffer.mockRejectedValueOnce(
+      Object.assign(new Error('precondition failed'), { $metadata: { httpStatusCode: 412 } }),
+    );
+    const store = new S3SnapshotStore();
+
+    await expect(
+      store.savePartial('op_partial_3', {} as Partial<ExecutionSnapshot>, { expected: '"old"' }),
+    ).resolves.toEqual({ conflict: true });
+  });
+
+  it('still throws when the write fails for another reason', async () => {
+    uploadBuffer.mockRejectedValueOnce(new Error('network down'));
+    const store = new S3SnapshotStore();
+
+    await expect(
+      store.savePartial('op_partial_4', {} as Partial<ExecutionSnapshot>, { expected: '"old"' }),
+    ).rejects.toThrow('network down');
   });
 });
 

@@ -15,6 +15,7 @@ import { default as bailiancodingplan } from './bailianCodingPlan';
 import { default as bedrock } from './bedrock';
 import { default as bfl } from './bfl';
 import { default as cerebras } from './cerebras';
+import { default as chatgpt } from './chatGPT';
 import { default as cloudflare } from './cloudflare';
 import { default as cohere } from './cohere';
 import { default as cometapi } from './cometapi';
@@ -37,6 +38,8 @@ import { default as jina } from './jina';
 import { default as kimicodingplan } from './kimiCodingPlan';
 import { default as lmstudio } from './lmstudio';
 import { default as longcat } from './longcat';
+import { default as magpie } from './magpie';
+import { default as meta } from './meta';
 import { default as minimax } from './minimax';
 import { default as minimaxcodingplan } from './minimaxCodingPlan';
 import { default as mistral } from './mistral';
@@ -65,9 +68,12 @@ import { default as spark } from './spark';
 import { default as stepfun } from './stepfun';
 import { default as straico } from './straico';
 import { default as streamlake } from './streamlake';
+import { default as supergrok } from './superGrok';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
 import { default as togetherai } from './togetherai';
+import { typeSafeModels as typesafe } from './typesafe';
+import { default as unsloth } from './unsloth';
 import { default as upstage } from './upstage';
 import { default as v0 } from './v0';
 import { default as vercelaigateway } from './vercelaigateway';
@@ -123,6 +129,7 @@ const staticModelMap: ModelsMap = {
   bedrock,
   bfl,
   cerebras,
+  chatgpt,
   cloudflare,
   cohere,
   cometapi,
@@ -145,6 +152,8 @@ const staticModelMap: ModelsMap = {
   kimicodingplan,
   lmstudio,
   longcat,
+  magpie,
+  meta,
   minimax,
   minimaxcodingplan,
   mistral,
@@ -173,9 +182,12 @@ const staticModelMap: ModelsMap = {
   stepfun,
   straico,
   streamlake,
+  supergrok,
   taichu,
   tencentcloud,
   togetherai,
+  typesafe,
+  unsloth,
   upstage,
   v0,
   vercelaigateway,
@@ -237,6 +249,7 @@ export { default as bailiancodingplan } from './bailianCodingPlan';
 export { default as bedrock } from './bedrock';
 export { default as bfl } from './bfl';
 export { default as cerebras } from './cerebras';
+export { default as chatgpt } from './chatGPT';
 export { default as cloudflare } from './cloudflare';
 export { default as cohere } from './cohere';
 export { default as cometapi } from './cometapi';
@@ -259,6 +272,8 @@ export { default as jina } from './jina';
 export { default as kimicodingplan } from './kimiCodingPlan';
 export { default as lmstudio } from './lmstudio';
 export { default as longcat } from './longcat';
+export { default as magpie } from './magpie';
+export { default as meta } from './meta';
 export { default as minimax } from './minimax';
 export { default as minimaxcodingplan } from './minimaxCodingPlan';
 export { default as mistral } from './mistral';
@@ -287,9 +302,12 @@ export { default as spark } from './spark';
 export { default as stepfun } from './stepfun';
 export { default as straico } from './straico';
 export { default as streamlake } from './streamlake';
+export { default as supergrok } from './superGrok';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
 export { default as togetherai } from './togetherai';
+export { typeSafeModels as typesafe } from './typesafe';
+export { default as unsloth } from './unsloth';
 export { default as upstage } from './upstage';
 export { default as v0 } from './v0';
 export { default as vercelaigateway } from './vercelaigateway';

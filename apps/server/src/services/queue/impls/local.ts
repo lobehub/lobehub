@@ -27,6 +27,7 @@ export type LocalExecutionCallback = (
  */
 export class LocalQueueServiceImpl implements QueueServiceImpl {
   private executionCallback: LocalExecutionCallback | null = null;
+  private deduplicatedExecutions: Map<string, string> = new Map();
   private pendingExecutions: Set<string> = new Set();
 
   /**
@@ -38,9 +39,15 @@ export class LocalQueueServiceImpl implements QueueServiceImpl {
   }
 
   async scheduleMessage(message: QueueMessage): Promise<string> {
-    const { operationId, stepIndex, context, payload, delay = 50 } = message;
+    const { operationId, stepIndex, context, payload, delay = 50, deduplicationId } = message;
+
+    if (deduplicationId) {
+      const existingTaskId = this.deduplicatedExecutions.get(deduplicationId);
+      if (existingTaskId) return existingTaskId;
+    }
 
     const taskId = `local-${operationId}-${stepIndex}-${Date.now()}`;
+    if (deduplicationId) this.deduplicatedExecutions.set(deduplicationId, taskId);
 
     log(
       'Local execution scheduled for step %d of operation %s (delay: %dms)',

@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
-import type { UserMemoryIdentity } from './identity';
+import type { StrictOnly } from '../zodStrict';
 import type {
   UserMemoryActivity,
   UserMemoryContext,
   UserMemoryExperience,
+  UserMemoryIdentity,
   UserMemoryPreference,
-} from './layers';
+} from './rows';
 import { LayersEnum } from './shared';
 
 const stringArrayFieldSchema = z.preprocess(
@@ -14,9 +15,8 @@ const stringArrayFieldSchema = z.preprocess(
   z.array(z.string().trim().min(1)),
 );
 
-const enumArrayFieldSchema = <T extends z.EnumLike>(
-  schema: z.ZodNativeEnum<T> | z.ZodEnum<[string, ...string[]]>,
-) => z.preprocess((value) => (typeof value === 'string' ? [value] : value), z.array(schema));
+const enumArrayFieldSchema = <TSchema extends z.ZodType>(schema: TSchema) =>
+  z.preprocess((value) => (typeof value === 'string' ? [value] : value), z.array(schema));
 
 const searchMemoryTimeFieldSchema = z.enum([
   'capturedAt',
@@ -97,7 +97,7 @@ const searchMemoryYearIntentSchema = z.object({
 
 const searchMemoryLegacyRelativeDayAnchorSchema = z.enum(['today', 'yesterday']);
 
-const searchMemoryTimeIntentSchema: z.ZodType<SearchMemoryTimeIntent> = z.lazy(() =>
+const searchMemoryTimeIntentSchema: z.ZodType<StrictOnly<SearchMemoryTimeIntent>> = z.lazy(() =>
   z.union([
     z.object({
       selector: searchMemoryPresetTimeSelectorSchema,

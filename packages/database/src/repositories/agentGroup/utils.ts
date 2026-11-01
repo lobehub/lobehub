@@ -1,0 +1,32 @@
+import type { AgentItem, NewAgent } from '../../schemas';
+
+export const buildCopiedAgent = (
+  source: AgentItem | undefined,
+  targetWorkspaceId: string | null,
+  targetUserId: string,
+  fallbackTitle: string,
+  targetVisibility?: 'private' | 'public',
+): NewAgent => ({
+  agencyConfig: source?.agencyConfig,
+  avatar: source?.avatar,
+  backgroundColor: source?.backgroundColor,
+  chatConfig: source?.chatConfig,
+  description: source?.description,
+  editorData: source?.editorData,
+  fewShots: source?.fewShots,
+  model: source?.model,
+  openingMessage: source?.openingMessage,
+  openingQuestions: source?.openingQuestions,
+  params: source?.params,
+  pinned: source?.pinned,
+  plugins: source?.plugins,
+  provider: source?.provider,
+  systemRole: source?.systemRole,
+  tags: source?.tags,
+  title: source?.title || fallbackTitle,
+  tts: source?.tts,
+  userId: targetUserId,
+  virtual: source?.virtual ?? true,
+  ...(targetWorkspaceId && targetVisibility ? { visibility: targetVisibility } : {}),
+  workspaceId: targetWorkspaceId,
+});

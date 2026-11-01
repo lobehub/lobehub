@@ -1,41 +1,22 @@
 import type { IPaginationQuery } from '../types';
 
 const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 100;
 
 /**
  * Process pagination query parameters
  * @param request Query parameter object
- * @returns { limit, offset } if pagination parameters are provided; otherwise an empty object
+ * @returns a bounded limit/offset pair; omitted pagination defaults to page 1 / 20 items
  */
 export function processPaginationConditions(request: Record<string, any> & IPaginationQuery): {
   limit?: number;
   offset?: number;
 } {
-  const { page, pageSize } = request;
-
-  // If neither page nor pageSize is provided, skip pagination (return all data)
-  if (page === undefined && pageSize === undefined) {
-    return {};
-  }
-
-  // If only page is provided, default pageSize to 20
-  if (page !== undefined && pageSize === undefined) {
-    return {
-      limit: DEFAULT_PAGE_SIZE,
-      offset: (page - 1) * DEFAULT_PAGE_SIZE,
-    };
-  }
-
-  // If only pageSize is provided, default page to 1
-  if (page === undefined && pageSize !== undefined) {
-    return {
-      limit: pageSize,
-      offset: 0,
-    };
-  }
+  const page = Math.max(1, request.page ?? 1);
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, request.pageSize ?? DEFAULT_PAGE_SIZE));
 
   return {
     limit: pageSize,
-    offset: (page! - 1) * pageSize!,
+    offset: (page - 1) * pageSize,
   };
 }

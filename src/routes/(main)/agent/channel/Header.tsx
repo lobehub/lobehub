@@ -1,0 +1,347 @@
+'use client';
+
+import { exportJSONFile } from '@lobechat/utils/client';
+import type { DropdownItem } from '@lobehub/ui';
+import {
+  ActionIcon,
+  confirmModal,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Switch,
+  Tag,
+  toast,
+} from '@lobehub/ui';
+import {
+  BookOpen,
+  Download,
+  ExternalLink,
+  MoreHorizontal,
+  RefreshCw,
+  Trash2,
+  Upload,
+} from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
+
+import SkeletonBar from '@/components/Skeleton/Bar';
+import AgentBreadcrumb from '@/features/AgentBreadcrumb';
+import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
+import NavHeader from '@/features/NavHeader';
+import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
+import { useAgentStore } from '@/store/agent';
+import type { BotProviderItem } from '@/store/agent/slices/bot/action';
+
+import { resolveChannelHeaderView } from './headerView';
+import { isImportableChannel, planChannelImport } from './importPlan';
+
+interface HeaderProps {
+  agentId: string;
+  currentConfig?: BotProviderItem;
+  disabled?: boolean;
+  platformDef?: SerializedPlatformDefinition & { comingSoon?: boolean };
+  /** The `:platform` route param; set on a platform detail even before `platformDef` loads. */
+  platformId?: string;
+  /** Platform definitions are still loading. */
+  platformsLoading?: boolean;
+  providers?: BotProviderItem[];
+}
+
+const Header = memo<HeaderProps>(
+  ({
+    agentId,
+    currentConfig,
+    disabled,
+    platformDef,
+    platformId,
+    platformsLoading = false,
+    providers,
+  }) => {
+    const { t } = useTranslation(['agent', 'chat', 'common']);
+    const view = resolveChannelHeaderView(platformId, platformDef, platformsLoading);
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [pendingEnabled, setPendingEnabled] = useState<boolean>();
+    const [refreshingStatus, setRefreshingStatus] = useState(false);
+    const [toggleLoading, setToggleLoading] = useState(false);
+    const [
+      connectBot,
+      createBotProvider,
+      deleteAllBotProviders,
+      exportBotProviders,
+      refreshBotRuntimeStatus,
+      updateBotProvider,
+    ] = useAgentStore((s) => [
+      s.connectBot,
+      s.createBotProvider,
+      s.deleteAllBotProviders,
+      s.exportBotProviders,
+      s.refreshBotRuntimeStatus,
+      s.updateBotProvider,
+    ]);
+
+    const paidFeatureBlocked =
+      platformDef?.access?.requiredPlan === 'paid' && platformDef.access.allowed === false;
+    const writeDisabled = disabled || paidFeatureBlocked;
+    const toggleDisabled = disabled || (paidFeatureBlocked && !currentConfig?.enabled);
+    const effectiveEnabled = pendingEnabled ?? currentConfig?.enabled;
+    const hasProviders = !!providers?.length;
+    const setupGuideUrl = platformDef?.documentation?.setupGuideUrl;
+
+    useEffect(() => {
+      if (!currentConfig || pendingEnabled === currentConfig.enabled) setPendingEnabled(undefined);
+    }, [currentConfig, pendingEnabled]);
+
+    const handleExport = useCallback(async () => {
+      if (!providers?.length) return;
+      try {
+        // The cached providers carry masked credentials, so the file has to be
+        // built from a fresh authorized read or it would export placeholders.
+        const exportData = await exportBotProviders(agentId);
+        exportJSONFile(exportData, `lobehub-channels-${agentId}.json`);
+        // The file holds real tokens — say so rather than let it look inert.
+        toast.warning(t('channel.exportContainsCredentials'));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      }
+    }, [agentId, exportBotProviders, providers, t]);
+
+    const handleImport = useCallback(() => {
+      if (disabled) return;
+      fileInputRef.current?.click();
+    }, [disabled]);
+
+    const handleFileChange = useCallback(
+      async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (disabled || !file) {
+          event.target.value = '';
+          return;
+        }
+
+        try {
+          const data = JSON.parse(await file.text());
+          if (!Array.isArray(data) || !data.every(isImportableChannel)) {
+            toast.error(t('channel.importInvalidFormat'));
+            return;
+          }
+
+          for (const step of planChannelImport(data)) {
+            await createBotProvider({
+              agentId,
+              applicationId: step.applicationId,
+              credentials: step.credentials,
+              enabled: step.enabled,
+              platform: step.platform,
+              settings: step.settings,
+            });
+            if (step.connect) {
+              await connectBot({
+                agentId,
+                applicationId: step.applicationId,
+                platform: step.platform,
+              });
+            }
+          }
+
+          toast.success(t('channel.importSuccess'));
+        } catch {
+          toast.error(t('channel.importFailed'));
+        } finally {
+          event.target.value = '';
+        }
+      },
+      [agentId, connectBot, createBotProvider, disabled, t],
+    );
+
+    const handleDeleteAll = useCallback(() => {
+      if (disabled || !providers?.length) return;
+      confirmModal({
+        content: t('channel.deleteAllConfirmDesc'),
+        okButtonProps: { danger: true },
+        okText: t('channel.deleteAllChannels'),
+        onOk: async () => {
+          try {
+            await deleteAllBotProviders(agentId);
+            toast.success(t('channel.deleteAllSuccess'));
+          } catch {
+            toast.error(t('channel.deleteAllFailed'));
+          }
+        },
+        title: t('channel.deleteAllChannels'),
+      });
+    }, [agentId, deleteAllBotProviders, disabled, providers, t]);
+
+    const handleRefreshStatus = useCallback(async () => {
+      if (writeDisabled || !currentConfig?.enabled) return;
+      setRefreshingStatus(true);
+      try {
+        await refreshBotRuntimeStatus({
+          agentId,
+          applicationId: currentConfig.applicationId,
+          platform: currentConfig.platform,
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error));
+      } finally {
+        setRefreshingStatus(false);
+      }
+    }, [agentId, currentConfig, refreshBotRuntimeStatus, writeDisabled]);
+
+    const handleToggleEnable = useCallback(
+      async (enabled: boolean) => {
+        if ((enabled ? writeDisabled : disabled) || !currentConfig) return;
+        try {
+          setPendingEnabled(enabled);
+          setToggleLoading(true);
+          await updateBotProvider(currentConfig.id, agentId, { enabled });
+          if (enabled) {
+            await connectBot({
+              agentId,
+              applicationId: currentConfig.applicationId,
+              platform: currentConfig.platform,
+            });
+          }
+        } catch {
+          setPendingEnabled(undefined);
+          toast.error(t('channel.updateFailed'));
+        } finally {
+          setToggleLoading(false);
+        }
+      },
+      [agentId, connectBot, currentConfig, disabled, t, updateBotProvider, writeDisabled],
+    );
+
+    const menuItems: DropdownItem[] = [];
+
+    if (platformDef?.documentation?.portalUrl) {
+      menuItems.push({
+        icon: <Icon icon={ExternalLink} />,
+        key: 'open-platform',
+        label: t('channel.openPlatform'),
+        onClick: () =>
+          window.open(platformDef.documentation?.portalUrl, '_blank', 'noopener,noreferrer'),
+      });
+    }
+    if (menuItems.length > 0) menuItems.push({ type: 'divider' });
+    menuItems.push(
+      {
+        disabled: !hasProviders,
+        icon: <Icon icon={Download} />,
+        key: 'export',
+        label: t('channel.exportConfig'),
+        onClick: handleExport,
+      },
+      {
+        disabled,
+        icon: <Icon icon={Upload} />,
+        key: 'import',
+        label: t('channel.importConfig'),
+        onClick: handleImport,
+      },
+      { type: 'divider' },
+      {
+        danger: true,
+        disabled: disabled || !hasProviders,
+        icon: <Icon icon={Trash2} />,
+        key: 'delete-all',
+        label: t('channel.deleteAllChannels'),
+        onClick: handleDeleteAll,
+      },
+    );
+
+    return (
+      <>
+        <input
+          accept=".json"
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          type="file"
+          onChange={handleFileChange}
+        />
+        <NavHeader
+          style={{ position: 'relative' }}
+          right={
+            <Flexbox horizontal align="center" gap={8}>
+              {platformDef?.comingSoon && <Tag size={'small'}>{t('channel.comingSoon')}</Tag>}
+              {platformDef?.access?.requiredPlan === 'paid' && (
+                <Tag color="gold" size={'small'}>
+                  {platformDef.access.rolloutMode === 'notice'
+                    ? t('channel.paidFeature.noticeBadge')
+                    : t('channel.paidFeature.badge')}
+                </Tag>
+              )}
+              {currentConfig?.enabled && (
+                <ActionIcon
+                  disabled={writeDisabled}
+                  icon={RefreshCw}
+                  loading={refreshingStatus}
+                  size={'small'}
+                  title={t('channel.refreshStatus')}
+                  onClick={handleRefreshStatus}
+                />
+              )}
+              {currentConfig && (
+                <Switch
+                  checked={effectiveEnabled}
+                  disabled={toggleDisabled}
+                  loading={toggleLoading}
+                  onChange={handleToggleEnable}
+                />
+              )}
+              {setupGuideUrl && (
+                <ActionIcon
+                  aria-label={t('channel.documentation')}
+                  icon={BookOpen}
+                  title={t('channel.documentation')}
+                  onClick={() => window.open(setupGuideUrl, '_blank', 'noopener,noreferrer')}
+                />
+              )}
+              <DropdownMenu items={menuItems} placement={'bottomRight'}>
+                <ActionIcon icon={MoreHorizontal} title={t('more', { ns: 'common' })} />
+              </DropdownMenu>
+            </Flexbox>
+          }
+          // `relative` anchors the absolutely-centered switcher below.
+          left={
+            // On the platform list the Segmented already names the section, so
+            // repeating it here would print the same word twice. A platform
+            // detail still needs it: the active segment is inert, so this link
+            // is the only way back to the list.
+            <AgentBreadcrumb
+              agentId={agentId}
+              extraItems={
+                view.detail
+                  ? [view.platformName ?? <SkeletonBar height={14} width={56} />]
+                  : undefined
+              }
+              title={
+                view.detail ? (
+                  <Link relative="path" to="..">
+                    {t('tab.integration', { ns: 'chat' })}
+                  </Link>
+                ) : undefined
+              }
+            />
+          }
+          styles={{
+            // Center on the header midpoint (equal gaps), not the leftover track.
+            center: AGENT_PROFILE_TABS_CENTER_STYLE,
+            left: { minWidth: 0, paddingInlineStart: 8 },
+          }}
+        >
+          {/* The switcher belongs to the section's index (the platform list).
+              On a platform detail (`/channel/:platform`) it is one level too
+              deep, so drop it there and let the breadcrumb's Channels link be
+              the way back. */}
+          {!view.detail && <AgentProfileTabs active={'channel'} agentId={agentId} />}
+        </NavHeader>
+      </>
+    );
+  },
+);
+
+Header.displayName = 'AgentChannelHeader';
+
+export default Header;

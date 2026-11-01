@@ -1,13 +1,39 @@
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
+import { AuvManifest } from '@lobechat/builtin-tool-auv';
+import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
+import type * as ConstModule from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createAgentToolsEngine, createToolsEngine, getEnabledTools } from './index';
+
+const desktopEnv = vi.hoisted(() => ({ enabled: false }));
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof ConstModule>()),
+  get isDesktop() {
+    return desktopEnv.enabled;
+  },
+}));
+afterEach(() => {
+  desktopEnv.enabled = false;
+});
 
 // Mock the store and helper dependencies
 vi.mock('@/store/tool', () => ({
   getToolStoreState: () => ({
     connectors: [],
     builtinTools: [
+      { identifier: AuvManifest.identifier, manifest: AuvManifest, type: 'builtin' as const },
+      {
+        identifier: DashboardManifest.identifier,
+        manifest: DashboardManifest,
+        type: 'builtin' as const,
+      },
+      {
+        identifier: AttachmentsManifest.identifier,
+        manifest: AttachmentsManifest,
+        type: 'builtin' as const,
+      },
       {
         identifier: 'search',
         manifest: {
@@ -66,7 +92,7 @@ vi.mock('@/store/tool', () => ({
           api: [
             {
               description: 'Analyze visual media',
-              name: 'analyzeVisualMedia',
+              name: 'analyzeMedia',
               parameters: {
                 properties: {
                   question: { type: 'string' },
@@ -93,6 +119,56 @@ vi.mock('@/store/tool', () => ({
         } as unknown as ToolManifest,
         type: 'builtin' as const,
       },
+      {
+        identifier: 'lobe-image-generation',
+        manifest: {
+          api: [
+            {
+              description: 'Generate image',
+              name: 'generateImage',
+              parameters: {
+                properties: {
+                  prompt: { type: 'string' },
+                },
+                required: ['prompt'],
+                type: 'object',
+              },
+            },
+          ],
+          identifier: 'lobe-image-generation',
+          meta: {
+            title: 'Image Generation',
+            avatar: 'I',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
+      {
+        identifier: 'lobe-video-generation',
+        manifest: {
+          api: [
+            {
+              description: 'Generate video',
+              name: 'generateVideo',
+              parameters: {
+                properties: {
+                  prompt: { type: 'string' },
+                },
+                required: ['prompt'],
+                type: 'object',
+              },
+            },
+          ],
+          identifier: 'lobe-video-generation',
+          meta: {
+            avatar: 'V',
+            title: 'Video Generation',
+          },
+          type: 'builtin',
+        } as unknown as ToolManifest,
+        type: 'builtin' as const,
+      },
     ],
   }),
 }));
@@ -113,11 +189,26 @@ vi.mock('@/store/tool/selectors', () => ({
   },
 }));
 
+let mockServerConfig: { toolNameMaxLength?: number } = {};
+let mockFeatureFlags: { enableDashboard?: boolean } = {};
+
+vi.mock('@/store/serverConfig', () => ({
+  getServerConfigStoreState: () => ({
+    featureFlags: mockFeatureFlags,
+    serverConfig: mockServerConfig,
+  }),
+}));
+
+let mockIsCanUseFC = true;
+
 vi.mock('../isCanUseFC', () => ({
-  isCanUseFC: () => true,
+  isCanUseFC: () => mockIsCanUseFC,
 }));
 
 let mockCurrentAgentPlugins: string[] = [];
+let mockCurrentAgentDisabledPlugins: string[] = [];
+let mockCurrentChatConfig: { enableAgentMode?: boolean; memory?: { enabled?: boolean } } = {};
+let mockImageOutputSupport = false;
 
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: () => ({}),
@@ -125,15 +216,26 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
+    currentAgentDisabledPlugins: () => mockCurrentAgentDisabledPlugins,
     currentAgentPlugins: () => mockCurrentAgentPlugins,
     hasEnabledKnowledgeBases: () => false,
   },
   agentChatConfigSelectors: {
-    currentChatConfig: () => ({}),
-    isCloudSandboxEnabled: () => false,
-    isLocalSystemEnabled: () => false,
+    currentChatConfig: () => mockCurrentChatConfig,
     isMemoryToolEnabled: () => false,
   },
+  chatConfigByIdSelectors: {
+    // A local target only resolves on the desktop; elsewhere the run has no
+    // execution environment.
+    getExecutionTargetById: () => () => (desktopEnv.enabled ? 'local' : 'none'),
+  },
+}));
+
+vi.mock('@/store/aiInfra', () => ({
+  aiModelSelectors: {
+    isModelSupportImageOutput: () => () => mockImageOutputSupport,
+  },
+  getAiInfraStoreState: () => ({}),
 }));
 
 vi.mock('@/store/user', () => ({
@@ -162,6 +264,80 @@ describe('toolEngineering', () => {
     mockInstalledPluginManifestList = () => [];
     mockUseApplicationBuiltinSearchTool = true;
     mockCurrentAgentPlugins = [];
+    mockCurrentAgentDisabledPlugins = [];
+    mockIsCanUseFC = true;
+    mockCurrentChatConfig = {};
+    mockImageOutputSupport = false;
+    mockServerConfig = {};
+    mockFeatureFlags = {};
+  });
+
+  describe('feature-flagged tools', () => {
+    const generate = () =>
+      createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' }).generateToolsDetailed({
+        toolIds: [DashboardManifest.identifier],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+    it('never offers builtin-dashboard while the dashboard flag is off, even when pinned', () => {
+      mockCurrentAgentPlugins = [DashboardManifest.identifier];
+      mockFeatureFlags = { enableDashboard: false };
+      expect(generate().enabledToolIds).not.toContain(DashboardManifest.identifier);
+    });
+
+    it('offers a pinned builtin-dashboard once the flag is on', () => {
+      mockCurrentAgentPlugins = [DashboardManifest.identifier];
+      mockFeatureFlags = { enableDashboard: true };
+      expect(generate().enabledToolIds).toContain(DashboardManifest.identifier);
+    });
+  });
+
+  // `TOOL_NAME_MAX_LENGTH` is a server env, but this path generates tool names in
+  // the browser — the value has to arrive via the server config for `0` to
+  // actually turn the MD5 compression off here.
+  describe('tool name compression', () => {
+    const longNamedPlugin = {
+      api: [
+        {
+          description: 'Search documents',
+          name: 'searchDocumentsInWorkspace',
+          parameters: { properties: {}, required: [], type: 'object' },
+        },
+      ],
+      identifier: 'my-notion-mcp-connector-with-a-long-identifier',
+      meta: { avatar: '📓', title: 'Notion' },
+      type: 'default',
+    } as unknown as ToolManifest;
+
+    const generateLongToolName = () => {
+      mockInstalledPluginManifestList = () => [longNamedPlugin];
+      const toolsEngine = createToolsEngine();
+
+      return toolsEngine.generateTools({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [longNamedPlugin.identifier],
+      })![0].function.name;
+    };
+
+    it('should compress names past the default 64 chars', () => {
+      expect(generateLongToolName()).toContain('MD5HASH_');
+    });
+
+    it('should keep the full name when the server config sets 0', () => {
+      mockServerConfig = { toolNameMaxLength: 0 };
+
+      expect(generateLongToolName()).toBe(
+        'my-notion-mcp-connector-with-a-long-identifier____searchDocumentsInWorkspace',
+      );
+    });
+
+    it('should honour a custom threshold from the server config', () => {
+      mockServerConfig = { toolNameMaxLength: 200 };
+
+      expect(generateLongToolName()).not.toContain('MD5HASH_');
+    });
   });
 
   describe('createToolsEngine', () => {
@@ -220,6 +396,117 @@ describe('toolEngineering', () => {
   });
 
   describe('createChatToolsEngine', () => {
+    it('should not auto-enable image generation in chat mode', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockImageOutputSupport = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: [],
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-image-generation');
+    });
+
+    it('should enable image generation in chat mode when the tool is pinned', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockCurrentAgentPlugins = ['lobe-image-generation'];
+      mockImageOutputSupport = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: ['lobe-image-generation'],
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      expect(result.enabledToolIds).toContain('lobe-image-generation');
+    });
+
+    it('should not enable image generation in chat mode when model has native image output', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockCurrentAgentPlugins = ['lobe-image-generation'];
+      mockImageOutputSupport = true;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'gpt-image-chat',
+        provider: 'openai',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: ['lobe-image-generation'],
+        model: 'gpt-image-chat',
+        provider: 'openai',
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-image-generation');
+    });
+
+    it('should not enable image generation in chat mode when model cannot call tools', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockCurrentAgentPlugins = ['lobe-image-generation'];
+      mockIsCanUseFC = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'plain-text-model',
+        provider: 'test',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: ['lobe-image-generation'],
+        model: 'plain-text-model',
+        provider: 'test',
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-image-generation');
+    });
+
+    it('should enable video generation in chat mode when the tool is pinned', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockCurrentAgentPlugins = ['lobe-video-generation'];
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: ['lobe-video-generation'],
+        model: 'claude-sonnet',
+        provider: 'anthropic',
+      });
+
+      expect(result.enabledToolIds).toContain('lobe-video-generation');
+    });
+
+    it('should not enable video generation in chat mode when model cannot call tools', () => {
+      mockCurrentChatConfig = { enableAgentMode: false };
+      mockIsCanUseFC = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'plain-text-model',
+        provider: 'test',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        toolIds: [],
+        model: 'plain-text-model',
+        provider: 'test',
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-video-generation');
+    });
+
     it('should include web browsing tool as default when no tools are provided', () => {
       const toolsEngine = createAgentToolsEngine({
         model: 'gpt-4',
@@ -268,6 +555,23 @@ describe('toolEngineering', () => {
       expect(result.enabledToolIds).toContain('lobe-agent');
     });
 
+    it.each([true, false])('enables lobe-attachments only with oversized files (%s)', (flag) => {
+      const toolsEngine = createAgentToolsEngine(
+        { model: 'deepseek-chat', provider: 'deepseek' },
+        undefined,
+        undefined,
+        { hasOversizedFiles: flag },
+      );
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds.includes('lobe-attachments')).toBe(flag);
+    });
+
     it('should enable lobe-agent by default since it is always-on', () => {
       const toolsEngine = createAgentToolsEngine({
         model: 'deepseek-chat',
@@ -281,6 +585,83 @@ describe('toolEngineering', () => {
       });
 
       expect(result.enabledToolIds).toContain('lobe-agent');
+    });
+
+    it('should honor an explicit disabled policy for an always-on builtin tool', () => {
+      mockCurrentAgentDisabledPlugins = ['lobe-agent'];
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-agent');
+    });
+
+    it('should keep agent-mode defaults and mark every tool incompatible when the model cannot call functions', () => {
+      mockIsCanUseFC = false;
+
+      const toolsEngine = createAgentToolsEngine({
+        model: 'gemini-3.1-flash-lite-image',
+        provider: 'lobehub',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'gemini-3.1-flash-lite-image',
+        provider: 'lobehub',
+        toolIds: [],
+      });
+
+      // The stored mode is not demoted to chat mode for a non-FC model (same
+      // rule as the server runtime); the engine reports the incompatibility
+      // per tool instead.
+      expect(result.enabledToolIds).toEqual([]);
+      expect(result.filteredTools).toContainEqual({
+        id: 'lobe-agent',
+        reason: 'incompatible',
+      });
+      expect(result.filteredTools).toContainEqual({
+        id: 'lobe-web-browsing',
+        reason: 'incompatible',
+      });
+    });
+
+    it('should not enable image generation by default in agent mode', () => {
+      const toolsEngine = createAgentToolsEngine({
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds).not.toContain('lobe-image-generation');
+    });
+
+    it('should allow image generation explicit activation in agent mode', () => {
+      const toolsEngine = createAgentToolsEngine({
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const result = toolsEngine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+        toolIds: ['lobe-image-generation'],
+      });
+
+      expect(result.enabledToolIds).toContain('lobe-image-generation');
     });
   });
 
@@ -354,6 +735,33 @@ describe('toolEngineering', () => {
       // Both should be enabled despite their normal filters
       expect(result.enabledToolIds).toContain('stdio-mcp-plugin');
       expect(result.enabledToolIds).toContain('lobe-web-browsing');
+    });
+
+    it('does NOT let isExplicitActivation enable a plugin the agent has disabled', () => {
+      mockInstalledPluginManifestList = () => [
+        {
+          api: [{ description: 'x', name: 'x', parameters: {} }],
+          identifier: 'disabled-plugin',
+          meta: { title: 'Disabled Plugin' },
+          type: 'default',
+        } as unknown as ToolManifest,
+      ];
+      mockCurrentAgentDisabledPlugins = ['disabled-plugin'];
+
+      const toolsEngine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+      const result = toolsEngine.generateToolsDetailed({
+        context: { isExplicitActivation: true },
+        toolIds: ['disabled-plugin'],
+        model: 'gpt-4',
+        provider: 'openai',
+        skipDefaultTools: true,
+      });
+
+      // Unlike a merely rule-disabled tool, a disabled plugin's manifest is
+      // absent from the pool entirely, so explicit activation has nothing to
+      // resolve — it can't bypass a gate that was never reached.
+      expect(result.enabledToolIds).not.toContain('disabled-plugin');
+      expect(result.enabledToolIds).toEqual([]);
     });
   });
 
@@ -446,5 +854,37 @@ describe('toolEngineering', () => {
         expect(result).toEqual([]);
       });
     });
+  });
+});
+
+// https://github.com/lobehub/lobehub/pull/19051
+describe('Computer Use activation', () => {
+  it('loads the native API only after activation in standalone Electron', () => {
+    desktopEnv.enabled = true;
+    const engine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+    expect(
+      engine.generateToolsDetailed({ model: 'gpt-4', provider: 'openai', toolIds: [] })
+        .enabledToolIds,
+    ).not.toContain(AuvManifest.identifier);
+    expect(
+      engine.generateToolsDetailed({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [AuvManifest.identifier],
+        context: { isExplicitActivation: true },
+      }).enabledToolIds,
+    ).toContain(AuvManifest.identifier);
+  });
+  it('does not let explicit activation bypass the Web platform restriction', () => {
+    desktopEnv.enabled = false;
+    const engine = createAgentToolsEngine({ model: 'gpt-4', provider: 'openai' });
+    expect(
+      engine.generateToolsDetailed({
+        model: 'gpt-4',
+        provider: 'openai',
+        toolIds: [AuvManifest.identifier],
+        context: { isExplicitActivation: true },
+      }).enabledToolIds,
+    ).not.toContain(AuvManifest.identifier);
   });
 });

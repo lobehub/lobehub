@@ -7,8 +7,14 @@ export const ChatErrorType = {
   FreePlanLimit: 'FreePlanLimit', // Free plan usage limit
   SubscriptionPlanLimit: 'SubscriptionPlanLimit', // Subscription user limit exceeded
   InsufficientBudgetForModel: 'InsufficientBudgetForModel', // Has credits but not enough for estimated model cost
-  SubscriptionKeyMismatch: 'SubscriptionKeyMismatch', // Subscription key mismatch
-
+  WorkspaceFrozenByAdmin: 'WorkspaceFrozenByAdmin', // Workspace manually frozen by admin (reason is operator-written, safe to surface)
+  WorkspaceFrozenByRiskControl: 'WorkspaceFrozenByRiskControl', // Workspace auto-frozen by risk control (reason is engineer debug text, hide from user)
+  WorkspaceSubscriptionInactive: 'WorkspaceSubscriptionInactive', // Workspace's paid subscription has lapsed — view-only for non-primary members; spend blocked until renewed
+  ShareTurnLimitExceeded: 'ShareTurnLimitExceeded', // Shared-agent topic hit shareConfig.maxTurnsPerTopic — visitor can start a new topic
+  ShareTopicLimitExceeded: 'ShareTopicLimitExceeded', // Visitor hit shareConfig.maxTopicsPerVisitor on this shared agent
+  ShareSpendLimitExceeded: 'ShareSpendLimitExceeded', // Shared agent reached shareConfig.monthlySpendLimit for the current month — recovers on the next reset
+  ShareHeterogeneousAgentUnsupported: 'ShareHeterogeneousAgentUnsupported', // This agent configuration is not supported for shared visitors
+  AgentShareProviderNotSupported: 'AgentShareProviderNotSupported', // This shared agent uses a provider that is not supported for shared visitors
   SupervisorDecisionFailed: 'SupervisorDecisionFailed', // Supervisor decision failed
 
   InvalidUserKey: 'InvalidUserKey', // is not valid User key
@@ -23,6 +29,18 @@ export const ChatErrorType = {
   UnknownChatFetchError: 'UnknownChatFetchError',
   SystemTimeNotMatchError: 'SystemTimeNotMatchError',
   ServerAgentRuntimeError: 'ServerAgentRuntimeError',
+  DeviceGatewayNotConfigured: 'DeviceGatewayNotConfigured', // Heterogeneous agent has no reachable run device / gateway
+  DeviceResponseTimeout: 'DeviceResponseTimeout', // Run reached the device, which did not answer in time
+
+  // ******* Desktop Backend-Proxy Network Errors ******* //
+  // Emitted by the Electron backend proxy when the upstream fetch fails at the
+  // network level — usually the user's own network/proxy/VPN, not a server bug.
+  RemoteServerOffline: 'RemoteServerOffline',
+  RemoteServerTimeout: 'RemoteServerTimeout',
+  RemoteServerDNSFailed: 'RemoteServerDNSFailed',
+  RemoteServerConnectionRefused: 'RemoteServerConnectionRefused',
+  RemoteServerCertInvalid: 'RemoteServerCertInvalid',
+  RemoteServerUnreachable: 'RemoteServerUnreachable',
 
   // ******* Client Errors ******* //
   BadRequest: 400,
@@ -40,6 +58,24 @@ export const ChatErrorType = {
 } as const;
 
 export type ErrorType = (typeof ChatErrorType)[keyof typeof ChatErrorType];
+
+const remoteServerNetworkErrorTypes = [
+  ChatErrorType.RemoteServerOffline,
+  ChatErrorType.RemoteServerTimeout,
+  ChatErrorType.RemoteServerDNSFailed,
+  ChatErrorType.RemoteServerConnectionRefused,
+  ChatErrorType.RemoteServerCertInvalid,
+  ChatErrorType.RemoteServerUnreachable,
+] as const;
+
+export type RemoteServerNetworkErrorType = (typeof remoteServerNetworkErrorTypes)[number];
+
+const remoteServerNetworkErrorTypeSet = new Set<string>(remoteServerNetworkErrorTypes);
+
+export const isRemoteServerNetworkError = (
+  errorType: unknown,
+): errorType is RemoteServerNetworkErrorType =>
+  typeof errorType === 'string' && remoteServerNetworkErrorTypeSet.has(errorType);
 
 export interface ErrorResponse {
   body: any;

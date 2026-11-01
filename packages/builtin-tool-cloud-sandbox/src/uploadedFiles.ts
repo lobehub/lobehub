@@ -62,9 +62,14 @@ export const sandboxUploadedFilePath = (name: string): string =>
   `${SANDBOX_UPLOADED_FILES_DIR}/${sanitizeSandboxFileName(name)}`;
 
 /**
- * Render the dynamic `{{sandbox_uploaded_files}}` section listing the files that
- * are pre-loaded into the sandbox. Returns an empty string when there are no
- * files so the surrounding system prompt renders cleanly.
+ * Render the whole `<uploaded_files>` section, or nothing at all.
+ *
+ * The section used to be static in the prompt with only the file list filled
+ * in, so a conversation with no attachments still read "run `listFiles` on
+ * /mnt/data" — and that directory is only created while syncing files, so the
+ * agent spent a tool call on `Directory not found` and then had to reason its
+ * way out of a failure that was never real. Nothing is uploaded in most
+ * conversations, so the instruction belongs with the files it describes.
  *
  * Applies the same size/count caps as the bootstrap and de-dupes by resolved
  * sandbox path, so the listed files match exactly what is written to disk.
@@ -85,5 +90,11 @@ export const formatUploadedFilesPrompt = (files: SandboxUploadedFileMeta[]): str
 
   if (lines.length === 0) return '';
 
-  return ['These user-uploaded files are pre-loaded and ready to use:', ...lines].join('\n');
+  return [
+    '<uploaded_files>',
+    `Files the user uploaded in this conversation (attachments and session files) are automatically synced into \`${SANDBOX_UPLOADED_FILES_DIR}\` when your sandbox session starts. If the user refers to a file they shared, look there first — do NOT ask them to re-upload. Run \`listFiles\` on \`${SANDBOX_UPLOADED_FILES_DIR}\` to see everything that is available.`,
+    'These user-uploaded files are pre-loaded and ready to use:',
+    ...lines,
+    '</uploaded_files>',
+  ].join('\n');
 };

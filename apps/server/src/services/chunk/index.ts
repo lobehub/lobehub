@@ -1,7 +1,9 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 
+import { FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE, MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
+import { getChunkingLoaderType } from '@/libs/document-loaders/loaderType';
 import { type ChunkContentParams } from '@/server/modules/ContentChunk';
 import { ContentChunk } from '@/server/modules/ContentChunk';
 import {
@@ -45,8 +47,10 @@ export class ChunkService {
 
     await this.fileModel.update(fileId, { embeddingTaskId: asyncTaskId });
 
-    // Async router will read keyVaults from DB, no need to pass jwtPayload
-    // Dynamic import to avoid circular dependency
+    // Async router will read keyVaults from DB, no need to pass jwtPayload.
+    // Kept dynamic on purpose: the async router imports this chunk service, so a
+    // static import here would form a real module cycle that `lint:circular`
+    // (madge) rejects. Call-time import breaks the static edge.
     const { createAsyncCaller } = await import('@/server/routers/async');
     const asyncCaller = await createAsyncCaller({ userId: this.userId });
 
@@ -83,16 +87,35 @@ export class ChunkService {
     // skip if already exist chunk tasks
     if (skipExist && result.chunkTaskId) return;
 
+    // No chunking loader can parse this format (e.g. `.dwg`): creating a task would only
+    // surface a retryable "Chunking failed" for a limitation retrying cannot fix.
+    if (!getChunkingLoaderType(result.name)) return;
+
     // 1. create a asyncTaskId
     const asyncTaskId = await this.asyncTaskModel.create({
-      status: AsyncTaskStatus.Processing,
+      status:
+        result.size > MAX_FILE_PARSE_SIZE ? AsyncTaskStatus.Error : AsyncTaskStatus.Processing,
       type: AsyncTaskType.Chunking,
     });
 
     await this.fileModel.update(fileId, { chunkTaskId: asyncTaskId });
 
-    // Async router will read keyVaults from DB, no need to pass jwtPayload
-    // Dynamic import to avoid circular dependency
+    if (result.size > MAX_FILE_PARSE_SIZE) {
+      await this.asyncTaskModel.update(asyncTaskId, {
+        error: new AsyncTaskError(
+          AsyncTaskErrorType.FileTooLargeToParse,
+          FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE,
+        ),
+        status: AsyncTaskStatus.Error,
+      });
+
+      return asyncTaskId;
+    }
+
+    // Async router will read keyVaults from DB, no need to pass jwtPayload.
+    // Kept dynamic on purpose: the async router imports this chunk service, so a
+    // static import here would form a real module cycle that `lint:circular`
+    // (madge) rejects. Call-time import breaks the static edge.
     const { createAsyncCaller } = await import('@/server/routers/async');
     const asyncCaller = await createAsyncCaller({ userId: this.userId });
 

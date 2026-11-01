@@ -3,9 +3,10 @@ import createDebug from 'debug';
 import type { CreateVideoOptions } from '../../core/openaiCompatibleFactory';
 import type {
   CreateVideoPayload,
-  CreateVideoResponse,
+  CreateVideoResult,
   PollVideoStatusResult,
 } from '../../types/video';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
 
 const log = createDebug('lobe-video:zhipu');
 
@@ -88,8 +89,9 @@ export async function pollZhipuVideoStatus(
 export async function createZhipuVideo(
   payload: CreateVideoPayload,
   options: CreateVideoOptions,
-): Promise<CreateVideoResponse> {
+): Promise<CreateVideoResult> {
   const { model, params } = payload;
+  const requestModel = resolveMappedModelId(model, options);
   const {
     prompt,
     imageUrl,
@@ -103,13 +105,13 @@ export async function createZhipuVideo(
     watermark,
   } = params;
 
-  log('Creating video with Zhipu API - model: %s, params: %O', model, params);
+  log('Creating video with Zhipu API - model: %s, params: %O', requestModel, params);
 
   const baseURL = options.baseURL || 'https://open.bigmodel.cn/api/paas/v4';
 
   // Build request body based on Zhipu CogVideoX API format
   const body: Record<string, unknown> = {
-    model,
+    model: requestModel,
     prompt,
   };
 

@@ -1,0 +1,459 @@
+/**
+ * @vitest-environment happy-dom
+ */
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { PendingAcceptanceCheckList } from './PendingAcceptanceCheckList';
+import TaskAcceptance from './TaskAcceptance';
+
+// The section links out to the acceptance report, so it needs router context.
+const render = (ui: ReactNode) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+
+const mocks = vi.hoisted(() => ({
+  acceptanceSubject: null as null | { id: string },
+  bundle: undefined as
+    | undefined
+    | {
+        acceptance: { id: string; requirement: string };
+        checks: Array<{
+          category: string;
+          id: string;
+          seq: number;
+          title: string;
+        }>;
+        isOwner: boolean;
+      },
+  currentPortalView: null as null | string,
+  openDeleteConfirm: vi.fn(),
+  deleteAcceptance: vi.fn(),
+  mutateBundle: vi.fn(),
+  mutateSubject: vi.fn(),
+  navigate: vi.fn(),
+  openAcceptance: vi.fn(),
+  openAcceptanceCheck: vi.fn(),
+  subjectArgs: [] as unknown[],
+  taskDetailOverrides: {} as Record<string, unknown>,
+  toggleTaskAgentPanel: vi.fn(),
+  updateVerifyConfig: vi.fn(),
+}));
+
+// Real base-ui ActionIcon only surfaces its title via a hover Tooltip; the
+// assertions click the title text directly.
+vi.mock('@lobehub/ui', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+    <button type="button" onClick={onClick}>
+      {title}
+    </button>
+  ),
+}));
+
+vi.mock('@/features/Acceptance/Workspace/AcceptanceDeleteConfirm', () => ({
+  openAcceptanceDeleteConfirm: (opts: unknown) => mocks.openDeleteConfirm(opts),
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => mocks.navigate,
+}));
+
+vi.mock('antd', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  App: { useApp: () => ({ message: { error: vi.fn() } }) },
+}));
+
+vi.mock('@/features/Acceptance', async () => ({
+  // The real row/list primitives: the assertions cover the shared grammar.
+  ...(await vi.importActual('@/features/Acceptance/CriterionList')),
+  CheckRow: ({ check }: { check: { title: string } }) => (
+    <div data-testid="acceptance-check-detail">detail: {check.title}</div>
+  ),
+  checkDisplayTitle: (title: string) => title,
+  checkHeadMeta: () => ({ color: 'green', icon: () => null }),
+  shouldGroupChecks: (checkCount: number) => checkCount > 10,
+  groupChecks: (checks: Array<{ category: string }>) =>
+    [...new Set(checks.map((check) => check.category))].map((category) => ({
+      checks: checks.filter((check) => check.category === category),
+      key: `category:${category}`,
+      label: category,
+    })),
+  useAcceptanceBundle: () => ({
+    data: mocks.bundle,
+    error: undefined,
+    isLoading: false,
+    mutate: mocks.mutateBundle,
+  }),
+  useAcceptanceBySubject: (...args: unknown[]) => {
+    mocks.subjectArgs = args;
+    return {
+      data: mocks.acceptanceSubject,
+      error: undefined,
+      isLoading: false,
+      mutate: mocks.mutateSubject,
+    };
+  },
+}));
+
+// The result panel mounts the real Acceptance atoms; the assertions only care
+// that the right atoms land in the right scope, not their internals.
+vi.mock('@/features/Acceptance/Viewer/AcceptanceScope', () => ({
+  AcceptanceBundleGate: ({ children }: { children: ReactNode }) => <>{children}</>,
+  AcceptanceScope: ({
+    acceptanceId,
+    children,
+    embedded,
+  }: {
+    acceptanceId: string;
+    children: ReactNode;
+    embedded?: boolean;
+  }) => (
+    <div
+      data-acceptance-id={acceptanceId}
+      data-embedded={embedded ? '' : undefined}
+      data-testid="acceptance-scope"
+    >
+      {children}
+    </div>
+  ),
+}));
+
+vi.mock('@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory', () => ({
+  default: ({ toolbar }: { toolbar?: ReactNode }) => (
+    <div data-testid="acceptance-check-inventory">{toolbar}</div>
+  ),
+}));
+
+vi.mock('@/features/Acceptance/Viewer/Review/AcceptanceDecision', () => ({
+  default: () => <div data-testid="acceptance-decision" />,
+}));
+
+vi.mock('@/services/verify', () => ({
+  verifyService: {
+    deleteAcceptance: (id: string, purge?: boolean) => mocks.deleteAcceptance(id, purge),
+    reviewChecks: vi.fn(),
+  },
+}));
+
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      openAcceptance: mocks.openAcceptance,
+      openAcceptanceCheck: mocks.openAcceptanceCheck,
+    }),
+}));
+
+vi.mock('@/store/chat/selectors', () => ({
+  chatPortalSelectors: { currentViewType: () => mocks.currentPortalView },
+}));
+
+vi.mock('@/store/chat/slices/portal/initialState', () => ({
+  PortalViewType: { TaskDetail: 'taskDetail' },
+}));
+
+vi.mock('@/store/global', () => ({
+  useGlobalStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({ toggleTaskAgentPanel: mocks.toggleTaskAgentPanel }),
+}));
+
+vi.mock('@/store/task', () => {
+  const useTaskStore = (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      activeTaskId: 'T-231',
+      taskDetailMap: {
+        'T-231': { id: 'task-database-231', identifier: 'T-231', ...mocks.taskDetailOverrides },
+      },
+    });
+  useTaskStore.getState = () => ({
+    updateVerifyConfig: mocks.updateVerifyConfig,
+  });
+  return { useTaskStore };
+});
+
+vi.mock('../shared/AccordionArrowIcon', () => ({ default: () => <span>arrow</span> }));
+vi.mock('./TaskVerifyConfig', () => ({
+  default: () => <div data-testid="task-acceptance-criteria">criteria</div>,
+}));
+
+describe('TaskAcceptance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.acceptanceSubject = null;
+    mocks.bundle = undefined;
+    mocks.currentPortalView = null;
+    mocks.taskDetailOverrides = {};
+  });
+
+  it('renders nothing for a recurring task — no Verifier config, no acceptance fetch', () => {
+    // Recurring tasks never get a verify plan on the server; the whole
+    // acceptance section (config editor included) must stay hidden.
+    mocks.taskDetailOverrides = { automationMode: 'schedule' };
+
+    const { container } = render(<TaskAcceptance />);
+
+    expect(screen.queryByTestId('task-acceptance-criteria')).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+    // The acceptance subject fetch is skipped, not just its rendering.
+    expect(mocks.subjectArgs).toEqual(['task', null]);
+  });
+
+  it('renders the configured criteria in the same slot before an acceptance aggregate exists', () => {
+    render(<TaskAcceptance />);
+
+    expect(screen.getByTestId('task-acceptance-criteria')).toBeInTheDocument();
+    expect(mocks.subjectArgs).toEqual(['task', 'task-database-231']);
+  });
+
+  it('keeps a small pending checklist flat with the Acceptance check row grammar', () => {
+    const onOpen = vi.fn();
+
+    render(
+      <PendingAcceptanceCheckList
+        groupLabel={'Ungrouped'}
+        items={[
+          { id: 'criterion-1', title: 'Word count' },
+          { id: 'criterion-2', title: 'Markdown structure' },
+        ]}
+        onOpen={onOpen}
+      />,
+    );
+
+    expect(screen.queryByText('Ungrouped')).not.toBeInTheDocument();
+    expect(screen.getByText('C1')).toBeInTheDocument();
+    expect(screen.getByText('C2')).toBeInTheDocument();
+    expect(screen.queryByText('Agent')).not.toBeInTheDocument();
+    expect(screen.queryByText('Required')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Word count'));
+    expect(onOpen).toHaveBeenCalledWith({ id: 'criterion-1', title: 'Word count' });
+  });
+
+  it('shows the pending checklist group only after it exceeds ten checks', () => {
+    render(
+      <PendingAcceptanceCheckList
+        groupLabel={'Ungrouped'}
+        items={Array.from({ length: 11 }, (_, index) => ({
+          id: `criterion-${index + 1}`,
+          title: `Check ${index + 1}`,
+        }))}
+        onOpen={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Ungrouped')).toBeInTheDocument();
+    expect(screen.getByText('Check 11')).toBeInTheDocument();
+  });
+
+  it('opens the selected check and expands its Acceptance panel from Task detail', () => {
+    mocks.currentPortalView = 'taskDetail';
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [
+        { category: 'Setup', id: 'c1', seq: 1, title: 'Create task' },
+        { category: 'Result', id: 'c2', seq: 2, title: 'Show result' },
+      ],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.queryByTestId('task-acceptance-criteria')).not.toBeInTheDocument();
+    expect(screen.queryByText('Setup')).not.toBeInTheDocument();
+    expect(screen.queryByText('Result')).not.toBeInTheDocument();
+    expect(screen.queryByText('taskDetail.acceptance.collapseAll')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Create task'));
+    expect(mocks.toggleTaskAgentPanel).toHaveBeenCalledWith(true);
+    expect(mocks.openAcceptanceCheck).toHaveBeenCalledWith('acceptance-1', 'c1');
+  });
+
+  it('opens the acceptance report in the panel rather than navigating away', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    fireEvent.click(screen.getByText('taskDetail.acceptance.openReport'));
+    expect(mocks.toggleTaskAgentPanel).toHaveBeenCalledWith(true);
+    expect(mocks.openAcceptance).toHaveBeenCalledWith('acceptance-1');
+  });
+
+  it('mounts the live Acceptance checklist and decision bar in the task result panel', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance variant={'result'} />);
+
+    const scope = screen.getByTestId('acceptance-scope');
+    expect(scope).toHaveAttribute('data-acceptance-id', 'acceptance-1');
+    expect(scope).toHaveAttribute('data-embedded');
+    expect(screen.getByTestId('acceptance-check-inventory')).toBeInTheDocument();
+    expect(screen.getByTestId('acceptance-decision')).toBeInTheDocument();
+    // No collapsible 交付验收 section header — the inventory brings its own.
+    expect(screen.queryByText('taskDetail.acceptance.title')).not.toBeInTheDocument();
+  });
+
+  it('keeps the report link reachable from the inventory toolbar in the result panel', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance variant={'result'} />);
+
+    fireEvent.click(screen.getByText('taskDetail.acceptance.openReport'));
+    expect(mocks.toggleTaskAgentPanel).toHaveBeenCalledWith(true);
+    expect(mocks.openAcceptance).toHaveBeenCalledWith('acceptance-1');
+  });
+
+  it('falls back to the configured criteria in the result panel before an acceptance exists', () => {
+    render(<TaskAcceptance variant={'result'} />);
+
+    expect(screen.getByTestId('task-acceptance-criteria')).toBeInTheDocument();
+    expect(screen.queryByTestId('acceptance-scope')).not.toBeInTheDocument();
+  });
+
+  it('groups a checklist with more than 10 checks', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: Array.from({ length: 11 }, (_, index) => ({
+        category: index < 6 ? 'Setup' : 'Result',
+        id: `c${index + 1}`,
+        seq: index + 1,
+        title: `Check ${index + 1}`,
+      })),
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Setup')).toBeInTheDocument();
+    expect(screen.getByText('Result')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.collapseAll')).toBeInTheDocument();
+    expect(screen.getByText('Check 11')).toBeInTheDocument();
+  });
+
+  it('removes the acceptance and clears the task verify config from the header delete button', async () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    fireEvent.click(screen.getByText('taskDetail.acceptance.remove'));
+    expect(mocks.openDeleteConfirm).toHaveBeenCalledTimes(1);
+    expect(mocks.openDeleteConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'taskDetail.acceptance.removeConfirm.content',
+        ids: ['acceptance-1'],
+      }),
+    );
+    expect(mocks.deleteAcceptance).not.toHaveBeenCalled();
+
+    const opts = mocks.openDeleteConfirm.mock.calls[0][0] as {
+      onDelete: (purge: boolean) => Promise<void>;
+    };
+    await opts.onDelete(true);
+
+    expect(mocks.deleteAcceptance).toHaveBeenCalledWith('acceptance-1', true);
+    expect(mocks.updateVerifyConfig).toHaveBeenCalledWith('T-231', {
+      enabled: false,
+      requirement: null,
+      verifyCriteriaIds: null,
+    });
+    // Config clears BEFORE the aggregate is deleted: the inverse order could
+    // destroy the record and then fail, leaving a stale config to recreate it.
+    expect(mocks.updateVerifyConfig.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.deleteAcceptance.mock.invocationCallOrder[0],
+    );
+    expect(mocks.mutateSubject).toHaveBeenCalled();
+  });
+
+  it('aborts removal without deleting the aggregate when the config clear fails', async () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: true,
+    };
+    mocks.updateVerifyConfig.mockRejectedValueOnce(new Error('config write failed'));
+
+    render(<TaskAcceptance />);
+
+    fireEvent.click(screen.getByText('taskDetail.acceptance.remove'));
+    const opts = mocks.openDeleteConfirm.mock.calls[0][0] as {
+      onDelete: (purge: boolean) => Promise<void>;
+    };
+    await expect(opts.onDelete(false)).rejects.toThrow('config write failed');
+
+    expect(mocks.deleteAcceptance).not.toHaveBeenCalled();
+    expect(mocks.mutateSubject).not.toHaveBeenCalled();
+  });
+
+  it('hides the remove button when the viewer does not own the acceptance', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [{ category: 'Setup', id: 'c1', seq: 1, title: 'Create task' }],
+      isOwner: false,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Create task')).toBeInTheDocument();
+    expect(screen.queryByText('taskDetail.acceptance.remove')).not.toBeInTheDocument();
+  });
+
+  it('keeps the Acceptance cross-round union visible in Task detail', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: [
+        { category: 'Current', id: 'c1', seq: 1, title: 'Current check' },
+        { category: 'Historical', id: 'old', seq: 2, title: 'Removed check' },
+      ],
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Current check')).toBeInTheDocument();
+    expect(screen.getByText('Removed check')).toBeInTheDocument();
+  });
+
+  it('groups a checklist only after it exceeds ten checks', () => {
+    mocks.acceptanceSubject = { id: 'acceptance-1' };
+    mocks.bundle = {
+      acceptance: { id: 'acceptance-1', requirement: 'Everything is verifiable.' },
+      checks: Array.from({ length: 11 }, (_, index) => ({
+        category: index < 6 ? 'Setup' : 'Result',
+        id: `c${index + 1}`,
+        seq: index + 1,
+        title: `Check ${index + 1}`,
+      })),
+      isOwner: true,
+    };
+
+    render(<TaskAcceptance />);
+
+    expect(screen.getByText('Setup')).toBeInTheDocument();
+    expect(screen.getByText('Result')).toBeInTheDocument();
+    expect(screen.getByText('taskDetail.acceptance.collapseAll')).toBeInTheDocument();
+    expect(screen.getByText('Check 11')).toBeInTheDocument();
+  });
+});

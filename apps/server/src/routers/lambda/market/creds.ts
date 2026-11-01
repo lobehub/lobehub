@@ -1,17 +1,51 @@
+import type { UserCredSummary } from '@lobechat/types';
+import { MarketAPIError, orgRefToPathSegment } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
 import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { cloudWorkspaceAuth } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, requireMarketAuth, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
 
 const log = debug('lambda-router:market:creds');
 
+const MARKET_STATUS_TO_TRPC_CODE: Record<number, TRPCError['code']> = {
+  400: 'BAD_REQUEST',
+  403: 'FORBIDDEN',
+  404: 'NOT_FOUND',
+  409: 'CONFLICT',
+};
+
+/**
+ * Maps a Market API error (share/publish/unshare return structured 400/403/404
+ * responses — invalid org, not a member, credential/org not found) to the
+ * matching tRPC error code so the frontend can distinguish them instead of
+ * seeing a blanket 500.
+ */
+function mapMarketShareError(error: unknown, fallbackMessage: string): TRPCError {
+  if (error instanceof MarketAPIError) {
+    return new TRPCError({
+      cause: error,
+      code: MARKET_STATUS_TO_TRPC_CODE[error.status] ?? 'INTERNAL_SERVER_ERROR',
+      message: error.message || fallbackMessage,
+    });
+  }
+  return new TRPCError({ cause: error, code: 'INTERNAL_SERVER_ERROR', message: fallbackMessage });
+}
+
 // Creds procedure with market authentication
 const credsProcedure = publicProcedure
   .use(serverDatabase)
+  // `ctx.workspaceId` from the raw `X-Workspace-Id` header is NOT trustworthy on
+  // its own (createLambdaContext copies it verbatim, with no membership check).
+  // `cloudWorkspaceAuth` verifies the caller is actually a member before letting
+  // `workspaceId` through — demoting it to `undefined` otherwise. `share`,
+  // `publish` and `unshare` below target `ctx.workspaceId`; this guarantees
+  // they can never reach a workspace the caller doesn't belong to.
+  .use(cloudWorkspaceAuth)
   .use(marketUserInfo)
   .use(requireMarketAuth)
   .use(async ({ ctx, next }) => {
@@ -25,6 +59,14 @@ const credsProcedure = publicProcedure
     });
   });
 const credsManageProcedure = credsProcedure.use(withRbacPermission('workspace:update:all'));
+
+/**
+ * The active workspace's organization, for share operations that act on one
+ * of a credential's shares. Outside a workspace no org is sent, which Market
+ * accepts while the credential has a single share.
+ */
+const shareTarget = (ctx: { workspaceId?: string | null }) =>
+  ctx.workspaceId ? { orgId: orgRefToPathSegment({ workspaceId: ctx.workspaceId }) } : {};
 
 export const credsRouter = router({
   // Create file credential
@@ -63,7 +105,7 @@ export const credsRouter = router({
         key: z.string().min(1).max(100),
         name: z.string().min(1).max(255),
         type: z.enum(['kv-env', 'kv-header']),
-        values: z.record(z.string()),
+        values: z.record(z.string(), z.string()),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -239,7 +281,77 @@ export const credsRouter = router({
       }
     }),
 
-  // Inject credentials by keys (explicit injection)
+  // Publish a privately shared credential so every member of the active
+  // workspace can use it. Owner-only.
+  publish: credsProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    log('publish input: id=%d', input.id);
+    try {
+      const result = await ctx.marketService.market.creds.publish(
+        input.id,
+        undefined,
+        shareTarget(ctx),
+      );
+      log('publish success: id=%d', result.id);
+      return result;
+    } catch (error) {
+      log('publish error: %O', error);
+      throw mapMarketShareError(error, 'Failed to publish credential');
+    }
+  }),
+
+  // Share one of the caller's own personal credentials into the current
+  // workspace's Market organization. Always targets `ctx.workspaceId` — never
+  // accepts an org id from client input — so `cloudWorkspaceAuth`'s membership
+  // check (above) guarantees a caller can never share into a workspace they
+  // don't belong to. A credential can be shared into several workspaces;
+  // calling again for the same one changes that share's `visibility`.
+  share: credsProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        visibility: z.enum(['private', 'public']).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Sharing a credential requires an active workspace context',
+        });
+      }
+      log('share input: id=%d, visibility=%s', input.id, input.visibility);
+      try {
+        const result = await ctx.marketService.market.creds.share(input.id, {
+          orgId: orgRefToPathSegment({ workspaceId: ctx.workspaceId }),
+          visibility: input.visibility,
+        });
+        log('share success: id=%d', result.id);
+        return result;
+      } catch (error) {
+        log('share error: %O', error);
+        throw mapMarketShareError(error, 'Failed to share credential');
+      }
+    }),
+
+  // Remove a credential's share into the active workspace. Does not delete
+  // the credential. Its owner, or an admin of that workspace, may call it.
+  unshare: credsProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
+    log('unshare input: id=%d', input.id);
+    try {
+      const result = await ctx.marketService.market.creds.unshare(
+        input.id,
+        undefined,
+        shareTarget(ctx),
+      );
+      log('unshare success: id=%d', result.id);
+      return result;
+    } catch (error) {
+      log('unshare error: %O', error);
+      throw mapMarketShareError(error, 'Failed to unshare credential');
+    }
+  }),
+
+  // Inject credentials by keys (explicit injection).
   inject: credsProcedure
     .input(
       z.object({
@@ -282,7 +394,8 @@ export const credsRouter = router({
       }
     }),
 
-  // Inject credentials for skill execution (auto-inject based on skill declaration)
+  // Inject credentials for skill execution (auto-inject based on skill declaration).
+  // NOTE: same Market SDK gap as `inject` above — stays personal-only for now.
   injectForSkill: credsProcedure
     .input(
       z.object({
@@ -312,13 +425,24 @@ export const credsRouter = router({
     }),
 
   // List all credentials
-  list: credsProcedure.query(async ({ ctx }) => {
+  list: credsProcedure.query(async ({ ctx }): Promise<{ data?: UserCredSummary[] }> => {
     log('list called');
 
     try {
       const result = await ctx.marketService.market.creds.list();
       log('list success: %d credentials', result.data?.length ?? 0);
-      return result;
+
+      if (!ctx.workspaceId) return result;
+
+      const workspaceId = ctx.workspaceId;
+      return {
+        data: result.data?.map((cred) => ({
+          ...cred,
+          sharedToActiveWorkspace: !!cred.shares?.some(
+            (share) => share.workspaceId === workspaceId,
+          ),
+        })),
+      };
     } catch (error) {
       log('list error: %O', error);
       throw new TRPCError({
@@ -330,6 +454,39 @@ export const credsRouter = router({
   }),
 
   // List OAuth connections (for creating OAuth credentials)
+  /**
+   * The credentials an agent run may inject, as the runtime's context rules
+   * see them: inside a verified workspace the workspace's merged organization
+   * view (org-owned creds + members' shared creds), otherwise the caller's
+   * personal creds. Unlike `list`, this is scoped on purpose — it mirrors
+   * `createServerContextFactProviders.listCredentials` so browser-mode and
+   * server-mode runs read the same list.
+   */
+  listForContext: credsProcedure.query(async ({ ctx }) => {
+    const result = ctx.workspaceId
+      ? await ctx.marketService.market.organizations.creds({ workspaceId: ctx.workspaceId }).list()
+      : await ctx.marketService.market.creds.list();
+    const creds = (result.data ?? []) as Array<{
+      description?: string;
+      key: string;
+      name: string;
+      ownerDisplayName?: string;
+      ownerType?: 'organization' | 'user';
+      type: string;
+    }>;
+    log('listForContext success: %d credentials (workspace=%s)', creds.length, ctx.workspaceId);
+    return {
+      data: creds.map((cred) => ({
+        description: cred.description,
+        key: cred.key,
+        name: cred.name,
+        ownerDisplayName: cred.ownerDisplayName,
+        ownerType: cred.ownerType,
+        type: cred.type,
+      })),
+    };
+  }),
+
   listOAuthConnections: credsManageProcedure.query(async ({ ctx }) => {
     log('listOAuthConnections called');
 
@@ -380,7 +537,7 @@ export const credsRouter = router({
         description: z.string().optional(),
         id: z.number(),
         name: z.string().optional(),
-        values: z.record(z.string()).optional(),
+        values: z.record(z.string(), z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

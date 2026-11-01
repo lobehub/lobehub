@@ -4,9 +4,13 @@ import {
   LocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system';
 
-import { deviceGateway } from '@/server/services/deviceGateway';
+import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
+import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 
+import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
+import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
+import { withoutDeviceReplay } from './withoutDeviceReplay';
 
 /**
  * Which arg carries the working directory for the APIs that consume one. The
@@ -44,27 +48,125 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
     if (!context.userId) {
       throw new Error('userId is required for Local System device proxy execution');
     }
+    // No active device: `activeDeviceId` is legitimately empty in device-capable
+    // runs (never bound yet, or the device dropped offline mid-run and the plan
+    // re-resolved to `device-unrouted`). Historically this guard threw a bare
+    // error string with no recovery path — the model kept stalling on it (see
+    // agent vent reports). Return a structured, actionable result per API call
+    // instead: the model is told exactly how to recover (activate a device, or
+    // ask the user to reconnect) rather than hitting an opaque failure.
     if (!context.activeDeviceId) {
-      throw new Error('activeDeviceId is required for Local System device proxy execution');
+      const noDevice = buildNoActiveDeviceResult('Local System', {
+        remoteDeviceToolAvailable: context.toolManifestMap
+          ? REMOTE_DEVICE_TOOL_IDENTIFIER in context.toolManifestMap
+          : true,
+      });
+
+      const proxy: Record<string, (args: any) => Promise<any>> = {};
+      for (const api of LocalSystemManifest.api) {
+        proxy[api.name] = async () => noDevice;
+      }
+      return proxy;
     }
+
+    // Resolve the workspace scope the same way `remote-device` does, recovering
+    // it from the running agent when the run-scoped `context.workspaceId` was
+    // lost (see `resolveRunWorkspaceId`). Without this, a workspace device the
+    // model just activated via listOnlineDevices would be addressed under the
+    // personal principal and every filesystem/shell call against it would miss.
+    // Resolved once, shared by every api call in this step.
+    let workspaceIdPromise: Promise<string | undefined> | undefined;
+    const getDeviceWorkspaceId = () => (workspaceIdPromise ??= resolveRunWorkspaceId(context));
+
+    // Content scope — which workspace's data a command operates on — is a
+    // different question from which gateway pool addresses the device, so it
+    // must NOT reuse `getDeviceWorkspaceId` (that one intentionally returns
+    // undefined for a personal-scope device).
+    let contentWorkspaceIdPromise: Promise<string | undefined> | undefined;
+    const getContentWorkspaceId = () =>
+      (contentWorkspaceIdPromise ??= resolveContentWorkspaceId(context));
 
     const proxy: Record<string, (args: any) => Promise<any>> = {};
 
     for (const api of LocalSystemManifest.api) {
       const workingDirArg = WORKING_DIR_ARG[api.name];
       proxy[api.name] = async (args: any) => {
-        // Inject the device-bound cwd/scope when the model didn't supply one.
-        // `??=` leaves an explicit per-call override possible for the future.
-        const finalArgs =
-          workingDirArg && context.workingDirectory && args?.[workingDirArg] == null
-            ? { ...args, [workingDirArg]: context.workingDirectory }
-            : args;
+        // Inject the device-bound cwd/scope when the model didn't supply one
+        // or explicitly passed `.` (a relative reference that resolves to
+        // process.cwd() on the device side — the LobeHub install directory on
+        // packaged desktop instead of the user's actual workspace).
+        //
+        // `cwd` and `scope` differ in how much the model is trusted:
+        // - `scope` IS a manifest field (the model may legitimately point a
+        //   search at a subdirectory), and the out-of-scope intervention audit
+        //   inspects it. Only fill it in when absent/`.`.
+        // - `cwd` is NOT in the manifest for ANY api — the model can never
+        //   legitimately set it, and the audit does not inspect it. So it is
+        //   stripped from every call before dispatch, and re-added only for the
+        //   apis that consume it, with the device-bound value.
+        //
+        // Stripping has to be unconditional, not limited to the `cwd`-arg apis:
+        // downstream, `cwd` also acts as a legacy search-root alias and as the
+        // base a relative `scope` resolves against. Left in place on a search
+        // call, `globFiles({ pattern: 'passwd', scope: 'etc', cwd: '/' })` would
+        // be approved by the audit as a workspace-relative `scope` and then
+        // execute against `/etc`. Likewise `readFile({ path: 'passwd', cwd:
+        // '/etc' })` — only `path` is audited, and it looks workspace-relative.
+        const { cwd: _offContractCwd, ...sanitized } = (args ?? {}) as Record<string, unknown>;
+        let finalArgs = sanitized as typeof args;
+        if (workingDirArg && context.workingDirectory) {
+          const scopeValue: unknown = finalArgs?.[workingDirArg];
+          // `cwd` was just stripped, so a `cwd`-arg api always needs it back.
+          const needsInjection =
+            workingDirArg === 'cwd' || scopeValue == null || scopeValue === '.';
+          if (needsInjection) {
+            finalArgs = { ...finalArgs, [workingDirArg]: context.workingDirectory };
+          }
+        }
 
-        return deviceGateway.executeToolCall(
+        // A device shell has its own `lh`, so nothing is rewritten — but the
+        // CLI would resolve to the device credentials' PERSONAL scope, which is
+        // how a workspace agent ends up unable to find (or edit) itself. Set on
+        // every command, so an `lh` reached indirectly (`bash -lc 'lh …'`, a
+        // script, a Makefile) inherits the scope too. The run id travels with
+        // it: `lh goal plan` and the other run-attributed commands need it. The
+        // model's own `env` wins: it may be deliberately overriding the scope.
+        if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
+          finalArgs = { ...finalArgs, topicId: context.topicId, agentId: context.agentId };
+          const lhEnv = buildDeviceLhEnv({
+            operationId: context.operationId,
+            workspaceId: await getContentWorkspaceId(),
+          });
+          if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
+
+          // The sandbox decision belongs to the run's owner, not to the model:
+          // it is set here from the resolved execution context, overriding
+          // anything that arrived in the LLM args (the manifest doesn't expose
+          // the field, but a model that guessed it must not be able to switch
+          // its own fence off — or on).
+          if (context.localSandbox !== undefined) {
+            finalArgs = {
+              ...finalArgs,
+              sandbox: context.localSandbox,
+              // Only meaningful for a fenced run, so don't add noise to the
+              // args of an unfenced one.
+              ...(context.localSandbox
+                ? { sandboxNetwork: context.localSandboxNetwork === true }
+                : {}),
+            };
+          }
+        }
+
+        const result = await executeAuthorizedDeviceToolCall(
+          context.serverDB,
           {
             deviceId: context.activeDeviceId!,
             operationId: context.operationId,
             userId: context.userId!,
+            // Workspace devices live under the `workspace:<id>` principal in
+            // the gateway, so the relay needs the workspaceId to address the
+            // right DO pool. Personal device runs resolve to undefined.
+            workspaceId: await getDeviceWorkspaceId(),
           },
           {
             apiName: api.name,
@@ -73,6 +175,8 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           },
           context.executionTimeoutMs,
         );
+
+        return withoutDeviceReplay(result);
       };
     }
 

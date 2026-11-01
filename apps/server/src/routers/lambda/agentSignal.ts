@@ -8,17 +8,25 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
+import { rollbackAgentSignalReceipt } from '@/server/services/agentSignal/services/receiptRollbackService';
 import { listAgentSignalReceipts } from '@/server/services/agentSignal/services/receiptService';
+import { assertAgentSignalTriggerRateLimit } from '@/server/services/agentSignal/triggerRateLimit';
 import {
   AGENT_SIGNAL_TRIGGER_SOURCE_TYPES,
   buildTriggerSourceEvent,
+  resolveTriggerSourceEventAgentId,
 } from '@/server/services/agentSignal/triggerSourceEvent';
 
 const log = debug('lobe-server:agent-signal:router');
 
 const agentSignalProcedure = wsCompatProcedure;
 const agentSignalWriteProcedure = agentSignalProcedure.use(withScopedPermission('message:create'));
+const agentSignalAgentWriteProcedure = agentSignalProcedure.use(
+  withScopedPermission('agent:update'),
+);
+const agentSignalAgentDatabaseWriteProcedure = agentSignalAgentWriteProcedure.use(serverDatabase);
 const clientSourceTypes = AGENT_SIGNAL_CLIENT_SOURCE_TYPES;
 
 type ClientSourceType = (typeof clientSourceTypes)[number];
@@ -52,7 +60,9 @@ export const agentSignalRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
     }),
-  triggerSourceEvent: agentSignalProcedure
+  // Same RBAC gate as `emitSourceEvent` and the REST `/signals/trigger` route; API-key scopes
+  // (`agent:write` + `model:invoke`) are enforced by the namespace guard in `@lobechat/const`.
+  triggerSourceEvent: agentSignalWriteProcedure
     .input(
       z.object({
         agentId: z.string().optional(),
@@ -76,6 +86,12 @@ export const agentSignalRouter = router({
         userId: ctx.userId,
       });
 
+      // `payloadOverride.agentId` can name an agent the request's `agentId` never did; authorize
+      // the agent the payload actually targets.
+      const agentId = resolveTriggerSourceEventAgentId(sourceEvent, input.agentId);
+
+      await assertAgentSignalTriggerRateLimit(ctx.userId);
+
       log(
         'Triggering source event sourceType=%s sourceId=%s',
         sourceEvent.sourceType,
@@ -83,7 +99,7 @@ export const agentSignalRouter = router({
       );
 
       return enqueueAgentSignalSourceEvent(sourceEvent, {
-        agentId: input.agentId,
+        agentId,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
       });
@@ -106,6 +122,23 @@ export const agentSignalRouter = router({
         sinceCreatedAt: input.sinceCreatedAt,
         topicId: input.topicId,
         userId: ctx.userId,
+      });
+    }),
+  rollbackReceipt: agentSignalAgentDatabaseWriteProcedure
+    .input(
+      z.object({
+        agentDocumentId: z.string().min(1).optional(),
+        // Skill receipts only; memory receipts resolve their target from the stored receipt.
+        documentId: z.string().min(1).optional(),
+        historyId: z.string().min(1).optional(),
+        receiptId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return rollbackAgentSignalReceipt(input, {
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
       });
     }),
 });

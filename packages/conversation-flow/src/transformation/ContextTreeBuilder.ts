@@ -45,9 +45,25 @@ export class ContextTreeBuilder {
   }
 
   /**
-   * Transform a single IdNode and append to contextTree array
+   * Transform an IdNode and everything it continues into, appending to contextTree
    */
   private transformToLinear(idNode: IdNode, contextTree: ContextNode[]): void {
+    // A long topic is one parent chain thousands of messages deep. Each step
+    // hands back the nodes it continues with instead of recursing into them;
+    // pushing them in reverse keeps the original depth-first output order.
+    const stack: IdNode[] = [idNode];
+    while (stack.length > 0) {
+      const next: IdNode[] = [];
+      this.transformStep(stack.pop()!, contextTree, next);
+      for (let i = next.length - 1; i >= 0; i -= 1) stack.push(next[i]);
+    }
+  }
+
+  /**
+   * Transform a single IdNode into contextTree and collect, in output order,
+   * the IdNodes the walk continues with.
+   */
+  private transformStep(idNode: IdNode, contextTree: ContextNode[], next: IdNode[]): void {
     const message = this.messageMap.get(idNode.id);
     if (!message) return;
 
@@ -68,7 +84,7 @@ export class ContextTreeBuilder {
           (child) => child.id === compareNode.activeColumnId,
         );
         if (activeColumnIdNode && activeColumnIdNode.children.length > 0) {
-          this.transformToLinear(activeColumnIdNode.children[0], contextTree);
+          next.push(activeColumnIdNode.children[0]);
         }
       }
       return;
@@ -89,7 +105,7 @@ export class ContextTreeBuilder {
           (child) => child.id === compareNode.activeColumnId,
         );
         if (activeColumnIdNode && activeColumnIdNode.children.length > 0) {
-          this.transformToLinear(activeColumnIdNode.children[0], contextTree);
+          next.push(activeColumnIdNode.children[0]);
         }
       }
       return;
@@ -101,12 +117,18 @@ export class ContextTreeBuilder {
       const agentCouncilNode = this.createAgentCouncilNodeFromChildren(message, idNode);
       contextTree.push(agentCouncilNode);
 
-      // Continue processing children of the last member (for supervisor final reply)
-      // The supervisor's reply has parentId pointing to the last agent's message
-      const lastChild = idNode.children.at(-1);
-      if (lastChild && lastChild.children.length > 0) {
-        // Process the first child of the last agent (supervisor's reply)
-        this.transformToLinear(lastChild.children[0], contextTree);
+      // Continue from every member to surface the supervisor's post-council reply.
+      // The reply attaches to exactly ONE member, but which member is non-deterministic:
+      // broadcast agents finish near-simultaneously so their createdAt values tie, and the
+      // writer anchors the reply to the createdAt-last member while the tree preserves
+      // input-array order — the two can disagree. Walking only children.at(-1) would strand
+      // the reply. Only the member carrying it has children, so iterating every member emits
+      // it exactly once and keeps contextTree in agreement with flatList (FlatListBuilder
+      // applies the same all-member continuation).
+      for (const child of idNode.children) {
+        if (child.children.length > 0) {
+          next.push(child.children[0]);
+        }
       }
       return;
     }
@@ -123,7 +145,7 @@ export class ContextTreeBuilder {
       });
 
       for (const nonTaskChild of nonTaskChildren) {
-        this.transformToLinear(nonTaskChild, contextTree);
+        next.push(nonTaskChild);
       }
 
       // Also check for children of task messages (e.g., summary as child of last task)
@@ -136,7 +158,7 @@ export class ContextTreeBuilder {
         for (const taskGrandchild of taskChild.children) {
           const taskGrandchildMsg = this.messageMap.get(taskGrandchild.id);
           if (taskGrandchildMsg && taskGrandchildMsg.role !== 'task') {
-            this.transformToLinear(taskGrandchild, contextTree);
+            next.push(taskGrandchild);
           }
         }
       }
@@ -151,7 +173,7 @@ export class ContextTreeBuilder {
       // Find the next message after tools
       const nextMessage = this.messageCollector.findNextAfterTools(message, idNode);
       if (nextMessage) {
-        this.transformToLinear(nextMessage, contextTree);
+        next.push(nextMessage);
       }
       return;
     }
@@ -159,16 +181,17 @@ export class ContextTreeBuilder {
     // Priority 6: Branch — multiple NON-TOOL children (dual-form reader invariant: tool children are inline data, not branch candidates).
     // Tool children are inline data of their assistant (handled by Priority 4),
     // never branch candidates.
-    const nonToolChildren = idNode.children.filter(
-      (child) => this.messageMap.get(child.id)?.role !== 'tool',
+    const metadataBranchIds = new Set(
+      this.branchResolver.getMetadataBranchIds(idNode.children.map((child) => child.id)),
     );
+    const nonToolChildren = idNode.children.filter((child) => metadataBranchIds.has(child.id));
     if (nonToolChildren.length > 1) {
       // Add current message node
       const messageNode = this.createMessageNode(message);
       contextTree.push(messageNode);
 
       // Create branch node
-      const branchNode = this.createBranchNode(message, idNode);
+      const branchNode = this.createBranchNode(message, nonToolChildren);
       contextTree.push(branchNode);
 
       // Don't continue after branch - branch is an end point
@@ -181,7 +204,7 @@ export class ContextTreeBuilder {
 
     // Continue with single child
     if (idNode.children.length === 1) {
-      this.transformToLinear(idNode.children[0], contextTree);
+      next.push(idNode.children[0]);
     }
   }
 
@@ -212,7 +235,10 @@ export class ContextTreeBuilder {
     // group head legitimately has a mix of tool + assistant children. (In the
     // old tool-anchored form a tool-using assistant only ever had tool children,
     // so this stays a no-op for legacy data.)
-    return idNode.children.some((child) => this.messageMap.get(child.id)?.role === 'tool');
+    return (
+      idNode.children.some((child) => this.messageMap.get(child.id)?.role === 'tool') ||
+      this.messageCollector.isToolChainHead(message)
+    );
   }
 
   /**
@@ -264,7 +290,8 @@ export class ContextTreeBuilder {
   /**
    * Create BranchNode
    */
-  private createBranchNode(message: Message, idNode: IdNode): BranchNode {
+  private createBranchNode(message: Message, branchChildren: IdNode[]): BranchNode {
+    const idNode = { children: branchChildren, id: message.id };
     const activeBranchId = this.branchResolver.getActiveBranchId(message, idNode);
 
     // For optimistic update (activeBranchId is undefined), use children.length as the index

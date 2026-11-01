@@ -11,7 +11,6 @@ import { DocumentModel } from '@/database/models/document';
 import { EmbeddingModel } from '@/database/models/embedding';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
-import { SearchRepo } from '@/database/repositories/search';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
@@ -19,6 +18,8 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
+
+import { assertFileNotInRestrictedKnowledgeBase } from './_helpers/knowledgeBaseAccess';
 
 const chunkProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -35,7 +36,6 @@ const chunkProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseSearchService: new KnowledgeBaseSearchService(ctx.serverDB, ctx.userId, wsId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
-      searchRepo: new SearchRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -76,6 +76,8 @@ export const chunkRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
+
       return {
         items: await ctx.chunkModel.findByFileId(input.id, input.cursor || 0),
         nextCursor: input.cursor ? input.cursor + 1 : 1,

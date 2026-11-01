@@ -1,9 +1,8 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { DraggablePanel } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
-import Loading from '@/components/Loading/BrandTextLoading';
+import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import RightPanel from '@/features/RightPanel';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -27,19 +26,15 @@ const AgentBuilder = memo(() => {
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.groupAgentBuilder);
 
   return (
-    <DraggablePanel
-      backgroundColor={cssVar.colorBgContainer}
+    // RightPanel: the same draggable side panel on desktop, a full-screen
+    // drawer on mobile instead of a fixed-width column over the profile.
+    <RightPanel
       expand={chatPanelExpanded}
-      expandable={false}
       maxWidth={600}
       minWidth={360}
-      placement="right"
-      size={{
-        height: '100%',
-        width,
-      }}
+      width={width}
       onExpandChange={setChatPanelExpanded}
-      onSizeChange={(_, size) => {
+      onSizeChange={(size) => {
         if (size?.width) {
           const w = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
           if (!!w) updateSystemStatus({ groupAgentBuilderPanelWidth: w });
@@ -51,9 +46,9 @@ const AgentBuilder = memo(() => {
           <AgentBuilderConversation agentId={groupAgentBuilderId} />
         </AgentBuilderProvider>
       ) : (
-        <Loading debugId="GroupAgentBuilder > Init" />
+        <ConversationSegmentSkeleton />
       )}
-    </DraggablePanel>
+    </RightPanel>
   );
 });
 

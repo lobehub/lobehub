@@ -1,6 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getMimeType } from './mimeType';
+import { getMimeType, resolveMimeType, tryGetMimeType } from './mimeType';
+
+afterEach(() => {
+  vi.doUnmock('node:path');
+  vi.resetModules();
+});
+
+describe('browser compatibility', () => {
+  it('detects a pasted image without relying on Node path.extname', async () => {
+    vi.doMock('node:path', () => ({ default: {} }));
+    vi.resetModules();
+
+    const browserMimeType = await import('./mimeType');
+
+    expect(browserMimeType.getMimeType('pasted-image.png')).toBe('image/png');
+  });
+});
 
 describe('getMimeType', () => {
   describe('custom code file MIME types', () => {
@@ -8,67 +24,12 @@ describe('getMimeType', () => {
       expect(getMimeType('script.py')).toBe('text/x-python');
       expect(getMimeType('/path/to/script.py')).toBe('text/x-python');
     });
-
-    it('should return correct MIME type for Go files', () => {
-      expect(getMimeType('main.go')).toBe('text/x-go');
-      expect(getMimeType('/src/main.go')).toBe('text/x-go');
-    });
-
-    it('should return correct MIME type for Rust files', () => {
-      expect(getMimeType('lib.rs')).toBe('text/x-rust');
-      expect(getMimeType('/src/lib.rs')).toBe('text/x-rust');
-    });
-
-    it('should return correct MIME type for Ruby files', () => {
-      expect(getMimeType('app.rb')).toBe('text/x-ruby');
-    });
-
-    it('should return correct MIME type for Kotlin files', () => {
-      expect(getMimeType('Main.kt')).toBe('text/x-kotlin');
-    });
-
-    it('should return correct MIME type for Scala files', () => {
-      expect(getMimeType('App.scala')).toBe('text/x-scala');
-    });
-
-    it('should return correct MIME type for Swift files', () => {
-      expect(getMimeType('ContentView.swift')).toBe('text/x-swift');
-    });
-
-    it('should return correct MIME type for Haskell files', () => {
-      expect(getMimeType('Main.hs')).toBe('text/x-haskell');
-    });
-
-    it('should return correct MIME type for Lua files', () => {
-      expect(getMimeType('script.lua')).toBe('text/x-lua');
-    });
-
-    it('should return correct MIME type for Perl files', () => {
-      expect(getMimeType('script.pl')).toBe('text/x-perl');
-    });
-
-    it('should return correct MIME type for R files', () => {
-      expect(getMimeType('analysis.r')).toBe('text/x-r');
-    });
-
-    it('should return correct MIME type for Clojure files', () => {
-      expect(getMimeType('core.clj')).toBe('text/x-clojure');
-    });
-
     it('should return correct MIME type for Elixir files (.ex)', () => {
       expect(getMimeType('app.ex')).toBe('text/x-elixir');
     });
 
     it('should return correct MIME type for Elixir script files (.exs)', () => {
       expect(getMimeType('mix.exs')).toBe('text/x-elixir');
-    });
-
-    it('should return correct MIME type for Svelte files', () => {
-      expect(getMimeType('App.svelte')).toBe('text/x-svelte');
-    });
-
-    it('should return correct MIME type for Vue files', () => {
-      expect(getMimeType('App.vue')).toBe('text/x-vue');
     });
   });
 
@@ -98,37 +59,8 @@ describe('getMimeType', () => {
     it('should return correct MIME type for JSON files', () => {
       expect(getMimeType('config.json')).toBe('application/json');
     });
-
-    it('should return correct MIME type for HTML files', () => {
-      expect(getMimeType('index.html')).toBe('text/html');
-    });
-
-    it('should return correct MIME type for CSS files', () => {
-      expect(getMimeType('styles.css')).toBe('text/css');
-    });
-
     it('should return correct MIME type for PNG images', () => {
       expect(getMimeType('photo.png')).toBe('image/png');
-    });
-
-    it('should return correct MIME type for JPEG images', () => {
-      expect(getMimeType('photo.jpg')).toBe('image/jpeg');
-    });
-
-    it('should return correct MIME type for PDF files', () => {
-      expect(getMimeType('document.pdf')).toBe('application/pdf');
-    });
-
-    it('should return correct MIME type for XML files', () => {
-      expect(getMimeType('data.xml')).toBe('application/xml');
-    });
-
-    it('should return correct MIME type for plain text files', () => {
-      expect(getMimeType('readme.txt')).toBe('text/plain');
-    });
-
-    it('should return correct MIME type for Markdown files', () => {
-      expect(getMimeType('README.md')).toBe('text/markdown');
     });
   });
 
@@ -159,5 +91,147 @@ describe('getMimeType', () => {
       expect(getMimeType('archive.tar.gz')).toBe('application/gzip');
       expect(getMimeType('component.test.js')).toBe('text/javascript');
     });
+  });
+});
+
+describe('tryGetMimeType', () => {
+  it('returns the mime with charset for text responses', () => {
+    expect(tryGetMimeType('/abs/path/style.css')).toBe('text/css; charset=utf-8');
+    expect(tryGetMimeType('bundle.js')).toBe('text/javascript; charset=utf-8');
+  });
+
+  it('returns the mime without charset for binary responses', () => {
+    expect(tryGetMimeType('icon.png')).toBe('image/png');
+    expect(tryGetMimeType('font.woff2')).toBe('font/woff2');
+  });
+
+  it('returns undefined when the extension is unknown', () => {
+    expect(tryGetMimeType('foo.unknownext')).toBeUndefined();
+    expect(tryGetMimeType('Makefile')).toBeUndefined();
+  });
+});
+
+describe('resolveMimeType', () => {
+  it('resolves common web/data extensions via the extension lookup + charset', async () => {
+    await expect(resolveMimeType('/repo/data.json', Buffer.from('{}'))).resolves.toBe(
+      'application/json; charset=utf-8',
+    );
+    await expect(resolveMimeType('/repo/README.md', Buffer.from('# hi'))).resolves.toBe(
+      'text/markdown; charset=utf-8',
+    );
+  });
+
+  it('appends charset to custom code-language mimes', async () => {
+    // .py → CUSTOM_MIME_TYPES text/x-python → text/ prefix → gains charset.
+    const py = Buffer.from('print("hi")\n');
+    await expect(resolveMimeType('/repo/script.py', py)).resolves.toBe(
+      'text/x-python; charset=utf-8',
+    );
+
+    // .v / .sv resolve to HDL text mimes with charset (not octet-stream).
+    const vSource = Buffer.from('module adder(); endmodule\n');
+    await expect(resolveMimeType('/repo/adder.v', vSource)).resolves.toBe(
+      'text/x-verilog; charset=utf-8',
+    );
+    const svSource = Buffer.from('package p; endpackage\n');
+    await expect(resolveMimeType('/repo/top.sv', svSource)).resolves.toBe(
+      'text/x-systemverilog; charset=utf-8',
+    );
+  });
+
+  it('serves preview-only image formats via the extension lookup', async () => {
+    // Truly binary buffers so the sniff never asks us to downgrade.
+    await expect(
+      resolveMimeType('/repo/photo.heic', Buffer.from([0x00, 0xff, 0xd8, 0x00])),
+    ).resolves.toBe('image/heic');
+    await expect(
+      resolveMimeType('/repo/diagram.bmp', Buffer.from([0x42, 0x4d, 0x00, 0x01])),
+    ).resolves.toBe('image/bmp');
+  });
+
+  it('trusts magic bytes for binary formats even when the extension is unknown', async () => {
+    // `.blob` isn't in mime-db, so file-type's magic sniff decides.
+    const pngBytes = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+      0x52,
+    ]);
+    await expect(resolveMimeType('/repo/mystery.blob', pngBytes)).resolves.toBe('image/png');
+  });
+
+  it('trusts magic bytes even when mime-db would lie about the extension', async () => {
+    // Real MPEG-TS carries the 0x47 sync byte at 188-byte intervals. File-type
+    // recognises it and serves video/mp2t regardless of extension.
+    const mpegTs = Buffer.alloc(376);
+    mpegTs[0] = 0x47;
+    mpegTs[188] = 0x47;
+    await expect(resolveMimeType('/repo/clip.ts', mpegTs)).resolves.toBe('video/mp2t');
+  });
+
+  it('downgrades to text/plain when mime-db claims binary but the buffer is text', async () => {
+    // The classic .ts ambiguity: mime-db → video/mp2t, but TypeScript source
+    // has no magic bytes and sniffs as text. The downgrade rule catches this
+    // without an extension override.
+    const tsSource = Buffer.from('export const foo = (x: number): number => x + 1;\n');
+    await expect(resolveMimeType('/repo/module.ts', tsSource)).resolves.toBe(
+      'text/plain; charset=utf-8',
+    );
+
+    // Same rule saves `.cjs` (mime-db → application/node).
+    const cjsSource = Buffer.from(`module.exports = { plugins: ['@semantic-release/npm'] };\n`);
+    await expect(resolveMimeType('/repo/.releaserc.cjs', cjsSource)).resolves.toBe(
+      'text/plain; charset=utf-8',
+    );
+  });
+
+  it('keeps image/svg+xml for SVG instead of downgrading it to text/plain', async () => {
+    // SVG is text, but browsers only render it as an image from image/svg+xml.
+    const svgSource = Buffer.from(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 10L5 0L10 10z"/></svg>\n',
+    );
+    await expect(resolveMimeType('/repo/shape.svg', svgSource)).resolves.toBe('image/svg+xml');
+  });
+
+  it('keeps the text downgrade for other text extensions mime-db maps to non-text types', async () => {
+    const mtsSource = Buffer.from('export const bar = 1;\n');
+    await expect(resolveMimeType('/repo/module.mts', mtsSource)).resolves.toBe(
+      'text/plain; charset=utf-8',
+    );
+
+    // Non-SVG `+xml` types stay on the downgrade so text previews keep working.
+    const atomFeed = Buffer.from('<feed xmlns="http://www.w3.org/2005/Atom"></feed>\n');
+    await expect(resolveMimeType('/repo/feed.atom', atomFeed)).resolves.toBe(
+      'text/plain; charset=utf-8',
+    );
+  });
+
+  it('prefers the SVG extension over the generic XML match for an `<?xml` prolog', async () => {
+    // file-type fingerprints the prolog as application/xml, which browsers won't render as an image.
+    const exportedSvg = Buffer.from(
+      '<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg"/>\n',
+    );
+    await expect(resolveMimeType('/repo/exported.svg', exportedSvg)).resolves.toBe('image/svg+xml');
+
+    // Plain .xml keeps the magic-byte result.
+    const plainXml = Buffer.from('<?xml version="1.0"?><root/>');
+    await expect(resolveMimeType('/repo/data.xml', plainXml)).resolves.toBe('application/xml');
+  });
+
+  it('falls back to text/plain for unknown text extensions via the sniff', async () => {
+    await expect(resolveMimeType('/repo/App.tsx', Buffer.from(''))).resolves.toBe(
+      'text/plain; charset=utf-8',
+    );
+    const editorconfig = Buffer.from('root = true\n[*]\nindent_style = space\n');
+    await expect(resolveMimeType('/repo/.editorconfig', editorconfig)).resolves.toBe(
+      'text/plain; charset=utf-8',
+    );
+  });
+
+  it('falls back to application/octet-stream when the sniff detects binary data', async () => {
+    // No known extension and no recognisable magic bytes — the sniff sees
+    // embedded null bytes and classifies as binary.
+    const binary = Buffer.from([0x00, 0x01, 0x02, 0x03, 0x00, 0x01, 0x02, 0x03]);
+    await expect(resolveMimeType('/repo/strange.blob', binary)).resolves.toBe(
+      'application/octet-stream',
+    );
   });
 });

@@ -5,24 +5,37 @@ import qs from 'query-string';
 import { memo, useMemo } from 'react';
 
 import { withSuspense } from '@/components/withSuspense';
+import { buildAssistantListQuery } from '@/features/CommunityAgentList/assistantListQuery';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useQuery } from '@/hooks/useQuery';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
-import { AssistantCategory, AssistantSorts } from '@/types/discover';
+import { assistantSelectors } from '@/store/discover/selectors';
+import { AssistantCategory, type AssistantQueryParams, AssistantSorts } from '@/types/discover';
 
 import CategoryMenu from '../../../../components/CategoryMenu';
 import { useCategory } from './useCategory';
 
 const Category = memo(() => {
-  const useAssistantCategories = useDiscoverStore((s) => s.useAssistantCategories);
-  const {
-    category = AssistantCategory.Discover,
-    q,
-    source,
-  } = useQuery() as { category?: AssistantCategory; q?: string; source?: string };
-  const { data: items = [] } = useAssistantCategories({ q, source: source as any });
+  const useAssistantCategories = useDiscoverStore((s) => s.useFetchAssistantCategories);
+  const useAssistantList = useDiscoverStore((s) => s.useFetchAssistantList);
+  const query = useQuery() as AssistantQueryParams;
+  const { category = AssistantCategory.Discover, q, source } = query;
+  const { queryKey } = useAssistantList(buildAssistantListQuery(query));
+  const data = useDiscoverStore(assistantSelectors.assistantList(queryKey));
+  // Fallback counts while the list entry converges: the categories query is
+  // keyed by `q` + `source` only, so switching category keeps its rows on screen
+  // (the replica replacement for the old SWR `keepPreviousData`).
+  const shouldLoadFallbackCategories = data?.categoryCounts === undefined;
+  const { queryKey: categoriesQueryKey } = useAssistantCategories(
+    { q, source },
+    { enabled: shouldLoadFallbackCategories },
+  );
+  const fallbackItems = useDiscoverStore(
+    assistantSelectors.assistantCategories(categoriesQueryKey),
+  );
+  const items = data?.categoryCounts ?? fallbackItems;
   const navigate = useWorkspaceAwareNavigate();
   const cates = useCategory();
 

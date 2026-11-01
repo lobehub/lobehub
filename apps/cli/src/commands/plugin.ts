@@ -40,6 +40,61 @@ export function registerPluginCommand(program: Command) {
       printTable(rows, ['ID', 'IDENTIFIER', 'TYPE', 'TITLE']);
     });
 
+  // ── search ────────────────────────────────────────────
+
+  plugin
+    .command('search [query]')
+    .description('Search MCP plugins in the marketplace')
+    .option('-c, --category <category>', 'Filter by category (e.g. developer, productivity)')
+    .option('-L, --limit <n>', 'Number of results', '20')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(
+      async (
+        query: string | undefined,
+        options: { category?: string; json?: string | boolean; limit?: string },
+      ) => {
+        const client = await getTrpcClient();
+        const [result, installed] = await Promise.all([
+          client.market.getMcpList.query({
+            category: options.category,
+            pageSize: Number.parseInt(options.limit || '20', 10),
+            q: query,
+          }),
+          client.plugin.getPlugins.query(),
+        ]);
+        const installedIds = new Set(
+          (Array.isArray(installed) ? installed : []).map((p: any) => p.identifier),
+        );
+        const items = (result?.items ?? []).map((item: any) => ({
+          ...item,
+          installed: installedIds.has(item.identifier),
+        }));
+
+        if (options.json !== undefined) {
+          const fields = typeof options.json === 'string' ? options.json : undefined;
+          outputJson(items, fields);
+          return;
+        }
+
+        if (items.length === 0) {
+          console.log('No plugins found.');
+          return;
+        }
+
+        const rows = items.map((p: any) => [
+          truncate(p.identifier || '', 30),
+          truncate(p.name || '', 30),
+          truncate(p.description || '', 50),
+          p.installed ? pc.green('installed') : '',
+        ]);
+
+        printTable(rows, ['IDENTIFIER', 'NAME', 'DESCRIPTION', 'STATUS']);
+        if (result?.totalCount > items.length) {
+          console.log(pc.dim(`Showing ${items.length} of ${result.totalCount} results.`));
+        }
+      },
+    );
+
   // ── create ──────────────────────────────────────────
 
   plugin

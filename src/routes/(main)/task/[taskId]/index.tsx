@@ -1,16 +1,15 @@
 'use client';
 
-import { memo } from 'react';
 import { useParams } from 'react-router';
 
-import { TaskDetailPage } from '@/features/AgentTasks';
+import { RoutedTaskDetailPage } from '@/features/AgentTasks';
 
-const TaskDetailRoute = memo(() => {
+const TaskDetailRoute = () => {
   const { taskId } = useParams<{ taskId?: string }>();
 
   if (!taskId) return null;
 
-  return <TaskDetailPage taskId={taskId} />;
-});
+  return <RoutedTaskDetailPage taskId={taskId} />;
+};
 
 export default TaskDetailRoute;

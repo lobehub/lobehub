@@ -1,31 +1,65 @@
 'use client';
 
-import { Button } from '@lobehub/ui';
-import { App } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { AGENT_CHAT_URL } from '@lobechat/const';
+import { Button, Flexbox, Select, toast } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { customAlphabet } from 'nanoid/non-secure';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { SESSION_CHAT_URL } from '@/const/url';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
+import { ensureAgentMarketSkillsAndWarn } from '@/services/ensureAgentMarketSkills';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 
 import { useDetailContext } from '../../DetailProvider';
 
-const styles = createStaticStyles(({ css }) => ({
-  buttonGroup: css`
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({
+  buttonGroup: { width: '100%' },
+  forkButton: {
+    flex: '1',
+    width: 'unset',
+    borderStartStartRadius: '0',
+    borderEndStartRadius: '0',
+  },
+  // Match Button type="primary" on the right so the two halves read as one
+  // pill. (colorPrimary bg + colorBgLayout text) auto-flips with the theme:
+  // dark bg + near-white text in light theme, white bg + near-black text
+  // in dark theme. We use colorBgLayout directly instead of the
+  // semantically-named colorTextLightSolid because the cssVar proxy doesn't
+  // pick up LobeHub's JS-level override of that token.
+  visibilitySelect: {
+    width: '130px',
+    borderColor: cssVar.colorPrimary,
+    borderInlineEndWidth: '0',
+    borderStartEndRadius: '0',
+    borderEndEndRadius: '0',
+    color: cssVar.colorBgLayout,
+    backgroundColor: cssVar.colorPrimary,
+    backgroundImage: 'none',
+  },
+  // Hover / active feedback; skipped while the select is disabled.
+  visibilitySelectInteractive: {
+    borderColor: {
+      'default': cssVar.colorPrimary,
+      ':hover': cssVar.colorPrimaryHover,
+      ':active': cssVar.colorPrimaryActive,
+    },
+    backgroundColor: {
+      'default': cssVar.colorPrimary,
+      ':hover': cssVar.colorPrimaryHover,
+      ':active': cssVar.colorPrimaryActive,
+    },
+  },
+});
 
 /**
  * Generate a market identifier (8-character lowercase alphanumeric string)
@@ -36,18 +70,21 @@ const generateMarketIdentifier = () => {
   return generate();
 };
 
+type ForkTarget = 'private' | 'public';
+
 const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { identifier, title, config, avatar, backgroundColor, description, tags, editorData } =
     useDetailContext();
   const [isLoading, setIsLoading] = useState(false);
   const createAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
   const { isAuthenticated, signIn } = useMarketAuth();
   const { allowed: canCreate } = usePermission('create_content');
   const activeWorkspaceId = useActiveWorkspaceId();
+  const [visibility, setVisibility] = useState<ForkTarget>('private');
 
   const meta = {
     avatar,
@@ -58,8 +95,12 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
     title,
   };
 
-  const handleForkAndChat = async () => {
-    if (!canCreate) return;
+  // `target` only matters in workspace mode. Personal-mode forks ignore it
+  // (every row there is implicitly owner-private). Default = Private so
+  // newly-grabbed agents don't surface to teammates before the user has
+  // had a chance to vet them.
+  const handleForkAndChat = async (target: ForkTarget = 'private') => {
+    if (!canCreate || isLoading) return;
     // Check if user is authenticated
     if (!isAuthenticated) {
       try {
@@ -77,29 +118,31 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
 
       if (existingAgentId) {
         // User has already forked this agent, navigate to existing fork
-        message.info(t('fork.alreadyForked'));
-        navigate(SESSION_CHAT_URL(existingAgentId, mobile));
+        toast.info(t('fork.alreadyForked'));
+        navigate(AGENT_CHAT_URL(existingAgentId, mobile));
         return;
       }
 
       // Generate a unique identifier for the forked agent
       const newIdentifier = generateMarketIdentifier();
 
-      // When forking inside a workspace, attribute the fork to the workspace's
-      // Market organization mirror so `agents.ownerId` ends up on the org
-      // account rather than the actor. Provisioning is idempotent.
+      // Workspace mode forks must be attributed to the workspace's Market
+      // organization mirror — the per-user trust token always carries the
+      // workspaceId, so Market rejects the request without
+      // `x-lobe-owner-account-id` (403). Whether the local agent ends up
+      // private or public is independent of this market-side ownership.
+      //
+      // Freshly created workspaces get the Market org provisioned upfront in
+      // `workspace.create` / the Stripe webhook. `autoProvision: true` is a
+      // best-effort backfill for historical workspaces that predate that
+      // change; if the caller isn't the owner it silently falls through and
+      // the fork surfaces the failure as the usual `fork.failed` toast.
       let actAs: number | undefined;
       if (activeWorkspaceId) {
-        try {
-          const { marketAccountId } =
-            await lambdaClient.workspace.ensureMarketOrganization.mutate();
-          actAs = marketAccountId;
-        } catch (error) {
-          console.warn(
-            'Failed to provision Market organization for workspace; falling back to personal fork:',
-            error,
-          );
-        }
+        const { marketAccountId } = await lambdaClient.workspace.ensureMarketOrganization.mutate({
+          autoProvision: true,
+        });
+        actAs = marketAccountId;
       }
 
       // Step 2: Fork the agent via Market API (single-item batch)
@@ -137,8 +180,14 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
         },
       };
 
-      // Step 4: Add to local agent list
-      const result = await createAgent(agentData);
+      // Step 4: Add to local agent list. `target` decides where it lands —
+      // Private bucket (only the creator sees it) or workspace-shared
+      // (visible to every member). In personal mode `visibility` is left
+      // unset and the column defaults to `public` (no-op).
+      const result = await createAgent({
+        ...agentData,
+        ...(activeWorkspaceId ? { visibility: target } : {}),
+      });
       await refreshAgentList();
 
       // Step 5: Report fork event (using 'add' event type)
@@ -148,30 +197,78 @@ const ForkAndChat = memo<{ mobile?: boolean }>(({ mobile }) => {
         source: location.pathname,
       });
 
-      message.success(t('fork.success'));
+      toast.success(t('fork.success'));
 
-      // Step 6: Navigate to chat
-      navigate(SESSION_CHAT_URL(result!.agentId, mobile));
+      // Step 6: Install the Market skills the agent references. The agent already
+      // exists, so this never throws and only ever adds a non-blocking warning.
+      await ensureAgentMarketSkillsAndWarn(config.plugins);
+
+      // Step 7: Navigate to chat
+      navigate(AGENT_CHAT_URL(result!.agentId, mobile));
     } catch (error: any) {
       console.error('Fork failed:', error);
-      message.error(t('fork.failed'));
+      toast.error(t('fork.failed'));
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Personal mode has no Private/Public split — render the plain primary
+  // button so users don't see a meaningless dropdown.
+  if (!activeWorkspaceId) {
+    return (
+      <Button
+        block
+        className={stylex.props(styles.buttonGroup).className}
+        disabled={!canCreate}
+        loading={isLoading}
+        size={'large'}
+        type={'primary'}
+        onClick={() => handleForkAndChat('private')}
+      >
+        {t('fork.forkAndChat')}
+      </Button>
+    );
+  }
+
+  // Workspace mode: Select on the left chooses Private (default) vs Public,
+  // primary button on the right runs the fork. Keeping the choice next to
+  // the action makes the target visibility explicit at click time.
+  const visibilityOptions = [
+    { label: t('fork.visibilityPrivate'), value: 'private' },
+    { label: t('fork.visibilityPublic'), value: 'public' },
+  ];
+
+  const isVisibilityDisabled = !canCreate || isLoading;
+
   return (
-    <Button
-      block
-      className={styles.buttonGroup}
-      disabled={!canCreate}
-      loading={isLoading}
-      size={'large'}
-      type={'primary'}
-      onClick={handleForkAndChat}
-    >
-      {t('fork.forkAndChat')}
-    </Button>
+    <Flexbox horizontal className={stylex.props(styles.buttonGroup).className} gap={0}>
+      <Select
+        disabled={isVisibilityDisabled}
+        options={visibilityOptions}
+        size={'large'}
+        suffixIconProps={{ color: cssVar.colorBgLayout }}
+        value={visibility}
+        className={
+          stylex.props(
+            styles.visibilitySelect,
+            !isVisibilityDisabled && styles.visibilitySelectInteractive,
+          ).className
+        }
+        onChange={(v) => setVisibility(v as ForkTarget)}
+      />
+      <Button
+        block
+        className={stylex.props(styles.forkButton).className}
+        disabled={!canCreate}
+        loading={isLoading}
+        size={'large'}
+        type={'primary'}
+        onClick={() => handleForkAndChat(visibility)}
+      >
+        {t('fork.forkAndChat')}
+      </Button>
+    </Flexbox>
   );
 });
 

@@ -48,8 +48,12 @@ export interface SkillSummary {
 export interface SkillDetail extends SkillSummary {
   /** Raw SKILL.md content when requested by callers. */
   content?: string;
+  /** UpdatedAt marker captured from the post-refine backing document for receipt rollback freshness checks. */
+  expectedCurrentDocumentUpdatedAt?: string;
   /** Parsed index frontmatter. */
   frontmatter: SkillFrontmatter;
+  /** Document history id captured immediately before a mutating skill write. */
+  preMutationHistoryId?: string;
 }
 
 /** Current managed skill target snapshot used by proposal merge preflight checks. */
@@ -92,7 +96,7 @@ export interface GetSkillInput extends SkillTargetInput {
 export interface CreateSkillInput {
   /** Agent id that owns the skill documents. */
   agentId: string;
-  /** Markdown body authored by the skill-management agent; must not include YAML frontmatter. */
+  /** Markdown body authored by the skill-management agent; a pasted YAML frontmatter block is stripped before rendering. */
   bodyMarkdown: string;
   /** Frontmatter description to persist for the skill. */
   description: string;
@@ -110,7 +114,7 @@ export interface CreateSkillInput {
 export interface ReplaceSkillIndexInput extends SkillTargetInput {
   /** Agent id that owns the skill documents. */
   agentId: string;
-  /** Replacement Markdown body authored by the skill-management agent; must not include YAML frontmatter. */
+  /** Replacement Markdown body authored by the skill-management agent; a pasted YAML frontmatter block is stripped before rendering. */
   bodyMarkdown: string;
   /** Optional frontmatter description override. */
   description?: string;

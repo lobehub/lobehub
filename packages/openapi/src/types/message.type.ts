@@ -1,10 +1,14 @@
-import type { DBMessageItem, FileItem } from '@lobechat/types';
 import { z } from 'zod';
 
-import type { SessionItem, TopicItem } from '@/database/schemas';
-
+import type {
+  PublicFile,
+  PublicMessage,
+  PublicSession,
+  PublicTopic,
+} from '../helpers/public-fields';
 import type { IPaginationQuery, PaginationQueryResponse } from './common.type';
 import { PaginationQuerySchema } from './common.type';
+import { EvalPaginationSchema } from './eval-resource.type';
 
 // ==================== Message Query Types ====================
 
@@ -20,11 +24,15 @@ export const MessagesQueryByTopicRequestSchema = z.object({
  * Message count statistics query parameters
  */
 export interface MessagesCountQuery {
+  threadId?: string;
+  topicId?: string;
   topicIds?: string[];
   userId?: string;
 }
 
 export const MessagesCountQuerySchema = z.object({
+  topicId: z.string().min(1).optional(),
+  threadId: z.string().min(1).optional(),
   // Count by topic ID array (comma-separated string, e.g., "topic1,topic2,topic3")
   topicIds: z.string().nullish(),
   // Count by user ID (admin only)
@@ -53,19 +61,24 @@ export const CountByUserRequestSchema = z.object({
  * Message list query parameters
  */
 export interface MessagesListQuery extends IPaginationQuery {
+  limit?: number;
+  offset?: number;
   role?: 'user' | 'system' | 'assistant' | 'tool';
+  threadId?: string;
   topicId?: string;
   userId?: string;
 }
 
 export const MessagesListQuerySchema = z
   .object({
+    threadId: z.string().min(1).optional(),
     // Filter parameters
     topicId: z.string().nullish(),
     userId: z.string().nullish(),
     role: z.enum(['user', 'system', 'assistant', 'tool']).nullish(),
   })
   .extend(PaginationQuerySchema.shape)
+  .extend(EvalPaginationSchema.shape)
   .refine((data) => Boolean(data.topicId || data.userId), {
     message: 'At least one filter parameter must be provided: topicId or userId',
   });
@@ -123,7 +136,7 @@ export interface MessagesCreateRequest {
 
 export const MessagesCreateRequestSchema = z.object({
   content: z.string().min(1, 'Message content cannot be empty'),
-  role: z.enum(['user', 'system', 'assistant', 'tool'], { required_error: 'Invalid role type' }),
+  role: z.enum(['user', 'system', 'assistant', 'tool'], { error: 'Invalid role type' }),
 
   // AI-related fields
   model: z.string().nullish(), // Model used
@@ -158,7 +171,7 @@ export const MessagesCreateRequestSchema = z.object({
 });
 
 export const MessagesCreateWithReplyRequestSchema = MessagesCreateRequestSchema.extend({
-  role: z.literal('user', { errorMap: () => ({ message: 'Role must be user when creating an AI reply' }) }),
+  role: z.literal('user', { error: 'Role must be user when creating an AI reply' }),
 });
 
 export type MessagesCreateWithReplyRequest = z.infer<typeof MessagesCreateWithReplyRequestSchema>;
@@ -190,7 +203,9 @@ export interface MessagesDeleteBatchRequest {
 }
 
 export const MessagesDeleteBatchRequestSchema = z.object({
-  messageIds: z.array(z.string().min(1, 'Message ID cannot be empty')).min(1, 'Message ID array cannot be empty'),
+  messageIds: z
+    .array(z.string().min(1, 'Message ID cannot be empty'))
+    .min(1, 'Message ID array cannot be empty'),
 });
 
 // ==================== Message Response Types ====================
@@ -200,15 +215,15 @@ export interface MessageIdParam {
 }
 
 // Message type queried from database join, includes associated session and topic info
-export interface MessageResponseFromDatabase extends DBMessageItem {
-  filesToMessages: { file: FileItem; messageId: string }[] | null;
-  session: SessionItem | null;
-  topic: TopicItem | null;
+export interface MessageResponseFromDatabase extends PublicMessage {
+  filesToMessages: { file: PublicFile; messageId: string }[] | null;
+  session: PublicSession | null;
+  topic: PublicTopic | null;
 }
 
 // Return type for message query, includes associated session and topic info
 export interface MessageResponse extends Omit<MessageResponseFromDatabase, 'filesToMessages'> {
-  files: FileItem[] | null;
+  files: PublicFile[] | null;
 }
 
 export type MessageListResponse = PaginationQueryResponse<{

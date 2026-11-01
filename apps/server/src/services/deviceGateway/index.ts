@@ -1,1008 +1,518 @@
-import path from 'node:path';
-
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import {
-  type DeviceMessageApiResult,
+  describeGatewayRequestFailure,
   type DeviceStatusResult,
   type DeviceSystemInfo,
-  type DeviceToolCallResult,
   GatewayHttpClient,
-  type GatewayMcpStdioParams,
 } from '@lobechat/device-gateway-client';
-import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import type {
-  DeviceGitAheadBehind,
-  DeviceGitBranchDiffPatches,
-  DeviceGitBranchInfo,
-  DeviceGitBranchListItem,
-  DeviceGitCheckoutResult,
-  DeviceGitDeleteBranchResult,
-  DeviceGitFileRevertResult,
-  DeviceGitLinkedPullRequestResult,
-  DeviceGitRemoteBranchListItem,
-  DeviceGitRenameBranchResult,
-  DeviceGitSyncResult,
-  DeviceGitWorkingTreeFiles,
-  DeviceGitWorkingTreePatches,
-  DeviceGitWorkingTreeStatus,
-  DeviceGitWorktreeListItem,
-  DeviceListProjectSkillsResult,
-  DeviceLocalFilePreviewResult,
-  DeviceMoveProjectFileItem,
-  DeviceMoveProjectFileResultItem,
-  DeviceProjectFileIndexResult,
-  DeviceRenameProjectFileResult,
-  DeviceWriteProjectFileResult,
-  ProjectSkillMeta,
-  WorkspaceInitResult,
-} from '@lobechat/types';
+import type { DeviceClient, DeviceMetricSample } from '@lobechat/types';
 import debug from 'debug';
 
 import { gatewayEnv } from '@/envs/gateway';
+import { redisService } from '@/server/services/redis';
+
+import * as agents from './agents';
+import { resolveDeviceClientKinds } from './clientKinds';
+import * as clientUpdate from './clientUpdate';
+import * as gitRead from './gitRead';
+import * as gitWrite from './gitWrite';
+import * as projectFileMutations from './projectFileMutations';
+import * as projectFiles from './projectFiles';
+import * as terminal from './terminal';
+import type { DeviceClientGetter, DeviceRpcArgs } from './types';
+import * as workspace from './workspace';
 
 const log = debug('lobe-server:device-gateway');
 
-/**
- * Is `target` the same as, or nested inside, `root`?
- *
- * The device's working directory may be a POSIX path (`/Users/…`) or a Windows
- * path (`C:\…`) while this check runs on the cloud server (POSIX). We pick the
- * path flavour from the root's shape so a Windows device path is still resolved
- * with Windows semantics rather than being mangled by `path.posix`.
- */
-export const isPathWithinRoot = (root: string, target: string): boolean => {
-  const p = /^[A-Z]:[/\\]/i.test(root) ? path.win32 : path.posix;
-  if (!p.isAbsolute(root) || !p.isAbsolute(target)) return false;
-  const relative = p.relative(p.resolve(root), p.resolve(target));
-  return relative === '' || (!relative.startsWith('..') && !p.isAbsolute(relative));
-};
-
-/**
- * Guard the web/remote file mutations (move / rename / write) against escaping
- * the project root. These routes accept absolute paths straight from an
- * untrusted browser session, so before forwarding them to a device we confirm
- * every path stays inside the workspace the UI is operating in — otherwise a
- * caller could bypass the Files tree and mutate arbitrary locations on the
- * device. Mirrors the read path's `workspaceRoot` containment check.
- */
-const assertPathsWithinWorkspace = (
-  workspaceRoot: string,
-  candidates: Array<string | undefined>,
-): void => {
-  if (!workspaceRoot) throw new Error('A workspace root is required for file mutations');
-
-  for (const candidate of candidates) {
-    if (!candidate || !isPathWithinRoot(workspaceRoot, candidate)) {
-      throw new Error(`Path is outside the approved workspace: ${candidate ?? '(empty)'}`);
-    }
-  }
-};
+export { isPathWithinRoot, joinDevicePath } from './paths';
+export { isValidDirectoryName } from '@lobechat/utils/directoryName';
 
 export type { DeviceAttachment, DeviceStatusResult, DeviceSystemInfo };
 
+/**
+ * Outcome of a device system-info read. `reason` is the gateway's code when it
+ * gave one (`TIMEOUT`, `DEVICE_OFFLINE`, `DEVICE_NOT_FOUND`), otherwise a local one.
+ */
+export type DeviceSystemInfoRead =
+  { ok: true; systemInfo: DeviceSystemInfo } | { ok: false; reason: string };
+
+/** One extra attempt for a device read; see `readDevices`. */
+const DEVICE_READ_ATTEMPTS = 2;
+const DEVICE_READ_RETRY_DELAY_MS = 250;
+
+/**
+ * The gateway service. Device presence reads live here; every other device RPC
+ * is a module function (`gitRead`, `projectFiles`, `terminal`, …) that this
+ * class exposes under its original method name, handing it the lazy client.
+ */
 export class DeviceGateway {
   private client: GatewayHttpClient | null = null;
+
+  private readonly clientGetter: DeviceClientGetter = () => this.getClient();
+
+  /**
+   * Run a device READ, retrying once and reporting the fallback out loud.
+   *
+   * These reads decide which devices a run may reach, and the fallback value is
+   * indistinguishable from a legitimately empty pool: a single dropped
+   * connection therefore reads as "every device is offline", which sends a
+   * device-bound run to the cloud sandbox instead. Retrying absorbs the blip,
+   * and the warning leaves the breadcrumb that was missing entirely — the old
+   * bare `catch {}` made this failure invisible in every log.
+   */
+  private async readDevices<T>(
+    label: string,
+    context: { userId: string; workspaceId?: string },
+    read: () => Promise<T>,
+    fallback: T,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= DEVICE_READ_ATTEMPTS; attempt++) {
+      try {
+        return await read();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (attempt < DEVICE_READ_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, DEVICE_READ_RETRY_DELAY_MS));
+          continue;
+        }
+        console.warn(`[DeviceGateway] ${label} failed; treating the online set as empty`, {
+          attempts: attempt,
+          error: message,
+          userId: context.userId,
+          workspaceId: context.workspaceId,
+        });
+      }
+    }
+    return fallback;
+  }
 
   get isConfigured(): boolean {
     return !!gatewayEnv.DEVICE_GATEWAY_URL;
   }
 
-  async queryDeviceStatus(userId: string): Promise<DeviceStatusResult> {
+  async queryDeviceStatus(userId: string, workspaceId?: string): Promise<DeviceStatusResult> {
     const client = this.getClient();
     if (!client) return { deviceCount: 0, online: false };
 
-    try {
-      return await client.queryDeviceStatus(userId);
-    } catch {
-      return { deviceCount: 0, online: false };
-    }
+    return this.readDevices(
+      'queryDeviceStatus',
+      { userId, workspaceId },
+      () => client.queryDeviceStatus(userId, workspaceId),
+      { deviceCount: 0, online: false },
+    );
   }
 
-  async queryDeviceList(userId: string): Promise<DeviceAttachment[]> {
+  // Pass a `workspaceId` to address a workspace-owned device pool (the gateway
+  // routes to the `workspace:<id>` principal); omit it for the personal pool.
+  async queryDeviceList(userId: string, workspaceId?: string): Promise<DeviceAttachment[]> {
     const client = this.getClient();
     if (!client) return [];
 
+    return this.readDevices(
+      'queryDeviceList',
+      { userId, workspaceId },
+      async () => {
+        const devices = await client.queryDeviceList(userId, workspaceId);
+        // The gateway already dedupes to one entry per physical device, with its
+        // live connections nested as `channels`. Map to the runtime shape; every
+        // returned device has at least one channel, so it's online.
+        return devices.map((d) => ({
+          // `channels` may be absent if the gateway worker deploy lags behind the
+          // server (separate Cloudflare deploy); tolerate the legacy flat shape.
+          //
+          // Sorted newest-first because every consumer reads `channels[0]` as
+          // "this device's current connection" — the settings row's
+          // "Connected {time}", a ghost row's `lastSeen`, its hostname/platform
+          // fallback — while `sortDevicesByActivity` ranks by the FRESHEST
+          // channel. The gateway promises no order, so leaving it raw lets a
+          // multi-channel device rank by one connection and get labelled with
+          // another. Normalising here (the single entry point both `listDevices`
+          // and `getScopedOnlineDevices` pull channels through) makes
+          // `channels[0]` mean the same thing everywhere.
+          channels: (d.channels ?? [])
+            .map((c) => ({
+              channel: c.channel,
+              connectedAt: new Date(c.connectedAt).toISOString(),
+              connectionId: c.connectionId,
+            }))
+            .sort((a, b) => Date.parse(b.connectedAt) - Date.parse(a.connectedAt)),
+          deviceId: d.deviceId,
+          hostname: d.hostname,
+          lastSeen: new Date(d.connectedAt).toISOString(),
+          online: true,
+          platform: d.platform,
+        }));
+      },
+      [],
+    );
+  }
+
+  /**
+   * The device's system info, preferring the desktop app's answer: its
+   * `supportedTools` gate desktop-only tools, and when `lh connect` is up on the
+   * same device an unconstrained read is answered by the CLI, which reports
+   * none. When the desktop read fails for any reason, ask whichever client the
+   * device has: a device without the desktop app answers `NO_CAPABLE_CONNECTION`,
+   * and a desktop that timed out or whose socket is closing (`TIMEOUT`,
+   * `DEVICE_OFFLINE`) may still sit beside a live `lh connect`, which is the
+   * answer canary got. A gateway that predates `clientKinds` answers the first
+   * read as before.
+   *
+   * `maxAgeMs` lets a caller accept an answer this device gave within that
+   * window instead of a fresh round trip over its WebSocket. The send path
+   * asks every turn and the answer changes only when the client upgrades or
+   * the user moves the daemon, so a few minutes of staleness there is a
+   * round trip saved per send; callers that need the live answer (an
+   * explicit device inspection) leave it unset. Only successful answers are
+   * remembered — an offline device is asked again next time.
+   */
+  async queryDeviceSystemInfo(
+    userId: string,
+    deviceId: string,
+    workspaceId?: string,
+    options?: { maxAgeMs?: number },
+  ): Promise<DeviceSystemInfo | undefined> {
+    const query = async () => {
+      const desktop = await this.readDeviceSystemInfo(userId, deviceId, workspaceId, {
+        clientKinds: ['desktop'],
+      });
+      if (desktop.ok) return desktop.systemInfo;
+
+      const any = await this.readDeviceSystemInfo(userId, deviceId, workspaceId);
+      return any.ok ? any.systemInfo : undefined;
+    };
+
+    const maxAgeMs = options?.maxAgeMs;
+    if (!maxAgeMs || maxAgeMs <= 0) return query();
+
+    return redisService.deviceSystemInfo.remember(
+      { userId, deviceId, workspaceId },
+      query,
+      maxAgeMs,
+    );
+  }
+
+  /**
+   * Like {@link queryDeviceSystemInfo}, but a failed read says why. Use it when
+   * "the device did not answer" must not be mistaken for "the device answered
+   * without this capability" — e.g. gating a tool on `supportedTools`.
+   */
+  async readDeviceSystemInfo(
+    userId: string,
+    deviceId: string,
+    workspaceId?: string,
+    options?: { clientKinds?: DeviceClient[] },
+  ): Promise<DeviceSystemInfoRead> {
+    const client = this.getClient();
+    if (!client) return { ok: false, reason: 'GATEWAY_NOT_CONFIGURED' };
+
     try {
-      const devices = await client.queryDeviceList(userId);
-      // The gateway already dedupes to one entry per physical device, with its
-      // live connections nested as `channels`. Map to the runtime shape; every
-      // returned device has at least one channel, so it's online.
-      return devices.map((d) => ({
-        // `channels` may be absent if the gateway worker deploy lags behind the
-        // server (separate Cloudflare deploy); tolerate the legacy flat shape.
-        channels: (d.channels ?? []).map((c) => ({
-          channel: c.channel,
-          connectedAt: new Date(c.connectedAt).toISOString(),
-          connectionId: c.connectionId,
-        })),
-        deviceId: d.deviceId,
-        hostname: d.hostname,
-        lastSeen: new Date(d.connectedAt).toISOString(),
-        online: true,
-        platform: d.platform,
-      }));
-    } catch {
+      const result = await client.getDeviceSystemInfo(userId, deviceId, workspaceId, options);
+      if (result.success && result.systemInfo) return { ok: true, systemInfo: result.systemInfo };
+      log(
+        'readDeviceSystemInfo: unanswered for userId=%s, deviceId=%s: %s',
+        userId,
+        deviceId,
+        result.error,
+      );
+      return { ok: false, reason: result.error ?? 'NO_SYSTEM_INFO' };
+    } catch (error) {
+      log('readDeviceSystemInfo: failed for userId=%s, deviceId=%s: %O', userId, deviceId, error);
+      return { ok: false, reason: describeGatewayRequestFailure(error, 'RPC call').code };
+    }
+  }
+
+  /**
+   * The device's health samples held by the gateway (two days), observed at or
+   * after `since`. Unlike the RPC reads this works while the device is
+   * offline — the samples live in gateway storage, not on the device.
+   *
+   * A failed read degrades to no samples: the chart is a polled side panel,
+   * and surfacing a gateway blip as a 500 only turns each poll (and its SWR
+   * retries) into an error log. The next poll picks the history back up.
+   */
+  async queryDeviceMetrics(params: {
+    deviceId: string;
+    since: number;
+    userId: string;
+    workspaceId?: string;
+  }): Promise<DeviceMetricSample[]> {
+    const client = this.getClient();
+    if (!client) return [];
+    try {
+      return await client.getDeviceMetrics(params.userId, params.deviceId, {
+        since: params.since,
+        workspaceId: params.workspaceId,
+      });
+    } catch (error) {
+      console.warn('[DeviceGateway] device metrics read failed; returning no samples', {
+        deviceId: params.deviceId,
+        error: error instanceof Error ? error.message : String(error),
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+      });
       return [];
     }
   }
 
-  async queryDeviceSystemInfo(
-    userId: string,
-    deviceId: string,
-  ): Promise<DeviceSystemInfo | undefined> {
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.getDeviceSystemInfo(userId, deviceId);
-      return result.success ? result.systemInfo : undefined;
-    } catch {
-      log('queryDeviceSystemInfo: failed for userId=%s, deviceId=%s', userId, deviceId);
-      return undefined;
-    }
+  initWorkspace(...args: DeviceRpcArgs<typeof workspace.initWorkspace>) {
+    return workspace.initWorkspace(this.clientGetter, ...args);
   }
 
-  /**
-   * Scan a bound project directory on the device in a single round-trip:
-   * project skills (`.agents/skills` + `.claude/skills`) plus the root
-   * `AGENTS.md` / `CLAUDE.md`. Routed through the generic device RPC relay
-   * (`invokeRpc`) — a server-internal channel the agent never sees, distinct
-   * from the LLM-facing tool-call path.
-   *
-   * Returns `undefined` when the gateway is unconfigured, the device is offline,
-   * or the call fails — callers fall back to the cached scan.
-   */
-  async initWorkspace(params: {
-    deviceId: string;
-    scope: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<WorkspaceInitResult | undefined> {
-    const { userId, deviceId, scope, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      // The device returns rich `ProjectSkillItem`s; narrow to metadata only so
-      // the cached `workingDirs` payload stays small (SKILL.md bodies are still
-      // read lazily at activation time).
-      const result = await client.invokeRpc<{
-        instructions?: WorkspaceInitResult['instructions'];
-        skills?: (ProjectSkillMeta & Record<string, unknown>)[];
-      }>({ deviceId, timeout, userId }, { method: 'initWorkspace', params: { scope } });
-
-      if (!result.success || !result.data) {
-        log('initWorkspace: failed for deviceId=%s — %s', deviceId, result.error);
-        return undefined;
-      }
-
-      const { instructions, skills } = result.data;
-      return {
-        instructions: instructions ?? [],
-        skills: (skills ?? []).map(({ description, name, path }) => ({
-          description,
-          name,
-          path,
-        })),
-      };
-    } catch (error) {
-      log('initWorkspace: error for deviceId=%s — %O', deviceId, error);
-      return undefined;
-    }
+  prepareSkillDirectory(...args: DeviceRpcArgs<typeof workspace.prepareSkillDirectory>) {
+    return workspace.prepareSkillDirectory(this.clientGetter, ...args);
   }
 
-  /**
-   * Generic helper for the granular git read RPCs (branch / PR / working-tree /
-   * ahead-behind). Returns `undefined` when the gateway is unconfigured, the
-   * device is offline, or the call fails — callers treat that as "unknown".
-   */
-  private async invokeGitRead<T>(
-    method: string,
-    params: { deviceId: string; timeout?: number; userId: string },
-    rpcParams: Record<string, unknown>,
-  ): Promise<T | undefined> {
-    const { userId, deviceId, timeout = 15_000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.invokeRpc<T>(
-        { deviceId, timeout, userId },
-        { method, params: rpcParams },
-      );
-
-      if (!result.success || result.data === undefined) {
-        log('%s: failed for deviceId=%s — %s', method, deviceId, result.error);
-        return undefined;
-      }
-
-      return result.data;
-    } catch (error) {
-      log('%s: error for deviceId=%s — %O', method, deviceId, error);
-      return undefined;
-    }
+  enrollWorkspace(...args: DeviceRpcArgs<typeof workspace.enrollWorkspace>) {
+    return workspace.enrollWorkspace(this.clientGetter, ...args);
   }
 
-  /** Branch name + detached flag for a directory on a remote device. */
-  gitBranch(params: { deviceId: string; path: string; userId: string }) {
-    return this.invokeGitRead<DeviceGitBranchInfo>('getGitBranch', params, { path: params.path });
+  unenrollWorkspace(...args: DeviceRpcArgs<typeof workspace.unenrollWorkspace>) {
+    return workspace.unenrollWorkspace(this.clientGetter, ...args);
   }
 
-  /** The GitHub PR linked to a branch in a directory on a remote device. */
-  gitLinkedPullRequest(params: { branch: string; deviceId: string; path: string; userId: string }) {
-    return this.invokeGitRead<DeviceGitLinkedPullRequestResult>('getLinkedPullRequest', params, {
-      branch: params.branch,
-      path: params.path,
-    });
+  gitBranch(...args: DeviceRpcArgs<typeof gitRead.gitBranch>) {
+    return gitRead.gitBranch(this.clientGetter, ...args);
   }
 
-  /** Working-tree dirty-file counts for a directory on a remote device. */
-  gitWorkingTreeStatus(params: { deviceId: string; path: string; userId: string }) {
-    return this.invokeGitRead<DeviceGitWorkingTreeStatus>('getGitWorkingTreeStatus', params, {
-      path: params.path,
-    });
+  gitLinkedPullRequest(...args: DeviceRpcArgs<typeof gitRead.gitLinkedPullRequest>) {
+    return gitRead.gitLinkedPullRequest(this.clientGetter, ...args);
   }
 
-  /** Ahead/behind commit counts for a directory on a remote device. */
-  gitAheadBehind(params: { deviceId: string; path: string; userId: string }) {
-    return this.invokeGitRead<DeviceGitAheadBehind>('getGitAheadBehind', params, {
-      path: params.path,
-    });
+  gitPullRequestDetail(...args: DeviceRpcArgs<typeof gitRead.gitPullRequestDetail>) {
+    return gitRead.gitPullRequestDetail(this.clientGetter, ...args);
   }
 
-  /** Git worktrees attached to the same repository as a directory on a remote device. */
-  listGitWorktrees(params: { deviceId: string; path: string; userId: string }) {
-    return this.invokeGitRead<DeviceGitWorktreeListItem[]>('listGitWorktrees', params, {
-      path: params.path,
-    });
+  gitPullRequestActivity(...args: DeviceRpcArgs<typeof gitRead.gitPullRequestActivity>) {
+    return gitRead.gitPullRequestActivity(this.clientGetter, ...args);
   }
 
-  /**
-   * List the local branches of a directory on a remote device via the
-   * `listGitBranches` device RPC, so the web/remote branch switcher can populate
-   * the same dropdown the local desktop renders over IPC.
-   */
-  async listGitBranches(params: {
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitBranchListItem[] | undefined> {
-    const { userId, deviceId, path, timeout = 15_000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.invokeRpc<DeviceGitBranchListItem[]>(
-        { deviceId, timeout, userId },
-        { method: 'listGitBranches', params: { path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('listGitBranches: failed for deviceId=%s — %s', deviceId, result.error);
-        return undefined;
-      }
-
-      return result.data;
-    } catch (error) {
-      log('listGitBranches: error for deviceId=%s — %O', deviceId, error);
-      return undefined;
-    }
+  gitPullRequestMergeContext(...args: DeviceRpcArgs<typeof gitRead.gitPullRequestMergeContext>) {
+    return gitRead.gitPullRequestMergeContext(this.clientGetter, ...args);
   }
 
-  /**
-   * Checkout (or create) a branch in a directory on a remote device via the
-   * `checkoutGitBranch` device RPC.
-   */
-  async checkoutGitBranch(params: {
-    branch: string;
-    create?: boolean;
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitCheckoutResult> {
-    const { userId, deviceId, branch, create, path, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) return { error: 'Device gateway not configured', success: false };
-
-    try {
-      const result = await client.invokeRpc<DeviceGitCheckoutResult>(
-        { deviceId, timeout, userId },
-        { method: 'checkoutGitBranch', params: { branch, create, path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('checkoutGitBranch: failed for deviceId=%s — %s', deviceId, result.error);
-        return { error: result.error || 'Checkout failed', success: false };
-      }
-
-      return result.data;
-    } catch (error) {
-      log('checkoutGitBranch: error for deviceId=%s — %O', deviceId, error);
-      return { error: (error as Error)?.message || 'Checkout failed', success: false };
-    }
+  gitWorkingTreeStatus(...args: DeviceRpcArgs<typeof gitRead.gitWorkingTreeStatus>) {
+    return gitRead.gitWorkingTreeStatus(this.clientGetter, ...args);
   }
 
-  /**
-   * Rename a branch in a directory on a remote device via the `renameGitBranch`
-   * device RPC.
-   */
-  async renameGitBranch(params: {
-    deviceId: string;
-    from: string;
-    path: string;
-    timeout?: number;
-    to: string;
-    userId: string;
-  }): Promise<DeviceGitRenameBranchResult> {
-    const { userId, deviceId, from, to, path, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) return { error: 'Device gateway not configured', success: false };
-
-    try {
-      const result = await client.invokeRpc<DeviceGitRenameBranchResult>(
-        { deviceId, timeout, userId },
-        { method: 'renameGitBranch', params: { from, path, to } },
-      );
-
-      if (!result.success || !result.data) {
-        log('renameGitBranch: failed for deviceId=%s — %s', deviceId, result.error);
-        return { error: result.error || 'Rename failed', success: false };
-      }
-
-      return result.data;
-    } catch (error) {
-      log('renameGitBranch: error for deviceId=%s — %O', deviceId, error);
-      return { error: (error as Error)?.message || 'Rename failed', success: false };
-    }
+  gitAheadBehind(...args: DeviceRpcArgs<typeof gitRead.gitAheadBehind>) {
+    return gitRead.gitAheadBehind(this.clientGetter, ...args);
   }
 
-  /**
-   * Delete a branch in a directory on a remote device via the `deleteGitBranch`
-   * device RPC.
-   */
-  async deleteGitBranch(params: {
-    branch: string;
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitDeleteBranchResult> {
-    const { userId, deviceId, branch, path, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) return { error: 'Device gateway not configured', success: false };
-
-    try {
-      const result = await client.invokeRpc<DeviceGitDeleteBranchResult>(
-        { deviceId, timeout, userId },
-        { method: 'deleteGitBranch', params: { branch, path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('deleteGitBranch: failed for deviceId=%s — %s', deviceId, result.error);
-        return { error: result.error || 'Delete failed', success: false };
-      }
-
-      return result.data;
-    } catch (error) {
-      log('deleteGitBranch: error for deviceId=%s — %O', deviceId, error);
-      return { error: (error as Error)?.message || 'Delete failed', success: false };
-    }
+  claudeCodeQuota(...args: DeviceRpcArgs<typeof agents.claudeCodeQuota>) {
+    return agents.claudeCodeQuota(this.clientGetter, ...args);
   }
 
-  /**
-   * Pull (`--ff-only`) the current branch of a directory on a remote device via
-   * the `pullGitBranch` device RPC.
-   */
-  async pullGitBranch(params: {
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitSyncResult> {
-    const { userId, deviceId, path, timeout = 65_000 } = params;
-    const client = this.getClient();
-    if (!client) return { error: 'Device gateway not configured', success: false };
-
-    try {
-      const result = await client.invokeRpc<DeviceGitSyncResult>(
-        { deviceId, timeout, userId },
-        { method: 'pullGitBranch', params: { path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('pullGitBranch: failed for deviceId=%s — %s', deviceId, result.error);
-        return { error: result.error || 'Pull failed', success: false };
-      }
-
-      return result.data;
-    } catch (error) {
-      log('pullGitBranch: error for deviceId=%s — %O', deviceId, error);
-      return { error: (error as Error)?.message || 'Pull failed', success: false };
-    }
+  codexQuota(...args: DeviceRpcArgs<typeof agents.codexQuota>) {
+    return agents.codexQuota(this.clientGetter, ...args);
   }
 
-  /**
-   * Push the current branch of a directory on a remote device via the
-   * `pushGitBranch` device RPC.
-   */
-  async pushGitBranch(params: {
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitSyncResult> {
-    const { userId, deviceId, path, timeout = 65_000 } = params;
-    const client = this.getClient();
-    if (!client) return { error: 'Device gateway not configured', success: false };
-
-    try {
-      const result = await client.invokeRpc<DeviceGitSyncResult>(
-        { deviceId, timeout, userId },
-        { method: 'pushGitBranch', params: { path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('pushGitBranch: failed for deviceId=%s — %s', deviceId, result.error);
-        return { error: result.error || 'Push failed', success: false };
-      }
-
-      return result.data;
-    } catch (error) {
-      log('pushGitBranch: error for deviceId=%s — %O', deviceId, error);
-      return { error: (error as Error)?.message || 'Push failed', success: false };
-    }
+  kimiCodeQuota(...args: DeviceRpcArgs<typeof agents.kimiCodeQuota>) {
+    return agents.kimiCodeQuota(this.clientGetter, ...args);
   }
 
-  /**
-   * Working-tree (unstaged) per-file patches for a directory on a remote device
-   * via the `getGitWorkingTreePatches` device RPC, so the web/remote Review panel
-   * renders the same diffs the local desktop shows over IPC.
-   */
-  async getGitWorkingTreePatches(params: {
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitWorkingTreePatches | undefined> {
-    const { userId, deviceId, path, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.invokeRpc<DeviceGitWorkingTreePatches>(
-        { deviceId, timeout, userId },
-        { method: 'getGitWorkingTreePatches', params: { path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('getGitWorkingTreePatches: failed for deviceId=%s — %s', deviceId, result.error);
-        return undefined;
-      }
-
-      return result.data;
-    } catch (error) {
-      log('getGitWorkingTreePatches: error for deviceId=%s — %O', deviceId, error);
-      return undefined;
-    }
+  listGitWorktrees(...args: DeviceRpcArgs<typeof gitRead.listGitWorktrees>) {
+    return gitRead.listGitWorktrees(this.clientGetter, ...args);
   }
 
-  /**
-   * Branch diff (current branch vs base ref) per-file patches for a directory on
-   * a remote device via the `getGitBranchDiff` device RPC.
-   */
-  async getGitBranchDiff(params: {
-    baseRef?: string;
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitBranchDiffPatches | undefined> {
-    const { userId, deviceId, baseRef, path, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.invokeRpc<DeviceGitBranchDiffPatches>(
-        { deviceId, timeout, userId },
-        { method: 'getGitBranchDiff', params: { baseRef, path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('getGitBranchDiff: failed for deviceId=%s — %s', deviceId, result.error);
-        return undefined;
-      }
-
-      return result.data;
-    } catch (error) {
-      log('getGitBranchDiff: error for deviceId=%s — %O', deviceId, error);
-      return undefined;
-    }
+  listHeterogeneousAgentModels(...args: DeviceRpcArgs<typeof agents.listHeterogeneousAgentModels>) {
+    return agents.listHeterogeneousAgentModels(this.clientGetter, ...args);
   }
 
-  /**
-   * Repo-relative paths of dirty working-tree files for a directory on a remote
-   * device via the `getGitWorkingTreeFiles` device RPC — the Files tab's git
-   * status overlay.
-   */
-  async getGitWorkingTreeFiles(params: {
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitWorkingTreeFiles | undefined> {
-    const { userId, deviceId, path, timeout = 15_000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.invokeRpc<DeviceGitWorkingTreeFiles>(
-        { deviceId, timeout, userId },
-        { method: 'getGitWorkingTreeFiles', params: { path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('getGitWorkingTreeFiles: failed for deviceId=%s — %s', deviceId, result.error);
-        return undefined;
-      }
-
-      return result.data;
-    } catch (error) {
-      log('getGitWorkingTreeFiles: error for deviceId=%s — %O', deviceId, error);
-      return undefined;
-    }
+  listGitBranches(...args: DeviceRpcArgs<typeof gitRead.listGitBranches>) {
+    return gitRead.listGitBranches(this.clientGetter, ...args);
   }
 
-  /**
-   * Project file index (tree) for a directory on a remote device via the
-   * `getProjectFileIndex` device RPC — the Files tab's tree.
-   */
-  async getProjectFileIndex(params: {
-    deviceId: string;
-    scope: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceProjectFileIndexResult | undefined> {
-    const { userId, deviceId, scope, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.invokeRpc<DeviceProjectFileIndexResult>(
-        { deviceId, timeout, userId },
-        { method: 'getProjectFileIndex', params: { scope } },
-      );
-
-      if (!result.success || !result.data) {
-        log('getProjectFileIndex: failed for deviceId=%s — %s', deviceId, result.error);
-        return undefined;
-      }
-
-      return result.data;
-    } catch (error) {
-      log('getProjectFileIndex: error for deviceId=%s — %O', deviceId, error);
-      return undefined;
-    }
+  checkoutGitBranch(...args: DeviceRpcArgs<typeof gitWrite.checkoutGitBranch>) {
+    return gitWrite.checkoutGitBranch(this.clientGetter, ...args);
   }
 
-  /**
-   * Read a preview payload for a file on a remote device. This is read-only and
-   * deliberately mirrors the desktop local-file preview contract without
-   * exposing a `localfile://` URL to web callers.
-   */
-  async getLocalFilePreview(params: {
-    accept?: 'image';
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-    workingDirectory: string;
-  }): Promise<DeviceLocalFilePreviewResult> {
-    const { accept, userId, deviceId, path, workingDirectory, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) return { error: 'Device gateway not configured', success: false };
-
-    try {
-      const result = await client.invokeRpc<DeviceLocalFilePreviewResult>(
-        { deviceId, timeout, userId },
-        {
-          method: 'getLocalFilePreview',
-          params: { accept, path, workingDirectory },
-        },
-      );
-
-      if (!result.success || !result.data) {
-        log('getLocalFilePreview: failed for deviceId=%s — %s', deviceId, result.error);
-        return { error: result.error || 'Failed to load local file preview', success: false };
-      }
-
-      return result.data;
-    } catch (error) {
-      log('getLocalFilePreview: error for deviceId=%s — %O', deviceId, error);
-      return { error: (error as Error).message, success: false };
-    }
+  renameGitBranch(...args: DeviceRpcArgs<typeof gitWrite.renameGitBranch>) {
+    return gitWrite.renameGitBranch(this.clientGetter, ...args);
   }
 
-  /**
-   * Project skills (`.agents/skills` / `.claude/skills`) for a directory on a
-   * remote device via the `listProjectSkills` device RPC — the Resources tab's
-   * skills group in device mode. Mirrors `getProjectFileIndex`; returns
-   * `undefined` when the gateway is unconfigured, the device is offline, or the
-   * call fails so the UI degrades to "no skills".
-   */
-  async listProjectSkills(params: {
-    deviceId: string;
-    scope: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceListProjectSkillsResult | undefined> {
-    const { userId, deviceId, scope, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.invokeRpc<DeviceListProjectSkillsResult>(
-        { deviceId, timeout, userId },
-        { method: 'listProjectSkills', params: { scope } },
-      );
-
-      if (!result.success || !result.data) {
-        log('listProjectSkills: failed for deviceId=%s — %s', deviceId, result.error);
-        return undefined;
-      }
-
-      return result.data;
-    } catch (error) {
-      log('listProjectSkills: error for deviceId=%s — %O', deviceId, error);
-      return undefined;
-    }
+  deleteGitBranch(...args: DeviceRpcArgs<typeof gitWrite.deleteGitBranch>) {
+    return gitWrite.deleteGitBranch(this.clientGetter, ...args);
   }
 
-  /**
-   * List the remote branches (`refs/remotes/origin/*`) of a directory on a
-   * remote device via the `listGitRemoteBranches` device RPC, so the web/remote
-   * Review base-ref picker mirrors the local desktop's.
-   */
-  async listGitRemoteBranches(params: {
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitRemoteBranchListItem[] | undefined> {
-    const { userId, deviceId, path, timeout = 15_000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.invokeRpc<DeviceGitRemoteBranchListItem[]>(
-        { deviceId, timeout, userId },
-        { method: 'listGitRemoteBranches', params: { path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('listGitRemoteBranches: failed for deviceId=%s — %s', deviceId, result.error);
-        return undefined;
-      }
-
-      return result.data;
-    } catch (error) {
-      log('listGitRemoteBranches: error for deviceId=%s — %O', deviceId, error);
-      return undefined;
-    }
+  removeGitWorktree(...args: DeviceRpcArgs<typeof gitWrite.removeGitWorktree>) {
+    return gitWrite.removeGitWorktree(this.clientGetter, ...args);
   }
 
-  /**
-   * Revert (discard working-tree changes to) a single file in a directory on a
-   * remote device via the `revertGitFile` device RPC.
-   */
-  async revertGitFile(params: {
-    deviceId: string;
-    filePath: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitFileRevertResult> {
-    const { userId, deviceId, filePath, path, timeout = 15_000 } = params;
-    const client = this.getClient();
-    if (!client) return { error: 'Device gateway not configured', success: false };
-
-    try {
-      const result = await client.invokeRpc<DeviceGitFileRevertResult>(
-        { deviceId, timeout, userId },
-        { method: 'revertGitFile', params: { filePath, path } },
-      );
-
-      if (!result.success || !result.data) {
-        log('revertGitFile: failed for deviceId=%s — %s', deviceId, result.error);
-        return { error: result.error || 'Revert failed', success: false };
-      }
-
-      return result.data;
-    } catch (error) {
-      log('revertGitFile: error for deviceId=%s — %O', deviceId, error);
-      return { error: (error as Error)?.message || 'Revert failed', success: false };
-    }
+  addGitWorktree(...args: DeviceRpcArgs<typeof gitWrite.addGitWorktree>) {
+    return gitWrite.addGitWorktree(this.clientGetter, ...args);
   }
 
-  /**
-   * Move one or more files/folders within a directory on a remote device, via
-   * the device's `moveLocalFiles` RPC. Powers the Files tree's move in device
-   * mode. Unlike the read RPCs this is a user-initiated mutation, so a missing
-   * gateway / offline device / failed call throws rather than degrading to
-   * `undefined` — the UI surfaces the error instead of silently no-op'ing.
-   */
-  async moveProjectFiles(params: {
-    deviceId: string;
-    items: DeviceMoveProjectFileItem[];
-    timeout?: number;
-    userId: string;
-    workingDirectory: string;
-  }): Promise<DeviceMoveProjectFileResultItem[]> {
-    const { userId, deviceId, items, workingDirectory, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) throw new Error('Device gateway not configured');
-
-    assertPathsWithinWorkspace(
-      workingDirectory,
-      items.flatMap((item) => [item.oldPath, item.newPath]),
-    );
-
-    const result = await client.invokeRpc<DeviceMoveProjectFileResultItem[]>(
-      { deviceId, timeout, userId },
-      { method: 'moveLocalFiles', params: { items } },
-    );
-
-    if (!result.success || !result.data) {
-      log('moveProjectFiles: failed for deviceId=%s — %s', deviceId, result.error);
-      throw new Error(result.error || 'Move failed');
-    }
-
-    return result.data;
+  pullGitBranch(...args: DeviceRpcArgs<typeof gitWrite.pullGitBranch>) {
+    return gitWrite.pullGitBranch(this.clientGetter, ...args);
   }
 
-  /**
-   * Rename a single file/folder in a directory on a remote device, via the
-   * device's `renameLocalFile` RPC. Like `moveProjectFiles`, a transport failure
-   * throws rather than degrading silently.
-   */
-  async renameProjectFile(params: {
-    deviceId: string;
-    newName: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-    workingDirectory: string;
-  }): Promise<DeviceRenameProjectFileResult> {
-    const { userId, deviceId, path, newName, workingDirectory, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) throw new Error('Device gateway not configured');
-
-    // The rename stays in the same directory (the device rejects separators in
-    // `newName`), so containing the source path also contains the target.
-    assertPathsWithinWorkspace(workingDirectory, [path]);
-
-    const result = await client.invokeRpc<DeviceRenameProjectFileResult>(
-      { deviceId, timeout, userId },
-      { method: 'renameLocalFile', params: { newName, path } },
-    );
-
-    if (!result.success || !result.data) {
-      log('renameProjectFile: failed for deviceId=%s — %s', deviceId, result.error);
-      throw new Error(result.error || 'Rename failed');
-    }
-
-    return result.data;
+  pushGitBranch(...args: DeviceRpcArgs<typeof gitWrite.pushGitBranch>) {
+    return gitWrite.pushGitBranch(this.clientGetter, ...args);
   }
 
-  /**
-   * Save edited content back to a file on a remote device, via the device's
-   * `writeLocalFile` RPC. Powers remote save in the LocalFile editor. Like the
-   * other file mutations, a transport failure throws rather than degrading.
-   */
-  async writeProjectFile(params: {
-    content: string;
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-    workingDirectory: string;
-  }): Promise<DeviceWriteProjectFileResult> {
-    const { userId, deviceId, path, content, workingDirectory, timeout = 30_000 } = params;
-    const client = this.getClient();
-    if (!client) throw new Error('Device gateway not configured');
-
-    assertPathsWithinWorkspace(workingDirectory, [path]);
-
-    const result = await client.invokeRpc<DeviceWriteProjectFileResult>(
-      { deviceId, timeout, userId },
-      { method: 'writeLocalFile', params: { content, path } },
-    );
-
-    if (!result.success || !result.data) {
-      log('writeProjectFile: failed for deviceId=%s — %s', deviceId, result.error);
-      throw new Error(result.error || 'Write failed');
-    }
-
-    return result.data;
+  runGitPullRequestAction(...args: DeviceRpcArgs<typeof gitWrite.runGitPullRequestAction>) {
+    return gitWrite.runGitPullRequestAction(this.clientGetter, ...args);
   }
 
-  /**
-   * Check whether a path exists on the device and is a directory, via the same
-   * generic `invokeRpc` channel as `gitInfo`. Lets a web / remote client
-   * validate a manually-entered working directory before binding it. Returns
-   * `undefined` when the gateway is unconfigured or the device is unreachable
-   * (the caller treats "can't verify" as non-blocking).
-   */
-  async statPath(params: {
-    deviceId: string;
-    path: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<{ exists: boolean; isDirectory: boolean; repoType?: 'git' | 'github' } | undefined> {
-    const { userId, deviceId, path, timeout = 8000 } = params;
-    const client = this.getClient();
-    if (!client) return undefined;
-
-    try {
-      const result = await client.invokeRpc<{
-        exists: boolean;
-        isDirectory: boolean;
-        repoType?: 'git' | 'github';
-      }>({ deviceId, timeout, userId }, { method: 'statPath', params: { path } });
-
-      if (!result.success || !result.data) {
-        log('statPath: failed for deviceId=%s — %s', deviceId, result.error);
-        return undefined;
-      }
-
-      return result.data;
-    } catch (error) {
-      log('statPath: error for deviceId=%s — %O', deviceId, error);
-      return undefined;
-    }
+  getGitWorkingTreePatches(...args: DeviceRpcArgs<typeof gitRead.getGitWorkingTreePatches>) {
+    return gitRead.getGitWorkingTreePatches(this.clientGetter, ...args);
   }
 
-  async dispatchAgentRun(params: {
-    agentType: HeterogeneousAgentType;
-    cwd?: string;
-    deviceId?: string;
-    /** Image attachments forwarded to the device as fetchable (signed) URLs. */
-    imageList?: Array<{ id?: string; url: string }>;
-    jwt: string;
-    operationId: string;
-    prompt: string;
-    resumeSessionId?: string;
-    systemContext?: string;
-    topicId: string;
-    userId: string;
-  }): Promise<{ error?: string; success: boolean }> {
-    const client = this.getClient();
-    if (!client) return { error: 'GATEWAY_NOT_CONFIGURED', success: false };
-
-    try {
-      return await client.dispatchAgentRun(params);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      log('dispatchAgentRun: error — %s', message);
-      return { error: message, success: false };
-    }
+  getGitBranchDiff(...args: DeviceRpcArgs<typeof gitRead.getGitBranchDiff>) {
+    return gitRead.getGitBranchDiff(this.clientGetter, ...args);
   }
 
-  async executeToolCall(
-    params: { deviceId: string; operationId?: string; userId: string },
-    toolCall: { apiName: string; arguments: string; identifier: string },
-    timeout = 30_000,
-  ): Promise<DeviceToolCallResult> {
-    const client = this.getClient();
-    if (!client) {
-      return {
-        content: 'Device Gateway is not configured',
-        error: 'GATEWAY_NOT_CONFIGURED',
-        success: false,
-      };
-    }
-
-    log(
-      'executeToolCall: operationId=%s, userId=%s, deviceId=%s, tool=%s/%s',
-      params.operationId ?? 'N/A',
-      params.userId,
-      params.deviceId,
-      toolCall.identifier,
-      toolCall.apiName,
-    );
-
-    try {
-      return await client.executeToolCall(
-        {
-          deviceId: params.deviceId,
-          operationId: params.operationId,
-          timeout,
-          userId: params.userId,
-        },
-        toolCall,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      log('executeToolCall: error — %s', message);
-      return { content: `Device tool call error: ${message}`, error: message, success: false };
-    }
+  getGitWorkingTreeFiles(...args: DeviceRpcArgs<typeof gitRead.getGitWorkingTreeFiles>) {
+    return gitRead.getGitWorkingTreeFiles(this.clientGetter, ...args);
   }
 
-  /**
-   * Tunnel a stdio MCP tool call to a connected device. The cloud server can't
-   * spawn the user's local MCP binary, so the command/args/env are forwarded
-   * to the device, which spawns the stdio server and runs the call locally.
-   */
-  async executeMcpCall(
-    mcpCall: {
-      apiName: string;
-      arguments: string;
-      deviceId: string;
-      identifier: string;
-      params: GatewayMcpStdioParams;
-      userId: string;
-    },
-    timeout = 30_000,
-  ): Promise<DeviceToolCallResult> {
-    const client = this.getClient();
-    if (!client) {
-      return {
-        content: 'Device Gateway is not configured',
-        error: 'GATEWAY_NOT_CONFIGURED',
-        success: false,
-      };
-    }
-
-    log(
-      'executeMcpCall: userId=%s, deviceId=%s, mcp=%s/%s',
-      mcpCall.userId,
-      mcpCall.deviceId,
-      mcpCall.identifier,
-      mcpCall.apiName,
-    );
-
-    try {
-      return await client.executeMcpCall({ ...mcpCall, timeout });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      log('executeMcpCall: error — %s', message);
-      return { content: `Device MCP call error: ${message}`, error: message, success: false };
-    }
+  getProjectFileIndex(...args: DeviceRpcArgs<typeof projectFiles.getProjectFileIndex>) {
+    return projectFiles.getProjectFileIndex(this.clientGetter, ...args);
   }
 
-  async executeMessageApi(
-    params: { deviceId: string; userId: string },
-    api: { apiName: string; payload: Record<string, unknown>; platform: string },
-    timeout = 30_000,
-  ): Promise<DeviceMessageApiResult> {
-    const client = this.getClient();
-    if (!client) {
-      return {
-        content: 'Device Gateway is not configured',
-        error: 'GATEWAY_NOT_CONFIGURED',
-        success: false,
-      };
-    }
+  listProjectDirectory(...args: DeviceRpcArgs<typeof projectFiles.listProjectDirectory>) {
+    return projectFiles.listProjectDirectory(this.clientGetter, ...args);
+  }
 
-    log(
-      'executeMessageApi: userId=%s, deviceId=%s, api=%s/%s',
-      params.userId,
-      params.deviceId,
-      api.platform,
-      api.apiName,
-    );
+  browseDirectory(...args: DeviceRpcArgs<typeof projectFiles.browseDirectory>) {
+    return projectFiles.browseDirectory(this.clientGetter, ...args);
+  }
 
-    try {
-      return await client.executeMessageApi(
-        { deviceId: params.deviceId, timeout, userId: params.userId },
-        api,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      log('executeMessageApi: error — %s', message);
-      return { content: `Device message API error: ${message}`, error: message, success: false };
-    }
+  searchProjectFiles(...args: DeviceRpcArgs<typeof projectFiles.searchProjectFiles>) {
+    return projectFiles.searchProjectFiles(this.clientGetter, ...args);
+  }
+
+  getLocalFilePreview(...args: DeviceRpcArgs<typeof projectFiles.getLocalFilePreview>) {
+    return projectFiles.getLocalFilePreview(this.clientGetter, ...args);
+  }
+
+  copyAssetForPublish(...args: DeviceRpcArgs<typeof projectFiles.copyAssetForPublish>) {
+    return projectFiles.copyAssetForPublish(this.clientGetter, ...args);
+  }
+
+  readExternalAssetForPublish(
+    ...args: DeviceRpcArgs<typeof projectFiles.readExternalAssetForPublish>
+  ) {
+    return projectFiles.readExternalAssetForPublish(this.clientGetter, ...args);
+  }
+
+  listProjectSkills(...args: DeviceRpcArgs<typeof projectFiles.listProjectSkills>) {
+    return projectFiles.listProjectSkills(this.clientGetter, ...args);
+  }
+
+  listClaudeCodeMemory(...args: DeviceRpcArgs<typeof projectFiles.listClaudeCodeMemory>) {
+    return projectFiles.listClaudeCodeMemory(this.clientGetter, ...args);
+  }
+
+  listGitRemoteBranches(...args: DeviceRpcArgs<typeof gitRead.listGitRemoteBranches>) {
+    return gitRead.listGitRemoteBranches(this.clientGetter, ...args);
+  }
+
+  revertGitFile(...args: DeviceRpcArgs<typeof gitWrite.revertGitFile>) {
+    return gitWrite.revertGitFile(this.clientGetter, ...args);
+  }
+
+  moveProjectFiles(...args: DeviceRpcArgs<typeof projectFileMutations.moveProjectFiles>) {
+    return projectFileMutations.moveProjectFiles(this.clientGetter, ...args);
+  }
+
+  renameProjectFile(...args: DeviceRpcArgs<typeof projectFileMutations.renameProjectFile>) {
+    return projectFileMutations.renameProjectFile(this.clientGetter, ...args);
+  }
+
+  writeProjectFile(...args: DeviceRpcArgs<typeof projectFileMutations.writeProjectFile>) {
+    return projectFileMutations.writeProjectFile(this.clientGetter, ...args);
+  }
+
+  createProjectFile(...args: DeviceRpcArgs<typeof projectFileMutations.createProjectFile>) {
+    return projectFileMutations.createProjectFile(this.clientGetter, ...args);
+  }
+
+  createProjectDirectory(
+    ...args: DeviceRpcArgs<typeof projectFileMutations.createProjectDirectory>
+  ) {
+    return projectFileMutations.createProjectDirectory(this.clientGetter, ...args);
+  }
+
+  createDirectory(...args: DeviceRpcArgs<typeof projectFileMutations.createDirectory>) {
+    return projectFileMutations.createDirectory(this.clientGetter, ...args);
+  }
+
+  copyProjectFiles(...args: DeviceRpcArgs<typeof projectFileMutations.copyProjectFiles>) {
+    return projectFileMutations.copyProjectFiles(this.clientGetter, ...args);
+  }
+
+  trashProjectFiles(...args: DeviceRpcArgs<typeof projectFileMutations.trashProjectFiles>) {
+    return projectFileMutations.trashProjectFiles(this.clientGetter, ...args);
+  }
+
+  statPath(...args: DeviceRpcArgs<typeof workspace.statPath>) {
+    return workspace.statPath(this.clientGetter, ...args);
+  }
+
+  dispatchAgentRun(...args: DeviceRpcArgs<typeof agents.dispatchAgentRun>) {
+    return agents.dispatchAgentRun(this.clientGetter, ...args);
+  }
+
+  executeToolCall(...args: DeviceRpcArgs<typeof agents.executeToolCall>) {
+    return agents.executeToolCall(this.clientGetter, ...args);
+  }
+
+  executeMcpCall(...args: DeviceRpcArgs<typeof agents.executeMcpCall>) {
+    return agents.executeMcpCall(this.clientGetter, ...args);
+  }
+
+  executeMessageApi(...args: DeviceRpcArgs<typeof agents.executeMessageApi>) {
+    return agents.executeMessageApi(this.clientGetter, ...args);
+  }
+
+  listListeningPorts(...args: DeviceRpcArgs<typeof workspace.listListeningPorts>) {
+    return workspace.listListeningPorts(this.clientGetter, ...args);
+  }
+
+  getAppUpdateState(...args: DeviceRpcArgs<typeof clientUpdate.getAppUpdateState>) {
+    return clientUpdate.getAppUpdateState(this.clientGetter, ...args);
+  }
+
+  checkAppUpdate(...args: DeviceRpcArgs<typeof clientUpdate.checkAppUpdate>) {
+    return clientUpdate.checkAppUpdate(this.clientGetter, ...args);
+  }
+
+  installAppUpdate(...args: DeviceRpcArgs<typeof clientUpdate.installAppUpdate>) {
+    return clientUpdate.installAppUpdate(this.clientGetter, ...args);
+  }
+
+  createTerminalSession(...args: DeviceRpcArgs<typeof terminal.createTerminalSession>) {
+    return terminal.createTerminalSession(this.clientGetter, ...args);
+  }
+
+  writeTerminal(...args: DeviceRpcArgs<typeof terminal.writeTerminal>) {
+    return terminal.writeTerminal(this.clientGetter, ...args);
+  }
+
+  readTerminal(...args: DeviceRpcArgs<typeof terminal.readTerminal>) {
+    return terminal.readTerminal(this.clientGetter, ...args);
+  }
+
+  resizeTerminal(...args: DeviceRpcArgs<typeof terminal.resizeTerminal>) {
+    return terminal.resizeTerminal(this.clientGetter, ...args);
+  }
+
+  closeTerminal(...args: DeviceRpcArgs<typeof terminal.closeTerminal>) {
+    return terminal.closeTerminal(this.clientGetter, ...args);
+  }
+
+  getCliUpdateState(...args: DeviceRpcArgs<typeof clientUpdate.getCliUpdateState>) {
+    return clientUpdate.getCliUpdateState(this.clientGetter, ...args);
+  }
+
+  checkCliUpdate(...args: DeviceRpcArgs<typeof clientUpdate.checkCliUpdate>) {
+    return clientUpdate.checkCliUpdate(this.clientGetter, ...args);
+  }
+
+  restartCli(...args: DeviceRpcArgs<typeof clientUpdate.restartCli>) {
+    return clientUpdate.restartCli(this.clientGetter, ...args);
   }
 
   private getClient(): GatewayHttpClient | null {
@@ -1011,7 +521,11 @@ export class DeviceGateway {
     if (!url || !token) return null;
 
     if (!this.client) {
-      this.client = new GatewayHttpClient({ gatewayUrl: url, serviceToken: token });
+      this.client = new GatewayHttpClient({
+        gatewayUrl: url,
+        resolveClientKinds: resolveDeviceClientKinds,
+        serviceToken: token,
+      });
     }
     return this.client;
   }

@@ -6,14 +6,17 @@ import { mcpSystemDepsCheckService } from './MCPSystemDepsCheckService';
 import { type InstallationChecker } from './types';
 
 // Hoist the mock to ensure it's available in the factory
-const { mockExecPromise } = vi.hoisted(() => {
+const { debugLog, mockExecPromise } = vi.hoisted(() => {
   return {
+    debugLog: vi.fn(),
     mockExecPromise: vi.fn(),
   };
 });
 
 // Mock node:child_process
 vi.mock('node:child_process');
+
+vi.mock('debug', () => ({ default: () => debugLog }));
 
 // Mock node:util to return our hoisted mock when promisify is called
 vi.mock('node:util', () => ({
@@ -227,6 +230,26 @@ describe('MCPSystemDepsCheckService', () => {
       expect(result.error).toBe('command not found');
     });
 
+    it('should not log check commands or execution error messages', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const mockDependency: SystemDependency = {
+        name: 'private-tool',
+        checkCommand: 'private-tool --token command-secret-marker',
+      };
+
+      mockExecPromise.mockRejectedValue(new Error('execution-error-secret-marker'));
+
+      await mcpSystemDepsCheckService.checkSystemDependency(mockDependency);
+
+      const logOutput = JSON.stringify([debugLog.mock.calls, consoleError.mock.calls]);
+      expect(logOutput).toContain('private-tool');
+      expect(logOutput).toContain('Error');
+      expect(logOutput).not.toContain('command-secret-marker');
+      expect(logOutput).not.toContain('execution-error-secret-marker');
+
+      consoleError.mockRestore();
+    });
+
     it('should handle unknown error types', async () => {
       const mockDependency: SystemDependency = {
         name: 'tool',
@@ -420,6 +443,33 @@ describe('MCPSystemDepsCheckService', () => {
 
       expect(result.needsConfig).toBe(true);
       expect(result.configSchema).toBeDefined();
+    });
+
+    it('should not log deployment configuration schema values', async () => {
+      const mockOption: DeploymentOption = {
+        installationMethod: 'npm',
+        installationDetails: { packageName: 'test-package' },
+        connection: {
+          args: ['index.js'],
+          command: 'node',
+          configSchema: {
+            properties: {
+              apiKey: {
+                description: 'config-schema-secret-marker',
+                required: true,
+                type: 'string',
+              },
+            },
+            type: 'object',
+          },
+        },
+      } as any;
+
+      await mcpSystemDepsCheckService.checkDeployOption(mockOption);
+
+      const logOutput = JSON.stringify(debugLog.mock.calls);
+      expect(logOutput).toContain('needsConfig');
+      expect(logOutput).not.toContain('config-schema-secret-marker');
     });
 
     it('should detect configuration requirements from property-level required flag', async () => {

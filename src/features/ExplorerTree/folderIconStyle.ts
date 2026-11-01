@@ -6,14 +6,15 @@ import type { CSSProperties } from 'react';
 // the file-icon offset through a CSS custom property the wrapper sets — custom
 // properties cascade through shadow DOM, so toggling it on the host reflows
 // the offset live (see `getExplorerTreeStyleVars`).
-const FILE_ICON_OFFSET_VAR = '--explorer-file-icon-offset';
+export const FILE_ICON_OFFSET_VAR = '--explorer-file-icon-offset';
 const FOLDER_ICON_SIZE = '18px';
 const FILE_ICON_SIZE = '16px';
 
-// Chevron column width + row gap at default density (16 + 6). We standardised
-// consumers on default density, so this matches `--trees-icon-width` +
-// `--trees-item-row-gap` exactly.
-const RESERVED_FILE_ICON_OFFSET = '22px';
+// The file-icon slot has to clear the folder chevron column, i.e.
+// `--trees-icon-width` + `--trees-item-row-gap`. These are pierre's defaults at
+// default density; trees that widen either (the document tree) pass their own.
+const DEFAULT_ICON_WIDTH = 16;
+const DEFAULT_ITEM_ROW_GAP = 6;
 
 const MATERIAL_FILE_ICON_ASSETS_URL = genCdnUrl({
   path: 'assets',
@@ -110,9 +111,11 @@ const MATERIAL_FILE_PREFIX_RULES = [
   { iconName: 'vite', prefixes: ['vite.config.'] },
 ] satisfies { iconName: string; prefixes: string[] }[];
 
-const cssString = (value: string) => value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+export const cssString = (value: string) => value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 
 const cssUrl = (url: string) => `url("${cssString(url)}")`;
+
+export const svgMaskUrl = (svg: string) => `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 
 const iconUrl = (iconsUrl: string, iconName: string, open = false) =>
   `${iconsUrl}/${iconName}${open ? '-open' : ''}.svg`;
@@ -203,7 +206,15 @@ ${MATERIAL_FILE_PREFIX_RULES.map(({ iconName, prefixes }) =>
 ).join('\n')}
 `;
 
-export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL) => `
+// pierre renders its own <svg> in the file icon slot; we paint the material /
+// 文稿 glyph over it, so hide the built-in one.
+export const HIDE_FILE_SLOT_SVG_CSS = `
+  [data-item-type="file"] > [data-item-section="icon"] > svg {
+    visibility: hidden;
+  }
+`;
+
+const getFolderIconCSS = (iconsUrl: string) => `
   [data-item-type="folder"] [data-item-section="content"] {
     display: flex;
     align-items: center;
@@ -222,6 +233,11 @@ export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL)
   [data-item-type="folder"][aria-expanded="true"] [data-item-section="content"]::before {
     background-image: ${iconBackground(iconsUrl, 'folder', true)};
   }
+${getFolderIconRules(iconsUrl)}
+`;
+
+// Material file icons keyed off extension / name (js, json, .gitignore, …).
+const getMaterialFileIconCSS = (iconsUrl: string) => `
   [data-item-type="file"] > [data-item-section="icon"] {
     margin-inline-start: var(${FILE_ICON_OFFSET_VAR}, 0px);
     background-image: ${iconBackground(iconsUrl, 'file')};
@@ -229,14 +245,30 @@ export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL)
     background-repeat: no-repeat;
     background-size: ${FILE_ICON_SIZE} ${FILE_ICON_SIZE};
   }
-  [data-item-type="file"] > [data-item-section="icon"] > svg {
-    visibility: hidden;
-  }
-${getFolderIconRules(iconsUrl)}
+${HIDE_FILE_SLOT_SVG_CSS}
 ${getFileIconRules(iconsUrl)}
 `;
 
+export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL) => `
+${getFolderIconCSS(iconsUrl)}
+${getMaterialFileIconCSS(iconsUrl)}
+`;
+
 export const FOLDER_ICON_CSS = getExplorerTreeIconCSS();
+
+// Tree rows are pointer targets, not prose: allowing text selection lets a
+// drag-select swallow the row so a subsequent right-click hits the browser's
+// native selection menu instead of our context menu. Disable selection on rows
+// while keeping the rename input editable.
+export const DISABLE_ROW_TEXT_SELECTION_CSS = `
+  [data-type='item'] {
+    user-select: none;
+  }
+
+  [data-type='item'] input {
+    user-select: text;
+  }
+`;
 
 // pierre/trees marks the clicked row as model-focused, which otherwise paints
 // a pointer-only ring.
@@ -253,10 +285,14 @@ export const HIDE_POINTER_FOCUS_RING_CSS = `
 `;
 
 export const getExplorerTreeStyleVars = ({
+  iconWidth = DEFAULT_ICON_WIDTH,
   reserveChevronSlot,
+  rowGap = DEFAULT_ITEM_ROW_GAP,
 }: {
+  iconWidth?: number;
   reserveChevronSlot: boolean;
+  rowGap?: number;
 }): CSSProperties =>
   ({
-    [FILE_ICON_OFFSET_VAR]: reserveChevronSlot ? RESERVED_FILE_ICON_OFFSET : '0px',
+    [FILE_ICON_OFFSET_VAR]: reserveChevronSlot ? `${iconWidth + rowGap}px` : '0px',
   }) as CSSProperties;

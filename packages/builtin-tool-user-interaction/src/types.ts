@@ -1,3 +1,5 @@
+import type { AskUserQuestionArgs } from '@lobechat/shared-tool-ui/ask-user';
+
 export const UserInteractionIdentifier = 'lobe-user-interaction';
 
 export const UserInteractionApiName = {
@@ -8,35 +10,19 @@ export const UserInteractionApiName = {
   submitUserResponse: 'submitUserResponse',
 } as const;
 
-export type InteractionMode = 'form' | 'freeform';
-
 export type InteractionStatus = 'cancelled' | 'pending' | 'skipped' | 'submitted';
 
-export interface InteractionFieldOption {
-  label: string;
-  value: string;
-}
-
-export interface InteractionField {
-  key: string;
-  kind: 'multiselect' | 'select' | 'text' | 'textarea';
-  label: string;
-  options?: InteractionFieldOption[];
-  placeholder?: string;
-  required?: boolean;
-  value?: string | string[];
-}
-
-export interface AskUserQuestionArgs {
-  question: {
-    description?: string;
-    fields?: InteractionField[];
-    id: string;
-    metadata?: Record<string, unknown>;
-    mode: InteractionMode;
-    prompt: string;
-  };
-}
+/**
+ * The AskUserQuestion data model is shared with Claude Code and lobe-agent — it
+ * lives in `@lobechat/shared-tool-ui/ask-user`. Re-exported here so consumers
+ * get the argument types from this package's single import surface.
+ */
+export type {
+  AskUserDraft,
+  AskUserQuestionArgs,
+  AskUserQuestionItem,
+  AskUserQuestionOption,
+} from '@lobechat/shared-tool-ui/ask-user';
 
 export interface SubmitUserResponseArgs {
   requestId: string;
@@ -57,7 +43,8 @@ export interface GetInteractionStateArgs {
 }
 
 export interface InteractionState {
-  question?: AskUserQuestionArgs['question'];
+  /** The whole `{ questions }` payload presented to the user. */
+  question?: AskUserQuestionArgs;
   requestId: string;
   response?: Record<string, unknown>;
   skipReason?: string;

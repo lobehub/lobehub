@@ -1,8 +1,10 @@
 /**
  * @vitest-environment happy-dom
  */
+import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
+import type { TooltipProps } from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
@@ -28,9 +30,13 @@ const createRenderProps = (
   type: 'element',
 });
 
+const platform = vi.hoisted(() => ({ isDesktop: true }));
+
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  isDesktop: true,
+  get isDesktop() {
+    return platform.isDesktop;
+  },
 }));
 
 vi.mock('@/components/FileIcon', () => ({
@@ -39,33 +45,54 @@ vi.mock('@/components/FileIcon', () => ({
   ),
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  Tooltip: ({
-    children,
-    mouseEnterDelay,
-    placement,
-    title,
-  }: {
-    children: ReactNode;
-    mouseEnterDelay?: number;
-    placement?: string;
-    title?: ReactNode;
-  }) => (
-    <span
-      data-mouse-enter-delay={String(mouseEnterDelay)}
-      data-placement={placement}
-      data-testid="local-file-tooltip"
-      data-title={typeof title === 'string' ? title : undefined}
-    >
-      {children}
-    </span>
-  ),
-}));
+const tooltipPropsSpy = vi.hoisted(() => vi.fn());
+
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const ActualTooltip = actual.Tooltip as ComponentType<TooltipProps>;
+  return {
+    ...actual,
+    Tooltip: (props: TooltipProps) => {
+      tooltipPropsSpy(props);
+      return <ActualTooltip {...props} />;
+    },
+  };
+});
 
 describe('LocalFileLink Render', () => {
   afterEach(() => {
+    platform.isDesktop = true;
     useChatStore.setState(useChatStore.getInitialState());
+  });
+
+  it.each(['/home/ubuntu/workspace/src/client.ts:391', './src/client.ts:391'])(
+    'renders %s as a non-navigable file reference on web',
+    (href) => {
+      platform.isDesktop = false;
+      const { container } = render(
+        <Render {...createRenderProps({ linkHref: href, linkLabel: 'client.ts' })} />,
+      );
+
+      expect(screen.queryByRole('link')).toBeNull();
+      expect(container.querySelector('[href]')).toBeNull();
+      expect(screen.getByTestId('file-icon')).toHaveAttribute('data-file-name', 'client.ts');
+      fireEvent.click(screen.getByText('client.ts'));
+      fireEvent.click(screen.getByText('client.ts'), { metaKey: true });
+      fireEvent(
+        screen.getByText('client.ts'),
+        new MouseEvent('auxclick', { bubbles: true, button: 1 }),
+      );
+      expect(useChatStore.getState().openLocalFiles).toEqual([]);
+    },
+  );
+
+  it('keeps unresolved relative references non-navigable on desktop', () => {
+    const { container } = render(
+      <Render {...createRenderProps({ linkHref: './client.ts', linkLabel: 'client.ts' })} />,
+    );
+    expect(container.querySelector('[href]')).toBeNull();
+    fireEvent.click(screen.getByText('client.ts'));
+    expect(useChatStore.getState().openLocalFiles).toEqual([]);
   });
 
   it('opens local file links in the right-side local file portal', () => {
@@ -96,15 +123,13 @@ describe('LocalFileLink Render', () => {
 
     const link = screen.getByRole('link', { name: 'Group.tsx' });
 
-    expect(screen.getByTestId('local-file-tooltip')).toHaveAttribute(
-      'data-title',
-      '/Users/me/project/src/Group.tsx (line 265)',
+    expect(tooltipPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mouseEnterDelay: 0.1,
+        placement: 'topLeft',
+        title: '/Users/me/project/src/Group.tsx (line 265)',
+      }),
     );
-    expect(screen.getByTestId('local-file-tooltip')).toHaveAttribute(
-      'data-mouse-enter-delay',
-      '0.1',
-    );
-    expect(screen.getByTestId('local-file-tooltip')).toHaveAttribute('data-placement', 'topLeft');
 
     fireEvent.click(link);
 
@@ -122,6 +147,24 @@ describe('LocalFileLink Render', () => {
       },
     ]);
     expect(useChatStore.getState().showPortal).toBe(true);
+  });
+
+  it('claims the link so the desktop preload does not open it in the system browser', () => {
+    render(
+      <Render
+        {...createRenderProps({
+          linkHref: '/Users/me/project/src/Group.tsx',
+          linkLabel: 'Group.tsx',
+        })}
+      />,
+    );
+
+    const link = screen.getByRole('link', { name: 'Group.tsx' });
+    expect(link).toHaveAttribute(RENDERER_HANDLED_LINK_ATTR, 'true');
+
+    // A modifier-click has no meaning on desktop — the portal still takes it.
+    fireEvent.click(link, { metaKey: true });
+    expect(useChatStore.getState().openLocalFiles).toHaveLength(1);
   });
 
   it('marks links outside the current workspace as user-approved external previews', () => {

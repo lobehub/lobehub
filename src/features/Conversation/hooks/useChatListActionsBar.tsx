@@ -1,15 +1,15 @@
+import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { type ActionIconGroupItemType } from '@lobehub/ui';
-import { css, cx } from 'antd-style';
 import {
   ArrowDownFromLine,
   Copy,
   DownloadIcon,
   Edit,
+  GitFork,
   LanguagesIcon,
   ListChevronsDownUp,
   ListChevronsUpDown,
   ListRestart,
-  Play,
   RotateCcw,
   Share2,
   Split,
@@ -20,28 +20,23 @@ import { useTranslation } from 'react-i18next';
 
 import { localeOptions } from '@/locales/resources';
 
-const translateStyle = css`
-  .ant-dropdown-menu-sub {
-    overflow-y: scroll;
-    max-height: 400px;
-  }
-`;
+type ActionBarItem = ActionIconGroupItemType & { sfSymbol?: SFSymbol };
 
 interface ChatListActionsBar {
-  branching: ActionIconGroupItemType;
-  collapse: ActionIconGroupItemType;
-  continueGeneration: ActionIconGroupItemType;
-  copy: ActionIconGroupItemType;
-  del: ActionIconGroupItemType;
-  delAndRegenerate: ActionIconGroupItemType;
+  branching: ActionBarItem;
+  collapse: ActionBarItem;
+  continueGeneration: ActionBarItem;
+  copy: ActionBarItem;
+  del: ActionBarItem;
+  delAndRegenerate: ActionBarItem;
   divider: { type: 'divider' };
-  edit: ActionIconGroupItemType;
-  expand: ActionIconGroupItemType;
-  export: ActionIconGroupItemType;
-  regenerate: ActionIconGroupItemType;
-  share: ActionIconGroupItemType;
-  translate: ActionIconGroupItemType;
-  tts: ActionIconGroupItemType;
+  edit: ActionBarItem;
+  expand: ActionBarItem;
+  export: ActionBarItem;
+  fork: ActionBarItem;
+  regenerate: ActionBarItem;
+  share: ActionBarItem;
+  translate: ActionBarItem;
 }
 
 export const useChatListActionsBar = ({
@@ -78,6 +73,7 @@ export const useChatListActionsBar = ({
         icon: Copy,
         key: 'copy',
         label: t('copy'),
+        sfSymbol: 'doc.on.doc',
       },
       del: {
         danger: true,
@@ -85,6 +81,7 @@ export const useChatListActionsBar = ({
         icon: Trash,
         key: 'del',
         label: hasThread ? t('messageAction.deleteDisabledByThreads', { ns: 'chat' }) : t('delete'),
+        sfSymbol: 'trash',
       },
       delAndRegenerate: {
         disabled: hasThread || isRegenerating,
@@ -101,6 +98,7 @@ export const useChatListActionsBar = ({
         icon: Edit,
         key: 'edit',
         label: t('edit'),
+        sfSymbol: 'pencil',
       },
       expand: {
         icon: ListChevronsUpDown,
@@ -111,18 +109,26 @@ export const useChatListActionsBar = ({
         icon: DownloadIcon,
         key: 'export',
         label: 'Export as PDF',
+        sfSymbol: 'square.and.arrow.up',
+      },
+      fork: {
+        icon: GitFork,
+        key: 'fork',
+        label: t('forkTopic'),
       },
       regenerate: {
         disabled: isRegenerating,
         icon: RotateCcw,
         key: 'regenerate',
         label: t('regenerate'),
+        sfSymbol: 'arrow.clockwise',
         spin: isRegenerating,
       },
       share: {
         icon: Share2,
         key: 'share',
         label: t('share'),
+        sfSymbol: 'square.and.arrow.up',
       },
       translate: {
         children: localeOptions.map((i) => ({
@@ -132,14 +138,8 @@ export const useChatListActionsBar = ({
         icon: LanguagesIcon,
         key: 'translate',
         label: t('translate.action', { ns: 'chat' }),
-        popupClassName: cx(translateStyle),
-      },
-      tts: {
-        icon: Play,
-        key: 'tts',
-        label: t('tts.action', { ns: 'chat' }),
       },
     }),
-    [hasThread, isContinuing, isRegenerating],
+    [hasThread, isContinuing, isRegenerating, t],
   );
 };

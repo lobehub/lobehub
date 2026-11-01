@@ -2,10 +2,19 @@
 
 import { AGENT_PROFILE_URL } from '@lobechat/const';
 import type { AgentEvalRunDetail } from '@lobechat/types';
-import { ActionIcon, Avatar, copyToClipboard, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App, Button, Card, Tag, Typography } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  confirmModal,
+  copyToClipboard,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Highlighter,
+  Markdown,
+  Tag,
+  toast,
+} from '@lobehub/ui';
 import {
   ArrowLeft,
   ChevronDown,
@@ -19,13 +28,16 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { createRunEditModal } from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
 import StatusBadge from '@/routes/(main)/eval/features/StatusBadge';
 import { useEvalStore } from '@/store/eval';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   backLink: css`
     display: inline-flex;
     gap: 4px;
@@ -33,14 +45,23 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: fit-content;
 
-    font-size: 14px;
+    font-size: ${cssVar.fontSize};
     color: ${cssVar.colorTextTertiary};
     text-decoration: none;
 
-    transition: color 0.2s;
+    transition: color 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorText};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: -1px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
   configSection: css`
@@ -48,7 +69,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   configSectionLabel: css`
     margin-block-end: 8px;
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     font-weight: 500;
     color: ${cssVar.colorTextSecondary};
   `,
@@ -57,9 +78,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     max-height: 300px;
     padding: 12px;
-    border-radius: 6px;
+    border-radius: ${cssVar.borderRadiusSM};
 
-    font-size: 13px;
+    font-size: ${cssVar.fontSize};
 
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -70,18 +91,46 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 4px;
     align-items: center;
 
+    width: fit-content;
     padding: 0;
     border: none;
 
-    font-size: 12px;
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
 
     background: transparent;
 
-    transition: color 0.2s;
+    transition: color 0.15s ease;
 
     &:hover {
       color: ${cssVar.colorText};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  `,
+  agentLink: css`
+    cursor: pointer;
+    border-radius: ${cssVar.borderRadiusSM};
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimary};
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
   datasetLink: css`
@@ -92,20 +141,44 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       color: ${cssVar.colorPrimary};
     }
   `,
-  metaRow: css`
-    flex-wrap: wrap;
-    font-size: 13px;
+  headerBand: css`
+    padding: 20px;
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  metaItem: css`
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 4px;
+    padding-inline: 10px;
+    border-radius: ${cssVar.borderRadiusSM};
+
+    font-size: ${cssVar.fontSize};
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+  metaLabel: css`
+    font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextTertiary};
   `,
+  metaRow: css`
+    flex-wrap: wrap;
+  `,
   modelText: css`
-    font-family: monospace;
-    font-size: 12px;
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextSecondary};
   `,
-  separator: css`
-    color: ${cssVar.colorBorder};
-  `,
-  titleRow: css`
-    margin-block-end: 16px;
+  runName: css`
+    margin: 0;
+
+    font-size: ${cssVar.fontSizeHeading3};
+    font-weight: 600;
+    line-height: 1.2;
+    color: ${cssVar.colorText};
   `,
 }));
 
@@ -117,8 +190,9 @@ interface RunHeaderProps {
 
 const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const { t } = useTranslation('eval');
-  const { message } = App.useApp();
+
   const navigate = useWorkspaceAwareNavigate();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const abortRun = useEvalStore((s) => s.abortRun);
   const deleteRun = useEvalStore((s) => s.deleteRun);
   const startRun = useEvalStore((s) => s.startRun);
@@ -165,7 +239,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
           setStarting(true);
           await startRun(run.id, run.status !== 'idle');
         } catch (error: any) {
-          message.error(error?.message || 'Failed to start run');
+          toast.error(error?.message || 'Failed to start run');
         } finally {
           setStarting(false);
         }
@@ -176,15 +250,18 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
 
   const handleOpenAgent = () => {
     if (run.targetAgentId) {
-      window.open(AGENT_PROFILE_URL(run.targetAgentId), '_blank');
+      window.open(
+        buildWorkspaceAwarePath(AGENT_PROFILE_URL(run.targetAgentId), activeWorkspaceSlug),
+        '_blank',
+      );
     }
   };
   const handleCopyRunId = async () => {
     try {
       await copyToClipboard(run.id);
-      message.success(t('run.detail.copyRunIdSuccess'));
+      toast.success(t('run.detail.copyRunIdSuccess'));
     } catch {
-      message.error(t('run.detail.copyRunIdFailed'));
+      toast.error(t('run.detail.copyRunIdFailed'));
     }
   };
 
@@ -202,24 +279,22 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
         {t('run.detail.backToBenchmark')}
       </WorkspaceLink>
 
-      {/* Header Card */}
-      <Card styles={{ body: { padding: 20 } }}>
+      {/* Header band — results-led: run name + status prominent, meta as a quiet stat row */}
+      <Flexbox className={styles.headerBand} gap={16}>
         {/* Title row */}
-        <Flexbox horizontal align="center" className={styles.titleRow} justify="space-between">
-          <Flexbox gap={4}>
-            <Flexbox horizontal align="center" gap={8}>
-              <Typography.Title level={4} style={{ margin: 0 }}>
-                {run.name || run.id.slice(0, 8)}
-              </Typography.Title>
+        <Flexbox horizontal align="flex-start" gap={16} justify="space-between">
+          <Flexbox gap={10} style={{ minWidth: 0 }}>
+            <Flexbox horizontal align="center" gap={12}>
+              <h1 className={styles.runName}>{run.name || run.id.slice(0, 8)}</h1>
+              <StatusBadge status={run.status} />
               <ActionIcon
                 icon={Copy}
                 size="small"
                 title={t('run.detail.copyRunId')}
                 onClick={handleCopyRunId}
               />
-              <StatusBadge status={run.status} />
             </Flexbox>
-            {/* Meta info row */}
+            {/* Meta info — quiet stat chips */}
             <Flexbox horizontal align="center" className={styles.metaRow} gap={8}>
               {run.dataset && (
                 <WorkspaceLink
@@ -227,43 +302,53 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
                   target="_blank"
                   to={`/eval/bench/${benchmarkId}/datasets/${run.dataset.id}`}
                 >
-                  {run.dataset.name}
+                  <span className={styles.metaItem}>{run.dataset.name}</span>
                 </WorkspaceLink>
               )}
               {run.targetAgentId && (
-                <>
-                  <span className={styles.separator}>|</span>
-                  <Flexbox
-                    horizontal
-                    align="center"
-                    gap={4}
-                    style={{ cursor: 'pointer' }}
-                    onClick={handleOpenAgent}
-                  >
-                    <Avatar avatar={agentAvatar} size={16} />
-                    <span>{agentTitle}</span>
-                  </Flexbox>
-                </>
+                <Flexbox
+                  horizontal
+                  align="center"
+                  className={styles.agentLink}
+                  role={'button'}
+                  tabIndex={0}
+                  onClick={handleOpenAgent}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleOpenAgent();
+                    }
+                  }}
+                >
+                  <span className={styles.metaItem}>
+                    <AgentAvatar
+                      agentId={run.targetAgentId}
+                      avatar={agentAvatar}
+                      name={agentTitle}
+                      shape={'circle'}
+                      size={16}
+                    />
+                    {agentTitle}
+                  </span>
+                </Flexbox>
               )}
               {agentModel && (
-                <>
-                  <span className={styles.separator}>|</span>
+                <span className={styles.metaItem}>
                   <span className={styles.modelText}>
                     {agentProvider ? `${agentProvider} / ` : ''}
                     {agentModel}
                   </span>
-                </>
+                </span>
               )}
               {run.createdAt && (
-                <>
-                  <span className={styles.separator}>|</span>
-                  <span>{formatDate(run.createdAt)}</span>
-                </>
+                <span className={styles.metaItem}>
+                  <span className={styles.metaLabel}>{formatDate(run.createdAt)}</span>
+                </span>
               )}
             </Flexbox>
           </Flexbox>
           {/* Actions */}
-          <Flexbox horizontal align="center" gap={8}>
+          <Flexbox horizontal align="center" gap={8} style={{ flexShrink: 0 }}>
             {canStart && !hideStart && (
               <Button
                 icon={<Play size={14} />}
@@ -357,7 +442,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
             )}
           </Flexbox>
         )}
-      </Card>
+      </Flexbox>
     </Flexbox>
   );
 });

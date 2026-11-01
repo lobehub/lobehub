@@ -7,7 +7,11 @@ import type { EditorState as LobehubEditorState } from '@lobehub/editor/react';
  * Document source type - determines which service to use for persistence
  */
 export type DocumentSourceType = 'notebook' | 'page';
-export type DocumentContentFormat = 'markdown' | 'skillMarkdown';
+/**
+ * - `html`: a self-contained HTML page. It is rendered in a sandboxed frame and
+ *   never loaded into, read from or saved through the rich-text editor.
+ */
+export type DocumentContentFormat = 'html' | 'markdown' | 'skillMarkdown';
 
 /**
  * Editor content state for a single document
@@ -15,10 +19,21 @@ export type DocumentContentFormat = 'markdown' | 'skillMarkdown';
  */
 export interface EditorContentState {
   /**
+   * Agent commands editing the stored page right now. Without a collaboration
+   * room the page is read-only meanwhile, so an edit typed in between can't be
+   * overwritten by, or overwrite, the agent's write.
+   */
+  agentEditing?: number;
+  /**
    * Whether auto-save is enabled for this document
    * Defaults to true. Set to false if the consumer handles saving themselves.
    */
   autoSave?: boolean;
+  /**
+   * The body syncs through a live collaboration room, which persists it; local
+   * saves only carry metadata.
+   */
+  collab?: boolean;
   /**
    * Document content (markdown)
    */
@@ -27,11 +42,11 @@ export interface EditorContentState {
    * Content format used by the editor persistence pipeline.
    */
   contentFormat?: DocumentContentFormat;
+
   /**
    * Editor JSON data (BlockNote format)
    */
   editorData: any;
-
   /**
    * Whether there are unsaved changes
    */
@@ -48,6 +63,14 @@ export interface EditorContentState {
    * Last updated time
    */
   lastUpdatedTime: Date | null;
+  /**
+   * The body as the editor serialized it right after loading it. Loading is not
+   * byte-stable (fresh node ids, the editor's own markdown export), so a body
+   * equal to this is unedited even when it differs from `lastSaved*`. Only the
+   * dirty check reads it; `lastSaved*` stays the server's body, which conflict
+   * reconciliation compares remote rows against. Cleared once a save lands.
+   */
+  loadedBody?: { content: string; editorData: unknown };
   /**
    * Edit-session id that currently owns this document's collaborative lock.
    * Used by workspace page saves to prove the client still holds the lease.

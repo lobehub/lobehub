@@ -4,11 +4,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { agentDocumentsRuntime } from './agentDocuments';
 
 const listDocuments = vi.fn();
+const countChildren = vi.fn().mockResolvedValue(new Map([['documents-1', 3]]));
 
 vi.mock('@/server/services/agentDocuments', () => ({
-  AgentDocumentsService: vi.fn().mockImplementation(() => ({
-    listDocuments,
-  })),
+  AgentDocumentsService: vi.fn().mockImplementation(function () {
+    return {
+      countChildren,
+      listDocuments,
+    };
+  }),
 }));
 
 describe('agentDocumentsRuntime', () => {

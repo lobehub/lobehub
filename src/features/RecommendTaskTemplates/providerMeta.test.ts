@@ -16,6 +16,12 @@ describe('getProviderMeta', () => {
     expect(meta?.icon).toBeDefined();
   });
 
+  it('resolves posthog as a lobehub source provider', () => {
+    const meta = getProviderMeta({ identifier: 'posthog', source: 'lobehub' });
+    expect(meta).toMatchObject({ identifier: 'posthog', label: 'PostHog', source: 'lobehub' });
+    expect(meta?.icon).toBeDefined();
+  });
+
   it('resolves composio source via COMPOSIO_APP_TYPES', () => {
     const meta = getProviderMeta({ identifier: 'gmail', source: 'composio' });
     expect(meta).toMatchObject({ identifier: 'gmail', label: 'Gmail', source: 'composio' });
@@ -28,8 +34,8 @@ describe('getProviderMeta', () => {
   });
 
   it('does not cross namespaces (lobehub id under composio source returns undefined)', () => {
-    // 'github' is a lobehub provider id, not a composio identifier.
-    expect(getProviderMeta({ identifier: 'github', source: 'composio' })).toBeUndefined();
+    // 'posthog' is a lobehub provider id, not a composio identifier.
+    expect(getProviderMeta({ identifier: 'posthog', source: 'composio' })).toBeUndefined();
   });
 });
 

@@ -1,0 +1,47 @@
+'use client';
+
+import type { BuiltinInspectorProps } from '@lobechat/types';
+import { createStaticStyles, cx } from '@lobehub/ui';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { inspectorTextStyles, shinyTextStyles } from '@/styles';
+
+import type { SetTaskVerifyParams, SetTaskVerifyState } from '../../../types';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  identifierChip: css`
+    flex-shrink: 0;
+
+    padding-block: 2px;
+    padding-inline: 8px;
+    border-radius: 999px;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillTertiary};
+  `,
+}));
+
+export const SetTaskVerifyInspector = memo<
+  BuiltinInspectorProps<SetTaskVerifyParams, SetTaskVerifyState>
+>(({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
+  const { t } = useTranslation('plugin');
+
+  const identifier = pluginState?.identifier ?? args?.identifier ?? partialArgs?.identifier;
+
+  return (
+    <div className={inspectorTextStyles.root} style={{ flexWrap: 'wrap', gap: 4 }}>
+      <span className={cx((isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}>
+        {t('builtins.lobe-task.apiName.setTaskVerify')}
+      </span>
+      {identifier && <span className={styles.identifierChip}>{identifier}</span>}
+    </div>
+  );
+});
+
+SetTaskVerifyInspector.displayName = 'SetTaskVerifyInspector';
+
+export default SetTaskVerifyInspector;

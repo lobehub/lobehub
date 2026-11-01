@@ -10,7 +10,7 @@ tags:
 
 # 国际化实现指南
 
-欢迎阅读 LobeHub 国际化实现指南。本文档将指导你了解 LobeHub 的国际化机制，包括文件结构、如何添加新语种。LobeHub 采用 `i18next` 和 `lobe-i18n` 作为国际化解决方案，旨在为用户提供流畅的多语言支持。
+欢迎阅读 LobeHub 国际化实现指南。本文档将指导你了解 LobeHub 的国际化机制，包括文件结构、如何添加新语种。LobeHub 采用 `i18next` 和 `@lobehub/i18n-cli` 作为国际化解决方案，旨在为用户提供流畅的多语言支持。
 
 ## 国际化概述
 
@@ -20,29 +20,25 @@ tags:
 
 在 LobeHub 的项目中，国际化相关的文件被组织如下：
 
-- `src/locales/default`: 包含默认开发语言（中文）的翻译文件，我们作为中文。
-- `locales`: 包含所有支持的语言文件夹，每个语言文件夹中包含相应语言的翻译文件，这些翻译文件通过 lobe-i18n 自动生成。
+- `packages/locales/src/default`: 包含默认开发语言（英文）的翻译文件，作为源语言（`.i18nrc.js` 中的 `entryLocale: 'en-US'`）。
+- `locales`: 包含所有支持的语言文件夹，每个语言文件夹中包含相应语言的翻译文件，这些翻译文件通过 `@lobehub/i18n-cli` 自动生成。
 
-在 `src/locales` 这个目录结构中，`default` 文件夹包含了原始的翻译文件（中文），其他每个语言文件夹则包含了相应语言的 JSON 翻译文件。每个语言文件夹中的文件对应 `default` 文件夹中的 TypeScript 文件，确保了各语种之间的翻译文件结构一致性。
+在 `packages/locales/src/default` 这个目录结构中，每个文件都是一个包含源语言（英文）文案的 TypeScript namespace 模块，而 `locales/` 下的每个语言文件夹则包含了相应语言的 JSON 翻译文件。每个语言文件夹中的文件对应 `packages/locales/src/default` 中的 TypeScript namespace 文件，确保了各语种之间的翻译文件结构一致性。
 
 ```bash
-src/locales
-├── create.ts
-├── default
-│ ├── chat.ts
-│ ├── common.ts
-│ ├── error.ts
-│ ├── index.ts
-│ ├── market.ts
-│ ├── migration.ts
-│ ├── plugin.ts
-│ ├── setting.ts
-│ ├── tool.ts
-│ └── welcome.ts
-└── resources.ts
+packages/locales/src/default
+├── index.ts
+├── agent.ts
+├── chat.ts
+├── common.ts
+├── error.ts
+├── setting.ts
+├── tool.ts
+├── welcome.ts
+└── ... (50+ 个 namespace 文件)
 ```
 
-通过 lobe-i18n 自动生成的文件结构如下：
+通过 `@lobehub/i18n-cli` 自动生成的文件结构如下：
 
 ```bash
 locales
@@ -122,6 +118,6 @@ const createI18nInstance = (lang) => {
 ## 资源和进一步阅读
 
 - [i18next 官方文档](https://www.i18next.com/)
-- [lobe-i18n 工具说明](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n)
+- [@lobehub/i18n-cli 工具说明](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n)
 
 通过遵循本指南，你可以更好地理解和参与到 LobeHub 的国际化工作中，为全球用户提供无缝的多语言体验。

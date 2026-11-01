@@ -1,6 +1,7 @@
 import type { BuiltinInspector } from '@lobechat/types';
 
 import { MemoryApiName } from '../../types';
+import { AddActivityMemoryInspector } from './AddActivityMemory';
 import { AddContextMemoryInspector } from './AddContextMemory';
 import { AddExperienceMemoryInspector } from './AddExperienceMemory';
 import { AddIdentityMemoryInspector } from './AddIdentityMemory';
@@ -17,6 +18,7 @@ import { UpdateIdentityMemoryInspector } from './UpdateIdentityMemory';
  * of tool calls in the conversation UI.
  */
 export const MemoryInspectors: Record<string, BuiltinInspector> = {
+  [MemoryApiName.addActivityMemory]: AddActivityMemoryInspector as BuiltinInspector,
   [MemoryApiName.addContextMemory]: AddContextMemoryInspector as BuiltinInspector,
   [MemoryApiName.addExperienceMemory]: AddExperienceMemoryInspector as BuiltinInspector,
   [MemoryApiName.addIdentityMemory]: AddIdentityMemoryInspector as BuiltinInspector,
@@ -28,6 +30,7 @@ export const MemoryInspectors: Record<string, BuiltinInspector> = {
 };
 
 // Re-export individual inspectors
+export { AddActivityMemoryInspector } from './AddActivityMemory';
 export { AddContextMemoryInspector } from './AddContextMemory';
 export { AddExperienceMemoryInspector } from './AddExperienceMemory';
 export { AddIdentityMemoryInspector } from './AddIdentityMemory';

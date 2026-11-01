@@ -1,0 +1,202 @@
+import { type AgentState } from '@lobechat/agent-runtime';
+import { type ChatToolPayload } from '@lobechat/types';
+import { describe, expect, it, vi } from 'vitest';
+
+import { type RuntimeExecutorContext } from '../context';
+import { buildServerAgentMemberRunner, buildServerVirtualSubAgentRunner } from '../executorHelpers';
+
+/**
+ * The parent model a spawned `callSubAgent` follows must be the model the
+ * parent run ACTUALLY uses. `world.agent` alone is not enough: when a
+ * run continues a topic whose model was switched, execAgent keeps the
+ * topic-pinned model only in `modelRuntimeConfig` while the world config
+ * retains the agent default.
+ */
+describe('buildServerVirtualSubAgentRunner sub-agent model resolution', () => {
+  const buildRunner = (state: Partial<AgentState>) => {
+    const execVirtualSubAgent = vi.fn().mockResolvedValue({ operationId: 'child-op' });
+    const ctx = {
+      execVirtualSubAgent,
+      messageModel: { create: vi.fn().mockResolvedValue({ id: 'placeholder-id' }) },
+      operationId: 'parent-op',
+      topicId: 'topic-1',
+    } as unknown as RuntimeExecutorContext;
+
+    const runner = buildServerVirtualSubAgentRunner(
+      ctx,
+      {
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+        operationId: 'parent-op',
+        ...state,
+      } as AgentState,
+      { id: 'tool-call-1' } as ChatToolPayload,
+      'parent-message-1',
+    );
+
+    return { execVirtualSubAgent, runner };
+  };
+
+  it('follows the topic-pinned runtime model over the world agent default', async () => {
+    const { execVirtualSubAgent, runner } = buildRunner({
+      origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      world: {
+        agent: { model: 'agent-default-model', provider: 'agent-default-provider' } as any,
+      },
+      modelRuntimeConfig: { model: 'topic-pinned-model', provider: 'topic-pinned-provider' },
+    });
+
+    await runner!.run({ description: 'task', instruction: 'do it' });
+
+    expect(execVirtualSubAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'topic-pinned-model', provider: 'topic-pinned-provider' }),
+    );
+  });
+
+  it('falls back to the world agent config when no runtime model exists', async () => {
+    const { execVirtualSubAgent, runner } = buildRunner({
+      origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      world: {
+        agent: { model: 'agent-default-model', provider: 'agent-default-provider' } as any,
+      },
+    });
+
+    await runner!.run({ description: 'task', instruction: 'do it' });
+
+    expect(execVirtualSubAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'agent-default-model', provider: 'agent-default-provider' }),
+    );
+  });
+
+  it('keeps a named callAgent target on its own model', async () => {
+    const { execVirtualSubAgent, runner } = buildRunner({
+      modelRuntimeConfig: { model: 'topic-pinned-model', provider: 'topic-pinned-provider' },
+    });
+
+    await runner!.run({ agentId: 'target-agent', description: 'task', instruction: 'do it' });
+
+    expect(execVirtualSubAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'target-agent', model: undefined, provider: undefined }),
+    );
+  });
+});
+
+// Fail-close regression for share-visitor runs: the child run spawned by
+// either runner does not inherit the parent's shareGate, so for a run with
+// `ctx.agentShareVisitor` set, no runner may be built at all.
+describe('buildServerVirtualSubAgentRunner continuing an earlier sub-agent', () => {
+  it('quarantines the placeholder before a child can write an early completion', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'placeholder' });
+    const execVirtualSubAgent = vi.fn(async () => {
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: '',
+        }),
+      );
+      return { operationId: 'child', success: true, threadId: 'thread' };
+    });
+    const runner = buildServerVirtualSubAgentRunner(
+      {
+        operationId: 'op',
+        stepIndex: 4,
+        topicId: 'topic',
+        execVirtualSubAgent,
+        messageModel: { create },
+        hookDispatcher: { hasAfterToolCallControl: () => true },
+      } as unknown as RuntimeExecutorContext,
+      {
+        origin: { agentId: 'agent', topicId: 'topic' },
+        usage: { tools: { byTool: [{ name: 'lobe-agent/callSubAgent', calls: 1 }] } },
+      } as AgentState,
+      { id: 'call', identifier: 'lobe-agent', apiName: 'callSubAgent' } as ChatToolPayload,
+      'assistant',
+    );
+    await runner!.run({ description: 'task', instruction: 'run' });
+    expect(execVirtualSubAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the sub-agent thread and links the new placeholder to it', async () => {
+    const execVirtualSubAgent = vi
+      .fn()
+      .mockResolvedValue({ operationId: 'child-op-2', success: true, threadId: 'thread-1' });
+    const create = vi.fn().mockResolvedValue({ id: 'placeholder-2' });
+    const runner = buildServerVirtualSubAgentRunner(
+      {
+        execVirtualSubAgent,
+        messageModel: { create },
+        operationId: 'parent-op',
+        topicId: 'topic-1',
+      } as unknown as RuntimeExecutorContext,
+      {
+        operationId: 'parent-op',
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      } as AgentState,
+      { id: 'tool-call-2' } as ChatToolPayload,
+      'parent-message-2',
+    );
+
+    const result = await runner!.run({
+      description: 'Hand over',
+      instruction: 'Summarize your findings',
+      subAgentId: 'thread-1',
+    });
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ pluginState: { status: 'pending', threadId: 'thread-1' } }),
+    );
+    expect(execVirtualSubAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agent-1',
+        parentMessageId: 'placeholder-2',
+        parentOperationId: 'parent-op',
+        threadId: 'thread-1',
+      }),
+    );
+    expect(result).toMatchObject({
+      started: true,
+      threadId: 'thread-1',
+      toolMessageId: 'placeholder-2',
+    });
+  });
+});
+
+describe('runner builders fail closed for share-visitor runs', () => {
+  const shareCtx = {
+    agentShareVisitor: {
+      agentId: 'agent-1',
+      shareId: 'share-1',
+      visitorUserId: 'visitor-1',
+    },
+    execGroupMember: vi.fn(),
+    execVirtualSubAgent: vi.fn(),
+    messageModel: { create: vi.fn() },
+    operationId: 'parent-op',
+    topicId: 'topic-1',
+  } as unknown as RuntimeExecutorContext;
+
+  const state = {
+    origin: { agentId: 'agent-1', groupId: 'group-1', topicId: 'topic-1' },
+    operationId: 'parent-op',
+  } as unknown as AgentState;
+
+  it('buildServerVirtualSubAgentRunner returns undefined when agentShareVisitor is set', () => {
+    expect(
+      buildServerVirtualSubAgentRunner(
+        shareCtx,
+        state,
+        { id: 'tool-call-1' } as ChatToolPayload,
+        'parent-message-1',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('buildServerAgentMemberRunner returns undefined when agentShareVisitor is set', () => {
+    expect(
+      buildServerAgentMemberRunner(
+        shareCtx,
+        state,
+        { id: 'tool-call-1' } as ChatToolPayload,
+        'parent-message-1',
+      ),
+    ).toBeUndefined();
+  });
+});

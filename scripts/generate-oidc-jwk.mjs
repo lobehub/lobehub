@@ -8,8 +8,9 @@
  *
  * Set the output single-line JSON string as the environment variable OIDC_JWKS_KEY
  */
-import { exportJWK, generateKeyPair } from 'jose';
 import crypto from 'node:crypto';
+
+import { exportJWK, generateKeyPair } from 'jose';
 
 // Generate key ID
 function generateKeyId() {
@@ -58,5 +59,4 @@ async function generateJwks() {
 }
 
 // Execute main function
-// eslint-disable-next-line unicorn/prefer-top-level-await
 generateJwks();

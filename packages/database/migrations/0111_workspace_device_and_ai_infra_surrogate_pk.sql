@@ -1,6 +1,6 @@
 -- Combined workspace-scoped DB rollout (formerly two separate 0111 migrations):
---   1. ai_infra surrogate `_id` PK + workspace-scoped partial uniques (LOBE-10056)
---   2. workspace-scoped device unique + workspace `frozen` columns (LOBE-10315)
+--   1. ai_infra surrogate `_id` PK + workspace-scoped partial uniques
+--   2. workspace-scoped device unique + workspace `frozen` columns
 --
 -- The two parts touch disjoint tables (ai_providers / ai_models vs.
 -- devices / workspaces). Every statement is guarded so the migration is a
@@ -10,10 +10,10 @@
 
 -- ===========================================================================
 -- Part 1 — ai_infra surrogate `_id` PK + workspace-scoped partial uniques
--- (LOBE-10056 Phase 5)
+-- (Phase 5 — ai_infra surrogate PK rollout)
 --
 -- On cloud production this whole part is a NO-OP: the manual steps [3]~[7]
--- (LOBE-10073 .. LOBE-10077) already performed the backfill, NOT NULL, PK swap
+-- already performed the backfill, NOT NULL, PK swap
 -- and partial indexes online / CONCURRENTLY. Every statement below is guarded
 -- (UPDATE … WHERE _id IS NULL / IF EXISTS / catalog check / IF NOT EXISTS) so
 -- it skips cleanly there, while still fully rebuilding the schema on a fresh or
@@ -57,7 +57,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS "ai_models_id_provider_id_user_id_workspace_id
 
 -- ===========================================================================
 -- Part 2 — workspace-scoped device unique + workspace `frozen` columns
--- (LOBE-10315)
 --
 -- Replace the full (user_id, device_id) unique with two partial uniques scoped
 -- by workspace_id (null vs. not null), so personal and workspace-enrolled rows
