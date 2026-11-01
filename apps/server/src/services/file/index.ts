@@ -116,8 +116,11 @@ export class FileService {
   /**
    * Create pre-signed upload descriptor
    */
-  public async createPreSignedUpload(key: string): Promise<PreSignedUpload> {
-    return this.impl.createPreSignedUpload(key);
+  public async createPreSignedUpload(
+    key: string,
+    options?: { private?: boolean },
+  ): Promise<PreSignedUpload> {
+    return this.impl.createPreSignedUpload(key, options);
   }
 
   /**

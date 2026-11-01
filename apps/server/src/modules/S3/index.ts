@@ -195,12 +195,19 @@ export class S3 {
     return upload.url;
   }
 
+  /**
+   * A presigned PUT for one object. `private` signs it without the public-read
+   * ACL `S3_SET_ACL` otherwise applies — for a transient copy that must only be
+   * reachable through a short-lived signed GET.
+   */
   public async createPreSignedUpload(
     key: string,
     contentLength?: number,
+    options?: { private?: boolean },
   ): Promise<PreSignedUpload> {
+    const publicRead = this.setAcl && !options?.private;
     const command = new PutObjectCommand({
-      ACL: this.setAcl ? PUBLIC_READ_ACL_HEADER : undefined,
+      ACL: publicRead ? PUBLIC_READ_ACL_HEADER : undefined,
       Bucket: this.bucket,
       ...(contentLength === undefined ? {} : { ContentLength: contentLength }),
       Key: key,
@@ -209,7 +216,7 @@ export class S3 {
     const url = await getSignedUrl(this.presignClient, command, { expiresIn: 3600 });
 
     return {
-      headers: this.setAcl ? { 'x-amz-acl': PUBLIC_READ_ACL_HEADER } : undefined,
+      headers: publicRead ? { 'x-amz-acl': PUBLIC_READ_ACL_HEADER } : undefined,
       url,
     };
   }

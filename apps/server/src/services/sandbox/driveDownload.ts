@@ -144,7 +144,8 @@ try:
         count = 0
         try:
             for _, _, files, _ in walk():
-                count += len(files)
+                # Every directory is an entry walked, and maybe one archived.
+                count += len(files) + 1
                 total += sum(entry.st_size for _, entry in files)
                 if total > max_bytes or count > max_files:
                     done(ok=False, code="TOO_LARGE", bytes=total, files=count)
@@ -290,7 +291,10 @@ export const driveDownloadFileName = (path: string, kind: 'directory' | 'file') 
 export interface PrepareDriveDownloadParams {
   fileService: {
     createDownloadUrl: (url: string, fileName: string, expiresIn?: number) => Promise<string>;
-    createPreSignedUpload: (key: string) => Promise<PreSignedUpload>;
+    createPreSignedUpload: (
+      key: string,
+      options?: { private?: boolean },
+    ) => Promise<PreSignedUpload>;
     deleteFile: (key: string) => Promise<unknown>;
     deleteFiles: (keys: string[]) => Promise<unknown>;
     listFileKeys: (prefix: string, limit?: number) => Promise<string[]>;
@@ -363,7 +367,9 @@ export const prepareDriveDownload = async ({
   if (!sandbox.capabilities.shell) throw new DriveDownloadError('DOWNLOAD_UNAVAILABLE');
 
   const key = `${DRIVE_DOWNLOAD_PREFIX}${dayOf(now)}/${randomUUID()}`;
-  const upload = await fileService.createPreSignedUpload(key);
+  // Private whatever the bucket's default ACL: a copy of someone's drive is
+  // reachable only through the short-lived link below.
+  const upload = await fileService.createPreSignedUpload(key, { private: true });
   // Alongside the packing, which takes far longer.
   const sweep = sweepExpiredDownloads(fileService, now);
 

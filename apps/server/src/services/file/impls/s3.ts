@@ -70,8 +70,13 @@ export class S3StaticFileImpl implements FileServiceImpl {
     return this.s3.createPreSignedUrl(key);
   }
 
-  async createPreSignedUpload(key: string): Promise<PreSignedUpload> {
-    return this.s3.createPreSignedUpload(key);
+  async createPreSignedUpload(
+    key: string,
+    options?: { private?: boolean },
+  ): Promise<PreSignedUpload> {
+    return options
+      ? this.s3.createPreSignedUpload(key, undefined, options)
+      : this.s3.createPreSignedUpload(key);
   }
 
   async getFileMetadata(key: string): Promise<{ contentLength: number; contentType?: string }> {

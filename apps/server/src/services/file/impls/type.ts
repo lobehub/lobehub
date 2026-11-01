@@ -19,7 +19,7 @@ export interface FileServiceImpl {
   /**
    * Create pre-signed upload descriptor
    */
-  createPreSignedUpload: (key: string) => Promise<PreSignedUpload>;
+  createPreSignedUpload: (key: string, options?: { private?: boolean }) => Promise<PreSignedUpload>;
 
   /**
    * Create pre-signed upload URL

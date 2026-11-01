@@ -522,6 +522,21 @@ describe('FileS3', () => {
         url: 'https://presigned-url.example.com',
       });
     });
+
+    it('signs a private upload without the public-read ACL even when the bucket sets one', async () => {
+      const s3 = new FileS3();
+
+      const result = await s3.createPreSignedUpload('private-copy.zip', undefined, {
+        private: true,
+      });
+
+      expect(PutObjectCommand).toHaveBeenCalledWith({
+        ACL: undefined,
+        Bucket: 'test-bucket',
+        Key: 'private-copy.zip',
+      });
+      expect(result).toEqual({ headers: undefined, url: 'https://presigned-url.example.com' });
+    });
   });
 
   describe('multipart uploads', () => {

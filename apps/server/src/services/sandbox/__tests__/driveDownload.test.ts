@@ -72,12 +72,12 @@ describe.skipIf(!hasPython)('the drive download script', () => {
 
   const run = (
     target: string,
-    options: { hidden?: string[]; maxBytes?: number; url?: string } = {},
+    options: { hidden?: string[]; maxBytes?: number; maxFiles?: number; url?: string } = {},
   ) => {
     const command = buildDriveDownloadCommand({
       hidden: options.hidden ?? [],
       maxBytes: options.maxBytes ?? DRIVE_DOWNLOAD_MAX_BYTES,
-      maxFiles: 100,
+      maxFiles: options.maxFiles ?? 100,
       path: target,
       uploadHeaders: { 'x-amz-acl': 'public-read' },
       uploadUrl: options.url ?? uploadUrl,
@@ -175,6 +175,17 @@ describe.skipIf(!hasPython)('the drive download script', () => {
     },
   );
 
+  it('counts directories toward the entry limit, so empty ones cannot run it unbounded', async () => {
+    for (let index = 0; index < 5; index += 1)
+      mkdirSync(path.join(root, `many/d${index}`), { recursive: true });
+
+    await expect(run('many', { maxFiles: 3 })).resolves.toMatchObject({
+      code: 'TOO_LARGE',
+      ok: false,
+    });
+    expect(received).toHaveLength(0);
+  });
+
   it('refuses a folder over the size limit before packing it', async () => {
     await expect(run('project', { maxBytes: 5 })).resolves.toMatchObject({
       code: 'TOO_LARGE',
@@ -239,7 +250,11 @@ describe('prepareDriveDownload', () => {
       sandbox,
     });
 
-    const key = fileService.createPreSignedUpload.mock.calls[0][0];
+    const [key, uploadOptions] = fileService.createPreSignedUpload.mock.calls[0] as unknown as [
+      string,
+      unknown,
+    ];
+    expect(uploadOptions).toEqual({ private: true });
     expect(key).toMatch(/^sandbox-drive-downloads\/\d{4}-\d{2}-\d{2}\/[\da-f-]{36}$/);
     expect(fileService.createDownloadUrl).toHaveBeenCalledWith(
       key,
