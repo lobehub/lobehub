@@ -74,13 +74,16 @@ export const setSandboxDefaultSelection = (agentId: string, selection?: SandboxS
 };
 
 /**
- * Whether the active workspace's plan includes a drive: the composer's cached
- * answer when there is one, the server's otherwise. A failed lookup reads as
- * no — the run goes to the temporary sandbox, as it would have anyway.
+ * Whether the active workspace's plan includes a drive. A cached yes is taken
+ * as is; a cached no is confirmed with the server first, because the cache is
+ * persisted — an account that has just upgraded still reads no until its
+ * revalidation lands, and its first conversation would otherwise lose the
+ * drive. A failed lookup reads as no — the run goes to the temporary sandbox,
+ * as it would have anyway.
  */
 const isDriveEntitled = async (): Promise<boolean> => {
   const cached = sandboxSelectors.entitlement(useSandboxStore.getState());
-  if (cached) return cached.entitled;
+  if (cached?.entitled) return true;
 
   try {
     return (await sandboxStorageService.getEntitlement()).entitled;

@@ -112,6 +112,20 @@ describe('pendingSandboxSelection', () => {
       setSandboxDefaultSelection('agent-warm');
     });
 
+    // The cache is persisted: an account that has just upgraded still reads
+    // "no drive" until its revalidation lands, so a cached no is confirmed.
+    it('confirms a cached negative with the server before declining the drive', async () => {
+      mocks.cachedEntitlement = { entitled: false };
+      mocks.getEntitlement.mockResolvedValue({ entitled: true });
+      setSandboxDefaultSelection('agent-upgraded', root);
+
+      await expect(resolvePendingSandboxSelection('agent-upgraded')).resolves.toEqual(root);
+      expect(mocks.getEntitlement).toHaveBeenCalledTimes(1);
+
+      consumePendingSandboxSelection('agent-upgraded');
+      setSandboxDefaultSelection('agent-upgraded');
+    });
+
     it('keeps an explicit pick, including the temporary sandbox', async () => {
       mocks.cachedEntitlement = { entitled: true };
       setSandboxDefaultSelection('agent-picked', root);
