@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Checker from './Checker';
 
 const fetchPresetTaskResult = vi.fn();
+const modelState = vi.hoisted(() => ({ models: [] as any[] }));
 
 vi.mock('@/services/chat', () => ({
   chatService: { fetchPresetTaskResult: (...args: any[]) => fetchPresetTaskResult(...args) },
@@ -19,7 +20,7 @@ vi.mock('@/hooks/useProviderName', () => ({
 }));
 
 vi.mock('@/store/aiInfra', () => ({
-  aiModelSelectors: { getAiProviderModelList: () => () => [] },
+  aiModelSelectors: { getAiProviderModelList: () => () => modelState.models },
   aiProviderSelectors: { isProviderConfigUpdating: () => () => false },
   useAiInfraStore: (selector: (state: any) => unknown) =>
     selector({ updateAiProviderConfig: vi.fn() }),
@@ -27,6 +28,7 @@ vi.mock('@/store/aiInfra', () => ({
 
 describe('Checker', () => {
   beforeEach(() => {
+    modelState.models = [];
     fetchPresetTaskResult.mockReset();
   });
 
@@ -66,5 +68,34 @@ describe('Checker', () => {
 
     expect(await screen.findByText('render:OllamaBizError')).toBeInTheDocument();
     expect(screen.queryByText('render:ConnectionCheckFailed')).not.toBeInTheDocument();
+  });
+
+  it('uses a key-scoped model when the provider default is unavailable', async () => {
+    modelState.models = [{ enabled: true, id: 'jzs-max-3.0', type: 'chat' }];
+    fetchPresetTaskResult.mockImplementation(async ({ onFinish }) => {
+      await onFinish('ok');
+    });
+
+    render(
+      <Checker
+        model="gpt-5.6-terra"
+        provider="jzstoken"
+        onAfterCheck={async () => {}}
+        onBeforeCheck={async () => true}
+      />,
+    );
+
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button'));
+    });
+
+    expect(fetchPresetTaskResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          model: 'jzs-max-3.0',
+          provider: 'jzstoken',
+        }),
+      }),
+    );
   });
 });

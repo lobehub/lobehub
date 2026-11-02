@@ -149,6 +149,11 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
   };
   generateObject?: {
     /**
+     * Force structured generation through Chat Completions even when the model
+     * matches a built-in Responses API rule.
+     */
+    forceChatCompletions?: boolean;
+    /**
      * Transform schema before sending to the provider (e.g., filter unsupported properties)
      */
     handleSchema?: (schema: any) => any;
