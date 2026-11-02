@@ -6,6 +6,8 @@ interface TruncatedFileNameProps {
 }
 
 const ELLIPSIS = '...';
+/** Upper bound for the overflow correction below, in pixels. */
+const MAX_OVERFLOW_CORRECTION = 24;
 
 /** Rendered width of `name.slice(start, end)`. */
 export type MeasureRange = (start: number, end: number) => number;
@@ -66,34 +68,49 @@ interface CharacterMetrics {
 }
 
 /**
- * Character edges of the rendered full name, read on demand through a Range and
- * memoized for one measurement pass: the binary search only touches ~2·log₂(n)
- * of them. Reads only, no DOM
- * writes, so measuring every row a commit mounts costs a single layout.
+ * Widths of segments of the rendered full name, read on demand through a Range
+ * and memoized for one measurement pass: the binary search only touches
+ * ~2·log₂(n) segments. Reads only, no DOM writes, so measuring every row a
+ * commit mounts costs a single layout.
+ *
+ * A segment's width is the larger of two readings: the distance between its
+ * first and last character edges (exact for left-to-right text, where it keeps
+ * the spacing a standalone segment box drops) and the segment's own bounding
+ * box (correct for right-to-left and mixed-direction names, whose edges can
+ * invert). Erring wide only ever truncates a little more, never overflows.
  */
 const createCharacterMetrics = (node: Text, name: string, fullWidth: number) => {
   const range = document.createRange();
-  const left: number[] = [];
-  const right: number[] = [];
-  let origin: number | undefined;
+  const edges = new Map<number, DOMRect>();
+  const widths = new Map<string, number>();
 
-  const edges = (index: number) => {
-    if (left[index] === undefined) {
-      range.setStart(node, index);
-      range.setEnd(node, index + 1);
-      const rect = range.getBoundingClientRect();
-      left[index] = rect.left;
-      right[index] = rect.right;
-    }
-    return [left[index], right[index]] as const;
+  const rectOf = (start: number, end: number) => {
+    range.setStart(node, start);
+    range.setEnd(node, end);
+    return range.getBoundingClientRect();
   };
 
-  const startX = () => (origin ??= edges(0)[0]);
+  const charRect = (index: number) => {
+    let rect = edges.get(index);
+    if (!rect) {
+      rect = rectOf(index, index + 1);
+      edges.set(index, rect);
+    }
+    return rect;
+  };
 
   const measureRange: MeasureRange = (start, end) => {
     if (end <= start) return 0;
     if (start === 0 && end === name.length) return fullWidth;
-    return edges(end - 1)[1] - (start === 0 ? startX() : edges(start)[0]);
+
+    const key = `${start}:${end}`;
+    let width = widths.get(key);
+    if (width === undefined) {
+      const edgeWidth = charRect(end - 1).right - charRect(start).left;
+      width = Math.max(edgeWidth, rectOf(start, end).width);
+      widths.set(key, width);
+    }
+    return width;
   };
 
   return { fullWidth, measureRange, name } satisfies CharacterMetrics;
@@ -149,6 +166,10 @@ const truncateWithMetrics = (
 const TruncatedFileName = memo<TruncatedFileNameProps>(({ name, className }) => {
   const containerRef = useRef<HTMLSpanElement>(null);
   const measuredWidthRef = useRef<number | null>(null);
+  // Pixels held back after a truncated result still overflowed; joining scripts
+  // (Arabic) reshape glyphs where a word is split, so segment widths can run a
+  // little short of the joined text.
+  const overflowCorrectionRef = useRef({ name, px: 0 });
   // Bumped on a width change so the full name renders and is measured again.
   const [measureEpoch, setMeasureEpoch] = useState(0);
   const [truncated, setTruncated] = useState<{
@@ -172,10 +193,27 @@ const TruncatedFileName = memo<TruncatedFileNameProps>(({ name, className }) => 
     measuredWidthRef.current = width;
     if (width <= 0) return;
 
+    if (overflowCorrectionRef.current.name !== name)
+      overflowCorrectionRef.current = { name, px: 0 };
     const metrics = createCharacterMetrics(node, name, container.scrollWidth);
-    const text = truncateWithMetrics(metrics, width, container);
+    const text = truncateWithMetrics(metrics, width - overflowCorrectionRef.current.px, container);
     setTruncated({ epoch: measureEpoch, name, text });
   }, [name, measureEpoch]);
+
+  // A truncated result that still overflows is measured again with the excess
+  // held back. Reads only; rare in practice (joining scripts).
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || displayName === name) return;
+
+    const overflow = container.scrollWidth - container.clientWidth;
+    const correction = overflowCorrectionRef.current;
+    if (overflow <= 0 || correction.name !== name) return;
+    if (correction.px >= MAX_OVERFLOW_CORRECTION) return;
+
+    correction.px += overflow + 1;
+    setMeasureEpoch((epoch) => epoch + 1);
+  }, [displayName, name]);
 
   useEffect(() => {
     const container = containerRef.current;
