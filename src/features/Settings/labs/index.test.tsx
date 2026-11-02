@@ -102,6 +102,12 @@ describe('Labs settings page', () => {
     expect(screen.getByText('group.desktop')).toBeDefined();
   });
 
+  it('offers the Codex app-server toggle outside the Desktop group', () => {
+    const codexAppServer = LAB_FEATURES.find(({ flag }) => flag === 'enableCodexAppServer');
+
+    expect(codexAppServer?.desktopOnly).toBeFalsy();
+  });
+
   it('renders the message text selection actions lab toggle', () => {
     renderPage();
 
