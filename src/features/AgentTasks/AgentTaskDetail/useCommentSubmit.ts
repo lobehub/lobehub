@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import {
   getAttachmentFileIdsFromEditor,
   getEditorAttachmentStateFromJson,
+  hasIncompleteEditorAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useTaskStore } from '@/store/task';
 
@@ -30,7 +31,8 @@ export const useCommentSubmit = ({
   taskIdRef.current = taskId;
 
   const submit = useCallback(async () => {
-    if (!canComment || submittingRef.current) return;
+    // A still-uploading image would be sent as its local `blob:` preview URL.
+    if (!canComment || submittingRef.current || hasIncompleteEditorAttachments(editor)) return;
     const json = editor?.getDocument?.('json') as unknown;
     const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
     const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
