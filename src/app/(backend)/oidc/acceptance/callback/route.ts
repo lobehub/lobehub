@@ -26,7 +26,7 @@ const READ_QUERY = 'var q=new URLSearchParams(location.search)';
 // so it goes to any opener; the SDK still matches it against its own state.
 const deniedPage = () =>
   page(
-    `${READ_QUERY};window.opener&&window.opener.postMessage({error:${scriptJson(REPORTED_ERRORS)}.indexOf(q.get("error"))<0?"error":q.get("error"),state:q.get("state"),type:"lobehub-review:denied"},"*")`,
+    `${READ_QUERY};window.opener&&window.opener.postMessage({error:${scriptJson(REPORTED_ERRORS)}.indexOf(q.get("error"))<0?"error":q.get("error"),state:q.get("state"),type:"lobehub-acceptance:denied"},"*")`,
   );
 
 export async function GET(request: NextRequest) {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     // The target origin comes from the authorization code itself, never from
     // the query, so a copied tag on another origin cannot receive the code.
     return page(
-      `${READ_QUERY};window.opener&&window.opener.postMessage({code:q.get("code"),state:q.get("state"),type:"lobehub-review:authorized"},${scriptJson(site.origin)})`,
+      `${READ_QUERY};window.opener&&window.opener.postMessage({code:q.get("code"),state:q.get("state"),type:"lobehub-acceptance:authorized"},${scriptJson(site.origin)})`,
     );
   } catch (error) {
     log('review callback failed: %O', error);

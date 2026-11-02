@@ -183,7 +183,7 @@ describe('GET /oidc/interaction/[uid]', () => {
 
     beforeEach(() => {
       mocks.getInteractionDetails.mockResolvedValue({
-        params: { client_id: 'lobehub-review', resource: RESOURCE, scope: 'acceptance:review' },
+        params: { client_id: 'lobehub-acceptance', resource: RESOURCE, scope: 'acceptance:review' },
         prompt: { name: 'consent' },
       });
       mocks.getConsentClientMetadata.mockResolvedValue({ clientName: 'LobeHub Review' });

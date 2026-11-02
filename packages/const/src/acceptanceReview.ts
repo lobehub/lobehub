@@ -1,7 +1,7 @@
-export const ACCEPTANCE_REVIEW_CLIENT_ID = 'lobehub-review';
+export const ACCEPTANCE_CLIENT_ID = 'lobehub-acceptance';
 
 /**
- * URL parameter that activates the review toolbar (`@lobehub/review-sdk`). A
+ * URL parameter that activates the acceptance toolbar (`@lobehub/acceptance-sdk`). A
  * page mounts the toolbar only when its URL carries this parameter; the SDK
  * persists the value in sessionStorage and strips the parameter afterwards.
  */

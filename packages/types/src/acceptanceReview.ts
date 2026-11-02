@@ -1,4 +1,4 @@
-// Contract for the embeddable review toolbar (`@lobehub/review-sdk`, `src/protocol.ts`).
+// Contract for the embeddable acceptance toolbar (`@lobehub/acceptance-sdk`, `src/protocol.ts`).
 import { z } from 'zod';
 
 const rectSchema = z.object({
