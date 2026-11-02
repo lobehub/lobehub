@@ -1,12 +1,15 @@
 'use client';
 
 import type { WidgetOutput } from '@lobechat/types';
-import { useThemeMode } from '@lobehub/ui';
+import { ActionIcon, useThemeMode } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
+import { Maximize2Icon, Minimize2Icon } from 'lucide-react';
 import { memo, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { createWidgetHtmlDocument } from './document';
+import { useElementFullscreen } from './useElementFullscreen';
 import { useWidgetHtmlBridge } from './useWidgetHtmlBridge';
 
 const styles = stylex.create({
@@ -24,7 +27,36 @@ const styles = stylex.create({
     borderWidth: 1,
     height: 360,
     overflow: 'hidden',
+  },
+  // The browser paints a full-screen element's backdrop black; keep the app's page color.
+  fullscreen: {
+    backgroundColor: cssVar.colorBgLayout,
+    borderRadius: 0,
+    borderWidth: 0,
+    height: '100%',
+  },
+  root: {
+    height: '100%',
+    position: 'relative',
     width: '100%',
+  },
+  // Always visible: the pointer is usually over the frame, and a parent's :hover
+  // does not reliably match while it is inside a sandboxed iframe.
+  toggle: {
+    backgroundColor: cssVar.colorBgElevated,
+    boxShadow: cssVar.boxShadowTertiary,
+    insetBlockStart: 8,
+    insetInlineEnd: 8,
+    opacity: {
+      ':focus-visible': 1,
+      ':hover': 1,
+      'default': 0.72,
+    },
+    position: 'absolute',
+    zIndex: 1,
+  },
+  toggleShown: {
+    opacity: 1,
   },
 });
 
@@ -39,27 +71,62 @@ interface HtmlViewProps {
   output: WidgetOutput;
 }
 
-/** A widget output drawn by its version's own HTML, in a sandboxed frame. */
+/**
+ * A widget output drawn by its version's own HTML, in a sandboxed frame. The
+ * view can go full screen in place: the same frame grows, so it keeps its
+ * state and live updates, and Esc brings it back.
+ */
 const HtmlView = memo<HtmlViewProps>(({ html, output, framed }) => {
-  const ref = useRef<HTMLIFrameElement>(null);
+  const { t } = useTranslation('dashboard');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLIFrameElement>(null);
   const { isDarkMode } = useThemeMode();
   const srcDoc = useMemo(() => createWidgetHtmlDocument(html), [html]);
-  useWidgetHtmlBridge(ref, output, isDarkMode ? 'dark' : 'light');
-
-  const frame = (
-    <iframe
-      data-widget-html
-      className={stylex.props(styles.frame).className}
-      ref={ref}
-      sandbox={'allow-scripts'}
-      srcDoc={srcDoc}
-      style={FRAME_STYLE}
-      title={'widget'}
-    />
+  useWidgetHtmlBridge(frameRef, output, isDarkMode ? 'dark' : 'light');
+  const fullscreen = useElementFullscreen(containerRef);
+  const toggleLabel = t(
+    fullscreen.isFullscreen ? 'widget.fullscreen.exit' : 'widget.fullscreen.enter',
   );
-  if (!framed) return frame;
 
-  return <div {...stylex.props(styles.framed)}>{frame}</div>;
+  return (
+    <div
+      data-widget-html-root
+      data-widget-html-fullscreen={fullscreen.isFullscreen || undefined}
+      ref={containerRef}
+      {...stylex.props(
+        styles.root,
+        framed && styles.framed,
+        fullscreen.isFullscreen && styles.fullscreen,
+      )}
+    >
+      <iframe
+        data-widget-html
+        className={stylex.props(styles.frame).className}
+        ref={frameRef}
+        sandbox={'allow-scripts'}
+        srcDoc={srcDoc}
+        style={FRAME_STYLE}
+        title={'widget'}
+      />
+      {fullscreen.supported && (
+        <ActionIcon
+          data-widget-html-fullscreen-toggle
+          aria-label={toggleLabel}
+          icon={fullscreen.isFullscreen ? Minimize2Icon : Maximize2Icon}
+          size={'small'}
+          className={
+            stylex.props(styles.toggle, fullscreen.isFullscreen && styles.toggleShown).className
+          }
+          title={toggleLabel}
+          // The card around the view opens the drill-down on click.
+          onClick={(event) => {
+            event.stopPropagation();
+            void fullscreen.toggle();
+          }}
+        />
+      )}
+    </div>
+  );
 });
 
 HtmlView.displayName = 'DashboardWidgetHtmlView';
