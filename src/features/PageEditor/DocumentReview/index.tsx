@@ -111,11 +111,6 @@ const DocumentReviewPanel = memo(() => {
   const isDraftRuleSet = review.ruleSet?.status === 'draft';
   const canRunChecks = Boolean(review.ruleSet) && !isDraftRuleSet && counts.unchecked > 0;
   const canRecheck = Boolean(review.ruleSet) && !isDraftRuleSet && counts.needs_recheck > 0;
-  // The rules toolbar can hold the commit action (`confirmRules`) next to this
-  // slot. Exactly one primary per action group: when the commit button owns it,
-  // the run/recheck slot steps down to the default variant.
-  const hasCommitAction = reviewTab === 'rules' && isDraftRuleSet && review.canWrite;
-
   const toolbarAction = (() => {
     if (!review.canWrite) return null;
 
@@ -142,7 +137,7 @@ const DocumentReviewPanel = memo(() => {
         <Button
           loading={review.pendingAction === 'runChecks'}
           size={'small'}
-          type={hasCommitAction ? 'default' : 'primary'}
+          type={'default'}
           onClick={() => review.runChecks()}
         >
           {review.pendingAction === 'runChecks'
@@ -158,7 +153,7 @@ const DocumentReviewPanel = memo(() => {
           icon={RefreshCwIcon}
           loading={review.pendingAction === 'recheck'}
           size={'small'}
-          type={hasCommitAction ? 'default' : 'primary'}
+          type={'default'}
           onClick={() => review.recheck()}
         >
           {review.pendingAction === 'recheck'
