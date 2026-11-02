@@ -124,6 +124,7 @@ describe('TaskModel public surface', () => {
   it('keeps the static methods', () => {
     expect(
       [
+        'findInterruptedRunningTopics',
         'findOrphanedRunningTopics',
         'findStuckTasks',
         'getScheduledTasks',

@@ -1,7 +1,15 @@
 'use client';
 
-import { DropdownMenu, Flexbox, Icon, useTheme } from '@lobehub/ui';
-import { ActionIcon, Button, Divider, type ModalInstance } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Divider,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  type ModalInstance,
+  useTheme,
+} from '@lobehub/ui';
 import { MoreHorizontalIcon, PlayIcon, Settings2Icon, UsersIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

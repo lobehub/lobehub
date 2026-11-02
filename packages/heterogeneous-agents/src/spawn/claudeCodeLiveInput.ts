@@ -10,6 +10,14 @@ import type { Writable } from 'node:stream';
  */
 const DEFAULT_IDLE_CLOSE_MS = 30 * 60 * 1000;
 
+/**
+ * How long a task that ends between turns may wait for the main-agent turn its
+ * notification wakes. Claude Code opens that turn within milliseconds; the
+ * grace only bounds an end that wakes nothing, such as a task killed between
+ * turns.
+ */
+const DEFAULT_WAKE_UP_GRACE_MS = 30 * 1000;
+
 const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed', 'killed']);
 
 const readIdleCloseMs = (): number => {
@@ -33,6 +41,7 @@ const isAbortedResult = (message: any): boolean =>
 
 export interface ClaudeCodeLiveInputOptions {
   idleCloseMs?: number;
+  wakeUpGraceMs?: number;
 }
 
 /**
@@ -44,8 +53,13 @@ export interface ClaudeCodeLiveInputOptions {
  * waiting for background tasks after `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS`
  * (10 minutes by default) and kills them. So stdin stays open until the session
  * is between turns with no running task and no delivered message it has not
- * picked up yet. A notification for a task that finished during the last turn
- * is still delivered after the close, because print mode drains those itself.
+ * picked up yet.
+ *
+ * A task that ends between turns does not make the session idle: its
+ * notification wakes the main agent for a turn, and that turn can start a new
+ * task or resume a finished sub-agent with `SendMessage`. Closing at the end
+ * would put those tasks under the ceiling, so the decision waits for the
+ * wake-up turn's result.
  *
  * Requires `--replay-user-messages`: the replayed `uuid` is how a delivered
  * message is known to have been picked up.
@@ -59,12 +73,15 @@ export class ClaudeCodeLiveInput {
   private lineBuffer = '';
   private turnOpen = true;
   private readonly unconsumed = new Set<string>();
+  private readonly wakeUpGraceMs: number;
+  private wakeUpTimer: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly stdin: Writable,
     options: ClaudeCodeLiveInputOptions = {},
   ) {
     this.idleCloseMs = options.idleCloseMs ?? readIdleCloseMs();
+    this.wakeUpGraceMs = options.wakeUpGraceMs ?? DEFAULT_WAKE_UP_GRACE_MS;
     stdin.on('error', () => this.markClosed());
     stdin.on('close', () => this.markClosed());
   }
@@ -201,7 +218,7 @@ export class ClaudeCodeLiveInput {
         TERMINAL_TASK_STATUSES.has(message.patch?.status as string));
     if (ended && message.task_id) {
       this.activeTasks.delete(message.task_id);
-      this.closeIfIdle();
+      this.awaitWakeUpTurn();
     }
   }
 
@@ -209,11 +226,32 @@ export class ClaudeCodeLiveInput {
   private openTurn(): void {
     this.turnOpen = true;
     this.lastOutcome = undefined;
+    this.clearWakeUpTimer();
   }
 
   private closeIfIdle(): void {
     if (this.turnOpen || this.activeTasks.size > 0 || this.unconsumed.size > 0) return;
     this.close();
+  }
+
+  /**
+   * The last task ended between turns. The turn its notification wakes decides
+   * at its result; close here only if no turn opens within the grace.
+   */
+  private awaitWakeUpTurn(): void {
+    if (this.closed) return;
+    if (this.turnOpen || this.activeTasks.size > 0 || this.unconsumed.size > 0) return;
+
+    this.clearWakeUpTimer();
+    this.wakeUpTimer = setTimeout(() => this.closeIfIdle(), this.wakeUpGraceMs);
+    this.wakeUpTimer.unref?.();
+  }
+
+  private clearWakeUpTimer(): void {
+    if (!this.wakeUpTimer) return;
+
+    clearTimeout(this.wakeUpTimer);
+    this.wakeUpTimer = undefined;
   }
 
   private armIdleTimer(): void {
@@ -232,5 +270,6 @@ export class ClaudeCodeLiveInput {
   private markClosed(): void {
     this.closed = true;
     this.clearIdleTimer();
+    this.clearWakeUpTimer();
   }
 }

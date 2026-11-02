@@ -363,6 +363,8 @@ Behavior:
 
 - Labs flag `enableGatewayMux` (labPrefer selector + `LAB_FEATURES` entry `gatewayMux`,
   stage `alpha`, i18n `labs` namespace en-US + zh-CN).
+  _Update: the rollout gate (later the `agent_gateway_mux` feature flag) has been
+  removed. Web takes v2 wherever `serverConfig.agentGatewayProtocol === 2`._
 - `GatewayActionImpl.createClient(options, ctx)` — when the flag is on, return
   `createOperationClient(getMux(identity), operationId, {...})` where `identity` is
   `'owner'` (getToken = `aiAgentService.issueGatewayUserToken`) or `share:${agentShareId}`

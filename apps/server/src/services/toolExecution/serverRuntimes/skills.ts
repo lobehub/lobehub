@@ -577,7 +577,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       // Content scope, NOT the gateway-addressing scope resolved above: a
       // workspace agent routed to the caller's own machine is still editing
       // workspace content.
-      const deviceLhEnv = buildDeviceLhEnv(await this.resolveWorkspaceId());
+      const deviceLhEnv = buildDeviceLhEnv({
+        operationId: device.operationId,
+        workspaceId: await this.resolveWorkspaceId(),
+      });
       const response = await executeAuthorizedDeviceToolCall(
         this.serverDB,
         {
@@ -595,7 +598,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
             command,
             ...(cwd && { cwd }),
             // Keep `lh` on the device in this run's workspace instead of the
-            // device credentials' personal scope.
+            // device credentials' personal scope, and tell it which run it acts for.
             ...(deviceLhEnv && { env: deviceLhEnv }),
             ...(device.executionTimeoutMs && { timeout: device.executionTimeoutMs }),
           }),

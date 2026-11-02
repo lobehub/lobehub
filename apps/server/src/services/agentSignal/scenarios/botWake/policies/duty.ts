@@ -16,8 +16,8 @@ const dutyLabel = (duty: string) => {
   return line.length > DUTY_LABEL_LENGTH ? `${line.slice(0, DUTY_LABEL_LENGTH - 1)}…` : line;
 };
 
-/** Another person spoke this recently, right before the author: the author is answering them. */
-const ANSWERING_OTHER_MS = 2 * 60 * 1000;
+/** Another bot spoke this recently, right before the author: the author is answering that agent. */
+const ANSWERING_OTHER_BOT_MS = 2 * 60 * 1000;
 
 export interface WakeDutyInput extends WakeClassifierInput {
   /** The bot's duties, as its owner wrote them. */
@@ -27,10 +27,18 @@ export interface WakeDutyInput extends WakeClassifierInput {
 export interface WakeDutyJudgement {
   /** The duty the message falls within, in full; absent when the model did not say. */
   duty?: string;
+  /**
+   * 0..1: how likely stepping in now would actually help the people talking (an open question
+   * nobody answered that the bot can settle). Absent when the model did not answer it.
+   */
+  helpful?: number;
   /** 0..1: how likely the message falls within the bot's duties, so it should step in now. */
   inDuty: number;
   reason: string;
 }
+
+/** Tag on an `allow` that came from `helpful`, not from the duties: the agent is told so. */
+export const DUTY_HELPFUL_TAG = 'helpful';
 
 /** Calls the model. Must honour `abortSignal`; the policy also stops waiting on its own. */
 export type WakeDutyJudge = (
@@ -70,14 +78,22 @@ const degraded = (reason: string): WakePolicyResult => ({
  * Expects:
  * - `rules.duties.text` is set; without duties the recorder does not build this policy
  *
+ * The same call asks whether stepping in would actually help (`helpful`): an open question nobody
+ * has answered that the bot can settle with something it can check. In a replay of reviewed
+ * decisions the duty score alone did not tell wanted wakes from unwanted ones (AUC 0.57); with
+ * `helpful` it did (0.80).
+ *
  * Returns:
- * - `abstain` without a model call for a message too short to act on, and for a reply to someone
- *   else: the author is answering that person, and the model, which only sees the text, reads the
- *   "你" in it as the assistant. The same for a message right after another participant spoke
- *   (`answering-other`): a person or another bot, anyone but this bot and the author, reply or not
+ * - `abstain` without a model call for a message too short to act on; for a reply to someone else
+ *   (`reply-to-other`): the author is answering that person, and in a replay the model still woke
+ *   on such replies ("可以把 count 和 load 的窗口改大"); and for a message right after another bot
+ *   spoke (`answering-other`): with several agents in a thread, the author is most likely
+ *   answering that one. A message right after a person goes to the model, which kept all of them
+ *   under the bar in the replay
  * - `abstain` tagged `degraded` when the model errors or answers late: no answer is not a yes
- * - Otherwise `allow` when the score reaches `rules.duties.threshold`, else `deny`; `confidence` is
- *   the score and `matched` the duty the model named
+ * - Otherwise `allow` when the duty score reaches `rules.duties.threshold` (`matched` = the duty
+ *   the model named), or when `helpful` reaches `rules.duties.helpfulThreshold` (tagged
+ *   {@link DUTY_HELPFUL_TAG}, no `matched`); else `deny`. `confidence` is the score that decided
  */
 export const createDutyPolicy = (
   rules: WakeRules,
@@ -96,16 +112,13 @@ export const createDutyPolicy = (
     ) {
       return abstain('reply-to-other');
     }
-    // Another bot counts: in a thread with several agents the owner is often answering one of
-    // them. Only this bot's own lines (logged under its application id) do not.
+    // In a thread with several agents the owner is often answering one of them, which the
+    // transcript does not make plain. A line right after a person is left to the model.
     const previous = state.conversation?.recent.at(-1);
-    const isOwnLine = previous?.isBot === true && previous.authorId === signal.applicationId;
     if (
-      previous &&
-      !isOwnLine &&
-      previous.authorId !== undefined &&
-      previous.authorId !== authorId &&
-      signal.timestamp - previous.at < ANSWERING_OTHER_MS
+      previous?.isBot === true &&
+      previous.authorId !== signal.applicationId &&
+      signal.timestamp - previous.at < ANSWERING_OTHER_BOT_MS
     ) {
       return abstain('answering-other');
     }
@@ -144,6 +157,20 @@ export const createDutyPolicy = (
       const matched = outcome.duty?.trim() || undefined;
       const reason = outcome.reason || `score ${outcome.inDuty.toFixed(2)}`;
 
+      if (outcome.inDuty < rules.duties.threshold) {
+        const { helpful } = outcome;
+        if (helpful !== undefined && helpful >= rules.duties.helpfulThreshold) {
+          // Not the duties: the agent is told it woke to settle an open question, not to carry out
+          // a duty, so no duty is named.
+          return {
+            confidence: helpful,
+            reason,
+            tags: ['duty', DUTY_HELPFUL_TAG],
+            verdict: 'allow',
+          };
+        }
+      }
+
       return {
         confidence: outcome.inDuty,
         matched,
@@ -161,5 +188,5 @@ export const createDutyPolicy = (
   id: DUTY_POLICY_ID,
   mode: rules.duties.mode,
   requires: ['channel', 'conversation'],
-  version: 2,
+  version: 3,
 });

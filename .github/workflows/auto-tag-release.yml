@@ -141,6 +141,7 @@ jobs:
         if: env.SHOULD_TAG == 'true' && steps.check-tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v3
         with:
+          token: ${{ steps.app-token.outputs.token }}
           tag_name: v${{ env.VERSION }}
           target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
           name: 🚀 Release v${{ env.VERSION }}
@@ -156,8 +157,6 @@ jobs:
             ### Commit Message
             ${{ github.event.pull_request.body }}
           draft: false
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Output result
         run: |

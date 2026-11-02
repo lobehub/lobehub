@@ -2,7 +2,11 @@ import { ModelEmptyError, ModelRefusalError } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { formatErrorForState, readErrorBudgetContext } from './formatErrorForState';
+import {
+  formatErrorForState,
+  readDispatchErrorContext,
+  readErrorBudgetContext,
+} from './formatErrorForState';
 
 describe('formatErrorForState', () => {
   it('classifies an already-wrapped error using its nested provider message', () => {
@@ -504,5 +508,48 @@ describe('readErrorBudgetContext', () => {
         }),
       ),
     ).toBeUndefined();
+  });
+});
+
+describe('readDispatchErrorContext', () => {
+  const sandboxFailure = (dispatch: Record<string, unknown> = {}) =>
+    formatErrorForState({
+      body: {
+        detail: 'CLAUDE_CODE_OAUTH_TOKEN 未设置。请先在凭证管理中添加该凭证后再运行 claude-code。',
+        dispatch: { agentType: 'claude-code', stage: 'sandbox_spawn', ...dispatch },
+      },
+      message: 'Hetero sandbox spawn failed',
+      type: ChatErrorType.ServerAgentRuntimeError,
+    });
+
+  it('projects only the allowlisted dispatch fields', () => {
+    const context = readDispatchErrorContext(
+      sandboxFailure({
+        deviceAccessDenied: true,
+        missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+        workspaceId: 'ws-internal',
+      }),
+    );
+
+    expect(context).toEqual({
+      agentType: 'claude-code',
+      deviceAccessDenied: true,
+      missingCredential: 'CLAUDE_CODE_OAUTH_TOKEN',
+      stage: 'sandbox_spawn',
+    });
+    expect(JSON.stringify(context)).not.toContain('凭证管理');
+  });
+
+  it('drops a credential that is not an environment-variable name', () => {
+    expect(
+      readDispatchErrorContext(sandboxFailure({ missingCredential: 'sk-ant-oat01-AbC_dEf' })),
+    ).toEqual({ agentType: 'claude-code', stage: 'sandbox_spawn' });
+  });
+
+  it('ignores errors without an allowlisted dispatch context', () => {
+    expect(readDispatchErrorContext(undefined)).toBeUndefined();
+    expect(readDispatchErrorContext(formatErrorForState(new Error('boom')))).toBeUndefined();
+    expect(readDispatchErrorContext(sandboxFailure({ stage: 'other' }))).toBeUndefined();
+    expect(readDispatchErrorContext(sandboxFailure({ agentType: 'openclaw' }))).toBeUndefined();
   });
 });

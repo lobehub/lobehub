@@ -12,6 +12,13 @@ import { withUsageCost } from '../usageConverters/utils/withUsageCost';
 const log = debug('lobe-model-runtime:anthropic:generate-object');
 
 export interface AnthropicGenerateObjectConfig {
+  /**
+   * Send `tool_choice: { type: 'auto' }` plus a prompt instruction instead of a
+   * forced tool choice, for endpoints that reject `any` / `tool` in the current
+   * request (for example while thinking is enabled). Unlike the Claude path for
+   * models that reject forced tool use, this does not add `strict` to the tool.
+   */
+  autoToolChoice?: boolean;
   maxTokens?: number;
   requestModel?: string;
   requestParams?: Pick<Anthropic.MessageCreateParamsNonStreaming, 'output_config' | 'thinking'>;
@@ -68,6 +75,7 @@ export const buildAnthropicGenerateObjectRequest = async (
   const forcedToolChoiceRejected = [model, config?.requestModel].some(
     (id): id is string => !!id && rejectsForcedToolChoice(id),
   );
+  const useAutoToolChoice = forcedToolChoiceRejected || !!config?.autoToolChoice;
   // With `tool_choice: auto` nothing forces the model to call a tool, so the
   // official migration guide asks callers to state the requirement in the prompt.
   // Without it the model may answer in plain text and the parser silently returns
@@ -76,8 +84,8 @@ export const buildAnthropicGenerateObjectRequest = async (
   let toolUseInstruction: string | undefined;
   if (tools) {
     finalTools = buildAnthropicTools(tools);
-    tool_choice = forcedToolChoiceRejected ? { type: 'auto' } : { type: 'any' };
-    if (forcedToolChoiceRejected) {
+    tool_choice = useAutoToolChoice ? { type: 'auto' } : { type: 'any' };
+    if (useAutoToolChoice) {
       toolUseInstruction =
         'You must respond by calling one of the provided tools. Do not reply with plain text.';
     }
@@ -102,12 +110,12 @@ export const buildAnthropicGenerateObjectRequest = async (
 
     finalTools = [tool];
     schemaToolName = tool.name;
-    tool_choice = forcedToolChoiceRejected
+    tool_choice = useAutoToolChoice
       ? { type: 'auto' }
       : config?.schemaToolChoice === 'any'
         ? { type: 'any' }
         : { name: tool.name, type: 'tool' };
-    if (forcedToolChoiceRejected) {
+    if (useAutoToolChoice) {
       toolUseInstruction = `You must respond by calling the \`${tool.name}\` tool. Do not reply with plain text.`;
     }
   } else {

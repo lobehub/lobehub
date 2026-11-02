@@ -1,24 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentGatewayUnavailableError, AgentStreamHistoryError } from '../../utils/agentStreamTransport';
+import {
+  AgentGatewayUnavailableError,
+  AgentStreamHistoryError,
+} from '../../utils/agentStreamTransport';
 import { followAgentRun } from './followRun';
 
-const { getTrpcClient, historyQuery, streamAgentEvents } = vi.hoisted(() => {
-  const historyQuery = vi.fn();
-  return {
-    getTrpcClient: vi.fn(async () => ({
-      aiAgent: { getOperationStreamHistory: { query: historyQuery } },
-    })),
-    historyQuery,
-    streamAgentEvents: vi.fn(),
-  };
-});
+const { getTrpcClient, globalConfigQuery, historyQuery, streamAgentEvents, userTokenQuery } =
+  vi.hoisted(() => {
+    const globalConfigQuery = vi.fn();
+    const historyQuery = vi.fn();
+    const userTokenQuery = vi.fn();
+    return {
+      getTrpcClient: vi.fn(async () => ({
+        aiAgent: {
+          getOperationStreamHistory: { query: historyQuery },
+          issueGatewayUserToken: { query: userTokenQuery },
+        },
+        config: { getGlobalConfig: { query: globalConfigQuery } },
+      })),
+      globalConfigQuery,
+      historyQuery,
+      streamAgentEvents: vi.fn(),
+      userTokenQuery,
+    };
+  });
 
 vi.mock('../../api/client', () => ({ getTrpcClient }));
 vi.mock('../../api/http', () => ({ getAgentStreamAuthInfo: vi.fn() }));
-vi.mock('../../settings', () => ({ resolveAgentGatewayUrl: () => 'https://gateway.test' }));
+vi.mock('../../settings', () => ({
+  normalizeUrl: (url?: string) => (url ? url.replace(/\/$/, '') : undefined),
+  resolveAgentGatewayUrl: () => 'https://gateway.test',
+}));
 vi.mock('../../utils/agentStream', () => ({ streamAgentEvents }));
-vi.mock('../../utils/logger', () => ({ log: { error: vi.fn() } }));
+vi.mock('../../utils/logger', () => ({ log: { debug: vi.fn(), error: vi.fn() } }));
 
 describe('followAgentRun', () => {
   beforeEach(() => {
@@ -28,6 +43,53 @@ describe('followAgentRun', () => {
       events: [],
       hasMore: false,
       nextCursor: '0',
+    });
+    globalConfigQuery.mockResolvedValue({
+      serverConfig: { agentGatewayProtocol: 1, agentGatewayUrl: 'https://gateway.test' },
+    });
+    streamAgentEvents.mockResolvedValue({ kind: 'completed', status: 'done' });
+  });
+
+  describe('gateway protocol', () => {
+    const streamedWith = () => streamAgentEvents.mock.calls[0][0];
+
+    it('follows over /v2/ws, minting a user token per dial, when the server Gateway serves protocol 2', async () => {
+      globalConfigQuery.mockResolvedValue({
+        serverConfig: { agentGatewayProtocol: 2, agentGatewayUrl: 'https://gateway.test/' },
+      });
+      userTokenQuery
+        .mockResolvedValueOnce({ token: 'jwt-1' })
+        .mockResolvedValueOnce({ token: 'jwt-2' });
+
+      await followAgentRun('op-1');
+
+      const { getGatewayUserToken } = streamedWith();
+      await expect(getGatewayUserToken()).resolves.toBe('jwt-1');
+      await expect(getGatewayUserToken()).resolves.toBe('jwt-2');
+    });
+
+    it('stays on /ws for a protocol-1 (self-hosted) Gateway', async () => {
+      await followAgentRun('op-1');
+
+      expect(streamedWith().getGatewayUserToken).toBeUndefined();
+    });
+
+    it('stays on /ws when the CLI points at a different Gateway than the server advertises', async () => {
+      globalConfigQuery.mockResolvedValue({
+        serverConfig: { agentGatewayProtocol: 2, agentGatewayUrl: 'https://other-gateway.test' },
+      });
+
+      await followAgentRun('op-1');
+
+      expect(streamedWith().getGatewayUserToken).toBeUndefined();
+    });
+
+    it('stays on /ws when the capability lookup fails', async () => {
+      globalConfigQuery.mockRejectedValue(new Error('fetch failed'));
+
+      await followAgentRun('op-1');
+
+      expect(streamedWith().getGatewayUserToken).toBeUndefined();
     });
   });
 

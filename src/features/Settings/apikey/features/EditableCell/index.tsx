@@ -1,8 +1,8 @@
 'use client';
 
 import { ActionIcon, createStaticStyles, cx, Input, toast } from '@lobehub/ui';
-import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import { type Dayjs } from 'dayjs';
 import { Check, Edit, X } from 'lucide-react';
 import React, { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
