@@ -444,6 +444,12 @@ describe('Google context-caching pricing', () => {
   const units = (id: string) =>
     LOBE_DEFAULT_MODEL_LIST.find((m) => m.providerId === ModelProvider.Google && m.id === id)
       ?.pricing?.units;
+  const storage = {
+    lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
+    name: 'textInput_cacheWrite',
+    strategy: 'lookup',
+    unit: 'millionTokens',
+  };
   const fixed = (name: string, rate: number) => ({
     name,
     rate,
@@ -466,25 +472,14 @@ describe('Google context-caching pricing', () => {
   it.each([
     ['gemini-2.5-flash', 0.03, 0.1],
     ['gemini-2.5-flash-lite', 0.01, 0.03],
-  ])('lists text and audio cache reads for %s', (id, text, audio) => {
+  ])('lists text and audio cache reads plus storage for %s', (id, text, audio) => {
     expect(units(id)).toEqual(
       expect.arrayContaining([
         fixed('textInput_cacheRead', text),
         fixed('audioInput_cacheRead', audio),
+        storage,
       ]),
     );
-  });
-
-  // Gemini's per-hour storage fee only applies to explicit caches, which LobeHub never creates;
-  // implicit caching has no write charge, so the cards must not list one.
-  it('lists no cache-write price on Gemini cards', () => {
-    const geminiWithCacheWrite = LOBE_DEFAULT_MODEL_LIST.filter(
-      (m) =>
-        m.id.startsWith('gemini') &&
-        m.pricing?.units.some((u) => u.name === 'textInput_cacheWrite'),
-    ).map((m) => `${m.providerId}/${m.id}`);
-
-    expect(geminiWithCacheWrite).toEqual([]);
   });
 
   it('lists the audio cache read for Gemini 3 Flash Preview', () => {
