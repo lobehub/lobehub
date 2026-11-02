@@ -103,9 +103,16 @@ const styles = createStaticStyles(({ css }) => {
       white-space: nowrap;
     `,
     menuPlaceholder: css`
+      cursor: pointer;
+
       flex-shrink: 0;
+
       width: 24px;
       height: 24px;
+      padding: 0;
+      border: none;
+
+      background: transparent;
     `,
     nameContainer: css`
       overflow: hidden;
@@ -173,7 +180,7 @@ const FileListItem = ({
   userId,
   visibility,
 }: FileListItemProps) => {
-  const { t } = useTranslation(['components', 'file', 'chat']);
+  const { t } = useTranslation(['components', 'file', 'chat', 'common']);
   const uploaderName =
     uploader?.fullName || uploader?.username || (uploader?.id ? uploader.id.slice(0, 8) : '');
   const chunkTargetId = getChunkTargetId({ fileId, id });
@@ -264,8 +271,12 @@ const FileListItem = ({
   // The row menu (its hooks plus a Base UI menu tree) mounts on first hover or
   // focus instead of for every row Virtuoso renders; scrolling a long list used
   // to mount and tear down dozens of closed menus per frame.
-  const [menuActivated, setMenuActivated] = useState(false);
-  const activateMenu = useCallback(() => setMenuActivated(true), []);
+  const [menuActivation, setMenuActivation] = useState<'focus' | 'pointer' | null>(null);
+  const menuActivated = menuActivation !== null;
+  const activateMenu = useCallback(() => setMenuActivation((prev) => prev ?? 'pointer'), []);
+  // Keyboard users reach the placeholder trigger first; hand focus to the real
+  // trigger once it mounts so Tab/Enter keep working.
+  const activateMenuFromFocus = useCallback(() => setMenuActivation((prev) => prev ?? 'focus'), []);
   const menuItemsRef = useRef<FileListItemMenuGetter | null>(null);
   const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);
 
@@ -275,6 +286,7 @@ const FileListItem = ({
       fileId={fileId}
       fileType={fileType}
       filename={name}
+      focusOnMount={menuActivation === 'focus'}
       id={id}
       isFolder={isFolder}
       isPage={isPage}
@@ -288,7 +300,14 @@ const FileListItem = ({
       onRenameStart={isFolder ? handleRenameStart : undefined}
     />
   ) : (
-    <div aria-hidden className={styles.menuPlaceholder} />
+    <button
+      aria-haspopup="menu"
+      aria-label={t('more', { ns: 'common' })}
+      className={cx(styles.menuPlaceholder, styles.hover)}
+      type="button"
+      onClick={activateMenuFromFocus}
+      onFocus={activateMenuFromFocus}
+    />
   );
 
   const handleCheckboxClick = useCallback(

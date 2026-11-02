@@ -53,7 +53,9 @@ vi.mock('../../hooks/useFileItemClick', () => ({
 }));
 
 vi.mock('./FileListItemMenu', () => ({
-  default: () => <span data-testid="row-menu" />,
+  default: ({ focusOnMount }: { focusOnMount?: boolean }) => (
+    <span data-focus-on-mount={String(!!focusOnMount)} data-testid="row-menu" />
+  ),
 }));
 
 vi.mock('./FileListItemActions', () => ({
@@ -158,6 +160,19 @@ describe('FileListItem', () => {
     fireEvent.focus(screen.getByRole('checkbox'));
 
     expect(screen.getByTestId('row-menu')).toBeInTheDocument();
+  });
+
+  // Keyboard users must still reach the menu on rows without an enabled
+  // checkbox (other members' files, folders, pages).
+  it('keeps a focusable menu trigger before the row is activated', () => {
+    render(<FileListItem {...baseProps} selectable={false} />);
+
+    const trigger = screen.getByRole('button', { name: 'more' });
+    expect(screen.queryByTestId('row-menu')).not.toBeInTheDocument();
+
+    fireEvent.focus(trigger);
+
+    expect(screen.getByTestId('row-menu')).toHaveAttribute('data-focus-on-mount', 'true');
   });
 
   it('disables selection for rows the workspace member did not upload', () => {

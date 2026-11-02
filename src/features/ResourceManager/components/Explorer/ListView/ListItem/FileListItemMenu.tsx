@@ -1,6 +1,6 @@
 import type { ItemType } from '@lobehub/ui';
 import type { RefObject } from 'react';
-import { memo, useCallback, useLayoutEffect } from 'react';
+import { memo, useCallback, useLayoutEffect, useRef } from 'react';
 
 import { useFileTransferMenuItem } from '@/business/client/hooks/useFileTransferMenuItem';
 
@@ -27,6 +27,8 @@ interface FileListItemMenuProps extends Pick<
   | 'visibility'
 > {
   className?: string;
+  /** Move focus to the menu trigger once mounted (activated from the keyboard). */
+  focusOnMount?: boolean;
   isFolder: boolean;
   isPage: boolean;
   /** Receives the base item getter for the row's right-click menu. */
@@ -45,6 +47,7 @@ const FileListItemMenu = memo<FileListItemMenuProps>(
   ({
     className,
     fileId,
+    focusOnMount,
     fileType,
     filename,
     id,
@@ -88,7 +91,20 @@ const FileListItemMenu = memo<FileListItemMenuProps>(
       menuItemsRef.current = menuItems;
     }, [menuItems, menuItemsRef]);
 
-    return <DropdownMenu className={className} items={getMenuItems} />;
+    const wrapperRef = useRef<HTMLSpanElement>(null);
+    // Read once: only the mount that replaces a focused placeholder moves focus.
+    const focusOnMountRef = useRef(focusOnMount);
+
+    useLayoutEffect(() => {
+      if (!focusOnMountRef.current) return;
+      wrapperRef.current?.querySelector<HTMLElement>('button, [tabindex]')?.focus();
+    }, []);
+
+    return (
+      <span ref={wrapperRef} style={{ display: 'contents' }}>
+        <DropdownMenu className={className} items={getMenuItems} />
+      </span>
+    );
   },
 );
 

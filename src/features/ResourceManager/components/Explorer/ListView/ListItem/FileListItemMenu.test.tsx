@@ -1,5 +1,5 @@
 import type { ItemType } from '@lobehub/ui';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { createRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,7 +23,7 @@ vi.mock('../../ItemDropdown/useFileItemDropdown', () => ({
 vi.mock('../../ItemDropdown/DropdownMenu', () => ({
   default: ({ items }: { items: unknown }) => {
     mocks.dropdownItems(items);
-    return null;
+    return <button type="button">menu-trigger</button>;
   },
 }));
 
@@ -73,5 +73,13 @@ describe('FileListItemMenu', () => {
 
     const keys = menuItemsRef.current!().map((item) => item && 'key' in item && item.key);
     expect(keys).toEqual(['download', 'delete']);
+  });
+
+  it('moves focus to the real trigger when activated from the keyboard', () => {
+    const menuItemsRef = createRef<FileListItemMenuGetter | null>();
+
+    render(<FileListItemMenu {...baseProps} focusOnMount menuItemsRef={menuItemsRef} />);
+
+    expect(screen.getByRole('button', { name: 'menu-trigger' })).toHaveFocus();
   });
 });

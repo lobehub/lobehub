@@ -99,18 +99,36 @@ const createCharacterMetrics = (node: Text, name: string, fullWidth: number) => 
   return { fullWidth, measureRange, name } satisfies CharacterMetrics;
 };
 
+let measureContext: CanvasRenderingContext2D | null | undefined;
+
+/**
+ * Width of the ellipsis for a name without a period to measure. Periods come
+ * from the primary Latin font, which canvas renders like the DOM (the CJK
+ * fallback and tabular-number features that make canvas unreliable for whole
+ * names do not touch them).
+ */
+const measureEllipsis = (element: Element) => {
+  if (measureContext === undefined) {
+    measureContext = document.createElement('canvas').getContext('2d');
+  }
+  if (!measureContext) return 0;
+
+  const style = window.getComputedStyle(element);
+  measureContext.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  return measureContext.measureText(ELLIPSIS).width;
+};
+
 const truncateWithMetrics = (
   { fullWidth, measureRange, name }: CharacterMetrics,
   width: number,
+  element: Element,
 ) => {
   if (fullWidth <= width) return name;
 
-  // The extension dot gives the real width of "."; without one, approximate the
-  // ellipsis by three average glyphs.
+  // The extension dot gives the rendered width of "." directly.
   const dotIndex = name.lastIndexOf('.');
   const dotWidth = dotIndex >= 0 ? measureRange(dotIndex, dotIndex + 1) : 0;
-  const ellipsisWidth =
-    (dotWidth > 0 ? dotWidth : fullWidth / Math.max(name.length, 1)) * ELLIPSIS.length;
+  const ellipsisWidth = dotWidth > 0 ? dotWidth * ELLIPSIS.length : measureEllipsis(element);
 
   return truncateFileNameToWidth(name, width, measureRange, ellipsisWidth);
 };
@@ -155,7 +173,7 @@ const TruncatedFileName = memo<TruncatedFileNameProps>(({ name, className }) => 
     if (width <= 0) return;
 
     const metrics = createCharacterMetrics(node, name, container.scrollWidth);
-    const text = truncateWithMetrics(metrics, width);
+    const text = truncateWithMetrics(metrics, width, container);
     setTruncated({ epoch: measureEpoch, name, text });
   }, [name, measureEpoch]);
 
