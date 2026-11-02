@@ -1,8 +1,25 @@
 export default {
+  'sharePage.app.linkCopied': 'Link copied',
   'sharePage.app.open': 'Open app',
   'sharePage.app.help': 'Trouble opening the app?',
   'sharePage.app.helpDescription':
     'If this browser prevents opening the app, use its menu to open this page in your system browser. You can also keep reading here.',
+  'sharePage.app.browserGuide.dismiss': 'Got it',
+  'sharePage.app.browserGuide.stepMenu': 'Tap ··· in the top-right corner',
+  'sharePage.app.browserGuide.stepOpen': 'Choose “Open in Browser” or a similar option',
+  'sharePage.app.browserGuide.title.dingtalk':
+    'DingTalk can’t open the app directly. Open this page in your browser to continue.',
+  'sharePage.app.browserGuide.title.qq':
+    'QQ can’t open the app directly. Open this page in your browser to continue.',
+  'sharePage.app.browserGuide.title.wechat':
+    'WeChat can’t open the app directly. Open this page in your browser to continue.',
+  'sharePage.app.browserGuide.title.weibo':
+    'Weibo can’t open the app directly. Open this page in your browser to continue.',
+  'sharePage.app.fallback.desc':
+    'You may not have the LobeHub app yet, or this browser blocked the jump.',
+  'sharePage.app.fallback.dismiss': 'Keep reading',
+  'sharePage.app.fallback.download': 'Get the app',
+  'sharePage.app.fallback.title': 'App didn’t open?',
 
   'backgroundActivity.alertDesc': '{{name}} is using {{memory}} of memory and {{cpu}} CPU.',
   'backgroundActivity.cpu': 'CPU',
