@@ -9,6 +9,7 @@ import {
   withHeadlessEditorLock,
 } from '@/server/services/agentDocuments/headlessEditor';
 import { DocumentService } from '@/server/services/document';
+import { updateDocumentThroughRoom } from '@/server/services/pageCollab/bodyWriter';
 
 import { ReviewServiceError } from './errors';
 import { extractDocumentText } from './textExtract';
@@ -61,6 +62,13 @@ export interface ReplaceTextResult {
  * `saveSource: 'llm_call'` so the change lands as a reviewable history entry and
  * stays undoable in the client editor. The server never string-patches the
  * stored Markdown directly.
+ *
+ * The write goes through {@link updateDocumentThroughRoom}: a page open in a
+ * live collaboration room projects the room over its row, so a direct row write
+ * would be reported as applied and then overwritten by the next projection. The
+ * room-aware writer puts the change into the room (or the row when there is no
+ * live room), which is also how document mutations and agent-document writes
+ * land.
  */
 export const replaceTextInDocument = async (params: {
   db: LobeChatDatabase;
@@ -128,12 +136,18 @@ export const replaceTextInDocument = async (params: {
       );
     }
 
-    await documentService.updateDocument(documentId, {
-      content: applied.content,
-      editorData: applied.editorData,
-      ...(lockOwnerId ? { lockOwnerId } : {}),
-      saveSource: 'llm_call',
-    });
+    await updateDocumentThroughRoom(
+      db,
+      documentService,
+      documentId,
+      {
+        content: applied.content,
+        editorData: applied.editorData,
+        ...(lockOwnerId ? { lockOwnerId } : {}),
+        saveSource: 'llm_call',
+      },
+      { userId, workspaceId: workspaceId ?? undefined },
+    );
 
     return { content: applied.content, replacementCount: applied.replacementCount };
   });
