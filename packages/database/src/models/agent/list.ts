@@ -7,6 +7,7 @@ import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { notShareVisitorTopic } from '../../utils/shareVisitor';
 import { notTrashed } from '../../utils/softDelete';
+import { countOf } from '../utils/rows';
 import { type AgentModelContext } from './context';
 import { type DeviceBindingCandidate } from './types';
 
@@ -290,7 +291,7 @@ export const countAgents = async (
       ]),
     );
 
-  return result[0]?.count ?? 0;
+  return countOf(result, 'the agent count');
 };
 
 /**

@@ -42,7 +42,7 @@ import {
 } from './kanbanBoardModel';
 import KanbanColumn, { COLUMN_I18N_KEYS, COLUMN_STATUS_ICON, COLUMN_WIDTH } from './KanbanColumn';
 import type { TaskListViewOptions } from './listViewOptions';
-import { HIDDEN_WHEN_COMPLETED_STATUSES } from './listViewOptions';
+import { getCompletedWithin, HIDDEN_WHEN_COMPLETED_STATUSES } from './listViewOptions';
 
 const styles = createStaticStyles(({ css }) => ({
   board: css`
@@ -77,13 +77,15 @@ const KanbanBoard = memo<KanbanBoardProps>((props) => {
   const { t } = useTranslation('chat');
   const { allowed: canEditTask } = usePermission('create_content');
   const groupBy = normalizeKanbanGroupBy(options.groupBy);
-  const excludeStatuses = options.hideCompleted ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
+  const excludeStatuses =
+    options.completedTasks === 'none' ? HIDDEN_WHEN_COMPLETED_STATUSES : undefined;
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
   // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
   // `queryKey` the groups are read by.
   const { error, isLoading, mutate, queryKey } = useFetchTaskGroupList({
     ...buildKanbanGroupQuery({ agentId, excludeStatuses, groupBy, myTaskScope, projectId }),
+    completedWithin: getCompletedWithin(options),
     includeArchived: options.showArchived,
   });
   // Each board query (scope, dimension, filters) is its own store entry, so the

@@ -765,6 +765,7 @@
   "irag-1.0.description": "ERNIE iRAG は、画像検索、画像と言語の検索、コンテンツ生成に対応する画像検索拡張生成モデルです。",
   "jamba-large.description": "Jamba Large は、複雑な企業向けタスクに対応する最も強力で高度なモデルです。",
   "jamba-mini.description": "Jamba Mini は、速度と品質のバランスに優れた、同クラスで最も効率的なモデルです。",
+  "jev-1.14.0.description": "TypeSafe Jevは、生成された文章ではなく、型付き質問に対して校正された確率を返すSystem Oneの意思決定モデルです。",
   "jina-deepsearch-v1.description": "DeepSearch は、ウェブ検索、読解、推論を組み合わせて徹底的な調査を行うエージェントのようなモデルです。調査タスクを受け取り、複数回の広範な検索を行った後に回答を生成します。継続的な調査と多角的な問題解決を行う点で、従来の LLM や一度きりの検索に依存する RAG システムとは根本的に異なります。",
   "kimi-k2-instruct.description": "Kimi K2 Instruct は、コードやQAなどの長文コンテキストに対応した、Kimi公式の推論モデルです。",
   "kimi-k2-thinking.description": "kimi-k2-thinkingはMoonshot AIの思考モデルで、一般的なエージェント能力と推論能力を備えています。深い推論に優れ、マルチステップツールを使用して難しい問題を解決できます。",

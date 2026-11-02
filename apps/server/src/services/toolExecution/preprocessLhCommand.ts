@@ -57,34 +57,52 @@ export const isDirectLhInvocation = (command: string): boolean =>
   LH_DIRECT_INVOCATION_PATTERN.test(command);
 
 /**
- * Env overrides for a workspace run executing ON THE USER'S DEVICE rather than
- * in the sandbox.
+ * Env overrides for a run executing ON THE USER'S DEVICE rather than in the
+ * sandbox.
  *
  * A device shell has its own `lh` and its own stored credentials, so nothing
  * needs rewriting there — but without `LOBEHUB_WORKSPACE_ID` the CLI resolves
  * to personal scope, and a workspace agent asked to edit itself silently reads
  * and writes the wrong tenancy instead of failing.
  *
- * Applied to EVERY command of a workspace run, deliberately not gated on
- * `isLhCommand`. The device merges this into the spawned process environment,
- * so every descendant inherits it — which is the only way to reach an `lh` the
- * command invokes indirectly: `bash -lc 'lh whoami'`, a shell script, a
- * Makefile target, an npm script. Command-position detection sees none of
- * those, and unlike the sandbox path there is nothing here worth gating: this
- * mints no credential, it exports a non-secret scope id that only the LobeHub
- * CLI reads, so setting it on a command that never calls `lh` costs nothing.
+ * `LOBEHUB_OPERATION_ID` names the run the command belongs to, as every other
+ * runtime already does. Without it the commands that act for the current run
+ * cannot work on a device at all: `lh goal plan` / `lh goal report` refuse
+ * outright ("Current manager operation ID required"), so a goal whose manager
+ * runs on a device never leaves planning, and `lh doc`, `lh notify`,
+ * `lh topic send` and `lh agent run` lose their attribution.
+ *
+ * Applied to EVERY command, deliberately not gated on `isLhCommand`. The device
+ * merges this into the spawned process environment, so every descendant
+ * inherits it — which is the only way to reach an `lh` the command invokes
+ * indirectly: `bash -lc 'lh whoami'`, a shell script, a Makefile target, an npm
+ * script. Command-position detection sees none of those, and unlike the sandbox
+ * path there is nothing here worth gating: this mints no credential, it exports
+ * non-secret ids that only the LobeHub CLI reads, so setting them on a command
+ * that never calls `lh` costs nothing.
  *
  * `LOBEHUB_JWT` is deliberately NOT sent: on a personal device the stored
  * credentials already are the caller's, so it buys nothing, while a workspace
  * device belongs to another member and shipping the caller's token onto their
  * machine would be a real credential leak. Auth stays with the device; only the
- * scope travels. A device owner who is not a member of that workspace now gets
- * an explicit error rather than a silent personal-scope write.
+ * scope and the run id travel. A device owner who is not a member of that
+ * workspace now gets an explicit error rather than a silent personal-scope
+ * write.
  */
-export const buildDeviceLhEnv = (
-  workspaceId: string | undefined,
-): Record<string, string> | undefined =>
-  workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : undefined;
+export const buildDeviceLhEnv = ({
+  operationId,
+  workspaceId,
+}: {
+  operationId?: string;
+  workspaceId?: string;
+}): Record<string, string> | undefined => {
+  const env: Record<string, string> = {
+    ...(workspaceId && { LOBEHUB_WORKSPACE_ID: workspaceId }),
+    ...(operationId && { LOBEHUB_OPERATION_ID: operationId }),
+  };
+
+  return Object.keys(env).length > 0 ? env : undefined;
+};
 
 /** Shell variable holding the per-command directory the `lh` wrapper is written to. */
 const LH_SHIM_DIR_VAR = '__lobehub_lh_bin';

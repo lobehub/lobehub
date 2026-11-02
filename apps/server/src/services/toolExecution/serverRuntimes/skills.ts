@@ -58,6 +58,7 @@ import {
   UserSkillService,
 } from '@/server/services/userSkill';
 
+import { pageSandboxWrapper, type SandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { createSandboxMarketService } from './sandboxMarket';
 import { type ServerRuntimeRegistration } from './types';
@@ -169,6 +170,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private disabledSkillIds: Set<string>;
   private isSkillGranted?: (identifier: string) => boolean;
   private shareVisitorBlocked: boolean;
+  private wrapSandbox?: SandboxWrapper;
 
   constructor(options: {
     agentId?: string;
@@ -211,6 +213,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     topicId?: string;
     userId: string;
     workspaceId?: string;
+    wrapSandbox?: SandboxWrapper;
   }) {
     this.agentId = options.agentId;
     this.skillModel = options.skillModel;
@@ -233,6 +236,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.disabledSkillIds = options.disabledSkillIds ?? new Set();
     this.isSkillGranted = options.isSkillGranted;
     this.shareVisitorBlocked = options.shareVisitorBlocked ?? false;
+    this.wrapSandbox = options.wrapSandbox;
   }
 
   /**
@@ -373,7 +377,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         topicId: this.topicId,
         userId: this.userId,
       });
-      const response = await sandboxService.callTool('runCommand', { command: lhResult.command });
+      const response = await (this.wrapSandbox?.(sandboxService) ?? sandboxService).callTool(
+        'runCommand',
+        { command: lhResult.command },
+      );
 
       log('runCommand response: %O', response);
 
@@ -570,7 +577,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       // Content scope, NOT the gateway-addressing scope resolved above: a
       // workspace agent routed to the caller's own machine is still editing
       // workspace content.
-      const deviceLhEnv = buildDeviceLhEnv(await this.resolveWorkspaceId());
+      const deviceLhEnv = buildDeviceLhEnv({
+        operationId: device.operationId,
+        workspaceId: await this.resolveWorkspaceId(),
+      });
       const response = await executeAuthorizedDeviceToolCall(
         this.serverDB,
         {
@@ -588,7 +598,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
             command,
             ...(cwd && { cwd }),
             // Keep `lh` on the device in this run's workspace instead of the
-            // device credentials' personal scope.
+            // device credentials' personal scope, and tell it which run it acts for.
             ...(deviceLhEnv && { env: deviceLhEnv }),
             ...(device.executionTimeoutMs && { timeout: device.executionTimeoutMs }),
           }),
@@ -732,7 +742,10 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         topicId: this.topicId,
         userId: this.userId,
       });
-      const response = await sandboxService.callTool('execScript', enhancedParams);
+      const response = await (this.wrapSandbox?.(sandboxService) ?? sandboxService).callTool(
+        'execScript',
+        enhancedParams,
+      );
 
       log('execScript response: %O', response);
 
@@ -951,6 +964,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       : undefined;
 
     const service = new SkillServerRuntimeService({
+      wrapSandbox: pageSandboxWrapper(context, workspaceId),
       agentId: context.agentId,
       device,
       disabledSkillIds,

@@ -19,8 +19,8 @@ import { toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import type { AiModelReasoningConfig } from 'model-bank';
-import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
+import { type SWRResponse } from 'swr';
 
 import { LOADING_FLAT } from '@/const/message';
 import {
@@ -69,7 +69,7 @@ import { type ChatTopic, type ChatTopicStatus, type CreateTopicParams } from '@/
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
-import { type TopicData } from './initialState';
+import { type PendingNewTopicDirectory, type TopicData } from './initialState';
 import { type PendingTopicStatusSource, PendingTopicStatusWrites } from './pendingStatusWrites';
 import {
   applyTopicDispatchToBucket,
@@ -315,10 +315,7 @@ export class ChatTopicActionImpl {
    * Without it the deferred row would be born with only a path — outside the
    * project list, the sidebar's project grouping and its execution routing.
    */
-  setPendingNewTopicDirectory = (value?: {
-    agentId: string;
-    projectWorkingDirectoryId: string;
-  }): void => {
+  setPendingNewTopicDirectory = (value?: PendingNewTopicDirectory): void => {
     this.#set({ pendingNewTopicDirectory: value }, false, n('setPendingNewTopicDirectory'));
   };
 
@@ -548,10 +545,9 @@ export class ChatTopicActionImpl {
   };
 
   markTopicCompleted = async (id: string): Promise<void> => {
-    await this.#get().internal_updateTopic(id, {
-      completedAt: new Date(),
-      status: 'completed',
-    });
+    await this.#get().internal_updateTopic(id, { completedAt: new Date(), status: 'completed' });
+    // Like deleting it, archiving the topic the user is on opens a new one.
+    if (this.#get().activeTopicId === id) this.#get().switchTopic(null);
   };
 
   unmarkTopicCompleted = async (id: string): Promise<void> => {
@@ -1071,27 +1067,19 @@ export class ChatTopicActionImpl {
    * Unlike {@link internal_pinTopicStatus} it never pins: the clear's response
    * may already be stale when it lands (a run started meanwhile, here or on
    * another device), so a newer pending write wins and the next fetch stays
-   * authoritative. Only a loaded row that is still unread follows.
+   * authoritative. Only loaded copies that are still unread follow — every one
+   * of them, since the sidebar's unread dot reads all loaded buckets.
+   *
+   * `status` is the server's current status when the clear found the row
+   * already moved on; it defaults to the `active` the clear itself wrote.
    */
-  internal_settleTopicRead = (params: { agentId?: string; groupId?: string; topicId: string }) => {
-    const { agentId, groupId, topicId } = params;
+  internal_settleTopicRead = (params: { status?: ChatTopicStatus; topicId: string }) => {
+    const { status = 'active', topicId } = params;
     if (!this.#pendingTopicStatusWrites.settle(topicId, 'unread')) return;
 
-    const state = this.#get();
-    const key = topicMapKey({
-      agentId: agentId ?? state.activeAgentId,
-      groupId: groupId ?? state.activeGroupId,
-    });
-    const topic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
-    if (topic?.status !== 'unread') return;
-
-    state.internal_dispatchTopic({
-      type: 'updateTopic',
-      id: topicId,
-      value: { status: 'active' },
-      agentId,
-      groupId,
-    });
+    this.#topicEntity.update(topicId, (topic) =>
+      topic.status === 'unread' ? { ...topic, status } : topic,
+    );
   };
 
   #getTopicUpdatedAt = (topic: RunningTopicForWatchdog): number | undefined => {
@@ -1842,12 +1830,14 @@ export class ChatTopicActionImpl {
     // directory must never land on another agent's topic.
     const pending = this.#get().pendingNewTopicDirectory;
     const targetSessionId = params.sessionId ?? this.#get().activeAgentId;
-    const pendingDirectoryId =
-      pending && pending.agentId === targetSessionId
-        ? pending.projectWorkingDirectoryId
-        : undefined;
-    const createParams: CreateTopicParams = pendingDirectoryId
-      ? { ...params, projectWorkingDirectoryId: pendingDirectoryId }
+    const staged = pending?.agentId === targetSessionId ? pending : undefined;
+    const createParams: CreateTopicParams = staged
+      ? {
+          ...params,
+          ...(staged.projectWorkingDirectoryId
+            ? { projectWorkingDirectoryId: staged.projectWorkingDirectoryId }
+            : { projectId: staged.projectId }),
+        }
       : params;
 
     const tmpId = Date.now().toString();
@@ -1857,7 +1847,7 @@ export class ChatTopicActionImpl {
     );
 
     const topicId = await topicService.createTopic(createParams);
-    if (pendingDirectoryId) this.#get().setPendingNewTopicDirectory();
+    if (staged) this.#get().setPendingNewTopicDirectory();
     await this.#get().refreshTopic();
 
     return topicId;

@@ -38,6 +38,9 @@ const WorkspaceEnvironmentsSetting = memo(() => {
         tabs={
           <Tabs
             activeKey={visibility}
+            // Tabs fill their container by default, which pushed the actions
+            // onto a second row; size to the tabs so both share one.
+            style={{ width: 'auto' }}
             items={[
               {
                 icon: <Icon icon={UsersIcon} />,

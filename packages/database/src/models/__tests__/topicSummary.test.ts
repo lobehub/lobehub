@@ -208,6 +208,12 @@ describe('TopicSummaryModel', () => {
         trigger: 'eval',
         userId,
       },
+      {
+        createdAt: new Date('2026-07-31T00:00:00Z'),
+        id: 'channel-run',
+        trigger: 'channel',
+        userId,
+      },
     ]);
     await db.insert(messages).values([
       {
@@ -223,6 +229,14 @@ describe('TopicSummaryModel', () => {
         id: 'm-evaluation',
         role: 'user',
         topicId: 'evaluation',
+        updatedAt: new Date('2026-07-31T10:00:00Z'),
+        userId,
+      },
+      {
+        content: 'channel request',
+        id: 'm-channel-run',
+        role: 'user',
+        topicId: 'channel-run',
         updatedAt: new Date('2026-07-31T10:00:00Z'),
         userId,
       },

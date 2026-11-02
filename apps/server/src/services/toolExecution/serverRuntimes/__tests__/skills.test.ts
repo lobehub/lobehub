@@ -590,7 +590,7 @@ describe('skillsRuntime', () => {
     });
 
     const [, toolCall] = mocks.executeToolCall.mock.calls.at(-1)!;
-    expect(JSON.parse(toolCall.arguments).env).toEqual({ LOBEHUB_WORKSPACE_ID: 'workspace-1' });
+    expect(mocks.buildDeviceLhEnv.mock.calls[0][0]).toMatchObject({ operationId: 'op-1' });
     // Auth stays with the device — the caller's token must not travel there.
     expect(JSON.parse(toolCall.arguments).env).not.toHaveProperty('LOBEHUB_JWT');
   });

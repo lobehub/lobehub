@@ -2,7 +2,7 @@ import type * as lobechatConstModule from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type * as lobechatTypesModule from '@lobechat/types';
 import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -111,21 +111,21 @@ vi.mock('@/features/Electron/HeterogeneousAgent/StatusGuide', () => ({
     error,
     onDismiss,
     onRetry,
-    onTransfer,
+    onHandoff,
     workingDirectoryReset,
   }: {
     agentType?: string;
     error?: { code?: string };
     onDismiss?: () => void;
     onRetry?: () => void;
-    onTransfer?: () => void;
+    onHandoff?: () => void;
     workingDirectoryReset?: { name?: string; onReset: () => Promise<void> };
   }) => (
     <div>
       {`guide:${agentType}:${error?.code}`}
       {onDismiss && <button onClick={onDismiss}>dismiss</button>}
       {onRetry && <button onClick={onRetry}>guide-retry</button>}
-      {onTransfer && <button onClick={onTransfer}>transfer</button>}
+      {onHandoff && <button onClick={onHandoff}>handoff</button>}
       {workingDirectoryReset && (
         <button onClick={() => void workingDirectoryReset.onReset()}>
           {`reset-to:${workingDirectoryReset.name}`}
@@ -681,7 +681,7 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('guide:claude-code:rate_limit')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('transfer'));
+    fireEvent.click(screen.getByText('handoff'));
     expect(createTopicForwardModalMock).toHaveBeenCalledWith({
       cancelSourceContinuation: true,
       sourceAgentId: 'source-agent',
@@ -690,7 +690,7 @@ describe('ErrorMessageExtra', () => {
     });
   });
 
-  it('requests cancellation of the conversation source even when another topic is active', () => {
+  it('restores handoff after cancelling the source wait even when another topic is active', () => {
     useChatStore.setState({
       activeTopicId: 'main-topic',
       topicDetailMap: {
@@ -727,7 +727,26 @@ describe('ErrorMessageExtra', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('transfer'));
+    expect(screen.queryByText('handoff')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'dismiss' })).not.toBeInTheDocument();
+
+    act(() => {
+      useChatStore.setState((state) => ({
+        topicDetailMap: {
+          ...state.topicDetailMap,
+          'source-topic': {
+            ...state.topicDetailMap['source-topic'],
+            metadata: { scheduledRun: null },
+            status: 'failed',
+          } as any,
+        },
+      }));
+    });
+
+    fireEvent.click(screen.getByText('handoff'));
+    // Opening the picker does not resolve the quota error or consume the entry.
+    fireEvent.click(screen.getByText('handoff'));
+    expect(createTopicForwardModalMock).toHaveBeenCalledTimes(2);
     expect(cancelHeteroContinuationMock).not.toHaveBeenCalled();
 
     const props = createTopicForwardModalMock.mock.calls[0][0];
@@ -840,7 +859,7 @@ describe('ErrorMessageExtra', () => {
     });
   });
 
-  it('dismisses only the current heterogeneous error field', () => {
+  it('dismisses only the current non-quota heterogeneous error field', () => {
     render(
       <ErrorMessageExtra
         error={{ message: 'response.undefined' }}
@@ -848,7 +867,7 @@ describe('ErrorMessageExtra', () => {
           error: {
             body: {
               agentType: 'claude-code',
-              code: HeterogeneousAgentSessionErrorCode.RateLimit,
+              code: HeterogeneousAgentSessionErrorCode.Overloaded,
             },
           } as any,
           id: 'failed-step-2',

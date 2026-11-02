@@ -44,9 +44,6 @@ export default {
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.inputMarkdown.desc':
     'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
-  'features.integrations.desc':
-    'Show the Integrations settings page: connect the GitHub App so merged pull requests accept deliveries and failing checks or reviews reach the agent that opened them. Hidden by default.',
-  'features.integrations.title': 'Integrations',
   'features.inputMarkdown.title': 'Input Markdown Rendering',
   'features.messageTextSelectionActions.desc':
     'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
@@ -54,9 +51,6 @@ export default {
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',
-  'features.persistentSandbox.desc':
-    'Keep files the cloud sandbox writes. Its working directory survives session recycling and is shared across your topics, instead of being discarded with the sandbox. Requires a paid plan; large downloads and dependencies still belong in /tmp.',
-  'features.persistentSandbox.title': 'Persistent Sandbox',
   'features.projects.desc':
     'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
   'features.projects.title': 'Project Workspaces',

@@ -336,6 +336,26 @@ describe('WorkspaceModel', () => {
     });
   });
 
+  it('defaults connector management to all members and updates it without replacing settings', async () => {
+    const workspaceId = await createWorkspace();
+    const model = new WorkspaceModel(serverDB, ownerId);
+
+    await expect(model.getConnectorMemberManage(workspaceId)).resolves.toBe('all_members');
+    await model.updateApiKeyMemberCreation(workspaceId, 'admins_only');
+    await model.updateConnectorMemberManage(workspaceId, 'admins_only');
+
+    await expect(model.getConnectorMemberManage(workspaceId)).resolves.toBe('admins_only');
+    await expect(model.getSettings(workspaceId)).resolves.toEqual({
+      apiKey: { memberCreation: 'admins_only' },
+      connector: { memberManage: 'admins_only' },
+      gracePeriodUntil: 123,
+      keep: true,
+    });
+
+    await model.updateConnectorMemberManage(workspaceId, 'all_members');
+    await expect(model.getConnectorMemberManage(workspaceId)).resolves.toBe('all_members');
+  });
+
   it('finds a workspace by id and by slug, and returns undefined when missing', async () => {
     const workspaceId = await createWorkspace();
     const model = new WorkspaceModel(serverDB, ownerId);

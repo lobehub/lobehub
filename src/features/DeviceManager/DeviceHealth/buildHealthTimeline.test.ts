@@ -11,6 +11,8 @@ const from = to - 12 * BUCKET;
 const point = (bucketsAgo: number, patch: Partial<DeviceMetricPoint> = {}): DeviceMetricPoint => ({
   connected: true,
   cpuPercent: 10,
+  diskPercent: 40,
+  diskUsedBytes: 80,
   load1: 1,
   memoryPercent: 50,
   memoryUsedBytes: 100,
@@ -19,7 +21,15 @@ const point = (bucketsAgo: number, patch: Partial<DeviceMetricPoint> = {}): Devi
 });
 
 const build = (points: DeviceMetricPoint[], cpuCount: number | null = 8) =>
-  buildHealthTimeline({ bucketMs: BUCKET, cpuCount, from, memoryTotalBytes: 200, points, to });
+  buildHealthTimeline({
+    bucketMs: BUCKET,
+    cpuCount,
+    diskTotalBytes: 200,
+    from,
+    memoryTotalBytes: 200,
+    points,
+    to,
+  });
 
 describe('buildHealthTimeline', () => {
   it('lays out one slot per bucket across the window', () => {
@@ -55,7 +65,12 @@ describe('buildHealthTimeline', () => {
   it('reports load as a share of the cores, with a chart ceiling of at least 100%', () => {
     const timeline = build([point(4, { load1: 4 }), point(3, { cpuPercent: 90, load1: 12 })]);
 
-    expect(timeline.latest).toEqual({ cpuPercent: 90, loadPercent: 150, memoryPercent: 50 });
+    expect(timeline.latest).toEqual({
+      cpuPercent: 90,
+      diskPercent: 40,
+      loadPercent: 150,
+      memoryPercent: 50,
+    });
     expect(timeline.loadCeiling).toBe(150);
     expect(build([point(3, { load1: 2 })]).loadCeiling).toBe(100);
   });
@@ -100,7 +115,11 @@ describe('groupStripBlocks', () => {
   });
 
   it('aligns blocks to wall-clock boundaries rather than the window start', () => {
-    const blocks = groupStripBlocks([slot(1, 'online'), slot(2, 'online'), slot(3, 'online')], BUCKET, 2 * BUCKET);
+    const blocks = groupStripBlocks(
+      [slot(1, 'online'), slot(2, 'online'), slot(3, 'online')],
+      BUCKET,
+      2 * BUCKET,
+    );
 
     expect(blocks.map(({ end, start }) => ({ end, start }))).toEqual([
       { end: 2 * BUCKET, start: BUCKET },

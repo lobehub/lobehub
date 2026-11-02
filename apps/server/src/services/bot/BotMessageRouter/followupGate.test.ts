@@ -14,19 +14,19 @@ const base = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const setup = (deps: { decision?: unknown; rolledOut?: boolean; scheduler?: unknown } = {}) => {
+const setup = (deps: { decision?: unknown; enabled?: boolean; scheduler?: unknown } = {}) => {
   const observe = vi.fn();
   const judge = vi.fn(async () => deps.decision as never);
-  const isRolledOut = vi.fn(async () => deps.rolledOut ?? true);
+  const rememberEngaged = vi.fn(async () => {});
   const gate = createFollowupGate({
     applicationId: 'app',
     observe,
     platform: 'discord',
-    recorder: { isRolledOut, judge },
+    recorder: { enabled: deps.enabled ?? true, judge, rememberEngaged },
     scheduler: deps.scheduler as never,
   });
 
-  return { gate, isRolledOut, judge, observe };
+  return { gate, judge, observe, rememberEngaged };
 };
 
 describe('follow-up gate', () => {
@@ -35,20 +35,45 @@ describe('follow-up gate', () => {
     mockDefer.mockResolvedValue(true);
   });
 
-  it('proceeds untouched while the rollout is off: no judging, no scheduling, no parking', async () => {
+  it('proceeds untouched while the wake switch is off: no judging, no scheduling, no parking', async () => {
     const submit = vi.fn(async () => 'hold' as const);
-    const { gate, isRolledOut, judge, observe } = setup({
+    const { gate, judge, observe } = setup({
       decision: { decidedBy: 'x', reason: 'r', verdict: 'deny' },
-      rolledOut: false,
+      enabled: false,
       scheduler: { submit },
     });
 
     expect(await gate(base())).toBe('proceed');
-    expect(isRolledOut).toHaveBeenCalled();
     expect(judge).not.toHaveBeenCalled();
     expect(submit).not.toHaveBeenCalled();
     expect(mockDefer).not.toHaveBeenCalled();
     expect(observe).not.toHaveBeenCalled();
+  });
+
+  it('lets a wake that is addressed to the bot straight through: no collect window, no parking', async () => {
+    const submit = vi.fn(async () => 'hold' as const);
+    const { gate, observe } = setup({ scheduler: { submit } });
+
+    expect(await gate(base({ initiated: true, immediate: true }))).toBe('proceed');
+    expect(submit).not.toHaveBeenCalled();
+    expect(mockDefer).not.toHaveBeenCalled();
+    expect(observe).not.toHaveBeenCalled();
+  });
+
+  it('still schedules an initiated wake that is only chatter in the window', async () => {
+    const submit = vi.fn(async () => 'hold' as const);
+    const { gate, observe } = setup({ scheduler: { submit } });
+
+    expect(await gate(base({ initiated: true }))).toBe('stop');
+    expect(submit).toHaveBeenCalledTimes(1);
+    expect(observe).toHaveBeenCalledWith(
+      'onSubscribedMessage',
+      expect.anything(),
+      expect.anything(),
+      'defer',
+      'scheduled',
+      true,
+    );
   });
 
   it('proceeds when nothing enforces and there is no scheduler (the default)', async () => {
@@ -102,6 +127,27 @@ describe('follow-up gate', () => {
       'scheduled',
       true,
     );
+  });
+
+  it('keeps an edit from answering a parked message before its replay does', async () => {
+    const scheduler = { submit: vi.fn(async () => 'hold') };
+    const { gate, rememberEngaged } = setup({ scheduler });
+    const replay = { id: 'm1:replay:1710000000000:0', text: 'm1' } as never;
+
+    await gate(base({ merged: replay, parked: [replay, msg('m2')] }));
+
+    // Marked under the platform ids, which are what an edit of the message carries.
+    expect(rememberEngaged).toHaveBeenCalledWith(['m1', 'm2']);
+  });
+
+  it('marks nothing when the scheduler lets the batch through', async () => {
+    const { gate, rememberEngaged } = setup({
+      scheduler: { submit: vi.fn(async () => 'release') },
+    });
+
+    await gate(base());
+
+    expect(rememberEngaged).not.toHaveBeenCalled();
   });
 
   it('files a Discord thread message under its parent channel so one run covers both', async () => {

@@ -9,6 +9,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { isDesktop } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { docsPagePath } from '@/features/ResourceHome/paths';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useElectronStore } from '@/store/electron';
 import { pageActions, pageSelectors, usePageStore } from '@/store/page';
@@ -96,7 +97,7 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
       clearTimeout(clickTimerRef.current);
       clickTimerRef.current = null;
     }
-    addTab(buildWorkspaceAwarePath(`/page/${pageId}`, activeWorkspaceSlug));
+    addTab(buildWorkspaceAwarePath(docsPagePath(pageId), activeWorkspaceSlug));
     pageActions.selectPage(pageId);
   }, [pageId, activeWorkspaceSlug, addTab]);
 
@@ -121,7 +122,7 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
         className={className}
         contextMenuItems={dropdownMenu}
         disabled={editing}
-        href={`/page/${pageId}`}
+        href={docsPagePath(pageId)}
         icon={icon}
         key={pageId}
         title={

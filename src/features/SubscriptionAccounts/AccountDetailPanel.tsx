@@ -1,12 +1,12 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
-import { ActionIcon, Avatar, Empty, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Empty, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { XIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import SkeletonBar from '@/components/Skeleton/Bar';
 import QuotaCalendar from '@/features/AgentQuotaCalendar/QuotaCalendarModal';
 import RunningGlyph from '@/features/Home/components/RunningGlyph';
@@ -106,9 +106,12 @@ const ActiveRuns = ({ accountId }: { accountId: string }) => {
           {/* A run that is executing carries the shared running ring on its
               avatar; a waiting one says so in text on the right. */}
           <span {...stylex.props(styles.avatar)}>
-            <Avatar
-              avatar={run.agentAvatar || DEFAULT_AVATAR}
+            <AgentAvatar
+              agentId={run.agentId}
+              avatar={run.agentAvatar}
               background={run.agentBackgroundColor ?? undefined}
+              name={run.agentTitle}
+              shape={'circle'}
               size={24}
             />
             {run.status === 'running' && (

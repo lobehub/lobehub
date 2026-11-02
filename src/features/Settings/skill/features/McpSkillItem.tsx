@@ -9,13 +9,13 @@ import MCPTag from '@/components/Plugins/MCPTag';
 import PluginTag from '@/components/Plugins/PluginTag';
 import McpDetail from '@/features/MCP/MCPDetail';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
-import NavItem from '@/features/NavPanel/components/NavItem';
 import { createPluginDetailModal } from '@/features/PluginDetailModal';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import Actions from './Actions';
+import SkillListRow, { useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
 interface McpSkillItemProps {
@@ -32,6 +32,7 @@ interface McpSkillItemProps {
 const McpSkillItem = memo<McpSkillItemProps>(
   ({ identifier, title, avatar, type, runtimeType, author, isSelected, onSelect }) => {
     const { t } = useTranslation('plugin');
+    const iconSize = useSkillListVariant() === 'page' ? 20 : 18;
     const isMCP = runtimeType === 'mcp';
     const isCustomPlugin = type === 'customPlugin';
     const isCommunityMCP = isMCP && !isCustomPlugin;
@@ -64,14 +65,14 @@ const McpSkillItem = memo<McpSkillItemProps>(
 
     if (onSelect) {
       return (
-        <NavItem
+        <SkillListRow
           active={isSelected}
           title={title}
           icon={() =>
             avatar && avatar !== 'MCP_AVATAR' ? (
-              <Avatar avatar={avatar} shape="square" size={18} />
+              <Avatar avatar={avatar} shape="square" size={iconSize} />
             ) : (
-              <Icon icon={McpIcon} size={18} />
+              <Icon icon={McpIcon} size={iconSize} />
             )
           }
           onClick={onSelect}

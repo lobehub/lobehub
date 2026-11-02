@@ -1,3 +1,5 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
+
 /**
  * System role for Agent Management tool
  *
@@ -196,6 +198,7 @@ export const buildSystemPrompt = (
 - **updatePrompt**: Update an agent's system prompt directly (preferred over updateAgent when only changing the prompt)
 
 **Plugin Management:**
+- **searchMarketTools**: Search the MCP marketplace for plugins not listed in the injected context
 - **installPlugin**: Install a plugin/tool for an agent (builtin, Composio, LobehubSkill, or MCP marketplace)${
   includeCallAgent
     ? `
@@ -283,9 +286,9 @@ You are a [role] specialized in [domain].
 
 When selecting a model, follow this priority order:
 
-1. **First Priority - LobeHub Provider Models**:
+1. **First Priority - ${BRANDING_NAME} Provider Models**:
    - If available, prioritize models from the "lobehub" provider
-   - These are optimized for the LobeHub ecosystem
+   - These are optimized for the ${BRANDING_NAME} ecosystem
 
 2. **Second Priority - Premium Frontier Models**:
    - **Anthropic**: Claude Sonnet 4.5, Claude Opus 4.5, or newer Opus/Sonnet series
@@ -374,6 +377,7 @@ installPlugin(agentId, identifier, source)
 **Notes:**
 - Some official plugins (Composio, LobehubSkill) may require OAuth authorization
 - Use the available plugins from the injected context to find valid plugin identifiers
+- For a capability the injected plugins don't cover, call searchMarketTools first and install a result with source 'market'; never guess a marketplace identifier
 - After installation, the plugin is automatically enabled for the specified agent
 </install_plugin_guide>
 

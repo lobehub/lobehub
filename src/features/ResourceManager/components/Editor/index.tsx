@@ -6,6 +6,7 @@ import { ArrowLeftIcon, DownloadIcon, InfoIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ShareButton from '@/business/client/features/FileShare/ShareButton';
 import NavHeader from '@/features/NavHeader';
 import { PageAgentProvider } from '@/features/PageEditor/PageAgentProvider';
 import FileDetailComponent from '@/features/ResourceManager/FileDetail';
@@ -98,6 +99,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
           }
           right={
             <Flexbox horizontal gap={8}>
+              {fileDetail && <ShareButton fileId={fileDetail.fileId ?? fileDetail.id} />}
               {fileDetail?.url && (
                 <ActionIcon
                   icon={DownloadIcon}

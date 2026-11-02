@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import {
   agents,
+  channels,
   messages,
   sessions,
   topics,
@@ -279,6 +280,175 @@ describe('TrashModel', () => {
       expect(await wsOther.countByType({ deletedByUserId: otherUserId })).toEqual({ topic: 1 });
       // without the filter the workspace scope still sees both
       expect(await wsOther.countByType()).toEqual({ message: 1, topic: 1 });
+    });
+
+    it('splits a workspace bin into the private side and the public side', async () => {
+      const wsModel = new TrashModel(serverDB, userId, workspaceId);
+      await serverDB.insert(agents).values([
+        { id: 'agt_private', userId, visibility: 'private', workspaceId },
+        { id: 'agt_public', userId, visibility: 'public', workspaceId },
+      ]);
+      await serverDB.insert(topics).values([
+        { agentId: 'agt_private', id: 'tpc_private', userId, workspaceId },
+        { agentId: 'agt_public', id: 'tpc_public', userId, workspaceId },
+      ]);
+      await serverDB.insert(messages).values([
+        { content: 'secret', id: 'msg_private', role: 'user', topicId: 'tpc_private', userId },
+        { content: 'shared', id: 'msg_public', role: 'user', topicId: 'tpc_public', userId },
+      ]);
+      const [privateWidget, publicWidget] = await serverDB
+        .insert(widgets)
+        .values([
+          { title: 'mine', userId, visibility: 'private', workspaceId },
+          { title: 'shared', userId, visibility: 'public', workspaceId },
+        ])
+        .returning();
+      await serverDB.insert(channels).values([
+        { id: 'chn_private', title: 'members only', userId, visibility: 'private', workspaceId },
+        { id: 'chn_public', title: 'open', userId, visibility: 'public', workspaceId },
+      ]);
+      const roots: [string, 'agent' | 'channel' | 'message' | 'topic' | 'widget'][] = [
+        ['chn_private', 'channel'],
+        ['chn_public', 'channel'],
+        [privateWidget.id, 'widget'],
+        [publicWidget.id, 'widget'],
+        ['agt_private', 'agent'],
+        ['agt_public', 'agent'],
+        ['tpc_private', 'topic'],
+        ['tpc_public', 'topic'],
+        ['msg_private', 'message'],
+        ['msg_public', 'message'],
+      ];
+      for (const [resourceId, resourceType] of roots) {
+        await wsModel.register({
+          deletedAt: at('2026-08-01T00:00:00Z'),
+          root: { projectId: null, resourceId, resourceType },
+        });
+      }
+
+      const sideIds = async (visibility: 'private' | 'public') =>
+        (await wsModel.list({ visibility })).items.map((item) => item.resourceId).sort();
+      expect(await sideIds('private')).toEqual(
+        ['agt_private', 'chn_private', 'msg_private', 'tpc_private', privateWidget.id].sort(),
+      );
+      expect(await sideIds('public')).toEqual(
+        ['agt_public', 'chn_public', 'msg_public', 'tpc_public', publicWidget.id].sort(),
+      );
+      expect(await wsModel.countByType({ visibility: 'private' })).toEqual({
+        agent: 1,
+        channel: 1,
+        message: 1,
+        topic: 1,
+        widget: 1,
+      });
+
+      const all = await wsModel.list();
+      const privateIds = await wsModel.findPrivateIds(all.items.map((item) => item.id));
+      expect(
+        all.items
+          .filter((item) => privateIds.has(item.id))
+          .map((item) => item.resourceId)
+          .sort(),
+      ).toEqual(
+        ['agt_private', 'chn_private', 'msg_private', 'tpc_private', privateWidget.id].sort(),
+      );
+    });
+
+    it('keeps the side a root had when it was trashed', async () => {
+      const wsModel = new TrashModel(serverDB, userId, workspaceId);
+      await serverDB
+        .insert(agents)
+        .values({ id: 'agt_flip', userId, visibility: 'private', workspaceId });
+      await serverDB
+        .insert(topics)
+        .values({ agentId: 'agt_flip', id: 'tpc_flip', userId, workspaceId });
+      const root = await wsModel.register({
+        deletedAt: at('2026-08-01T00:00:00Z'),
+        root: {
+          meta: { parentTitle: 'Flip' },
+          projectId: null,
+          resourceId: 'tpc_flip',
+          resourceType: 'topic',
+        },
+      });
+      expect(root.meta).toEqual({ parentTitle: 'Flip', private: true });
+
+      // The still-live agent is made public after its topic was trashed.
+      await serverDB.update(agents).set({ visibility: 'public' }).where(eq(agents.id, 'agt_flip'));
+      const sideIds = async (visibility: 'private' | 'public') =>
+        (await wsModel.list({ visibility })).items.map((item) => item.resourceId);
+      expect(await sideIds('public')).toEqual([]);
+      expect(await sideIds('private')).toEqual(['tpc_flip']);
+    });
+
+    it('sides a root registered before the snapshot existed by its live visibility', async () => {
+      const wsModel = new TrashModel(serverDB, userId, workspaceId);
+      await serverDB.insert(agents).values([
+        { id: 'agt_legacy_private', userId, visibility: 'private', workspaceId },
+        { id: 'agt_legacy_public', userId, visibility: 'public', workspaceId },
+      ]);
+      await serverDB.insert(topics).values([
+        { agentId: 'agt_legacy_private', id: 'tpc_legacy_private', userId, workspaceId },
+        { agentId: 'agt_legacy_public', id: 'tpc_legacy_public', userId, workspaceId },
+      ]);
+      await serverDB.insert(messages).values({
+        content: 'shared',
+        id: 'msg_legacy_public',
+        role: 'user',
+        topicId: 'tpc_legacy_public',
+        userId,
+      });
+      const legacyRoots = [
+        ['agt_legacy_private', 'agent'],
+        ['agt_legacy_public', 'agent'],
+        ['tpc_legacy_private', 'topic'],
+        ['msg_legacy_public', 'message'],
+      ] as const;
+      for (const [resourceId, resourceType] of legacyRoots) {
+        await wsModel.register({
+          deletedAt: at('2026-08-01T00:00:00Z'),
+          root: { projectId: null, resourceId, resourceType },
+        });
+      }
+      // Rows trashed before #21537 carry no `private` key, or no meta at all.
+      await serverDB
+        .update(trashItems)
+        .set({ meta: sql`${trashItems.meta} - 'private'` })
+        .where(eq(trashItems.resourceType, 'agent'));
+      await serverDB
+        .update(trashItems)
+        .set({ meta: null })
+        .where(sql`${trashItems.resourceType} <> 'agent'`);
+
+      const sideIds = async (visibility: 'private' | 'public') =>
+        (await wsModel.list({ visibility })).items.map((item) => item.resourceId).sort();
+      expect(await sideIds('private')).toEqual(['agt_legacy_private', 'tpc_legacy_private']);
+      expect(await sideIds('public')).toEqual(['agt_legacy_public', 'msg_legacy_public']);
+      expect(await wsModel.countByType({ visibility: 'private' })).toEqual({ agent: 1, topic: 1 });
+    });
+
+    it('keeps a root whose source or project is gone off the public side', async () => {
+      const wsModel = new TrashModel(serverDB, userId, workspaceId);
+      await serverDB
+        .insert(agents)
+        .values({ id: 'agt_gone', userId, visibility: 'public', workspaceId });
+      await serverDB.insert(topics).values({ id: 'tpc_shared', userId, workspaceId });
+      for (const [resourceId, resourceType, projectId] of [
+        ['agt_gone', 'agent', null],
+        ['tpc_shared', 'topic', 'proj_removed'],
+      ] as const) {
+        await wsModel.register({
+          deletedAt: at('2026-08-01T00:00:00Z'),
+          root: { projectId, resourceId, resourceType },
+        });
+      }
+      // Removed outside the trash: the source row, and the recorded project.
+      await serverDB.delete(agents).where(eq(agents.id, 'agt_gone'));
+
+      const sideIds = async (visibility: 'private' | 'public') =>
+        (await wsModel.list({ visibility })).items.map((item) => item.resourceId).sort();
+      expect(await sideIds('public')).toEqual([]);
+      expect(await sideIds('private')).toEqual(['agt_gone', 'tpc_shared']);
     });
   });
 

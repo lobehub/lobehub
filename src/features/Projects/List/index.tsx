@@ -1,27 +1,23 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import {
-  Avatar,
+  ActionIcon,
+  Button,
   Center,
+  confirmModal,
   ContextMenuTrigger,
   createStaticStyles,
   cssVar,
+  type DropdownItem,
+  DropdownMenu,
   Empty,
   Flexbox,
   Icon,
   SearchBar,
-  Tooltip,
-} from '@lobehub/ui';
-import {
-  ActionIcon,
-  Button,
-  confirmModal,
-  type DropdownItem,
-  DropdownMenu,
   Text,
   toast,
+  Tooltip,
 } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
@@ -35,6 +31,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import AgentAvatar from '@/components/AgentAvatar';
 import AsyncError from '@/components/AsyncError';
 import { PROJECT_STATUS_VISUALS, resolveProjectStatus } from '@/components/ExecutionStatus';
 import AssigneeAvatar from '@/features/AgentTasks/features/AssigneeAvatar';
@@ -133,13 +130,17 @@ const ProjectCoordinatorAvatar = memo<{ project: ProjectListItem }>(({ project }
     <span className={styles.owner}>
       {coordinatorAgent && label ? (
         <Tooltip title={label}>
-          <Avatar
-            avatar={coordinatorAgent.avatar || DEFAULT_AVATAR}
-            background={coordinatorAgent.backgroundColor || cssVar.colorBgContainer}
-            shape={'circle'}
-            size={20}
-            variant={'outlined'}
-          />
+          <span style={{ display: 'inline-flex' }}>
+            <AgentAvatar
+              agentId={project.coordinatorAgentId}
+              avatar={coordinatorAgent.avatar}
+              background={coordinatorAgent.backgroundColor || cssVar.colorBgContainer}
+              name={label}
+              shape={'circle'}
+              size={20}
+              variant={'outlined'}
+            />
+          </span>
         </Tooltip>
       ) : (
         // Rows without joined meta (a cleared main agent, which resolves to LobeAI,

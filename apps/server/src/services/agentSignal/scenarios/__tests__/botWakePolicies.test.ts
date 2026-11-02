@@ -133,6 +133,63 @@ describe('internal rules policy', () => {
   });
 });
 
+describe('internal rules policy: naming the bot', () => {
+  const policy = createInternalRulesPolicy('enforce');
+  const conversation = { botNames: ['Shadow Arvin'], recent: [] };
+  const run = (s: WakeSignal, names = conversation) =>
+    policy.evaluate({ signal: s, state: { ...snapshot(), conversation: names } });
+
+  it('allows a plain message that calls the bot by name', () => {
+    const result = run(signal({ message: 'Shadow Arvin 听得到吗' }));
+
+    expect([result.verdict, result.reason]).toEqual(['allow', 'named-in-text']);
+    expect(result.tags).toContain('named-in-text');
+  });
+
+  it('lets an owner-written message count the same as anyone else’s', () => {
+    const owner = { ...human, isOwner: true };
+
+    expect(run(signal({ author: owner, message: 'shadow arvin, are you there?' })).verdict).toBe(
+      'allow',
+    );
+  });
+
+  it('still refuses what the other rules refuse, even when the bot is named', () => {
+    const named = 'Shadow Arvin ';
+    const cases: [Partial<WakeSignal>, string][] = [
+      [{ author: { ...human, isBot: true }, message: `${named}hi` }, 'bot-message'],
+      [{ author: { ...human, isMe: true }, message: `${named}hi` }, 'self-message'],
+      [{ author: { ...human, isSystem: true }, message: `${named}hi` }, 'system-message'],
+      [
+        { mentions: { ...noMentions, otherUserIds: ['u2'] }, message: `<@u2> ${named}hi` },
+        'mentions-someone-else',
+      ],
+      [
+        { mentions: { ...noMentions, everyone: true }, message: `@everyone ${named}` },
+        'broadcast-mention',
+      ],
+    ];
+
+    for (const [overrides, reason] of cases) {
+      expect([run(signal(overrides)).verdict, run(signal(overrides)).reason]).toEqual([
+        'deny',
+        reason,
+      ]);
+    }
+  });
+
+  it('has no opinion when nothing names the bot, or when its names are not known', () => {
+    expect(run(signal({ message: 'is anyone around?' })).verdict).toBe('abstain');
+    expect(run(signal({ message: 'Shadow Arvin hi' }), { botNames: [], recent: [] }).verdict).toBe(
+      'abstain',
+    );
+    expect(
+      policy.evaluate({ signal: signal({ message: 'Shadow Arvin hi' }), state: snapshot() })
+        .verdict,
+    ).toBe('abstain');
+  });
+});
+
 describe('owner rules policy', () => {
   const run = (
     botWake: Record<string, unknown>,
@@ -257,6 +314,48 @@ describe('owner rules policy', () => {
       name: 'owner presence suppression switched off',
     },
     {
+      channel: {
+        botLastSpokeAt: NOW - 10_000,
+        followupAuthorId: 'u1',
+        followupUntil: NOW + 290_000,
+      },
+      expected: ['allow', 'inside-followup-window'],
+      name: 'the person the bot answered follows up inside the window',
+    },
+    // "让 agent 用 lh 试试看？" / "我试试": two people talking to each other right after the bot
+    // answered one of them.
+    {
+      channel: {
+        botLastSpokeAt: NOW - 10_000,
+        followupAuthorId: 'u2',
+        followupUntil: NOW + 290_000,
+      },
+      expected: ['abstain', 'no-owner-rule-opinion'],
+      name: 'someone else speaking inside the window is not a follow-up',
+    },
+    // "你直接进我们的 agent 里面 IM bot 那边配置就好了": the owner answering the person the bot
+    // just helped.
+    {
+      channel: {
+        botLastSpokeAt: NOW - 10_000,
+        followupAuthorId: 'u2',
+        followupUntil: NOW + 290_000,
+      },
+      expected: ['abstain', 'no-owner-rule-opinion'],
+      name: 'the owner is not a follow-up to a conversation the bot had with someone else',
+      signal: { author: { ...human, id: 'o1', isOwner: true } },
+    },
+    {
+      botWake: { rules: { scope: 'bot-threads' } },
+      channel: {
+        botLastSpokeAt: NOW - 10_000,
+        followupAuthorId: 'u2',
+        followupUntil: NOW + 290_000,
+      },
+      expected: ['abstain', 'no-owner-rule-opinion'],
+      name: 'bot-threads scope: someone else in the bot thread is left to the classifier',
+    },
+    {
       botWake: { rules: { maxSilentWakes: 1, ownerPresenceSeconds: 120 } },
       channel: { ownerLastSpokeAt: NOW - 1000, silentWakes: 5 },
       expected: ['deny', 'budget-exhausted'],
@@ -268,6 +367,152 @@ describe('owner rules policy', () => {
     const result = run(botWake ?? {}, overrides ?? {}, channel);
 
     expect([result.verdict, result.reason]).toEqual(expected);
+  });
+});
+
+// From bot-wake review of missed wakes: the owner answering the bot right after its reply, and the
+// person it was helping pasting the link it asked for eight minutes later in the bot's thread.
+describe('owner rules policy: following up on the bot itself', () => {
+  const APP = 'app1';
+  const botLine = (at: number) => ({ at, authorId: APP, id: `m${at}`, isBot: true, text: '好的' });
+  const personLine = (authorId: string, at: number) => ({
+    at,
+    authorId,
+    id: `m${at}`,
+    isBot: false,
+    text: '嗯',
+  });
+
+  const run = ({
+    author = human,
+    botWake = {},
+    channel,
+    recent,
+    threadSubscribed = true,
+  }: {
+    author?: WakeAuthor;
+    botWake?: Record<string, unknown>;
+    channel: Partial<WakeChannelState>;
+    recent: ReturnType<typeof botLine>[];
+    threadSubscribed?: boolean;
+  }) => {
+    const result = createOwnerRulesPolicy('enforce', rulesFor(botWake)).evaluate({
+      signal: signal({ applicationId: APP, author }),
+      state: {
+        ...snapshot(channel),
+        conversation: { botNames: ['Nasa'], recent },
+        threadSubscribed,
+      },
+    });
+    return [result.verdict, result.reason];
+  };
+
+  const owner: WakeAuthor = { ...human, id: 'o1', isOwner: true };
+  const window = {
+    botLastSpokeAt: NOW - 28_000,
+    followupAuthorId: 'u2',
+    followupUntil: NOW + 272_000,
+  };
+
+  it('lets the owner answering the bot’s own line in the window follow up', () => {
+    expect(run({ author: owner, channel: window, recent: [botLine(NOW - 28_000)] })).toEqual([
+      'allow',
+      'owner-answers-bot',
+    ]);
+  });
+
+  it('leaves the owner answering someone else in the window to the duty judge', () => {
+    expect(
+      run({
+        author: owner,
+        channel: window,
+        recent: [botLine(NOW - 60_000), personLine('u2', NOW - 28_000)],
+      }),
+    ).toEqual(['abstain', 'no-owner-rule-opinion']);
+    // Not the owner: someone else replying to the bot is still more likely talking to the room.
+    expect(
+      run({ author: { ...human, id: 'u3' }, channel: window, recent: [botLine(NOW - 28_000)] }),
+    ).toEqual(['abstain', 'no-owner-rule-opinion']);
+  });
+
+  const lapsed = {
+    botLastSpokeAt: NOW - 484_000,
+    followupAuthorId: 'u1',
+    followupUntil: NOW - 184_000,
+  };
+
+  it('lets the person the bot answered come back to its thread after the window', () => {
+    expect(run({ channel: lapsed, recent: [botLine(NOW - 484_000)] })).toEqual([
+      'allow',
+      'thread-followup',
+    ]);
+    expect(
+      run({
+        botWake: { rules: { scope: 'bot-threads' } },
+        channel: lapsed,
+        recent: [botLine(NOW - 484_000), personLine('u1', NOW - 200_000)],
+      }),
+    ).toEqual(['allow', 'thread-followup']);
+  });
+
+  it('does not extend the window outside a subscribed thread, for others, or past 30 minutes', () => {
+    const recent = [botLine(NOW - 484_000)];
+    expect(run({ channel: lapsed, recent, threadSubscribed: false })).toEqual([
+      'abstain',
+      'no-owner-rule-opinion',
+    ]);
+    expect(run({ author: { ...human, id: 'u3' }, channel: lapsed, recent })).toEqual([
+      'abstain',
+      'no-owner-rule-opinion',
+    ]);
+    expect(run({ channel: { ...lapsed, botLastSpokeAt: NOW - 31 * 60_000 }, recent })).toEqual([
+      'abstain',
+      'no-owner-rule-opinion',
+    ]);
+    // Someone else spoke since: the author may be answering them.
+    expect(
+      run({ channel: lapsed, recent: [botLine(NOW - 484_000), personLine('u3', NOW - 60_000)] }),
+    ).toEqual(['abstain', 'no-owner-rule-opinion']);
+  });
+});
+
+describe('owner rules policy: naming the bot', () => {
+  const rules = rulesFor({ rules: { ownerPresenceSeconds: 120 } });
+  const conversation = { botNames: ['Nasa'], recent: [] };
+  const run = (
+    s: Partial<WakeSignal>,
+    c: Partial<WakeChannelState>,
+    botWake: Record<string, unknown> = { rules: { ownerPresenceSeconds: 120 } },
+  ) =>
+    createOwnerRulesPolicy('enforce', rulesFor(botWake)).evaluate({
+      signal: signal(s),
+      state: { ...snapshot(c), conversation },
+    });
+
+  it('does not let owner presence silence someone else calling the bot by name', () => {
+    const result = run({ message: 'Nasa ？' }, { ownerLastSpokeAt: NOW - 10_000 });
+
+    expect([result.verdict, result.reason]).toEqual(['abstain', 'no-owner-rule-opinion']);
+  });
+
+  it('still suppresses unnamed chatter while the owner is around', () => {
+    const result = createOwnerRulesPolicy('enforce', rules).evaluate({
+      signal: signal({ message: 'anyone know why the deploy is slow?' }),
+      state: { ...snapshot({ ownerLastSpokeAt: NOW - 10_000 }), conversation },
+    });
+
+    expect([result.verdict, result.reason]).toEqual(['deny', 'owner-present']);
+  });
+
+  it('keeps scope and the channel lists in force when the bot is named', () => {
+    const named = { message: 'Nasa hi' };
+    const recent = { ownerLastSpokeAt: NOW - 10_000 };
+
+    expect(run(named, recent, { rules: { scope: 'none' } }).reason).toBe('scope-none');
+    expect(run(named, recent, { rules: { denyChannels: ['c1'] } }).reason).toBe('channel-denied');
+    expect(run(named, recent, { rules: { allowChannels: ['c2'] } }).reason).toBe(
+      'channel-not-allowed',
+    );
   });
 });
 
@@ -309,6 +554,25 @@ describe('classifier policy', () => {
 
     expect(classify).toHaveBeenCalledWith(
       expect.objectContaining({ customInstructions: 'billing only' }),
+      expect.any(AbortSignal),
+    );
+  });
+
+  it('hands the model who the bot is and what was said just before', async () => {
+    const classify = answer();
+    const conversation = {
+      botNames: ['Shadow Arvin'],
+      lastBotMessage: 'The rollout starts at noon.',
+      recent: [{ at: 1, authorName: 'Bob', id: 'm0', isBot: false, text: 'is it live yet?' }],
+    };
+
+    await createClassifierPolicy('enforce', rules, classify).evaluate({
+      signal: signal(),
+      state: { ...snapshot(), conversation },
+    });
+
+    expect(classify).toHaveBeenCalledWith(
+      expect.objectContaining({ conversation }),
       expect.any(AbortSignal),
     );
   });
@@ -382,11 +646,11 @@ describe('createWakePolicySet', () => {
   const ids = (settings: Record<string, unknown> | null) =>
     createWakePolicySet({ classify, settings }).map((policy) => `${policy.id}:${policy.mode}`);
 
-  it('defaults every policy to shadow', () => {
+  it('enforces every policy by default', () => {
     expect(ids({ botWake: { enabled: true } })).toEqual([
-      `${INTERNAL_RULES_POLICY_ID}:shadow`,
-      `${OWNER_RULES_POLICY_ID}:shadow`,
-      `${CLASSIFIER_POLICY_ID}:shadow`,
+      `${INTERNAL_RULES_POLICY_ID}:enforce`,
+      `${OWNER_RULES_POLICY_ID}:enforce`,
+      `${CLASSIFIER_POLICY_ID}:enforce`,
     ]);
   });
 
@@ -397,22 +661,70 @@ describe('createWakePolicySet', () => {
     expect(policies.slice(0, -1).every((policy) => !policy.costly)).toBe(true);
   });
 
-  it('honours per-policy modes', () => {
+  it('honours an operator override of the modes in a nested config', () => {
     expect(
-      ids({ botWake: { classifier: { mode: 'enforce' }, enabled: true, mode: 'enforce' } }),
+      ids({ botWake: { classifier: { mode: 'shadow' }, enabled: true, mode: 'shadow' } }),
     ).toEqual([
-      `${INTERNAL_RULES_POLICY_ID}:enforce`,
-      `${OWNER_RULES_POLICY_ID}:enforce`,
-      `${CLASSIFIER_POLICY_ID}:enforce`,
+      `${INTERNAL_RULES_POLICY_ID}:shadow`,
+      `${OWNER_RULES_POLICY_ID}:shadow`,
+      `${CLASSIFIER_POLICY_ID}:shadow`,
     ]);
   });
 
   it('leaves out policies switched off, and the classifier without a model call', () => {
     expect(ids({ botWake: { classifier: { mode: 'off' }, enabled: true } })).toHaveLength(2);
     expect(ids({ botWake: { enabled: true, mode: 'off' } })).toEqual([
-      `${CLASSIFIER_POLICY_ID}:shadow`,
+      `${CLASSIFIER_POLICY_ID}:enforce`,
     ]);
     expect(createWakePolicySet({ settings: { botWake: { enabled: true } } })).toHaveLength(2);
+  });
+});
+
+// The bot stepped back after "nasa 就在这瞎捣乱", then was woken by its name two minutes later.
+describe('owner rules policy: a stand-down', () => {
+  const conversation = { botNames: ['Nasa'], recent: [] };
+  const policies = () =>
+    createWakePolicySet({ settings: { botWake: { enabled: true, mode: 'enforce' } } });
+  const decide = (s: Partial<WakeSignal>, c: Partial<WakeChannelState>, explicit = false) =>
+    aggregateWakeVerdictsAsync(policies(), signal(s), {
+      ...snapshot(c),
+      conversation,
+      explicitMention: explicit,
+    });
+  const inWindow = { botLastSpokeAt: NOW - 10_000, followupUntil: NOW + 60_000 };
+
+  it('denies every wake nobody addressed to the bot, its name in the text included', async () => {
+    const stoodDown = { ...inWindow, standDownUntil: NOW + 60_000 };
+
+    for (const message of ['那这个怎么处理?', '其他 agent 为啥不能来看和学习呢？nasa']) {
+      const decision = await decide({ message }, stoodDown);
+      expect([decision.verdict, decision.reason, decision.decidedBy]).toEqual([
+        'deny',
+        'stood-down',
+        OWNER_RULES_POLICY_ID,
+      ]);
+    }
+  });
+
+  it('still wakes for an explicit @-mention or reply: those never reach the policies', async () => {
+    const decision = await decide(
+      { message: 'Nasa 你来看下' },
+      { standDownUntil: NOW + 60_000 },
+      true,
+    );
+
+    expect(decision).toMatchObject({ fastPath: true, verdict: 'allow' });
+  });
+
+  it('ends when its time is up', async () => {
+    const over = { ...inWindow, standDownUntil: NOW - 1 };
+
+    expect((await decide({ message: 'Nasa 你怎么看' }, over)).reason).toBe('named-in-text');
+    expect(
+      (await decide({ message: '那这个怎么处理?' }, over)).records.find(
+        (record) => record.policyId === OWNER_RULES_POLICY_ID,
+      )?.reason,
+    ).toBe('inside-followup-window');
   });
 });
 
@@ -425,8 +737,25 @@ describe('policy set aggregation', () => {
 
   beforeEach(() => classify.mockClear());
 
-  it('skips the costly classifier once a rule has denied, even in shadow', async () => {
+  it('stops at the first rule that denies and never asks the classifier', async () => {
     const policies = createWakePolicySet({ classify, settings: { botWake: { enabled: true } } });
+    const decision = await aggregateWakeVerdictsAsync(
+      policies,
+      signal({ author: { ...human, isBot: true } }),
+      snapshot(),
+    );
+
+    expect(classify).not.toHaveBeenCalled();
+    expect(decision.verdict).toBe('deny');
+    expect(decision.records.map((record) => record.policyId)).toEqual([INTERNAL_RULES_POLICY_ID]);
+    expect(decision.records[0]).toMatchObject({ reason: 'bot-message', verdict: 'deny' });
+  });
+
+  it('skips the costly classifier once a rule has denied, even in shadow', async () => {
+    const policies = createWakePolicySet({
+      classify,
+      settings: { botWake: { classifier: { mode: 'shadow' }, enabled: true, mode: 'shadow' } },
+    });
     const decision = await aggregateWakeVerdictsAsync(
       policies,
       signal({ author: { ...human, isBot: true } }),
@@ -438,7 +767,6 @@ describe('policy set aggregation', () => {
       INTERNAL_RULES_POLICY_ID,
       OWNER_RULES_POLICY_ID,
     ]);
-    expect(decision.records[0]).toMatchObject({ reason: 'bot-message', verdict: 'deny' });
   });
 
   it('runs the classifier when the cheap rules pass', async () => {

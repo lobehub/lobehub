@@ -620,6 +620,11 @@ export interface OperationCreationParams {
   projectInstructions?: ProjectInstructionFile[];
   queueRetries?: number;
   queueRetryDelay?: string;
+  /**
+   * `operationId` names an idle row a durable dispatcher reserved for this exact run. Start
+   * must initialize that reservation or fail; it never inserts a fresh row.
+   */
+  reservedOperation?: boolean;
   /** Search route resolved once before the operation starts. */
   searchDecision?: SearchDecision;
   /** Abort startup before the first step is scheduled */

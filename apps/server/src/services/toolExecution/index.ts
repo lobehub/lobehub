@@ -344,12 +344,15 @@ export class ToolExecutionService {
         toolName: apiName,
       });
 
-      log('MCP tool execution successful for: %s:%s', identifier, apiName);
+      log('MCP tool execution completed for: %s:%s', identifier, apiName);
 
       return {
         content: typeof result === 'string' ? result : JSON.stringify(result),
+        ...(result?.success === false
+          ? { error: { code: 'MCP_TOOL_ERROR', message: result.error?.message ?? result.content } }
+          : {}),
         state: typeof result === 'object' ? result : undefined,
-        success: true,
+        success: result?.success !== false,
       };
     } catch (error) {
       log('MCP tool execution failed for %s:%s: %O', identifier, apiName, error);

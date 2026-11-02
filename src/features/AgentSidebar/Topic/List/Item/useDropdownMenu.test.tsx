@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildTopicPrompt } from './buildTopicPrompt';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
 
+const favoriteMenuItemMock = vi.hoisted(() =>
+  vi.fn((target?: unknown) => (target ? { key: 'toggleFavorite', label: 'favorite.add' } : null)),
+);
+vi.mock('@/features/Favorites', () => ({ useFavoriteMenuItem: favoriteMenuItemMock }));
+
 const locationFixture = vi.hoisted(() => ({ pathname: '/project/project-1/topic/topic-1' }));
 const removeMock = vi.hoisted(() => vi.fn());
 const confirmDeleteMock = vi.hoisted(() => vi.fn());
@@ -242,6 +247,62 @@ describe('useTopicItemDropdownMenu', () => {
     },
   );
 
+  it.each([
+    ['/project/project-1/topic/topic-1', true],
+    ['/project/project-1/topic/topic-other', false],
+  ])(
+    'after archiving a Project row at %s, navigates home only for the current Topic',
+    async (pathname, shouldNavigate) => {
+      scopeFixture.enabled = true;
+      locationFixture.pathname = pathname;
+      const { result } = renderHook(() =>
+        useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+      );
+
+      await result.current.toggleCompleted();
+
+      expect(completeMock).toHaveBeenCalledWith('topic-1');
+      expect(refreshProjectMock).toHaveBeenCalledOnce();
+      if (shouldNavigate) expect(navigateMock).toHaveBeenCalledWith('/project/project-1');
+      else expect(navigateMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it('stays on the Topic the user opened while the archive was in flight', async () => {
+    scopeFixture.enabled = true;
+    locationFixture.pathname = '/project/project-1/topic/topic-1';
+    let finishArchive!: () => void;
+    completeMock.mockReturnValueOnce(new Promise<void>((resolve) => (finishArchive = resolve)));
+    const { rerender, result } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+    );
+
+    const archiving = result.current.toggleCompleted();
+    locationFixture.pathname = '/project/project-1/topic/topic-other';
+    rerender();
+    finishArchive();
+    await archiving;
+
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('does not navigate once the user left the Project while the archive was in flight', async () => {
+    scopeFixture.enabled = true;
+    locationFixture.pathname = '/project/project-1/topic/topic-1';
+    let finishArchive!: () => void;
+    completeMock.mockReturnValueOnce(new Promise<void>((resolve) => (finishArchive = resolve)));
+    const { result, unmount } = renderHook(() =>
+      useTopicItemDropdownMenu({ id: 'topic-1', title: 'Topic' }),
+    );
+
+    const archiving = result.current.toggleCompleted();
+    unmount();
+    finishArchive();
+    await archiving;
+
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it('copies the row Agent link even when another Agent is active', async () => {
     scopeFixture.enabled = true;
     const writeText = vi.fn();
@@ -326,6 +387,7 @@ describe('useTopicItemDropdownMenu', () => {
     expect(items.map((item) => (item && 'key' in item ? item.key : 'divider'))).toEqual([
       'markCompleted',
       'favorite',
+      'toggleFavorite',
       'divider',
       'autoRename',
       'rename',
@@ -447,5 +509,38 @@ describe('useTopicItemDropdownMenu', () => {
 
       expect(result.current.canInlineArchive).toBe(false);
     });
+  });
+
+  it('offers Favorites beside Pin, linking the row topic under its agent', () => {
+    const { result } = renderHook(() =>
+      useTopicItemDropdownMenu({ fav: true, id: 'topic-1', title: 'Topic 1' }),
+    );
+
+    const keys = result.current
+      .dropdownMenu()
+      .map((item) => (item && 'key' in item ? item.key : 'divider'));
+    expect(keys.slice(keys.indexOf('favorite'), keys.indexOf('favorite') + 2)).toEqual([
+      'favorite',
+      'toggleFavorite',
+    ]);
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      {
+        path: '/agent/agent-1/topic-1',
+        snapshotReady: true,
+        targetId: 'topic-1',
+        title: 'Topic 1',
+        type: 'topic',
+      },
+      { showHotkey: false },
+    );
+  });
+
+  it('holds the favorite add until a placeholder topic title is replaced', () => {
+    renderHook(() => useTopicItemDropdownMenu({ id: 'topic-1', title: '...' }));
+
+    expect(favoriteMenuItemMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotReady: false }),
+      { showHotkey: false },
+    );
   });
 });

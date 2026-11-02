@@ -24,6 +24,7 @@ import { getWidgetCardBody, getWidgetHealth, getWidgetUpdatedAt } from '../utils
 import HealthDot from './HealthDot';
 import StatusBadges from './StatusBadges';
 import WidgetOutputView from './views';
+import { createLayoutScope, resolveSurface, WIDGET_SURFACE_STYLES } from './views/LayoutView';
 
 const styles = createStaticStyles(({ css }) => ({
   actions: css`
@@ -45,6 +46,11 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     flex: 1;
     min-height: 0;
+  `,
+  bodyScrollable: css`
+    /* Rows past the card height scroll inside the card instead of being clipped. */
+    overflow-y: auto;
+    overscroll-behavior: contain;
   `,
   card: css`
     overflow: hidden;
@@ -129,6 +135,17 @@ const WidgetCard = memo<WidgetCardProps>(
     // The running badge would repeat the spinning refresh button and the pulsing dot.
     const badges = health.badges.filter((badge) => badge !== 'running');
 
+    // Lists and tables are the only outputs taller than their card; the rest size to it.
+    const scrollable =
+      bodyState === 'output' &&
+      !view?.layout &&
+      (output?.type === 'list' || output?.type === 'table');
+    // A layout may paint the whole card; header and footer then follow its text color.
+    const surface =
+      view?.layout && output
+        ? WIDGET_SURFACE_STYLES[resolveSurface(view.surface, createLayoutScope(output))]
+        : undefined;
+
     let body: ReactNode;
     if (bodyState === 'output' && output) {
       body = (
@@ -167,13 +184,21 @@ const WidgetCard = memo<WidgetCardProps>(
         className={cx(styles.card, onOpen && styles.clickable, className)}
         data-widget-id={widget.id}
         data-widget-running={health.running}
+        data-widget-surface={surface ? 'custom' : undefined}
         gap={10}
+        style={surface}
         onClick={onOpen}
       >
         <Flexbox horizontal align={'center'} className={styles.header} gap={6}>
           {handle}
           {title ?? (
-            <Text ellipsis className={styles.title} title={widget.title} weight={500}>
+            <Text
+              ellipsis
+              className={styles.title}
+              style={surface && { color: 'inherit' }}
+              title={widget.title}
+              weight={500}
+            >
               {widget.title}
             </Text>
           )}
@@ -191,9 +216,15 @@ const WidgetCard = memo<WidgetCardProps>(
             </Flexbox>
           )}
         </Flexbox>
-        <div className={styles.body}>{body}</div>
+        <div className={cx(styles.body, scrollable && styles.bodyScrollable)}>{body}</div>
         {updatedAt && (
-          <Flexbox horizontal align={'center'} className={styles.footer} gap={6}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={styles.footer}
+            gap={6}
+            style={surface && { color: 'inherit', opacity: 0.72 }}
+          >
             <HealthDot health={health} />
             <Tooltip title={dayjs(updatedAt).format('YYYY-MM-DD HH:mm:ss')}>
               <span data-widget-updated>

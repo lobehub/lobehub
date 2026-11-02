@@ -119,6 +119,15 @@ export const reviewGoalDelivery = async (
 
     const predictor = new VerifyReviewPredictorService(db, userId, workspaceId);
     const feedback: string[] = [];
+    // Only a check this round itself answered can be repaired inside the round;
+    // one judged from an earlier round's result has no row here to re-open.
+    const rejectCheck = (check: (typeof checks)[number], reason: string) => {
+      if (check.result?.verifyRunId !== run.id) return;
+      (review.rejectedChecks ??= []).push({
+        checkItemId: check.result.checkItemId,
+        feedback: reason,
+      });
+    };
     // Checks are judged concurrently, so the aggregate has to be order
     // independent: take the most blocking outcome seen rather than letting the
     // last writer win. `rejected` outranks `unjudgeable` because one genuinely
@@ -183,7 +192,10 @@ export const reviewGoalDelivery = async (
         // The criterion asks for something no reader can confirm. Re-delivering
         // cannot change that, so this must not read as a rejected delivery.
         escalate('unjudgeable');
-      } else escalate('rejected');
+      } else {
+        escalate('rejected');
+        rejectCheck(check, prediction.comment ?? 'Acceptance review rejected this check.');
+      }
       feedback.push(
         `${check.title}: ${prediction?.comment ?? prediction?.statusReason ?? 'Review could not reach a decision.'}`,
       );

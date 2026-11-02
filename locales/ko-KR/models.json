@@ -765,6 +765,7 @@
   "irag-1.0.description": "ERNIE iRAG는 이미지 검색, 이미지-텍스트 검색, 콘텐츠 생성을 위한 이미지 검색 기반 생성 모델입니다.",
   "jamba-large.description": "복잡한 기업용 작업을 위해 설계된 가장 강력하고 고급화된 모델로, 탁월한 성능을 제공합니다.",
   "jamba-mini.description": "동급 모델 중 가장 효율적인 모델로, 속도와 품질의 균형을 유지하면서도 경량화된 구조를 갖추고 있습니다.",
+  "jev-1.14.0.description": "TypeSafe Jev는 생성된 산문 대신 유형화된 질문에 대해 보정된 확률을 반환하는 System One 의사결정 모델입니다.",
   "jina-deepsearch-v1.description": "DeepSearch는 웹 검색, 문서 읽기, 추론을 결합하여 심층적인 조사를 수행합니다. 사용자의 연구 과제를 받아 반복적인 검색을 통해 정보를 수집하고, 그 후에야 답변을 생성합니다. 이 과정은 지속적인 조사와 다각적 문제 해결을 포함하며, 사전 학습 데이터나 단일 검색에 의존하는 기존 LLM 또는 RAG 시스템과는 근본적으로 다릅니다.",
   "kimi-k2-instruct.description": "Kimi K2 Instruct는 코드, 질의응답 등 다양한 작업을 위한 장문 문맥 추론 모델로, Kimi의 공식 추론 모델입니다.",
   "kimi-k2-thinking.description": "kimi-k2-thinking은 Moonshot AI의 사고 모델로, 일반적인 에이전트 및 추론 능력을 갖추고 있습니다. 심층 추론에 뛰어나며 다단계 도구 사용을 통해 어려운 문제를 해결할 수 있습니다.",

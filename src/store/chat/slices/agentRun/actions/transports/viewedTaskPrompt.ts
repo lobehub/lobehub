@@ -30,7 +30,8 @@ export const buildViewedTaskPrompt = (
     });
   }
 
-  const task = taskState.taskDetailMap[viewedTask.taskId];
+  const task =
+    taskState.taskDetailMap[taskState.taskRefIndex[viewedTask.taskId] ?? viewedTask.taskId];
   if (task) return buildTaskDetailPrompt({ defaultAssigneeAgentId, task });
 };
 

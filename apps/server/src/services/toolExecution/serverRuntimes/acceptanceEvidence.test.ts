@@ -516,6 +516,8 @@ describe('acceptanceEvidenceRuntime', () => {
     expect(result).toEqual(
       expect.objectContaining({ error: 'UNBACKED_VISUAL_EVIDENCE', success: false }),
     );
-    expect(result.content).toContain('The server received only [content, type] for the rejected item');
+    expect(result.content).toContain(
+      'The server received only [content, type] for the rejected item',
+    );
   });
 });

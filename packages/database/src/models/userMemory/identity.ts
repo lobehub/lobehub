@@ -1,10 +1,14 @@
-import type { IdentityListParams, IdentityListResult } from '@lobechat/types';
+import type {
+  IdentityListParams,
+  IdentityListResult,
+  UserMemoryIdentity,
+  UserMemoryIdentityInsert,
+} from '@lobechat/types';
 import { RelationshipEnum } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
-import type { NewUserMemoryIdentity, UserMemoryIdentity } from '../../schemas';
 import { userMemories, userMemoriesIdentities } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
@@ -30,7 +34,7 @@ export class UserMemoryIdentityModel {
     return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
-  create = async (params: Omit<NewUserMemoryIdentity, 'userId'>) => {
+  create = async (params: Omit<UserMemoryIdentityInsert, 'userId'>) => {
     const [result] = await this.db
       .insert(userMemoriesIdentities)
       .values({ ...params, userId: this.userId })
@@ -121,7 +125,10 @@ export class UserMemoryIdentityModel {
     ];
 
     const filters = conditions.filter((condition): condition is SQL => condition !== undefined);
-    const whereClause = filters.length > 0 ? and(...filters) : undefined;
+    const whereClause =
+      filters.length > 0
+        ? and(...filters)
+        : /* v8 ignore next -- unreachable: eq()/inArray() always yield SQL, so filters is never empty */ undefined;
 
     // Build ORDER BY
     const applyOrder = order === 'asc' ? asc : desc;

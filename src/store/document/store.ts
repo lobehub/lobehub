@@ -7,11 +7,11 @@ import { expose } from '../middleware/expose';
 import { flattenActions } from '../utils/flattenActions';
 import { type ResetableStore, ResetableStoreAction } from '../utils/resetableStore';
 import {
+  createDocumentSlice,
   type DocumentAction,
   type DocumentDetailSliceState,
   initialDocumentDetailSliceState,
 } from './slices/document';
-import { createDocumentSlice } from './slices/document';
 import { type EditorAction, type EditorState } from './slices/editor';
 import { createEditorSlice, initialEditorState } from './slices/editor';
 

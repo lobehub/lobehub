@@ -5,7 +5,14 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { FileTextIcon, FolderOpenIcon, GlobeIcon, HardDriveIcon, UsersIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import {
+  Fragment,
+  type KeyboardEvent,
+  memo,
+  type MouseEvent,
+  type ReactNode,
+  useMemo,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -22,7 +29,7 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 import { isArtifactPage } from '../Layout/Body/PageSection/group';
-import { docsFilePath, docsPagePath } from '../paths';
+import { docsFilePath, docsPagePath, DRIVE_PATH, LIBRARY_INDEX_PATH } from '../paths';
 
 /** Title, location, owner, created, updated — the time columns stay fixed-width. */
 const COLUMNS = 'minmax(0, 3fr) minmax(0, 1.4fr) minmax(0, 1.1fr) 132px 132px';
@@ -36,6 +43,34 @@ const styles = stylex.create({
     minWidth: 0,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  /**
+   * The Location cell's items carry 6px of inline padding for the hover fill;
+   * pulling the cell back by the same amount keeps their text on the column.
+   */
+  location: {
+    marginInlineStart: '-6px',
+  },
+  locationItem: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '6px',
+    alignItems: 'center',
+
+    minWidth: 0,
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    borderRadius: '6px',
+
+    whiteSpace: 'nowrap',
+  },
+  locationLink: {
+    cursor: 'pointer',
+    borderWidth: 0,
+    font: 'inherit',
+    color: { 'default': 'inherit', ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillSecondary },
   },
   header: {
     display: 'grid',
@@ -105,36 +140,104 @@ const formatTime = (value: Date | string) => {
 interface LocationProps {
   libraryNames: Map<string, string>;
   myId?: string;
+  onNavigate: (path: string) => void;
   row: DocsHomeRow;
 }
 
-/** Where the row lives: its knowledge base, else the drive (files) or a page section. */
-const Location = memo<LocationProps>(({ libraryNames, myId, row }) => {
-  const { t } = useTranslation('file');
-  const names = row.knowledgeBaseIds.flatMap((id) => libraryNames.get(id) ?? []);
+interface LocationItemProps {
+  icon?: ReactNode;
+  label: string;
+  onNavigate?: (path: string) => void;
+  path?: string;
+}
 
+/**
+ * One place a row lives. With a `path` it is a button that opens that section
+ * (without also opening the row) and fills on hover; without one it is plain.
+ */
+const LocationItem = memo<LocationItemProps>(({ icon, label, onNavigate, path }) => {
+  const content = (
+    <>
+      {icon}
+      <span {...stylex.props(styles.cell)}>{label}</span>
+    </>
+  );
+
+  if (!path || !onNavigate) return <span {...stylex.props(styles.locationItem)}>{content}</span>;
+
+  return (
+    <button
+      type={'button'}
+      {...stylex.props(styles.locationItem, styles.locationLink)}
+      onKeyDown={(event: KeyboardEvent) => event.stopPropagation()}
+      onClick={(event: MouseEvent) => {
+        event.stopPropagation();
+        onNavigate(path);
+      }}
+    >
+      {content}
+    </button>
+  );
+});
+
+LocationItem.displayName = 'DocsHomeLocationItem';
+
+/**
+ * Where the row lives: its knowledge bases, else the drive (files) or a page
+ * section. Knowledge bases and the drive open on click; My docs and Shared
+ * are sidebar sections with no page of their own, so they stay plain text.
+ */
+const Location = memo<LocationProps>(({ libraryNames, myId, onNavigate, row }) => {
+  const { t } = useTranslation('file');
+  const libraries = row.knowledgeBaseIds.flatMap((id) => {
+    const name = libraryNames.get(id);
+    return name ? [{ id, name }] : [];
+  });
+
+  let items: ReactNode;
   if (row.knowledgeBaseIds.length > 0) {
-    return (
-      <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.cell, styles.meta)}>
-        <LibIcon size={14} />
-        <span {...stylex.props(styles.cell)}>
-          {names.length > 0 ? names.join(', ') : t('docs.section.library')}
-        </span>
-      </Flexbox>
+    items =
+      libraries.length > 0 ? (
+        libraries.map((library, index) => (
+          <Fragment key={library.id}>
+            {index > 0 && <span>,</span>}
+            <LocationItem
+              icon={index === 0 ? <LibIcon size={14} /> : undefined}
+              label={library.name}
+              path={`${LIBRARY_INDEX_PATH}/${library.id}`}
+              onNavigate={onNavigate}
+            />
+          </Fragment>
+        ))
+      ) : (
+        <LocationItem icon={<LibIcon size={14} />} label={t('docs.section.library')} />
+      );
+  } else if (row.kind === 'file') {
+    items = (
+      <LocationItem
+        icon={<Icon icon={HardDriveIcon} size={14} />}
+        label={t('docs.section.drive')}
+        path={DRIVE_PATH}
+        onNavigate={onNavigate}
+      />
+    );
+  } else {
+    const shared = row.userId && myId && row.userId !== myId;
+    items = (
+      <LocationItem
+        icon={<Icon icon={shared ? UsersIcon : FolderOpenIcon} size={14} />}
+        label={shared ? t('docs.shared.title') : t('docs.myDocs.title')}
+      />
     );
   }
 
-  const [icon, label] =
-    row.kind === 'file'
-      ? [HardDriveIcon, t('docs.section.drive')]
-      : row.userId && myId && row.userId !== myId
-        ? [UsersIcon, t('docs.shared.title')]
-        : [FolderOpenIcon, t('docs.myDocs.title')];
-
   return (
-    <Flexbox horizontal align={'center'} gap={6} {...stylex.props(styles.cell, styles.meta)}>
-      <Icon icon={icon} size={14} />
-      <span {...stylex.props(styles.cell)}>{label}</span>
+    <Flexbox
+      horizontal
+      align={'center'}
+      {...stylex.props(styles.cell, styles.meta, styles.location)}
+    >
+      {items}
     </Flexbox>
   );
 });
@@ -226,11 +329,18 @@ const HomeList = memo<HomeListProps>(({ onTabChange, tab }) => {
           onRetry={() => revalidate()}
         >
           {rows?.map((row) => (
-            <button
+            // A div, not a button: the location cell holds its own buttons.
+            <div
               key={row.id}
-              type={'button'}
+              role={'button'}
+              tabIndex={0}
               {...stylex.props(styles.row)}
               onClick={() => open(row)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                open(row);
+              }}
             >
               <Flexbox horizontal align={'center'} gap={10} {...stylex.props(styles.cell)}>
                 {row.kind === 'page' ? (
@@ -247,7 +357,7 @@ const HomeList = memo<HomeListProps>(({ onTabChange, tab }) => {
                 </span>
               </Flexbox>
               <span {...stylex.props(styles.desktopOnly)}>
-                <Location libraryNames={libraryNames} myId={myId} row={row} />
+                <Location libraryNames={libraryNames} myId={myId} row={row} onNavigate={navigate} />
                 <Flexbox
                   horizontal
                   align={'center'}
@@ -264,7 +374,7 @@ const HomeList = memo<HomeListProps>(({ onTabChange, tab }) => {
                 <span {...stylex.props(styles.meta)}>{formatTime(row.createdAt)}</span>
               </span>
               <span {...stylex.props(styles.meta)}>{formatTime(row.updatedAt)}</span>
-            </button>
+            </div>
           ))}
         </AsyncBoundary>
       </div>

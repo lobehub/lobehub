@@ -1,6 +1,14 @@
 'use client';
 
-import { Button, createStaticStyles, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import {
+  Button,
+  createStaticStyles,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -11,9 +19,12 @@ import { createSkillStoreModal } from '@/features/SkillStore';
 import { openImportFromGithubModal } from '@/features/SkillStore/SkillList/ImportFromGithubModal';
 import { openImportFromUrlModal } from '@/features/SkillStore/SkillList/ImportFromUrlModal';
 import { openUploadSkillModal } from '@/features/SkillStore/SkillList/UploadSkillModal';
+import { useConnectorManageable } from '@/hooks/useConnectorManagePolicy';
 
+import ConnectorManagePolicy from './ConnectorManagePolicy';
 import { type ToolDetailType } from './SkillDetail';
 import SkillList, { type SkillViewMode } from './SkillList';
+import { SkillListVariantProvider } from './SkillListRow';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -21,6 +32,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: 1;
     padding-block: 4px;
     padding-inline: 8px;
+  `,
+  pageBody: css`
+    padding-block: 0 24px;
+    padding-inline: 0;
+  `,
+  pageHeader: css`
+    display: flex;
+    flex-shrink: 0;
+    gap: 16px;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    padding-block: 24px 16px;
+    padding-inline: 12px;
   `,
   header: css`
     display: flex;
@@ -42,6 +67,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 260px;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
+  tooltipAnchor: css`
+    display: inline-flex;
+  `,
 }));
 
 interface LeftPanelProps {
@@ -49,13 +77,15 @@ interface LeftPanelProps {
   fullWidth?: boolean;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
+  /** Render as the page-level list a row opens a second-level detail from. */
+  page?: boolean;
   selectedIdentifier?: string;
   viewMode: SkillViewMode;
 }
 
 const LeftPanel = memo<LeftPanelProps>(
-  ({ fullWidth, onDeleteSelected, onSelect, selectedIdentifier, viewMode }) => {
-    const { t } = useTranslation('setting');
+  ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
+    const { t } = useTranslation(['setting', 'tool']);
     const [showAddConnector, setShowAddConnector] = useState(false);
 
     const handleOpenStore = useCallback(() => {
@@ -63,6 +93,66 @@ const LeftPanel = memo<LeftPanelProps>(
     }, []);
 
     const isConnectorView = viewMode === 'connector';
+    // Adding a workspace connector follows the same member policy as editing one.
+    const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
+    const addConnectorTitle = t('connector.add.title', {
+      defaultValue: 'Add Custom Connector',
+      ns: 'tool',
+    });
+    const isConnectorPage = page && isConnectorView;
+
+    if (isConnectorPage)
+      return (
+        <SkillListVariantProvider value={'page'}>
+          <div className={styles.pageHeader}>
+            <Flexbox gap={4}>
+              <Text as={'h1'} fontSize={20} style={{ margin: 0 }} weight={600}>
+                {t('skillView.connectors', 'Connectors')}
+              </Text>
+              <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
+            </Flexbox>
+            <Flexbox horizontal flex={'none'} gap={8}>
+              <Tooltip title={t('skillStore.title')}>
+                <Button
+                  aria-label={t('skillStore.title')}
+                  icon={<Icon icon={Store} />}
+                  onClick={handleOpenStore}
+                />
+              </Tooltip>
+              <Tooltip
+                title={
+                  canAddConnector || isPolicyPending
+                    ? undefined
+                    : t('tools.connectorFeedback.manageOnly')
+                }
+              >
+                {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
+                <span className={styles.tooltipAnchor}>
+                  <Button
+                    disabled={!canAddConnector}
+                    icon={Grid2x2Plus}
+                    onClick={() => setShowAddConnector(true)}
+                  >
+                    {addConnectorTitle}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Flexbox>
+          </div>
+          <ConnectorManagePolicy variant={'page'} />
+          <div className={styles.pageBody}>
+            <SkillList
+              viewMode={viewMode}
+              onDeleteSelected={onDeleteSelected}
+              onSelect={onSelect}
+            />
+          </div>
+          <CustomConnectorModal
+            open={showAddConnector}
+            onClose={() => setShowAddConnector(false)}
+          />
+        </SkillListVariantProvider>
+      );
 
     return (
       <>
@@ -80,15 +170,23 @@ const LeftPanel = memo<LeftPanelProps>(
             <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
               {isConnectorView ? (
                 // Connector view: single action to add a custom OAuth connector.
-                <Button
-                  icon={Grid2x2Plus}
-                  size="small"
-                  title={t('connector.add.title', {
-                    defaultValue: 'Add Custom Connector',
-                    ns: 'tool',
-                  })}
-                  onClick={() => setShowAddConnector(true)}
-                />
+                <Tooltip
+                  title={
+                    canAddConnector || isPolicyPending
+                      ? addConnectorTitle
+                      : t('tools.connectorFeedback.manageOnly')
+                  }
+                >
+                  {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
+                  <span className={styles.tooltipAnchor}>
+                    <Button
+                      disabled={!canAddConnector}
+                      icon={Grid2x2Plus}
+                      size="small"
+                      onClick={() => setShowAddConnector(true)}
+                    />
+                  </span>
+                </Tooltip>
               ) : (
                 // Skill view: import a skill from a URL, GitHub, or a zip upload.
                 <DropdownMenu
@@ -142,6 +240,8 @@ const LeftPanel = memo<LeftPanelProps>(
               <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore} />
             </div>
           </div>
+
+          {isConnectorView && <ConnectorManagePolicy />}
 
           <div className={styles.body}>
             <SkillList

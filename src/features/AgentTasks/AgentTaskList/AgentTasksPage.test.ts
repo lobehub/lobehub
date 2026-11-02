@@ -18,6 +18,7 @@ import {
   collapseSubTasks,
   compareTaskItems,
   DEFAULT_TASK_LIST_VIEW_OPTIONS,
+  isTaskHiddenByCompletedFilter,
 } from './listViewOptions';
 import { shouldRenderTaskAgentPanelToggle } from './taskAgentPanelToggle';
 
@@ -80,7 +81,7 @@ describe('AgentTasksPage', () => {
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
         groupBy: 'automationMode',
-        hideCompleted: false,
+        completedTasks: 'all',
         orderBy: 'updatedAt',
         orderDirection: 'asc',
         showSubTasks: true,
@@ -101,7 +102,7 @@ describe('AgentTasksPage', () => {
         getMyTaskViewOptions({
           ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
           groupBy: 'priority',
-          hideCompleted: false,
+          completedTasks: 'week',
           orderBy: 'title',
           orderDirection: 'asc',
           showSubTasks: false,
@@ -109,7 +110,7 @@ describe('AgentTasksPage', () => {
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
         groupBy: 'priority',
-        hideCompleted: false,
+        completedTasks: 'all',
         orderBy: 'updatedAt',
         orderDirection: 'asc',
         showSubTasks: true,
@@ -127,6 +128,22 @@ describe('AgentTasksPage', () => {
       // pinning `showSubTasks` keeps it out of the paginated path.
       expect(options.showSubTasks).toBe(true);
       expect(collapseSubTasks([parent, child]).map((t) => t.id)).toEqual(['p']);
+    });
+
+    it('never re-applies the completed window to a page the server already cut', () => {
+      // The server counted this row inside the window; a browser clock that is
+      // ahead (or a cutoff crossed since the fetch) must not drop it again.
+      const options = getMyTaskViewOptions({
+        ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
+        completedTasks: 'day',
+      });
+      const justOutside = {
+        ...taskUpdatedAt('done', '2026-01-01'),
+        completedAt: new Date('2026-01-01T00:00:00Z'),
+        status: 'completed',
+      } as TaskListItem;
+      const now = new Date('2026-01-02T00:00:01Z').getTime();
+      expect(isTaskHiddenByCompletedFilter(justOutside, options.completedTasks, now)).toBe(false);
     });
 
     it('renders a page newest-first, like the server paginates it', () => {
@@ -170,9 +187,12 @@ describe('AgentTasksPage', () => {
       expect(pinned.orderBy).toBe('updatedAt');
       expect(pinned.orderDirection).toBe('asc');
       expect(pinned.showSubTasks).toBe(true);
+      // `completedTasks` stays offered: it takes effect server-side
+      // (`getVisibleTaskStatuses` / `getCompletedWithin`), so only the
+      // rendered page is told not to cut again.
+      expect(pinned.completedTasks).toBe('all');
       // Not pinned: the panel keeps offering these, and they still take effect.
       expect(pinned.groupBy).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.groupBy);
-      expect(pinned.hideCompleted).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.hideCompleted);
       expect(pinned.nestedSubTasks).toBe(DEFAULT_TASK_LIST_VIEW_OPTIONS.nestedSubTasks);
     });
   });

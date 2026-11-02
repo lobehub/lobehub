@@ -5,7 +5,11 @@ import {
   collectHeteroAttachedFiles,
   isLocalHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
-import { formatContextSelections, formatPageSelections } from '@lobechat/prompts';
+import {
+  CHANNEL_INSTRUCTIONS,
+  formatContextSelections,
+  formatPageSelections,
+} from '@lobechat/prompts';
 import { applyTopicModelToHeterogeneousProvider, buildHeteroExecArgs } from '@lobechat/types';
 import debug from 'debug';
 
@@ -44,6 +48,7 @@ export const prepareHeteroRun = async (
     | 'shareGate'
     | 'topicId'
     | 'userMessageMetadata'
+    | 'trigger'
   >,
   input: Pick<
     HeteroDispatchInput,
@@ -53,6 +58,7 @@ export const prepareHeteroRun = async (
     | 'pinnedHeterogeneousTopicModel'
     | 'runAttachments'
     | 'selfMessageIds'
+    | 'reservedOperationId'
   >,
   operationId: string,
 ) => {
@@ -70,6 +76,7 @@ export const prepareHeteroRun = async (
   const heteroService = new HeterogeneousAgentService(deps.db, deps.userId, {
     workspaceId: deps.workspaceId,
   });
+  const isChannelOperation = ctx.trigger === 'channel' && input.reservedOperationId === operationId;
   const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
   // Sign an operation-scoped JWT so the CLI can authenticate against
   // heteroIngest / heteroFinish without full user credentials.
@@ -80,7 +87,10 @@ export const prepareHeteroRun = async (
       // supervises; the server still derives the agent and topic from this
       // operation, never from the CLI. A Task run also gets `acceptance:evidence`
       // for its own verification round.
-      capabilities: heteroOperationCapabilities(prompt, { taskId: operationTaskId }),
+      capabilities: heteroOperationCapabilities(prompt, {
+        channel: isChannelOperation,
+        taskId: operationTaskId,
+      }),
       operationId,
       userId: deps.userId,
       workspaceId: deps.workspaceId,
@@ -209,7 +219,13 @@ export const prepareHeteroRun = async (
       ? formatPageSelections(pageSelections)
       : undefined;
   const agentSystemContext = withConversationGoalPrompt(
-    joinSystemContext(providerContext, projectContext, viewedTaskContext, selectionContext),
+    joinSystemContext(
+      providerContext,
+      projectContext,
+      viewedTaskContext,
+      selectionContext,
+      isChannelOperation ? CHANNEL_INSTRUCTIONS : undefined,
+    ),
     prompt,
   );
   const systemContext = buildCloudHeteroContext({

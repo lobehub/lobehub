@@ -114,7 +114,8 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
           {isInitialLoading ? <TaskDetailSkeleton chrome={'body'} /> : <TaskDetailSections />}
         </WideScreenContainer>
       </Flexbox>
-      <TopicChatDrawer />
+      {/* The task page has nothing else to read beside a run, so it opens wide. */}
+      <TopicChatDrawer defaultExpanded />
     </Flexbox>
   );
 });

@@ -15,8 +15,8 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import AgentAvatar from '@/components/AgentAvatar';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@/const/meta';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
@@ -86,11 +86,11 @@ const AgentSelect = memo(() => {
   const displayMeta = showInboxFallback ? inboxMeta : (sidebarItem ?? agentMapMeta);
   const displayTitle = agentDisplayName(
     displayMeta,
-    showInboxFallback ? 'Lobe AI' : t('defaultSession', { ns: 'common' }),
+    showInboxFallback ? DEFAULT_INBOX_TITLE : t('defaultSession', { ns: 'common' }),
   );
   const displayAvatar =
     (typeof displayMeta?.avatar === 'string' ? displayMeta.avatar : undefined) ||
-    (showInboxFallback ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR);
+    (showInboxFallback ? DEFAULT_INBOX_AVATAR : undefined);
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen);
@@ -123,7 +123,8 @@ const AgentSelect = memo(() => {
           className={styles.trigger}
           type={'text'}
         >
-          <Avatar
+          <AgentAvatar
+            agentId={showInboxFallback ? inboxAgentId : displayAgentId}
             avatar={displayAvatar}
             background={displayMeta?.backgroundColor || undefined}
             name={displayTitle}

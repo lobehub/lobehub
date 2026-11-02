@@ -38,15 +38,7 @@ describe('resolveClaudeCodeTokenStatus', () => {
 
     expect(
       resolveClaudeCodeTokenStatus({ contextCreds: [], inWorkspace: true, personalCreds: [cred] }),
-    ).toEqual({ personalCred: cred, sharedElsewhere: false, status: 'personalNotShared' });
-  });
-
-  it('flags a personal token that is shared to a different workspace', () => {
-    const cred = personalToken({ organizationAccountId: 42, sharedToActiveWorkspace: false });
-
-    expect(
-      resolveClaudeCodeTokenStatus({ contextCreds: [], inWorkspace: true, personalCreds: [cred] }),
-    ).toEqual({ personalCred: cred, sharedElsewhere: true, status: 'personalNotShared' });
+    ).toEqual({ personalCred: cred, status: 'personalNotShared' });
   });
 
   it('shows the personal preview once the token is shared to the active workspace', () => {

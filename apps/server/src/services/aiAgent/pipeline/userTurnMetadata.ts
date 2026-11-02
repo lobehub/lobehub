@@ -49,8 +49,9 @@ export const buildUserTurnMetadata = ({
   ...(botSender ? { botSender } : undefined),
   // A provider event that injected this turn keeps its source on the row.
   ...(externalOrigin ? { externalOrigin } : undefined),
-  // A follow-up queued behind a running turn renders as that turn's
-  // continuation; the client's optimistic row is replaced by this one.
+  // A message that steered the running turn directly renders as that turn's
+  // continuation; the client's optimistic row is replaced by this one. A
+  // follow-up that waited in queue starts its own turn and is not marked.
   ...(steer ? { steer: true as const } : undefined),
   // Later turns read the selection back from history, so the skills stay
   // injected for the rest of the topic (see `collectSelectedSkillIds`).

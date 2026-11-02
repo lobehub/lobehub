@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -62,6 +63,37 @@ describe('adding an Agent to a Channel', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     const added = await team.asOwner.addAgent(team.channel.id, { agentId: agent.id });
     expect(added).toMatchObject({ agentId: agent.id, config: {}, name: 'Current Agent name' });
+  });
+
+  it('labels LobeAI by its product name, not the generic fallback', async () => {
+    const team = await fixture.createTeamChannel();
+    const [inbox] = await db
+      .insert(agents)
+      .values({ slug: INBOX_SESSION_ID, userId: fixture.ownerId, workspaceId: fixture.workspaceId })
+      .returning();
+    const added = await team.asOwner.addAgent(team.channel.id, { agentId: inbox.id });
+    expect(added.name).toBe(DEFAULT_INBOX_TITLE);
+  });
+
+  // Retrying a batch that partly succeeded resubmits the members that already joined.
+  it('returns the existing member when the same Agent is added again', async () => {
+    const team = await fixture.createTeamChannel();
+    const [agent] = await db
+      .insert(agents)
+      .values({ userId: fixture.ownerId, workspaceId: fixture.workspaceId })
+      .returning();
+    const first = await team.asOwner.addAgent(team.channel.id, { agentId: agent.id });
+    const retried = await team.asOwner.addAgent(team.channel.id, { agentId: agent.id });
+
+    expect(retried.id).toBe(first.id);
+    expect(
+      await db
+        .select()
+        .from(channelMembers)
+        .where(
+          and(eq(channelMembers.channelId, team.channel.id), eq(channelMembers.agentId, agent.id)),
+        ),
+    ).toHaveLength(1);
   });
 
   it('permits an owner’s private Agent but checks the actual requester again at claim', async () => {

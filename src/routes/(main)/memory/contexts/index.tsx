@@ -1,3 +1,3 @@
-import MemoryEntities from '@/features/MemoryEntities';
+import MemoryContextStories from '@/features/MemoryContextStories';
 
-export default MemoryEntities;
+export default MemoryContextStories;

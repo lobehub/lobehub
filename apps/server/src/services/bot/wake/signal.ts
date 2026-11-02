@@ -7,9 +7,17 @@ import type { WakeAuthor, WakeSignal } from '@/server/services/agentSignal/scena
 /** The part of a chat-sdk `Message` the wake pipeline reads. */
 export interface WakeMessageLike {
   attachments?: unknown[];
-  author?: { isBot?: boolean | 'unknown'; isMe?: boolean; userId?: string };
+  author?: {
+    fullName?: string;
+    isBot?: boolean | 'unknown';
+    isMe?: boolean;
+    userId?: string;
+    userName?: string;
+  };
   id: string;
   isMention?: boolean;
+  /** `edited` is set when the message was dispatched from an edit rather than its first send. */
+  metadata?: { dateSent?: Date; edited?: boolean; editedAt?: Date };
   raw?: unknown;
   text?: string;
 }
@@ -41,6 +49,29 @@ const isSystemMessage = (platform: string, raw: unknown): boolean => {
   const type = readRawType(raw);
 
   return type !== undefined && !DISCORD_USER_MESSAGE_TYPES.has(type);
+};
+
+interface DiscordRawAuthor {
+  global_name?: unknown;
+  id?: unknown;
+  username?: unknown;
+}
+
+/** Who wrote the message a Discord reply points at; the gateway inlines it as `referenced_message`. */
+const readReplyTo = (
+  platform: string,
+  raw: unknown,
+): Pick<WakeSignal, 'replyToAuthorId' | 'replyToAuthorName'> => {
+  if (platform !== 'discord' || typeof raw !== 'object' || raw === null) return {};
+  const author = (raw as { referenced_message?: { author?: DiscordRawAuthor } | null })
+    .referenced_message?.author;
+  if (typeof author?.id !== 'string' || !author.id) return {};
+
+  const name = [author.global_name, author.username].find(
+    (value): value is string => typeof value === 'string' && !!value.trim(),
+  );
+
+  return { replyToAuthorId: author.id, ...(name ? { replyToAuthorName: name.trim() } : {}) };
 };
 
 /**
@@ -80,6 +111,7 @@ export const buildWakeSignal = ({
     message: text,
     platform,
     platformThreadId,
+    ...readReplyTo(platform, message.raw),
     timestamp,
   };
 };

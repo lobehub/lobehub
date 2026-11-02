@@ -10,6 +10,14 @@ vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
+const workspaceMocks = vi.hoisted(() => ({
+  getConnectorMemberManage: vi.fn(async () => 'all_members' as const),
+}));
+vi.mock('@/database/models/workspace', () => ({
+  WorkspaceModel: vi.fn(function () {
+    return workspaceMocks;
+  }),
+}));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
 }));

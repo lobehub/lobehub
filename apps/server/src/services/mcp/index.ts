@@ -1,14 +1,16 @@
 import { isDesktop } from '@lobechat/const';
 import {
   type CheckMcpInstallResult,
+  ConnectorErrorCode,
   type CustomPluginMetadata,
   type LobeChatPluginApi,
   type ToolManifest,
   type ToolManifestSettings,
 } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
+import { getMcpServerDescription } from '@lobechat/utils/mcpServerDescription';
 import { type DeploymentOption } from '@lobehub/market-sdk';
-import { McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import retry from 'async-retry';
 import debug from 'debug';
@@ -21,7 +23,11 @@ import {
   type StdioMCPParams,
 } from '@/libs/mcp';
 import { MCPClient } from '@/libs/mcp';
-import { getMCPErrorLogMetadata, getMCPLogOrigin } from '@/libs/mcp/utils';
+import {
+  getMCPConnectionErrorType,
+  getMCPErrorLogMetadata,
+  getMCPLogOrigin,
+} from '@/libs/mcp/utils';
 
 import { type ProcessContentBlocksFn } from './contentProcessor';
 import { contentBlocksToString } from './contentProcessor';
@@ -57,6 +63,11 @@ export interface MCPToolCallProcessedResult {
 
 // Removed MCPConnection interface as it's no longer needed
 
+const isMcpToolFailure = (error: unknown): error is ProtocolError | SdkError =>
+  ProtocolError.isInstance(error) ||
+  (SdkError.isInstance(error) &&
+    (error.code === SdkErrorCode.RequestTimeout || error.code === SdkErrorCode.ConnectionClosed));
+
 export class MCPService {
   // Store instances of the custom MCPClient, keyed by serialized MCPClientParams
   private clients: Map<string, MCPClient> = new Map();
@@ -81,11 +92,12 @@ export class MCPService {
 
     const state = { ...result, content: newContent };
 
-    if (result.isError) {
-      return { content, state, success: true };
-    }
-
-    return { content, state, success: true };
+    return {
+      content,
+      ...(result.isError ? { error: { message: content, name: 'MCPToolError' } } : {}),
+      state,
+      success: result.isError !== true,
+    };
   }
 
   /**
@@ -243,14 +255,12 @@ export class MCPService {
         if ((error as Error).message === 'NoValidSessionId') throw error;
 
         // Tool-level MCP errors are returned as a failed tool result, not thrown
-        if (error instanceof McpError) {
-          const mcpError = error as McpError;
-
+        if (isMcpToolFailure(error)) {
           return {
-            content: mcpError.message,
+            content: error.message,
             error,
             state: {
-              content: [{ text: mcpError.message, type: 'text' }],
+              content: [{ text: error.message, type: 'text' }],
               isError: true,
             },
             success: false,
@@ -269,6 +279,7 @@ export class MCPService {
     // must enforce the same Desktop-only stdio boundary, even for cached clients.
     if (params.type === 'stdio' && !isDesktop) {
       throw new TRPCError({
+        cause: { data: { code: ConnectorErrorCode.StdioDesktopOnly } },
         code: 'BAD_REQUEST',
         message: 'Stdio MCP type is not supported in web environment.',
       });
@@ -300,9 +311,17 @@ export class MCPService {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       if (typeof error === 'object' && !!error && 'data' in error) {
+        const type = getMCPConnectionErrorType(error);
         throw new TRPCError({
           cause: error,
-          code: 'SERVICE_UNAVAILABLE',
+          code:
+            type === 'AUTHORIZATION_ERROR'
+              ? // These credentials belong to the upstream MCP, not the signed-in
+                // LobeHub user. A 401 here would trigger the client's global logout.
+                'FORBIDDEN'
+              : type === 'INITIALIZATION_TIMEOUT'
+                ? 'TIMEOUT'
+                : 'SERVICE_UNAVAILABLE',
           message: errorMessage,
         });
       }
@@ -373,7 +392,7 @@ export class MCPService {
         avatar: metadata?.avatar || 'MCP_AVATAR',
         description:
           metadata?.description ||
-          `${identifier} MCP server has ${tools.length} tools, like "${tools[0]?.name}"`,
+          getMcpServerDescription(identifier, { tools }, { includeToolExample: true }),
         title: identifier,
       },
       // TODO: temporary
@@ -404,13 +423,7 @@ export class MCPService {
       identifier,
       meta: {
         avatar: metadata?.avatar || 'MCP_AVATAR',
-        description:
-          metadata?.description ||
-          `${identifier} MCP server has ` +
-            Object.entries(manifest)
-              .filter(([key]) => ['tools', 'prompts', 'resources'].includes(key))
-              .map(([key, item]) => `${(item as Array<any>)?.length} ${key}`)
-              .join(','),
+        description: metadata?.description || getMcpServerDescription(identifier, manifest),
         title: metadata?.name || identifier,
       },
       ...manifest,

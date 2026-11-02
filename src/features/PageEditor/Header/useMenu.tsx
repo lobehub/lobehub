@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import { useResourcePermission } from '@/features/ResourcePermission/useResourcePermission';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -53,7 +54,25 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
   const { lg = true } = useResponsive();
   const dateLocale = i18n.resolvedLanguage || i18n.language;
 
-  const documentId = usePageEditorStore((s) => s.documentId);
+  const [documentId, pageTitle, pageEmoji] = usePageEditorStore((s) => [
+    s.documentId,
+    s.title,
+    s.emoji,
+  ]);
+  const favoriteMenuItem = useFavoriteMenuItem(
+    documentId
+      ? {
+          icon: pageEmoji ?? null,
+          // The canonical link: this menu also opens in the document modal,
+          // which leaves the location on whatever page is underneath.
+          path: `/page/${documentId}`,
+          targetId: documentId,
+          snapshotReady: pageTitle !== undefined,
+          title: pageTitle || t('pageEditor.titlePlaceholder'),
+          type: 'page',
+        }
+      : undefined,
+  );
   // An HTML page has no rich-text body: it exports as HTML and has no editor history.
   const isHtmlPage = useIsHtmlPage(documentId);
   const { allowed: canCreatePage } = usePermission('create_content');
@@ -260,6 +279,7 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
             { type: 'divider' as const },
           ]
         : []),
+      ...(favoriteMenuItem ? [favoriteMenuItem] : []),
       {
         disabled: !canCreatePage,
         icon: <Icon icon={CopyPlus} />,
@@ -386,6 +406,7 @@ export const useMenu = (options: UseMenuOptions = {}): { menuItems: any[] } => {
     }
     return items;
   }, [
+    favoriteMenuItem,
     isHtmlPage,
     isWorkspaceScopedPage,
     lastUpdatedTime,

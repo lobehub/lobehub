@@ -41,7 +41,11 @@ export const createEvalToolForwardingHook = (
         method: 'POST',
         signal: controller.signal,
       });
-      if (!response.ok) throw `Tool forwarding server responded with HTTP ${response.status}`;
+      if (!response.ok) {
+        // The error body is never read; release its connection now rather than at GC.
+        await response.body?.cancel().catch(() => {});
+        throw `Tool forwarding server responded with HTTP ${response.status}`;
+      }
 
       const body: unknown = await response.json();
       if (!isRecord(body)) throw new Error('Invalid tool forwarding response');

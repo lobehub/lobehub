@@ -49,5 +49,9 @@ export const useComposerFocus = ({
 
   const collapse = useCallback(() => setExpanded(false), []);
 
-  return { collapse, expand, expanded, handleEditorInit };
+  // Open the composer for content that arrives on its own (a queued follow-up)
+  // without taking focus: nothing the user did asked to write.
+  const reveal = useCallback(() => setExpanded(true), []);
+
+  return { collapse, expand, expanded, handleEditorInit, reveal };
 };

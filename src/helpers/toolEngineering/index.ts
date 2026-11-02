@@ -7,8 +7,8 @@ import {
   createEnableChecker,
   type LobeToolManifest,
   type PluginEnableChecker,
+  ToolsEngine,
 } from '@lobechat/context-engine';
-import { ToolsEngine } from '@lobechat/context-engine';
 import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
 import {
   type BuiltinToolResolveContext,
@@ -168,7 +168,7 @@ export const createAgentToolsEngine = (
       // `currentAgentPlugins` already resolves to pinned-only identifiers.
       plugins: agentSelectors.currentAgentPlugins(agentState),
     },
-    // Feature-flagged tools (e.g. lobe-dashboard) leave the pool while their
+    // Feature-flagged tools (e.g. builtin-dashboard) leave the pool while their
     // flag is off for this user.
     disabledPluginIds: [
       ...agentSelectors.currentAgentDisabledPlugins(agentState),

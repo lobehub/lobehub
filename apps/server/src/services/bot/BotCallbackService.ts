@@ -4,6 +4,7 @@ import type {
   BotNoReplyResult,
   BotWakeKind,
   ChatErrorBudgetContext,
+  ChatErrorDispatchContext,
   ChatErrorHeterogeneousContext,
 } from '@lobechat/types';
 import debug from 'debug';
@@ -24,7 +25,7 @@ import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { AgentBridgeService } from './AgentBridgeService';
 import { runDeferredReplay, scheduleDeferredReplay } from './deferredReplay';
-import { detectNoReply } from './noReply';
+import { detectNoReply, extractStandDown } from './noReply';
 import { recordNoReplyLabel } from './noReplyLabel';
 import type {
   BotMessageAttachment,
@@ -108,6 +109,7 @@ export interface BotCallbackBody {
    * Forwarded verbatim from the agent lifecycle event.
    */
   errorBudget?: ChatErrorBudgetContext;
+  errorDispatch?: ChatErrorDispatchContext;
   errorHeterogeneous?: ChatErrorHeterogeneousContext;
   errorMessage?: string;
   errorType?: string;
@@ -249,14 +251,15 @@ export class BotCallbackService {
       // In queue mode, the bridge handler's finally block skips this cleanup
       // to keep the thread marked active while the agent runs on the job queue.
       AgentBridgeService.clearActiveThread(platformThreadId);
-      // Bookkeeping for the bot-wake pipeline (follow-up window, silent-wake budget, scheduler).
-      // Best-effort and a no-op unless the bot has bot-wake enabled: it never affects delivery.
-      await this.recordWakeOutcome(
-        body,
-        settings,
-        platform,
-        !noReply && body.reason !== 'error' && body.reason !== 'interrupted',
-      );
+      // Bookkeeping for the bot-wake pipeline (follow-up window, silent-wake budget, stand-down,
+      // scheduler). Best-effort and a no-op unless the bot has bot-wake enabled: it never affects
+      // delivery.
+      const finished = body.reason !== 'error' && body.reason !== 'interrupted';
+      // The agent steps back with a `STAND_DOWN` line after its reply, or `NO_REPLY:stand_down`.
+      const standDown =
+        finished &&
+        (noReply?.reason === 'stand_down' || extractStandDown(body.lastAssistantContent).standDown);
+      await this.recordWakeOutcome(body, settings, platform, finished && !noReply, standDown);
       if (noReply) {
         await this.labelNoReply(body, noReply, platform, workspaceId);
       } else {
@@ -322,6 +325,7 @@ export class BotCallbackService {
     settings: Record<string, unknown> | null | undefined,
     platform: string,
     spoke: boolean,
+    standDown: boolean,
   ): Promise<void> {
     try {
       await recordWakeRunOutcome({
@@ -330,6 +334,12 @@ export class BotCallbackService {
         platformThreadId: body.platformThreadId,
         settings,
         spoke,
+        // What was posted: without the stand-down marker, which is for the runtime.
+        spoken: {
+          id: body.operationId ?? randomUUID(),
+          text: extractStandDown(body.lastAssistantContent).content,
+        },
+        standDown,
         wakeKind: body.wakeKind,
       });
     } catch (error) {
@@ -597,6 +607,7 @@ export class BotCallbackService {
       lastAssistantContent,
       errorAttribution,
       errorBudget,
+      errorDispatch,
       errorHeterogeneous,
       errorMessage,
       errorType,
@@ -619,6 +630,7 @@ export class BotCallbackService {
         errorAttribution,
         errorBudget,
         errorHeterogeneous,
+        errorDispatch,
       );
       const errorText = client.formatMarkdown?.(errorBody) ?? errorBody;
       if (deliveredChunkCount < 1) {
@@ -674,7 +686,9 @@ export class BotCallbackService {
     // ("\n", "  ") through; those collapse to empty text downstream and get
     // rejected by Telegram as "message text is empty", silently losing the
     // reply. Trim before testing.
-    const hasText = !!lastAssistantContent?.trim();
+    // The stand-down marker is for the runtime, not the channel; what came before it is posted.
+    const replyText = extractStandDown(lastAssistantContent).content;
+    const hasText = !!replyText?.trim();
     const hasAttachments = !!attachments?.length;
     if (!hasText && !hasAttachments) {
       // console (not debug) — every one of these is a user-facing "bot went
@@ -699,7 +713,7 @@ export class BotCallbackService {
     // attachment-only path still drives `deliverFirstChunk` once.
     let chunks: string[];
     if (hasText) {
-      const msgBody = renderFinalReply(lastAssistantContent!);
+      const msgBody = renderFinalReply(replyText!);
       const formattedBody = client.formatMarkdown?.(msgBody) ?? msgBody;
       const finalText = client.formatReply?.(formattedBody, stats) ?? formattedBody;
       chunks = splitMessage(finalText, charLimit);

@@ -13,6 +13,7 @@ const {
   hasAnyPermissionMock,
   notifyAssignedMock,
   resolveMock,
+  resolveRefsMock,
   resolveTaskPatchInvariantsMock,
   runTaskMock,
   updateTaskMock,
@@ -23,6 +24,7 @@ const {
   hasAnyPermissionMock: vi.fn(),
   notifyAssignedMock: vi.fn(),
   resolveMock: vi.fn(),
+  resolveRefsMock: vi.fn(),
   resolveTaskPatchInvariantsMock: vi.fn(),
   runTaskMock: vi.fn(),
   updateTaskMock: vi.fn(),
@@ -57,6 +59,7 @@ vi.mock('@/database/models/agent', () => ({
 vi.mock('@/database/models/task', () => ({
   TaskModel: class {
     resolve = resolveMock;
+    resolveRefs = resolveRefsMock;
   },
 }));
 vi.mock('@/database/models/taskTopic', () => ({
@@ -142,6 +145,59 @@ describe('TaskRestService patch runs the shared invariants', () => {
       resolved: { createdByUserId: CALLER, id: 'task-1' },
     }));
     updateTaskMock.mockResolvedValue({ id: 'task-1' });
+  });
+
+  it('preserves unchanged legacy checkpoint selections after a selected task is deleted', async () => {
+    const tasks = { beforeIds: ['T-2'], afterIds: ['T-2'] };
+    resolveTaskPatchInvariantsMock.mockImplementation(async (_, { data }) => ({
+      data,
+      resolved: { id: 'task-1', config: { checkpoint: { tasks } } },
+    }));
+    resolveRefsMock.mockImplementation(async (refs) => ({
+      ambiguous: [],
+      byRef: new Map(),
+      missing: refs,
+      tasks: [],
+    }));
+    updateTaskMock.mockImplementation(async (id, data) => ({ id, ...data }));
+    const config = { checkpoint: { tasks, topic: { before: true } } };
+
+    await expect(service().updateTask('T-1', { config })).resolves.toEqual({
+      id: 'task-1',
+      config,
+    });
+    expect(resolveRefsMock).not.toHaveBeenCalled();
+
+    updateTaskMock.mockClear();
+    await expect(
+      service().updateTask('T-1', {
+        config: { checkpoint: { tasks: { beforeIds: ['MISSING'] } } },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: expect.stringContaining('MISSING') });
+    expect(updateTaskMock).not.toHaveBeenCalled();
+  });
+
+  it('dual-writes explicitly replaced checkpoint selections', async () => {
+    resolveTaskPatchInvariantsMock.mockImplementation(async (_, { data }) => ({
+      data,
+      resolved: { id: 'task-1', config: { checkpoint: { tasks: { beforeIds: ['T-2'] } } } },
+    }));
+    const selected = { id: 'task_3', identifier: 'T-3' };
+    resolveRefsMock.mockResolvedValue({
+      ambiguous: [],
+      byRef: new Map([['t-3', selected]]),
+      missing: [],
+      tasks: [selected],
+    });
+    updateTaskMock.mockImplementation(async (id, data) => ({ id, ...data }));
+
+    await expect(
+      service().updateTask('T-1', {
+        config: { checkpoint: { tasks: { beforeIds: ['t-3'] } } },
+      }),
+    ).resolves.toMatchObject({
+      config: { checkpoint: { tasks: { beforeIds: ['T-3'], beforeTasks: [selected] } } },
+    });
   });
 
   it('writes the row the invariants resolved, not the raw path id', async () => {

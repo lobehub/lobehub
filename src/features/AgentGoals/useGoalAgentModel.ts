@@ -84,6 +84,12 @@ export const useGoalAgentModel = ({ goalId, routeAgentId }: UseGoalAgentModelPar
   // goal cannot see. Their planner fallback here is their own, so a pick that
   // matches it must be kept, not cleared into the owner's unknown default.
   const viewerIsOwner = !ownerId || ownerId === viewerId;
+  // A public workspace goal cannot run on a private agent (the server refuses
+  // the handoff), so its pickers offer only public ones.
+  const publicGoal = useGoalStore((s) => {
+    const goal = graph(s)?.goal;
+    return !!goal?.workspaceId && goal.visibility !== 'private';
+  });
   const systemGoalModel = useUserStore(systemAgentSelectors.goal);
   // The system goal model lives in user settings; before they load it reads as
   // the built-in default.
@@ -141,6 +147,7 @@ export const useGoalAgentModel = ({ goalId, routeAgentId }: UseGoalAgentModelPar
     });
 
   return {
+    privateAgentsAllowed: viewerIsOwner && !publicGoal,
     viewerIsOwner,
     executor: {
       agentId: taskAgentId,

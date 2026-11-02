@@ -32,6 +32,9 @@ const jsonOutput = () => JSON.parse(String(output.mock.calls.at(-1)?.[0]));
 beforeEach(() => {
   vi.clearAllMocks();
   output = vi.spyOn(console, 'log').mockImplementation(() => {});
+  // This repository declares a project in `.agents/acceptance/config.json`;
+  // run outside it so only `--project` files an acceptance here.
+  vi.spyOn(process, 'cwd').mockReturnValue(tmpdir());
   vi.mocked(getTrpcClient).mockResolvedValue({
     acceptance: {
       ensure: { mutate: ensure },

@@ -102,7 +102,7 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
       case 'task': {
         return resourceDeleted
           ? () => promptResourceDeleted(work)
-          : () => openTaskDetail(openTarget.identifier);
+          : () => openTaskDetail(openTarget.taskId);
       }
     }
   })();

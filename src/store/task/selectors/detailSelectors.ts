@@ -17,7 +17,8 @@ const activeTaskDetail = (s: TaskStoreState): TaskDetailData | undefined =>
 
 const activeTaskDatabaseId = (s: TaskStoreState) => activeTaskDetail(s)?.id;
 
-const taskDetailById = (id: string) => (s: TaskStoreState) => s.taskDetailMap[id];
+const taskDetailById = (ref: string) => (s: TaskStoreState) =>
+  s.taskDetailMap[s.taskRefIndex?.[ref] ?? ref];
 
 const isTaskDetailLoading = (s: TaskStoreState): boolean =>
   !s.activeTaskId || !s.taskDetailMap[s.activeTaskId];

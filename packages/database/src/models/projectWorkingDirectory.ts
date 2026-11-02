@@ -54,6 +54,7 @@ export class ProjectWorkingDirectoryModel {
           eq(projects.id, id),
           buildWorkspaceWhere(this.scope(), projects),
           isNull(projects.deletedAt),
+          /* v8 ignore next -- unreachable: `project()` is private and its only caller (`list`) never passes `write` */
           write ? eq(projects.userId, this.userId) : undefined,
         ),
       );

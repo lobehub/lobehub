@@ -17,8 +17,8 @@ import {
   isProcessingStatus,
   TaskMessages,
 } from '../../Tasks/shared';
-import { type TaskMetrics } from './TaskTitle';
 import TaskTitle from './TaskTitle';
+import { type TaskMetrics } from './TaskTitle';
 
 interface ClientTaskItemProps {
   item: UIChatMessage;
@@ -190,7 +190,11 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
               title={title}
               agent={
                 agent
-                  ? { avatar: agent.avatar || undefined, backgroundColor: agent.backgroundColor }
+                  ? {
+                      avatar: agent.avatar || undefined,
+                      backgroundColor: agent.backgroundColor,
+                      id: itemAgentId,
+                    }
                   : undefined
               }
             />

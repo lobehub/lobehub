@@ -12,8 +12,8 @@ import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
-import { type AgentItemData } from './AgentItem';
 import AgentItem from './AgentItem';
+import { type AgentItemData } from './AgentItem';
 
 type Row = { agent: AgentItemData; type: 'agent' } | { label: string; type: 'header' };
 

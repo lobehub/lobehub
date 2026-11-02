@@ -765,6 +765,7 @@
   "irag-1.0.description": "ERNIE iRAG là mô hình tạo nội dung tăng cường truy xuất hình ảnh, dùng cho tìm kiếm hình ảnh, truy xuất hình ảnh-văn bản và tạo nội dung.",
   "jamba-large.description": "Mô hình mạnh mẽ và tiên tiến nhất của chúng tôi, được thiết kế cho các tác vụ doanh nghiệp phức tạp với hiệu suất vượt trội.",
   "jamba-mini.description": "Mô hình hiệu quả nhất trong phân khúc, cân bằng giữa tốc độ và chất lượng với dung lượng nhỏ gọn.",
+  "jev-1.14.0.description": "TypeSafe Jev là một mô hình quyết định Hệ thống Một trả về các xác suất được hiệu chỉnh cho các câu hỏi có kiểu thay vì văn bản được tạo ra.",
   "jina-deepsearch-v1.description": "DeepSearch kết hợp tìm kiếm web, đọc hiểu và suy luận để phục vụ các cuộc điều tra chuyên sâu. Hãy hình dung nó như một tác nhân nhận nhiệm vụ nghiên cứu của bạn, thực hiện các lượt tìm kiếm rộng rãi qua nhiều vòng lặp, và chỉ sau đó mới đưa ra câu trả lời. Quá trình này bao gồm nghiên cứu liên tục, suy luận và giải quyết vấn đề từ nhiều góc độ — hoàn toàn khác biệt so với các LLM tiêu chuẩn vốn chỉ trả lời dựa trên dữ liệu huấn luyện hoặc hệ thống RAG truyền thống dựa vào tìm kiếm một lần.",
   "kimi-k2-instruct.description": "Kimi K2 Instruct là mô hình suy luận chính thức của Kimi với khả năng xử lý ngữ cảnh dài cho mã, hỏi đáp và nhiều hơn nữa.",
   "kimi-k2-thinking.description": "kimi-k2-thinking là mô hình tư duy của Moonshot AI với khả năng đại diện và lý luận tổng quát. Nó vượt trội trong việc lý luận sâu và có thể giải quyết các vấn đề khó thông qua sử dụng công cụ nhiều bước.",

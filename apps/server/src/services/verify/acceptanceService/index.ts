@@ -7,6 +7,7 @@ import type {
   VerifyCheckTally,
   VerifyRunDecisionDetail,
 } from '@lobechat/types';
+import { statusFromRound } from '@lobechat/utils/verify/acceptanceStatus';
 import debug from 'debug';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
@@ -25,6 +26,7 @@ import { ExpertiseRejectionWorkflow } from '@/server/workflows/expertiseRejectio
 
 import { requireDecidableAcceptance } from '../acceptanceDecision';
 import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from '../acceptanceMerge';
+import { acceptanceResponse } from '../acceptanceResponse';
 import {
   assertPlanLeavesAcceptedChecksAlone,
   type AttachedRun,
@@ -43,7 +45,6 @@ import {
 } from './listing';
 import { findRepairOrigin, resolveOrigin } from './origin';
 import { reviewChecks } from './reviewChecks';
-import { statusFromRound } from './statusRollup';
 import {
   type AcceptanceSubjectSummary,
   assertProjectExists,
@@ -67,13 +68,13 @@ export type {
 } from './checkUnion';
 export { buildAcceptanceCheckUnion, tallyCheckUnion } from './checkUnion';
 export type { AcceptanceListFilter, AcceptanceListOptions } from './listing';
+export type { AcceptanceSubjectSummary } from './subjects';
 export type {
   AcceptanceCheckReviewEvent,
   AcceptanceCheckReviewOverlay,
   AcceptanceCheckUserReview,
-} from './reviewOverlay';
-export { buildCheckReviewOverlay } from './reviewOverlay';
-export type { AcceptanceSubjectSummary } from './subjects';
+} from '@lobechat/utils/verify/acceptanceReviewOverlay';
+export { buildCheckReviewOverlay } from '@lobechat/utils/verify/acceptanceReviewOverlay';
 
 const log = debug('lobe-server:verify-acceptance');
 
@@ -150,6 +151,7 @@ export class AcceptanceService {
       projectId?: string;
       requirement?: string;
       title?: string;
+      visibility?: AcceptanceItem['visibility'];
     },
   ): Promise<AcceptanceItem> => {
     const canonicalId = await assertSubjectExists(this.deps, subjectType, subjectId);
@@ -163,6 +165,7 @@ export class AcceptanceService {
       config: defaults?.config,
       projectId,
       requirement: defaults?.requirement,
+      ...(defaults?.visibility ? { visibility: defaults.visibility } : {}),
       ...(subjectType === 'standalone' && defaults?.title
         ? { metadata: { title: defaults.title } }
         : {}),
@@ -713,7 +716,7 @@ export class AcceptanceService {
     ]);
 
     return rows.map((row) => ({
-      ...row,
+      ...acceptanceResponse(row),
       checkCount: checkCounts.get(row.id) ?? null,
       project: projects.get(row.id) ?? null,
       subject: subjects.get(row.id)!,

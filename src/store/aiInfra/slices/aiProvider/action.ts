@@ -118,9 +118,9 @@ const getModelProperty = async <T>(
   return getModelPropertyWithFallback<T | undefined>(model.id, propertyName, model.providerId);
 };
 
-const hasParameters = (parameters?: ModelParamsSchema): parameters is ModelParamsSchema =>
-  !!parameters && Object.keys(parameters).length > 0;
+const hasParameters = (parameters?: object) => !!parameters && Object.keys(parameters).length > 0;
 
+/** Only image and video models reach here, so `parameters` is a generation schema. */
 const resolveModelParameters = async (
   model: EnabledAiModel,
 ): Promise<ModelParamsSchema | undefined> => {
@@ -128,7 +128,7 @@ const resolveModelParameters = async (
   // populates it. An empty object is truthy, so a naive truthy check would skip
   // the fallback and leave required fields (e.g. `prompt`) missing, which later
   // fails schema validation. Treat an empty object as "no inline parameters".
-  if (hasParameters(model.parameters)) return model.parameters;
+  if (hasParameters(model.parameters)) return model.parameters as ModelParamsSchema;
 
   return getModelPropertyWithFallback<ModelParamsSchema | undefined>(
     model.id,

@@ -1,4 +1,5 @@
 import { getBusinessTrpcHeaders } from '@/business/client/trpc-headers';
+import { isDesktop } from '@/const/version';
 
 import {
   parseRealtimeAsrSessionResponse,
@@ -26,7 +27,7 @@ export const createRealtimeAsrSession = async (
   let response: Response;
   try {
     response = await fetcher('/webapi/asr/realtime/session', {
-      body: JSON.stringify({ platform: 'web' }),
+      body: JSON.stringify({ platform: isDesktop ? 'desktop' : 'web' }),
       headers,
       method: 'POST',
       signal,

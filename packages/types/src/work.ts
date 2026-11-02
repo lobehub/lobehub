@@ -96,6 +96,22 @@ export interface CanvasWorkVersionMetadata {
   totalSize: number;
 }
 
+/**
+ * Storage one Canvas holds in the caller's file usage: every distinct blob
+ * registered under the canvas across all its versions. The canvas is the unit
+ * a user can free — its files only render together, so they are never listed
+ * or deleted one by one.
+ */
+export interface CanvasStorageItem {
+  canvasId: string;
+  fileCount: number;
+  /** `null` when the files outlived their Work (the save never registered one). */
+  title: string | null;
+  totalSize: number;
+  updatedAt: Date;
+  workId: string | null;
+}
+
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
   canvas?: CanvasWorkVersionMetadata;
@@ -419,6 +435,8 @@ export interface RegisterCanvasWorkParams {
   cumulativeCost?: number | null;
   cumulativeUsage?: WorkVersionCumulativeUsage | null;
   description?: string | null;
+  /** Checked under the Work row lock; 0 means this must be the first version. */
+  expectedVersion?: number;
   messageId?: string | null;
   metadata: CanvasWorkVersionMetadata;
   rootOperationId?: string | null;

@@ -1,16 +1,29 @@
-import type { BotNoReplyReason, BotNoReplyResult, BotWakeKind } from '@lobechat/types';
-import { BOT_NO_REPLY_REASONS, BOT_NO_REPLY_TOKEN } from '@lobechat/types';
+import type { BotNoReplyResult, BotWakeKind } from '@lobechat/types';
+import { BOT_STAND_DOWN_TOKEN, parseBotNoReplyToken } from '@lobechat/types';
 
-const REASONS = new Set<string>(BOT_NO_REPLY_REASONS);
-
-/** `NO_REPLY`, `NO_REPLY:duplicate`, tolerating backticks / brackets and a trailing period. */
-const NO_REPLY_PATTERN = new RegExp(
-  String.raw`^[\s\`\[(]*${BOT_NO_REPLY_TOKEN}(?:\s*[:：]\s*([a-z_]+))?[\s\`\])]*[.。]?\s*$`,
+/** `STAND_DOWN` ending the text, alone or after the reply, tolerating backticks / brackets. */
+const STAND_DOWN_PATTERN = new RegExp(
+  String.raw`(?:^|[\s\`\[(])${BOT_STAND_DOWN_TOKEN}[\`\])]*[.。]?\s*$`,
   'i',
 );
 
+/**
+ * Splits the stand-down marker off a finished run's text: the agent ends its reply with
+ * `STAND_DOWN` to step back from the conversation (people told it it is interfering).
+ *
+ * Returns:
+ * - `standDown` whether the text ended with the marker
+ * - `content` the text to post, without the marker; unchanged when there was none
+ */
+export const extractStandDown = (content?: string): { content?: string; standDown: boolean } => {
+  const match = content ? STAND_DOWN_PATTERN.exec(content.trimEnd()) : null;
+  if (!content || !match) return { content, standDown: false };
+
+  return { content: content.slice(0, match.index).trimEnd(), standDown: true };
+};
+
 export interface DetectNoReplyInput {
-  /** The run's final assistant text. */
+  /** The run's final assistant text, as the agent wrote it (a stand-down marker included). */
   content?: string;
   hasAttachments?: boolean;
   /** Only a `followup` wake may end in silence; a `mention` always owes the user an answer. */
@@ -25,6 +38,8 @@ export interface DetectNoReplyInput {
  * - A `followup` wake that produced nothing at all (no text, no attachments) → `empty_completion`.
  * - A `mention` wake is never silent: an empty completion there stays the fault it always was, and
  *   the token is just text.
+ * - Standing down (`STAND_DOWN` with nothing before it, or `NO_REPLY:stand_down`) is silence with
+ *   reason `stand_down`. The bare marker is silent on a `mention` wake too: there is nothing to post.
  *
  * Returns `undefined` when the run has something to deliver.
  */
@@ -33,21 +48,16 @@ export const detectNoReply = ({
   hasAttachments,
   wakeKind,
 }: DetectNoReplyInput): BotNoReplyResult | undefined => {
-  if (wakeKind !== 'followup') return undefined;
+  const ending = extractStandDown(content);
+  const text = ending.content?.trim() ?? '';
 
-  const text = content?.trim() ?? '';
+  if (ending.standDown && !text && !hasAttachments) return { reason: 'stand_down' };
+  if (wakeKind !== 'followup') return undefined;
 
   if (!text) return hasAttachments ? undefined : { reason: 'empty_completion' };
 
-  const match = NO_REPLY_PATTERN.exec(text);
-  if (!match) return undefined;
+  const reason = parseBotNoReplyToken(text);
+  if (!reason) return undefined;
 
-  const raw = match[1]?.toLowerCase();
-  // `empty_completion` is detected by us, never claimed by the agent.
-  const reason: BotNoReplyReason =
-    raw && REASONS.has(raw) && raw !== 'empty_completion'
-      ? (raw as BotNoReplyReason)
-      : 'unspecified';
-
-  return { reason };
+  return { reason: ending.standDown ? 'stand_down' : reason };
 };

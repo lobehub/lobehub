@@ -53,10 +53,16 @@ export async function writeOrdinaryDocument(
       });
     } else {
       const snapshot = await createAgentMarkdownSnapshot(content);
-      await deps.agentDocumentModel.update(existing.id, {
-        content: snapshot.content,
+      const inRoom = await deps.writeThroughRoom(existing.documentId, {
         editorData: snapshot.editorData,
+        markdown: snapshot.content,
       });
+      if (!inRoom) {
+        await deps.agentDocumentModel.update(existing.id, {
+          content: snapshot.content,
+          editorData: snapshot.editorData,
+        });
+      }
     }
 
     const updated = await resolveOrdinaryPath(deps, writablePath, ctx.agentId);

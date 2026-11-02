@@ -1,4 +1,3 @@
-import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { ProviderConfig } from '@lobechat/types';
 import { pickTrimmedString, toRecord } from '@lobechat/utils/object';
 
@@ -11,7 +10,12 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveGoalModelConfig } from '@/server/services/goal/modelConfig';
 
 import type { VerifyModelConfig } from './modelConfig';
-import { isHeterogeneousVerifyProvider, REVIEW_PREDICT_MODEL_CONFIG } from './modelConfig';
+import {
+  isHeterogeneousVerifyProvider,
+  resolveVerifyServiceModel,
+  REVIEW_PREDICT_MODEL_CONFIG,
+  VERIFY_FALLBACK_MODEL_CONFIG,
+} from './modelConfig';
 
 /** Resolve within the task owner's scope; never select an arbitrary enabled model. */
 export const resolveGoalReviewModelConfig = async (
@@ -60,10 +64,12 @@ export const resolveGoalReviewModelConfig = async (
     const configured = await usable(await agents.getAgentModelConfig(params.verifierAgentId));
     if (configured) return configured;
   }
+  const serviceModel = await usable(await resolveVerifyServiceModel(db, userId));
+  if (serviceModel) return serviceModel;
   const pinned = await usable(REVIEW_PREDICT_MODEL_CONFIG);
   if (pinned) return pinned;
-  const builtin = await usable(await agents.getAgentModelConfig(BUILTIN_AGENT_SLUGS.verifyAgent));
-  if (builtin) return builtin;
+  const fallback = await usable(VERIFY_FALLBACK_MODEL_CONFIG);
+  if (fallback) return fallback;
 
   // Program checks may never have needed a verifier model. Fall back to the
   // task's configured model, then the user's Goal system-agent configuration.
