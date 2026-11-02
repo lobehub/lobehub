@@ -9,7 +9,7 @@ import {
   Tooltip,
 } from '@lobehub/ui';
 import { isEqual } from 'es-toolkit';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
@@ -22,9 +22,9 @@ import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 
 import { useFileItemClick, useFileItemDoubleClick } from '../../hooks/useFileItemClick';
-import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import { getListViewMinWidth } from './constants';
 import FileListItemActions from './FileListItemActions';
+import FileListItemMenu, { type FileListItemMenuGetter } from './FileListItemMenu';
 import FileListItemName from './FileListItemName';
 import { useFileListItemDrag } from './useFileListItemDrag';
 import { useFileListItemMeta } from './useFileListItemMeta';
@@ -101,6 +101,11 @@ const styles = createStaticStyles(({ css }) => {
 
       color: ${cssVar.colorText};
       white-space: nowrap;
+    `,
+    menuPlaceholder: css`
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
     `,
     nameContainer: css`
       overflow: hidden;
@@ -255,19 +260,36 @@ const FileListItem = ({
     isPage,
     libraryId: resourceManagerState.libraryId,
   });
-  const { menuItems } = useFileItemDropdown({
-    fileId,
-    fileType,
-    filename: name,
-    id,
-    libraryId: resourceManagerState.libraryId,
-    onRenameStart: isFolder ? handleRenameStart : undefined,
-    size,
-    sourceType,
-    url,
-    userId,
-    visibility,
-  });
+
+  // The row menu (its hooks plus a Base UI menu tree) mounts on first hover or
+  // focus instead of for every row Virtuoso renders; scrolling a long list used
+  // to mount and tear down dozens of closed menus per frame.
+  const [menuActivated, setMenuActivated] = useState(false);
+  const activateMenu = useCallback(() => setMenuActivated(true), []);
+  const menuItemsRef = useRef<FileListItemMenuGetter | null>(null);
+  const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);
+
+  const rowMenu = menuActivated ? (
+    <FileListItemMenu
+      className={styles.hover}
+      fileId={fileId}
+      fileType={fileType}
+      filename={name}
+      id={id}
+      isFolder={isFolder}
+      isPage={isPage}
+      libraryId={resourceManagerState.libraryId}
+      menuItemsRef={menuItemsRef}
+      size={size}
+      sourceType={sourceType}
+      url={url}
+      userId={userId}
+      visibility={visibility}
+      onRenameStart={isFolder ? handleRenameStart : undefined}
+    />
+  ) : (
+    <div aria-hidden className={styles.menuPlaceholder} />
+  );
 
   const handleCheckboxClick = useCallback(
     (e: React.MouseEvent) => {
@@ -286,7 +308,7 @@ const FileListItem = ({
   }, []);
 
   return (
-    <ContextMenuTrigger items={menuItems}>
+    <ContextMenuTrigger items={menuActivated ? getContextMenuItems : undefined}>
       <Flexbox
         horizontal
         align={'center'}
@@ -316,6 +338,8 @@ const FileListItem = ({
         onDragOver={handleDragOver}
         onDragStart={handleDragStart}
         onDrop={handleDrop}
+        onFocus={menuActivated ? undefined : activateMenu}
+        onPointerEnter={menuActivated ? undefined : activateMenu}
       >
         <Center
           height={40}
@@ -369,7 +393,7 @@ const FileListItem = ({
             isFolder={isFolder}
             isPage={isPage}
             isSupportedForChunking={isSupportedForChunking}
-            menuItems={menuItems}
+            menu={rowMenu}
             parseFiles={fileStoreState.parseFiles}
             t={t}
           />

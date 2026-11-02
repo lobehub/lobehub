@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import FileListItem from './index';
@@ -52,12 +52,12 @@ vi.mock('../../hooks/useFileItemClick', () => ({
   useFileItemDoubleClick: () => vi.fn(),
 }));
 
-vi.mock('../../ItemDropdown/useFileItemDropdown', () => ({
-  useFileItemDropdown: () => ({ menuItems: [] }),
+vi.mock('./FileListItemMenu', () => ({
+  default: () => <span data-testid="row-menu" />,
 }));
 
 vi.mock('./FileListItemActions', () => ({
-  default: () => null,
+  default: ({ menu }: { menu: React.ReactNode }) => <>{menu}</>,
 }));
 
 vi.mock('./FileListItemName', () => ({
@@ -138,6 +138,26 @@ describe('FileListItem', () => {
     render(<FileListItem {...baseProps} />);
 
     expect(screen.getByTestId('avatar')).toHaveAttribute('data-fallback-variant', 'pixel');
+  });
+
+  // Regression: every row Virtuoso rendered mounted its own closed Base UI menu
+  // (plus the menu hooks), which made scrolling a long drive list stall.
+  it('mounts the row menu only once the row is hovered', () => {
+    render(<FileListItem {...baseProps} />);
+
+    expect(screen.queryByTestId('row-menu')).not.toBeInTheDocument();
+
+    fireEvent.pointerEnter(screen.getByText('Report.txt').closest('[data-row-index]')!);
+
+    expect(screen.getByTestId('row-menu')).toBeInTheDocument();
+  });
+
+  it('mounts the row menu when the row receives keyboard focus', () => {
+    render(<FileListItem {...baseProps} />);
+
+    fireEvent.focus(screen.getByRole('checkbox'));
+
+    expect(screen.getByTestId('row-menu')).toBeInTheDocument();
   });
 
   it('disables selection for rows the workspace member did not upload', () => {
