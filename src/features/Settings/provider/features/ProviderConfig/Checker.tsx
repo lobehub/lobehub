@@ -119,16 +119,25 @@ const Checker = memo<ConnectionCheckerProps>(
       return sorted.map((m) => m.id);
     }, [aiProviderModelList, model]);
 
+    // A provider's default probe may not be present in a key-scoped catalog,
+    // such as JZSTOKEN's dedicated jzs-max-3.0 keys. Once models are available,
+    // keep the preferred model when usable and otherwise probe the first model
+    // visible to that key instead of reporting a false connection failure.
+    const defaultCheckModel = useMemo(
+      () => (sortedModels.length === 0 || sortedModels.includes(model) ? model : sortedModels[0]),
+      [model, sortedModels],
+    );
+
     const [loading, setLoading] = useState(false);
     const [pass, setPass] = useState(false);
-    const [checkModel, setCheckModel] = useState(model);
+    const [checkModel, setCheckModel] = useState(defaultCheckModel);
 
     const [error, setError] = useState<ChatMessageError | undefined>();
 
-    // Sync checkModel state when model prop changes
+    // Sync checkModel state when the preferred model or key-scoped catalog changes.
     useEffect(() => {
-      setCheckModel(model);
-    }, [model]);
+      setCheckModel(defaultCheckModel);
+    }, [defaultCheckModel]);
 
     const checkConnection = async () => {
       // Clear previous check results immediately

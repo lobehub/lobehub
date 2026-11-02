@@ -40,6 +40,39 @@ describe('LobeJZSTOKENAI', () => {
     );
   });
 
+  it('keeps structured generation on the Chat Completions path', async () => {
+    const instance = new LobeJZSTOKENAI({ apiKey: 'test' });
+    const create = vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue({
+      choices: [{ message: { content: '{"ok":true}', role: 'assistant' } }],
+      usage: undefined,
+    } as any);
+    const createResponse = vi.spyOn(instance['client'].responses, 'create');
+
+    const result = await instance.generateObject({
+      messages: [{ content: 'Return a JSON object', role: 'user' }],
+      model: 'gpt-5.6-terra',
+      schema: {
+        name: 'result',
+        schema: {
+          additionalProperties: false,
+          properties: { ok: { type: 'boolean' } },
+          required: ['ok'],
+          type: 'object',
+        },
+      },
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(create).toHaveBeenCalledOnce();
+    expect(create.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        model: 'gpt-5.6-terra',
+        response_format: expect.objectContaining({ type: 'json_schema' }),
+      }),
+    );
+    expect(createResponse).not.toHaveBeenCalled();
+  });
+
   it('fetches the key-scoped model list', async () => {
     const client = {
       models: {

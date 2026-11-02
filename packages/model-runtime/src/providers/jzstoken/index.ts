@@ -21,6 +21,9 @@ export const params = {
   debug: {
     chatCompletion: () => process.env.DEBUG_JZSTOKEN_CHAT_COMPLETION === '1',
   },
+  generateObject: {
+    forceChatCompletions: true,
+  },
   models: async ({ client }) => {
     const page = (await client.models.list()) as { data?: JZSTOKENModelCard[] };
     return processMultiProviderModelList(page.data ?? [], 'jzstoken');
