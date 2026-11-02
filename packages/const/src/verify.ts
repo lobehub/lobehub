@@ -175,7 +175,7 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
   /\b(?:npm|pnpm|yarn|bun|bunx)\s+run\s+check\b/i,
   // static analysis / build / CI gates
   /\btype[\s-]?check(?:s|ing)?\b/i,
-  /\b(?:tsc|tsgo|eslint|stylelint|prettier|biome|ruff|mypy|clippy)\b/i,
+  /\b(?:tsc|tsrs|eslint|stylelint|prettier|biome|ruff|mypy|clippy)\b/i,
   /\blint(?:s|ing)?\b/i,
   /\bcompiles?\s+(?:cleanly|without errors)\b/i,
   /\bbuild\s+(?:pass(?:es|ed)?|succeed(?:s|ed)?|(?:is\s+)?(?:green|clean))\b/i,

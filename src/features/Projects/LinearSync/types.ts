@@ -1,5 +1,5 @@
 import type { LinearConnectionView, LinearIssueStateType } from '@lobechat/types';
-import { LINEAR_OPEN_ISSUE_STATE_TYPES } from '@lobechat/types';
+import { LINEAR_DEFAULT_IMPORT_STATE_TYPES } from '@lobechat/types';
 
 /** What the import picker is filtered to. */
 export interface LinearImportFilter {
@@ -13,7 +13,7 @@ export interface LinearImportFilter {
 export const initialImportFilter = (): LinearImportFilter => ({
   linearProjectId: null,
   linearProjectName: null,
-  stateTypes: [...LINEAR_OPEN_ISSUE_STATE_TYPES],
+  stateTypes: [...LINEAR_DEFAULT_IMPORT_STATE_TYPES],
   teamId: null,
   teamName: null,
 });

@@ -1,8 +1,17 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, type DropdownItem, DropdownMenu, Text, toast } from '@lobehub/ui';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { Ellipsis, Pencil, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

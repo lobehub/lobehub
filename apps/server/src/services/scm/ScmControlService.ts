@@ -12,6 +12,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { archiveSignedOffGoalTasks } from '@/server/services/goal/signOffArchive';
 import { AcceptanceService } from '@/server/services/verify/acceptanceService';
 
 import type { GitHubReviewFeedback } from './github/app';
@@ -425,6 +426,8 @@ export class ScmControlService {
       url: row.url,
     });
     if (!accepted) return { detail: 'acceptance no longer exists', outcome: 'skipped' };
+    // A merge signs a Goal-level acceptance off like the owner's own accept does.
+    await archiveSignedOffGoalTasks(this.db, accepted);
     return { acceptanceId: accepted.id, outcome: 'accepted' };
   };
 

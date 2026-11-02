@@ -13,8 +13,7 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "vitest --run",
-    "test:coverage": "vitest --coverage --silent='passed-only'",
-    "type-check": "tsgo --noEmit -p tsconfig.json"
+    "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
     "@lobechat/context-engine": "workspace:*",

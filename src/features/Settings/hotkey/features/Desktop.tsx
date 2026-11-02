@@ -3,7 +3,7 @@
 import { HotkeyInput, Spin, toast } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SettingsSectionSkeleton } from '@/components/Skeleton';
@@ -14,9 +14,23 @@ import { useElectronStore } from '@/store/electron';
 import { desktopHotkeysSelectors } from '@/store/electron/selectors';
 import { type DesktopHotkeyConfig, type DesktopHotkeyItem } from '@/types/hotkey';
 
+import { acceleratorToHotkey } from './appMenuHotkeys';
+
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
-  const hotkeys = useElectronStore(desktopHotkeysSelectors.hotkeys, isEqual);
+  const storedHotkeys = useElectronStore(desktopHotkeysSelectors.hotkeys, isEqual);
+  // Main process stores Electron accelerators (`CommandOrControl+,`); HotkeyInput reads `mod+comma`.
+  // Normalize the form values themselves: Form binds fields by name and overrides a field's `value`.
+  const hotkeys = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(storedHotkeys).map(([id, accelerator]) => [
+          id,
+          acceleratorToHotkey(accelerator),
+        ]),
+      ) as DesktopHotkeyConfig,
+    [storedHotkeys],
+  );
   const form = useForm({ initialValues: hotkeys, values: hotkeys });
 
   const [isHotkeysInit, updateDesktopHotkey, useFetchDesktopHotkeys] = useElectronStore((s) => [

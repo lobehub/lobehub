@@ -8,8 +8,8 @@ import * as stylex from '@stylexjs/stylex';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 
-import { type ImageProps } from '@/libs/next/Image';
 import Image from '@/libs/next/Image';
+import { type ImageProps } from '@/libs/next/Image';
 
 const styles = stylex.create({ extraTitle: { fontWeight: 300, whiteSpace: 'nowrap' } });
 

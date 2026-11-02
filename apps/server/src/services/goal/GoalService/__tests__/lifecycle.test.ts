@@ -3,10 +3,12 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
+import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
+import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { agents, goalEvents, goals, tasks, topics, users, workspaces } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -574,5 +576,143 @@ describe('GoalService', () => {
 
     await expect(service.delete(graph.goal.id)).rejects.toThrow(/not deleted/);
     expect(await service.graph(graph.goal.id)).toBeDefined();
+  });
+});
+
+describe('GoalService.archiveSignedOffTasks', () => {
+  /** The owner accepts the Goal-level acceptance for `taskId`. */
+  const signOff = async (taskId: string) => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.ensureForSubject('task', taskId);
+    await model.updateStatus(acceptance.id, 'accepted');
+  };
+
+  /**
+   * Tick a goal with one work Task up to its last step: the work is done and
+   * the Goal-level acceptance Task has passed, so the next tick achieves it.
+   */
+  const readyToAchieve = async () => {
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'A one-page onboarding checklist',
+      title: 'Signed off',
+      tasks: ['Draft the checklist'],
+    });
+    const work = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(work.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+    const acceptance = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(acceptance.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    return {
+      acceptanceTaskId: acceptance.taskId!,
+      goalId: graph.goal.id,
+      service,
+      taskModel,
+      workTaskId: work.taskId!,
+    };
+  };
+
+  /** An achieved goal with one work Task and its Goal-level acceptance Task. */
+  const achieveGoal = async () => {
+    const ready = await readyToAchieve();
+    expect((await ready.service.tick(ready.goalId)).outcome).toBe('achieved');
+    return ready;
+  };
+
+  it('archives the finished Tasks of a goal once its Goal-level acceptance is signed off', async () => {
+    const { acceptanceTaskId, service, taskModel, workTaskId } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+
+    const archived = await service.archiveSignedOffTasks(acceptanceTaskId);
+
+    expect(archived.sort()).toEqual([acceptanceTaskId, workTaskId].sort());
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeInstanceOf(Date);
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeInstanceOf(Date);
+    // Status is untouched, so a restored Task reads exactly as it did.
+    expect((await taskModel.findById(workTaskId))?.status).toBe('completed');
+    // A repeated sign-off has nothing left to archive.
+    expect(await service.archiveSignedOffTasks(acceptanceTaskId)).toEqual([]);
+  });
+
+  it('archives on the achieved transition when the owner signed off before it', async () => {
+    const { acceptanceTaskId, goalId, service, taskModel, workTaskId } = await readyToAchieve();
+    // The sign-off lands while the goal is still running: nothing to archive yet.
+    await signOff(acceptanceTaskId);
+    expect(await service.archiveSignedOffTasks(acceptanceTaskId)).toEqual([]);
+
+    expect((await service.tick(goalId)).outcome).toBe('achieved');
+
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeInstanceOf(Date);
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeInstanceOf(Date);
+  });
+
+  it('archives nothing on the achieved transition until the owner signs off', async () => {
+    const { acceptanceTaskId, service, taskModel, workTaskId } = await achieveGoal();
+
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
+    expect(await service.archiveSignedOffTasks(acceptanceTaskId)).toEqual([]);
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
+  });
+
+  it('leaves unfinished Tasks of a signed-off goal alone', async () => {
+    const { acceptanceTaskId, service, taskModel, workTaskId } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    await taskModel.updateStatus(workTaskId, 'paused');
+
+    expect(await service.archiveSignedOffTasks(acceptanceTaskId)).toEqual([acceptanceTaskId]);
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
+  });
+
+  it('archives nothing for an acceptance that is not the Goal-level one', async () => {
+    const { acceptanceTaskId, service, taskModel, workTaskId } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    await signOff(workTaskId);
+
+    expect(await service.archiveSignedOffTasks(workTaskId)).toEqual([]);
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
+    expect(await service.archiveSignedOffTasks('task_not_in_any_goal')).toEqual([]);
+  });
+
+  it('restores the reworked Task when a signed-off goal is sent back for changes', async () => {
+    const { acceptanceTaskId, service, taskModel, workTaskId } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    await service.archiveSignedOffTasks(acceptanceTaskId);
+
+    expect(await service.reopenForChanges(acceptanceTaskId, 'Add a day-one agenda')).toBeDefined();
+
+    // The runner refuses an archived Task, so the rework must be live again.
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeNull();
+    expect((await taskModel.findById(acceptanceTaskId))?.status).toBe('backlog');
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeInstanceOf(Date);
+  });
+
+  it('never re-archives the reworked Task from a sign-off that read it before the reopen', async () => {
+    const { acceptanceTaskId, service, taskModel } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    // The sign-off read the Task as finished, then the reopen moved it back to backlog.
+    const stale = await taskModel.findById(acceptanceTaskId);
+    expect(stale?.status).toBe('completed');
+    await service.reopenForChanges(acceptanceTaskId, 'Add a day-one agenda');
+
+    expect(
+      await new TaskArchiveModel(serverDB, userId).archive(acceptanceTaskId, {
+        onlyStatuses: ['canceled', 'completed'],
+      }),
+    ).toBeNull();
+    expect((await taskModel.findById(acceptanceTaskId))?.archivedAt).toBeNull();
+  });
+
+  it('archives nothing while the goal is not achieved', async () => {
+    const { acceptanceTaskId, service, taskModel, workTaskId } = await achieveGoal();
+    await signOff(acceptanceTaskId);
+    const goal = await new GoalModel(serverDB, userId).findByGraphTask(acceptanceTaskId);
+    await new GoalModel(serverDB, userId).update(goal!.id, { status: 'running' });
+
+    expect(await service.archiveSignedOffTasks(acceptanceTaskId)).toEqual([]);
+    expect((await taskModel.findById(workTaskId))?.archivedAt).toBeNull();
   });
 });

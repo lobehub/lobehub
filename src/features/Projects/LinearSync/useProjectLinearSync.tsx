@@ -81,7 +81,13 @@ export const useProjectLinearSync = (
           projectId={projectId}
           onJobStarted={refresh}
         />
-        <SyncJobs jobs={syncJobs.data ?? []} rules={syncRules.data ?? []} />
+        <SyncJobs
+          canStop={!isViewer}
+          jobs={syncJobs.data ?? []}
+          projectId={projectId}
+          rules={syncRules.data ?? []}
+          onChanged={refresh}
+        />
       </Flexbox>
     ),
   };
