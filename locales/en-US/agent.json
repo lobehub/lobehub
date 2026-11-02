@@ -28,6 +28,7 @@
   "channel.access.identity.approverMissing": "To approve strangers, add your own ID first, or nobody can run /approve.",
   "channel.access.identity.desc": "Lets the bot reach you with reminders and notices, and makes you the one who approves strangers. The settings below never block you.",
   "channel.access.identity.required": "Required to approve strangers",
+  "channel.access.identity.requiredToSave": "Approving strangers needs Your Platform User ID. Fill it in first.",
   "channel.access.list.approved": "Approved people",
   "channel.access.list.clearContent": "Switching to Everyone also removes the {{count}} people on the list, since a filled list limits everyone.",
   "channel.access.list.clearOk": "Switch and clear",
