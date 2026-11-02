@@ -8,6 +8,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { isDesktop } from '@/const/version';
+import { useFavoriteMenuItem } from '@/features/Favorites';
 import { docsPagePath } from '@/features/ResourceHome/paths';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -70,6 +71,21 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
     transferLabel: t('pageEditor.menu.move', { ns: 'file' }),
   });
   const currentUserId = useUserStore(userProfileSelectors.userId);
+  // Same target as the open page's ⋯ menu (PageEditor/Header/useMenu), so both
+  // entries read and write one favorite. No hotkey: it toggles the open page,
+  // not a row in this list.
+  const favoriteMenuItem = useFavoriteMenuItem(
+    document
+      ? {
+          icon: document.metadata?.emoji ?? null,
+          path: `/page/${pageId}`,
+          targetId: pageId,
+          title: document.title || t('pageEditor.titlePlaceholder', { ns: 'file' }),
+          type: 'page',
+        }
+      : undefined,
+    { showHotkey: false },
+  );
 
   const isPrivate = document?.visibility === 'private';
   const isPublic = document?.visibility === 'public';
@@ -172,6 +188,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
               { type: 'divider' as const },
             ]
           : []),
+        ...(favoriteMenuItem ? wrapMenuItems([favoriteMenuItem]) : []),
         {
           disabled: !canEditPage,
           icon: <Icon icon={Pencil} />,
@@ -240,6 +257,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
       addTab,
       navigate,
       transferMenuItems,
+      favoriteMenuItem,
     ],
   );
 };
