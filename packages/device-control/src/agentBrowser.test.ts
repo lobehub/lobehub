@@ -150,6 +150,26 @@ describe('runAgentBrowserCall', () => {
     return { exec, readFile: vi.fn(), screenshotPath: '/tmp/shot.png' };
   };
 
+  it('keeps concurrent runs of different topics on one device on their own pages', async () => {
+    const device = createDevice();
+    const browse = async (topicId: string, url: string) => {
+      const identity = { __agentId: 'agt', __topicId: topicId };
+      await runAgentBrowserCall('navigate', { ...identity, url }, device);
+      return runAgentBrowserCall('readPage', identity, device);
+    };
+
+    const [york, sfu] = await Promise.all([
+      browse('tpc_a', 'https://yorku.ca/'),
+      browse('tpc_b', 'https://sfu.ca/'),
+    ]);
+
+    expect(york.state).toMatchObject({
+      content: 'text of https://yorku.ca/',
+      url: 'https://yorku.ca/',
+    });
+    expect(sfu.state).toMatchObject({ content: 'text of https://sfu.ca/', url: 'https://sfu.ca/' });
+  });
+
   it('keeps concurrent sub-agents of one topic on their own pages', async () => {
     const device = createDevice();
     const browse = async (threadId: string, url: string) => {
