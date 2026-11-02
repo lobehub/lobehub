@@ -16,6 +16,7 @@ import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
 import { pageActions, pageSelectors, usePageStore } from '@/store/page';
+import { isTempPageId } from '@/store/page/projection';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -73,9 +74,10 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
   const currentUserId = useUserStore(userProfileSelectors.userId);
   // Same target as the open page's ⋯ menu (PageEditor/Header/useMenu), so both
   // entries read and write one favorite. No hotkey: it toggles the open page,
-  // not a row in this list.
+  // not a row in this list. A row still being created carries a client-minted
+  // id that the server row replaces, so it cannot be favorited until then.
   const favoriteMenuItem = useFavoriteMenuItem(
-    document
+    document && !isTempPageId(pageId)
       ? {
           icon: document.metadata?.emoji ?? null,
           path: `/page/${pageId}`,

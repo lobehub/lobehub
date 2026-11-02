@@ -320,4 +320,17 @@ describe('Page list item dropdown menu', () => {
 
     expect(getMenuItem(result.current(), 'toggleFavorite')).toBeUndefined();
   });
+
+  it('has no favorite entry for a page that is still being created', () => {
+    // An optimistic row's client-minted id is swapped for the server id once
+    // creation lands; a favorite saved against it would point at no page.
+    storeMock.document = { id: 'temp-page-1', title: 'Draft' };
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'temp-page-1', toggleEditing: vi.fn() }),
+    );
+
+    expect(useFavoriteMenuItemMock).toHaveBeenLastCalledWith(undefined, { showHotkey: false });
+    expect(getMenuItem(result.current(), 'toggleFavorite')).toBeUndefined();
+  });
 });
