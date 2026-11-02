@@ -332,6 +332,35 @@ const ExecAgentSchema = z
      */
     selectedToolIds: z.array(z.string()).optional(),
     /**
+     * Explicit slash-selected skills. On-demand turns load these bodies
+     * automatically into the post-user-message suffix.
+     */
+    selectedSkills: z
+      .array(
+        z.object({
+          content: z.string().optional(),
+          identifier: z.string(),
+          name: z.string(),
+          resources: z
+            .record(
+              z.string(),
+              z.object({
+                documentId: z.string().optional(),
+                fileHash: z.string(),
+                size: z.number(),
+              }),
+            )
+            .optional(),
+          source: z.enum(['builtin', 'device', 'market', 'project', 'user']).optional(),
+        }),
+      )
+      .optional(),
+    /**
+     * Stable skill identifiers selected by CLI/API callers. The server resolves
+     * these through the caller's scoped skills before starting the run.
+     */
+    selectedSkillIds: z.array(z.string()).optional(),
+    /**
      * Agents the user @-mentioned in this message (multi-mention). When present
      * (and non-group), the run enables the callAgent tool and injects the
      * mentioned-agents delegation context so the supervisor delegates to them
@@ -962,6 +991,8 @@ export const aiAgentRouter = router({
       resumeApprovals,
       resumeToolResult,
       selectedToolIds,
+      selectedSkills,
+      selectedSkillIds,
       trigger,
       userInterventionConfig,
     } = input;
@@ -1016,6 +1047,8 @@ export const aiAgentRouter = router({
         resumeApprovals,
         resumeToolResult,
         selectedToolIds,
+        selectedSkills,
+        selectedSkillIds,
         slug,
         trigger: trigger ?? RequestTrigger.Chat,
         userAgent: ctx.userAgent ?? undefined,

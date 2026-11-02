@@ -10,6 +10,7 @@ import {
   SkillResolver,
   ToolResolver,
 } from '@lobechat/context-engine';
+import type { AgentContextMode } from '@lobechat/types';
 
 import type { RuntimeExecutorContext } from '../context';
 import { log } from '../executorHelpers';
@@ -25,6 +26,7 @@ export const resolveServerCallLlmTooling = (
   ctx: Pick<RuntimeExecutorContext, 'operationId' | 'stepIndex'>,
   state: AgentState,
   allowedToolNames?: string[],
+  contextMode?: AgentContextMode,
 ): ServerCallLlmTooling => {
   // Resolve tools via ToolResolver (unified tool injection).
   //
@@ -33,7 +35,10 @@ export const resolveServerCallLlmTooling = (
   // enabled tools), so any id that reaches it WILL inject local-system.
   // `resolveRunActiveDeviceId` swallows the id whenever the plan/policy
   // forbids devices — the same filter the tool executors apply.
-  const activeDeviceId = resolveRunActiveDeviceId(state.metadata);
+  // On-demand tools are only callable after activation. Do not let the routed
+  // device implicitly inject local-system into the first bootstrap payload.
+  const activeDeviceId =
+    contextMode === 'on-demand' ? undefined : resolveRunActiveDeviceId(state.metadata);
   const operationToolSet: OperationToolSet = state.operationToolSet ?? {
     enabledToolIds: [],
     executorMap: state.toolExecutorMap ?? {},

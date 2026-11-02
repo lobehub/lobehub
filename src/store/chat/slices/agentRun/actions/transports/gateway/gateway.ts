@@ -11,6 +11,7 @@ import type {
   ExecAgentResult,
   MessageMetadata,
   RuntimeMentionedAgent,
+  RuntimeSelectedSkill,
 } from '@lobechat/types';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 
@@ -516,6 +517,12 @@ export class GatewayActionImpl {
      */
     selectedToolIds?: string[];
     /**
+     * Explicit slash-selected skills. On-demand runs auto-load their bodies as
+     * provenance-bearing suffix messages instead of relying on a second model
+     * activation call.
+     */
+    selectedSkills?: RuntimeSelectedSkill[];
+    /**
      * Agents the user @-mentioned in this message (multi-mention). Forwarded to
      * the server so the supervisor run enables the callAgent tool and injects the
      * mentioned-agents delegation context — mirrors the client runtime's
@@ -549,6 +556,7 @@ export class GatewayActionImpl {
       resumeApprovals,
       resumeToolResult,
       selectedToolIds,
+      selectedSkills,
       mentionedAgents,
       tempMessageIds,
     } = params;
@@ -688,6 +696,7 @@ export class GatewayActionImpl {
         resumeApprovals,
         resumeToolResult,
         selectedToolIds,
+        selectedSkills,
         trigger: metadata?.trigger,
         userInterventionConfig,
       },

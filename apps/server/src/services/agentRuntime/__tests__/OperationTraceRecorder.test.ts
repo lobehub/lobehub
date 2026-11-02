@@ -432,14 +432,16 @@ describe('OperationTraceRecorder', () => {
       recorder = new OperationTraceRecorder(store as any);
     });
 
-    const buildCe = (overrides: { input?: unknown; output?: unknown } = {}) => ({
+    const buildCe = (
+      overrides: { input?: unknown; metadata?: unknown; output?: unknown } = {},
+    ) => ({
       input: { messages: ['hello'] },
       output: { tokens: 42 },
       ...overrides,
     });
 
     const appendStepWithCe = (
-      ce: { input?: unknown; output?: unknown },
+      ce: { input?: unknown; metadata?: unknown; output?: unknown },
       prevStepsInStore: any[],
     ) => {
       store.loadPartial.mockResolvedValue({ startedAt: 1, steps: prevStepsInStore });
@@ -447,7 +449,7 @@ describe('OperationTraceRecorder', () => {
         afterStepSignalEvents: [],
         agentState: { messages: [] },
         beforeStepSignalEvents: [],
-        contextEngine: ce,
+        contextEngine: ce as any,
         currentContext: { phase: 'user_input' },
         externalRetryCount: 0,
         presentation: buildPresentation(),
@@ -480,6 +482,27 @@ describe('OperationTraceRecorder', () => {
       const step = getSavedStep(0);
       expect(step.contextEngine.input).toEqual({ messages: ['hello'] });
       expect(step.contextEngine.output).toEqual({ tokens: 42 });
+    });
+
+    it('keeps explicit trace metadata even when CE input and output are deduplicated', async () => {
+      const prevStep = {
+        contextEngine: { input: { messages: ['hello'] }, output: { tokens: 42 } },
+        stepIndex: 0,
+        stepType: 'call_llm',
+      };
+      const metadata = {
+        activatedToolBundles: [],
+        protocolVersion: '1',
+        rawSystemRole: '  exact prompt  ',
+        stablePrefixHash: 'md5:stable',
+      };
+
+      await appendStepWithCe(buildCe({ metadata }), [prevStep]);
+
+      const step = getSavedStep(1);
+      expect(step.contextEngine.input).toBeUndefined();
+      expect(step.contextEngine.output).toBeUndefined();
+      expect(step.contextEngine.metadata).toEqual(metadata);
     });
 
     it('strips both input and output when both are identical to the previous step', async () => {

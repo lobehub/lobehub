@@ -15,7 +15,8 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
-    "@lobechat/prompts": "workspace:*"
+    "@lobechat/prompts": "workspace:*",
+    "js-sha256": "^0.11.1"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

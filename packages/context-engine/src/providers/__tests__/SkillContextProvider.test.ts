@@ -216,4 +216,40 @@ describe('SkillContextProvider', () => {
     expect(systemMessage!.content).not.toContain('<content>');
     expect(systemMessage!.content).toMatchSnapshot();
   });
+
+  it('keeps on-demand system content empty and exposes only relevant skill cards', async () => {
+    const skills: SkillMeta[] = [
+      {
+        content: 'Full deployment instructions that must stay out of system.',
+        description: 'Deploy releases to production',
+        identifier: 'deploy',
+        name: 'Deploy',
+      },
+      {
+        content: 'Full chart instructions that must stay out of system.',
+        description: 'Create charts from datasets',
+        identifier: 'charts',
+        name: 'Charts',
+      },
+    ];
+    const provider = new SkillContextProvider({ contextMode: 'on-demand', enabledSkills: skills });
+    const messages = [{ content: 'Please deploy the release', id: 'u1', role: 'user' }];
+    const ctx = createContext(messages);
+
+    const result = await provider.process(ctx);
+
+    expect(result.messages).toEqual(messages);
+    expect(result.metadata.skillContext).toBeUndefined();
+    expect(provider.getOnDemandCards(ctx)).toEqual([
+      expect.objectContaining({
+        description: 'Deploy releases to production',
+        identifier: 'deploy',
+        name: 'Deploy',
+      }),
+    ]);
+    expect(provider.getOnDemandCards(ctx)[0].estimatedTokens).toBeGreaterThan(0);
+    expect(JSON.stringify(provider.getOnDemandCards(ctx))).not.toContain(
+      'Full deployment instructions',
+    );
+  });
 });

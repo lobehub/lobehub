@@ -49,6 +49,8 @@ const readJsonObjectFile = async (
 const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unknown>> =>
   readJsonObjectFile(agencyConfigFile, 'agencyConfig');
 
+const collectOption = (value: string, previous: string[]): string[] => [...previous, value];
+
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
   registerAgentSpaceFsCommand(agent);
@@ -339,6 +341,12 @@ export function registerAgentCommand(program: Command) {
     .option('-s, --slug <slug>', 'Agent slug')
     .option('-p, --prompt <text>', 'User prompt')
     .option('-t, --topic-id <id>', 'Reuse an existing topic')
+    .option(
+      '--skill <identifier>',
+      'Explicitly select a skill for this run (repeatable)',
+      collectOption,
+      [],
+    )
     .option('--no-auto-start', 'Do not auto-start the agent')
     .option(
       '--device <target>',
@@ -361,6 +369,7 @@ export function registerAgentCommand(program: Command) {
         json?: boolean;
         prompt?: string;
         replay?: string;
+        skill?: string[];
         slug?: string;
         sse?: boolean;
         topicId?: string;
@@ -430,11 +439,16 @@ export function registerAgentCommand(program: Command) {
         if (deviceId) input.deviceId = deviceId;
         if (options.slug) input.slug = options.slug;
         if (options.topicId) input.appContext = { topicId: options.topicId };
+        if (options.skill?.length) input.selectedSkillIds = options.skill;
         if (options.autoStart === false) input.autoStart = false;
         // commander's --no-headless sets `headless` to false. Anything else
         // (undefined, true) → headless mode is on and tool calls auto-execute.
         if (options.headless !== false) {
           input.userInterventionConfig = { approvalMode: 'headless' };
+        } else {
+          // The server defaults to headless when this field is omitted, so
+          // --no-headless must explicitly opt into manual approval.
+          input.userInterventionConfig = { approvalMode: 'manual' };
         }
 
         const result = await client.aiAgent.execAgent.mutate(input as any);

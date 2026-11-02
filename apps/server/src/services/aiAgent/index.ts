@@ -25,10 +25,15 @@ import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import { generateSystemPrompt, RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import {
   injectSelfFeedbackIntentTool,
+  selfFeedbackIntentManifest,
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
-import { builtinTools, manualModeExcludeToolIds } from '@lobechat/builtin-tools';
+import {
+  builtinTools,
+  manualModeExcludeToolIds,
+  onDemandBootstrapToolIds,
+} from '@lobechat/builtin-tools';
 import {
   isHeterogeneousAgentModelId,
   LOADING_FLAT,
@@ -44,6 +49,7 @@ import {
   type ToolsEngine,
   type ToolSource,
 } from '@lobechat/context-engine';
+import { ON_DEMAND_BOOTSTRAP_MANIFESTS_BY_IDENTIFIER } from '@lobechat/context-engine/onDemand';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
@@ -53,6 +59,7 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt, resourcesTreePrompt } from '@lobechat/prompts';
 import type {
+  AgentContextMode,
   AgentModelOverride,
   ChatAudioItem,
   ChatFileItem,
@@ -70,7 +77,9 @@ import type {
   LobeAgentChatConfig,
   LobeAgentConfig,
   MessagePluginItem,
+  OnDemandDiscoveryPool,
   RuntimeMentionedAgent,
+  RuntimeSelectedSkill,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
   UserInterventionConfig,
@@ -86,6 +95,7 @@ import {
   RequestTrigger,
   resolveAgentAgencyConfig,
   resolveAgentModelConfig,
+  resolveContextMode,
   resolveModelScopedChatConfig,
   ThreadStatus,
   ThreadType,
@@ -129,7 +139,7 @@ import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionChec
 import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
+import type { EvalContext, InstalledPlugin, ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import { AgentService } from '@/server/services/agent';
@@ -160,6 +170,8 @@ import {
   resolveAgentSelfIterationCapability,
 } from '@/server/services/agentSignal/featureGate';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
+import { buildOnDemandDiscoveryPool } from '@/server/services/aiAgent/pipeline/toolDiscovery';
+import { resolveSelectedSkillIds } from '@/server/services/aiAgent/resolveSelectedSkills';
 import { platformRegistry } from '@/server/services/bot/platforms';
 import { ComposioService } from '@/server/services/composio';
 import {
@@ -483,6 +495,18 @@ interface InternalExecAgentParams extends ExecAgentParams {
     pluginState?: Record<string, unknown>;
     toolCallId: string;
   };
+  /**
+   * Skill identifiers selected by non-SPA callers such as the CLI. The server
+   * resolves these through the same scoped skill sources as the slash menu so
+   * on-demand runs can auto-load their bodies without a second model call.
+   */
+  selectedSkillIds?: string[];
+  /**
+   * Explicit slash-selected skills resolved by the caller. On-demand consumes
+   * these as auto-loaded suffix entries; legacy context keeps its existing
+   * message-based injection.
+   */
+  selectedSkills?: RuntimeSelectedSkill[];
   /**
    * Tool identifiers the user @-mentioned in this message. Merged into the
    * agent's plugin set for this run (alongside `additionalPluginIds`) so a
@@ -1332,6 +1356,8 @@ export class AiAgentService {
       resumeApprovals,
       resumeToolResult,
       selectedToolIds,
+      selectedSkills,
+      selectedSkillIds,
       mentionedAgents,
       suppressUserMessage,
       ephemeralUserMessage,
@@ -2890,11 +2916,15 @@ export class AiAgentService {
 
     // 5. Tool discovery — short-circuit when disableTools is set
     let tools: any[] | undefined;
+    let contextMode: AgentContextMode = 'default';
     let toolsResult: { enabledToolIds: string[]; tools?: any[] | undefined } = {
       enabledToolIds: [],
       tools: undefined,
     };
     let toolsEngine: ToolsEngine | undefined;
+    let discoveryPool: OnDemandDiscoveryPool | undefined;
+    let discoveryDeviceOnline = false;
+    let discoveryGatewayConfigured = false;
     const toolManifestMap: Record<string, any> = {};
     const toolSourceMap: Record<string, ToolSource> = {};
     const toolExecutorMap: Record<string, ToolExecutor> = {};
@@ -2915,6 +2945,9 @@ export class AiAgentService {
     let lobehubSkillManifests: LobeToolManifest[] = [];
     let composioManifests: LobeToolManifest[] = [];
     let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
+    let discoveryConnectorManifests: ReturnType<typeof buildConnectorManifests> = [];
+    let pluginsWithoutConnectors: InstalledPlugin[] = [];
+    let isManifestIngestAllowed = (_identifier: string): boolean => false;
     // When the user @-mentions agents (multi-mention, non-group), enable the
     // agent-management tool for this run so the supervisor can `callAgent` to
     // delegate. Mirrors the client runtime, which injects a callAgent manifest.
@@ -3160,7 +3193,7 @@ export class AiAgentService {
       // Filter out plugin entries that are now handled by real MCP connectors.
       // `let` because community-MCP plugins may be patched with connector
       // permissions below (their connector row has no endpoint, so they stay here).
-      let pluginsWithoutConnectors = installedPlugins.filter(
+      pluginsWithoutConnectors = installedPlugins.filter(
         (p) => !connectorIdentifierSet.has(p.identifier),
       );
       log('execAgent: got %d connector manifests', connectorManifests.length);
@@ -3319,11 +3352,52 @@ export class AiAgentService {
         }
       }
       const deviceOnline = onlineDevices.length > 0;
+      discoveryDeviceOnline = deviceOnline;
+      discoveryGatewayConfigured = gatewayConfigured;
 
       const toolsContext: ServerAgentToolsContext = {
         installedPlugins: pluginsWithoutConnectors,
         isModelSupportToolUse,
       };
+      contextMode = resolveContextMode(
+        isGoalTurn
+          ? { ...agentConfig.chatConfig, toolMode: 'custom' as const }
+          : agentConfig.chatConfig,
+        { supportToolUse: isModelSupportToolUse(model, provider) },
+      );
+
+      // On-demand still has to discover installed-but-unpinned connectors.
+      // The legacy path resolves only the agent's pinned identifiers; doing the
+      // same here would make those capabilities invisible without ever putting
+      // them in the first tools payload. Resolve every scoped connector and
+      // retain the same enabled/tool/permission filtering used by agent mode.
+      if (contextMode === 'on-demand') {
+        try {
+          const discoveryConnectors = (
+            await this.connectorModel.resolveAll(resolvedAgentId, connectorGateKeeper)
+          ).filter((connector) => !disabledPluginIdSet.has(connector.identifier));
+          const discoveryMcpConnectors = discoveryConnectors.filter(
+            (connector) => connector.mcpServerUrl || connector.mcpConnectionType === 'stdio',
+          );
+          const discoveryConnectorTools =
+            discoveryMcpConnectors.length > 0
+              ? await this.connectorToolModel.queryAllByConnectorIds(
+                  discoveryMcpConnectors.map((connector) => connector.id),
+                )
+              : [];
+
+          discoveryConnectorManifests = buildConnectorManifests(
+            discoveryMcpConnectors,
+            discoveryConnectorTools,
+          );
+          log(
+            'execAgent: on-demand discovered %d installed connector manifest(s)',
+            discoveryConnectorManifests.length,
+          );
+        } catch (error) {
+          log('execAgent: failed to resolve on-demand connectors: %O', error);
+        }
+      }
 
       // Dynamically inject turn-scoped builtin tools.
       const hasTopicReference = /refer_topic/.test(prompt ?? '');
@@ -3529,6 +3603,7 @@ export class AiAgentService {
           plugins: agentPlugins,
         },
         canUseDevice,
+        contextMode,
         deviceContext: gatewayConfigured
           ? {
               autoActivated: activeDeviceId ? true : undefined,
@@ -3591,13 +3666,20 @@ export class AiAgentService {
       log('execAgent: agent configured plugins: %O', pluginIds);
 
       const isManualMode = agentConfig.chatConfig?.skillActivateMode === 'manual';
+      const initialToolIds =
+        contextMode === 'on-demand' ? [...onDemandBootstrapToolIds] : pluginIds;
 
       toolsResult = toolsEngine.generateToolsDetailed({
-        excludeDefaultToolIds: isManualMode ? manualModeExcludeToolIds : undefined,
+        excludeDefaultToolIds:
+          contextMode === 'on-demand'
+            ? undefined
+            : isManualMode
+              ? manualModeExcludeToolIds
+              : undefined,
         model,
         promptMode: agentConfig.chatConfig?.promptMode,
         provider,
-        toolIds: pluginIds,
+        toolIds: initialToolIds,
       });
 
       tools = toolsResult.tools;
@@ -3618,7 +3700,7 @@ export class AiAgentService {
       // activateDevice calls or switching to a machine the user never chose.
       // Enforced here (not as a point deletion after the seed) so the later
       // Skill/Composio ingest loops cannot re-add the identifier.
-      const isManifestIngestAllowed = (identifier: string): boolean => {
+      isManifestIngestAllowed = (identifier: string): boolean => {
         if (disabledPluginIdSet.has(identifier)) return false;
         if (!canUseDevice && isDeviceToolIdentifier(identifier)) return false;
         if (deviceLocked && REMOTE_DEVICE_TOOL_IDENTIFIERS.has(identifier)) return false;
@@ -3776,14 +3858,21 @@ export class AiAgentService {
             featureUserEnabled,
           })
         ) {
-          tools = tools ?? [];
-          injectSelfFeedbackIntentTool({
-            enabledToolIds: toolsResult.enabledToolIds,
-            manifestMap: toolManifestMap,
-            sourceMap: toolSourceMap,
-            tools,
-          });
-          log('execAgent: injected self-feedback intent declaration tool');
+          if (contextMode === 'on-demand') {
+            toolManifestMap[selfFeedbackIntentManifest.identifier] =
+              selfFeedbackIntentManifest as LobeToolManifest;
+            toolSourceMap[selfFeedbackIntentManifest.identifier] = 'builtin';
+            log('execAgent: queued self-feedback intent tool for on-demand discovery');
+          } else {
+            tools = tools ?? [];
+            injectSelfFeedbackIntentTool({
+              enabledToolIds: toolsResult.enabledToolIds,
+              manifestMap: toolManifestMap,
+              sourceMap: toolSourceMap,
+              tools,
+            });
+            log('execAgent: injected self-feedback intent declaration tool');
+          }
         }
       }
     }
@@ -3791,18 +3880,7 @@ export class AiAgentService {
     // Inject client function tools from Response API
     const CLIENT_FN_IDENTIFIER = 'lobe-client-fn';
     if (functionTools?.length) {
-      for (const ft of functionTools) {
-        tools?.push({
-          function: {
-            description: ft.description,
-            name: `${CLIENT_FN_IDENTIFIER}____${ft.name}`,
-            parameters: ft.parameters,
-          },
-          type: 'function',
-        });
-      }
-      toolSourceMap[CLIENT_FN_IDENTIFIER] = 'client';
-      toolManifestMap[CLIENT_FN_IDENTIFIER] = {
+      const clientFunctionManifest: LobeToolManifest = {
         api: functionTools.map((ft) => ({
           description: ft.description ?? '',
           name: ft.name,
@@ -3812,7 +3890,23 @@ export class AiAgentService {
         meta: { title: 'Client Functions' },
         type: 'default',
       };
-      toolsResult.enabledToolIds.push(CLIENT_FN_IDENTIFIER);
+      toolSourceMap[CLIENT_FN_IDENTIFIER] = 'client';
+      toolManifestMap[CLIENT_FN_IDENTIFIER] = clientFunctionManifest;
+      toolExecutorMap[CLIENT_FN_IDENTIFIER] = 'client';
+
+      if (contextMode !== 'on-demand') {
+        for (const ft of functionTools) {
+          tools?.push({
+            function: {
+              description: ft.description,
+              name: `${CLIENT_FN_IDENTIFIER}____${ft.name}`,
+              parameters: ft.parameters,
+            },
+            type: 'function',
+          });
+        }
+        toolsResult.enabledToolIds.push(CLIENT_FN_IDENTIFIER);
+      }
     }
 
     // Override RemoteDevice manifest's systemRole with the dynamic device
@@ -4066,6 +4160,70 @@ export class AiAgentService {
       );
     }
 
+    if (contextMode === 'on-demand') {
+      const discoveryConnectorIdentifiers = new Set(
+        discoveryConnectorManifests.map((manifest) => manifest.identifier),
+      );
+
+      // All installed plugins are discoverable, even when the agent has not
+      // pinned them. They remain absent from the first payload because
+      // `initialToolIds` is the bootstrap allowlist; connectors win collisions
+      // so execution continues through the same connector runtime as agent mode.
+      for (const plugin of pluginsWithoutConnectors) {
+        if (!isManifestIngestAllowed(plugin.identifier)) continue;
+        if (discoveryConnectorIdentifiers.has(plugin.identifier)) continue;
+        const manifest = plugin.manifest as LobeToolManifest | undefined;
+        if (!manifest || !Array.isArray(manifest.api) || manifest.api.length === 0) continue;
+        toolManifestMap[plugin.identifier] = manifest;
+        if (!discoveryGatewayConfigured && manifest.executors?.includes('client')) {
+          toolExecutorMap[plugin.identifier] = 'client';
+        }
+      }
+
+      for (const manifest of discoveryConnectorManifests) {
+        if (!isManifestIngestAllowed(manifest.identifier)) continue;
+        if (!Array.isArray(manifest.api) || manifest.api.length === 0) continue;
+        toolManifestMap[manifest.identifier] = manifest as LobeToolManifest;
+      }
+
+      // Keep the runtime manifest map aligned with the closed first payload
+      // even if a later discovery-ingest step encountered the full builtin.
+      for (const [identifier, manifest] of Object.entries(
+        ON_DEMAND_BOOTSTRAP_MANIFESTS_BY_IDENTIFIER,
+      )) {
+        toolManifestMap[identifier] = manifest as LobeToolManifest;
+      }
+
+      const bootstrapIds = new Set<string>(onDemandBootstrapToolIds);
+      const nonBootstrapEnabledIds = toolsResult.enabledToolIds.filter(
+        (id) => !bootstrapIds.has(id),
+      );
+      if (nonBootstrapEnabledIds.length > 0) {
+        throw new Error(
+          `On-demand initial tool set contains non-bootstrap tools: ${nonBootstrapEnabledIds.join(', ')}`,
+        );
+      }
+
+      discoveryPool = buildOnDemandDiscoveryPool({
+        agentId: resolvedAgentId,
+        allowedIdentifiers: new Set(Object.keys(toolManifestMap)),
+        canUseDevice,
+        deviceOnline: discoveryDeviceOnline,
+        executionTarget: executionPlan?.target,
+        executorMap: toolExecutorMap,
+        gatewayConfigured: discoveryGatewayConfigured,
+        manifestMap: toolManifestMap,
+        pluginIdentifiers: new Set(pluginsWithoutConnectors.map((plugin) => plugin.identifier)),
+        sourceMap: toolSourceMap,
+        workspaceId: this.workspaceId,
+      });
+      log(
+        'execAgent: built on-demand discovery pool with %d cards and %d bundles',
+        discoveryPool.cards.length,
+        Object.keys(discoveryPool.bundles).length,
+      );
+    }
+
     await throwIfExecutionAborted('tool preparation');
 
     // 10. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 8)
@@ -4136,17 +4294,24 @@ export class AiAgentService {
     // gates. manifestMap is intentionally broader for discovery and must not
     // by itself authorize a tool in chat/custom mode or without function calls.
     const historicalActivatedToolIds = extractActivatedToolIdsFromMessages(allMessages) ?? [];
+    // A fresh on-demand user round starts from bootstrap only. Activations live
+    // on the current operation's `activatedStepTools` and therefore accumulate
+    // across its tool steps, but must never become defaults merely because an
+    // earlier round activated them. Legacy modes keep their historical restore
+    // behavior unchanged.
     const activatableToolIds =
-      toolsEngine && historicalActivatedToolIds.length > 0
-        ? toolsEngine.generateToolsDetailed({
-            context: { isExplicitActivation: true },
-            model,
-            promptMode: agentConfig.chatConfig?.promptMode,
-            provider,
-            skipDefaultTools: true,
-            toolIds: historicalActivatedToolIds,
-          }).enabledToolIds
-        : [];
+      contextMode === 'on-demand'
+        ? []
+        : toolsEngine && historicalActivatedToolIds.length > 0
+          ? toolsEngine.generateToolsDetailed({
+              context: { isExplicitActivation: true },
+              model,
+              promptMode: agentConfig.chatConfig?.promptMode,
+              provider,
+              skipDefaultTools: true,
+              toolIds: historicalActivatedToolIds,
+            }).enabledToolIds
+          : [];
 
     log('execAgent: prepared evalContext for executor');
 
@@ -4239,6 +4404,31 @@ export class AiAgentService {
         initialContext: {
           ...initialContext.initialContext,
           mentionedAgents,
+        },
+      };
+    }
+
+    let effectiveSelectedSkills = selectedSkills;
+    if (contextMode === 'on-demand' && selectedSkillIds?.length) {
+      const skillModel = new AgentSkillModel(this.db, this.userId, this.workspaceId);
+      let agentSkills: Awaited<ReturnType<AgentDocumentsService['getAgentSkills']>> | undefined;
+      effectiveSelectedSkills = await resolveSelectedSkillIds({
+        findAgentSkill: async (identifier) => {
+          agentSkills ??= await this.agentDocumentsService.getAgentSkills(resolvedAgentId);
+          return agentSkills.find((skill) => skill.identifier === identifier);
+        },
+        findUserSkill: (identifier) => skillModel.findByIdentifier(identifier),
+        ids: selectedSkillIds,
+        selectedSkills,
+      });
+    }
+
+    if (contextMode === 'on-demand' && effectiveSelectedSkills?.length) {
+      initialContext = {
+        ...initialContext,
+        initialContext: {
+          ...initialContext.initialContext,
+          selectedSkills: effectiveSelectedSkills,
         },
       };
     }
@@ -4595,6 +4785,7 @@ export class AiAgentService {
           documentId: appContext?.documentId,
           groupId: appContext?.groupId,
           isSubAgent: appContext?.isSubAgent,
+          memoryEnabled: globalMemoryEnabled,
           // Persist the orchestration role on state.metadata so the
           // inactivity-watchdog abandon path can distinguish an isolated group
           // member ('member') from a genuine callSubAgent child.
@@ -4630,6 +4821,7 @@ export class AiAgentService {
         stream,
         toolSet: {
           activatableToolIds,
+          discoveryPool,
           enabledToolIds: toolsResult.enabledToolIds,
           executorMap: toolExecutorMap,
           manifestMap: toolManifestMap,

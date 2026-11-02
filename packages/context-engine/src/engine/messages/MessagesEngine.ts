@@ -2,6 +2,7 @@ import debug from 'debug';
 
 import type { OpenAIChatMessage } from '@/types/index';
 
+import { processOnDemandMessages } from '../../onDemand/messages';
 import { ContextEngine } from '../../pipeline';
 import {
   ActivationResultTrimProcessor,
@@ -206,6 +207,12 @@ export class MessagesEngine {
    * Process messages and return OpenAI-compatible format
    */
   async process(): Promise<MessagesEngineResult> {
+    if (this.params.contextMode === 'on-demand') {
+      return processOnDemandMessages(this.params, {
+        genToolCallingName: this.toolNameResolver.generate.bind(this.toolNameResolver),
+      });
+    }
+
     const pipeline = this.buildPipeline();
     const result = await pipeline.process({ messages: this.params.messages });
 

@@ -11,6 +11,10 @@
     "ai",
     "lobe"
   ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./onDemand": "./src/onDemand/index.ts"
+  },
   "main": "src/index.ts",
   "scripts": {
     "test": "vitest",
@@ -18,9 +22,13 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
+    "@lobechat/builtin-tool-activator": "workspace:*",
+    "@lobechat/builtin-tool-agent-documents": "workspace:*",
+    "@lobechat/builtin-tool-skills": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/database": "workspace:*",
     "@lobechat/prompts": "workspace:*",
+    "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",
     "debug": "^4.4.3",
     "es-toolkit": "^1.49.0",
@@ -32,7 +40,6 @@
     "xastscript": "^4.0.0"
   },
   "devDependencies": {
-    "@lobechat/types": "workspace:*",
     "@types/debug": "^4.1.13"
   }
 }

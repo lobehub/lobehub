@@ -16,6 +16,7 @@ export class ServerContextBuilder implements ContextBuilder {
       this.ctx,
       input.state,
       input.payload.allowedToolNames,
+      input.state.metadata?.contextMode,
     );
     const result = await buildServerCallLlmContext({
       ctx: this.ctx,
@@ -31,7 +32,7 @@ export class ServerContextBuilder implements ContextBuilder {
       modelParameters: result.resolvedExtendParams,
       preserveThinking: result.preserveThinkingForPayload,
       replayAssistantReasoning: result.shouldReplayAssistantReasoning,
-      resolvedTools: tooling.resolved,
+      resolvedTools: result.resolvedTools ?? tooling.resolved,
     };
   }
 }

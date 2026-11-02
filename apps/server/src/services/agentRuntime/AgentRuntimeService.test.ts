@@ -1,12 +1,15 @@
 /**
  * @vitest-environment node
  */
+import type { LobeToolManifest } from '@lobechat/context-engine';
+import { buildAtomicCapabilityBundle } from '@lobechat/context-engine/onDemand';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import type * as ModelBankModule from 'model-bank';
 import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import type { appEnv } from '@/envs/app';
 
 import { AgentRuntimeService } from './AgentRuntimeService';
 import { hookDispatcher } from './hooks';
@@ -35,6 +38,15 @@ vi.mock('@/libs/trusted-client', () => ({
   getTrustedClientTokenForSession: vi.fn().mockResolvedValue(undefined),
   isTrustedClientEnabled: vi.fn().mockReturnValue(false),
 }));
+
+vi.mock('@/envs/app', async (importOriginal) => {
+  const actual = await importOriginal<{ appEnv: typeof appEnv }>();
+
+  return {
+    ...actual,
+    appEnv: { ...actual.appEnv, APP_URL: 'http://localhost:3210' },
+  };
+});
 
 // Mock database and models
 vi.mock('@/database/models/message', () => ({
@@ -307,11 +319,11 @@ describe('AgentRuntimeService', () => {
           status: 'idle',
           stepCount: 0,
           messages: [],
-          metadata: {
+          metadata: expect.objectContaining({
             agentConfig: mockParams.agentConfig,
             modelRuntimeConfig: mockParams.modelRuntimeConfig,
             userId: mockParams.userId,
-          },
+          }),
           toolManifestMap: {},
         }),
       );
@@ -446,6 +458,93 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({ activatedStepTools: undefined }),
+      );
+    });
+
+    it('persists on-demand mode and restores only a validated atomic activation', async () => {
+      const taskManifest: LobeToolManifest = {
+        api: [
+          {
+            description: 'Create a task',
+            name: 'create',
+            parameters: { properties: {}, type: 'object' },
+          },
+        ],
+        identifier: 'lobe-task',
+        meta: { title: 'Task' },
+        type: 'builtin',
+      };
+      const bundle = buildAtomicCapabilityBundle({
+        execution: { environment: 'server', transport: 'builtin-native' },
+        identifier: taskManifest.identifier,
+        manifest: taskManifest,
+        permissions: {
+          grants: [
+            {
+              principal: { id: 'agent-1', type: 'agent' },
+              scopes: ['tool:execute', 'api:create'],
+            },
+          ],
+          sharedAuthorizations: [],
+        },
+        sourceRuntime: { runtime: 'server', source: 'builtin' },
+      });
+      const discoveryPool = {
+        bundles: { 'lobe-task': bundle },
+        cards: [
+          {
+            capability: 'Create tasks',
+            executionEnvironment: 'server' as const,
+            hash: bundle.hash,
+            identifier: 'lobe-task',
+            name: 'Task',
+            source: 'builtin' as const,
+            version: bundle.version,
+          },
+        ],
+        hash: 'pool-hash',
+        version: '1' as const,
+      };
+
+      await service.createOperation({
+        ...mockParams,
+        autoStart: false,
+        initialMessages: [
+          {
+            content: 'Successfully activated tools: lobe-task.create',
+            id: 'tool-message-1',
+            plugin: { apiName: 'activateTools', identifier: 'lobe-activator' },
+            pluginState: { activatedTools: [{ identifier: 'lobe-task' }] },
+            role: 'tool',
+          },
+        ] as any,
+        initialStepCount: 3,
+        toolSet: {
+          ...mockParams.toolSet,
+          activatableToolIds: ['lobe-task'],
+          discoveryPool,
+          manifestMap: { 'lobe-task': taskManifest },
+        },
+      });
+
+      expect(mockCoordinator.saveAgentState).toHaveBeenCalledWith(
+        'test-operation-1',
+        expect.objectContaining({
+          activatedStepTools: [
+            {
+              activatedAtStep: 3,
+              capability: {
+                hash: bundle.hash,
+                identifier: 'lobe-task',
+                version: bundle.version,
+              },
+              id: 'lobe-task',
+              manifest: taskManifest,
+              source: 'discovery',
+            },
+          ],
+          metadata: expect.objectContaining({ contextMode: 'on-demand' }),
+        }),
       );
     });
 

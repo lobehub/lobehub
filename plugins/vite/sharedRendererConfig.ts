@@ -386,6 +386,7 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
 }
 
 export const sharedOptimizeDeps = {
+  exclude: ['linkedom'],
   include: [
     'react',
     'react-dom',

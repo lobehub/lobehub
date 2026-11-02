@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildAtomicCapabilityBundle } from '../../../onDemand';
 import { ToolNameResolver } from '../ToolNameResolver';
 import { ToolResolver } from '../ToolResolver';
 import type {
@@ -83,6 +84,49 @@ function makeOperationToolSet(manifests: LobeToolManifest[]): OperationToolSet {
 }
 
 const emptyDelta: StepToolDelta = { activatedTools: [] };
+
+const buildCapabilityPool = (manifest: LobeToolManifest) => {
+  const bundle = buildAtomicCapabilityBundle({
+    execution: { environment: 'server', transport: 'builtin-native' },
+    identifier: manifest.identifier,
+    manifest,
+    permissions: {
+      grants: [
+        {
+          principal: { id: 'agent-1', type: 'agent' },
+          scopes: ['tool:execute', ...manifest.api.map((api) => `api:${api.name}`)],
+        },
+      ],
+      sharedAuthorizations: [],
+    },
+    sourceRuntime: { runtime: 'server', source: 'builtin' },
+  });
+
+  return {
+    bundle,
+    capability: {
+      hash: bundle.hash,
+      identifier: bundle.identifier,
+      version: bundle.version,
+    },
+    pool: {
+      bundles: { [manifest.identifier]: bundle },
+      cards: [
+        {
+          capability: manifest.meta?.description ?? 'Native capability',
+          executionEnvironment: bundle.execution.environment,
+          hash: bundle.hash,
+          identifier: bundle.identifier,
+          name: manifest.meta?.title ?? manifest.identifier,
+          source: bundle.sourceRuntime.source,
+          version: bundle.version,
+        },
+      ],
+      hash: 'pool-hash',
+      version: '1' as const,
+    },
+  };
+};
 
 describe('ToolResolver', () => {
   const resolver = new ToolResolver();
@@ -190,6 +234,98 @@ describe('ToolResolver', () => {
       // calculator should appear only once
       expect(result.tools).toHaveLength(1);
       expect(result.enabledToolIds).toEqual(['calculator']);
+    });
+  });
+
+  describe('on-demand atomic activations', () => {
+    it('adds the real native tool and schema on the following step', () => {
+      const manifest = mockLocalSystemManifest;
+      const { capability, pool } = buildCapabilityPool(manifest);
+      const opSet = { ...makeOperationToolSet([mockSearchManifest]), discoveryPool: pool };
+
+      const result = resolver.resolve(opSet, {
+        activatedTools: [
+          {
+            capability,
+            id: manifest.identifier,
+            source: 'discovery',
+          },
+        ],
+      });
+
+      expect(result.enabledToolIds).toEqual(['web-search', 'local-system']);
+      expect(result.manifestMap['local-system']).toEqual(manifest);
+      expect(result.tools.map((tool) => tool.function.name)).toEqual([
+        'web-search____search',
+        'local-system____run_command',
+        'local-system____read_file',
+      ]);
+      expect(result.tools[1].function.parameters).toMatchObject(manifest.api[0].parameters);
+      expect(result.tools.some((tool) => tool.function.name.includes('invoke'))).toBe(false);
+    });
+
+    it('keeps accumulated on-demand activations on later steps', () => {
+      const manifest = mockCalcManifest;
+      const { capability, pool } = buildCapabilityPool(manifest);
+      const opSet = { ...makeOperationToolSet([]), discoveryPool: pool };
+
+      const result = resolver.resolve(opSet, emptyDelta, [
+        {
+          activatedAtStep: 2,
+          capability,
+          id: manifest.identifier,
+          source: 'discovery',
+        },
+      ]);
+
+      expect(result.enabledToolIds).toEqual(['calculator']);
+      expect(result.tools.map((tool) => tool.function.name)).toEqual(['calculator____calculate']);
+    });
+
+    it.each([
+      ['missing expectation', (pool: any, _capability: any) => pool],
+      [
+        'version drift',
+        (pool: any, _capability: any) => ({
+          ...pool,
+          cards: [{ ...pool.cards[0], version: 'drifted-version' }],
+        }),
+      ],
+      [
+        'hash drift',
+        (pool: any, _capability: any) => ({
+          ...pool,
+          cards: [{ ...pool.cards[0], hash: 'md5:drifted' }],
+        }),
+      ],
+      [
+        'missing manual',
+        (pool: any, capability: any) => ({
+          ...pool,
+          bundles: {
+            [capability.identifier]: { ...pool.bundles[capability.identifier], manual: undefined },
+          },
+        }),
+      ],
+    ])('fails closed on %s', (testName, mutate) => {
+      const manifest = mockCalcManifest;
+      const { capability, pool } = buildCapabilityPool(manifest);
+      const mutatedPool = mutate(pool, capability);
+      const opSet = { ...makeOperationToolSet([]), discoveryPool: mutatedPool };
+
+      const result = resolver.resolve(opSet, {
+        activatedTools: [
+          {
+            ...(testName !== 'missing expectation' && { capability }),
+            id: manifest.identifier,
+            source: 'discovery',
+          },
+        ],
+      });
+
+      expect(result.enabledToolIds).toEqual([]);
+      expect(result.tools).toEqual([]);
+      expect(result.manifestMap[manifest.identifier]).toBeUndefined();
     });
   });
 

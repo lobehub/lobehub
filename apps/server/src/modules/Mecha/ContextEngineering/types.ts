@@ -19,6 +19,11 @@ import type {
 } from '@lobechat/context-engine';
 import type { PageContentContext } from '@lobechat/prompts';
 import type {
+  AgentContextMode,
+  OnDemandBudgetConfig,
+  OnDemandDocumentCard,
+  OnDemandRetrievalBatch,
+  OnDemandToolCard,
   RuntimeAdditionalContextFragment,
   RuntimeInitialContext,
   UIChatMessage,
@@ -54,6 +59,8 @@ export interface ServerKnowledgeConfig {
 export interface ServerToolsConfig {
   /** Tool identifiers that must be removed from historical tool calls in this runtime scope */
   disabledToolIdentifiers?: string[];
+  /** Compact cards the on-demand suffix may expose without tool schemas/manuals. */
+  discoveryCards?: readonly OnDemandToolCard[];
   /** Tool manifests with systemRole and API definitions */
   manifests?: LobeToolManifest[];
   /** Enabled tool IDs (kept for compatibility) */
@@ -83,6 +90,8 @@ export interface ServerMessagesEngineParams {
   additionalVariables?: Record<string, string>;
   /** Agent documents to inject into context based on load rules and positions */
   agentDocuments?: AgentContextDocument[];
+  /** Card-only document discovery; bodies stay behind readDocument. */
+  documentCards?: readonly OnDemandDocumentCard[];
   /** User's timezone for time-related variables (e.g. 'Asia/Shanghai') */
   userTimezone?: string;
   // ========== Extended contexts ==========
@@ -90,6 +99,15 @@ export interface ServerMessagesEngineParams {
   agentBuilderContext?: AgentBuilderContext;
   /** Agent identity context for bot/group-originated runs */
   agentGroup?: AgentGroupConfig;
+  /** Explicit context strategy; default preserves legacy assembly. */
+  contextMode?: AgentContextMode;
+  /** On-demand dynamic-suffix budget and server retrieval facts. */
+  onDemand?: {
+    budget?: Partial<OnDemandBudgetConfig>;
+    /** Legacy total-only override; new callers should pass `budget`. */
+    maxTokens?: number;
+    retrieval?: OnDemandRetrievalBatch;
+  };
   /** Agent Management context (optional, available models and plugins) */
   agentManagementContext?: AgentManagementContext;
   /** Group Agent Builder context (optional, for editing the current group) */

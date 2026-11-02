@@ -1,0 +1,20 @@
+{
+  "agentId": "agt_T101LEGACY01",
+  "agentPrompt": "  User-authored Agent Prompt\n\tkeep every byte and never rewrite this instruction.  ",
+  "canonicalization": "prompt-harness-canonical-json-v1",
+  "hashes": {
+    "full": "sha256:23d780d2097d4ddb0a82126e38c66c025c3cf377dbff753cc4b55c4d61d35867",
+    "messages": "sha256:64390c5c9d9ecdcc370e541d3d7d0eef8f74d2bc7da22fe60aa43216d09ad00b",
+    "messagesAndTools": "sha256:f47cddf4c531b95a5ad4f242540440e021a9dff5fc0e6c1e6d8bf3a2616ac9c3",
+    "tools": "sha256:46adf9390c94e2c89eb4ff6cb28320962cde104d40ead3f9550912966a4880da"
+  },
+  "provenance": {
+    "capturedAt": "2026-11-02T14:43:57.552Z",
+    "frozenTime": "2026-11-02T12:00:00.000Z",
+    "note": "The repository and tracked history did not contain an authoritative Task 0 legacy request artifact. This baseline was frozen from the first complete T105 isolated mock capture and is reused by every later harness run; it is a T105 regression baseline, not a retroactive Task 0 claim.",
+    "requestCount": 2,
+    "scenario": "baseline-legacy",
+    "source": "scripts/promptHarness/stack.sh --scenario=baseline-on-demand,baseline-legacy"
+  },
+  "userMessage": "T105_BASELINE compare identical Agent Prompt and user turn"
+}

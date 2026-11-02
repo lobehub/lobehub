@@ -1,0 +1,21 @@
+{
+  "agentId": "agt_T106CHAT01",
+  "agentPrompt": "  User-authored Agent Prompt\n\tkeep every byte and never rewrite this instruction.  ",
+  "canonicalization": "prompt-harness-canonical-json-v1",
+  "hashes": {
+    "full": "sha256:614b78ec0c16f45d0db47441e6e09b0cb7ef02b8640ab97b84456197930d72a6",
+    "messages": "sha256:58341ead86f72a1b14ec55dc8a6e2faefdd077e754234e218f827e1e76c3a174",
+    "messagesAndTools": "sha256:2c3ca02ca9058898307615201dede546156f0529893fe4fb1a7e092e4e1a2c84",
+    "tools": "sha256:c32e972a835fc9cc96c0b51ec91b387b010077849f1a1d23dfc3bdab4c0bed88"
+  },
+  "provenance": {
+    "capturedAt": "2026-11-02T16:15:21.811Z",
+    "frozenTime": "2026-11-02T12:00:00.000Z",
+    "note": "Frozen from the pre-change origin/canary merge-base worktree at commit 420fa1b80057cbc186e3c78e7d358929b2db7c06 using the same isolated mock-provider request surface and fixture. This is the authoritative pre-change chat control available to T106; no historical Task 0 artifact was found.",
+    "requestCount": 1,
+    "scenario": "baseline-chat",
+    "source": "bash scripts/promptHarness/stack.sh --scenario=baseline-chat,baseline-legacy --keep",
+    "sourceCommit": "420fa1b80057cbc186e3c78e7d358929b2db7c06"
+  },
+  "userMessage": "T105_BASELINE compare identical Agent Prompt and user turn"
+}

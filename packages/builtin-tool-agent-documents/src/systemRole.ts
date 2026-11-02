@@ -3,7 +3,7 @@ export const systemPrompt = `You have access to an Agent Documents tool for crea
 <core_capabilities>
 1. List documents (listDocuments) - equivalent to ls/find
 2. Create document (createDocument) - equivalent to touch/create with content
-3. Read document (readDocument) - equivalent to cat/read; only one read entry, by document ID
+3. Read document (readDocument) - equivalent to a windowed cat/read; one entry, by document ID
 4. Replace document content (replaceDocumentContent) - full-content overwrite by ID
 5. Modify nodes (modifyNodes) - apply precise LiteXML insert/modify/remove operations
 6. Remove document (removeDocument) - equivalent to rm/delete
@@ -17,6 +17,7 @@ export const systemPrompt = `You have access to an Agent Documents tool for crea
 3. Use explicit IDs and content in arguments. Read documents by ID; if you only know the filename, listDocuments first to resolve it.
 4. If operation depends on existing content, read before writing/deleting.
 5. Confirm what changed after each operation.
+6. When readDocument reports hasMore=true, continue with the exact nextOffset and limit from its continuation payload. Never assume a window is the complete document.
 </workflow>
 
 <tool_selection_guidelines>
@@ -26,7 +27,7 @@ export const systemPrompt = `You have access to an Agent Documents tool for crea
 - When the user asks to remember, save, or reuse a workflow, checklist, template, skill, or repeatable procedure for this agent or topic, prefer createDocument with hintIsSkill=true over user memory. This preserves scoped procedural knowledge without turning it into a global personal preference.
 - Do not create or maintain managed skills directly; Agent Signal decides whether hinted documents become skills.
 - **listDocuments**: list agent documents. Use scope="currentTopic" when the user asks about documents in the current topic. Pass sourceType="web" to enumerate web-crawled documents, or sourceType="all" to see everything. Pass parentId to expand a folder. Use this to resolve a title to a document ID before reading. For read and mutation calls, pass the result's \`id\`. For folder navigation, pass the folder's \`documentId\` (or the ID shown in a collapsed folder row) as \`listDocuments.parentId\`.
-- **readDocument**: retrieve current content by agent document ID. Pass the \`id\` field returned by listDocuments, not \`documentId\`. This is the only way to read an agent document — there is no read-by-filename variant. Prefer format="xml" when you may edit content, because XML includes stable node IDs. If the response contains empty content, the document is genuinely empty; do not retry with a different format or filename.
+- **readDocument**: retrieve a character window of the current content by agent document ID. Pass the \`id\` field returned by listDocuments, not \`documentId\`. This is the only way to read an agent document — there is no read-by-filename variant. Prefer format="xml" when you may edit content, because XML includes stable node IDs. The result reports start/end offsets, line range, total length, content hash, and, when incomplete, an exact continuation object. Continue with that object's \`offset\` and \`limit\`; never treat a partial window as the whole document. If the response contains empty content and hasMore=false, the document is genuinely empty; do not retry with a different format or filename.
 - **modifyNodes**: preferred content-edit API. Use LiteXML insert/modify/remove operations after reading XML. For modify operations, include the existing node ID in the LiteXML.
 - **replaceDocumentContent**: overwrite the full content of an existing document only when replacing most or all content.
 - **removeDocument**: permanently remove a document by ID.

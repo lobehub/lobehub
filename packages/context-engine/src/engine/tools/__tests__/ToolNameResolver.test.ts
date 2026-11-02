@@ -873,6 +873,35 @@ describe('ToolNameResolver', () => {
         expect(result[0].apiName).toBe('activateTools');
       });
 
+      it('should drop fully-qualified names that were not offered this turn', () => {
+        const toolCalls = [
+          {
+            function: { arguments: '{"expression":"1 + 1"}', name: 'lobe-calculator____calculate' },
+            id: 'call_1',
+            type: 'function',
+          },
+        ];
+
+        const manifests = {
+          'lobe-activator': {
+            api: [{ description: '', name: 'activateTools', parameters: {} }],
+            identifier: 'lobe-activator',
+            meta: {},
+            type: 'builtin' as const,
+          },
+          'lobe-calculator': {
+            api: [{ description: '', name: 'calculate', parameters: {} }],
+            identifier: 'lobe-calculator',
+            meta: {},
+            type: 'builtin' as const,
+          },
+        };
+
+        const result = resolver.resolve(toolCalls, manifests, ['lobe-activator____activateTools']);
+
+        expect(result).toEqual([]);
+      });
+
       it('should drop bare API names whose tool was not offered this turn', () => {
         const toolCalls = [
           {

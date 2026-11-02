@@ -1,4 +1,10 @@
-import type { ChatToolPayload, WorkRegistrationIntent } from '@lobechat/types';
+import { validateAtomicCapabilityBundle } from '@lobechat/context-engine/onDemand';
+import type {
+  ChatToolPayload,
+  OnDemandCapabilityExpectation,
+  OnDemandDiscoveryPool,
+  WorkRegistrationIntent,
+} from '@lobechat/types';
 
 import { UsageCounter } from '../core';
 import type {
@@ -347,20 +353,44 @@ const persistActivatedTools = ({
   stepCount: number;
 }) => {
   const existingIds = new Set((newState.activatedStepTools ?? []).map((tool) => tool.id));
+  const discoveryPool = newState.operationToolSet?.discoveryPool;
 
   for (const result of results) {
     const discoveredTools = result.data.state?.activatedTools as
-      Array<{ identifier: string }> | undefined;
+      | Array<{
+          capability?: OnDemandCapabilityExpectation;
+          identifier: string;
+        }>
+      | undefined;
     if (!discoveredTools?.length) continue;
 
     const newActivations = discoveredTools
       .filter((tool) => !existingIds.has(tool.identifier))
-      .map((tool) => ({
-        activatedAtStep: stepCount,
-        id: tool.identifier,
-        manifest: effectiveManifestMap[tool.identifier],
-        source: 'discovery' as const,
-      }));
+      .flatMap((tool) => {
+        if (!discoveryPool) {
+          return [
+            {
+              activatedAtStep: stepCount,
+              id: tool.identifier,
+              manifest: effectiveManifestMap[tool.identifier],
+              source: 'discovery' as const,
+            },
+          ];
+        }
+
+        const resolved = resolveOnDemandActivation(discoveryPool, tool);
+        return resolved
+          ? [
+              {
+                activatedAtStep: stepCount,
+                capability: resolved.capability,
+                id: tool.identifier,
+                manifest: resolved.manifest,
+                source: 'discovery' as const,
+              },
+            ]
+          : [];
+      });
 
     for (const activation of newActivations) existingIds.add(activation.id);
 
@@ -368,6 +398,35 @@ const persistActivatedTools = ({
       newState.activatedStepTools = [...(newState.activatedStepTools ?? []), ...newActivations];
     }
   }
+};
+
+const resolveOnDemandActivation = (
+  discoveryPool: OnDemandDiscoveryPool,
+  tool: { capability?: OnDemandCapabilityExpectation; identifier: string },
+) => {
+  const card = discoveryPool.cards.find((item) => item.identifier === tool.identifier);
+  const bundle = discoveryPool.bundles[tool.identifier];
+  if (!card || !bundle || card.hash !== bundle.hash || card.version !== bundle.version) {
+    return;
+  }
+
+  const capability =
+    tool.capability ??
+    ({
+      hash: card.hash,
+      identifier: card.identifier,
+      version: card.version,
+    } satisfies OnDemandCapabilityExpectation);
+  if (
+    capability.identifier !== card.identifier ||
+    capability.version !== card.version ||
+    capability.hash !== card.hash
+  ) {
+    return;
+  }
+
+  const validation = validateAtomicCapabilityBundle(bundle, capability);
+  return validation.ok ? { capability, manifest: validation.bundle.manifest } : undefined;
 };
 
 export const callTool =

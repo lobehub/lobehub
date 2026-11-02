@@ -15,6 +15,7 @@ import {
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
+import { validateAtomicCapabilityBundle } from '@lobechat/context-engine/onDemand';
 import { parse } from '@lobechat/conversation-flow';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import {
@@ -34,6 +35,7 @@ import {
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
+  type OnDemandTraceMetadata,
   resolveCompressionMode,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -506,6 +508,7 @@ export class AgentRuntimeService {
     });
 
     const operationToolSet = toolSet;
+    const contextMode = operationToolSet.discoveryPool ? 'on-demand' : 'default';
     let operationCreated = false;
     let hooksRegistered = false;
 
@@ -533,12 +536,43 @@ export class AgentRuntimeService {
         (id) => activatableToolIds.has(id),
       );
       const activatedStepTools = restoredActivatedToolIds?.length
-        ? restoredActivatedToolIds.map((id) => ({
-            activatedAtStep: initialStepCount,
-            id,
-            manifest: operationToolSet.manifestMap[id],
-            source: 'discovery' as const,
-          }))
+        ? restoredActivatedToolIds.flatMap((id) => {
+            const discoveryPool = operationToolSet.discoveryPool;
+            if (!discoveryPool) {
+              return [
+                {
+                  activatedAtStep: initialStepCount,
+                  id,
+                  manifest: operationToolSet.manifestMap[id],
+                  source: 'discovery' as const,
+                },
+              ];
+            }
+
+            const card = discoveryPool.cards.find((item) => item.identifier === id);
+            const bundle = discoveryPool.bundles[id];
+            if (!card || !bundle || card.hash !== bundle.hash || card.version !== bundle.version) {
+              return [];
+            }
+
+            const capability = {
+              hash: card.hash,
+              identifier: card.identifier,
+              version: card.version,
+            };
+            const validation = validateAtomicCapabilityBundle(bundle, capability);
+            return validation.ok
+              ? [
+                  {
+                    activatedAtStep: initialStepCount,
+                    capability,
+                    id,
+                    manifest: validation.bundle.manifest,
+                    source: 'discovery' as const,
+                  },
+                ]
+              : [];
+          })
         : undefined;
 
       const initialState = {
@@ -556,6 +590,7 @@ export class AgentRuntimeService {
           agentGroup,
           botContext,
           botPlatformContext,
+          ...(contextMode === 'on-demand' && { contextMode }),
           deviceAccessPolicy,
           deviceSystemInfo,
           discordContext,
@@ -1012,7 +1047,13 @@ export class AgentRuntimeService {
         // Context: contextEngine.input (agentDocuments) was ~2.7MB/step,
         // hitting Upstash Redis 10MB limit. Bypassing events keeps the heavy
         // payload in trace only, reducing per-step Redis state by ~500x.
-        let contextEnginePayload: { input: unknown; output: unknown } | undefined;
+        let contextEnginePayload:
+          | {
+              input: unknown;
+              metadata?: OnDemandTraceMetadata;
+              output: unknown;
+            }
+          | undefined;
 
         // Create Agent and Runtime instances
         // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
@@ -1022,8 +1063,8 @@ export class AgentRuntimeService {
           metadata: agentState?.metadata,
           operationId,
           stepIndex,
-          tracingContextEngine: (input, output) => {
-            contextEnginePayload = { input, output };
+          tracingContextEngine: (input, output, metadata) => {
+            contextEnginePayload = { input, ...(metadata && { metadata }), output };
           },
         });
 
@@ -2747,7 +2788,11 @@ export class AgentRuntimeService {
     metadata?: any;
     operationId: string;
     stepIndex: number;
-    tracingContextEngine?: (input: unknown, output: unknown) => void;
+    tracingContextEngine?: (
+      input: unknown,
+      output: unknown,
+      metadata?: OnDemandTraceMetadata,
+    ) => void;
   }) {
     const modelId = metadata?.modelRuntimeConfig?.model as string | undefined;
     const providerId = metadata?.modelRuntimeConfig?.provider as string | undefined;

@@ -58,6 +58,21 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             description: 'Target document ID.',
             type: 'string',
           },
+          limit: {
+            default: 50_000,
+            description:
+              'Maximum characters to return in this window (1-200000). The result reports the exact range and continuation offset.',
+            maximum: 200_000,
+            minimum: 1,
+            type: 'number',
+          },
+          offset: {
+            default: 0,
+            description:
+              'Zero-based character offset to start reading from. Use nextOffset from the previous readDocument result to continue.',
+            minimum: 0,
+            type: 'number',
+          },
         },
         required: ['id'],
         type: 'object',

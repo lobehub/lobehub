@@ -38,7 +38,17 @@ export {
   formatSelectedToolsContext,
   SelectedToolInjector,
 } from './SelectedToolInjector';
-export { selectActivatedSkills, SkillContextProvider } from './SkillContextProvider';
+export {
+  buildOnDemandSkillCards,
+  buildOnDemandSkillReferenceCards,
+  ON_DEMAND_SKILL_CARD_RELEVANCE,
+  renderOnDemandSkillCard,
+  renderOnDemandSkillReferenceCard,
+  scoreOnDemandSkillRelevance,
+  selectActivatedSkills,
+  selectOnDemandSkillCards,
+  SkillContextProvider,
+} from './SkillContextProvider';
 export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';
 export { TaskManagerContextInjector } from './TaskManagerContextInjector';
@@ -109,7 +119,12 @@ export type { Plan, PlanInjectorConfig } from './PlanInjector';
 export type { RuntimeAdditionalContextProviderConfig } from './RuntimeAdditionalContextProvider';
 export type { SelectedSkillInjectorConfig } from './SelectedSkillInjector';
 export type { SelectedToolInjectorConfig } from './SelectedToolInjector';
-export type { SkillContextProviderConfig, SkillMeta } from './SkillContextProvider';
+export type {
+  OnDemandSkillCard,
+  OnDemandSkillReferenceCard,
+  SkillContextProviderConfig,
+  SkillMeta,
+} from './SkillContextProvider';
 export type { SystemDateProviderConfig } from './SystemDateProvider';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
 export type { TaskManagerContextInjectorConfig } from './TaskManagerContextInjector';

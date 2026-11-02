@@ -1,7 +1,7 @@
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { type ContextBuckets, MessagesEngine } from '@lobechat/context-engine';
-import { type OpenAIChatMessage } from '@lobechat/types';
+import { type OnDemandContextMetadata, type OpenAIChatMessage } from '@lobechat/types';
 
 import { type ServerMessagesEngineParams } from './types';
 
@@ -116,6 +116,8 @@ const createServerVariableGenerators = (params: {
  */
 export const serverMessagesEngine = async ({
   additionalContexts,
+  contextMode,
+  onDemand,
   messages = [],
   model,
   modelDisplayName,
@@ -133,6 +135,7 @@ export const serverMessagesEngine = async ({
   initialContext,
   knowledge,
   agentDocuments,
+  documentCards,
   skillsConfig,
   toolsConfig,
   capabilities,
@@ -153,9 +156,12 @@ export const serverMessagesEngine = async ({
 }: ServerMessagesEngineParams): Promise<{
   contextBuckets?: ContextBuckets;
   messages: OpenAIChatMessage[];
+  onDemandContext?: OnDemandContextMetadata;
 }> => {
   const engine = new MessagesEngine({
     additionalContexts,
+    contextMode,
+    onDemand,
     // Capability injection
     capabilities: {
       isCanUseAudio: capabilities?.isCanUseAudio,
@@ -191,6 +197,7 @@ export const serverMessagesEngine = async ({
       knowledgeBases: knowledge?.knowledgeBases,
     },
     agentDocuments,
+    documentCards,
 
     // Messages
     messages,
@@ -212,6 +219,7 @@ export const serverMessagesEngine = async ({
       disabledToolIdentifiers:
         toolsConfig?.disabledToolIdentifiers ??
         (toolsConfig?.tools?.includes(PageAgentIdentifier) ? undefined : [PageAgentIdentifier]),
+      discoveryCards: toolsConfig?.discoveryCards,
       manifests: toolsConfig?.manifests,
       tools: toolsConfig?.tools,
     },
@@ -236,6 +244,18 @@ export const serverMessagesEngine = async ({
     // Skills configuration
     ...(skillsConfig?.enabledSkills && skillsConfig.enabledSkills.length > 0 && { skillsConfig }),
 
+    // Explicit slash selections are resolved by the caller and stay scoped to
+    // this operation. On-demand turns them into auto-loaded dynamic entries;
+    // legacy modes keep their existing injector path.
+    ...(contextMode === 'on-demand' &&
+      initialContext?.selectedSkills?.length && {
+        selectedSkills: initialContext.selectedSkills,
+      }),
+    ...(contextMode === 'on-demand' &&
+      initialContext?.selectedTools?.length && {
+        selectedTools: initialContext.selectedTools,
+      }),
+
     // Topic references
     ...(topicReferences && topicReferences.length > 0 && { topicReferences }),
 
@@ -255,6 +275,7 @@ export const serverMessagesEngine = async ({
   return {
     contextBuckets: result.metadata.contextBuckets,
     messages: result.messages,
+    onDemandContext: result.metadata.onDemandContext,
   };
 };
 

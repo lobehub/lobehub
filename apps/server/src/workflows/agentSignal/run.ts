@@ -171,6 +171,56 @@ const toWorkflowStepSnapshot = (result: GeneratedAgentSignalEmissionResult): Ste
   };
 };
 
+const getWorkflowStepSourceId = (step: StepSnapshot): string | undefined => {
+  const payload = step.context?.payload;
+  if (typeof payload !== 'object' || payload === null || !('sourceId' in payload)) return;
+
+  const sourceId = (payload as Record<string, unknown>).sourceId;
+  return typeof sourceId === 'string' ? sourceId : undefined;
+};
+
+/**
+ * Agent Signal workflows can run after the AgentRuntime snapshot finalized for
+ * the same operation. Appending this workflow-only step preserves the LLM
+ * `contextEngine` trace instead of replacing it with a single `call_tool` row.
+ */
+const saveWorkflowStep = async (
+  store: ISnapshotStore,
+  snapshot: ExecutionSnapshot,
+  step: StepSnapshot,
+) => {
+  let existing: ExecutionSnapshot | null | undefined;
+  try {
+    existing = await store.get(snapshot.operationId);
+  } catch (error) {
+    log('Load existing workflow snapshot failed error=%O', error);
+  }
+
+  if (!existing?.steps?.length) {
+    await store.save(snapshot);
+    return;
+  }
+
+  const workflowSourceId = getWorkflowStepSourceId(step);
+  if (
+    workflowSourceId &&
+    existing.steps.some(
+      (existingStep) => getWorkflowStepSourceId(existingStep) === workflowSourceId,
+    )
+  ) {
+    return;
+  }
+
+  const nextStepIndex =
+    Math.max(...existing.steps.map((existingStep) => existingStep.stepIndex)) + 1;
+  await store.save({
+    ...existing,
+    completedAt: Math.max(existing.completedAt ?? 0, snapshot.completedAt ?? 0),
+    steps: [...existing.steps, { ...step, stepIndex: nextStepIndex }],
+    totalSteps: existing.steps.length + 1,
+  });
+};
+
 const persistWorkflowSnapshot = async (
   result: GeneratedAgentSignalEmissionResult,
   store: ISnapshotStore,
@@ -205,7 +255,7 @@ const persistWorkflowSnapshot = async (
     userId,
   };
 
-  await store.save(snapshot);
+  await saveWorkflowStep(store, snapshot, step);
 };
 
 const readSourcePayloadString = (
@@ -267,7 +317,7 @@ const persistWorkflowHydrationSkippedSnapshot = async (
     totalTokens: 0,
   };
 
-  await store.save({
+  const snapshot: ExecutionSnapshot = {
     agentId: readSourcePayloadString(input.sourceEvent, 'agentId'),
     completedAt,
     completionReason: 'done',
@@ -280,7 +330,8 @@ const persistWorkflowHydrationSkippedSnapshot = async (
     totalTokens: 0,
     traceId: operationId,
     userId: input.userId,
-  });
+  };
+  await saveWorkflowStep(store, snapshot, step);
 };
 
 const buildFeedbackSourceSerializedContext = async (

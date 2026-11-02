@@ -15,6 +15,7 @@ import { AgentRuntimeError } from '@lobechat/model-runtime/utils/createError';
 import {
   ChatErrorType,
   getDisabledPluginIds,
+  resolveContextMode,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
   type RuntimeStepContext,
@@ -187,6 +188,9 @@ class ChatService {
       chatConfig.memory?.effort ?? userMemorySettings.effort ?? 'medium';
     const enableAgentMode =
       chatConfig.enableAgentMode !== false && isCanUseFC(payload.model, payload.provider!);
+    const contextMode = resolveContextMode(chatConfig, {
+      supportToolUse: isCanUseFC(payload.model, payload.provider!),
+    });
 
     // =================== 1.2 build agent builder context =================== //
 
@@ -296,6 +300,7 @@ class ChatService {
       agentBuilderContext,
       agentDocuments,
       agentId: targetAgentId,
+      contextMode,
       // `agentConfig.plugins` is the raw (pre-filter) field — `plugins` below
       // is already pinned-only (resolved upstream in agentConfigResolver).
       disabledPluginIds: getDisabledPluginIds(agentConfig.plugins),

@@ -15,12 +15,18 @@ export interface ActivateSkillParams {
 export type ActivateSkillSource = 'agent' | 'builtin' | 'device' | 'project' | 'user';
 
 export interface ActivateSkillState {
+  /** Hash of the exact activated body returned to the model. */
+  contentHash?: string;
   description?: string;
   hasResources: boolean;
   id: string;
+  /** Source location for filesystem skills. */
+  location?: string;
   name: string;
   /** Skill origin — drives the inspector label (e.g. "Activate Agent Skill"). */
   source?: ActivateSkillSource;
+  /** Upstream resource/version identity used to detect drift. */
+  sourceVersion?: string;
   /** Friendly title for UI display; falls back to `name` when unset. */
   title?: string;
 }
@@ -108,11 +114,17 @@ export interface ReadReferenceParams {
 }
 
 export interface ReadReferenceState {
+  /** Hash of the exact reference body returned to the model. */
+  contentHash?: string;
   encoding: 'base64' | 'utf8';
   fileType: string;
   fullPath?: string;
   path: string;
   size: number;
+  /** Owning skill identity, included so the path cannot be detached from it. */
+  skillId?: string;
+  /** Upstream file hash or skill revision used to detect drift. */
+  sourceVersion?: string;
 }
 
 export interface ExportFileParams {

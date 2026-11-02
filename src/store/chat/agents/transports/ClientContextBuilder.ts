@@ -5,10 +5,11 @@ import type {
   ContextBuildOutput,
 } from '@lobechat/agent-runtime';
 import { ToolResolver, type ToolsEngine } from '@lobechat/context-engine';
-import type { MessageMetadata } from '@lobechat/types';
-import { TraceNameMap } from '@lobechat/types';
+import { buildOnDemandBootstrapToolSet } from '@lobechat/context-engine/onDemand';
+import { type MessageMetadata, resolveContextMode, TraceNameMap } from '@lobechat/types';
 import { dedupeBy } from '@lobechat/utils';
 
+import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { chatService } from '@/services/chat';
 import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import type { FetchOptions } from '@/services/chat/types';
@@ -36,7 +37,8 @@ export class ClientContextBuilder implements ContextBuilder {
     const operation = this.context.get().operations[this.context.operationId];
     if (!operation) throw new Error(`Operation not found: ${this.context.operationId}`);
 
-    const resolvedAgentConfig = this.resolveAgentConfig(input);
+    const onDemand = this.isOnDemand(input);
+    const resolvedAgentConfig = this.resolveAgentConfig(input, onDemand);
     const manifestMap = Object.fromEntries(
       (resolvedAgentConfig.enabledManifests ?? []).map((manifest) => [
         manifest.identifier,
@@ -61,7 +63,11 @@ export class ClientContextBuilder implements ContextBuilder {
     );
     const promptAgentConfig: ResolvedAgentConfig = {
       ...resolvedAgentConfig,
-      enabledManifests: Object.values(resolvedTools.promptManifestMap),
+      // On-demand keeps every manifest as a discovery card, while only the
+      // bootstrap and atomically activated identifiers become native tools.
+      enabledManifests: onDemand
+        ? resolvedAgentConfig.enabledManifests
+        : Object.values(resolvedTools.promptManifestMap),
       enabledToolIds: resolvedTools.enabledToolIds,
       tools: resolvedTools.tools.length > 0 ? resolvedTools.tools : undefined,
     };
@@ -113,15 +119,31 @@ export class ClientContextBuilder implements ContextBuilder {
     };
   }
 
-  private resolveAgentConfig(input: ContextBuildInput): ResolvedAgentConfig {
+  private isOnDemand(input: ContextBuildInput): boolean {
+    return (
+      resolveContextMode(this.context.agentConfig.chatConfig, {
+        supportToolUse: isCanUseFC(input.model, input.provider),
+      }) === 'on-demand'
+    );
+  }
+
+  private resolveAgentConfig(input: ContextBuildInput, onDemand: boolean): ResolvedAgentConfig {
+    const bootstrap = onDemand ? buildOnDemandBootstrapToolSet() : undefined;
+    const baseConfig: ResolvedAgentConfig = bootstrap
+      ? {
+          ...this.context.agentConfig,
+          enabledToolIds: bootstrap.enabledToolIds,
+          tools: bootstrap.tools,
+        }
+      : this.context.agentConfig;
     const activatedToolIds = [
       ...(this.context.runtimeContext?.stepContext?.activatedToolIds ?? []),
       ...(input.state.activatedStepTools?.map((tool) => tool.id) ?? []),
-    ];
+    ].filter((identifier) => !baseConfig.enabledToolIds?.includes(identifier));
     const uniqueActivatedToolIds = [...new Set(activatedToolIds)];
 
     if (!uniqueActivatedToolIds.length || !this.context.toolsEngine) {
-      return this.context.agentConfig;
+      return baseConfig;
     }
 
     const additional = this.context.toolsEngine.generateToolsDetailed({
@@ -132,22 +154,19 @@ export class ClientContextBuilder implements ContextBuilder {
       toolIds: uniqueActivatedToolIds,
     });
 
-    if (!additional.tools?.length) return this.context.agentConfig;
+    if (!additional.tools?.length) return baseConfig;
 
     return {
-      ...this.context.agentConfig,
+      ...baseConfig,
       enabledManifests: dedupeBy(
-        [...(this.context.agentConfig.enabledManifests ?? []), ...additional.enabledManifests],
+        [...(baseConfig.enabledManifests ?? []), ...additional.enabledManifests],
         (manifest) => manifest.identifier,
       ),
       enabledToolIds: [
-        ...new Set([
-          ...(this.context.agentConfig.enabledToolIds ?? []),
-          ...additional.enabledToolIds,
-        ]),
+        ...new Set([...(baseConfig.enabledToolIds ?? []), ...additional.enabledToolIds]),
       ],
       tools: dedupeBy(
-        [...(this.context.agentConfig.tools ?? []), ...additional.tools],
+        [...(baseConfig.tools ?? []), ...additional.tools],
         (tool) => tool.function.name,
       ),
     };

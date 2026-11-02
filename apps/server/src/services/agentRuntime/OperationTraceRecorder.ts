@@ -1,5 +1,9 @@
 import type { ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
-import type { ChatMessageErrorAttribution, ChatMessageErrorSeverity } from '@lobechat/types';
+import type {
+  ChatMessageErrorAttribution,
+  ChatMessageErrorSeverity,
+  OnDemandTraceMetadata,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import type { StepCompletionReason, StepPresentationData } from './types';
@@ -26,7 +30,11 @@ export interface AppendStepParams {
    * because ~97% of each step payload was tracing-only fields. Routing CE
    * via tracingContextEngine keeps it in trace only, keeping Redis state lean.
    */
-  contextEngine?: { input?: unknown; output?: unknown };
+  contextEngine?: {
+    input?: unknown;
+    metadata?: OnDemandTraceMetadata;
+    output?: unknown;
+  };
   currentContext?: { payload?: unknown; phase?: string; stepContext?: unknown };
   externalRetryCount: number;
   presentation: StepPresentationData;
@@ -223,8 +231,10 @@ export class OperationTraceRecorder {
     const storeOutput =
       lastOutputJson === undefined || JSON.stringify(step.contextEngine.output) !== lastOutputJson;
 
+    const ceMetadata = step.contextEngine.metadata as object | undefined;
     step.contextEngine = {
       ...(storeInput ? { input: step.contextEngine.input } : {}),
+      ...(ceMetadata ? { metadata: ceMetadata } : {}),
       ...(storeOutput ? { output: step.contextEngine.output } : {}),
     };
   }
@@ -267,7 +277,11 @@ export class OperationTraceRecorder {
     // RuntimeExecutorContext.tracingContextEngine). Uses the same delta
     // pattern as messagesBaseline/messagesDelta.
     const contextEngine: StepSnapshot['contextEngine'] = ceInput
-      ? { input: ceInput.input, output: ceInput.output }
+      ? {
+          input: ceInput.input,
+          ...(ceInput.metadata && { metadata: ceInput.metadata }),
+          output: ceInput.output,
+        }
       : undefined;
 
     // Strip heavy/redundant data from events before persisting to snapshot.

@@ -20,6 +20,9 @@ const vercelConfig = {
 };
 const nextConfig = defineConfig({
   ...(isVercel ? vercelConfig : {}),
+  ...(process.env.PROMPT_HARNESS_NEXT_DIST_DIR
+    ? { distDir: process.env.PROMPT_HARNESS_NEXT_DIST_DIR }
+    : {}),
 });
 
 export default nextConfig;

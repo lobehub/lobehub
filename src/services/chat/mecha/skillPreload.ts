@@ -5,7 +5,7 @@ import {
   type UserCredsContext,
 } from '@lobechat/builtin-tool-creds';
 import { resourcesTreePrompt } from '@lobechat/prompts';
-import type { RuntimeSelectedSkill, UserCredSummary } from '@lobechat/types';
+import type { RuntimeSelectedSkill, SkillResourceMeta, UserCredSummary } from '@lobechat/types';
 
 import { agentSkillService } from '@/services/skill';
 import { getToolStoreState } from '@/store/tool';
@@ -14,6 +14,8 @@ interface PreloadedSkill {
   content: string;
   identifier: string;
   name: string;
+  resources?: Record<string, SkillResourceMeta>;
+  source: NonNullable<RuntimeSelectedSkill['source']>;
 }
 
 interface PrepareSelectedSkillPreloadParams {
@@ -91,6 +93,28 @@ const buildCredsContext = (userCreds?: UserCredSummary[]): UserCredsContext => (
   settingsUrl: '/settings/credential',
 });
 
+/**
+ * Reference cards only need stable path metadata. Strip inline bodies so a
+ * slash-selected skill cannot preload every resource through the operation
+ * payload.
+ */
+const toReferenceCardResources = (
+  resources?: Record<string, SkillResourceMeta> | null,
+): Record<string, SkillResourceMeta> | undefined => {
+  if (!resources) return;
+
+  const entries = Object.entries(resources).map(([path, meta]) => [
+    path,
+    {
+      ...(meta.documentId && { documentId: meta.documentId }),
+      fileHash: meta.fileHash,
+      size: meta.size,
+    },
+  ]);
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+};
+
 const loadSkillContent = async (
   selectedSkill: RuntimeSelectedSkill,
   userCreds?: UserCredSummary[],
@@ -114,6 +138,8 @@ const loadSkillContent = async (
       content,
       identifier: builtinSkill.identifier,
       name: builtinSkill.name,
+      resources: toReferenceCardResources(builtinSkill.resources),
+      source: 'builtin',
     };
   }
 
@@ -137,6 +163,8 @@ const loadSkillContent = async (
     content,
     identifier: detail.identifier,
     name: detail.name,
+    resources: toReferenceCardResources(detail.resources),
+    source: detail.source,
   };
 };
 
@@ -158,7 +186,14 @@ export const resolveSelectedSkillsWithContent = async ({
   const enriched = await Promise.all(
     resolved.map(async (skill) => {
       const loaded = await loadSkillContent(skill, userCreds);
-      return loaded ? { ...skill, content: loaded.content } : skill;
+      return loaded
+        ? {
+            ...skill,
+            content: loaded.content,
+            ...(loaded.resources && { resources: loaded.resources }),
+            source: loaded.source,
+          }
+        : skill;
     }),
   );
 

@@ -1,5 +1,5 @@
 import { escapeXml } from '@lobechat/prompts';
-import type { RuntimeSelectedSkill } from '@lobechat/types';
+import type { AgentContextMode, RuntimeSelectedSkill } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseLastUserContentProvider } from '../base/BaseLastUserContentProvider';
@@ -18,6 +18,11 @@ declare module '../types' {
 const log = debug('context-engine:provider:SelectedSkillInjector');
 
 export interface SelectedSkillInjectorConfig {
+  /**
+   * On-demand handles selected skills as provenance-bearing dynamic entries;
+   * this legacy last-user injector must not duplicate their bodies.
+   */
+  contextMode?: AgentContextMode;
   enabled?: boolean;
   selectedSkills?: RuntimeSelectedSkill[];
 }
@@ -115,6 +120,11 @@ export class SelectedSkillInjector extends BaseLastUserContentProvider {
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    if (this.config.contextMode === 'on-demand') {
+      log('On-demand mode defers selected skill bodies to the dynamic suffix');
+      return this.markAsExecuted(context);
+    }
+
     if (this.config.enabled === false) return this.markAsExecuted(context);
 
     const clonedContext = this.cloneContext(context);

@@ -7,11 +7,14 @@ import {
 } from '@lobechat/builtin-tool-activator/executionRuntime';
 import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
 import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
+import { validateAtomicCapabilityBundle } from '@lobechat/context-engine/onDemand';
 import { getDisabledPluginIds } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
+import { ConnectorToolPermission } from '@/database/schemas';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
+import { getConnectorToolPermission } from '@/libs/mcp/connectorPermissionCheck';
 import {
   emitToolOutcomeSafely,
   resolveToolOutcomeScope,
@@ -28,6 +31,7 @@ import { type ServerRuntimeRegistration } from './types';
 export const activatorRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
     const activatedIds: string[] = [];
+    const isOnDemand = context.contextMode === 'on-demand';
     const emitActivationOutcome = async (input: {
       errorReason?: string;
       identifiers: string[];
@@ -135,6 +139,69 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         : undefined,
       getActivatedToolIds: () => [...activatedIds],
       getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
+        if (isOnDemand) {
+          const pool = context.discoveryPool;
+          if (!pool) return [];
+
+          const results: ToolManifestInfo[] = [];
+          for (const id of identifiers) {
+            const card = pool.cards.find((item) => item.identifier === id);
+            const bundle = pool.bundles[id];
+            if (!card || !bundle || card.hash !== bundle.hash || card.version !== bundle.version) {
+              continue;
+            }
+
+            const validation = validateAtomicCapabilityBundle(bundle, {
+              hash: card.hash,
+              identifier: card.identifier,
+              version: card.version,
+            });
+            if (!validation.ok) continue;
+
+            if (context.serverDB && context.userId) {
+              const permissions = await Promise.all(
+                validation.bundle.manifest.api.map((api) =>
+                  getConnectorToolPermission(
+                    context.serverDB!,
+                    context.userId!,
+                    id,
+                    api.name,
+                    context.workspaceId,
+                    context.agentId,
+                  ),
+                ),
+              );
+              if (permissions.includes(ConnectorToolPermission.disabled)) {
+                continue;
+              }
+            }
+
+            const manifest = validation.bundle.manifest;
+            results.push({
+              apiDescriptions: manifest.api.map((api) => ({
+                description: api.description,
+                name: api.name,
+              })),
+              avatar: manifest.meta?.avatar,
+              capability: {
+                hash: card.hash,
+                identifier: card.identifier,
+                version: card.version,
+              },
+              capabilitySummary: card.capability,
+              executionEnvironment: card.executionEnvironment,
+              identifier: manifest.identifier,
+              manual: validation.bundle.manual.content,
+              name: card.name,
+              source: card.source,
+              systemRole: manifest.systemRole,
+              version: card.version,
+            });
+          }
+
+          return results;
+        }
+
         // Note: context.toolManifestMap should only contain discoverable tools.
         // The caller is responsible for scoping this map to exclude hidden/internal tools.
         const results: ToolManifestInfo[] = [];
@@ -156,6 +223,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
 
         return results;
       },
+      isOnDemand: () => isOnDemand,
       markActivated: (identifiers: string[]) => {
         for (const id of identifiers) {
           if (!activatedIds.includes(id)) {

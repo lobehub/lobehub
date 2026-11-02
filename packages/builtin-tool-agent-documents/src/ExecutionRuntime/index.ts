@@ -8,6 +8,7 @@ import {
   formatUpdateLoadRuleResult,
 } from '@lobechat/prompts';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import { sha256 } from 'js-sha256';
 
 import type {
   CopyDocumentArgs,
@@ -15,6 +16,9 @@ import type {
   ListDocumentsArgs,
   ModifyDocumentNodesArgs,
   ReadDocumentArgs,
+  ReadDocumentContinuation,
+  ReadDocumentRange,
+  ReadDocumentState,
   RemoveDocumentArgs,
   RenameDocumentArgs,
   ReplaceDocumentContentArgs,
@@ -86,18 +90,166 @@ const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE = 'CURRENT_PAGE_DOCUMENT_WRITE_FORB
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE = 'CurrentPageDocumentWriteForbidden';
 
 /**
- * Upper bound on the characters a single readDocument result feeds back into the
- * model context. Agent documents can hold whole email/newsletter archives that
- * run into the millions of characters; returning one whole once pushed a task
- * past the model's context window — a lone tool result reached ~591k tokens and
- * the next completion 400'd with ExceededContextWindow. The client Inspector
- * still renders the full document from `state`, so only the LLM-facing `content`
- * is capped. ~200k chars is roughly 50k tokens per field — generous for a real
- * document read while leaving ample room in the window.
+ * A readDocument result is always an explicit window. The default keeps a
+ * single tool result around 12k tokens while the hard ceiling protects the
+ * context window from a caller-supplied oversized limit. The Inspector still
+ * receives the full document snapshot through `state`.
  */
-const MAX_READ_DOCUMENT_CONTENT_CHARS = 200_000;
+export const DEFAULT_READ_DOCUMENT_LIMIT = 50_000;
+export const MAX_READ_DOCUMENT_LIMIT = 200_000;
 
 type MaybePromise<T> = T | Promise<T>;
+
+interface DocumentReadWindow {
+  content: string;
+  continuation?: ReadDocumentContinuation;
+  hasMore: boolean;
+  nextOffset?: number;
+  range: ReadDocumentRange;
+}
+
+const countNewlines = (content: string) => {
+  let count = 0;
+  for (const char of content) {
+    if (char === '\n') count += 1;
+  }
+  return count;
+};
+
+const isHighSurrogate = (code: number) => code >= 0xd8_00 && code <= 0xdb_ff;
+const isLowSurrogate = (code: number) => code >= 0xdc_00 && code <= 0xdf_ff;
+
+const lineNumberAtOffset = (content: string, offset: number) =>
+  1 + countNewlines(content.slice(0, offset));
+
+const resolveWindowEnd = (content: string, start: number, requestedEnd: number) => {
+  let end = requestedEnd;
+
+  if (end < content.length) {
+    const lineBoundary = content.lastIndexOf('\n', end - 1);
+    if (lineBoundary >= start) end = lineBoundary + 1;
+  }
+
+  // Never split a UTF-16 surrogate pair. If the requested window can only hold
+  // half of one code point, include the whole pair so continuation advances.
+  if (end > start && isHighSurrogate(content.charCodeAt(end - 1))) {
+    end = end - start > 1 ? end - 1 : Math.min(content.length, requestedEnd + 1);
+  }
+
+  return end;
+};
+
+const buildReadWindow = (
+  content: string,
+  {
+    format,
+    id,
+    limit,
+    offset,
+  }: {
+    format: ReadDocumentContinuation['format'];
+    id: string;
+    limit: number;
+    offset: number;
+  },
+): DocumentReadWindow => {
+  let start = Math.min(offset, content.length);
+  if (start < content.length && isLowSurrogate(content.charCodeAt(start))) {
+    start += 1;
+  }
+
+  const requestedEnd = Math.min(content.length, start + limit);
+  const end = resolveWindowEnd(content, start, requestedEnd);
+  const windowContent = content.slice(start, end);
+  const totalLines = 1 + countNewlines(content);
+  const startLine = lineNumberAtOffset(content, start);
+  const returnedLines = countNewlines(windowContent);
+  const endLine =
+    windowContent.length === 0
+      ? startLine
+      : startLine + returnedLines - (windowContent.endsWith('\n') ? 1 : 0);
+  const hasMore = end < content.length;
+  const range: ReadDocumentRange = {
+    endLine,
+    endOffset: end,
+    length: windowContent.length,
+    startLine,
+    startOffset: start,
+    totalLength: content.length,
+    totalLines,
+  };
+  const continuation: ReadDocumentContinuation | undefined = hasMore
+    ? {
+        format,
+        id,
+        limit,
+        offset: end,
+      }
+    : undefined;
+
+  return {
+    ...(continuation && { continuation, nextOffset: end }),
+    content: windowContent,
+    hasMore,
+    range,
+  };
+};
+
+const renderWindowedReadContent = ({
+  contentHash,
+  id,
+  window,
+}: {
+  contentHash: string;
+  id: string;
+  window: DocumentReadWindow;
+}): string => {
+  const metadata = JSON.stringify({
+    contentHash,
+    endLine: window.range.endLine,
+    endOffset: window.range.endOffset,
+    hasMore: window.hasMore,
+    id,
+    length: window.range.length,
+    nextOffset: window.nextOffset,
+    startLine: window.range.startLine,
+    startOffset: window.range.startOffset,
+    totalLength: window.range.totalLength,
+    totalLines: window.range.totalLines,
+  });
+
+  return [
+    '<document_read_metadata>',
+    metadata,
+    '</document_read_metadata>',
+    window.content,
+    ...(window.continuation
+      ? [
+          '<document_read_continuation>',
+          JSON.stringify(window.continuation),
+          '</document_read_continuation>',
+        ]
+      : ['<document_read_complete />']),
+  ].join('\n');
+};
+
+const validateReadWindowArgs = (
+  args: ReadDocumentArgs,
+): { error: string } | { limit: number; offset: number } => {
+  const limit = args.limit ?? DEFAULT_READ_DOCUMENT_LIMIT;
+  const offset = args.offset ?? 0;
+
+  if (!Number.isSafeInteger(limit) || limit <= 0 || limit > MAX_READ_DOCUMENT_LIMIT) {
+    return {
+      error: `Invalid readDocument limit: expected an integer from 1 to ${MAX_READ_DOCUMENT_LIMIT}.`,
+    };
+  }
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    return { error: 'Invalid readDocument offset: expected a non-negative integer.' };
+  }
+
+  return { limit, offset };
+};
 
 export interface AgentDocumentsRuntimeService {
   copyDocument: (
@@ -273,48 +425,6 @@ export class AgentDocumentsExecutionRuntime {
     return doc.documentId === currentDocumentId;
   }
 
-  /**
-   * Cap a single field so one oversized document can't blow the model's context
-   * window. Truncation is byte-cheap `slice` on characters (not tokens), so the
-   * cap is deliberately conservative; the trailing marker tells the model the
-   * document was cut and to work with a smaller/targeted read instead of
-   * assuming it saw the whole thing.
-   */
-  private capReadContent(content: string) {
-    if (content.length <= MAX_READ_DOCUMENT_CONTENT_CHARS) return content;
-
-    // Avoid splitting a UTF-16 surrogate pair: if the cutoff lands right after a
-    // high surrogate (e.g. half of an emoji), step back one code unit. Otherwise
-    // JSON.stringify emits a lone `\uD83D`-style escape, which some upstream
-    // providers (DeepSeek, Anthropic) reject — which would re-break the exact
-    // large-document requests this cap is meant to protect.
-    let cutoff = MAX_READ_DOCUMENT_CONTENT_CHARS;
-    const lastCharCode = content.charCodeAt(cutoff - 1);
-    if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) cutoff -= 1;
-
-    const omitted = content.length - cutoff;
-    return (
-      content.slice(0, cutoff) +
-      `\n\n[... document truncated to fit the context window: ${omitted} of ${content.length} ` +
-      `characters omitted. This is only the beginning of the document — do not assume it is ` +
-      `complete. Read a smaller/specific document, or list and target sections instead of ` +
-      `loading the whole file.]`
-    );
-  }
-
-  private formatDocumentReadContent(
-    doc: AgentDocumentRecord,
-    format: 'xml' | 'markdown' | 'both' = 'xml',
-  ) {
-    const markdown = this.capReadContent(doc.content || '');
-    const xml = this.capReadContent(doc.litexml || '');
-
-    if (format === 'markdown') return markdown;
-    if (format === 'both') return JSON.stringify({ markdown, xml });
-
-    return xml || markdown;
-  }
-
   async listDocuments(
     args: ListDocumentsArgs,
     context?: AgentDocumentOperationContext,
@@ -431,11 +541,110 @@ export class AgentDocumentsExecutionRuntime {
     const doc = await this.service.readDocument({ ...args, agentId });
     if (!doc) return { content: `Document not found: ${args.id}`, success: false };
 
-    const format = args.format ?? 'xml';
+    const validated = validateReadWindowArgs(args);
+    if ('error' in validated) {
+      return { content: validated.error, success: false };
+    }
+
+    const markdown = doc.content || '';
+    const xml = doc.litexml || '';
+    const requestedFormat = args.format ?? 'xml';
+    // XML node ids are regenerated when the editor snapshot is projected. Hash
+    // the canonical Markdown source so every window of one document revision
+    // carries the same provenance hash.
+    const contentHash = `sha256:${sha256(markdown)}`;
+    const state: ReadDocumentState = {
+      content: markdown,
+      contentHash,
+      id: doc.id,
+      title: doc.title,
+      xml,
+    };
+
+    if (requestedFormat === 'both') {
+      const markdownWindow = buildReadWindow(markdown, {
+        format: 'markdown',
+        id: doc.id,
+        limit: validated.limit,
+        offset: validated.offset,
+      });
+      const xmlWindow = buildReadWindow(xml, {
+        format: 'xml',
+        id: doc.id,
+        limit: validated.limit,
+        offset: validated.offset,
+      });
+      const windowed = markdownWindow.hasMore || xmlWindow.hasMore || validated.offset > 0;
+      const primaryWindow = xml.length > 0 ? xmlWindow : markdownWindow;
+      const continuations = {
+        ...(markdownWindow.continuation && { markdown: markdownWindow.continuation }),
+        ...(xmlWindow.continuation && { xml: xmlWindow.continuation }),
+      };
+      const ranges = {
+        markdown: markdownWindow.range,
+        xml: xmlWindow.range,
+      };
+
+      return {
+        content: windowed
+          ? JSON.stringify(
+              {
+                continuations,
+                markdown: renderWindowedReadContent({
+                  contentHash,
+                  id: doc.id,
+                  window: markdownWindow,
+                }),
+                ranges,
+                xml: renderWindowedReadContent({
+                  contentHash,
+                  id: doc.id,
+                  window: xmlWindow,
+                }),
+              },
+              null,
+              2,
+            )
+          : JSON.stringify({ markdown, xml }),
+        state: {
+          ...state,
+          ...(primaryWindow.continuation && { continuation: primaryWindow.continuation }),
+          ...(Object.keys(continuations).length > 0 && { continuations }),
+          format: 'both',
+          hasMore: markdownWindow.hasMore || xmlWindow.hasMore,
+          ...(primaryWindow.nextOffset !== undefined && {
+            nextOffset: primaryWindow.nextOffset,
+          }),
+          range: primaryWindow.range,
+          ranges,
+        },
+        success: true,
+      };
+    }
+
+    const actualFormat =
+      requestedFormat === 'markdown' || !xml ? 'markdown' : ('xml' as 'markdown' | 'xml');
+    const source = actualFormat === 'markdown' ? markdown : xml;
+    const window = buildReadWindow(source, {
+      format: actualFormat,
+      id: doc.id,
+      limit: validated.limit,
+      offset: validated.offset,
+    });
+    const windowed = window.hasMore || validated.offset > 0;
 
     return {
-      content: this.formatDocumentReadContent(doc, format),
-      state: { content: doc.content, id: doc.id, title: doc.title, xml: doc.litexml },
+      content: windowed
+        ? renderWindowedReadContent({ contentHash, id: doc.id, window })
+        : window.content,
+      state: {
+        ...state,
+        ...(window.continuation && { continuation: window.continuation }),
+        format: actualFormat,
+        hasMore: window.hasMore,
+        ...(window.nextOffset !== undefined && { nextOffset: window.nextOffset }),
+        range: window.range,
+      },
       success: true,
     };
   }

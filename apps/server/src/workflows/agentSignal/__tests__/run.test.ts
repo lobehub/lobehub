@@ -6,6 +6,7 @@ import { agents, messages, threads, topics, users } from '@lobechat/database/sch
 import { getTestDB } from '@lobechat/database/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AgentSignalEmissionOrchestration } from '@/server/services/agentSignal/orchestrator';
 import { createProcedurePolicyOptions as createProcedurePolicyOptionsFixture } from '@/server/services/agentSignal/procedure';
 import type { SelfReflectionReviewContext } from '@/server/services/agentSignal/services/selfIteration/reflection/handler';
 import type { NightlyReviewContext } from '@/server/services/agentSignal/services/selfIteration/review/collect';
@@ -81,6 +82,127 @@ const createNightlyReviewContext = (input: {
 });
 
 describe('runAgentSignalWorkflow', () => {
+  it('appends workflow steps without replacing the existing LLM context trace', async () => {
+    const db = await getTestDB();
+    const userId = `eval_${uuid()}`;
+    const agentId = `agent_${uuid()}`;
+    const operationId = `op_${uuid()}`;
+    const topicId = `topic_${uuid()}`;
+    const startedAt = Date.now();
+    const existingSnapshot = {
+      agentId,
+      completedAt: startedAt + 100,
+      completionReason: 'done' as const,
+      operationId,
+      startedAt,
+      steps: [
+        {
+          completedAt: startedAt + 100,
+          contextEngine: {
+            input: { contextMode: 'on-demand', systemRole: 'exact prompt' },
+            metadata: { protocolVersion: '1', rawSystemRole: 'exact prompt' },
+            output: [{ content: 'exact prompt', role: 'system' }],
+          },
+          executionTimeMs: 100,
+          startedAt,
+          stepIndex: 0,
+          stepType: 'call_llm' as const,
+          totalCost: 0,
+          totalTokens: 10,
+        },
+      ],
+      topicId,
+      totalCost: 0,
+      totalSteps: 1,
+      totalTokens: 10,
+      traceId: operationId,
+      userId,
+    };
+    const getSnapshot = vi.fn().mockResolvedValue(existingSnapshot);
+    const saveSnapshot = vi.fn().mockResolvedValue(undefined);
+    const snapshotStore = {
+      get: getSnapshot,
+      getLatest: vi.fn(),
+      list: vi.fn(),
+      listPartials: vi.fn(),
+      loadPartial: vi.fn(),
+      removePartial: vi.fn(),
+      save: saveSnapshot,
+      savePartial: vi.fn(),
+    } satisfies ISnapshotStore;
+
+    await db.insert(users).values({ id: userId });
+
+    const executeSourceEvent: NonNullable<RunAgentSignalWorkflowDeps['executeSourceEvent']> = vi.fn(
+      async (sourceEvent) => ({
+        deduped: false as const,
+        orchestration: {
+          actions: [],
+          emittedSignals: [],
+          observability: {} as AgentSignalEmissionOrchestration['observability'],
+          plans: [],
+          results: [],
+        },
+        source: {
+          ...sourceEvent,
+          chain: { rootSourceId: sourceEvent.sourceId },
+        },
+        trigger: {
+          scopeKey: sourceEvent.scopeKey,
+          token: `trigger:${sourceEvent.sourceId}`,
+          windowEventCount: 1,
+        },
+      }),
+    );
+
+    await runAgentSignalWorkflow(
+      createWorkflowContext({
+        agentId,
+        sourceEvent: {
+          payload: {
+            agentId,
+            operationId,
+            topicId,
+          },
+          scopeKey: `topic:${topicId}`,
+          sourceId: `tool-outcome:${operationId}:activateTools`,
+          sourceType: 'tool.outcome.completed',
+          timestamp: startedAt + 200,
+        },
+        userId,
+      }),
+      {
+        createProcedurePolicyOptions: vi.fn().mockReturnValue({}),
+        createSnapshotStore: () => snapshotStore,
+        executeSourceEvent,
+        getDb: async () => db,
+      },
+    );
+
+    expect(getSnapshot).toHaveBeenCalledWith(operationId);
+    const saved = saveSnapshot.mock.calls[0][0];
+    expect(saved.steps).toHaveLength(2);
+    expect(saved.steps[0]).toMatchObject({
+      contextEngine: {
+        input: { contextMode: 'on-demand', systemRole: 'exact prompt' },
+        metadata: { protocolVersion: '1', rawSystemRole: 'exact prompt' },
+      },
+      stepIndex: 0,
+      stepType: 'call_llm',
+    });
+    expect(saved.steps[1]).toMatchObject({
+      context: {
+        payload: {
+          sourceId: `tool-outcome:${operationId}:activateTools`,
+          sourceType: 'tool.outcome.completed',
+        },
+      },
+      stepIndex: 1,
+      stepType: 'call_tool',
+    });
+    expect(saved.totalSteps).toBe(2);
+  });
+
   it('hydrates client.runtime.start into agent.user.message with serialized root-topic context', async () => {
     const db = await getTestDB();
     const userId = `eval_${uuid()}`;
@@ -88,8 +210,7 @@ describe('runAgentSignalWorkflow', () => {
     const parentMessageId = `msg_${uuid()}`;
     const baseTimestamp = new Date('2026-01-01T00:00:00.000Z').getTime();
     let capturedSourceEvent:
-      | AgentSignalSourceEvent<typeof AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage>
-      | undefined;
+      AgentSignalSourceEvent<typeof AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage> | undefined;
 
     await db.insert(users).values({ id: userId });
 
@@ -390,8 +511,7 @@ describe('runAgentSignalWorkflow', () => {
     const assistantMessageId = `msg_${uuid()}`;
     const baseTimestamp = new Date('2026-01-03T00:00:00.000Z').getTime();
     let capturedSourceEvent:
-      | AgentSignalSourceEvent<typeof AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage>
-      | undefined;
+      AgentSignalSourceEvent<typeof AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage> | undefined;
 
     await db.insert(users).values({ id: userId });
 

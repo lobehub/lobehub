@@ -10,6 +10,8 @@
  * 3. Replaces the deprecated pluginState passing pattern
  */
 
+import type { SkillResourceMeta } from './skill';
+
 /** Status of a todo item */
 export type StepContextTodoStatus = 'todo' | 'processing' | 'completed';
 
@@ -125,6 +127,13 @@ export interface RuntimeSelectedSkill {
    * Human-readable skill name shown in the input UI
    */
   name: string;
+  /**
+   * Structured resource metadata used to emit reference cards without loading
+   * their bodies. Optional for older callers that only provide content.
+   */
+  resources?: Record<string, SkillResourceMeta>;
+  /** Skill origin used by the discovery card. */
+  source?: 'builtin' | 'device' | 'market' | 'project' | 'user';
 }
 
 /**

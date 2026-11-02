@@ -24,12 +24,15 @@ import {
   chatModeAllowedToolIds,
   defaultToolIds,
   groupSupervisorToolIds,
+  onDemandBootstrapToolIds,
 } from '@lobechat/builtin-tools';
 import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
+import { ON_DEMAND_BOOTSTRAP_MANIFESTS_BY_IDENTIFIER } from '@lobechat/context-engine/onDemand';
 import {
   type BuiltinToolManifest,
   getActivePluginIds,
+  resolveContextMode,
   type RuntimeEnvMode,
   type RuntimePlatform,
 } from '@lobechat/types';
@@ -122,6 +125,7 @@ export const createServerToolsEngine = (
     defaultToolIds,
     excludeIdentifiers,
     manifestContext,
+    manifestOverrides,
   } = config;
 
   // Get plugin manifests from installed plugins (from database)
@@ -163,9 +167,12 @@ export const createServerToolsEngine = (
     ...builtinManifests,
     ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
   ];
-  const allManifests = excludeIdentifiers
+  const scopedManifests = excludeIdentifiers
     ? combinedManifests.filter((m) => !excludeIdentifiers.has(m.identifier))
     : combinedManifests;
+  const allManifests = scopedManifests.map(
+    (manifest) => manifestOverrides?.[manifest.identifier] ?? manifest,
+  );
 
   log(
     'Creating ToolsEngine with %d plugin manifests, %d builtin manifests, %d additional manifests, %d excluded',
@@ -200,6 +207,7 @@ export const createServerAgentToolsEngine = (
     additionalManifests,
     agentConfig,
     canUseDevice = false,
+    contextMode,
     deviceContext,
     disableLocalSystem = false,
     disabledPluginIds = [],
@@ -267,9 +275,14 @@ export const createServerAgentToolsEngine = (
   const toolMode = resolveToolMode(agentConfig.chatConfig ?? undefined);
   const isChatMode = toolMode === 'chat';
   const isCustomMode = toolMode === 'custom';
+  const isOnDemandMode =
+    resolveContextMode(
+      { ...agentConfig.chatConfig, contextMode },
+      { supportToolUse: context.isModelSupportToolUse(model, provider) },
+    ) === 'on-demand';
 
   log(
-    'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasDeviceProxy=%s canUseDevice=%s isChatMode=%s',
+    'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasDeviceProxy=%s canUseDevice=%s isChatMode=%s isOnDemand=%s',
     model,
     provider,
     searchMode,
@@ -279,6 +292,7 @@ export const createServerAgentToolsEngine = (
     hasDeviceProxy,
     canUseDevice,
     isChatMode,
+    isOnDemandMode,
   );
 
   // Chat mode: strict outer whitelist. Drop alwaysOn tools and every other
@@ -347,6 +361,14 @@ export const createServerAgentToolsEngine = (
     [RemoteDeviceManifest.identifier]: deviceCapable && hasDeviceProxy && !deviceLocked,
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };
+  // On-demand keeps the normal agent capability rules for eligibility, but
+  // makes only the closed bootstrap set callable before activation. Every
+  // other eligible/default/installed capability is resolved into the separate
+  // discovery pool by the host.
+  const onDemandRules = {
+    ...agentModeRules,
+    ...Object.fromEntries(onDemandBootstrapToolIds.map((id) => [id, true])),
+  };
 
   const excludedIdentifiers = new Set(disabledPluginIds);
   if (!canUseDevice) {
@@ -372,9 +394,11 @@ export const createServerAgentToolsEngine = (
     // `union(toolIds, defaultToolIds)`.
     defaultToolIds: isCustomMode
       ? (agentConfig.plugins ?? [])
-      : isChatMode
-        ? chatModeAllowedToolIds
-        : [...defaultToolIds, ...(isGroupSupervisor ? groupSupervisorToolIds : [])],
+      : isOnDemandMode
+        ? [...onDemandBootstrapToolIds]
+        : isChatMode
+          ? chatModeAllowedToolIds
+          : [...defaultToolIds, ...(isGroupSupervisor ? groupSupervisorToolIds : [])],
     // Post-merge wall: a plugin or Skill/Composio manifest claiming a
     // device identifier survives `buildAllowedBuiltinTools` (which only
     // filters the builtin source). Excluding the identifiers here drops
@@ -386,11 +410,20 @@ export const createServerAgentToolsEngine = (
     // Conversation context for context-aware builtin manifests (scope /
     // isSubAgent), e.g. hiding lobe-agent's callSubAgent in sub-agent / group runs.
     manifestContext,
+    manifestOverrides: isOnDemandMode
+      ? (ON_DEMAND_BOOTSTRAP_MANIFESTS_BY_IDENTIFIER as Readonly<Record<string, LobeToolManifest>>)
+      : undefined,
     enableChecker: createEnableChecker({
       // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-cron).
       // Only in agent mode; chat/custom modes can't let the activator bypass their fixed set.
-      allowExplicitActivation: toolMode === 'agent',
-      rules: isCustomMode ? customModeRules : isChatMode ? chatModeRules : agentModeRules,
+      allowExplicitActivation: toolMode === 'agent' && !isOnDemandMode,
+      rules: isCustomMode
+        ? customModeRules
+        : isOnDemandMode
+          ? onDemandRules
+          : isChatMode
+            ? chatModeRules
+            : agentModeRules,
     }),
   });
 };

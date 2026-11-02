@@ -200,11 +200,13 @@ export class ServerToolTransport implements ToolTransport {
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
               clientIp: context.state.metadata?.clientIp,
+              contextMode: context.state.metadata?.contextMode,
               currentTodos: context.currentTodos,
               deviceCapable: context.state.metadata?.executionPlan
                 ? isDeviceCapablePlan(context.state.metadata.executionPlan)
                 : undefined,
               documentId: context.state.metadata?.documentId,
+              discoveryPool: context.state.operationToolSet?.discoveryPool,
               editingAgentId: context.state.metadata?.editingAgentId,
               editingGroupId: context.state.metadata?.editingGroupId,
               execSubAgent: this.ctx.execSubAgent,
@@ -276,16 +278,21 @@ export class ServerToolTransport implements ToolTransport {
         ...execution.result,
         executionTime: execution.result.executionTime ?? 0,
       };
-      const executionResult = await archiveRuntimeToolResult(resultWithExecutionTime, {
-        agentId: context.state.metadata?.agentId,
-        identifier: chatToolPayload.identifier,
-        limit: context.toolResultMaxLength,
-        serverDB,
-        toolCallId: chatToolPayload.id,
-        topicId: this.ctx.topicId ?? context.state.metadata?.topicId,
-        userId,
-        workspaceId: context.state.metadata?.workspaceId ?? this.ctx.workspaceId,
-      });
+      const preserveOnDemandManual =
+        context.state.metadata?.contextMode === 'on-demand' &&
+        chatToolPayload.identifier === 'lobe-activator';
+      const executionResult = preserveOnDemandManual
+        ? resultWithExecutionTime
+        : await archiveRuntimeToolResult(resultWithExecutionTime, {
+            agentId: context.state.metadata?.agentId,
+            identifier: chatToolPayload.identifier,
+            limit: context.toolResultMaxLength,
+            serverDB,
+            toolCallId: chatToolPayload.id,
+            topicId: this.ctx.topicId ?? context.state.metadata?.topicId,
+            userId,
+            workspaceId: context.state.metadata?.workspaceId ?? this.ctx.workspaceId,
+          });
 
       await this.dispatchAfterToolCall(chatToolPayload, context, executionResult, toolCallMocked);
 

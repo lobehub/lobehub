@@ -38,7 +38,9 @@ import type {
 import { MessagesEngine, resolveTopicReferences } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
 import {
+  type AgentContextMode,
   getActivePluginIds,
+  type OnDemandContextMetadata,
   type OpenAIChatMessage,
   type RuntimeAdditionalContextFragment,
   type RuntimeInitialContext,
@@ -91,6 +93,8 @@ interface ContextEngineeringContext {
   agentDocuments?: AgentContextDocument[];
   /** The agent ID that will respond (for group context injection) */
   agentId?: string;
+  /** Explicit third-mode context strategy. Default keeps the legacy pipeline. */
+  contextMode?: AgentContextMode;
   /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left
@@ -158,6 +162,7 @@ export const contextEngineering = async ({
   disabledPluginIds,
   enableAgentMode,
   groupId,
+  contextMode,
   promptMode,
   initialContext,
   plugins,
@@ -167,6 +172,7 @@ export const contextEngineering = async ({
 }: ContextEngineeringContext): Promise<{
   contextBuckets?: ContextBuckets;
   messages: OpenAIChatMessage[];
+  onDemandContext?: OnDemandContextMetadata;
 }> => {
   log('tools: %o', tools);
 
@@ -689,6 +695,7 @@ export const contextEngineering = async ({
   const engine = new MessagesEngine({
     additionalContexts,
     // Agent configuration
+    contextMode,
     enableHistoryCount,
     formatHistorySummary: historySummaryPrompt,
     historyCount,
@@ -825,5 +832,6 @@ export const contextEngineering = async ({
   return {
     contextBuckets: result.metadata.contextBuckets,
     messages: result.messages,
+    onDemandContext: result.metadata.onDemandContext,
   };
 };

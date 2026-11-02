@@ -12,7 +12,8 @@
   "dependencies": {
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
-    "@lobechat/shared-tool-ui": "workspace:*"
+    "@lobechat/shared-tool-ui": "workspace:*",
+    "js-sha256": "^0.11.1"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

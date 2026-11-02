@@ -29,11 +29,53 @@ export interface CreateDocumentState {
 export interface ReadDocumentArgs {
   format?: 'xml' | 'markdown' | 'both';
   id: string;
+  /**
+   * Maximum number of characters to return. The runtime aligns the window to a
+   * line boundary when possible and reports the exact continuation offset.
+   */
+  limit?: number;
+  /** Character offset to start reading from. Use `nextOffset` from a prior result. */
+  offset?: number;
+}
+
+export interface ReadDocumentRange {
+  /** Inclusive, one-based line number of the last returned line. */
+  endLine: number;
+  /** Exclusive, zero-based character offset immediately after the window. */
+  endOffset: number;
+  /** Number of characters returned in this window. */
+  length: number;
+  /** Inclusive, one-based line number of the first returned line. */
+  startLine: number;
+  /** Inclusive, zero-based character offset of the first returned character. */
+  startOffset: number;
+  /** Total number of characters in the full source for this format. */
+  totalLength: number;
+  /** Total number of lines in the full source for this format. */
+  totalLines: number;
+}
+
+export interface ReadDocumentContinuation {
+  format: NonNullable<ReadDocumentArgs['format']>;
+  id: string;
+  limit: number;
+  offset: number;
 }
 
 export interface ReadDocumentState {
   content?: string;
+  /** Hash of the full source snapshot, not just the returned window. */
+  contentHash?: string;
+  continuation?: ReadDocumentContinuation;
+  /** Per-format continuations when `format` is `both`. */
+  continuations?: Partial<Record<'markdown' | 'xml', ReadDocumentContinuation>>;
+  format?: NonNullable<ReadDocumentArgs['format']>;
+  hasMore?: boolean;
   id: string;
+  nextOffset?: number;
+  range?: ReadDocumentRange;
+  /** Per-format windows when `format` is `both`. */
+  ranges?: Partial<Record<'markdown' | 'xml', ReadDocumentRange>>;
   title?: string;
   xml?: string;
 }

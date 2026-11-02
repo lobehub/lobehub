@@ -644,6 +644,21 @@ lossless tool result
         id: agentDocumentId,
       });
     });
+
+    it('should fail closed when the binding belongs to another agent', async () => {
+      const agentDocumentId = '11111111-1111-4111-8111-111111111111';
+      mockModel.findById.mockResolvedValue({
+        agentId: 'agent-2',
+        content: 'other agent content',
+        id: agentDocumentId,
+        title: 'Private',
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.getDocumentSnapshotById(agentDocumentId, 'agent-1');
+
+      expect(result).toBeUndefined();
+    });
   });
 
   describe('upsertDocumentByFilename', () => {

@@ -98,4 +98,23 @@ describe('SelectedSkillInjector', () => {
     expect(content).toContain('<current_page_context>');
     expect(content).toContain('<selected_skill_context>');
   });
+
+  it('should leave the last user message untouched in on-demand mode', async () => {
+    const provider = new SelectedSkillInjector({
+      contextMode: 'on-demand',
+      selectedSkills: [
+        {
+          content: 'Selected body must be loaded by the on-demand suffix instead.',
+          identifier: 'deploy',
+          name: 'Deploy',
+        },
+      ],
+    });
+    const context = createContext([{ content: 'Current request', id: 'user-1', role: 'user' }]);
+
+    const result = await provider.process(context);
+
+    expect(result.messages).toEqual(context.messages);
+    expect(result.metadata.selectedSkillContext).toBeUndefined();
+  });
 });

@@ -7,7 +7,11 @@ import type {
   ToolExecutor,
   ToolSource,
 } from '@lobechat/context-engine';
-import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
+import type {
+  ChatTopicBotContext,
+  OnDemandDiscoveryPool,
+  UserInterventionConfig,
+} from '@lobechat/types';
 import type { SearchDecision } from 'model-bank';
 
 import type { ExecutionPlan } from '@/helpers/executionTarget';
@@ -22,6 +26,8 @@ import { type AgentHook } from './hooks/types';
 export interface OperationToolSet {
   /** Tool IDs that may be restored from historical explicit activations for this run. */
   activatableToolIds?: string[];
+  /** Atomic capabilities the activator may load during this operation. */
+  discoveryPool?: OnDemandDiscoveryPool;
   enabledToolIds?: string[];
   executorMap?: Record<string, ToolExecutor>;
   manifestMap: Record<string, LobeToolManifest>;
@@ -353,6 +359,8 @@ export interface OperationCreationParams {
     documentId?: string | null;
     groupId?: string | null;
     isSubAgent?: boolean;
+    /** Whether user-memory retrieval is enabled for this operation. */
+    memoryEnabled?: boolean;
     /**
      * Group orchestration role, spread onto `state.metadata.orchestrationRole`.
      * Lets the inactivity-watchdog abandon path tell an isolated group member

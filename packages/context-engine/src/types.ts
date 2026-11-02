@@ -1,4 +1,9 @@
-import type { UIChatMessage } from '@lobechat/types';
+import type {
+  OnDemandBootstrapIdentifier,
+  OnDemandContextMetadata,
+  OnDemandDynamicEntryMetadata,
+  UIChatMessage,
+} from '@lobechat/types';
 
 /**
  * Consumer-side metadata extensions for PipelineContext.metadata.
@@ -58,6 +63,8 @@ export interface Message {
  */
 export interface PipelineContextMetadata extends PipelineContextMetadataOverrides {
   [key: `${string}InjectedCount`]: number | undefined;
+  /** Bootstrap tools permitted by the on-demand protocol. */
+  bootstrapToolIds?: readonly OnDemandBootstrapIdentifier[];
   /**
    * Per-bucket system-prompt text recorded by MessagesEngine while the
    * pipeline runs — lets the send side count exactly what was assembled
@@ -70,9 +77,21 @@ export interface PipelineContextMetadata extends PipelineContextMetadataOverride
    * bucket, which then also accumulates per-request injectors.
    */
   contextChatsBase?: string;
+  /** Context loading strategy actually used for this assembly. */
+  contextMode?: 'default' | 'on-demand';
+  /** Every dynamic on-demand candidate and whether this first turn included it. */
+  dynamicEntries?: readonly OnDemandDynamicEntryMetadata[];
   maxTokens?: number;
   model?: string;
+  /** Shared on-demand metadata bundle for client, server, and trace consumers. */
+  onDemandContext?: OnDemandContextMetadata;
+  /** On-demand protocol version. */
+  protocolVersion?: string;
   provider?: string;
+  /** Hash of the original, unmodified Agent Prompt. */
+  rawSystemRoleHash?: string;
+  /** Stable-prefix hash for the on-demand third mode. */
+  stablePrefixHash?: string;
 }
 
 /**

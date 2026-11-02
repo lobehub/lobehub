@@ -18,8 +18,10 @@ import type {
   OfficialToolItem,
   OnboardingContext,
   PlanTodoConfig,
+  ResolvedToolSet,
 } from '@lobechat/context-engine';
 import { countContextBuckets, resolveTopicReferences } from '@lobechat/context-engine';
+import { buildOnDemandTraceMetadata, hashContent } from '@lobechat/context-engine/onDemand';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
@@ -27,7 +29,14 @@ import {
   CONTEXT_ENGINEERING_SPAN_NAME,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { getActivePluginIds, getDisabledPluginIds } from '@lobechat/types';
+import {
+  getActivePluginIds,
+  getDisabledPluginIds,
+  type OnDemandActivatedToolBundleMetadata,
+  type OnDemandContextMetadata,
+  type OnDemandDocumentCard,
+  resolveContextMode,
+} from '@lobechat/types';
 
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
@@ -38,10 +47,13 @@ import { TopicModel } from '@/database/models/topic';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import { resolveOnDemandContextBudgetDefaults } from '@/envs/onDemandContext';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
+import { retrieveOnDemandServerContext } from '@/server/services/onDemandContext/retrieval';
+import { getOrLoadOnDemandRetrieval } from '@/server/services/onDemandContext/turnCache';
 
 import type { RuntimeExecutorContext } from '../context';
 import { buildPostProcessUrl, log, resolveRuntimeHistoryCount } from '../executorHelpers';
@@ -62,11 +74,43 @@ interface BuildServerCallLlmContextInput {
 }
 
 export interface ServerCallLlmContextBuildResult {
+  contextMetadata?: OnDemandContextMetadata;
   preserveThinkingForPayload?: boolean;
   processedMessages: ChatStreamPayload['messages'];
   resolvedExtendParams?: ServerCallLlmContextHints['resolvedExtendParams'];
+  resolvedTools?: ResolvedToolSet;
   shouldReplayAssistantReasoning: boolean;
 }
+
+const findCurrentUserMessage = (
+  messages: readonly { content: string; id?: string; role: string }[],
+): { index: number; message: { content: string; id?: string; role: string } } | undefined => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.role === 'user') return { index, message };
+  }
+};
+
+const buildActivatedToolBundles = (state: AgentState): OnDemandActivatedToolBundleMetadata[] => {
+  const discoveryPool = state.operationToolSet?.discoveryPool;
+
+  return (state.activatedStepTools ?? []).flatMap((activated) => {
+    const bundle = discoveryPool?.bundles[activated.id];
+    const capability = activated.capability;
+    if (!capability || !bundle) return [];
+
+    return [
+      {
+        activatedAtStep: activated.activatedAtStep,
+        capabilityHash: capability.hash,
+        capabilityVersion: capability.version,
+        identifier: capability.identifier,
+        manifestHash: hashContent(activated.manifest ?? bundle.manifest),
+        source: activated.source,
+      },
+    ];
+  });
+};
 
 export const buildServerCallLlmContext = async ({
   ctx,
@@ -102,6 +146,12 @@ export const buildServerCallLlmContext = async ({
     shouldReplayAssistantReasoning,
   } = contextHints;
   const agentId = state.metadata?.agentId;
+  const contextMode =
+    state.metadata?.contextMode === 'on-demand'
+      ? 'on-demand'
+      : resolveContextMode(agentConfig.chatConfig, {
+          supportToolUse: capabilities.isCanUseFC?.(model, provider) ?? true,
+        });
 
   // Extract <refer_topic> tags from messages and fetch summaries.
   // Skip if messages already contain injected topic_reference_context
@@ -263,6 +313,57 @@ export const buildServerCallLlmContext = async ({
   const memoryEffort = String(
     (state.metadata?.agentConfig as any)?.chatConfig?.memory?.effort ?? '',
   );
+
+  const currentUserMessage = findCurrentUserMessage(messagesForContext);
+  let onDemandRetrieval;
+  let documentCards: OnDemandDocumentCard[] | undefined;
+  if (contextMode === 'on-demand' && currentUserMessage && ctx.serverDB && ctx.userId) {
+    const cached = await getOrLoadOnDemandRetrieval({
+      cache: ctx.onDemandRetrievalCache,
+      currentUserMessage: currentUserMessage.message.content,
+      load: () =>
+        retrieveOnDemandServerContext({
+          agentId,
+          currentUserMessage: currentUserMessage.message.content,
+          db: ctx.serverDB,
+          effort: memoryEffort as 'high' | 'low' | 'medium',
+          memoryEnabled:
+            typeof state.metadata?.memoryEnabled === 'boolean'
+              ? state.metadata.memoryEnabled
+              : Boolean(state.metadata?.userMemory?.memories),
+          userId: ctx.userId!,
+          workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
+        }),
+      messageId: currentUserMessage.message.id,
+      messageIndex: currentUserMessage.index,
+    });
+    ctx.onDemandRetrievalCache = cached;
+    onDemandRetrieval = cached.batch;
+
+    if (agentId) {
+      try {
+        const documentService = new AgentDocumentsService(
+          ctx.serverDB,
+          ctx.userId,
+          state.metadata?.workspaceId ?? ctx.workspaceId,
+        );
+        const documents = await documentService.listDocuments(agentId, 'all');
+        documentCards = documents.slice(0, 50).map((document) => ({
+          description: document.description ?? undefined,
+          documentId: document.documentId,
+          filename: document.filename,
+          id: document.id,
+          sourceType: document.sourceType,
+          title: document.title,
+          updatedAt: document.updatedAt.toISOString(),
+        }));
+      } catch (error) {
+        // Document discovery is optional; a listing failure must not prevent a
+        // normal turn. The bootstrap readDocument/listDocuments path stays open.
+        log('Failed to build on-demand document cards: %O', error);
+      }
+    }
+  }
 
   const messageTodos = extractTodosFromMessages(messagesForContext);
   let planTodo: PlanTodoConfig | undefined =
@@ -563,6 +664,13 @@ export const buildServerCallLlmContext = async ({
 
   const contextEngineInput = {
     additionalContexts: llmPayload.additionalContexts,
+    contextMode,
+    ...(contextMode === 'on-demand' && {
+      onDemand: {
+        budget: resolveOnDemandContextBudgetDefaults(),
+        ...(onDemandRetrieval && { retrieval: onDemandRetrieval }),
+      },
+    }),
     ...(agentBuilderContext && { agentBuilderContext }),
     agentGroup: state.metadata?.agentGroup as AgentGroupConfig | undefined,
     agentManagementContext: (state as any).initialContext?.initialContext?.mentionedAgents?.length
@@ -589,6 +697,7 @@ export const buildServerCallLlmContext = async ({
     capabilities,
     botPlatformContext: ctx.botPlatformContext,
     discordContext: ctx.discordContext,
+    documentCards,
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
     evalContext: ctx.evalContext,
     forceFinish: state.forceFinish,
@@ -618,10 +727,13 @@ export const buildServerCallLlmContext = async ({
     ...(planTodo && { planTodo }),
     systemRole: agentConfig.systemRole ?? undefined,
     toolsConfig: {
+      discoveryCards: state.operationToolSet?.discoveryPool?.cards,
       manifests: Object.values(resolved.promptManifestMap),
       tools: resolved.enabledToolIds,
     },
-    userMemory: state.metadata?.userMemory,
+    // On-demand mode retrieves only current-turn matches through the shared
+    // ranking service. The legacy whole-persona injector stays default-only.
+    userMemory: contextMode === 'on-demand' ? undefined : state.metadata?.userMemory,
     ...(resolvedSkills?.enabledSkills?.length && {
       skillsConfig: { enabledSkills: resolvedSkills.enabledSkills },
     }),
@@ -631,7 +743,7 @@ export const buildServerCallLlmContext = async ({
     ...(onboardingContext && { onboardingContext }),
   };
 
-  const processedMessages = await agentRuntimeTracer.startActiveSpan(
+  const contextResult = await agentRuntimeTracer.startActiveSpan(
     CONTEXT_ENGINEERING_SPAN_NAME,
     {
       attributes: buildContextEngineeringAttributes({
@@ -653,7 +765,10 @@ export const buildServerCallLlmContext = async ({
         knowledgeInjected:
           (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) > 0 ||
           (contextEngineInput.knowledge?.fileContents?.length ?? 0) > 0,
-        memoryInjected: Boolean(contextEngineInput.userMemory?.memories),
+        memoryInjected:
+          contextMode === 'on-demand'
+            ? Boolean(onDemandRetrieval?.candidates.length)
+            : Boolean(contextEngineInput.userMemory?.memories),
         messageCount: messagesForContext.length,
         operationId,
         stepIndex,
@@ -680,7 +795,7 @@ export const buildServerCallLlmContext = async ({
             type: 'context_metrics',
           });
         }
-        return result.messages;
+        return result;
       } catch (error) {
         ceSpan.recordException(error as Error);
         ceSpan.setStatus({
@@ -697,16 +812,34 @@ export const buildServerCallLlmContext = async ({
   const {
     messages: _inputMsgs,
     toolsConfig: _toolsConfig,
+    onDemand: _onDemand,
     ...contextEngineInputLite
   } = contextEngineInput;
+  const onDemandTraceMetadata = contextResult.onDemandContext
+    ? buildOnDemandTraceMetadata({
+        activatedToolBundles: buildActivatedToolBundles(state),
+        context: contextResult.onDemandContext,
+        rawSystemRole: contextEngineInput.systemRole ?? '',
+      })
+    : undefined;
   ctx.tracingContextEngine?.(
-    { ...contextEngineInputLite, toolCount: _toolsConfig?.tools?.length ?? 0 },
-    processedMessages,
+    {
+      ...contextEngineInputLite,
+      ...(contextResult.onDemandContext && {
+        onDemandContext: contextResult.onDemandContext,
+      }),
+      toolCount:
+        contextResult.onDemandContext?.bootstrapToolIds.length ?? _toolsConfig?.tools?.length ?? 0,
+    },
+    contextResult.messages,
+    onDemandTraceMetadata,
   );
 
   return {
+    contextMetadata: contextResult.onDemandContext,
     preserveThinkingForPayload,
-    processedMessages,
+    processedMessages: contextResult.messages,
+    resolvedTools: tooling.resolved,
     resolvedExtendParams,
     shouldReplayAssistantReasoning,
   };

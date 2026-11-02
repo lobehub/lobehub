@@ -215,12 +215,15 @@ describe('SkillsExecutionRuntime', () => {
       const result = await runtime.readReference({ id: 'demo-skill', path: 'bazi.py' });
 
       expect(result.success).toBe(true);
-      expect(result.state).toEqual({
+      expect(result.state).toMatchObject({
+        contentHash: expect.stringMatching(/^sha256:/),
         encoding: 'utf8',
         fileType: 'text/x-python',
         fullPath: '/Users/test/lobehub/file-storage/skills/extracted/hash-1/bazi.py',
         path: 'bazi.py',
         size: 14,
+        skillId: 'skill-1',
+        sourceVersion: 'hash-1',
       });
     });
   });
@@ -405,6 +408,40 @@ describe('SkillsExecutionRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.content).toContain('builtin only');
       expect(result.state).toMatchObject({ name: 'artifacts', source: 'builtin' });
+    });
+
+    it('records the activated body hash and source revision for drift detection', async () => {
+      const updatedAt = new Date('2026-01-02T03:04:05.000Z');
+      const findByName = vi.fn().mockResolvedValue({
+        content: 'User-authored instructions',
+        description: 'user skill',
+        id: 'user-1',
+        name: 'overlap',
+        resources: {
+          'references/checklist.md': {
+            fileHash: 'file-hash-1',
+            size: 42,
+          },
+        },
+        updatedAt,
+      });
+      const runtime = new SkillsExecutionRuntime({
+        service: createMockService({ findByName }),
+      });
+
+      const result = await runtime.activateSkill({ name: 'overlap' });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('User-authored instructions');
+      expect(result.content).toContain('checklist.md');
+      expect(result.state).toMatchObject({
+        contentHash: expect.stringMatching(/^sha256:/),
+        hasResources: true,
+        id: 'user-1',
+        name: 'overlap',
+        source: 'user',
+        sourceVersion: updatedAt.toISOString(),
+      });
     });
   });
 

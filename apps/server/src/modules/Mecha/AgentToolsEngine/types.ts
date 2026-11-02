@@ -1,5 +1,6 @@
 import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
 import {
+  type AgentContextMode,
   type BuiltinToolResolveContext,
   type LobeAgentAgencyConfig,
   type LobeBuiltinTool,
@@ -58,6 +59,12 @@ export interface ServerAgentToolsEngineConfig {
    * static manifests. Mirrors the frontend `ToolsEngineConfig.manifestContext`.
    */
   manifestContext?: BuiltinToolResolveContext;
+  /**
+   * Restrict or replace selected manifests before they reach the ToolsEngine.
+   * On-demand uses this to reduce bootstrap manifests to the closed API
+   * allowlist while leaving every non-bootstrap capability untouched.
+   */
+  manifestOverrides?: Readonly<Record<string, LobeToolManifest>>;
 }
 
 /**
@@ -72,6 +79,7 @@ export interface ServerCreateAgentToolsEngineParams {
     agencyConfig?: LobeAgentAgencyConfig;
     /** Optional agent chat config */
     chatConfig?: {
+      contextMode?: AgentContextMode;
       /**
        * When explicitly `false`, the agent runs in chat mode — the engine
        * builds rules from `chatModeAllowedToolIds` only and ignores
@@ -97,6 +105,11 @@ export interface ServerCreateAgentToolsEngineParams {
    * Defaults to `false` (fail-closed) when the caller forgets to plumb it.
    */
   canUseDevice?: boolean;
+  /**
+   * Explicit context loading strategy. On-demand keeps every normal capability
+   * discoverable but exposes only the closed bootstrap set by default.
+   */
+  contextMode?: AgentContextMode;
   /** Device gateway context for remote tool calling */
   deviceContext?: {
     /** When true, a device has been auto-activated — Remote Device tool is unnecessary */

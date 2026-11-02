@@ -1,3 +1,6 @@
+import type { OnDemandCapabilityExpectation, OnDemandDiscoveryPool } from '@lobechat/types';
+
+import { validateAtomicCapabilityBundle } from '../../onDemand/bundleValidator';
 import { ToolNameResolver } from './ToolNameResolver';
 import type {
   ActivatedStepTool,
@@ -49,12 +52,28 @@ export class ToolResolver {
 
     // Apply accumulated step-level activations from previous steps
     for (const activation of accumulatedActivations) {
-      this.applyActivation(activation, tools, manifestMap, sourceMap, enabledToolIds);
+      this.applyActivation(
+        activation,
+        operationToolSet.discoveryPool,
+        tools,
+        manifestMap,
+        sourceMap,
+        executorMap,
+        enabledToolIds,
+      );
     }
 
     // Apply current step delta activations
     for (const activation of stepDelta.activatedTools) {
-      this.applyActivation(activation, tools, manifestMap, sourceMap, enabledToolIds);
+      this.applyActivation(
+        activation,
+        operationToolSet.discoveryPool,
+        tools,
+        manifestMap,
+        sourceMap,
+        executorMap,
+        enabledToolIds,
+      );
     }
 
     const shouldFilterByToolNames = allowedToolNames !== undefined;
@@ -120,18 +139,29 @@ export class ToolResolver {
   }
 
   private applyActivation(
-    activation: { id: string; manifest?: LobeToolManifest; source?: string },
+    activation: {
+      capability?: OnDemandCapabilityExpectation;
+      id: string;
+      manifest?: LobeToolManifest;
+      source?: string;
+    },
+    discoveryPool: OnDemandDiscoveryPool | undefined,
     tools: UniformTool[],
     manifestMap: Record<string, LobeToolManifest>,
     sourceMap: Record<string, ToolSource>,
+    executorMap: Record<string, ToolExecutor>,
     enabledToolIds: string[],
   ): void {
     // Skip if already present
     if (manifestMap[activation.id]) return;
 
-    if (activation.manifest) {
-      manifestMap[activation.id] = activation.manifest;
-      const newTools = generateToolsFromManifest(activation.manifest);
+    const resolvedManifest = discoveryPool
+      ? this.resolveOnDemandManifest(activation, discoveryPool)
+      : activation.manifest;
+
+    if (resolvedManifest) {
+      manifestMap[activation.id] = resolvedManifest;
+      const newTools = generateToolsFromManifest(resolvedManifest);
       tools.push(...newTools);
       enabledToolIds.push(activation.id);
 
@@ -141,7 +171,65 @@ export class ToolResolver {
       if (activation.source && !sourceMap[activation.id]) {
         sourceMap[activation.id] = this.mapSource(activation.source);
       }
+
+      if (discoveryPool && !executorMap[activation.id]) {
+        const bundle = discoveryPool.bundles[activation.id];
+        if (bundle) {
+          executorMap[activation.id] =
+            bundle.execution.environment === 'client' ? 'client' : 'server';
+          sourceMap[activation.id] = this.mapCapabilitySource(bundle.sourceRuntime.source);
+        }
+      }
     }
+  }
+
+  /**
+   * On-demand activations are executable only through an atomically complete,
+   * trusted bundle. Discovery requires the persisted expectation; runtime-owned
+   * activation sources (device/mention) may use the operation's card identity.
+   * A missing card, missing expectation, or any hash/version drift adds no tool.
+   */
+  private resolveOnDemandManifest(
+    activation: {
+      capability?: OnDemandCapabilityExpectation;
+      id: string;
+      source?: string;
+    },
+    discoveryPool: OnDemandDiscoveryPool,
+  ): LobeToolManifest | undefined {
+    const card = discoveryPool.cards.find((item) => item.identifier === activation.id);
+    const bundle = discoveryPool.bundles[activation.id];
+    if (
+      !card ||
+      !bundle ||
+      card.identifier !== bundle.identifier ||
+      card.version !== bundle.version ||
+      card.hash !== bundle.hash
+    ) {
+      return;
+    }
+
+    const expectation =
+      activation.capability ??
+      (activation.source !== 'discovery' && card
+        ? {
+            hash: card.hash,
+            identifier: card.identifier,
+            version: card.version,
+          }
+        : undefined);
+
+    if (!expectation) return;
+    if (
+      expectation.identifier !== card.identifier ||
+      expectation.version !== card.version ||
+      expectation.hash !== card.hash
+    ) {
+      return;
+    }
+
+    const validation = validateAtomicCapabilityBundle(bundle, expectation);
+    return validation.ok ? (validation.bundle.manifest as LobeToolManifest) : undefined;
   }
 
   private mapSource(source: string): ToolSource {
@@ -153,6 +241,24 @@ export class ToolResolver {
       case 'active_tools':
       case 'mention': {
         return 'builtin';
+      }
+      default: {
+        return 'builtin';
+      }
+    }
+  }
+
+  private mapCapabilitySource(source: string): ToolSource {
+    switch (source) {
+      case 'composio': {
+        return 'composio';
+      }
+      case 'lobehub-skill': {
+        return 'lobehubSkill';
+      }
+      case 'mcp':
+      case 'plugin': {
+        return 'mcp';
       }
       default: {
         return 'builtin';

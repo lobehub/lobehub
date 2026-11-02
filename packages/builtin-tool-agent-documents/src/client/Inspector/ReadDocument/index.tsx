@@ -17,6 +17,7 @@ export const ReadDocumentInspector = memo<
 
   const id = args?.id || partialArgs?.id;
   const title = pluginState?.title;
+  const range = pluginState?.range;
   const styles = inspectorChipStyles;
 
   if (isArgumentsStreaming && !title && !id) {
@@ -40,6 +41,38 @@ export const ReadDocumentInspector = memo<
         <span className={styles.chip}>{title}</span>
       ) : (
         id && <span className={styles.idChip}>{formatDocumentId(id)}</span>
+      )}
+      {range && (
+        <>
+          <span className={styles.separator}>·</span>
+          <span className={styles.subdued}>
+            {t('builtins.lobe-agent-documents.inspector.readRange', {
+              end: range.endLine,
+              start: range.startLine,
+              total: range.totalLines,
+            })}
+          </span>
+          <span className={styles.separator}>·</span>
+          <span className={styles.subdued}>
+            {t('builtins.lobe-agent-documents.inspector.charRange', {
+              end: range.endOffset,
+              start: range.startOffset,
+              total: range.totalLength,
+            })}
+          </span>
+        </>
+      )}
+      {pluginState && (
+        <>
+          <span className={styles.separator}>·</span>
+          <span className={styles.subdued}>
+            {pluginState.hasMore
+              ? t('builtins.lobe-agent-documents.inspector.continueAt', {
+                  offset: pluginState.nextOffset ?? range?.endOffset ?? 0,
+                })
+              : t('builtins.lobe-agent-documents.inspector.complete')}
+          </span>
+        </>
       )}
     </div>
   );

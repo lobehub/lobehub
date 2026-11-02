@@ -688,6 +688,59 @@ describe('agent command', () => {
       );
     });
 
+    it('should explicitly request manual approval with --no-headless', async () => {
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-manual',
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Wait for approval',
+        '--no-headless',
+      ]);
+
+      expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userInterventionConfig: { approvalMode: 'manual' },
+        }),
+      );
+    });
+
+    it('should pass repeated --skill options as selectedSkillIds', async () => {
+      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
+        operationId: 'op-skills',
+        success: true,
+      });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'agent',
+        'run',
+        '--agent-id',
+        'a1',
+        '--prompt',
+        'Use selected skills',
+        '--skill',
+        'lobehub',
+        '--skill',
+        'acceptance',
+      ]);
+
+      expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ selectedSkillIds: ['lobehub', 'acceptance'] }),
+      );
+    });
+
     it('should exit when neither --agent-id nor --slug provided', async () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'agent', 'run', '--prompt', 'Hello']);

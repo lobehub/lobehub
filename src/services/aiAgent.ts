@@ -2,6 +2,7 @@ import type {
   ExecAgentAppContext,
   ExecAgentResult,
   RuntimeMentionedAgent,
+  RuntimeSelectedSkill,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
   UserInterventionConfig,
@@ -90,6 +91,8 @@ export interface ExecAgentTaskParams {
   resumeApprovals?: ResumeApprovalParam[];
   /** Resume a previous op paused on a human-intervention tool by carrying the human answer as the tool result. */
   resumeToolResult?: ResumeToolResultParam;
+  /** Explicit slash-selected skills auto-loaded by the on-demand context pipeline. */
+  selectedSkills?: RuntimeSelectedSkill[];
   /** Tool identifiers the user @-mentioned in this message; the server enables them for this run. */
   selectedToolIds?: string[];
   slug?: string;

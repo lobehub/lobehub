@@ -9,8 +9,9 @@ import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { SkillsApiName, SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { builtinTools } from '@lobechat/builtin-tools';
+import { builtinTools, onDemandBootstrapToolIds } from '@lobechat/builtin-tools';
 import { ToolsEngine } from '@lobechat/context-engine';
+import { ON_DEMAND_BOOTSTRAP_ALLOWLIST } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { createServerAgentToolsEngine, createServerToolsEngine } from '../index';
@@ -227,6 +228,35 @@ describe('createServerAgentToolsEngine', () => {
     });
 
     expect(engine).toBeInstanceOf(ToolsEngine);
+  });
+
+  it('exposes exactly the closed bootstrap API set in on-demand mode', () => {
+    const engine = createServerAgentToolsEngine(createMockContext(), {
+      agentConfig: {
+        chatConfig: { contextMode: 'on-demand', enableAgentMode: true },
+        plugins: ['test-plugin', 'another-plugin'],
+      },
+      contextMode: 'on-demand',
+      globalMemoryEnabled: true,
+      hasEnabledKnowledgeBases: true,
+      model: 'gpt-4',
+      provider: 'openai',
+      useApplicationBuiltinSearchTool: true,
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'gpt-4',
+      provider: 'openai',
+      toolIds: [...onDemandBootstrapToolIds],
+    });
+    const expectedNames = onDemandBootstrapToolIds.flatMap((identifier) =>
+      ON_DEMAND_BOOTSTRAP_ALLOWLIST[identifier].map((apiName) => `${identifier}____${apiName}`),
+    );
+
+    expect(result.tools?.map((tool) => tool.function.name)).toEqual(expectedNames);
+    expect(result.tools).toHaveLength(5);
+    expect(result.tools?.some((tool) => tool.function.name.includes('invoke'))).toBe(false);
+    expect(result.enabledToolIds).toEqual([...onDemandBootstrapToolIds]);
   });
 
   it('should filter LocalSystem tool on server', () => {

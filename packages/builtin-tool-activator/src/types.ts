@@ -1,3 +1,5 @@
+import type { OnDemandCapabilityExpectation, OnDemandCapabilitySource } from '@lobechat/types';
+
 export const LobeActivatorIdentifier = 'lobe-activator';
 
 export const ActivatorApiName = {
@@ -13,8 +15,15 @@ export interface ActivateToolsParams {
 export interface ActivatedToolInfo {
   apiCount: number;
   avatar?: string;
+  /** Exact bundle identity persisted for the next resolver step. */
+  capability?: OnDemandCapabilityExpectation;
+  capabilitySummary?: string;
+  executionEnvironment?: 'client' | 'device' | 'sandbox' | 'server';
+  hash?: string;
   identifier: string;
   name: string;
+  source?: OnDemandCapabilitySource;
+  version?: string;
 }
 
 export interface ActivateToolsState {

@@ -101,6 +101,7 @@
     "lint:unused": "knip --include files,exports,types,enumMembers,duplicates",
     "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "prettier": "prettier -c --write \"**/**\"",
+    "prompt:harness": "bash scripts/promptHarness/stack.sh",
     "pull": "git pull",
     "qstash": "pnpx @upstash/qstash-cli@latest dev",
     "react-devtools": "cd apps/desktop && pnpm run react-devtools",

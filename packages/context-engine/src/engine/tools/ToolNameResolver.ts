@@ -211,6 +211,18 @@ export class ToolNameResolver {
           }
         }
 
+        // A fully-qualified name is still only callable when it was offered in
+        // this turn's tool payload. Otherwise a model could invoke a tool that
+        // an on-demand run has not activated (or a tool filtered by the host).
+        if (
+          offeredSet &&
+          !offeredSet.has(
+            this.generate(identifier, payload.apiName, payload.type as string | undefined),
+          )
+        ) {
+          return null;
+        }
+
         return payload;
       })
       .filter(Boolean) as ChatToolPayload[];
