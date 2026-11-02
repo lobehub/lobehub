@@ -342,6 +342,14 @@ export class AiAgentService {
     return this.agentRuntimeService.executeStep(params);
   }
 
+  /**
+   * Whether someone already asked this run to stop. The run may still be
+   * finishing its current step, so its row can read `running` for a moment.
+   */
+  isOperationInterrupted(operationId: string): Promise<boolean> {
+    return this.agentRuntimeService.isOperationInterrupted(operationId);
+  }
+
   /** Continue a run parked in `waiting_for_client` (see AgentRuntimeService). */
   resumeFromClientLlmWait(
     params: Parameters<AgentRuntimeService['resumeFromClientLlmWait']>[0],
