@@ -114,30 +114,43 @@ const AddWorkingDirContent = ({
         />
         {error ? <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text> : null}
       </Flexbox>
+      {/* As in the folder browser: the environment select narrows first, and the
+          row wraps only once it reaches its minimum, the buttons kept together. */}
       <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'} wrap={'wrap'}>
-        {environmentSelect}
-        {deviceId && (
-          <Button
-            disabled={loading}
-            onClick={() => {
-              setError(undefined);
-              setManual(false);
-            }}
+        {environmentSelect && (
+          <Flexbox
+            horizontal
+            flex={'1 1 0'}
+            justify={'flex-end'}
+            style={{ minWidth: 'min-content' }}
           >
-            {tPlugin('workingDirectory.browseFolders')}
-          </Button>
+            {environmentSelect}
+          </Flexbox>
         )}
-        <Button disabled={loading} onClick={close}>
-          {tCommon('cancel')}
-        </Button>
-        <Button
-          disabled={!value.trim()}
-          loading={loading}
-          type={'primary'}
-          onClick={() => handleSubmit(value)}
-        >
-          {tPlugin('workingDirectory.useFolder')}
-        </Button>
+        <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+          {deviceId && (
+            <Button
+              disabled={loading}
+              onClick={() => {
+                setError(undefined);
+                setManual(false);
+              }}
+            >
+              {tPlugin('workingDirectory.browseFolders')}
+            </Button>
+          )}
+          <Button disabled={loading} onClick={close}>
+            {tCommon('cancel')}
+          </Button>
+          <Button
+            disabled={!value.trim()}
+            loading={loading}
+            type={'primary'}
+            onClick={() => handleSubmit(value)}
+          >
+            {tPlugin('workingDirectory.useFolder')}
+          </Button>
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );

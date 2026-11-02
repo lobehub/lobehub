@@ -50,7 +50,10 @@ const EnvironmentSelect = memo<EnvironmentSelectProps>(
         loading={isLoading}
         placeholder={t('workingDirectory.environment.none')}
         size={'small'}
-        style={{ minWidth: 168 }}
+        // Sits in footer rows beside buttons: 168px when there is room, narrowing
+        // to 112px before the row wraps. Inline-size containment keeps a long
+        // environment name from raising that minimum.
+        style={{ contain: 'inline-size', flex: '0 1 168px', minWidth: 112 }}
         value={value}
         options={environments.map((environment) => ({
           label: environment.name,

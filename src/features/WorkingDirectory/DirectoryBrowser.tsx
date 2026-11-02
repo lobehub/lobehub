@@ -269,22 +269,35 @@ export const DirectoryBrowser = ({
           {blockedReason}
         </Text>
       )}
-      <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} wrap={'wrap'}>
-        {onManual ? (
-          <Button disabled={loading} onClick={() => onManual(displayedPath)}>
+      {/* The actions fill the rest of the row, and only `footerExtra` (the
+          environment select) gives up width there. The row wraps only once that
+          reaches its minimum — longer locales — and the actions stay right-aligned. */}
+      <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+        {onManual && (
+          <Button
+            disabled={loading}
+            style={{ flex: 'none' }}
+            onClick={() => onManual(displayedPath)}
+          >
             {t('workingDirectory.enterPathManually')}
           </Button>
-        ) : (
-          <span />
         )}
-        <Flexbox horizontal align={'center'} gap={8}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          flex={'1 1 0'}
+          gap={8}
+          justify={'flex-end'}
+          style={{ minWidth: 'min-content' }}
+        >
           {footerExtra}
-          <Button disabled={loading} onClick={onCancel}>
+          <Button disabled={loading} style={{ flex: 'none' }} onClick={onCancel}>
             {tCommon('cancel')}
           </Button>
           <Button
             disabled={!canUseDirectory || !!blockedReason}
             loading={loading}
+            style={{ flex: 'none' }}
             type={'primary'}
             onClick={() => directory && onSelect(directory.path)}
           >
