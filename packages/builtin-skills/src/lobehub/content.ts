@@ -56,6 +56,7 @@ run commands.
 | \`lh file\` | File management | \`references/file\` |
 | \`lh artifact\` | Publish local HTML or Canvas, with persistent bindings and retry recovery | \`references/artifact\` |
 | \`lh memory\` | User memory management (identity, activity, preference) | \`references/memory\` |
+| \`lh expertise\` | Self-evolving expertise: an agent's domains, lessons and rules | \`references/expertise\` |
 | \`lh search\` / \`lh recall\` | Search local resources or the web / recall past work in a time window | \`references/search\` |
 | \`lh gen\` | Content generation (text, image, video, TTS, ASR) | \`references/generate\` |
 | \`lh project\` / \`lh task\` | Projects and agent tasks | \`references/project\` |
