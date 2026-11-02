@@ -19,6 +19,9 @@ lh artifact publish ./report.html --json
 
 # Create a separate Canvas and bind future publishes to it
 lh artifact publish ./report.html --new --json
+
+# Take a published artifact offline (the deployment and its releases are kept)
+lh artifact unpublish ./report.html --json
 ```
 
 Bindings and pending operations live in the project's `.lobehub/artifacts.json`.

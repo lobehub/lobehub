@@ -13,6 +13,7 @@ import {
   users,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
+import { createProxyTestDB } from '../../__tests__/_proxyTestDB';
 import { AgentBotRetroModel } from '../botRetro';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -173,6 +174,56 @@ describe('AgentBotRetroModel', () => {
       },
     ]);
     expect(topic.failedMessages).toEqual([expect.stringContaining('provider overloaded')]);
+  });
+
+  it('keeps a last-activity timestamp the driver hands back as a Date', async () => {
+    await seedBase();
+    await serverDB.insert(messages).values({
+      agentId,
+      content: 'hi',
+      createdAt: inWindow,
+      id: 'm-date',
+      role: 'user',
+      topicId: botTopicId,
+      userId,
+    });
+
+    // The proxy driver parses aggregates through the Postgres type parsers, so
+    // MAX(created_at) arrives as a Date rather than the string a raw `sql` field
+    // normally carries.
+    const proxy = createProxyTestDB(serverDB);
+    const [topic] = await new AgentBotRetroModel(proxy, userId).listBotTopics(window);
+
+    expect(topic.lastActivityAt).toBeInstanceOf(Date);
+    expect(topic.lastActivityAt.toISOString()).toBe(inWindow.toISOString());
+  });
+
+  it('drops a grouped row that comes back without an agent', async () => {
+    await seedBase();
+    await serverDB.insert(messages).values({
+      agentId,
+      content: 'in the agent thread',
+      createdAt: inWindow,
+      id: 'm-agent',
+      role: 'user',
+      topicId: botTopicId,
+      userId,
+    });
+
+    // The INNER JOIN on agents keeps `topics.agent_id` non-null in practice, so
+    // a result set that still hands back none is a defensive case the query
+    // cannot produce; it must not put `null` into the review list.
+    const proxy = createProxyTestDB(serverDB, (query, result) =>
+      query.includes('group by') ? [[null, 1]] : result.rows,
+    );
+
+    await expect(
+      new AgentBotRetroModel(proxy, userId).listBotActiveAgents({
+        limit: 10,
+        windowEnd,
+        windowStart,
+      }),
+    ).resolves.toEqual([]);
   });
 
   it('lists the vent tool calls of the window, rejected ones included', async () => {

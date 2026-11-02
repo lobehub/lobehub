@@ -15,11 +15,13 @@ import { LinearIssueSyncService, MAX_TASKS_CREATED_PER_SYNC } from '../issueSync
 
 const linear = vi.hoisted(() => ({
   getLinearIssuesByIds: vi.fn(),
+  getLinearProjectTeamIds: vi.fn(),
   listLinearIssues: vi.fn(),
 }));
 vi.mock('../issues', async (importOriginal) => ({
   ...(await importOriginal<typeof IssuesModule>()),
   getLinearIssuesByIds: linear.getLinearIssuesByIds,
+  getLinearProjectTeamIds: linear.getLinearProjectTeamIds,
   listLinearIssues: linear.listLinearIssues,
 }));
 
@@ -140,6 +142,45 @@ describe('LinearIssueSyncService (real PostgreSQL)', () => {
 
     expect(result.closed).toBe(1);
     expect((await linkedTask('1'))?.status).toBe('completed');
+  });
+
+  it('closes the task of a project issue that lives in another team than the filter', async () => {
+    // A project linked to teams PKG and LOBE whose issues all live in LOBE,
+    // synced through a rule that names PKG.
+    const projectFilter = {
+      linearProjectId: 'project-1',
+      stateTypes: [...filter.stateTypes],
+      teamId: 'team-pkg',
+    };
+    const project = { id: 'project-1', name: 'LobeHub Model' };
+    const lobeIssue = issue({ id: '1', project, team: { id: 'team-lobe', key: 'LOBE' } });
+    linear.getLinearProjectTeamIds.mockResolvedValue(['team-pkg', 'team-lobe']);
+    serve([lobeIssue]);
+    const service = new LinearIssueSyncService(db, userId);
+    expect((await service.syncByFilter(TOKEN, projectFilter)).created).toBe(1);
+
+    // Closed in Linear, so the open-states filter no longer returns it.
+    linear.listLinearIssues.mockResolvedValue({ hasMore: false, issues: [] });
+    linear.getLinearIssuesByIds.mockResolvedValue([
+      { ...lobeIssue, state: { name: 'Done', type: 'completed' } },
+    ]);
+    const result = await service.syncByFilter(TOKEN, projectFilter);
+
+    expect(result.closed).toBe(1);
+    expect((await linkedTask('1'))?.status).toBe('completed');
+  });
+
+  it('fails a project rule whose teams cannot be read instead of narrowing the closing pass', async () => {
+    linear.getLinearProjectTeamIds.mockRejectedValue(new Error('Linear API error: timeout'));
+    serve([issue({ id: '1', team: { id: 'team-lobe', key: 'LOBE' } })]);
+
+    await expect(
+      new LinearIssueSyncService(db, userId).syncByFilter(TOKEN, {
+        linearProjectId: 'project-1',
+        stateTypes: [...filter.stateTypes],
+        teamId: 'team-pkg',
+      }),
+    ).rejects.toThrow('timeout');
   });
 
   it('does not interrupt a running task when its issue is closed', async () => {

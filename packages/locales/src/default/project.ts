@@ -216,6 +216,21 @@ export default {
   'createFromGithub.urlPlaceholder': 'https://github.com/owner/repo',
   'disabled.action': 'Enable in Labs',
   'disabled.title': 'Project workspaces are an Alpha experiment',
+  'delete.confirm.continue': 'Delete project',
+  'delete.confirm.kept.files': 'Files in the working directories on your devices',
+  'delete.confirm.kept.work': 'Tasks, goals, topics and channels',
+  'delete.confirm.keptLead': 'These are kept, but no longer belong to a project:',
+  'delete.confirm.namePrompt': 'Type “{{name}}” to confirm',
+  'delete.confirm.removed.automation':
+    'Project widgets and their run history, Linear sync rules, review sites, dashboards and project memories',
+  'delete.confirm.removed.bindings':
+    'Links to agents, groups and knowledge bases (your agents and knowledge bases are kept)',
+  'delete.confirm.removed.settings':
+    'Project settings, members, working directories and environments',
+  'delete.confirm.removedLead': 'Deleting “{{name}}” cannot be undone. It permanently removes:',
+  'delete.confirm.title': 'Delete project',
+  'delete.description':
+    'Permanently delete this project and its settings. Tasks, goals and topics are kept but no longer belong to a project.',
   'goals.create': 'Create goal',
   'goals.description': 'Define the outcomes this project is pursuing and track them to acceptance.',
   'goals.emptyDescription': 'Create the first measurable outcome for this project.',
@@ -232,9 +247,6 @@ export default {
   'goals.title': 'Goals',
   'list.emptyDescription': 'Create your first project to organize goals, tasks, and resources.',
   'list.deleteAction': 'Delete project',
-  'list.deleteConfirmDescription':
-    'Delete “{{name}}”? Its project tasks, goals, topics, and bindings will be permanently removed.',
-  'list.deleteConfirmTitle': 'Delete project?',
   'list.deleteError': 'Could not delete the project.',
   'list.deleteSuccess': '“{{name}}” deleted',
   'list.moreActions': 'More project actions',

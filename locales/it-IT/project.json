@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Cerca librerie",
   "knowledgeBases.updateFailed": "Impossibile aggiornare la libreria",
   "list.deleteAction": "Elimina progetto",
-  "list.deleteConfirmDescription": "Eliminare “{{name}}”? I suoi compiti di progetto, obiettivi, argomenti e associazioni saranno rimossi in modo permanente.",
-  "list.deleteConfirmTitle": "Eliminare il progetto?",
   "list.deleteError": "Impossibile eliminare il progetto.",
   "list.deleteSuccess": "“{{name}}” eliminato",
   "list.emptyDescription": "Crea il tuo primo progetto per organizzare obiettivi, attività e risorse.",
