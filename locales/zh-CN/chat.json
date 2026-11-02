@@ -2836,6 +2836,8 @@
   "tool.intervention.stop": "停止",
   "tool.intervention.stopTooltip": "就停在这一步——待审批的工具都不会执行，Agent 也不会继续",
   "tool.intervention.submit": "提交",
+  "tool.intervention.switchToAutoRun": "切换到自动批准",
+  "tool.intervention.switchToAutoRunDesc": "批准本次调用，之后不再询问。必须确认的高风险操作仍会询问。",
   "tool.intervention.toolAbort": "你已取消本次技能调用",
   "tool.intervention.toolEnded": "本次工具调用已结束",
   "tool.intervention.toolRejected": "本次技能调用已被拒绝",

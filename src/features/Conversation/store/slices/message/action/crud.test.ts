@@ -842,6 +842,46 @@ describe('Message CRUD Actions', () => {
       );
     });
 
+    it('keeps the local rows when the caller opts out of the refresh', async () => {
+      // The server's rows still carry the call as `pending`: loading them would
+      // bring back an approval card the user already answered.
+      vi.spyOn(messageServiceModule.messageService, 'updateToolArguments').mockResolvedValue({
+        success: true,
+        messages: [{ id: 'tool-msg-1', role: 'tool' }],
+      } as any);
+      const store = createTestStore();
+      act(() => {
+        store.getState().internal_dispatchMessage({
+          type: 'createMessage',
+          id: 'tool-msg-1',
+          value: {
+            content: '',
+            role: 'tool',
+            sessionId: 'test-session',
+            tool_call_id: 'tool-call-1',
+            plugin: {
+              apiName: 'test',
+              arguments: '{"key":"old"}',
+              identifier: 'p',
+              type: 'default',
+            },
+          },
+        });
+      });
+      const replaceSpy = vi.spyOn(store.getState(), 'replaceMessages');
+
+      await act(async () => {
+        await store
+          .getState()
+          .updatePluginArguments('tool-call-1', { key: 'new' }, true, { refresh: false });
+      });
+
+      expect(replaceSpy).not.toHaveBeenCalled();
+      expect(
+        store.getState().dbMessages.find((m) => m.id === 'tool-msg-1')?.plugin?.arguments,
+      ).toBe('{"key":"new"}');
+    });
+
     it('should update using toolCallId even when tool message not persisted (intervention pending)', async () => {
       const updateToolArgsSpy = vi
         .spyOn(messageServiceModule.messageService, 'updateToolArguments')

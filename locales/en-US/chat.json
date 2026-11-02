@@ -2836,6 +2836,8 @@
   "tool.intervention.stop": "Stop",
   "tool.intervention.stopTooltip": "Stop here — nothing pending runs and the agent does not continue",
   "tool.intervention.submit": "Submit",
+  "tool.intervention.switchToAutoRun": "Switch to auto approve",
+  "tool.intervention.switchToAutoRunDesc": "Approve this call and stop asking from now on. Calls that must always ask still ask.",
   "tool.intervention.toolAbort": "You canceled this Skill call",
   "tool.intervention.toolEnded": "This tool call has ended",
   "tool.intervention.toolRejected": "This Skill call was rejected",

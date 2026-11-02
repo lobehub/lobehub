@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   approveChoiceLabelKeys,
   canRememberViaAllowList,
+  canSwitchToAutoRun,
   dynamicAuditType,
   getApprovalChoices,
   isChoiceSubmitBlocked,
@@ -163,5 +164,31 @@ describe('isCoveredByRemember', () => {
     await expect(
       isCoveredByRemember({ config: 'always', rememberAction: 'allow-list', toolArgs: {} }),
     ).resolves.toBe(false);
+  });
+});
+
+describe('canSwitchToAutoRun', () => {
+  it.each(['manual', 'allow-list'])(
+    'is offered for a call that can skip approval in %s mode',
+    (mode) => {
+      expect(
+        canSwitchToAutoRun({ allowListRememberable: true, approvalMode: mode, isShare: false }),
+      ).toBe(true);
+    },
+  );
+
+  it('is hidden when auto approve would not skip this call', () => {
+    expect(
+      canSwitchToAutoRun({ allowListRememberable: false, approvalMode: 'manual', isShare: false }),
+    ).toBe(false);
+  });
+
+  it('is hidden for a share visitor and when already auto approving', () => {
+    expect(
+      canSwitchToAutoRun({ allowListRememberable: true, approvalMode: 'manual', isShare: true }),
+    ).toBe(false);
+    expect(
+      canSwitchToAutoRun({ allowListRememberable: true, approvalMode: 'auto-run', isShare: false }),
+    ).toBe(false);
   });
 });
