@@ -688,18 +688,20 @@ export class LinearIssueSyncService {
       const fresh = comments.filter((comment) => !known.has(comment.id));
       // Straight to the model: a bulk copy of history notifies no one, unlike
       // a comment posted in LobeHub.
-      for (const comment of fresh) {
-        // Linear's time, so the task's activity reads in the order it happened.
-        const createdAt = new Date(comment.createdAt);
-        await tasks.addComment({
-          authorUserId: this.userId,
-          content: linearCommentToContent(comment),
-          createdAt,
-          taskId: link.taskId,
-          updatedAt: createdAt,
-          userId: this.userId,
-        });
-      }
+      await tasks.addComments(
+        link.taskId,
+        fresh.map((comment) => {
+          // Linear's time, so the task's activity reads in the order it happened.
+          const createdAt = new Date(comment.createdAt);
+          return {
+            authorUserId: this.userId,
+            content: linearCommentToContent(comment),
+            createdAt,
+            updatedAt: createdAt,
+            userId: this.userId,
+          };
+        }),
+      );
       await linkModel.recordSyncedComments(
         current.id,
         fresh.map((comment) => comment.id),
