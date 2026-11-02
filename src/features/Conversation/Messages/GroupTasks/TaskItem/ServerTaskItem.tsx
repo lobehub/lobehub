@@ -10,8 +10,8 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 import { TaskContent } from '../../Tasks/shared';
-import { type TaskMetrics } from './TaskTitle';
 import TaskTitle from './TaskTitle';
+import { type TaskMetrics } from './TaskTitle';
 
 interface ServerTaskItemProps {
   item: UIChatMessage;

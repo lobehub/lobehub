@@ -1,6 +1,6 @@
 import { isOnServerSide } from '@lobechat/utils';
-import { type ParsedQuery } from 'query-string';
 import qs from 'query-string';
+import { type ParsedQuery } from 'query-string';
 import { useMemo } from 'react';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';

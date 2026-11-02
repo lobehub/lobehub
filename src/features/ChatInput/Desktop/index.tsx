@@ -22,8 +22,8 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
-import { type ActionToolbarProps } from '../ActionBar';
 import ActionBar from '../ActionBar';
+import { type ActionToolbarProps } from '../ActionBar';
 import ControlBar from '../ControlBar';
 import InputEditor from '../InputEditor';
 import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';

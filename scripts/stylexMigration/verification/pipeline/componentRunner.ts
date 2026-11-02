@@ -26,11 +26,13 @@ import { compareComponents } from '../browser/compareSnapshots';
 import { collectRulesInPage } from '../browser/ruleInventory';
 import { readRuntimeCompositions } from '../browser/runtimeCompositions';
 import { captureScreenshotEvidence } from '../browser/screenshotEvidence';
+import { screenshotCaptureLimit, shouldCaptureScreenshot } from '../browser/screenshotPlan';
 import { resolveCaptureSurfacesInPage } from '../browser/surfaces';
 import { buildComponentFixture } from '../build/buildFixtures';
 import { digestFile } from '../dependencies/dependencySnapshot';
 import type { StyleFixture } from '../fixtures/fixtureRegistry';
 import { serveFixtures } from '../fixtures/fixtureServer';
+import { loadPinnedAssets } from '../fixtures/pinnedAssets';
 import { sha256, writeJson } from '../reporting/report';
 import type { GateInput } from '../types';
 import type { FixtureProbe } from './probePlanner';
@@ -66,6 +68,9 @@ interface ProbeResult {
 }
 
 const openPage = async (browser: Browser, origin: string, failures: Set<string>) => {
+  const sourceDirectory = process.env.STYLEX_VERIFIER_SOURCE_DIRECTORY;
+  if (!sourceDirectory) throw new Error('VERIFIER_SOURCE_DIRECTORY_MISSING');
+  const assets = await loadPinnedAssets(sourceDirectory);
   const context = await browser.newContext({
     colorScheme: 'light',
     deviceScaleFactor: 1,
@@ -76,7 +81,12 @@ const openPage = async (browser: Browser, origin: string, failures: Set<string>)
     viewport: { height: 900, width: 1200 },
   });
   await context.route('**/*', async (route) => {
-    if (new URL(route.request().url()).origin === origin) await route.continue();
+    if (assets.has(route.request().url()))
+      await route.fulfill({
+        body: assets.get(route.request().url())!,
+        contentType: 'image/svg+xml',
+      });
+    else if (new URL(route.request().url()).origin === origin) await route.continue();
     else {
       failures.add(`EXTERNAL_REQUEST_BLOCKED:${route.request().resourceType()}`);
       await route.abort();
@@ -265,6 +275,7 @@ export const runFixtureComparison = async (options: {
   const results: ProbeResult[] = [];
   const screenshots: Array<{
     probeId: string;
+    variant: string;
     result: Awaited<ReturnType<typeof captureScreenshotEvidence>>;
   }> = [];
   const rulePlans: Array<{ plan: RuleWitnessPlan; side: 'base' | 'candidate'; variant: string }> =
@@ -439,8 +450,12 @@ export const runFixtureComparison = async (options: {
         timing.confirmation = performance.now() - phaseStarted;
         if (
           options.screenshots &&
-          screenshots.length < 3 &&
-          (screenshots.length === 0 || comparison.raw.length > 0)
+          shouldCaptureScreenshot(
+            fixture.styleVariants.map((entry) => entry.id),
+            screenshots.map((entry) => entry.variant),
+            variant.id,
+            comparison.differences.length > 0,
+          )
         ) {
           const image = await shardController.runOperation(() =>
             captureScreenshotEvidence(
@@ -449,7 +464,7 @@ export const runFixtureComparison = async (options: {
               `pixels-${screenshots.length}`,
             ),
           );
-          screenshots.push({ probeId: probe.id, result: image });
+          screenshots.push({ probeId: probe.id, variant: variant.id, result: image });
           artifactFiles.push(...image.artifactFiles);
         }
         phaseStarted = performance.now();
@@ -595,7 +610,7 @@ export const runFixtureComparison = async (options: {
       await writeJson(output, 'screenshots.json', {
         advisoryOnly: true,
         captures: screenshots,
-        maxCaptures: 3,
+        maxCaptures: screenshotCaptureLimit,
         limitations: [
           'VIEWPORT_ONLY',
           'PIXEL_EQUALITY_DOES_NOT_OVERRIDE_STYLE_FAILURE',

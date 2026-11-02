@@ -1,6 +1,13 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
-import { copyToClipboard, cx, Icon } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  copyToClipboard,
+  cx,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+  toast,
+} from '@lobehub/ui';
 import {
   ArrowRightIcon,
   ChevronDownIcon,

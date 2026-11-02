@@ -1,8 +1,8 @@
-import { realpathSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-import { ESLint } from 'eslint';
 import * as prettier from 'prettier';
 
 type Babel = {
@@ -23,7 +23,7 @@ const loadCompiler = () => {
 };
 
 let compiler: ReturnType<typeof loadCompiler> | undefined;
-let eslint: ESLint | undefined;
+const oxlintBin = path.join(repoRoot, 'node_modules/.bin/oxlint');
 
 /** Throws when the StyleX compiler rejects the file. */
 export const compileStylex = (code: string, filename: string) => {
@@ -55,12 +55,28 @@ export const format = async (code: string, filePath: string) => {
   return prettier.format(code, { ...config, filepath: filePath });
 };
 
-/** Lints with autofix; returns the fixed code and every remaining error. */
+/**
+ * Lints with autofix; returns the fixed code and every remaining error. Oxlint
+ * has no stdin mode and resolves path-scoped overrides from the file path, so
+ * the code is linted in place and the original file is restored afterwards.
+ */
 export const lintAndFix = async (code: string, filePath: string) => {
-  eslint ??= new ESLint({ cwd: repoRoot, fix: true });
-  const [result] = await eslint.lintText(code, { filePath });
-  const errors = result.messages
-    .filter((m) => m.severity === 2)
-    .map((m) => `${m.ruleId ?? 'parse'}: ${m.message.split('\n')[0]}`);
-  return { code: result.output ?? code, errors };
+  const original = readFileSync(filePath, 'utf8');
+  writeFileSync(filePath, code);
+  try {
+    const { stdout } = spawnSync(oxlintBin, ['--fix', '--format', 'json', filePath], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    const { diagnostics } = JSON.parse(stdout) as {
+      diagnostics: { code?: string; message: string; severity: string }[];
+    };
+    const errors = diagnostics
+      .filter((d) => d.severity === 'error')
+      .map((d) => `${d.code ?? 'parse'}: ${d.message.split('\n')[0]}`);
+    return { code: readFileSync(filePath, 'utf8'), errors };
+  } finally {
+    writeFileSync(filePath, original);
+  }
 };
