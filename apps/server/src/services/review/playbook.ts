@@ -431,7 +431,10 @@ export class ReviewPlaybookService {
       }))
       .filter((evidence) => evidence.anchor !== null);
 
-    const evidence = located.map((item) => item.anchor!.anchor);
+    const evidence: DocumentReviewTextAnchor[] = located.map((item) => ({
+      ...item.anchor!.anchor,
+      kind: item.kind,
+    }));
     const hasSupporting = located.some((item) => item.kind === 'supporting');
     const hasViolating = located.some((item) => item.kind === 'violating');
 
@@ -493,7 +496,14 @@ export class ReviewPlaybookService {
 
     const source = await readDocumentTextSource(this.documentModel, session.documentId);
     const documentText = documentPlainText(source);
-    const target = (result.evidence ?? []).find((item) => item.quote?.trim());
+    const locatedEvidence = (result.evidence ?? []).filter((item) => item.quote?.trim());
+    // A failed check can quote a compliant or contextual clause before the one it
+    // actually violates. The suggestion restricts edits to `targetQuote`, so it
+    // must land on the violating quote, not whichever quote happens to be first.
+    const target =
+      (result.status === 'failed'
+        ? locatedEvidence.find((item) => item.kind === 'violating')
+        : undefined) ?? locatedEvidence[0];
     if (!target) {
       throw new ReviewServiceError(
         'NO_TARGET_TEXT',
@@ -513,8 +523,8 @@ export class ReviewPlaybookService {
         user: chainSuggestionPrompt({
           contextAfter: context.after,
           contextBefore: context.before,
-          evidence: (result.evidence ?? []).map(({ quote }) => ({
-            kind: result.status === 'failed' ? 'violating' : 'context',
+          evidence: (result.evidence ?? []).map(({ kind, quote }) => ({
+            kind: kind ?? (result.status === 'failed' ? 'violating' : 'context'),
             quote,
           })),
           explanation: result.explanation ?? '',

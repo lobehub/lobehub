@@ -381,6 +381,34 @@ describe('ReviewPlaybookService (Playbook rule checks)', () => {
     ).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
   });
 
+  it('targets the violating quote when a failed check also quotes a compliant clause first', async () => {
+    const { acceptance, session } = await confirmRulesFromDrafts();
+    // The model quotes the compliant payment clause before the clause it fails on.
+    verdicts.set(acceptance.id, {
+      confidence: 0.9,
+      evidence: [
+        { kind: 'supporting', quote: SUPPORTING_PAYMENT },
+        { kind: 'violating', quote: VIOLATING_ACCEPTANCE },
+      ],
+      explanation: '第 4 条只写最终验收，没有分阶段验收。',
+      verdict: 'failed',
+    });
+
+    const checked = await service.runChecks({ sessionId: session.id });
+    const failed = checked.find((item) => item.ruleId === acceptance.id)!;
+    expect(failed.status).toBe('failed');
+    // Evidence kinds survive normalization, in their original order.
+    expect(failed.evidence?.map((item) => [item.kind, item.quote])).toEqual([
+      ['supporting', SUPPORTING_PAYMENT],
+      ['violating', VIOLATING_ACCEPTANCE],
+    ]);
+
+    // The suggestion prompt must restrict itself to the violating quote, not the
+    // compliant clause that merely came first.
+    const withSuggestion = await service.suggestFix({ checkResultId: failed.id });
+    expect(withSuggestion.suggestion?.original).toBe(VIOLATING_ACCEPTANCE);
+  });
+
   it('falls back to a pattern hint and flags duplicates when proposing from a description', async () => {
     const ruleSet = await model.createRuleSet({
       documentId,

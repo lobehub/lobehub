@@ -28,6 +28,13 @@ export interface DocumentReviewTextAnchor {
    * stays visible; the UI must not offer a jump for it.
    */
   invalid?: boolean;
+  /**
+   * Rule-check evidence role. Preserved on a check result's `evidence` anchors
+   * so a later fix suggestion can pick the violating quote instead of whichever
+   * quote happened to come first. Only set on rule-check evidence; change-impact
+   * anchors leave it undefined.
+   */
+  kind?: 'context' | 'supporting' | 'violating';
   /** Optional human label of the location, e.g. "§4.2 Acceptance". */
   label?: string;
   prefix?: string;
