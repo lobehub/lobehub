@@ -1,3 +1,4 @@
+import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -144,7 +145,10 @@ export const readMessagesByCursor = async (
 
   // Same rule as `getMessages`: only the caller knows whether this page is
   // rendered or fed to a model, so projection is opt-in per read.
-  return projectToolPayloads
-    ? { ...page, direction, messages: projectToolViewModels(page.messages) }
-    : { ...page, direction };
+  const messages = page.messages.map(omitToolWorkRegistration);
+  return {
+    ...page,
+    direction,
+    messages: projectToolPayloads ? projectToolViewModels(messages) : messages,
+  };
 };

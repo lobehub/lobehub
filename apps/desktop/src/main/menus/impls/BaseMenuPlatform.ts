@@ -5,6 +5,8 @@ import { BrowserWindow } from 'electron';
 import type { App } from '@/core/App';
 import ZoomService, { type ZoomAction } from '@/services/zoomSrv';
 
+import type { ContextMenuData } from '../types';
+
 // Popup (`/popup/*`) and desktop utility (`/desktop/*`) windows run without the app shell.
 const NON_APP_SHELL_PATH = /^\/(?:popup|desktop)(?:\/|$)/;
 
@@ -55,6 +57,33 @@ export abstract class BaseMenuPlatform {
         if (browser) browser.runWithUnloadConfirmation(operation);
         else operation();
       },
+      label,
+    };
+  }
+
+  /**
+   * Context menu > Copy Image: copy the right-clicked image itself to the clipboard.
+   * The standard Copy role only copies a text selection, so it does nothing on an image.
+   * `x`/`y` come from the `context-menu` event of the window the menu popped up over.
+   * Disabled when Electron reports no decoded bitmap (broken or still-loading image),
+   * since `copyImageAt` would silently copy nothing.
+   */
+  protected buildCopyImageMenuItem(
+    label: string,
+    data: ContextMenuData,
+  ): MenuItemConstructorOptions {
+    return {
+      click: (_item, win) => {
+        const target =
+          win && 'webContents' in win
+            ? (win as BrowserWindow)
+            : (BrowserWindow.getFocusedWindow() ??
+              this.app.browserManager.getMainWindow()?.browserWindow);
+        if (!target || target.isDestroyed()) return;
+        if (data.x === undefined || data.y === undefined) return;
+        target.webContents.copyImageAt(data.x, data.y);
+      },
+      enabled: data.hasImageContents !== false,
       label,
     };
   }

@@ -1,5 +1,7 @@
 declare module 'verification:component' {
+  import type { WorkSummaryItem } from '@lobechat/types';
   import type { ListProps } from '@lobehub/ui';
+  import type { LucideIcon } from 'lucide-react';
   import type { ComponentType, CSSProperties, ReactNode } from 'react';
 
   interface Row {
@@ -23,6 +25,24 @@ declare module 'verification:component' {
     tableLayout: 'auto' | 'fixed';
   }
   export const LiteTable: ComponentType<Props>;
+  export const WorkPreview: ComponentType<{
+    item: WorkSummaryItem;
+    title: string;
+  }>;
+  export const WorkPreviewStatus: typeof WorkPreview;
+  export const PreviewToolbar: ComponentType<{
+    actions?: ReactNode;
+    path: string;
+    rootPath?: string;
+  }>;
+  export const ToolbarActionButton: ComponentType<{
+    active?: boolean;
+    disabled?: boolean;
+    icon: LucideIcon;
+    label?: ReactNode;
+    loading?: boolean;
+  }>;
+  export const SidebarGroupItem: ComponentType<{ disabled: boolean; id: string; name: string }>;
   export const Menu: ComponentType<ListProps>;
   export const SpendType: ComponentType<{
     children: ReactNode;

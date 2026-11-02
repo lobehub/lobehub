@@ -5,6 +5,12 @@ export const acceptanceContentLayout = {
   paddingInline: 24,
 } as const;
 
+/** The checklist reads as one column of evidence, not a feed with an aside —
+ * it keeps the narrower reading width inside the page's wide frame. */
+export const acceptanceChecksLayout = {
+  maxWidth: 920,
+} as const;
+
 export const acceptanceFocusedLayout = {
   contentPaddingBlock: '32px 24px',
   headerGap: 8,

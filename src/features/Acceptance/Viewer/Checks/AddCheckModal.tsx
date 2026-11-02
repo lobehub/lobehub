@@ -1,10 +1,12 @@
 'use client';
 
 import type { AcceptanceChecklistItem } from '@lobechat/types';
-import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
   type ModalInstance,
   Select,

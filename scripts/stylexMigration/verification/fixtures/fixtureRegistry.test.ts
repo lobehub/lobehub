@@ -4,6 +4,26 @@ import { planFixtureProbes } from '../pipeline/probePlanner';
 import { fixtureIds, getStyleFixture, styleFixtureSchema } from './fixtureRegistry';
 
 describe('explicit fixture contract', () => {
+  it('splits WorkPreview resource/status cases inside the sixteen-shard budget', () => {
+    const resources = getStyleFixture('WorkPreview');
+    const statuses = getStyleFixture('WorkPreviewStatus');
+    expect(resources.styleVariants).toHaveLength(14);
+    expect(statuses.styleVariants).toHaveLength(4);
+    expect(planFixtureProbes(resources).length + planFixtureProbes(statuses).length).toBe(108);
+    expect(
+      getStyleFixture('PreviewToolbar').moduleBoundaries.every(
+        (edge) => edge.source !== './PathBreadcrumb',
+      ),
+    ).toBe(true);
+    expect(() =>
+      styleFixtureSchema.parse({
+        ...resources,
+        moduleBoundaries: [
+          { importer: 'src/fixture.tsx', source: 'store', replacement: 'fixtures/undeclared.ts' },
+        ],
+      }),
+    ).toThrow('UNDECLARED_BOUNDARY_ASSET');
+  });
   it('declares real versioned entries and does not claim source-unit coverage', () => {
     const fixture = getStyleFixture('LiteTable');
     expect(fixture.component.base.source).toBe('src/components/LiteTable/index.tsx');
@@ -53,8 +73,8 @@ describe('explicit fixture contract', () => {
     ).toBe(false);
   });
 
-  it('connects all sixteen entries with explicit mounting and probe contracts', () => {
-    expect(fixtureIds).toHaveLength(16);
+  it('connects all entries with explicit mounting and probe contracts', () => {
+    expect(fixtureIds).toHaveLength(21);
     for (const id of fixtureIds) {
       const fixture = getStyleFixture(id);
       expect(fixture.component.id).toBe(id);

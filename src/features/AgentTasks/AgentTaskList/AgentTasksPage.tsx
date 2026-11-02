@@ -544,6 +544,13 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
                   )
                 : t('taskList.scheduled.empty')
             }
+            selectionScope={[
+              collection,
+              isMineCollection ? myTaskScope : '',
+              collectionPage,
+              agentId ?? '',
+              projectId ?? '',
+            ].join(':')}
             onRetry={() => collectionSWR.mutate()}
           />
           {(collectionTasksTotal > COLLECTION_PAGE_SIZE || collectionPage > 1) && (
