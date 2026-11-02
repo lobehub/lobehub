@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AnthropicStream } from './anthropic';
+import { AWSBedrockClaudeStream } from './bedrock/claude';
 import { OpenAIStream } from './openai/openai';
 import { OpenAIResponsesStream } from './openai/responsesStream';
 import { readProviderReportedCost } from './providerReportedCost';
@@ -126,6 +127,34 @@ describe('provider-reported cost in stream callbacks', () => {
     expect(onFinal).toHaveBeenCalledWith(
       expect.objectContaining({ pricingOptions, providerReportedCost: 0.000_12 }),
     );
+  });
+
+  it('passes Bedrock Claude pricing options to onFinal', async () => {
+    const onFinal = vi.fn();
+    const pricingOptions = { lookupParams: { ttl: '1h' } };
+    await readAll(
+      AWSBedrockClaudeStream(
+        createStream([
+          {
+            message: { id: 'm1', usage: { input_tokens: 8, output_tokens: 1 } },
+            type: 'message_start',
+          },
+          { delta: { text: 'hi', type: 'text_delta' }, index: 0, type: 'content_block_delta' },
+          {
+            delta: { stop_reason: 'end_turn' },
+            type: 'message_delta',
+            usage: { output_tokens: 6 },
+          },
+          { type: 'message_stop' },
+        ]),
+        {
+          callbacks: { onFinal },
+          payload: { model: 'claude', pricingOptions, provider: 'bedrock' },
+        },
+      ),
+    );
+
+    expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ pricingOptions }));
   });
 
   it('omits providerReportedCost when the provider reports none', async () => {
