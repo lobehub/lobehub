@@ -31,6 +31,23 @@ describe('agentBrowserSessionName', () => {
     expect(agentBrowserSessionName('../x y')).toBe('lobehub-topic-___x_y');
     expect(agentBrowserSessionName(undefined)).toBe('lobehub-default');
   });
+
+  it('gives a sub-agent thread its own session inside the topic', () => {
+    expect(agentBrowserSessionName('tpc_1', 'thd_aaaaaaaa')).toBe('lh-tpc_1-aaaaaaaa');
+    expect(agentBrowserSessionName('tpc_1', 'thd_aaaaaaaa')).not.toBe(
+      agentBrowserSessionName('tpc_1', 'thd_bbbbbbbb'),
+    );
+    expect(agentBrowserSessionName('tpc_1', undefined)).toBe('lobehub-topic-tpc_1');
+    expect(agentBrowserSessionName(undefined, 'thd_a')).toBe('lobehub-default');
+  });
+
+  it('stays short enough for the socket path with real id lengths', () => {
+    // A 58-byte name made agent-browser refuse to start: "Socket path would be 114 bytes (max 103)".
+    const topicId = `tpc_${'a'.repeat(12)}`;
+    const name = agentBrowserSessionName(topicId, `thd_${'b'.repeat(16)}`);
+
+    expect(name.length).toBeLessThanOrEqual(agentBrowserSessionName(topicId).length);
+  });
 });
 
 describe('buildAgentBrowserCommands', () => {
@@ -114,6 +131,45 @@ describe('buildAgentBrowserCommands', () => {
 });
 
 describe('runAgentBrowserCall', () => {
+  // A device that, like agent-browser, keeps one current page per session.
+  const createDevice = () => {
+    const pages = new Map<string, string>();
+    const exec = vi.fn(async (session: string, commands: string[][]) => {
+      // Yield so concurrent runs interleave between their navigate and readPage.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      return JSON.stringify(
+        commands.map((command) => {
+          if (command[0] === 'open') pages.set(session, command[1]);
+          const url = pages.get(session);
+          const result =
+            command[0] === 'read' ? { content: `text of ${url}` } : { title: url, url };
+          return step(command, result);
+        }),
+      );
+    });
+    return { exec, readFile: vi.fn(), screenshotPath: '/tmp/shot.png' };
+  };
+
+  it('keeps concurrent sub-agents of one topic on their own pages', async () => {
+    const device = createDevice();
+    const browse = async (threadId: string, url: string) => {
+      const identity = { __agentId: 'agt', __threadId: threadId, __topicId: 'tpc' };
+      await runAgentBrowserCall('navigate', { ...identity, url }, device);
+      return runAgentBrowserCall('readPage', identity, device);
+    };
+
+    const [york, sfu] = await Promise.all([
+      browse('thd_york', 'https://yorku.ca/'),
+      browse('thd_sfu', 'https://sfu.ca/'),
+    ]);
+
+    expect(york.state).toMatchObject({
+      content: 'text of https://yorku.ca/',
+      url: 'https://yorku.ca/',
+    });
+    expect(sfu.state).toMatchObject({ content: 'text of https://sfu.ca/', url: 'https://sfu.ca/' });
+  });
+
   it('runs in the topic session without forwarding the run identity', async () => {
     const { exec, promise } = run(
       'navigate',

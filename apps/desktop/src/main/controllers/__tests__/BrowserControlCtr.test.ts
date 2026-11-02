@@ -24,6 +24,36 @@ const createGuest = (capturePage: ReturnType<typeof vi.fn>) => ({
   mainFrame: { executeJavaScript: vi.fn().mockResolvedValue(undefined) },
 });
 
+describe('BrowserControlCtr.runGatewayToolCall', () => {
+  it('hands the thread to the renderer and keeps run identity out of the tool args', async () => {
+    const broadcast = vi.fn();
+    const controller = new BrowserControlCtr({
+      browserManager: { getMainWindow: () => ({ broadcast }) },
+      getController: () => ({}),
+    } as unknown as App);
+
+    const pending = controller.runGatewayToolCall('navigate', {
+      __agentId: 'agt',
+      __threadId: 'thd_a',
+      __topicId: 'tpc',
+      url: 'https://example.com',
+    });
+
+    expect(broadcast).toHaveBeenCalledWith('browserSidebarGatewayToolCall', {
+      agentId: 'agt',
+      apiName: 'navigate',
+      args: { url: 'https://example.com' },
+      requestId: expect.any(String),
+      threadId: 'thd_a',
+      topicId: 'tpc',
+    });
+
+    const [, { requestId }] = broadcast.mock.calls[0];
+    controller.reportGatewayToolResult({ requestId, result: { content: 'ok', success: true } });
+    await expect(pending).resolves.toMatchObject({ success: true });
+  });
+});
+
 describe('BrowserControlCtr.screenshot', () => {
   let guest: ReturnType<typeof createGuest> | undefined;
   let controller: BrowserControlCtr;

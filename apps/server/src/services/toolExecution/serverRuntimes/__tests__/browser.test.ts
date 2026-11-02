@@ -118,6 +118,21 @@ describe('browserRuntime', () => {
       expect(mockReadDeviceSystemInfo).toHaveBeenCalledTimes(1);
     });
 
+    it('carries the thread so a sub-agent does not share its parent topic page', async () => {
+      mockExecuteToolCall.mockResolvedValue({ content: 'ok', success: true });
+
+      await browserRuntime
+        .factory({ ...context, isSubAgent: true, threadId: 'thd_1' })
+        .navigate({ url: 'https://example.com' });
+      await browserRuntime
+        .factory({ ...context, threadId: 'thd_user' })
+        .navigate({ url: 'https://example.com' });
+
+      const sent = mockExecuteToolCall.mock.calls.map(([, call]) => JSON.parse(call.arguments));
+      expect(sent[0]).toMatchObject({ __threadId: 'thd_1', __topicId: context.topicId });
+      expect(sent[1]).not.toHaveProperty('__threadId');
+    });
+
     // A timed-out capability read was cached as "unsupported", so a CLI with
     // agent-browser installed got install guidance for the rest of the run.
     it('does not treat an unanswered capability read as missing support', async () => {
