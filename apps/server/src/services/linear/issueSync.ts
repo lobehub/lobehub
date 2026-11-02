@@ -348,24 +348,31 @@ export class LinearIssueSyncService {
       const toCheck = unseen.filter(
         (link) => visibleTaskIds.has(link.taskId) && !closedTaskIds.has(link.taskId),
       );
+      // Issues Linear closed: this run closes their tasks.
+      const closing: string[] = [];
       if (toCheck.length > 0) {
         const fetched = await getLinearIssuesByIds(
           accessToken,
           toCheck.map((link) => link.externalId),
         );
         await this.syncIssues(fetched, { closeOnly: true }, result);
+        for (const issue of fetched) {
+          if (CLOSED_STATE_TYPES.has(issue.state.type)) closing.push(issue.id);
+        }
       }
       if (options.syncComments) {
         // The filter no longer reaches these issues, so their comments are
         // read here: those being closed now, and closed tasks whose comments
         // were never synced (imported before, or a failed read) — once, so a
-        // long tail of closed issues is not reread on every run.
+        // long tail of closed issues is not reread on every run. An open
+        // issue the filter misses (moved to another rule's project, say) is
+        // left to the rule that lists it.
         const catchUp = unseen
           .filter((link) => closedTaskIds.has(link.taskId) && !link.metadata?.commentsSynced)
           .slice(0, MAX_COMMENT_CATCH_UPS_PER_SYNC);
         await this.syncComments(
           accessToken,
-          [...toCheck, ...catchUp].map((link) => link.externalId),
+          [...closing, ...catchUp.map((link) => link.externalId)],
           result,
         );
       }

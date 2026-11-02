@@ -681,6 +681,30 @@ describe('LinearIssueSyncService comments (real PostgreSQL)', () => {
     ]);
   });
 
+  it('leaves the comments of an open issue the filter no longer lists to its own rule', async () => {
+    const service = new LinearIssueSyncService(db, userId);
+    serve([issue({ id: '1' })]);
+    serveComments([]);
+    await service.syncByFilter(TOKEN, { ...filter, stateTypes: states }, { syncComments: true });
+
+    // Moved to a project another rule covers: still open, no longer listed.
+    linear.listLinearIssues.mockImplementation(async () => ({ hasMore: false, issues: [] }));
+    linear.getLinearIssuesByIds.mockImplementation(async () => [issue({ id: '1' })]);
+    serveComments([comment({ id: 'c-elsewhere', issueId: '1' })]);
+    linear.listLinearIssueComments.mockClear();
+
+    const result = await service.syncByFilter(
+      TOKEN,
+      { ...filter, stateTypes: states },
+      { syncComments: true },
+    );
+
+    expect(result.commentsImported).toBeUndefined();
+    expect(linear.listLinearIssueComments).not.toHaveBeenCalled();
+    expect(await commentsOf('1')).toHaveLength(0);
+    expect((await linkedTask('1'))?.status).not.toBe('completed');
+  });
+
   it('catches up the comments of a closed task the filter no longer reaches, once', async () => {
     const service = new LinearIssueSyncService(db, userId);
     // Imported as completed, without comments, before comments could be synced.
