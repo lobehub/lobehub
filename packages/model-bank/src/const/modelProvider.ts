@@ -18,6 +18,7 @@ export enum ModelProvider {
   Cohere = 'cohere',
   CometAPI = 'cometapi',
   ComfyUI = 'comfyui',
+  DeAPI = 'deapi',
   DeepSeek = 'deepseek',
   Fal = 'fal',
   FireworksAI = 'fireworksai',

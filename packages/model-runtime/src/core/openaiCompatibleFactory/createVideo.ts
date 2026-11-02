@@ -11,6 +11,15 @@ import type { CreateVideoOptions } from '../openaiCompatibleFactory';
 
 const log = createDebug('lobe-video:openai-compatible');
 
+/**
+ * Providers that follow the OpenAI spec and take `input_reference` as `{ image_url }`;
+ * a bare string is rejected with a 400. Others (e.g. vLLM-Omni) keep the string form.
+ */
+const OBJECT_INPUT_REFERENCE_PROVIDERS = new Set<string>([
+  ModelProvider.DeAPI,
+  ModelProvider.OpenAI,
+]);
+
 interface OpenAIVideoStatusResponse {
   completed_at?: number;
   created?: number;
@@ -155,8 +164,9 @@ export async function createOpenAICompatibleVideo(
   if (imageUrl) {
     // OpenAI JSON requests reject bare strings, for example:
     // `input_reference: "https://example.com/image.jpg"`.
-    body['input_reference'] =
-      options.provider === ModelProvider.OpenAI ? { image_url: imageUrl } : imageUrl;
+    body['input_reference'] = OBJECT_INPUT_REFERENCE_PROVIDERS.has(options.provider)
+      ? { image_url: imageUrl }
+      : imageUrl;
   }
 
   log('OpenAI-compatible video API request body: %O', body);

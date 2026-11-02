@@ -715,6 +715,29 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 
 The above example disables all models first, then enables `fal-ai/flux/schnell` and `fal-ai/flux-pro/kontext` (displayed as `FLUX.1 Kontext [pro]`).
 
+## deAPI
+
+### `DEAPI_API_KEY`
+
+- Type: Required
+- Description: This is the API key you created in deAPI under [Settings → API Keys](https://app.deapi.ai/settings/api-keys). Setting it enables deAPI as a model provider.
+- Default: -
+- Example: `sk-dp-xxxxxx...xxxxxx`
+
+### `DEAPI_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the deAPI OpenAI-compatible base URL.
+- Default: `https://oai.deapi.ai/v1`
+- Example: `https://oai.deapi.ai/v1`
+
+### `DEAPI_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the deAPI model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+Flux1schnell,+Ltx2_3_22B_Dist_INT8=LTX-2.3`
+
 ## ComfyUI
 
 ### `ENABLED_COMFYUI`
