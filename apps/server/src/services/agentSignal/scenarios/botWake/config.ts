@@ -11,7 +11,9 @@ export const DEFAULT_WAKE_RULES: WakeRules = {
   denyChannels: [],
   // Off until the bot has duties: without the text there is nothing to judge a message against.
   // The decision model scores plain feature requests 0.65-0.76, so 0.8 let almost none through.
-  duties: { mode: 'enforce', threshold: 0.65 },
+  // `helpfulThreshold`: in a replay of reviewed decisions, 0.7 woke on twice as many of the wanted
+  // messages as the duty score alone, with about as many unwanted wakes.
+  duties: { helpfulThreshold: 0.7, mode: 'enforce', threshold: 0.65 },
   maxSilentWakes: 3,
   ownerPresenceSeconds: 120,
   scope: 'all',
@@ -125,6 +127,11 @@ const SettingsSchema = z
     customInstructionsEnabled: z.boolean().optional().catch(undefined),
     duties: z
       .object({
+        helpfulThreshold: z
+          .number()
+          .min(0)
+          .max(1)
+          .catch(DEFAULT_WAKE_RULES.duties.helpfulThreshold),
         mode: mode.catch(DEFAULT_WAKE_RULES.duties.mode),
         text: z.string().catch(''),
         threshold: z.number().min(0).max(1).catch(DEFAULT_WAKE_RULES.duties.threshold),
@@ -501,6 +508,7 @@ export const parseBotWakeSettings = (
         : raw.customInstructions?.trim().slice(0, MAX_CUSTOM_INSTRUCTIONS_LENGTH) || undefined,
     // No text, no duties: the judge is left out of the set, so nothing is asked of a model.
     duties: {
+      helpfulThreshold: raw.duties?.helpfulThreshold ?? DEFAULT_WAKE_RULES.duties.helpfulThreshold,
       mode: raw.duties?.mode ?? DEFAULT_WAKE_RULES.duties.mode,
       text: raw.duties?.text?.trim().slice(0, MAX_DUTIES_LENGTH) || undefined,
       threshold: raw.duties?.threshold ?? DEFAULT_WAKE_RULES.duties.threshold,

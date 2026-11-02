@@ -1,7 +1,15 @@
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import { ActionIcon, type DropdownItem, DropdownMenu, Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  ActionIcon,
+  createStaticStyles,
+  cssVar,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Skeleton,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import {
   BoxesIcon,

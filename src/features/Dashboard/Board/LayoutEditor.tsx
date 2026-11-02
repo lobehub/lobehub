@@ -155,6 +155,7 @@ const EditableCell = memo<EditableCellProps>(({ entry, layout, onResize, editabl
     >
       <WidgetCard
         className={stylex.props(gridStyles.editCard).className}
+        view={entry.view}
         widget={entry.widget}
         handle={
           <span

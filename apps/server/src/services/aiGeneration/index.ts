@@ -95,11 +95,11 @@ export class AiGenerationService {
   }
 
   /**
-   * Asks a decision model typed questions about one state and returns its probabilities.
+   * Asks typed questions about one state (`ModelRuntime.decide`): natively for decision models,
+   * emulated through `generateObject` for chat models.
    *
-   * Always called from the server: decision endpoints are hosted APIs, and the device relay
-   * {@link generateObject} may use has no decision call. A provider without a decision endpoint
-   * rejects with `CapabilityNotSupported`.
+   * Always called from the server: the device relay {@link generateObject} may use has no
+   * decision call. A provider with neither rejects with `CapabilityNotSupported`.
    */
   async decide<Q extends DecisionQuestions>(
     input: AiGenerationDecisionInput<Q>,

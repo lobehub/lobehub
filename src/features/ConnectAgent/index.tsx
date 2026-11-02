@@ -15,6 +15,7 @@ import {
   Button,
   Checkbox,
   createModal,
+  createStaticStyles,
   Input,
   type ModalInstance,
   ScrollArea,

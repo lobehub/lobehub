@@ -1,5 +1,6 @@
 'use client';
 
+import { ActionIcon } from '@lobehub/ui';
 import type { VerifyCodingScope } from '@lobechat/types';
 import { Avatar, Flexbox, Freeze, Icon, Popover, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
@@ -10,20 +11,25 @@ import {
   BotIcon,
   CheckCircleIcon,
   CheckSquareIcon,
+  ExternalLink,
   FileTextIcon,
   TargetIcon,
 } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { ArticleSkeleton } from '@/components/Skeleton';
+import { useAcceptanceOrigin } from '@/features/Acceptance/origin';
 import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';
 import { goalService } from '@/services/goal';
 import { taskService } from '@/services/task';
 import { verifyService } from '@/services/verify';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import type { InternalLinkReference } from '../internalLink';
 
@@ -223,7 +229,17 @@ interface InternalEntityPreviewProps extends PropsWithChildren {
 export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
   ({ children, fallbackTitle, reference }) => {
     const { t } = useTranslation('chat');
+    const { t: tVerify } = useTranslation('verify');
     const [open, setOpen] = useState(false);
+    const appOrigin = useAcceptanceOrigin();
+    const activeWorkspaceSlug = useActiveWorkspaceSlug();
+    // A click on the link opens the acceptance in the side panel; this is the
+    // explicit way out to a full browser page. Without an origin the URL would
+    // be relative, which the desktop system browser cannot resolve.
+    const browserUrl =
+      reference.type === 'acceptance' && appOrigin
+        ? `${appOrigin}${buildWorkspaceAwarePath(reference.pathname, activeWorkspaceSlug)}`
+        : undefined;
     const { data, isLoading } = useClientDataSWR(
       open ? internalEntityPreviewKey(reference) : null,
       () => getPreviewData(reference, t),
@@ -267,6 +283,14 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
             <span {...stylex.props(styles.type)}>{typeLabel}</span>
             <span {...stylex.props(styles.title)}>{data?.title || fallbackTitle}</span>
           </Flexbox>
+          {browserUrl && (
+            <ActionIcon
+              icon={ExternalLink}
+              size={'small'}
+              title={tVerify('report.actions.openInBrowser')}
+              onClick={() => openTrustedExternalUrl(browserUrl)}
+            />
+          )}
         </Flexbox>
         {data?.description && (
           <Text className={stylex.props(styles.description).className} fontSize={13}>

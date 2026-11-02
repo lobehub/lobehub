@@ -187,6 +187,10 @@ WidgetSummary.displayName = 'DashboardWidgetSummary';
 const WidgetData = memo<{ widget: DashboardWidgetItem }>(({ widget }) => {
   const { t } = useTranslation('dashboard');
   const trend = useWidgetTrend(widget);
+  const useFetchWidgetVersions = useDashboardStore((s) => s.useFetchWidgetVersions);
+  useFetchWidgetVersions(widget.id);
+  const versions = useDashboardStore(dashboardSelectors.widgetVersions(widget.id));
+  const view = versions.find((version) => version.id === widget.publishedVersionId)?.view;
 
   if (!widget.latestOutput) {
     return (
@@ -199,7 +203,7 @@ const WidgetData = memo<{ widget: DashboardWidgetItem }>(({ widget }) => {
   return (
     // A stat fills its height with the trend, so give it room the drawer does not size.
     <div style={widget.latestOutput.type === 'stat' ? { height: 200 } : { minHeight: 120 }}>
-      <WidgetOutputView density={'full'} output={widget.latestOutput} trend={trend} />
+      <WidgetOutputView density={'full'} output={widget.latestOutput} trend={trend} view={view} />
     </div>
   );
 });

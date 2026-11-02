@@ -44,17 +44,25 @@ describe('scheduleNightlyReview', () => {
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual({
+      jobs: ['self-review', 'bot-retro'],
+      messageId: 'nightly-message-1',
+      messageIds: ['nightly-message-1', 'nightly-message-1'],
       scheduled: true,
       success: true,
-      messageId: 'nightly-message-1',
     });
-    expect(mocks.publishPaginateUsersEntry).toHaveBeenCalledWith({
+    const defaults = {
       cursor: undefined,
       pageSize: 50,
       requestedAt: '2026-05-03T18:30:00.000Z',
       targetLimit: 20,
       whitelist: undefined,
+    };
+    expect(mocks.publishPaginateUsersEntry).toHaveBeenCalledTimes(2);
+    expect(mocks.publishPaginateUsersEntry).toHaveBeenCalledWith({
+      ...defaults,
+      job: 'self-review',
     });
+    expect(mocks.publishPaginateUsersEntry).toHaveBeenCalledWith({ ...defaults, job: 'bot-retro' });
   });
 
   it('forwards valid scheduler options from the request body', async () => {
@@ -65,6 +73,7 @@ describe('scheduleNightlyReview', () => {
     const response = await createApp().request('/cron-hourly-nightly-self-review', {
       body: JSON.stringify({
         cursor: { createdAt: '2026-05-04T00:00:00.000Z', id: 'user-1' },
+        jobs: ['bot-retro', 'unknown'],
         limit: 100,
         targetLimit: 5,
         whitelist: ['user-1', ''],
@@ -75,12 +84,16 @@ describe('scheduleNightlyReview', () => {
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual({
+      jobs: ['bot-retro'],
+      messageId: 'nightly-message-1',
+      messageIds: ['nightly-message-1'],
       scheduled: true,
       success: true,
-      messageId: 'nightly-message-1',
     });
+    expect(mocks.publishPaginateUsersEntry).toHaveBeenCalledTimes(1);
     expect(mocks.publishPaginateUsersEntry).toHaveBeenCalledWith({
       cursor: { createdAt: '2026-05-04T00:00:00.000Z', id: 'user-1' },
+      job: 'bot-retro',
       pageSize: 100,
       requestedAt: '2026-05-03T18:30:00.000Z',
       targetLimit: 5,

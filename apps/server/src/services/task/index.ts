@@ -38,6 +38,26 @@ const SUBTASK_KICKOFF_CONCURRENCY = 5;
 /** How long after a run starts a task may have no recorded operation yet. */
 const TASK_RUN_STARTING_GRACE_MS = 2 * 60 * 1000;
 
+/**
+ * The runner marks a task `running` before it dispatches the agent and records
+ * the topic / operation only after dispatch returns. Inside that window there
+ * is nothing to interrupt yet, so a write that stops the task would orphan the
+ * run about to start. Past the grace window a missing operation means the
+ * start died.
+ */
+export const isTaskRunStarting = (
+  task: { startedAt?: Date | string | null; status: string },
+  runningTopics: { operationId?: string | null }[],
+  now = Date.now(),
+): boolean => {
+  if (task.status !== 'running') return false;
+  const startedAt = task.startedAt ? new Date(task.startedAt).getTime() : 0;
+  return (
+    now - startedAt < TASK_RUN_STARTING_GRACE_MS &&
+    (runningTopics.length === 0 || runningTopics.some((topic) => !topic.operationId))
+  );
+};
+
 export interface CreateTaskInput {
   assigneeAgentId?: string;
   assigneeUserId?: string;
@@ -339,12 +359,7 @@ export class TaskService {
     // that window finds nothing to interrupt and would orphan the run it is
     // about to start. Past the grace window a missing operation means the
     // start died, and deletion goes ahead.
-    const startedAt = task.startedAt ? new Date(task.startedAt).getTime() : 0;
-    const isStarting =
-      task.status === 'running' &&
-      Date.now() - startedAt < TASK_RUN_STARTING_GRACE_MS &&
-      (runningTopics.length === 0 || runningTopics.some((topic) => !topic.operationId));
-    if (isStarting) {
+    if (isTaskRunStarting(task, runningTopics)) {
       throw new TRPCError({
         code: 'CONFLICT',
         message: 'This task is still starting its run. Try deleting it again in a moment.',
@@ -597,6 +612,18 @@ export class TaskService {
    */
   async assertAssigneeUserAssignable(assigneeUserId?: string | null): Promise<void> {
     await this.assertAssigneeUserAssignableWithDatabase(this.db, assigneeUserId);
+  }
+
+  /**
+   * {@link assertAssigneeUserAssignable} inside the caller's transaction,
+   * locking the member row until it commits — for bulk writes that assign
+   * many tasks in one transaction.
+   */
+  async assertAssigneeUserAssignableLocked(
+    tx: LobeChatDatabase,
+    assigneeUserId: string,
+  ): Promise<void> {
+    await this.assertAssigneeUserAssignableWithDatabase(tx, assigneeUserId, true);
   }
 
   private async assertAssigneeUserAssignableWithDatabase(

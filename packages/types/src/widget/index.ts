@@ -8,6 +8,11 @@
 // scheduling, versioning and rendering. Widgets are a standalone entity so any
 // host surface (a board, a goal, an agent page …) can mount the same widget.
 
+import type { WidgetLayoutNode, WidgetLayoutValue } from './layout';
+
+export * from './layout';
+export * from './preset';
+
 export const WIDGET_VISIBILITIES = ['private', 'public'] as const;
 export type WidgetVisibility = (typeof WIDGET_VISIBILITIES)[number];
 
@@ -36,7 +41,7 @@ export interface WidgetLevelFilter {
 export const WIDGET_RUNTIMES = ['node', 'python', 'bash'] as const;
 export type WidgetRuntime = (typeof WIDGET_RUNTIMES)[number];
 
-export const WIDGET_OUTPUT_TYPES = ['stat', 'list', 'series', 'table'] as const;
+export const WIDGET_OUTPUT_TYPES = ['stat', 'list', 'series', 'table', 'data'] as const;
 export type WidgetOutputType = (typeof WIDGET_OUTPUT_TYPES)[number];
 
 export type WidgetTrend = 'up' | 'down' | 'flat';
@@ -116,9 +121,20 @@ export interface WidgetTableOutput {
   type: 'table';
 }
 
+/**
+ * Free-form data for a card drawn by `WidgetView.layout`, e.g. a forecast
+ * with the current reading, today's range and the next hours. The layout
+ * binds to it as `data.*`.
+ */
+export interface WidgetDataOutput {
+  data: Record<string, unknown>;
+  meta?: WidgetOutputMeta;
+  type: 'data';
+}
+
 /** The JSON document a widget script prints to stdout. */
 export type WidgetOutput =
-  WidgetStatOutput | WidgetListOutput | WidgetSeriesOutput | WidgetTableOutput;
+  WidgetStatOutput | WidgetListOutput | WidgetSeriesOutput | WidgetTableOutput | WidgetDataOutput;
 
 /** One secret or variable the script expects in its environment. */
 export interface WidgetEnvRequirement {
@@ -197,10 +213,37 @@ export interface WidgetManifest {
   };
   /** Hostnames the sandbox may reach; empty or omitted means no network. */
   network?: { allow: string[] };
+  /**
+   * Settings a person fills in (a city, a target date, a repository) that
+   * the script reads from its environment. Never secrets: values are stored
+   * in plain text and shown in reviews — credentials go in `env`.
+   */
+  params?: WidgetParam[];
   /** Suggested refresh schedule applied when the version is published. */
   schedule?: { pattern: string; timezone?: string };
   timeoutMs?: number;
   title?: string;
+}
+
+export const WIDGET_PARAM_TYPES = ['string', 'number', 'boolean', 'date', 'select'] as const;
+export type WidgetParamType = (typeof WIDGET_PARAM_TYPES)[number];
+export type WidgetParamValue = string | number | boolean;
+
+/**
+ * One setting of a widget. The script reads it as the environment variable
+ * `name`: numbers and booleans as their text, a date as `YYYY-MM-DD`. The
+ * effective value is `value` (this widget's choice), else `default`.
+ */
+export interface WidgetParam {
+  default?: WidgetParamValue;
+  description?: string;
+  label?: string;
+  name: string;
+  /** Choices of a `select` param. */
+  options?: { label?: string; value: string }[];
+  required?: boolean;
+  type: WidgetParamType;
+  value?: WidgetParamValue;
 }
 
 /** Rendering hints for the widget card, independent of the data. */
@@ -208,9 +251,16 @@ export interface WidgetView {
   chart?: 'line' | 'bar' | 'area';
   /** Column keys to show, in order, for table output. */
   columns?: string[];
+  /**
+   * Declarative card template. When set it replaces the built-in rendering of
+   * the output type; required to show a `data` output.
+   */
+  layout?: WidgetLayoutNode;
   /** Maximum list / table rows before truncation. */
   limit?: number;
   size?: 'sm' | 'md' | 'lg';
+  /** Card background, a `WidgetLayoutSurface` — may be bound to the data. */
+  surface?: WidgetLayoutValue;
 }
 
 // ── Versions ────────────────────────────────────────────

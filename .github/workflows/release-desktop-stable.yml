@@ -516,6 +516,7 @@ jobs:
       - name: Upload to Release
         uses: softprops/action-gh-release@v3
         with:
+          token: ${{ steps.app-token.outputs.token }}
           # 手动触发时使用输入的版本号创建 tag
           tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', needs.check-stable.outputs.version) || github.event.release.tag_name }}
           # Source resolution already requires an existing release; do not unpublish it on a rebuild.
@@ -531,8 +532,6 @@ jobs:
             release/*.snap*
             release/*.rpm*
             release/*.tar.gz*
-        env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   # ============================================
   # 发布到 S3 更新服务器

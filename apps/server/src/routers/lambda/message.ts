@@ -1,3 +1,4 @@
+import { omitToolWorkRegistration } from '@lobechat/agent-runtime';
 import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
   AgentSenderMetadataSchema,
@@ -576,7 +577,8 @@ export const messageRouter = router({
       // from the very list this read returns, and a projected tool result would
       // silently disappear from it. Absent ⇒ whole payloads, which is never the
       // answer that loses data.
-      return input.projectToolPayloads ? projectToolViewModels(messages) : messages;
+      const visibleMessages = messages.map(omitToolWorkRegistration);
+      return input.projectToolPayloads ? projectToolViewModels(visibleMessages) : visibleMessages;
     }),
 
   /**
