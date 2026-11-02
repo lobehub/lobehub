@@ -127,7 +127,7 @@ const styles = stylex.create({
     alignItems: 'center',
     display: 'flex',
     insetBlock: 0,
-    insetInlineEnd: 40,
+    insetInlineEnd: 10,
     position: 'absolute',
   },
   header: {
@@ -185,7 +185,7 @@ const TaskGroupHeader = memo<{
     <div style={{ paddingTop: item.first ? 0 : sub ? 6 : 16 }}>
       <div {...stylex.props(styles.header)}>
         <AccordionRoot
-          indicatorPlacement={'end'}
+          indicatorPlacement={'start'}
           value={item.collapsed ? [] : [item.key]}
           variant={sub ? 'borderless' : 'filled'}
           onValueChange={() => onToggle(item.key)}
@@ -200,7 +200,8 @@ const TaskGroupHeader = memo<{
         </AccordionRoot>
         {createDefaults && (
           // Outside the trigger so clicking it opens the modal without toggling
-          // the group; offset to sit just left of the collapse indicator.
+          // the group; the collapse indicator sits at the start (like Linear),
+          // so the entry takes the header's far end.
           <div {...stylex.props(styles.action)}>
             <ActionIcon
               icon={Plus}
