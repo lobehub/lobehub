@@ -64,11 +64,6 @@ export const createInterventionProjection = (get: () => ChatStore) => {
   const rollbacks = new Map<string, () => void>();
   /** The pre-decision state, kept from the first of nested decisions on one card. */
   const originals = new Map<string, ToolIntervention | undefined>();
-  /** The in-flight decision per card, to re-show after a write reloads the server's rows. */
-  const decisions = new Map<
-    string,
-    { context: OptimisticUpdateContext; decision: Partial<ToolIntervention> }
-  >();
 
   const rollback = (toolMessageIds: readonly string[]) => {
     for (const id of toolMessageIds) {
@@ -81,7 +76,6 @@ export const createInterventionProjection = (get: () => ChatStore) => {
     for (const id of toolMessageIds) {
       rollbacks.delete(id);
       originals.delete(id);
-      decisions.delete(id);
     }
   };
 
@@ -97,7 +91,6 @@ export const createInterventionProjection = (get: () => ChatStore) => {
         ? originals.get(id)
         : dbMessageSelectors.getDbMessageById(id)(get())?.pluginIntervention;
       originals.set(id, original);
-      decisions.set(id, { context, decision });
       dispatchInterventionState(get, id, decision, context);
       const applied = dbMessageSelectors.getDbMessageById(id)(get())?.pluginIntervention;
       rollbacks.set(id, () => {
@@ -123,27 +116,8 @@ export const createInterventionProjection = (get: () => ChatStore) => {
     return () => rollback(toolMessageIds);
   };
 
-  /**
-   * Run a write that replaces the conversation with the server's rows (e.g. a
-   * legacy argument-edit fallback), then re-show the cards' in-flight
-   * decisions: those rows stay `pending` until the resume claims them, and a
-   * card back in `pending` remounts with a fresh Submit — a second approval
-   * then fails the claim and ends the resumed run.
-   */
-  const keepDecisionsAcross = async (
-    toolMessageIds: readonly string[],
-    write?: () => Promise<unknown>,
-  ) => {
-    await write?.();
-    for (const id of toolMessageIds) {
-      const pending = decisions.get(id);
-      if (pending) applyLocalDecision([id], pending.decision, pending.context);
-    }
-  };
-
   return {
     applyLocalDecision,
-    keepDecisionsAcross,
     dispatch: (
       toolMessageId: string,
       patch: Partial<ToolIntervention>,
