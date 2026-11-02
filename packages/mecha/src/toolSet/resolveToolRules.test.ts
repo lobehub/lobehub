@@ -96,6 +96,15 @@ describe('resolveToolRules', () => {
         'lobe-user-memory'
       ],
     ).toBe(false);
+    // Manual skill activation drops the activator, so unpinned memory stays resident.
+    expect(
+      resolveToolRules(
+        request({
+          agent: { chatConfig: { skillActivateMode: 'manual' } },
+          memoryEnabled: true,
+        }),
+      ).rules['lobe-user-memory'],
+    ).toBe(true);
     // Chat mode has no activator, so memory stays resident there.
     expect(
       resolveToolRules(

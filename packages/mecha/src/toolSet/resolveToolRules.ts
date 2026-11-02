@@ -119,9 +119,10 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
       (!activatorAvailable || pinnedPluginIds.includes(BrowserManifest.identifier)),
     // Memory follows the same Pinned/Auto split: `memory.enabled` decides
     // whether the capability exists at all, the pin decides whether its
-    // (large) manifest rides every turn or waits for the activator.
+    // (large) manifest rides every turn or waits for the activator. Without
+    // an activator the popover's "Auto" would otherwise mean "never loaded".
     [MemoryManifest.identifier]:
-      memoryEnabled && pinnedPluginIds.includes(MemoryManifest.identifier),
+      memoryEnabled && (!activatorAvailable || pinnedPluginIds.includes(MemoryManifest.identifier)),
     ...(request.isBotConversation && { [MessageManifest.identifier]: true }),
     ...(request.isGroupSupervisor && enableAll(groupSupervisorToolIds)),
     // The device picker: only for device-capable targets behind a gateway,
