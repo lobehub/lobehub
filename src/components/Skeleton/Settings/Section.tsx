@@ -1,33 +1,29 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import SkeletonBar from '../Bar';
+import moduleStyles from './Section.module.css';
 
-const styles = createStaticStyles(({ css }) => ({
-  divider: css`
-    width: 100%;
-    height: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  // A loaded settings form renders its fields flush in the group body (each field
-  // pads itself), while a bare `Form.Group` pads the body by 16px on both ends.
-  group: css`
-    & > :last-child {
-      padding-block: 0;
-    }
-  `,
-  row: css`
-    display: flex;
-    gap: 24px;
-    align-items: center;
-    justify-content: space-between;
-
-    min-height: 64px;
-    padding-block: 16px;
-  `,
-}));
+const styles = stylex.create({
+  divider: {
+    width: '100%',
+    height: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  row: {
+    display: 'flex',
+    gap: '24px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: '64px',
+    paddingBlock: '16px',
+  },
+});
 
 export interface SettingsSectionSkeletonControl {
   height: number;
@@ -43,7 +39,7 @@ const Row = ({
   index: number;
   withDesc: boolean;
 }) => (
-  <div className={styles.row}>
+  <div {...stylex.props(styles.row)}>
     {/* Line boxes match the loaded label (14px / 22px) and description (12px / 13px) stack. */}
     <Flexbox gap={4}>
       <Flexbox height={22} justify={'center'}>
@@ -92,7 +88,7 @@ const Group = ({
   withDesc = true,
 }: SettingsSectionSkeletonGroup) => (
   <Form.Group
-    className={styles.group}
+    className={moduleStyles.group}
     collapsible={false}
     variant={'filled'}
     title={
@@ -105,7 +101,7 @@ const Group = ({
     <Flexbox>
       {Array.from({ length: rows }).map((_, index) => (
         <Flexbox key={index}>
-          {index > 0 && <div className={styles.divider} />}
+          {index > 0 && <div {...stylex.props(styles.divider)} />}
           <Row control={controls?.[index] ?? control} index={index} withDesc={withDesc} />
         </Flexbox>
       ))}

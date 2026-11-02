@@ -1,9 +1,7 @@
-import { HotkeyEnum, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
+import { HotkeyEnum, HOTKEYS_REGISTRATION, HotkeyScopeEnum } from '@lobechat/const/hotkeys';
 import { renderHook } from '@testing-library/react';
 import { uniq } from 'es-toolkit/compat';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 
 import { useHotkeyById } from './useHotkeyById';
 

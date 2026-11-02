@@ -11,8 +11,9 @@ import {
   LucideCopy,
   PanelTop,
   PencilLine,
-  Share2,
-  Star,
+  Pin,
+  PinOff,
+  Share,
   Trash,
   Wand2,
 } from 'lucide-react';
@@ -51,7 +52,7 @@ export const useDropdownMenu = ({
   topicId,
   topicTitle,
 }: UseDropdownMenuProps): (() => DropdownItem[]) => {
-  const { t } = useTranslation(['common', 'topic']);
+  const { t } = useTranslation(['common', 'topic', 'chat']);
 
   const appOrigin = useAppOrigin();
   const navigate = useWorkspaceAwareNavigate();
@@ -109,15 +110,13 @@ export const useDropdownMenu = ({
         },
         {
           disabled: !canEditTopic,
-          icon: <Icon icon={Star} />,
+          icon: <Icon icon={fav ? PinOff : Pin} />,
           key: 'favorite',
-          label: fav
-            ? t('actions.unfavorite', { ns: 'topic' })
-            : t('actions.favorite', { ns: 'topic' }),
+          label: fav ? t('actions.unpin', { ns: 'topic' }) : t('actions.pin', { ns: 'topic' }),
           onClick: () => {
             favoriteTopic(topicId, !fav);
           },
-          sfSymbol: fav ? 'star.slash' : 'star',
+          sfSymbol: fav ? 'pin.slash' : 'pin',
         },
         {
           type: 'divider' as const,
@@ -202,7 +201,10 @@ export const useDropdownMenu = ({
           label: t('actions.copyLink', { ns: 'topic' }),
           onClick: () => {
             if (!agentId) return;
-            const url = `${appOrigin}${AGENT_CHAT_TOPIC_URL(agentId, topicId)}`;
+            const url = `${appOrigin}${buildWorkspaceAwarePath(
+              AGENT_CHAT_TOPIC_URL(agentId, topicId),
+              activeWorkspaceSlug,
+            )}`;
             void navigator.clipboard.writeText(url);
             toast.success(t('actions.copyLinkSuccess', { ns: 'topic' }));
           },
@@ -221,9 +223,9 @@ export const useDropdownMenu = ({
         },
         {
           disabled: !canEditTopic,
-          icon: <Icon icon={Share2} />,
+          icon: <Icon icon={Share} />,
           key: 'share',
-          label: t('share'),
+          label: t('shareModal.title', { ns: 'chat' }),
           onClick: handleOpenShareModal,
           sfSymbol: 'square.and.arrow.up',
         },

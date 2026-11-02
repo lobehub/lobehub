@@ -1,8 +1,9 @@
 'use client';
 
-import { Avatar, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { AgentMigrationBadge, useAgentTransferJob } from '@/features/AgentTransferMigration';
 import { useAgentContext } from '@/features/Conversation/useAgentContext';
 import NavHeader from '@/features/NavHeader';
@@ -157,10 +158,12 @@ const Header = memo(() => {
             gap={4}
           >
             {splitView && agentMeta && (
-              <Avatar
+              <AgentAvatar
+                agentId={agentId}
                 alt={agentMeta.title}
                 avatar={agentMeta.avatar}
                 background={agentMeta.backgroundColor}
+                name={agentMeta.title}
                 shape={'square'}
                 size={24}
                 style={{ flex: 'none', marginInlineStart: 8 }}

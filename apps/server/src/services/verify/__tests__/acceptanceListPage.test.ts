@@ -10,7 +10,7 @@ import { AcceptanceService } from '../acceptanceService';
 const mocks = vi.hoisted(() => ({
   projectFindByIds: vi.fn(),
   queryPage: vi.fn(),
-  taskResolveMany: vi.fn(),
+  taskResolveRefs: vi.fn(),
 }));
 
 vi.mock('@/database/models/acceptance', () => ({
@@ -20,7 +20,7 @@ vi.mock('@/database/models/acceptance', () => ({
 }));
 vi.mock('@/database/models/task', () => ({
   TaskModel: vi.fn(function () {
-    return { resolveMany: mocks.taskResolveMany };
+    return { resolveRefs: mocks.taskResolveRefs };
   }),
 }));
 vi.mock('@/database/models/topic', () => ({
@@ -79,7 +79,9 @@ describe('AcceptanceService.listPageWithSubjects', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.queryPage.mockResolvedValue({ items: rows, nextCursor: 'cursor-2' });
-    mocks.taskResolveMany.mockResolvedValue([{ id: 'task-1', identifier: 'T-1', name: 'Task 1' }]);
+    mocks.taskResolveRefs.mockResolvedValue({
+      byRef: new Map([['task-1', { id: 'task-1', identifier: 'T-1', name: 'Task 1' }]]),
+    });
     mocks.projectFindByIds.mockResolvedValue([{ id: 'project-1', name: 'Project 1' }]);
   });
 
@@ -126,7 +128,7 @@ describe('AcceptanceService.listPageWithSubjects', () => {
   });
 
   it('degrades subject titles and projects when their reads fail', async () => {
-    mocks.taskResolveMany.mockRejectedValue(new Error('db down'));
+    mocks.taskResolveRefs.mockRejectedValue(new Error('db down'));
     mocks.projectFindByIds.mockRejectedValue(new Error('db down'));
     const service = new AcceptanceService(db() as any, 'user-1');
 

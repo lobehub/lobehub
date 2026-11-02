@@ -6,11 +6,14 @@ import {
 } from '@lobechat/types';
 import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
 import { deserializeMcpIpcPayload, serializeMcpIpcPayload } from '@lobechat/utils/mcpIpcPayload';
+import { toRecord } from '@lobechat/utils/object';
 import { type PluginManifest } from '@lobehub/market-sdk';
 import { type CallReportRequest } from '@lobehub/market-types';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
+import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
+import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { discoverService } from './discover';
@@ -43,13 +46,13 @@ class MCPService {
     const s = getToolStoreState();
     const { identifier, arguments: args, apiName } = payload;
 
-    // Connector-first: custom connectors execute server-side with their stored
-    // (encrypted) OAuth token, so route them before the plugin path. The client
-    // has no credentials, hence the dedicated `connector.callTool` endpoint.
+    // Connector-first: HTTP connectors use their server-held credentials.
+    // Standalone desktop stdio connectors use local IPC; configured device
+    // gateways keep the existing server route.
     // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
-    const { connectorSelectors } = await import('@/store/tool/slices/connector');
+    const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
     const connector = connectorSelectors.connectorByIdentifier(identifier)(s);
     if (
       connector &&
@@ -57,10 +60,57 @@ class MCPService {
       (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
     ) {
       const { lambdaClient } = await import('@/libs/trpc/client');
-      return (await lambdaClient.connector.callTool.mutate(
-        { args, identifier, toolName: apiName },
-        { signal },
-      )) as MCPToolCallResult;
+      if (
+        isDesktop &&
+        connector.mcpConnectionType === 'stdio' &&
+        getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false
+      ) {
+        // Persisted connector projections omit env secrets and may be stale.
+        // This protected read retains the connector's credential ownership gate.
+        const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+        if (!detail.isEnabled) throw new Error('Connector is disabled');
+        const tool = detail.tools.find((item) => item.toolName === apiName);
+        if (!tool || tool.permission === 'disabled') {
+          throw new Error(`Tool '${apiName}' is unavailable or disabled for this connector`);
+        }
+        const config = detail.mcpStdioConfig;
+        if (detail.mcpConnectionType !== 'stdio' || !config?.command) {
+          throw new Error('Connector does not have a stdio command configured');
+        }
+        const result = await ensureElectronIpc().mcp.callTool(
+          serializeMcpIpcPayload({
+            args: safeParseJSON(args) ?? {},
+            env: config.env,
+            params: {
+              args: config.args ?? [],
+              command: config.command,
+              name: detail.identifier,
+              type: 'stdio',
+            },
+            toolName: apiName,
+          }),
+        );
+        return deserializeMcpIpcPayload<MCPToolCallResult>(result);
+      }
+      try {
+        return (await lambdaClient.connector.callTool.mutate(
+          { args, identifier, toolName: apiName },
+          { signal },
+        )) as MCPToolCallResult;
+      } catch (error) {
+        const data = toRecord(toRecord(error)?.data)?.errorData;
+        const type = getMCPConnectionErrorType({ data });
+        if (!type) throw error;
+        // Keep expected upstream connection errors visible in tool cards. An
+        // unrelated connector or LobeHub authentication failure still throws.
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: message,
+          error: { message, type },
+          state: { content: [{ text: message, type: 'text' }], isError: true },
+          success: false,
+        } satisfies MCPToolCallResult;
+      }
     }
 
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);

@@ -5,12 +5,17 @@ import {
   type ExpertiseEnforcement,
   type ExpertiseReasonKind,
 } from '@lobechat/types';
-import { Block, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
+  Block,
   Button,
+  createStaticStyles,
+  cssVar,
+  cx,
   type DropdownItem,
   DropdownMenu,
+  Flexbox,
+  Icon,
   SkeletonText,
   Tag,
   Text,
@@ -36,6 +41,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { docsFilePath, docsPagePath } from '@/features/ResourceHome/paths';
 import RightPanel from '@/features/RightPanel';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import type { RuleGroup, RuleItem, UpdateRuleInput } from '@/services/expertise';
@@ -577,8 +583,8 @@ const RuleDocument = ({
                     className={styles.link}
                     href={buildWorkspaceAwarePath(
                       source.documentFileId
-                        ? `/resource?file=${source.documentFileId}`
-                        : `/page/${source.documentId}`,
+                        ? docsFilePath(source.documentFileId)
+                        : docsPagePath(source.documentId),
                       workspaceSlug,
                     )}
                     onClick={(e) => {
@@ -696,6 +702,7 @@ interface DetailPanelProps extends Omit<RuleDocumentProps, 'rule' | 'code'> {
  */
 const DetailPanel = ({ code, onClose, rule, ...rest }: DetailPanelProps) => (
   <RightPanel
+    expandFollowsSelection
     defaultWidth={440}
     expand={Boolean(rule)}
     maxWidth={760}

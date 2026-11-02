@@ -61,6 +61,7 @@ const createStore = (messages: UIChatMessage[]) => {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
     dbMessagesMap,
+    internal_confirmClientMessages: vi.fn(),
     internal_dispatchMessage: vi.fn((action: any) => {
       if (action.type === 'createMessage') {
         dbMessagesMap[messageKey].push(action.value);

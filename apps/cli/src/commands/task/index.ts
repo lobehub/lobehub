@@ -13,6 +13,7 @@ import {
   truncate,
 } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from '../resourceUrl';
 import { registerArchiveCommands } from './archive';
 import { resolveAssigneeUserId } from './assignee';
 import { registerCheckpointCommands } from './checkpoint';
@@ -20,6 +21,7 @@ import { registerDepCommands } from './dep';
 import { registerDocCommands } from './doc';
 import { briefIcon, priorityLabel, statusBadge } from './helpers';
 import { registerLifecycleCommands } from './lifecycle';
+import { formatTaskModel, toCreateModelConfig, toModelConfigPatch } from './model';
 import { registerReviewCommands } from './review';
 import { registerTopicCommands } from './topic';
 import { resolveAppUrl, resolveAppUrlBuilder, taskPath } from './url';
@@ -78,7 +80,10 @@ export function registerTaskCommand(program: Command) {
         const result = await client.task.list.query(input as any);
 
         if (options.json !== undefined) {
-          outputJson(result.data, options.json);
+          outputJson(
+            withUrls(result.data, await resolveUrlBuilder(client), resourcePath.task),
+            options.json,
+          );
           return;
         }
 
@@ -213,7 +218,10 @@ export function registerTaskCommand(program: Command) {
         const doc = await client.document.getDocumentDetail.query({ id });
 
         if (options.json !== undefined) {
-          outputJson(doc, options.json);
+          outputJson(
+            withUrl(doc, await resolveUrlBuilder(client), resourcePath.document(doc)),
+            options.json,
+          );
           return;
         }
 
@@ -239,7 +247,10 @@ export function registerTaskCommand(program: Command) {
         const items = Array.isArray(messages) ? messages : [];
 
         if (options.json !== undefined) {
-          outputJson(items, options.json);
+          outputJson(
+            withUrls(items, await resolveUrlBuilder(client), resourcePath.message),
+            options.json,
+          );
           return;
         }
 
@@ -278,6 +289,7 @@ export function registerTaskCommand(program: Command) {
 
       // ── Header ──
       console.log(`\n${pc.bold(t.identifier)} ${t.name || ''}`);
+      console.log(`ID: ${t.id}`);
       console.log(`${pc.dim('URL:')} ${url}`);
       console.log(
         `${pc.dim('Status:')} ${statusBadge(t.status)}  ${pc.dim('Priority:')} ${priorityLabel(t.priority)}`,
@@ -285,6 +297,12 @@ export function registerTaskCommand(program: Command) {
       console.log(`${pc.dim('Instruction:')} ${t.instruction}`);
       if (t.description) console.log(`${pc.dim('Description:')} ${t.description}`);
       if (t.agentId) console.log(`${pc.dim('Agent:')} ${t.agentId}`);
+      // Comparing against the agent's current default tells an override apart
+      // from the snapshot every assigned task gets at creation.
+      const agentConfig = t.agentId
+        ? await client.agent.getAgentConfigById.query({ agentId: t.agentId }).catch(() => null)
+        : null;
+      console.log(`${pc.dim('Model:')} ${formatTaskModel(t.config, agentConfig)}`);
       if (t.userId) console.log(`${pc.dim('User:')} ${t.userId}`);
       if (t.parent) {
         console.log(`${pc.dim('Parent:')} ${t.parent.identifier} ${t.parent.name || ''}`);
@@ -531,15 +549,19 @@ export function registerTaskCommand(program: Command) {
     .option('--user <idOrEmail>', 'Assign to a workspace member (user id, email or username)')
     .option('--parent <id>', 'Parent task ID')
     .option('--priority <n>', 'Priority (0=none, 1=urgent, 2=high, 3=normal, 4=low)', '0')
+    .option('--model <model>', "Model to run with (default: the assignee agent's model)")
+    .option('--provider <provider>', 'Provider for --model (default: resolved from the agent)')
     .option('--json [fields]', 'Output JSON')
     .action(
       async (options: {
         agent?: string;
         instruction: string;
         json?: string | boolean;
+        model?: string;
         name?: string;
         parent?: string;
         priority?: string;
+        provider?: string;
         user?: string;
       }) => {
         const client = await getTrpcClient();
@@ -555,6 +577,8 @@ export function registerTaskCommand(program: Command) {
         if (assigneeUserId) input.assigneeUserId = assigneeUserId;
         if (options.parent) input.parentTaskId = options.parent;
         if (options.priority) input.priority = Number.parseInt(options.priority, 10);
+        const modelConfig = toCreateModelConfig(options);
+        if (modelConfig) input.config = modelConfig;
 
         const result = await client.task.create.mutate(input);
         const url = buildUrl(taskPath(result.data.identifier, result.data.name));
@@ -565,6 +589,7 @@ export function registerTaskCommand(program: Command) {
         }
 
         log.info(`Task created: ${pc.bold(result.data.identifier)} ${result.data.name || ''}`);
+        console.log(`ID: ${result.data.id}`);
         console.log(`${pc.bold('task')}: ${url}`);
       },
     );
@@ -582,6 +607,8 @@ export function registerTaskCommand(program: Command) {
     .option('--heartbeat-interval <n>', 'Heartbeat interval in seconds')
     .option('--heartbeat-timeout <n>', 'Heartbeat timeout in seconds (0 to disable)')
     .option('--description <text>', 'Task description')
+    .option('--model <model>', 'Model to run with ("null" to follow the assignee agent again)')
+    .option('--provider <provider>', 'Provider for the model (default: resolved from the agent)')
     .option(
       '--status <status>',
       'Set status (backlog, running, paused, completed, failed, canceled)',
@@ -597,8 +624,10 @@ export function registerTaskCommand(program: Command) {
           heartbeatTimeout?: string;
           instruction?: string;
           json?: string | boolean;
+          model?: string;
           name?: string;
           priority?: string;
+          provider?: string;
           status?: string;
           user?: string;
         },
@@ -620,6 +649,9 @@ export function registerTaskCommand(program: Command) {
           const val = Number.parseInt(options.heartbeatTimeout, 10);
           input.heartbeatTimeout = val === 0 ? null : val;
         }
+        // Deep-merged into config, so checkpoint / review / execution keys survive.
+        const configPatch = toModelConfigPatch(options);
+        if (configPatch) input.configPatch = configPatch;
         const hasFieldEdits = Object.keys(input).length > 1;
 
         // Status-only edits use the lifecycle API. Combined edits go through
@@ -633,7 +665,19 @@ export function registerTaskCommand(program: Command) {
           }
           if (!hasFieldEdits) {
             const result = await client.task.updateStatus.mutate({ id, status: options.status });
-            log.info(`${pc.bold(result.data.identifier)} → ${options.status}`);
+            if (options.json !== undefined) {
+              outputJson(
+                withUrl(
+                  result.data,
+                  await resolveUrlBuilder(client),
+                  resourcePath.task(result.data),
+                ),
+                typeof options.json === 'string' ? options.json : undefined,
+              );
+            } else {
+              log.info(`${pc.bold(result.data.identifier)} → ${options.status}`);
+              console.log(`ID: ${result.data.id}`);
+            }
             return;
           }
 
@@ -643,12 +687,16 @@ export function registerTaskCommand(program: Command) {
         const result = await client.task.update.mutate(input as any);
 
         if (options.json !== undefined) {
-          outputJson(result.data, typeof options.json === 'string' ? options.json : undefined);
+          outputJson(
+            withUrl(result.data, await resolveUrlBuilder(client), resourcePath.task(result.data)),
+            typeof options.json === 'string' ? options.json : undefined,
+          );
           return;
         }
 
         const statusSuffix = options.status ? ` → ${options.status}` : '';
         log.info(`Task updated: ${pc.bold(result.data.identifier)}${statusSuffix}`);
+        console.log(`ID: ${result.data.id}`);
       },
     );
 
@@ -665,8 +713,8 @@ export function registerTaskCommand(program: Command) {
       }
 
       const client = await getTrpcClient();
-      await client.task.delete.mutate({ id });
-      log.info(`Task ${pc.bold(id)} deleted.`);
+      const result = await client.task.delete.mutate({ id });
+      log.info(`Task ${pc.bold(result.data.identifier)} (id: ${result.data.id}) deleted.`);
     });
 
   // ── clear ──────────────────────────────────────────────
@@ -697,7 +745,10 @@ export function registerTaskCommand(program: Command) {
       const result = await client.task.getTaskTree.query({ id });
 
       if (options.json !== undefined) {
-        outputJson(result.data, options.json);
+        outputJson(
+          withUrls(result.data, await resolveUrlBuilder(client), resourcePath.task),
+          options.json,
+        );
         return;
       }
 

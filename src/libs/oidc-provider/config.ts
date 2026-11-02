@@ -60,6 +60,18 @@ export const defaultClients: ClientMetadata[] = [
   },
   {
     application_type: 'native',
+    client_id: 'toby',
+    client_name: 'toby',
+    grant_types: ['authorization_code', 'refresh_token'],
+    post_logout_redirect_uris: [],
+    // Universal-link callback: iOS only hands it to the app listed in the AASA webcredentials,
+    // so another app cannot impersonate toby the way it could with a custom scheme.
+    redirect_uris: desktopAppOrigins.map((origin) => urlJoin(origin, '/oidc/callback/toby')),
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+  },
+  {
+    application_type: 'native',
     client_id: 'lobehub-cli',
     client_name: 'LobeHub CLI',
     grant_types: ['urn:ietf:params:oauth:grant-type:device_code', 'refresh_token'],
@@ -68,13 +80,14 @@ export const defaultClients: ClientMetadata[] = [
     token_endpoint_auth_method: 'none',
   },
   {
-    application_type: 'native',
+    application_type: 'web',
     client_id: ACCEPTANCE_REVIEW_CLIENT_ID,
     client_name: 'LobeHub Review',
-    grant_types: ['urn:ietf:params:oauth:grant-type:device_code'],
+    grant_types: ['urn:ietf:params:oauth:grant-type:device_code', 'authorization_code'],
     scope: ACCEPTANCE_REVIEW_SCOPE,
     logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
-    response_types: [],
+    redirect_uris: [urlJoin(appUrl, '/oidc/review/callback')],
+    response_types: ['code'],
     token_endpoint_auth_method: 'none',
   },
   {

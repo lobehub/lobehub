@@ -1,8 +1,9 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { and, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, eq, exists, inArray, isNull, or } from 'drizzle-orm';
 
 import type { FtsSearchCandidateSource } from '../../repositories/ftsSearch';
 import {
+  agents,
   agentsToSessions,
   messagePlugins,
   messages,
@@ -149,6 +150,27 @@ export class MessageScope {
   // hetero subagent flow allocates many ids per run, and a few extra chars keep
   // collision odds negligible at that volume.
   protected genId = () => idGenerator('messages', 18);
+
+  /** Read and clear the same orphan history, only for the actual scoped Inbox. */
+  protected matchLegacyInbox = (agentId: string) => {
+    const inbox = this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(
+        and(
+          eq(agents.id, agentId),
+          eq(agents.slug, INBOX_SESSION_ID),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents),
+        ),
+      );
+    return and(
+      isNull(messages.agentId),
+      isNull(messages.sessionId),
+      isNull(messages.groupId),
+      isNull(messages.topicId),
+      exists(inbox),
+    );
+  };
 
   protected matchSession = (sessionId?: string | null) => {
     if (sessionId === INBOX_SESSION_ID) return isNull(messages.sessionId);

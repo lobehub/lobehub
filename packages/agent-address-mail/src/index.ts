@@ -14,6 +14,7 @@ export {
   DEFAULT_API_BASE_URL,
   DEFAULT_SIGNATURE_TOLERANCE_SECONDS,
   LobeMailApiClient,
+  LobeMailApiError,
   parseAgentMailSignature,
   verifyAgentMailSignature,
 } from './api';

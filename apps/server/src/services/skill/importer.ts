@@ -340,25 +340,23 @@ export class SkillImporter {
     let resources: Map<string, Buffer> | undefined;
     let zipBuffer: Buffer | undefined;
 
+    // Create abort controller for timeout. It stays armed until the body has been read:
+    // ssrfSafeFetch resolves at the headers and streams the body under the same signal.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+
     try {
       log('importFromUrl: fetching URL...');
-      // Create abort controller for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
-
-      let response: Response;
-      try {
-        // Use ssrfSafeFetch (not raw global fetch): input.url is fully user-controlled,
-        // so a raw fetch would let an authenticated user make the server request arbitrary
-        // internal hosts / cloud metadata (SSRF), and the body is stored and returned to the
-        // caller — a full-read SSRF. ssrfSafeFetch blocks private/link-local IPs at connect
-        // time and re-checks every redirect hop. See GHSA-53h9-fmjf-frwr / #16536.
-        response = await ssrfSafeFetch(input.url, { signal: controller.signal });
-      } finally {
-        clearTimeout(timeoutId);
-      }
+      // Use ssrfSafeFetch (not raw global fetch): input.url is fully user-controlled,
+      // so a raw fetch would let an authenticated user make the server request arbitrary
+      // internal hosts / cloud metadata (SSRF), and the body is stored and returned to the
+      // caller — a full-read SSRF. ssrfSafeFetch blocks private/link-local IPs at connect
+      // time and re-checks every redirect hop. See GHSA-53h9-fmjf-frwr / #16536.
+      const response = await ssrfSafeFetch(input.url, { signal: controller.signal });
 
       if (!response.ok) {
+        // The error body is never read; release its connection now rather than at GC.
+        await response.body?.cancel().catch(() => {});
         if (response.status === 404) {
           throw new SkillImportError(`Resource not found at ${input.url}`, 'NOT_FOUND');
         }
@@ -408,6 +406,8 @@ export class SkillImporter {
         `Failed to process URL: ${(error as Error).message}`,
         'DOWNLOAD_FAILED',
       );
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     log('importFromUrl: parsed manifest=%o', manifest);

@@ -14,9 +14,18 @@ import { isResourceAuthorOrAdmin } from '@/server/services/resourcePermission';
 /** Permission lookups are DB reads; a caller with many overrides must not open them all at once. */
 const PERMISSION_LOOKUP_CONCURRENCY = 5;
 
+/**
+ * The device a config actually routes to. A stored `boundDeviceId` is only
+ * honoured by the `device` and `local` targets: it intentionally lingers after
+ * switching to the sandbox or `none`, and `auto` treats it as stale.
+ */
+const routedDeviceId = (config: LobeAgentAgencyConfig | undefined): string | undefined =>
+  config?.executionTarget === 'device' || config?.executionTarget === 'local'
+    ? config.boundDeviceId
+    : undefined;
+
 const routesToDevice = (config: LobeAgentAgencyConfig | undefined, deviceId: string) =>
-  config?.boundDeviceId === deviceId &&
-  (config.executionTarget === 'device' || config.executionTarget === 'local');
+  routedDeviceId(config) === deviceId;
 
 /**
  * Keep the candidates whose EFFECTIVE execution target, for this caller, is
@@ -58,36 +67,22 @@ export const selectEffectivelyBoundAgents = (
     }));
 
 /**
- * Agents routed to `deviceId` for the caller: stored bindings plus the
- * caller's own workspace device overrides, resolved to the effective target.
+ * Agents of `candidates` the caller manages. Management access only changes the
+ * outcome when an override exists (it decides whether a `fixed` policy may
+ * ignore it), so look it up only then — with the same author-or-admin check
+ * the run path uses, failing closed.
  */
-export const loadDeviceBoundAgents = async ({
+const resolveManagedAgentIds = async ({
+  candidates,
   db,
-  deviceId,
+  overrides,
   userId,
-  workspaceId,
 }: {
+  candidates: DeviceBindingCandidate[];
   db: LobeChatDatabase;
-  deviceId: string;
+  overrides: Record<string, AgentDeviceOverride>;
   userId: string;
-  workspaceId?: string;
-}): Promise<DeviceBoundAgentItem[]> => {
-  // Overrides only exist per workspace; a personal agent's stored config is final.
-  const overrides = workspaceId
-    ? ((await new WorkspaceUserSettingsModel(db, userId, workspaceId).getPreference())
-        .agentDeviceOverrides ?? {})
-    : {};
-
-  const candidates = await new AgentModel(db, userId, workspaceId).queryBoundToDevice(
-    deviceId,
-    Object.entries(overrides)
-      .filter(([, override]) => override.boundDeviceId === deviceId)
-      .map(([agentId]) => agentId),
-  );
-
-  // Management access only changes the outcome when an override exists (it
-  // decides whether a `fixed` policy may ignore it), so look it up only then —
-  // with the same author-or-admin check the run path uses, failing closed.
+}): Promise<Set<string>> => {
   const canManage = new Set<string>();
   await pMap(
     candidates.filter((agent) => overrides[agent.id]),
@@ -117,5 +112,95 @@ export const loadDeviceBoundAgents = async ({
     { concurrency: PERMISSION_LOOKUP_CONCURRENCY },
   );
 
+  return canManage;
+};
+
+/**
+ * Agents routed to `deviceId` for the caller: stored bindings plus the
+ * caller's own workspace device overrides, resolved to the effective target.
+ */
+export const loadDeviceBoundAgents = async ({
+  db,
+  deviceId,
+  userId,
+  workspaceId,
+}: {
+  db: LobeChatDatabase;
+  deviceId: string;
+  userId: string;
+  workspaceId?: string;
+}): Promise<DeviceBoundAgentItem[]> => {
+  // Overrides only exist per workspace; a personal agent's stored config is final.
+  const overrides = workspaceId
+    ? ((await new WorkspaceUserSettingsModel(db, userId, workspaceId).getPreference())
+        .agentDeviceOverrides ?? {})
+    : {};
+
+  const candidates = await new AgentModel(db, userId, workspaceId).queryBoundToDevice(
+    deviceId,
+    Object.entries(overrides)
+      .filter(([, override]) => override.boundDeviceId === deviceId)
+      .map(([agentId]) => agentId),
+  );
+
+  const canManage = await resolveManagedAgentIds({ candidates, db, overrides, userId });
+
   return selectEffectivelyBoundAgents(candidates, { canManage, deviceId, overrides });
+};
+
+/**
+ * Where each of `candidates` routes for this caller: the stored config merged
+ * with the caller's own override, exactly as a run resolves it. Agents that
+ * route nowhere (sandbox, none, auto, unbound) are absent.
+ */
+export const selectAgentDeviceBindings = (
+  candidates: DeviceBindingCandidate[],
+  {
+    canManage,
+    overrides,
+  }: {
+    canManage: ReadonlySet<string>;
+    overrides: Record<string, AgentDeviceOverride>;
+  },
+): Record<string, string> => {
+  const bindings: Record<string, string> = {};
+  for (const agent of candidates) {
+    const deviceId = routedDeviceId(
+      resolveAgentAgencyConfig(agent.agencyConfig, overrides[agent.id], {
+        canManage: canManage.has(agent.id),
+        visibility: agent.visibility,
+        workspaceId: agent.workspaceId,
+      }),
+    );
+    if (deviceId) bindings[agent.id] = deviceId;
+  }
+  return bindings;
+};
+
+/**
+ * The effective device of many agents for the caller in one pass — the batched
+ * counterpart of {@link loadDeviceBoundAgents}, for surfaces that decorate a
+ * list of agents and must not fetch each agent's config separately.
+ */
+export const loadAgentDeviceBindings = async ({
+  agentIds,
+  db,
+  userId,
+  workspaceId,
+}: {
+  agentIds: string[];
+  db: LobeChatDatabase;
+  userId: string;
+  workspaceId?: string;
+}): Promise<Record<string, string>> => {
+  const overrides = workspaceId
+    ? ((await new WorkspaceUserSettingsModel(db, userId, workspaceId).getPreference())
+        .agentDeviceOverrides ?? {})
+    : {};
+  const candidates = await new AgentModel(db, userId, workspaceId).queryAgencyRoutingByIds(
+    agentIds,
+  );
+  const canManage = await resolveManagedAgentIds({ candidates, db, overrides, userId });
+
+  return selectAgentDeviceBindings(candidates, { canManage, overrides });
 };

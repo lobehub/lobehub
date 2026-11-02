@@ -1,27 +1,15 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { extractHtmlTitle } from '@lobechat/html-artifact';
 import { exportFile } from '@lobechat/utils/client';
-import {
-  Block,
-  Button,
-  createStaticStyles,
-  Drawer,
-  Flexbox,
-  Highlighter,
-  HtmlPreview,
-  Tabs,
-} from '@lobehub/ui';
+import { Block, Button, Drawer, Flexbox, Highlighter, HtmlPreview, Tabs } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { Code2, Download, Eye } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    height: 100%;
-  `,
-}));
+const styles = stylex.create({ container: { height: '100%' } });
 
 const hideHtmlPreviewActions = () => null;
 
@@ -96,7 +84,7 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
       onClose={onClose}
     >
       {mode === 'preview' ? (
-        <Block className={styles.container}>
+        <Block className={stylex.props(styles.container).className}>
           <HtmlPreview
             actionsRender={hideHtmlPreviewActions}
             copyable={false}
@@ -110,7 +98,7 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
           </HtmlPreview>
         </Block>
       ) : (
-        <Block className={styles.container}>
+        <Block className={stylex.props(styles.container).className}>
           <Highlighter
             language={'html'}
             showLanguage={false}
@@ -126,4 +114,5 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
 
 HtmlPreviewDrawer.displayName = 'HtmlPreviewDrawer';
 
+/**  Superseded by Canvas (`lobe-canvas`); kept so existing conversations keep rendering. */
 export default HtmlPreviewDrawer;

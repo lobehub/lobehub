@@ -1,5 +1,5 @@
 import type { ChatModelCard } from '@lobechat/types';
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { ModelProvider } from 'model-bank';
 import type { ChatResponse, Tool } from 'ollama/browser';
 import { Ollama } from 'ollama/browser';

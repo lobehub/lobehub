@@ -392,7 +392,7 @@ export class DocumentActionImpl {
     if (currentActiveId && currentActiveId !== documentId) return;
 
     if (this.#get().documents[documentId]) {
-      this.#get().reconcileRemote(documentId, document);
+      this.#reconcileWhenSettled(documentId, document);
       if (sourceType === 'notebook' && topicId) {
         this.#rememberTopicDocument(topicId, documentId);
       }
@@ -420,6 +420,30 @@ export class DocumentActionImpl {
     if (sourceType === 'page') {
       pageActions.upsertDocument(document);
     }
+  };
+
+  /**
+   * Reconcile a read once no save of this document is in flight.
+   *
+   * A read that lands mid-save (e.g. a focus revalidation after a tab switch)
+   * may carry the row that save is writing, without the edits typed since:
+   * adopting it then would wipe them from the editor. It may also carry a newer
+   * writer's revision, so it is deferred rather than dropped: once the save
+   * settles, the newest row in the view is reconciled, and `reconcileRemote`
+   * ignores it unless it is newer than what the save confirmed.
+   */
+  #reconcileWhenSettled = (documentId: string, row: DocumentItem): void => {
+    const pending = this.#get().getPendingSave(documentId);
+    if (!pending) {
+      this.#get().reconcileRemote(documentId, row);
+      return;
+    }
+
+    const retry = () => {
+      const latest = this.#get().documentDetailMap[documentId]?.document;
+      if (latest) this.#reconcileWhenSettled(documentId, latest);
+    };
+    void pending.then(retry, retry);
   };
 
   /**
@@ -468,8 +492,18 @@ export class DocumentActionImpl {
           return;
         }
         // Only react to *this* entry changing; every other store write (typing
-        // in the editor included) is none of our business.
-        if (previous && previous.documentDetailMap[documentId] === next) return;
+        // in the editor included) is none of our business — except this
+        // document becoming active while still unadopted. `#adoptDocument`
+        // skips an entry while another document is active, and the caller
+        // (`DocumentIdMode`) only claims `activeDocumentId` in a passive effect,
+        // after this layout effect ran. An entry already in memory never writes
+        // again, so without this retry the editor stays on its skeleton until
+        // the document is reopened.
+        if (previous && previous.documentDetailMap[documentId] === next) {
+          const becameActive =
+            state.activeDocumentId === documentId && previous.activeDocumentId !== documentId;
+          if (!becameActive || state.documents[documentId]) return;
+        }
         // Entries are scope-owned by the engine; never adopt one that belongs to
         // another identity (this hook can stay mounted across an identity switch).
         const scope = state.documentDetailReplica?.scope;

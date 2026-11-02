@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { agentDisplayName, agentRenameField, agentSecondaryDisplayName } from './displayName';
+import {
+  agentDisplayName,
+  agentIdentityLabel,
+  agentRenameField,
+  agentSecondaryDisplayName,
+} from './displayName';
 
 describe('agentDisplayName', () => {
   it('prefers the personal name over the role', () => {
@@ -89,5 +94,28 @@ describe('agentRenameField', () => {
 
   it('treats a blank name as absent, like the label does', () => {
     expect(agentRenameField({ name: '   ', title: 'Health Assistant' })).toBe('title');
+  });
+});
+
+describe('agentIdentityLabel', () => {
+  it('introduces a named agent by its name, with its role behind it', () => {
+    expect(agentIdentityLabel({ name: 'Nasa', title: 'Shadow Arvin' })).toBe('Nasa (Shadow Arvin)');
+  });
+
+  it('uses the title alone when there is no name', () => {
+    expect(agentIdentityLabel({ name: null, title: 'Shadow Arvin' })).toBe('Shadow Arvin');
+    expect(agentIdentityLabel({ name: '  ', title: 'Shadow Arvin' })).toBe('Shadow Arvin');
+  });
+
+  it('does not repeat a role the name already spells out', () => {
+    expect(agentIdentityLabel({ name: 'Max 的 Kimi Code', title: 'Kimi Code' })).toBe(
+      'Max 的 Kimi Code',
+    );
+    expect(agentIdentityLabel({ name: 'Nasa', title: 'Nasa' })).toBe('Nasa');
+  });
+
+  it('falls back when the agent has neither', () => {
+    expect(agentIdentityLabel({}, 'Current Agent')).toBe('Current Agent');
+    expect(agentIdentityLabel(null)).toBeUndefined();
   });
 });

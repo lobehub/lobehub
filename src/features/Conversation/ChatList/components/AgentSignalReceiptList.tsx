@@ -1,8 +1,9 @@
 'use client';
 
 import { LayersEnum } from '@lobechat/types';
-import { createStaticStyles, Icon, toast } from '@lobehub/ui';
+import { Icon, toast } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
+import * as stylex from '@stylexjs/stylex';
 import type { LucideIcon } from 'lucide-react';
 import { Brain, ClipboardCheck } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
@@ -21,16 +22,15 @@ import { useChatStore } from '@/store/chat';
 
 import type { AgentSignalReceiptView } from '../hooks/useAgentSignalReceipts';
 
-const styles = createStaticStyles(({ css }) => ({
-  list: css`
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-
-    width: 100%;
-    margin-block-start: 8px;
-  `,
-}));
+const styles = stylex.create({
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    width: '100%',
+    marginBlockStart: '8px',
+  },
+});
 
 const RECEIPT_LUCIDE_ICON_BY_KIND = {
   memory: Brain,
@@ -316,7 +316,7 @@ const AgentSignalReceiptList = memo<AgentSignalReceiptListProps>(({ receipts }) 
 
   // TODO: Migrate this temporary receipt UI into the final Agent Signal feedback surface.
   return (
-    <div className={styles.list}>
+    <div {...stylex.props(styles.list)}>
       {receipts.map((receipt) => (
         <AgentSignalReceiptItem
           key={receipt.id}

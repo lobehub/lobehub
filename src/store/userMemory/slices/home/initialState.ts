@@ -4,7 +4,7 @@ import { type IdentityRolesData, type PersonaData, type PersonaReplicaData } fro
 
 /**
  * The memory home reads (persona + identity roles/tags) are two
- * `@lobechat/replica` single-value resources. Their canonical values live in
+ * `local-replica` single-value resources. Their canonical values live in
  * `personaData` / `identityRolesData`; the long-standing flat fields
  * (`persona`, `personaInit`, `roles`, `tags`, `tagsInit`) are derived mirrors
  * of those views so every existing consumer keeps reading the place it always

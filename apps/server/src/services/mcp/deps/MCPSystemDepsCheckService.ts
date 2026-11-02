@@ -4,6 +4,7 @@ import { promisify } from 'node:util';
 import { type DeploymentOption, type SystemDependency } from '@lobehub/market-sdk';
 import debug from 'debug';
 
+import { getMCPErrorLogMetadata } from '@/libs/mcp/utils';
 import { type SystemDependencyCheckResult } from '@/types/plugins';
 
 import { type InstallationChecker } from './types';
@@ -62,7 +63,7 @@ class MCPSystemDepsCheckService {
     try {
       // If check command not provided, use generic command
       const checkCommand = dependency.checkCommand || `${dependency.name} --version`;
-      log(`Checking system dependency: ${dependency.name}, command: ${checkCommand}`);
+      log('Checking MCP system dependency: %s', dependency.name);
 
       const { stdout, stderr } = await execPromise(checkCommand);
       if (stderr && !stdout) {
@@ -130,9 +131,11 @@ class MCPSystemDepsCheckService {
         }
       }
 
-      log(
-        `System dependency check result: ${dependency.name}, installed: ${true}, meets requirement: ${meetRequirement}, version: ${version}`,
-      );
+      log('MCP system dependency check completed: %O', {
+        installed: true,
+        meetRequirement,
+        name: dependency.name,
+      });
       return {
         installInstructions: getCurrentPlatformInstructions(
           (dependency as any).installInstructions,
@@ -144,7 +147,10 @@ class MCPSystemDepsCheckService {
         version,
       };
     } catch (error) {
-      log(`System dependency check error: ${dependency.name}, ${error}`);
+      console.error('MCP system dependency check failed:', {
+        dependency: dependency.name,
+        error: getMCPErrorLogMetadata(error),
+      });
       return {
         error: error instanceof Error ? error.message : 'Unknown error',
         installInstructions: getCurrentPlatformInstructions(
@@ -206,10 +212,7 @@ class MCPSystemDepsCheckService {
           Object.values(configSchema.properties).some((prop: any) => prop.required === true))),
     );
 
-    log(
-      `Configuration check result: needsConfig=${needsConfig}, required=${configSchema?.required}, configSchema=%O`,
-      configSchema,
-    );
+    log('MCP deployment configuration check completed: %O', { needsConfig });
 
     // Create connection info
     const connection = option.connection.url

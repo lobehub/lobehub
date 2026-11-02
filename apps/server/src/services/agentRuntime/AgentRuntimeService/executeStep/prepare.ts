@@ -56,10 +56,13 @@ export async function prepareStepInput(
   deps: StepPrepareDeps,
   {
     agentState,
+    deferredInitContext,
     params,
     stepEntryMessages,
   }: {
     agentState: AgentState;
+    /** The context a deferred init assembled in this delivery, if one ran. */
+    deferredInitContext?: AgentExecutionParams['context'];
     params: AgentExecutionParams;
     stepEntryMessages: Awaited<
       ReturnType<AgentRuntimeServiceContext['queryStepEntryMessages']>
@@ -80,8 +83,16 @@ export async function prepareStepInput(
     toolMessageId,
   } = params;
 
+  // Step 0 starts from the operation's saved initial context — the same rule
+  // `executeSync` follows. For an ordinary run it is the context that was
+  // queued; for a deferred init it is the one the init assembled, which the
+  // queued placeholder predates, including on a redelivery after the save.
+  const savedInitialContext = (
+    agentState as AgentState & { initialContext?: AgentExecutionParams['context'] }
+  ).initialContext;
   // Handle human intervention
-  let currentContext = context;
+  let currentContext =
+    deferredInitContext ?? (stepIndex === 0 ? (savedInitialContext ?? context) : context);
   // The wait this step resumes, if any: a resumed call that finds no client
   // again re-parks under the same deadline, so retries never extend it.
   let resumedClientLlmWait: AgentRunClientLlmWait | undefined;

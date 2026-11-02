@@ -18,6 +18,7 @@ const {
   mockUpdateConfig,
   mockFindById,
   mockCreatePlugin,
+  mockGetMcpList,
   mockGetMcpManifest,
   mockQueryPlugins,
   mockResolveConnectors,
@@ -26,6 +27,7 @@ const {
   mockCountAgents: vi.fn(),
   mockCreatePlugin: vi.fn(),
   mockFindById: vi.fn(),
+  mockGetMcpList: vi.fn(),
   mockGetMcpManifest: vi.fn(),
   mockQueryPlugins: vi.fn(),
   mockResolveConnectors: vi.fn(),
@@ -81,6 +83,7 @@ vi.mock('@/server/services/discover', () => ({
     return {
       getAssistantDetail: mockGetAssistantDetail,
       getAssistantList: mockGetAssistantList,
+      getMcpList: mockGetMcpList,
       getMcpManifest: mockGetMcpManifest,
     };
   }),
@@ -242,6 +245,7 @@ describe('agentManagementRuntime', () => {
 
       expect(run).toHaveBeenCalledWith({
         agentId: 'agent-target',
+        background: false,
         description: 'Call agent agent-target',
         instruction: 'Do delegated work',
         timeout: 1_800_000,
@@ -512,6 +516,62 @@ describe('agentManagementRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.content).toContain('Failed to search agents');
+    });
+  });
+
+  // Agent Management could install a market plugin but had no way to find
+  // one, so the model either guessed an identifier or gave up.
+  describe('searchMarketTools', () => {
+    it('searches the MCP marketplace and marks installed plugins', async () => {
+      mockGetMcpList.mockResolvedValue({
+        items: [
+          { author: 'tavily', description: 'Web search', identifier: 'tavily', name: 'Tavily' },
+          { description: 'Repos', identifier: 'github', name: 'GitHub' },
+        ],
+        totalCount: 2,
+      });
+      mockQueryPlugins.mockResolvedValue([{ identifier: 'github' }]);
+
+      const result = await createRuntime().searchMarketTools({
+        category: 'web-search',
+        query: 'search',
+      });
+
+      expect(mockGetMcpList).toHaveBeenCalledWith({
+        category: 'web-search',
+        pageSize: 10,
+        q: 'search',
+      });
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('- Tavily (tavily): Web search');
+      expect(result.content).toContain('- GitHub (github) [installed]: Repos');
+      expect(result.state.tools.map((t: any) => [t.identifier, t.installed])).toEqual([
+        ['tavily', false],
+        ['github', true],
+      ]);
+    });
+
+    it('caps the page size at the advertised max', async () => {
+      mockGetMcpList.mockResolvedValue({ items: [], totalCount: 0 });
+
+      const result = await createRuntime().searchMarketTools({ pageSize: 100 });
+
+      expect(mockGetMcpList).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 20 }));
+      expect(result).toMatchObject({
+        content: 'Found 0 tool(s) in the marketplace.',
+        success: true,
+      });
+    });
+
+    it('reports a marketplace failure as a failed tool call', async () => {
+      mockGetMcpList.mockRejectedValue(new Error('unauthorized'));
+
+      const result = await createRuntime().searchMarketTools({ query: 'x' });
+
+      expect(result).toEqual({
+        content: 'Failed to search market tools: unauthorized',
+        success: false,
+      });
     });
   });
 

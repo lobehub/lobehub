@@ -1,14 +1,7 @@
 import { Github } from '@lobehub/icons';
-import {
-  ActionIcon,
-  Block,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  MaskShadow,
-  stopPropagation,
-  Text,
-} from '@lobehub/ui';
+import { ActionIcon, Block, Flexbox, MaskShadow, stopPropagation, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { GlobeIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,38 +13,17 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { type DiscoverProviderItem } from '@/types/discover';
 
-const styles = createStaticStyles(({ css, cssVar }) => {
-  return {
-    author: css`
-      color: ${cssVar.colorTextDescription};
-    `,
-    code: css`
-      font-family: ${cssVar.fontFamilyCode};
-    `,
-    desc: css`
-      flex: none;
-      margin: 0 !important;
-      color: ${cssVar.colorTextSecondary};
-    `,
-    footer: css`
-      margin-block-start: 16px;
-      border-block-start: 1px dashed ${cssVar.colorBorder};
-      background: ${cssVar.colorBgContainer};
-    `,
-    secondaryDesc: css`
-      font-size: 12px;
-      color: ${cssVar.colorTextDescription};
-    `,
-    title: css`
-      margin: 0 !important;
-      font-size: 16px !important;
-      font-weight: 500 !important;
-
-      &:hover {
-        color: ${cssVar.colorLink};
-      }
-    `,
-  };
+const styles = stylex.create({
+  author: { color: cssVar.colorTextDescription },
+  desc: { flex: 'none', margin: '0', color: cssVar.colorTextSecondary },
+  footer: {
+    marginBlockStart: '16px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorder,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
 });
 
 const ProviderItem = memo<DiscoverProviderItem>(
@@ -92,7 +64,7 @@ const ProviderItem = memo<DiscoverProviderItem>(
             <WorkspaceLink style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
               <ProviderCombine provider={identifier} size={28} style={{ flex: 'none' }} />
             </WorkspaceLink>
-            <div className={styles.author}>@{name}</div>
+            <div className={stylex.props(styles.author).className}>@{name}</div>
           </Flexbox>
           <Flexbox horizontal align={'center'}>
             <a href={url} rel="noopener noreferrer" target={'_blank'} onClick={stopPropagation}>
@@ -111,7 +83,7 @@ const ProviderItem = memo<DiscoverProviderItem>(
         <Flexbox flex={1} gap={12} paddingInline={16}>
           {description && (
             <Text
-              className={styles.desc}
+              className={stylex.props(styles.desc).className}
               ellipsis={{
                 rows: 3,
               }}
@@ -123,7 +95,7 @@ const ProviderItem = memo<DiscoverProviderItem>(
         <Flexbox
           horizontal
           align={'center'}
-          className={styles.footer}
+          className={stylex.props(styles.footer).className}
           justify={'space-between'}
           padding={16}
         >

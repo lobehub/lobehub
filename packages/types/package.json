@@ -15,8 +15,8 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
-    "@lobehub/market-sdk": "0.42.0",
-    "@lobehub/market-types": "^1.17.1",
+    "@lobehub/market-sdk": "0.46.0",
+    "@lobehub/market-types": "^1.19.0",
     "ajv": "^8.20.0",
     "model-bank": "workspace:*",
     "type-fest": "^4.41.0",

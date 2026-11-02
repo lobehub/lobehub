@@ -15,7 +15,10 @@ import {
   goalEvents,
   goalNodes,
   goals,
+  messagePlugins,
+  messages,
   tasks,
+  topics,
   users,
   verifyCheckResults,
   verifyRuns,
@@ -91,6 +94,80 @@ describe('buildTaskPrompt Goal loop context', () => {
     expect(result.prompt).toContain('Restore the table and submit fresh evidence.');
     expect(result.prompt).toContain('Goal loop — round 2 of 2');
     expect(result.prompt).not.toContain('round 2 of 20');
+  });
+});
+
+describe('buildTaskPrompt questions earlier rounds asked', () => {
+  /**
+   * Regression: each Goal round is a fresh conversation, so a question an
+   * earlier round put to the owner — and the answer — never reached the next.
+   * Rounds asked the same thing again, timed out, delivered "awaiting your
+   * confirmation", failed Acceptance and spawned another round.
+   */
+  it('hands the next round what earlier rounds asked and what came back', async () => {
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Compare the two designs.' });
+    await taskModel.update(task.id, { totalTopics: 2 });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Asked before',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, { kind: 'task', title: 'Compare' });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+
+    const taskTopicModel = new TaskTopicModel(db, userId);
+    const asks = [
+      {
+        content: 'User answers:\n- Confirm the four decisions as recommended?: Yes',
+        question: 'Confirm the four decisions as recommended?',
+        topicId: 'asked-round-1',
+      },
+      {
+        content:
+          'No answer received within the wait window; the user did not respond. Continue without their input or ask in plain text.',
+        question: 'Can a virtual display be created on this machine?',
+        topicId: 'asked-round-2',
+      },
+    ];
+    for (const [i, ask] of asks.entries()) {
+      await db.insert(topics).values({ id: ask.topicId, userId });
+      await taskTopicModel.add(task.id, ask.topicId, { seq: i + 1, trigger: 'goal' });
+      const messageId = `asked-message-${i}`;
+      await db.insert(messages).values({
+        content: ask.content,
+        createdAt: new Date(Date.UTC(2026, 9, 1, 10 + i)),
+        id: messageId,
+        role: 'tool',
+        topicId: ask.topicId,
+        userId,
+      });
+      await db.insert(messagePlugins).values({
+        apiName: 'askUserQuestion',
+        arguments: JSON.stringify({ questions: [{ options: [], question: ask.question }] }),
+        id: messageId,
+        identifier: 'claude-code',
+        toolCallId: `tc-${i}`,
+        userId,
+      });
+    }
+
+    const result = await buildTaskPrompt((await taskModel.findById(task.id))!, {
+      briefModel: new BriefModel(db, userId),
+      db,
+      taskModel,
+      taskTopicModel,
+      userId,
+    });
+
+    expect(result.prompt).toContain('Questions earlier rounds already asked the owner');
+    expect(result.prompt).toContain(
+      '1. Confirm the four decisions as recommended?\n       → User answers: - Confirm the four decisions as recommended?: Yes',
+    );
+    expect(result.prompt).toContain(
+      '2. Can a virtual display be created on this machine?\n       → No answer received within the wait window',
+    );
+    expect(result.prompt).toContain('Do not ask the owner again');
   });
 });
 

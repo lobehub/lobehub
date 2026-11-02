@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, createStaticStyles, DropdownMenu, SplitButton } from '@lobehub/ui';
+import { Button, DropdownMenu, SplitButton } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -10,14 +10,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import { useDetailContext } from '../../DetailProvider';
-
-const styles = createStaticStyles(({ css }) => ({
-  button: css`
-    button {
-      width: 100%;
-    }
-  `,
-}));
 
 const ChatWithModel = memo(() => {
   const { t } = useTranslation('discover');
@@ -53,7 +45,7 @@ const ChatWithModel = memo(() => {
   if (items.length === 1)
     return (
       <WorkspaceLink style={{ flex: 1 }} to={urlJoin('/community/provider', items[0].key)}>
-        <Button block className={styles.button} size={'large'} type={'primary'}>
+        <Button block size={'large'} type={'primary'}>
           {t('models.guide')}
         </Button>
       </WorkspaceLink>
@@ -61,12 +53,7 @@ const ChatWithModel = memo(() => {
 
   return (
     <DropdownMenu data-no-highlight items={items}>
-      <Button
-        className={styles.button}
-        size={'large'}
-        style={{ flex: 1, width: 'unset' }}
-        type={'primary'}
-      >
+      <Button size={'large'} style={{ flex: 1, width: 'unset' }} type={'primary'}>
         {t('models.guide')}
       </Button>
     </DropdownMenu>

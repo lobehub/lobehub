@@ -118,6 +118,7 @@ describe('extract module surface', () => {
     expect(functionMembers(MemoryExtractionExecutor)).toEqual(['create']);
     expect(functionMembers(MemoryExtractionWorkflowService)).toEqual([
       'getClient',
+      'triggerConsolidation',
       'triggerHourly',
       'triggerHourlyTracked',
       'triggerPersonaUpdate',

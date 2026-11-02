@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, Flexbox, Icon, useTheme } from '@lobehub/ui';
+import { Button, Flexbox, Icon, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { TriangleAlert, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,75 +13,57 @@ import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useGlobalStore } from '@/store/global';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  closeButton: css`
-    cursor: pointer;
-
-    position: absolute;
-    inset-block-start: 20px;
-    inset-inline-end: 20px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 28px;
-    height: 28px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    transition: all 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  container: css`
-    position: fixed;
-    z-index: 9999;
-    inset: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    background: ${cssVar.colorBgMask};
-  `,
-  content: css`
-    position: relative;
-
-    overflow: hidden;
-
-    max-width: 480px;
-    padding: 24px;
-    border: 1px solid ${cssVar.colorFillQuaternary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-    box-shadow: ${cssVar.boxShadowSecondary};
-  `,
-  desc: css`
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  title: css`
-    font-size: 16px;
-    font-weight: bold;
-    color: ${cssVar.colorWarningText};
-  `,
-  titleIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorWarning};
-  `,
-  warning: css`
-    padding: 12px;
-    border-radius: ${cssVar.borderRadius};
-    color: ${cssVar.colorWarningText};
-    background: var(--warning-yellow-bg, ${cssVar.colorWarningBg});
-  `,
-}));
+const styles = stylex.create({
+  closeButton: {
+    cursor: 'pointer',
+    position: 'absolute',
+    insetBlockStart: '20px',
+    insetInlineEnd: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: cssVar.borderRadius,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    transition: 'all 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  container: {
+    position: 'fixed',
+    zIndex: 9999,
+    inset: '0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: cssVar.colorBgMask,
+    backgroundImage: 'none',
+  },
+  content: {
+    position: 'relative',
+    overflow: 'hidden',
+    maxWidth: '480px',
+    padding: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorFillQuaternary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowSecondary,
+  },
+  desc: { lineHeight: 1.6, color: cssVar.colorTextSecondary },
+  title: { fontSize: '16px', fontWeight: 'bold', color: cssVar.colorWarningText },
+  titleIcon: { flexShrink: 0, color: cssVar.colorWarning },
+  warning: {
+    padding: '12px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorWarningText,
+    backgroundColor: `var(--warning-yellow-bg, ${cssVar.colorWarningBg})`,
+    backgroundImage: 'none',
+  },
+});
 
 const ServerVersionOutdatedAlert = () => {
   const theme = useTheme();
@@ -99,23 +83,23 @@ const ServerVersionOutdatedAlert = () => {
   if (isOfficialServer || !isServerVersionOutdated || dismissed) return null;
 
   return (
-    <div className={styles.container}>
-      <div className={styles.content} style={cssVariables}>
-        <div className={styles.closeButton} onClick={() => setDismissed(true)}>
+    <div {...stylex.props(styles.container)}>
+      <div className={stylex.props(styles.content).className} style={cssVariables}>
+        <div {...stylex.props(styles.closeButton)} onClick={() => setDismissed(true)}>
           <Icon icon={X} />
         </div>
 
         <Flexbox gap={16}>
           <Flexbox horizontal align="center" gap={8}>
-            <Icon className={styles.titleIcon} icon={TriangleAlert} />
-            <div className={styles.title}>{t('serverVersionOutdated.title')}</div>
+            <Icon className={stylex.props(styles.titleIcon).className} icon={TriangleAlert} />
+            <div {...stylex.props(styles.title)}>{t('serverVersionOutdated.title')}</div>
           </Flexbox>
 
-          <div className={styles.desc}>
+          <div {...stylex.props(styles.desc)}>
             {t('serverVersionOutdated.desc', { version: CURRENT_VERSION })}
           </div>
 
-          <div className={styles.warning}>{t('serverVersionOutdated.warning')}</div>
+          <div {...stylex.props(styles.warning)}>{t('serverVersionOutdated.warning')}</div>
 
           <Flexbox horizontal gap={8} justify="flex-end" style={{ marginTop: 8 }}>
             <a href={MANUAL_UPGRADE_URL} rel="noreferrer" target="_blank">

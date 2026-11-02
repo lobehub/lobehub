@@ -61,6 +61,22 @@ export const profileRouter = router({
     return ctx.userModel.getUserSSOProviders();
   }),
   getUserState: userProcedure.query(async ({ ctx }): Promise<UserInitializationState> => {
+    // A run's operation token reaches this route only for the acceptance CLI's
+    // report-language check, and it sits in the run's environment where the
+    // agent can read it. Return the response language and nothing else of the
+    // creator's profile; the token's calls are not the creator's activity.
+    if (ctx.heteroOperationScope) {
+      const userSettings = await ctx.userModel.getUserSettings();
+      const responseLanguage = (userSettings?.general as { responseLanguage?: unknown } | null)
+        ?.responseLanguage;
+
+      return {
+        preference: {},
+        settings: { general: typeof responseLanguage === 'string' ? { responseLanguage } : {} },
+        userId: ctx.userId,
+      };
+    }
+
     try {
       after(async () => {
         try {

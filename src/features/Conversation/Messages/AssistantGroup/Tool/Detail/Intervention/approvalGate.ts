@@ -1,3 +1,6 @@
+import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '@lobechat/agent-runtime';
+import type { HumanInterventionConfig } from '@lobechat/types';
+
 export type ApprovalChoice = 'approve' | 'approve-remember' | 'reject';
 
 /**
@@ -7,3 +10,128 @@ export type ApprovalChoice = 'approve' | 'approve-remember' | 'reject';
  */
 export const isChoiceSubmitBlocked = (choice: ApprovalChoice, approveDisabled = false) =>
   approveDisabled && choice !== 'reject';
+
+/**
+ * Whether "approve, and don't ask again" can take effect for a call through
+ * the allow-list (the generic remember step): the runtime skips approval for
+ * allow-listed tools in manual and allow-list modes, but never for calls
+ * that must always ask — an `always` policy, static or dynamic, or a
+ * security-blacklist match.
+ */
+export const canRememberViaAllowList = ({
+  config,
+  toolArgs = {},
+}: {
+  config?: unknown;
+  toolArgs?: Record<string, unknown>;
+}) => {
+  if (InterventionChecker.checkSecurityBlacklist(DEFAULT_SECURITY_BLACKLIST, toolArgs).blocked) {
+    return false;
+  }
+  if (config && typeof config === 'object' && !Array.isArray(config) && 'dynamic' in config) {
+    const dynamic = (config as { dynamic?: { policy?: string } }).dynamic;
+    return dynamic?.policy !== 'always';
+  }
+  return (
+    InterventionChecker.shouldIntervene({
+      config: config as HumanInterventionConfig | undefined,
+      securityBlacklist: [],
+      toolArgs,
+    }) !== 'always'
+  );
+};
+
+/**
+ * The choices an approval card lists, in order. "Approve, and don't ask again
+ * for similar actions" is one shared choice for every tool: offered when the
+ * tool defines its own notion of "similar" (a remember step of its own), or
+ * when the allow-list can remember the tool in the current mode.
+ */
+export const getApprovalChoices = ({
+  allowListRememberable,
+  approvalMode,
+  toolRemember,
+}: {
+  allowListRememberable: boolean;
+  approvalMode: string;
+  toolRemember: boolean;
+}): ApprovalChoice[] => {
+  const viaAllowList =
+    allowListRememberable && (approvalMode === 'manual' || approvalMode === 'allow-list');
+  return toolRemember || viaAllowList
+    ? ['approve', 'approve-remember', 'reject']
+    : ['approve', 'reject'];
+};
+
+/**
+ * What "approve and don't ask again" does: a tool's own remember step (e.g.
+ * a standing grant scoped to the same access) when it offers one, otherwise
+ * the tool joins the allow-list.
+ */
+export const resolveRememberAction = ({
+  toolRemember,
+}: {
+  toolRemember: boolean;
+}): 'allow-list' | 'tool' => (toolRemember ? 'tool' : 'allow-list');
+
+const APPROVE_LABEL_KEY = {
+  'approve': ['approve', 'tool.intervention.optionApprove'],
+  'approve-remember': ['approveRemember', 'tool.intervention.optionApproveRemember'],
+} as const;
+
+/**
+ * The keys wording an approve choice: a builtin tool may name what approving
+ * its call does (`plugin` key, e.g. "Approve dry run" vs "Approve
+ * publishing"), so consecutive steps of one flow do not read as the same
+ * approval; the shared `chat` wording is the fallback for every other tool.
+ */
+export const approveChoiceLabelKeys = ({
+  apiName,
+  choice,
+  identifier,
+}: {
+  apiName: string;
+  choice: Exclude<ApprovalChoice, 'reject'>;
+  identifier: string;
+}) => {
+  const [toolKey, shared] = APPROVE_LABEL_KEY[choice];
+  return { shared, tool: `builtins.${identifier}.${toolKey}.${apiName}` };
+};
+
+/** The dynamic audit type of an intervention config, when it has one. */
+export const dynamicAuditType = (config: unknown): string | undefined => {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return undefined;
+  const dynamic = (config as { dynamic?: { type?: unknown } }).dynamic;
+  return typeof dynamic?.type === 'string' ? dynamic.type : undefined;
+};
+
+/**
+ * Whether a sibling call of the same tool, still waiting in the same parallel
+ * batch, no longer needs approval once "approve, and don't ask again" took
+ * effect. Siblings were audited when the model emitted them, before the
+ * remember existed, so without this the user is asked again for the very
+ * thing they just said not to ask about.
+ *
+ * Allow-list: the sibling is covered unless it must always ask. Tool's own
+ * remember: the tool's audit is re-run with the remembered access; with no
+ * audit, or when it fails, the sibling still asks (fails closed).
+ */
+export const isCoveredByRemember = async ({
+  audit,
+  config,
+  rememberAction,
+  toolArgs,
+}: {
+  audit?: (toolArgs: Record<string, unknown>) => boolean | Promise<boolean>;
+  config?: unknown;
+  rememberAction: 'allow-list' | 'tool';
+  toolArgs: Record<string, unknown>;
+}) => {
+  if (rememberAction === 'allow-list') return canRememberViaAllowList({ config, toolArgs });
+  if (!audit) return false;
+  try {
+    return !(await audit(toolArgs));
+  } catch {
+    return false;
+  }
+};

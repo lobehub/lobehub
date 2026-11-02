@@ -9,10 +9,12 @@ describe('observeChatAttempt', () => {
   const attempt = {
     apiType: 'openai',
     attemptId: 'attempt-1',
+    channelId: 'channel-1',
     model: 'model',
     optionIndex: 0,
     providerId: 'test',
     requestId: 'request-1',
+    routerId: 'router-1',
     startedAt: 1000,
   };
 
@@ -48,7 +50,12 @@ describe('observeChatAttempt', () => {
     await response.text();
     expect(completion.mock.calls[0][0]).toEqual(final.mock.calls[0][0]);
     expect(final.mock.calls[0][0]).toMatchObject({
-      routeAttempt: { attemptId: 'attempt-1', requestId: 'request-1' },
+      routeAttempt: {
+        attemptId: 'attempt-1',
+        channelId: 'channel-1',
+        requestId: 'request-1',
+        routerId: 'router-1',
+      },
       speed: { ttft: 200, duration: 1000, latency: 1300, tps: 100 },
     });
     expect(finished).toHaveBeenCalledTimes(1);
@@ -265,8 +272,10 @@ describe('observeChatAttempt', () => {
     expect(finished.mock.calls[0][0].speed.tps).toBeUndefined();
     expect(final.mock.calls[0][0].routeAttempt).toEqual({
       attemptId: 'attempt-1',
+      channelId: 'channel-1',
       outcome: 'completed',
       requestId: 'request-1',
+      routerId: 'router-1',
     });
   });
 
@@ -388,6 +397,40 @@ describe('observeChatAttempt', () => {
       });
     },
   );
+
+  it.each([
+    {
+      error: {
+        body: { message: 'The content was blocked for safety reasons.', provider: 'google' },
+        type: 'ProviderContentPolicyViolation',
+      },
+      errorType: 'ProviderContentPolicyViolation',
+    },
+    {
+      error: { errorType: 'ContentModeration', message: 'blocked by moderation' },
+      errorType: 'ContentModeration',
+    },
+    // Fallback buckets carry no classification of their own, so they stay StreamChunkError.
+    { error: { message: 'boom', type: 'ProviderBizError' }, errorType: 'StreamChunkError' },
+    { error: { message: 'Internal error encountered.' }, errorType: 'StreamChunkError' },
+  ])('keeps the code a stream error already carries: $errorType', async ({ error, errorType }) => {
+    const finished = vi.fn();
+    const response = await observeChatAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('partial');
+        await callback?.onError?.(error);
+        await callback?.onFinal?.({ text: 'partial' });
+        return new Response('done');
+      },
+      undefined,
+      attempt,
+      true,
+      finished,
+    );
+    await response.text();
+
+    expect(finished.mock.calls[0][0].error).toMatchObject({ errorType });
+  });
 
   it.each([
     { expectedOutcome: 'completed', text: 'I cannot help with that.' },

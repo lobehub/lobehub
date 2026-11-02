@@ -103,7 +103,7 @@ export const execRouter = router({
           resumeApprovals: z.array(ResumeApprovalDecisionSchema).min(1).optional(),
           resumeToolResult: ResumeToolResultSchema.optional(),
           shareId: z.string(),
-          /** Queued behind a running turn; see `aiAgent.execAgent`'s `steer`. */
+          /** Directly steered the turn it replaces; see `aiAgent.execAgent`'s `steer`. */
           steer: z.boolean().optional(),
           /** Absent → the run creates a new visitor topic (counted against the topic cap). */
           topicId: z.string().nullish(),

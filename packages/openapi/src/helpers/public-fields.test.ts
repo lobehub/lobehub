@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AgentItem, AiProviderSelectItem, FileItem, UserItem } from '@/database/schemas';
+import type {
+  AgentItem,
+  AiProviderSelectItem,
+  ChatGroupAgentItem,
+  ChatGroupItem,
+  FileItem,
+  UserItem,
+} from '@/database/schemas';
 
 import {
   projectPublicAgent,
+  projectPublicChatGroup,
   projectPublicFile,
   projectPublicProvider,
   projectPublicUser,
   PUBLIC_AGENT_FIELDS,
+  PUBLIC_CHAT_GROUP_FIELDS,
 } from './public-fields';
 
 describe('public response field projections', () => {
@@ -32,7 +41,9 @@ describe('public response field projections', () => {
       workspaceId: 'workspace-1',
     } as unknown as AgentItem);
 
-    expect(Object.keys(projected).sort()).toEqual([...PUBLIC_AGENT_FIELDS, 'plugins'].sort());
+    expect(Object.keys(projected).sort()).toEqual(
+      [...PUBLIC_AGENT_FIELDS, 'personal', 'plugins'].sort(),
+    );
     expect(projected).not.toHaveProperty('clientId');
     expect(projected).not.toHaveProperty('marketIdentifier');
     expect(projected).not.toHaveProperty('userId');
@@ -94,5 +105,48 @@ describe('public response field projections', () => {
     expect(projected).not.toHaveProperty('normalizedEmail');
     expect(projected).not.toHaveProperty('onboarding');
     expect(projected).not.toHaveProperty('preference');
+  });
+
+  it('keeps chat group config, editor content and market fields out of the contract', () => {
+    const projected = projectPublicChatGroup(
+      {
+        avatar: null,
+        backgroundColor: null,
+        clientId: 'internal-client',
+        config: { systemPrompt: 'secret' },
+        content: 'internal',
+        createdAt: new Date(),
+        description: null,
+        editorData: { root: {} },
+        id: 'cg-1',
+        marketIdentifier: 'market-id',
+        pinned: false,
+        title: 'Group',
+        updatedAt: new Date(),
+        userId: 'user-1',
+        visibility: 'public',
+        workspaceId: 'workspace-1',
+      } as unknown as ChatGroupItem,
+      [
+        {
+          agentId: 'agt-1',
+          chatGroupId: 'cg-1',
+          enabled: true,
+          order: 0,
+          role: 'participant',
+          userId: 'user-1',
+          workspaceId: 'workspace-1',
+        } as unknown as ChatGroupAgentItem,
+      ],
+    );
+
+    expect(Object.keys(projected).sort()).toEqual(
+      [...PUBLIC_CHAT_GROUP_FIELDS, 'members', 'personal'].sort(),
+    );
+    expect(projected.personal).toBe(false);
+    expect(projected).not.toHaveProperty('config');
+    expect(projected.members).toEqual([
+      { agentId: 'agt-1', enabled: true, order: 0, role: 'participant' },
+    ]);
   });
 });

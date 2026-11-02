@@ -1,3 +1,5 @@
+import '@/styles/stylex.css';
+
 import type { CSSProperties, PropsWithChildren } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration, useRouteError } from 'react-router';
 import { isRtlLang } from 'rtl-detect';

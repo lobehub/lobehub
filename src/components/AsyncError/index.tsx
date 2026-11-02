@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, Center, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { RotateCwIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,10 +18,7 @@ import { normalizeAsyncError } from '@/libs/swr/normalizeError';
  *
  * - `page`   — full detail page / whole surface: centered hero + Reload.
  * - `block`  — a card / settings tab / widget: bordered block + Reload.
- * - `inline` — a list row / small slot: single line + retry link. An explicit
- *              `description` (what to do next) follows the title on the same
- *              line; raw technical detail (provider message, error code) goes
- *              in `details`, folded behind a "Show details" toggle.
+ * - `inline` — a list row / small slot: single line + retry link.
  * - `metric` — a stat / aggregate slot: a **failed** marker where a number
  *              would sit, so an errored fetch never reads as a confident `$0`.
  */
@@ -35,14 +34,13 @@ export interface AsyncErrorProps {
   /** Override the auto-derived description (status-based copy otherwise). */
   description?: ReactNode;
   /**
-   * `inline` only: raw technical detail (provider message, error code), hidden
-   * until the user expands it.
+   * Raw technical detail (a stack, a response body). Folded behind a
+   * "Show details" toggle so the failure stays one readable line, but the
+   * evidence is still reachable without leaving the surface.
    */
   details?: ReactNode;
   /** The thrown error; normalized for status-specific copy + retryable gating. */
   error?: unknown;
-  /** `inline` only: center the line (list slots) or start-align it (rows, cards). */
-  justify?: 'center' | 'start';
   /** Retry the same request (SWR `mutate` / query refetch). Hidden if absent. */
   onRetry?: () => void;
   /** Whether an explicit Retry action is currently in flight. */
@@ -52,109 +50,35 @@ export interface AsyncErrorProps {
   variant?: AsyncErrorVariant;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  block: css`
-    width: 100%;
-    min-height: 180px;
-    padding: 32px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  icon: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  details: css`
-    overflow: auto;
-
-    max-height: 160px;
-    margin: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-    word-break: break-word;
-    white-space: pre-wrap;
-  `,
-  inline: css`
-    padding-block: 8px;
-  `,
-  inlineIcon: css`
-    flex: none;
-    margin-block-start: 3px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  message: css`
-    flex: 0 1 auto;
-    min-width: 0;
-  `,
-  metric: css`
-    color: ${cssVar.colorTextQuaternary};
-  `,
-  page: css`
-    flex: 1;
-    width: 100%;
-    min-height: 320px;
-    padding: 48px;
-  `,
-}));
-
-const RetryLink = ({ onRetry, retrying }: { onRetry?: () => void; retrying: boolean }) => {
-  const { t } = useTranslation('error');
-
-  return (
-    <Button disabled={retrying} loading={retrying} size={'small'} type={'text'} onClick={onRetry}>
-      {t('error.retry')}
-    </Button>
-  );
-};
-
-interface InlineErrorProps {
-  action?: ReactNode;
-  description?: ReactNode;
-  details?: ReactNode;
-  heading: ReactNode;
-  justify: 'center' | 'start';
-}
-
-const InlineError = ({ action, description, details, heading, justify }: InlineErrorProps) => {
-  const { t } = useTranslation('error');
-  const [expanded, setExpanded] = useState(false);
-  const hasDetails = details !== undefined && details !== null && details !== '';
-
-  return (
-    <Flexbox className={styles.inline} gap={4}>
-      <Flexbox horizontal align={'center'} gap={8} justify={justify} wrap={'wrap'}>
-        {/* Icon and copy stay together; only the copy wraps in a narrow slot. */}
-        <Flexbox horizontal align={'flex-start'} className={styles.message} gap={8}>
-          <Icon className={styles.inlineIcon} icon={TriangleAlertIcon} size={14} />
-          <Text color={cssVar.colorTextSecondary} fontSize={13}>
-            {heading}
-            {description && (
-              <Text as={'span'} color={cssVar.colorTextTertiary} fontSize={13}>
-                {' '}
-                {description}
-              </Text>
-            )}
-          </Text>
-        </Flexbox>
-        {action}
-        {hasDetails && (
-          <Button
-            aria-expanded={expanded}
-            size={'small'}
-            type={'text'}
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded ? t('asyncState.hideDetails') : t('asyncState.showDetails')}
-          </Button>
-        )}
-      </Flexbox>
-      {hasDetails && expanded && <pre className={styles.details}>{details}</pre>}
-    </Flexbox>
-  );
-};
+const styles = stylex.create({
+  block: {
+    width: '100%',
+    minHeight: '180px',
+    padding: '32px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  details: {
+    overflow: 'auto',
+    maxHeight: 160,
+    margin: 0,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: 12,
+    color: cssVar.colorTextTertiary,
+    wordBreak: 'break-word',
+    whiteSpace: 'pre-wrap',
+  },
+  icon: { color: cssVar.colorTextTertiary },
+  inline: { paddingBlock: '8px' },
+  inlineIcon: { flex: 'none', marginBlockStart: 3, color: cssVar.colorTextTertiary },
+  message: { flexBasis: 'auto', flexGrow: 0, flexShrink: 1, minWidth: 0 },
+  metric: { color: cssVar.colorTextQuaternary },
+  page: { flex: '1', width: '100%', minHeight: '320px', padding: '48px' },
+});
 
 const AsyncError = memo<AsyncErrorProps>(
   ({
@@ -165,11 +89,12 @@ const AsyncError = memo<AsyncErrorProps>(
     title,
     description,
     details,
-    justify = 'center',
     action,
   }) => {
     const { t } = useTranslation('error');
     const { status, retryable } = normalizeAsyncError(error);
+    const [detailsOpen, setDetailsOpen] = useState(false);
+    const hasDetails = details !== undefined && details !== null && details !== '';
 
     // Status-specific copy when we recovered a status, else the generic reason.
     const reason =
@@ -181,7 +106,12 @@ const AsyncError = memo<AsyncErrorProps>(
     // ─── metric: a failed marker where a number would render (never a fake $0) ───
     if (variant === 'metric') {
       return (
-        <Flexbox horizontal align={'center'} className={styles.metric} gap={6}>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.metric).className}
+          gap={6}
+        >
           <Icon icon={TriangleAlertIcon} size={14} />
           <Text color={cssVar.colorTextQuaternary} fontSize={13}>
             {t('asyncState.metricLabel')}
@@ -204,21 +134,68 @@ const AsyncError = memo<AsyncErrorProps>(
     // ─── inline: single-line row failure with a retry link ───
     if (variant === 'inline') {
       return (
-        <InlineError
-          action={action ?? (showRetry && <RetryLink retrying={retrying} onRetry={onRetry} />)}
-          description={description}
-          details={details}
-          heading={heading}
-          justify={justify}
-        />
+        <Flexbox className={stylex.props(styles.inline).className} gap={4}>
+          <Flexbox horizontal align={'center'} gap={8} justify={'center'} wrap={'wrap'}>
+            {/* Icon and copy stay together; only the copy wraps in a narrow slot. */}
+            <Flexbox
+              horizontal
+              align={'flex-start'}
+              className={stylex.props(styles.message).className}
+              gap={8}
+            >
+              <Icon
+                className={stylex.props(styles.inlineIcon).className}
+                icon={TriangleAlertIcon}
+                size={14}
+              />
+              <Text color={cssVar.colorTextSecondary} fontSize={13}>
+                {heading}
+                {description && (
+                  <Text as={'span'} color={cssVar.colorTextTertiary} fontSize={13}>
+                    {' '}
+                    {description}
+                  </Text>
+                )}
+              </Text>
+            </Flexbox>
+            {action ??
+              (showRetry && (
+                <Button
+                  disabled={retrying}
+                  loading={retrying}
+                  size={'small'}
+                  type={'text'}
+                  onClick={onRetry}
+                >
+                  {t('error.retry')}
+                </Button>
+              ))}
+            {hasDetails && (
+              <Button
+                aria-expanded={detailsOpen}
+                size={'small'}
+                type={'text'}
+                onClick={() => setDetailsOpen((value) => !value)}
+              >
+                {detailsOpen ? t('asyncState.hideDetails') : t('asyncState.showDetails')}
+              </Button>
+            )}
+          </Flexbox>
+          {hasDetails && detailsOpen && (
+            <pre className={stylex.props(styles.details).className}>{details}</pre>
+          )}
+        </Flexbox>
       );
     }
 
     // ─── page / block: centered hero, sized by variant ───
     return (
-      <Center className={variant === 'page' ? styles.page : styles.block} gap={12}>
+      <Center
+        className={stylex.props(variant === 'page' ? styles.page : styles.block).className}
+        gap={12}
+      >
         <Icon
-          className={styles.icon}
+          className={stylex.props(styles.icon).className}
           icon={TriangleAlertIcon}
           size={variant === 'page' ? 32 : 24}
         />
@@ -247,6 +224,19 @@ const AsyncError = memo<AsyncErrorProps>(
               {t('error.retry')}
             </Button>
           ))}
+        {hasDetails && (
+          <Flexbox align={'center'} gap={4} width={'100%'}>
+            <Button
+              aria-expanded={detailsOpen}
+              size={'small'}
+              type={'text'}
+              onClick={() => setDetailsOpen((value) => !value)}
+            >
+              {detailsOpen ? t('asyncState.hideDetails') : t('asyncState.showDetails')}
+            </Button>
+            {detailsOpen && <pre className={stylex.props(styles.details).className}>{details}</pre>}
+          </Flexbox>
+        )}
       </Center>
     );
   },

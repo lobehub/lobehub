@@ -1,5 +1,8 @@
+import { dryRunAccessOf } from '@lobechat/builtin-tool-dashboard';
+import type { WidgetDryRunGrant } from '@lobechat/types';
 import { validateCronPattern } from '@lobechat/utils/cronEval';
 
+import { UserModel } from '@/database/models/user';
 import { type CreateWidgetVersionInput, WidgetModel } from '@/database/models/widget';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -182,6 +185,31 @@ export class WidgetService {
    * Set or clear the refresh schedule. The next due instant is computed from
    * the pattern; scheduled runs only fire once a version is published.
    */
+  /**
+   * Stop asking before dry runs that need no more access than this version:
+   * record its connectors and hosts as a standing grant at the version's own
+   * level. The access is read from the stored version, never taken from the
+   * caller, so the grant is exactly what the approval card showed. Only the
+   * widget's creator — the one who reviews its dry runs — may grant.
+   */
+  async grantDryRunAccess(
+    widgetId: string,
+    versionId: string,
+  ): Promise<WidgetDryRunGrant | undefined> {
+    await this.requireManageable(widgetId);
+    const version = await this.requireVersion(widgetId, versionId);
+    const access = dryRunAccessOf(version.manifest);
+    if (access.connectors.length === 0 && access.hosts.length === 0) return undefined;
+
+    const grant: WidgetDryRunGrant = {
+      ...access,
+      grantedAt: new Date().toISOString(),
+      workspaceId: version.workspaceId ?? null,
+    };
+    await new UserModel(this.db, this.userId).appendWidgetDryRunGrant(grant);
+    return grant;
+  }
+
   async setSchedule(widgetId: string, pattern: string | null, timezone?: string | null) {
     await this.requireManageable(widgetId);
 

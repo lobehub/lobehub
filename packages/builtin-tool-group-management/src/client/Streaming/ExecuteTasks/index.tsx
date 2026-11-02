@@ -1,12 +1,10 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { AgentGroupMember, BuiltinStreamingProps } from '@lobechat/types';
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, useTheme } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Markdown, useTheme } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
@@ -61,9 +59,11 @@ export const ExecuteTasksStreaming = memo<BuiltinStreamingProps<ExecuteTasksPara
         <div className={styles.taskCard} key={task.agentId || index}>
           <Flexbox gap={8}>
             <Flexbox horizontal align={'center'} gap={8}>
-              <Avatar
-                avatar={task.agent?.avatar || DEFAULT_AVATAR}
+              <AgentAvatar
+                agentId={task.agentId}
+                avatar={task.agent?.avatar}
                 background={task.agent?.backgroundColor || theme.colorBgContainer}
+                name={task.agent?.title}
                 shape={'square'}
                 size={20}
               />

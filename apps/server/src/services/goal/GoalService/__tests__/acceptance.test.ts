@@ -220,6 +220,37 @@ describe('GoalService', () => {
     });
   });
 
+  it('re-checks measured acceptance in the same transaction as the achieved write', async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'A runnable minimal training loop with evidence',
+      title: 'Reproduce Ornith training',
+      tasks: ['Implement minimal training loop'],
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+    const acceptanceTask = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(acceptanceTask.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+
+    // Evidence changes after the pre-check: only the read inside the final
+    // transaction (the one handed a `db`) sees the below-target observation.
+    const internals = service as unknown as {
+      evaluateMetricCriteria: (graph: unknown, db?: unknown) => Promise<unknown>;
+    };
+    const evaluate = internals.evaluateMetricCriteria;
+    vi.spyOn(internals, 'evaluateMetricCriteria').mockImplementation(async (graph, db) =>
+      db ? { allMet: false, criteria: [] } : evaluate(graph),
+    );
+
+    const result = await service.tick(graph.goal.id);
+    expect(result).toMatchObject({ outcome: 'no_progress' });
+    expect((await service.graph(graph.goal.id)).goal.status).not.toBe('achieved');
+  });
+
   it('does not mark a required goal achieved when only its initial Task is complete', async () => {
     const service = new GoalService(serverDB, userId);
     const taskModel = new TaskModel(serverDB, userId);

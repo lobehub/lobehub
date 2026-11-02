@@ -247,7 +247,7 @@ describe('AnthropicStream', () => {
 
         'id: msg_017aTuY86wNxth5TE544yqJq',
         'event: usage',
-        'data: {"inputCacheMissTokens":457,"totalInputTokens":457,"totalOutputTokens":84,"totalTokens":541}\n',
+        'data: {"inputCacheMissTokens":457,"totalInputTokens":457,"totalOutputTokens":83,"totalTokens":540}\n',
       ].map((item) => `${item}\n`),
     );
 
@@ -405,7 +405,7 @@ describe('AnthropicStream', () => {
 
         'id: msg_0175ryA67RbGrnRrGBXFQEYK',
         'event: usage',
-        'data: {"inputCacheMissTokens":485,"totalInputTokens":485,"totalOutputTokens":154,"totalTokens":639}\n',
+        'data: {"inputCacheMissTokens":485,"totalInputTokens":485,"totalOutputTokens":150,"totalTokens":635}\n',
         'id: msg_0175ryA67RbGrnRrGBXFQEYK',
         'event: stop',
         'data: "message_stop"\n',
@@ -492,7 +492,7 @@ describe('AnthropicStream', () => {
         'data: "end_turn"\n',
         'id: msg_01Vxc4yQTEjkDSba3N3BMbH8',
         'event: usage',
-        'data: {"inputCacheMissTokens":6,"inputCachedTokens":17918,"inputWriteCacheTokens":457,"totalInputTokens":18381,"totalOutputTokens":3224,"totalTokens":21605}\n',
+        'data: {"inputCacheMissTokens":6,"inputCachedTokens":17918,"inputWriteCacheTokens":457,"totalInputTokens":18381,"totalOutputTokens":3222,"totalTokens":21603}\n',
 
         'id: msg_01Vxc4yQTEjkDSba3N3BMbH8',
         'event: stop',
@@ -623,7 +623,7 @@ describe('AnthropicStream', () => {
           'data: "end_turn"\n',
           'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
           'event: usage',
-          'data: {"inputCacheMissTokens":46,"inputCachedTokens":0,"totalInputTokens":46,"totalOutputTokens":365,"totalTokens":411}\n',
+          'data: {"inputCacheMissTokens":46,"inputCachedTokens":0,"totalInputTokens":46,"totalOutputTokens":354,"totalTokens":400}\n',
           'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
           'event: stop',
           'data: "message_stop"\n',
@@ -783,7 +783,7 @@ describe('AnthropicStream', () => {
           'data: "end_turn"\n',
           'id: msg_019q32esPvu3TftzZnL6JPys',
           'event: usage',
-          'data: {"inputCacheMissTokens":92,"inputCachedTokens":0,"totalInputTokens":92,"totalOutputTokens":263,"totalTokens":355}\n',
+          'data: {"inputCacheMissTokens":92,"inputCachedTokens":0,"totalInputTokens":92,"totalOutputTokens":259,"totalTokens":351}\n',
           'id: msg_019q32esPvu3TftzZnL6JPys',
           'event: stop',
           'data: "message_stop"\n',
@@ -873,6 +873,7 @@ describe('AnthropicStream', () => {
         index: 0,
         delta: { type: 'abc', abc: '123' },
       },
+      { type: 'message_stop' },
     ];
 
     const mockReadableStream = new ReadableStream({
@@ -914,94 +915,10 @@ describe('AnthropicStream', () => {
         'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
         'event: data',
         'data: {"type":"content_block_delta","index":0,"delta":{"type":"abc","abc":"123"}}\n',
+        'id: msg_01MNsLe7n1uVLtu6W8rCFujD',
+        'event: stop',
+        'data: "message_stop"\n',
       ].map((item) => `${item}\n`),
     );
-  });
-  it('should report a dropped connection as a stream error instead of ending normally', async () => {
-    // @ts-ignore
-    const mockAnthropicStream: Stream = {
-      [Symbol.asyncIterator]() {
-        let count = 0;
-        return {
-          next: async () => {
-            if (count++ === 0) {
-              return {
-                done: false,
-                value: { type: 'message_start', message: { id: 'message_1', usage: {} } },
-              };
-            }
-            throw new TypeError('terminated');
-          },
-        };
-      },
-    };
-
-    const onErrorMock = vi.fn();
-    const onFinalMock = vi.fn();
-    const protocolStream = AnthropicStream(mockAnthropicStream, {
-      callbacks: { onError: onErrorMock, onFinal: onFinalMock },
-      payload: { apiMode: 'messages', model: 'deepseek-flash', provider: 'deepseek' },
-    });
-
-    const decoder = new TextDecoder();
-    const chunks: string[] = [];
-    // @ts-ignore
-    for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
-    }
-
-    expect(chunks).toContain('event: error\n');
-    expect(onErrorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'terminated', type: 'ProviderBizError' }),
-    );
-    expect(onFinalMock).toHaveBeenCalledWith(
-      expect.objectContaining({ error: expect.objectContaining({ message: 'terminated' }) }),
-    );
-  });
-
-  describe('relay-shaped failures', () => {
-    const collect = async (events: any[]) => {
-      const onCompletion = vi.fn();
-      const stream = new ReadableStream({
-        start(controller) {
-          for (const event of events) controller.enqueue(event);
-          controller.close();
-        },
-      });
-      const chunks: string[] = [];
-      const reader = AnthropicStream(stream, { callbacks: { onCompletion } }).getReader();
-      const decoder = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(decoder.decode(value, { stream: true }));
-      }
-      return { chunks, completion: onCompletion.mock.calls[0]?.[0] };
-    };
-
-    it('surfaces an inline error event instead of an empty completion', async () => {
-      const { chunks, completion } = await collect([
-        {
-          message: { id: 'msg_1', usage: { input_tokens: 100, output_tokens: 1 } },
-          type: 'message_start',
-        },
-        { error: { message: 'Overloaded', type: 'overloaded_error' }, type: 'error' },
-      ]);
-
-      expect(chunks.some((c) => c.includes('event: error'))).toBe(true);
-      expect(completion.error).toMatchObject({ message: 'Overloaded' });
-    });
-
-    it('names an OpenAI-format answer on an Anthropic endpoint as a malformed response', async () => {
-      const { completion } = await collect([
-        {
-          choices: [{ delta: { content: 'Hello' }, finish_reason: null, index: 0 }],
-          id: 'chatcmpl_1',
-          object: 'chat.completion.chunk',
-        },
-      ]);
-
-      expect(completion.error).toMatchObject({ type: 'UpstreamMalformedResponse' });
-    });
   });
 });

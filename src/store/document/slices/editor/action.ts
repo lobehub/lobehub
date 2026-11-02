@@ -13,10 +13,12 @@ import type { StoreSetter } from '@/store/types';
 import { composeSkillMarkdown, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
 
+import { PAGE_SYNC_WAIT_MS, waitForPageSynced } from '../../collabRegistry';
 import type { DocumentStore } from '../../store';
 import { documentDetailResource } from '../document/projection';
 import type { DocumentFormatFields } from './contentFormat';
 import { hasDocumentFormatFields, resolveDocumentContentFormat } from './contentFormat';
+import type { EditorContentState } from './initialState';
 import type { DocumentDispatch } from './reducer';
 import { documentReducer } from './reducer';
 
@@ -53,6 +55,8 @@ export class EditorActionImpl {
   readonly #get: () => DocumentStore;
   readonly #set: Setter;
   readonly #inflightSaves = new Map<string, Promise<void>>();
+  /** Document whose body each editor instance was last loaded with. */
+  readonly #editorDocumentIds = new WeakMap<IEditor, string>();
 
   constructor(set: Setter, get: () => DocumentStore, _api?: unknown) {
     void _api;
@@ -91,6 +95,12 @@ export class EditorActionImpl {
     const id = documentId || activeDocumentId;
 
     if (!editor || !id || id !== activeDocumentId) return false;
+    // A document switch moves `activeDocumentId` before the editor in the store
+    // holds the new body (each canvas mount creates its own editor, and the store
+    // keeps the previous one until it updates). Reading it now would write the
+    // previous document's body into this one.
+    const loadedDocumentId = this.#editorDocumentIds.get(editor);
+    if (loadedDocumentId !== undefined && loadedDocumentId !== id) return false;
 
     const doc = documents[id];
     if (!doc || doc.contentFormat === 'html') return false;
@@ -100,9 +110,31 @@ export class EditorActionImpl {
       const markdown = this.getPersistedMarkdown(id, editorMarkdown);
       const editorData = editor.getDocument('json');
 
+      if (doc.collab) {
+        internal_dispatchDocument(
+          {
+            id,
+            type: 'updateDocument',
+            value: {
+              content: markdown,
+              editorData,
+              isDirty: false,
+              lastSavedContent: markdown,
+              lastSavedEditorData: editorData,
+            },
+          },
+          'handleContentChange/collab',
+        );
+        return false;
+      }
+
       const markdownChanged = markdown !== doc.lastSavedContent;
       const editorDataChanged = !isEqual(editorData, doc.lastSavedEditorData);
-      const contentChanged = markdownChanged || editorDataChanged;
+      const isLoadedBody =
+        !!doc.loadedBody &&
+        markdown === doc.loadedBody.content &&
+        isEqual(editorData, doc.loadedBody.editorData);
+      const contentChanged = !isLoadedBody && (markdownChanged || editorDataChanged);
 
       internal_dispatchDocument(
         {
@@ -191,6 +223,95 @@ export class EditorActionImpl {
     );
   };
 
+  setDocumentCollab = (documentId: string, collab: boolean): void => {
+    const { documents, internal_dispatchDocument } = this.#get();
+    if (!documents[documentId] || documents[documentId].collab === collab) return;
+
+    if (collab) this.#get().cancelDebouncedSave(documentId);
+    internal_dispatchDocument(
+      { id: documentId, type: 'updateDocument', value: { collab, isDirty: false } },
+      n('setDocumentCollab'),
+    );
+  };
+
+  /**
+   * An agent command starts editing the stored page: save what the user typed
+   * so the agent reads it, and hold the page read-only until the command ends.
+   */
+  beginAgentEdit = (documentId: string): void => {
+    const doc = this.#get().documents[documentId];
+    if (!doc) return;
+
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { agentEditing: (doc.agentEditing ?? 0) + 1 },
+      },
+      n('beginAgentEdit'),
+    );
+    if (doc.isDirty) void this.#get().performSave(documentId);
+  };
+
+  /** One agent command ended; `all` releases the page when the whole run is over. */
+  endAgentEdit = (documentId: string, options?: { all?: boolean }): void => {
+    const doc = this.#get().documents[documentId];
+    if (!doc?.agentEditing) return;
+
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { agentEditing: options?.all ? 0 : doc.agentEditing - 1 },
+      },
+      n('endAgentEdit'),
+    );
+  };
+
+  /**
+   * Saves the page as a version the user asked for (the save hotkey, accepting
+   * AI suggestions). A room page persists through its room, which
+   * `performSave` skips, so the server records the room's state once this
+   * client's pending updates reached it.
+   */
+  saveVersion = async (documentId: string): Promise<void> => {
+    if (!this.#get().documents[documentId]?.collab) {
+      return this.#get().performSave(documentId, undefined, { saveSource: 'manual' });
+    }
+
+    await waitForPageSynced(documentId, PAGE_SYNC_WAIT_MS);
+    await documentService.snapshotPageVersion(documentId, 'manual');
+  };
+
+  /**
+   * Restores a history version into the page. A room page restores on the
+   * server, which merges it into the room for everyone; applying it here as
+   * well would insert it into the room a second time.
+   */
+  restoreVersion = async (
+    documentId: string,
+    version: { editorData: unknown; historyId: string },
+  ): Promise<void> => {
+    const { documents, editor, markDirty, performSave } = this.#get();
+
+    if (documents[documentId]?.collab) {
+      await documentService.updateDocument({
+        editorData: JSON.stringify(version.editorData),
+        id: documentId,
+        restoreFromHistoryId: version.historyId,
+        saveSource: 'restore',
+      });
+      return;
+    }
+
+    editor?.setDocument('json', JSON.stringify(version.editorData));
+    markDirty(documentId);
+    await performSave(documentId, undefined, {
+      restoreFromHistoryId: version.historyId,
+      saveSource: 'restore',
+    });
+  };
+
   markDirty = (documentId: string): void => {
     const { documents, internal_dispatchDocument } = this.#get();
     if (!documents[documentId]) return;
@@ -206,6 +327,15 @@ export class EditorActionImpl {
     const updatedAt = row.updatedAt instanceof Date ? row.updatedAt : new Date(row.updatedAt);
     if (doc.lastUpdatedTime && updatedAt.getTime() <= doc.lastUpdatedTime.getTime()) {
       return 'unchanged';
+    }
+
+    // The live room owns the body; a projected row can lag behind it.
+    if (doc.collab) {
+      internal_dispatchDocument(
+        { id: documentId, type: 'updateDocument', value: { lastUpdatedTime: updatedAt } },
+        n('reconcileRemote/collab'),
+      );
+      return 'rebased';
     }
 
     const content = row.content ?? '';
@@ -253,6 +383,8 @@ export class EditorActionImpl {
           lastSavedContent: content,
           lastSavedEditorData: editorData,
           lastUpdatedTime: updatedAt,
+          // The editor reloads the adopted body and records it again.
+          loadedBody: undefined,
           saveBlockedByLock: false,
           saveStatus: 'saved',
         },
@@ -275,6 +407,53 @@ export class EditorActionImpl {
 
     if (!doc || doc.contentFormat === 'html') return;
 
+    this.#loadDocumentIntoEditor(editor, doc);
+    this.#editorDocumentIds.set(editor, documentId);
+    if (!doc.isDirty) this.#adoptLoadedBody(editor, documentId);
+  };
+
+  /**
+   * Record the body the editor just loaded as unedited. Loading is not
+   * byte-stable: markdown is parsed into a fresh tree with new node ids, and the
+   * editor's own markdown need not match the stored text. A page an agent or
+   * the CLI wrote has no editorData at all, so without this the load itself
+   * reads as an edit — opening the page marks it dirty, autosaves it and holds
+   * navigation behind a "Saving…" toast although the user changed nothing.
+   *
+   * `lastSaved*` keeps the server's body: conflict reconciliation compares
+   * remote rows against it, and a normalized copy there would make a remote
+   * title-only change look like a body change and discard local edits.
+   */
+  #adoptLoadedBody = (editor: IEditor, documentId: string): void => {
+    try {
+      const markdown = this.getPersistedMarkdown(
+        documentId,
+        (editor.getDocument('markdown') as unknown as string) || '',
+      );
+      const editorData = editor.getDocument('json');
+      if (!isValidEditorData(editorData)) return;
+
+      // The load's own change event already queued an autosave of this body.
+      this.#get().cancelDebouncedSave(documentId);
+      this.#get().internal_dispatchDocument(
+        {
+          id: documentId,
+          type: 'updateDocument',
+          value: {
+            content: markdown,
+            editorData,
+            isDirty: false,
+            loadedBody: { content: markdown, editorData },
+          },
+        },
+        'adoptLoadedBody',
+      );
+    } catch (error) {
+      console.error('[DocumentStore] Failed to read the loaded body:', error);
+    }
+  };
+
+  #loadDocumentIntoEditor = (editor: IEditor, doc: EditorContentState): void => {
     // Check if editorData is valid and non-empty
     const editorDataRoot = (doc.editorData as { root?: { children?: unknown[] } } | null)?.root;
     // A childless root (empty-parse shell) throws Lexical error #38 on hydration;
@@ -385,8 +564,10 @@ export class EditorActionImpl {
           }).filter(([, value]) => value !== undefined),
         )
       : undefined;
-    // An HTML page's body is never edited here: only its title / emoji save.
-    const metadataOnly = options?.metadataOnly === true || doc.contentFormat === 'html';
+    // An HTML page's body is never edited here, and a room page's body persists
+    // through its room: only their title / emoji save.
+    const metadataOnly =
+      options?.metadataOnly === true || doc.contentFormat === 'html' || !!doc.collab;
     if (metadataOnly && !hasMetadataChanges) return;
 
     // Skip save if neither document content nor metadata changed
@@ -451,6 +632,8 @@ export class EditorActionImpl {
                   !isEqual(current?.editorData, currentEditorData),
                 lastSavedContent: currentContent,
                 lastSavedEditorData: structuredClone(currentEditorData),
+                // The saved body is now the editor's own serialization.
+                loadedBody: undefined,
               }
             : {}),
           ...(savedAt ? { lastUpdatedTime: savedAt } : {}),
@@ -464,7 +647,13 @@ export class EditorActionImpl {
       // leaving the pre-edit body there would render stale content — and keep
       // rendering it when the confirming read is slow or fails.
       const cachedDetail = this.#get().documentDetailMap[id]?.document;
-      if (cachedDetail) {
+      // A read that landed while this save was in flight may already hold a
+      // newer writer's revision; mirroring this save over it would regress it.
+      const cachedIsNewer =
+        !!savedAt &&
+        !!cachedDetail?.updatedAt &&
+        new Date(cachedDetail.updatedAt).getTime() > savedAt.getTime();
+      if (cachedDetail && !cachedIsNewer) {
         this.#get().internal_adoptDocumentDetail(
           id,
           {

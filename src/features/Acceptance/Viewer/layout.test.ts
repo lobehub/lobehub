@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { acceptanceFocusedLayout, acceptanceScrollLayout } from './layout';
+import {
+  acceptanceChecksLayout,
+  acceptanceContentLayout,
+  acceptanceFocusedLayout,
+  acceptanceScrollLayout,
+} from './layout';
+
+describe('acceptanceChecksLayout', () => {
+  it('keeps the checklist narrower than the discussion frame', () => {
+    expect(acceptanceChecksLayout.maxWidth).toBe(920);
+    expect(acceptanceChecksLayout.maxWidth).toBeLessThan(acceptanceContentLayout.maxWidth);
+  });
+});
 
 describe('acceptanceFocusedLayout', () => {
   it('keeps deliberate reading space above and below focused check content', () => {

@@ -1,7 +1,7 @@
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 
-import { IndexedDBQueryProjectionStorage } from '@/libs/queryProjectionStorage';
 import {
+  AppIndexedDBStorage,
   cacheScope,
   defineReplica,
   isReplicaSyncKey,
@@ -279,7 +279,7 @@ export const toolResultPayloadResource = defineReplica<string, ToolResultPayload
   name: TOOL_RESULT_PAYLOAD_NAME,
   persist: { maxEntries: TOOL_RESULT_PAYLOAD_MAX_PERSISTED_ENTRIES },
   storage: new SizeCappedPayloadStorage(
-    new IndexedDBQueryProjectionStorage<ToolResultPayloadRead>({
+    new AppIndexedDBStorage<ToolResultPayloadRead>({
       namespace: `replica:${TOOL_RESULT_PAYLOAD_NAME}:v${TOOL_RESULT_PAYLOAD_VERSION}`,
     }),
     TOOL_RESULT_PAYLOAD_MAX_PERSISTED_CHARS,

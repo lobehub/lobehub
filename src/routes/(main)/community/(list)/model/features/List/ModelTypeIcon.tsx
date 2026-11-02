@@ -9,6 +9,7 @@ import {
   MicIcon,
   MusicIcon,
   PhoneIcon,
+  SplitIcon,
   VideoIcon,
 } from 'lucide-react';
 import { type AiModelType } from 'model-bank';
@@ -17,6 +18,7 @@ import { memo } from 'react';
 const icons: Record<AiModelType, LucideIcon> = {
   asr: MicIcon,
   chat: MessageSquareTextIcon,
+  decision: SplitIcon,
   embedding: BoltIcon,
   image: ImageIcon,
   realtime: PhoneIcon,

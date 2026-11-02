@@ -12,6 +12,7 @@ import {
   sharedRendererDedupe,
   sharedRendererDefine,
 } from '../../plugins/vite/sharedRendererConfig';
+import { stylexPlugin, stylexTokenModules } from '../../plugins/vite/stylex';
 import { DEFAULT_PRERENDER_LOCALE } from './app/lib/prerender';
 
 export interface AuthRrConfigOptions {
@@ -154,8 +155,10 @@ export const createAuthRrConfig = ({ appRoot, repoRoot, resolvePlugins }: AuthRr
         // which rejects the extensionless directory imports some published `es/`
         // bundles still ship — bundle every dependency instead of externalizing.
         resolve: { noExternal: command === 'build' ? true : [] },
+        optimizeDeps: { exclude: [...stylexTokenModules] },
       },
     },
+    optimizeDeps: { exclude: [...stylexTokenModules] },
     plugins: [
       process.env.AUTH_TRACE_MODULE ? moduleTrace(process.env.AUTH_TRACE_MODULE) : undefined,
       authClientStubs(),
@@ -164,6 +167,8 @@ export const createAuthRrConfig = ({ appRoot, repoRoot, resolvePlugins }: AuthRr
       viteMarkdownImport(),
       viteNodeModuleStub(),
       vitePlatformResolve('web'),
+      // Both environments render StyleX components; the client build emits the CSS.
+      stylexPlugin(),
       reactRouter(),
       ...lobeIconImports(),
       ...(resolvePlugins ?? []),

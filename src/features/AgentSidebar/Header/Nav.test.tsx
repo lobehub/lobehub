@@ -22,8 +22,9 @@ const labMock = vi.hoisted(() => ({
   enableSelfLearning: true,
   enableGoals: true,
 }));
+const resourceAccessMock = vi.hoisted(() => ({ canEditResource: true, isAccessResolved: true }));
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
-  useResourceAccess: () => ({ canEditResource: true, isAccessResolved: true }),
+  useResourceAccess: () => resourceAccessMock,
 }));
 
 vi.mock('react-router', async () => {
@@ -140,6 +141,8 @@ describe('Agent sidebar header nav', () => {
     permissionMock.edit_own_content = true;
     labMock.enableSelfLearning = true;
     labMock.enableGoals = true;
+    resourceAccessMock.canEditResource = true;
+    resourceAccessMock.isAccessResolved = true;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });
@@ -279,5 +282,30 @@ describe('Agent sidebar header nav', () => {
     expect(labels.indexOf('management.sidebarEntry')).toBeLessThan(labels.indexOf('tab.profile'));
     expect(labels.indexOf('tab.profile')).toBeLessThan(labels.indexOf('goalList.title'));
     expect(labels.indexOf('goalList.title')).toBeLessThan(labels.indexOf('tab.tasks'));
+  });
+
+  // r1018 issue 7: in a workspace, `useResourceAccess` reports the edit check as
+  // permissive while `getGeneralAccess` is in flight (`canEditResource: true`,
+  // `isAccessResolved: false`). The profile entry must not vanish for that
+  // window — it used to disappear right after opening an agent and only
+  // reappear once the batched request returned.
+  it('keeps the profile entry visible while workspace resource access is still loading', () => {
+    resourceAccessMock.canEditResource = true;
+    resourceAccessMock.isAccessResolved = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.getByRole('button', { name: 'tab.profile' })).toBeInTheDocument();
+  });
+
+  it('hides the profile entry once the server confirms the member cannot edit the agent', () => {
+    resourceAccessMock.canEditResource = false;
+    resourceAccessMock.isAccessResolved = true;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u');
+
+    render(<Nav />);
+
+    expect(screen.queryByRole('button', { name: 'tab.profile' })).toBeNull();
   });
 });

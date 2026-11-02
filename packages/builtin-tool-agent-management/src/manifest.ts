@@ -218,6 +218,32 @@ export const AgentManagementManifest: BuiltinToolManifest = {
       },
     },
 
+    {
+      description:
+        "Search for tools (MCP plugins) in the LobeHub marketplace. Use this when the user wants a capability that no plugin in the injected context provides, then pass a result's identifier to installPlugin with source 'market'. Each result reports whether it is already installed.",
+      name: AgentManagementApiName.searchMarketTools,
+      parameters: {
+        properties: {
+          category: {
+            description:
+              'Optional: filter by category. Available categories: developer, productivity, web-search, tools, media-generate, etc.',
+            type: 'string',
+          },
+          pageSize: {
+            description: 'Optional: number of results to return (default: 10, max: 20).',
+            type: 'number',
+          },
+          query: {
+            description:
+              'Optional: search keywords to find specific tools. Leave empty to browse all available tools.',
+            type: 'string',
+          },
+        },
+        required: [],
+        type: 'object',
+      },
+    },
+
     // ==================== Prompt ====================
     {
       description:
@@ -292,6 +318,11 @@ export const AgentManagementManifest: BuiltinToolManifest = {
             description:
               'The instruction or task for the agent to execute. Be specific about expected deliverables.',
             type: 'string',
+          },
+          runInBackground: {
+            description:
+              'Optional. Start the agent and get control back immediately instead of waiting for its reply. Use it only when you have other independent work to do meanwhile, or when the user should not wait on this reply. The reply arrives later as a message from that agent (waking you up if your turn has ended) — never poll or wait for it. Default is false: wait for the reply in this turn.',
+            type: 'boolean',
           },
           skipCallSupervisor: {
             default: false,

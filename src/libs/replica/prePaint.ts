@@ -1,3 +1,5 @@
+export { settleWithin } from 'local-replica';
+
 /**
  * Upper bound for a route loader's pre-paint hydrate.
  *
@@ -8,14 +10,3 @@
  * stall, so a route transition never waits longer than this for it.
  */
 export const PRE_PAINT_HYDRATE_TIMEOUT = 50;
-
-/** Resolve once `promise` settles or `ms` elapses — never rejects, never hangs. */
-export const settleWithin = (promise: Promise<unknown>, ms: number): Promise<void> =>
-  new Promise((resolve) => {
-    const finish = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(finish, ms);
-    void Promise.resolve(promise).then(finish, finish);
-  });

@@ -33,6 +33,38 @@ const isStoredObjectAvailable = async (fileService: FileService, url: string): P
   }
 };
 
+/**
+ * A run's operation token reaches `createFile` only to upload evidence into its
+ * own acceptance round (see `authorizeHeteroOperationEvidence`). Keep what it
+ * creates out of the creator's library: no folder or document parent, no
+ * knowledge base, never public, and always filed as acceptance evidence, which
+ * the resource listings hide.
+ */
+const scopeOperationTokenUpload = <
+  T extends {
+    knowledgeBaseId?: string;
+    parentId?: string;
+    source?: string;
+    visibility?: 'private' | 'public';
+  },
+>(
+  input: T,
+): T => {
+  if (
+    input.parentId ||
+    input.knowledgeBaseId ||
+    input.visibility === 'public' ||
+    (input.source !== undefined && input.source !== FileSource.Acceptance)
+  ) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: "This run's token can only upload acceptance evidence",
+    });
+  }
+
+  return { ...input, source: FileSource.Acceptance, visibility: 'private' };
+};
+
 export const uploadRouter = router({
   checkFileHash: fileProcedure
     .use(withScopedPermission('file:upload'))
@@ -56,7 +88,8 @@ export const uploadRouter = router({
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input: requested }) => {
+      const input = ctx.heteroOperationScope ? scopeOperationTokenUpload(requested) : requested;
       const metadata = stripAgentShareFileProvenance(input.metadata);
       const existingFile = await ctx.fileModel.checkHash(input.hash!);
       const { isExist } = existingFile;

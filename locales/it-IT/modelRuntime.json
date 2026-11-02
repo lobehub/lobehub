@@ -1,6 +1,5 @@
 {
   "AccountDeactivated": "Il tuo account è stato disattivato o sospeso. Questo potrebbe essere dovuto a motivi di politica, sicurezza o revisione dell'account. Contatta l'assistenza del provider per ricevere supporto.",
-  "AgentRuntimeError": "Errore di esecuzione del runtime del modello linguistico Lobe. Risolvi il problema o riprova basandoti sulle informazioni seguenti.",
   "CapabilityNotSupported": "Spiacenti, questo modello non supporta la funzionalità richiesta (come input visivo o chiamata di strumenti). Passa a un modello che la supporta.",
   "ClientLlmExecutorLost": "Il dispositivo che esegue {{provider}} per questa conversazione ha smesso di rispondere prima che la risposta fosse completata — potrebbe essere stato chiuso, aggiornato o disconnesso. Tieni aperta la finestra di LobeHub e riprova.",
   "ClientLlmExecutorUnavailable": "{{provider}} può essere raggiunto solo dal tuo dispositivo, ma nessuna finestra aperta di LobeHub ha ricevuto la richiesta. Apri LobeHub sul dispositivo in cui è in esecuzione {{provider}}, quindi riprova.",

@@ -41,6 +41,7 @@ import type {
   updateAssistantRowWithRetry,
 } from './clientLlmWait';
 import type { createOperation } from './createOperation';
+import type { DeferredInitRunner } from './executeStep/deferredInit';
 import type { executeStep } from './executeStep/index';
 import type { executeSync } from './executeSync';
 import type {
@@ -127,6 +128,17 @@ export interface InterventionLifecycleCheckpoint {
  */
 export interface AgentRuntimeDelegate {
   /**
+   * Hand the topic's finished background sub-agent results to their parent
+   * agent as a new turn, unless a run of that topic is still going (its own
+   * completion delivers them then). Called when a background sub-agent finishes
+   * and when a topic run settles. Never throws.
+   */
+  deliverBackgroundSubAgentResults?: (params: {
+    /** The run that is settling right now, which no longer counts as busy. */
+    settledOperationId?: string;
+    topicId: string;
+  }) => Promise<void>;
+  /**
    * Fork a group member ("call agent member") under a `lobe-group-management`
    * tool call. Handles both in-group (non-isolated, shared group session) and
    * isolated members, installing the group-action member completion bridge that
@@ -158,6 +170,8 @@ export interface AgentRuntimeDelegate {
     scope: SteerQueueScope;
     state: AgentState;
   }) => Promise<{ messageId: string } | undefined>;
+  /** Run the init an operation was created without (see `DeferredInitRunner`). */
+  runDeferredInit?: DeferredInitRunner;
   /**
    * A top-level run just finished: start the follow-ups the user queued behind
    * it as the next turn (the composer pipeline, with `steer`). Resolves to

@@ -2,11 +2,13 @@
 
 import { resolveGoalAttemptBudget } from '@lobechat/builtin-tool-goal';
 import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-tool-task';
+import { GOAL_TITLE_MAX_LENGTH } from '@lobechat/const/goal';
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
 import {
   ActionIcon,
   Button,
+  confirmModal,
   createStaticStyles,
   cssVar,
   Flexbox,
@@ -23,6 +25,7 @@ import {
   Pencil,
   PencilLine,
   Plus,
+  RotateCw,
   ShieldCheck,
   Trash2,
   X,
@@ -37,16 +40,24 @@ import {
   CriterionRow,
   openCriterionEditModal,
 } from '@/features/Acceptance';
+import { useEscapeDiscardGuard } from '@/features/AgentTasks/shared/useEscapeDiscardGuard';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
 import { usePermission } from '@/hooks/usePermission';
 import { goalService } from '@/services/goal';
+import { useGoalStore } from '@/store/goal';
 import { shinyTextStyles } from '@/styles';
 
 import GoalAgentPill from '../GoalAgentPill';
 import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
-import { deriveGoalTitle } from './goalTitle';
+import {
+  deriveGoalTitle,
+  resolveDraftedTitle,
+  resolveFallbackTitle,
+  resolveSubmittedGoalTitle,
+} from './goalTitle';
+import { hasUnsavedGoalDraft } from './hasUnsavedGoalDraft';
 
 const styles = createStaticStyles(({ css }) => ({
   budgetField: css`
@@ -80,6 +91,7 @@ const styles = createStaticStyles(({ css }) => ({
     max-height: 320px;
   `,
   footer: css`
+    flex-shrink: 0;
     padding-block: 8px;
     padding-inline: 16px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
@@ -139,6 +151,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   head: css`
     position: relative;
+    min-height: 0;
     padding-block: 16px 8px;
     padding-inline: 16px;
   `,
@@ -146,6 +159,13 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     min-height: 208px;
     background: ${cssVar.colorBgElevated};
+  `,
+  /* A block (not flex) scroller: as a flex item the editor's overflow-hidden
+     wrapper would shrink to fit and clip instead of scrolling. */
+  inputScroller: css`
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
   `,
   instructionEditor: css`
     min-height: 36px;
@@ -227,11 +247,16 @@ export interface CreateGoalContentProps {
 const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const { agentId, initialRequirement, initialRoundBudget, initialTitle, onCreated, projectId } =
     props;
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const { close } = useModalContext();
   const { allowed: canCreate, reason } = usePermission('create_content');
 
   const [isCreating, setIsCreating] = useState(false);
+  // Drafting failed, so the review step offers to draft again.
+  const [generateFailed, setGenerateFailed] = useState(false);
+  // The stopgap title a failed draft leaves behind; still unedited at submit,
+  // it is replaced by a generated one once the goal exists.
+  const fallbackTitleRef = useRef<string>(undefined);
 
   const [step, setStep] = useState<'describe' | 'preparing' | 'review'>('describe');
   const [plan, setPlan] = useState<CreateGoalParams>({
@@ -273,13 +298,15 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
   const handleNext = useCallback(async () => {
     const instruction = instructionRef.current.trim() || plan.instruction.trim();
     if (!canCreate || !instruction) return;
-    const name = plan.name.trim() || deriveGoalTitle(instruction);
+    const typed = plan.name.trim();
+    const name = typed || deriveGoalTitle(instruction);
     setPlan((current) => ({
       ...current,
       instruction,
       name,
     }));
     instructionRef.current = instruction;
+    setGenerateFailed(false);
     setStep('preparing');
     try {
       const generated = await generateGoalCriteria({
@@ -287,25 +314,40 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
         goal: instruction,
       });
       instructionRef.current = generated.instruction;
+      const draftedTitle = resolveDraftedTitle({
+        generated: generated.title,
+        previousFallback: fallbackTitleRef.current,
+        retrying: generateFailed,
+        typed,
+      });
+      fallbackTitleRef.current = undefined;
       setPlan((current) => ({
         ...current,
         criteria: generated.criteria,
         instruction: generated.instruction,
-        name: generated.title,
+        name: draftedTitle,
       }));
       setStep('review');
     } catch (error) {
       console.error('[CreateGoalContent] generate failed:', error);
+      // Never the instruction itself: a pasted prompt as the title is what
+      // took over the goal page. The instruction stays the goal's body.
+      fallbackTitleRef.current = resolveFallbackTitle({
+        name,
+        previousFallback: fallbackTitleRef.current,
+        typed,
+      });
       setPlan((current) => ({
         ...current,
         criteria: [createFallbackGoalCriterion(instruction)],
         instruction,
-        name: instruction,
+        name,
       }));
+      setGenerateFailed(true);
       setStep('review');
       toast.warning(t('createGoal.generateFailed'));
     }
-  }, [canCreate, plan.instruction, plan.name, t]);
+  }, [canCreate, generateFailed, plan.instruction, plan.name, t]);
 
   const handleCreateBlank = useCallback(() => {
     if (!canCreate) return;
@@ -366,7 +408,11 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     const reviewedCriteria = plan.criteria.filter((criterion) => criterion.title.trim());
     if (!instruction || reviewedCriteria.length === 0) return;
 
-    const title = plan.name.trim() || instruction;
+    const { needsGeneratedTitle, title } = resolveSubmittedGoalTitle({
+      fallbackTitle: fallbackTitleRef.current,
+      instruction,
+      name: plan.name,
+    });
     const budget = buildGoalCreateInput({
       costBudget: plan.maxTotalCost,
       instruction,
@@ -404,6 +450,13 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
       // durable fallback — fired and forgotten so the modal still closes
       // immediately; the server dedupes a raced decomposition.
       void goalService.advance(graph.goal.id).catch(() => {});
+      // A stopgap title is named from the instruction once the goal exists;
+      // failing that, it keeps the stopgap rather than blocking the create.
+      if (needsGeneratedTitle)
+        void useGoalStore
+          .getState()
+          .autoRenameGoalTitle(graph.goal.id)
+          .catch(() => {});
       close();
       onCreated?.({ agentId: graph.goal.agentId ?? undefined, goalId: graph.goal.id });
     } catch (error) {
@@ -436,10 +489,34 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     }
   }, []);
 
+  // Escape is easy to hit by accident, so it asks before throwing away a
+  // described or drafted goal; an untouched modal still closes straight away.
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEscapeDiscardGuard(rootRef, {
+    hasUnsavedInput: () =>
+      hasUnsavedGoalDraft({
+        editorJson: editor?.getDocument?.('json'),
+        initialInstruction: initialRequirement ?? initialTitle,
+        instruction: instructionRef.current,
+        step,
+      }),
+    onEscape: () =>
+      confirmModal({
+        cancelText: t('createGoal.discardConfirm.cancel'),
+        content: t('createGoal.discardConfirm.content'),
+        okButtonProps: { danger: true },
+        okText: t('createGoal.discardConfirm.ok'),
+        onOk: close,
+        title: t('createGoal.discardConfirm.title'),
+      }),
+  });
+
   return (
-    <Flexbox onKeyDown={handleKeyDown}>
-      <Flexbox horizontal className={styles.head}>
-        <Flexbox flex={1} gap={6}>
+    <Flexbox flex={1} ref={rootRef} style={{ minHeight: 0 }} onKeyDown={handleKeyDown}>
+      {/* The describe step's editor lives in the head, so the head shrinks and
+          its editor scrolls; on review only the body below scrolls. */}
+      <Flexbox horizontal className={styles.head} style={{ flexShrink: step === 'review' ? 0 : 1 }}>
+        <Flexbox flex={1} gap={6} style={{ minHeight: 0 }}>
           {step === 'review' && (
             <Flexbox horizontal align={'center'} gap={8}>
               <ActionIcon
@@ -454,29 +531,50 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             </Flexbox>
           )}
           {step === 'review' ? (
-            <input
-              className={styles.title}
-              disabled={!canCreate}
-              placeholder={t('createGoal.titlePlaceholder')}
-              value={plan.name}
-              onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
-            />
+            <>
+              <input
+                className={styles.title}
+                disabled={!canCreate}
+                maxLength={GOAL_TITLE_MAX_LENGTH}
+                placeholder={t('createGoal.titlePlaceholder')}
+                value={plan.name}
+                onChange={(e) => setPlan((current) => ({ ...current, name: e.target.value }))}
+              />
+              {generateFailed && (
+                <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+                  <Text fontSize={12} type={'warning'}>
+                    {t('createGoal.generateFailed')}
+                  </Text>
+                  <Button
+                    disabled={!canCreate}
+                    icon={RotateCw}
+                    size={'small'}
+                    type={'text'}
+                    onClick={() => void handleNext()}
+                  >
+                    {t('regenerate', { ns: 'common' })}
+                  </Button>
+                </Flexbox>
+              )}
+            </>
           ) : (
             <div className={styles.titleStatic}>{t('createGoal.describeTitle')}</div>
           )}
           {step !== 'review' && (
             <>
               <GeneratingBorder className={styles.inputShell} generating={step === 'preparing'}>
-                <EditorCanvas
-                  disabled={!canCreate || step === 'preparing'}
-                  editor={editor}
-                  editorData={{ content: plan.instruction }}
-                  entityId={'create-goal-description'}
-                  floatingToolbar={false}
-                  placeholder={t('createGoal.instructionPlaceholder')}
-                  style={{ fontSize: 14, minHeight: 206, padding: 16 }}
-                  onContentChange={handleContentChange}
-                />
+                <div className={styles.inputScroller}>
+                  <EditorCanvas
+                    disabled={!canCreate || step === 'preparing'}
+                    editor={editor}
+                    editorData={{ content: plan.instruction }}
+                    entityId={'create-goal-description'}
+                    floatingToolbar={false}
+                    placeholder={t('createGoal.instructionPlaceholder')}
+                    style={{ fontSize: 14, minHeight: 206, padding: 16 }}
+                    onContentChange={handleContentChange}
+                  />
+                </div>
               </GeneratingBorder>
               {step === 'preparing' ? (
                 <Flexbox
@@ -543,7 +641,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
             <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
               <Flexbox horizontal align={'center'} gap={8}>
                 <Icon color={cssVar.colorTextTertiary} icon={ShieldCheck} size={16} />
-                <Text fontSize={13} weight={600}>
+                <Text fontSize={13} style={{ flex: 'none' }} weight={600}>
                   {t('createGoal.criteriaTitle')}
                 </Text>
                 <Text className={styles.sectionHint} fontSize={12}>

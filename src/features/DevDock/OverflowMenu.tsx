@@ -1,7 +1,6 @@
 'use client';
 
-import { type DropdownItem, DropdownMenu } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, type DropdownItem, DropdownMenu } from '@lobehub/ui';
 import { Ellipsis, Pin } from 'lucide-react';
 import { memo } from 'react';
 

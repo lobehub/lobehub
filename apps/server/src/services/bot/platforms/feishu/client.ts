@@ -362,6 +362,8 @@ async function resolveFeishuSenderName(
 class FeishuWebhookClient implements PlatformClient {
   readonly id: string;
   readonly applicationId: string;
+  /** No reply threads here (a topic reply is not wired), but the bot still decides its acknowledgement. */
+  readonly decidesReplyOpening = true;
 
   private config: BotProviderConfig;
   private domain: 'lark' | 'feishu';
@@ -480,6 +482,8 @@ class FeishuWebhookClient implements PlatformClient {
 class FeishuWSClientImpl implements PlatformClient {
   readonly id: string;
   readonly applicationId: string;
+  /** No reply threads here (a topic reply is not wired), but the bot still decides its acknowledgement. */
+  readonly decidesReplyOpening = true;
 
   private config: BotProviderConfig;
   private context: BotPlatformRuntimeContext;

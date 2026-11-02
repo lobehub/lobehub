@@ -141,6 +141,7 @@ export const CreateAgentSchema = z.object({
   editorData: z.unknown().optional(),
   fewShots: z.unknown().optional(),
   marketIdentifier: z.string().nullish(),
+  metadata: z.record(z.string(), z.unknown()).nullish(),
   model: z.string().nullish(),
   name: z.string().nullish(),
   openingMessage: z.string().nullish(),

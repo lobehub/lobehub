@@ -26,7 +26,8 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
   const titleCrumb = {
     key: 'goal',
     title: (
-      <Text ellipsis color={'inherit'} style={{ maxWidth: 320 }} weight={500}>
+      // Viewport-capped so the crumb fits beside the back button on a phone.
+      <Text ellipsis color={'inherit'} style={{ maxWidth: 'min(320px, 45vw)' }} weight={500}>
         {title}
       </Text>
     ),
@@ -43,7 +44,7 @@ const GoalWorkspaceBreadcrumb = memo<GoalWorkspaceBreadcrumbProps>(({ title }) =
                 key: 'goals',
                 title: (
                   <WorkspaceLink to={'/goals'}>
-                    <Text color={'inherit'} weight={500}>
+                    <Text color={'inherit'} style={{ whiteSpace: 'nowrap' }} weight={500}>
                       {t('goalList.title')}
                     </Text>
                   </WorkspaceLink>

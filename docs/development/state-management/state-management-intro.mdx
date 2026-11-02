@@ -155,7 +155,7 @@ src/store/session
 
 ## Implementation of SessionStore
 
-In LobeHub, the SessionStore is designed as the core module for managing session state and logic. It consists of multiple Slices, with each Slice managing a relevant portion of state and logic. Below is a simplified example of the SessionStore implementation:
+The legacy SessionStore retains selection/UI state and compatibility actions. Its slices group related behavior. The following simplified example shows how action classes are composed into the store:
 
 ### store.ts
 
@@ -195,32 +195,41 @@ export const useSessionStore = createWithEqualityFn<SessionStore>()(
 );
 ```
 
-In this `store.ts` file, we create a `useSessionStore` hook that uses the `zustand` library to create a global state manager. We merge the initialState with the actions from each Slice — via the shared `flattenActions` helper — to create a complete SessionStore. Note there is no `persist` middleware here: SessionStore data is fetched from the server via SWR, not persisted to local storage.
+In this `store.ts` file, we create a `useSessionStore` hook that uses the `zustand` library to create a global state manager. We merge the initialState with the actions from each Slice — via the shared `flattenActions` helper — to create a complete SessionStore. The legacy SessionStore manages session selection and UI state. Agent/sidebar lists are loaded and cached by [HomeStore’s replica-backed Agent list](https://github.com/lobehub/lobehub/blob/canary/src/store/home/slices/agentList/action.ts).
 
 ### slices/session/action.ts
 
-```ts
-import { type SWRResponse } from 'swr';
+The action slice below shows the existing `switchSession` action. It checks the active Agent ID and updates `activeAgentId` through a labeled state write.
 
+```ts
 import { type SessionStore } from '@/store/session';
 import { type StoreSetter } from '@/store/types';
+import { setNamespace } from '@/utils/storeDebug';
 
-export interface SessionAction {
-  /**
-   * A custom hook that uses SWR to fetch sessions data.
-   */
-  useFetchSessions: () => SWRResponse<any>;
-}
+const n = setNamespace('session');
 
 type Setter = StoreSetter<SessionStore>;
-export const createSessionSlice = (set: Setter, get: () => SessionStore): SessionAction => ({
-  useFetchSessions: () => {
-    // ...logic for initializing sessions
-  },
-  // ...implementation of other actions
-});
+export const createSessionSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
+  new SessionActionImpl(set, get, _api);
+
+export class SessionActionImpl {
+  readonly #get: () => SessionStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => SessionStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  switchSession = (sessionId: string): void => {
+    if (this.#get().activeAgentId === sessionId) return;
+
+    this.#set({ activeAgentId: sessionId }, false, n(`activeSession/${sessionId}`));
+  };
+}
+
+export type SessionAction = Pick<SessionActionImpl, keyof SessionActionImpl>;
 ```
 
-In the `action.ts` file, we define a `SessionAction` interface to describe session-related actions and implement a `useFetchSessions` function to create these actions. Then, we merge these actions with the initial state to form the session-related Slice.
-
-Through this layered and modular approach, we can ensure that LobeHub's SessionStore is clear, maintainable, and easy to extend and test.
+`createSessionSlice` returns an action-class instance. `flattenActions` exposes its public methods on the legacy store, and `SessionAction` is inferred from those methods. List loading and persistence belong to the owning list resource; this selection action only changes UI state.

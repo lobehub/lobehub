@@ -20,13 +20,18 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
   type ModalInstance,
   Text,
+  Tooltip,
   useModalContext,
 } from '@lobehub/ui';
 import { t } from 'i18next';
@@ -68,7 +73,7 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
   { id: 'goals', labelKey: 'tab.goals', routeId: 'goals' },
   { id: 'dashboard', labelKey: 'tab.dashboard', routeId: 'dashboard' },
-  { id: 'pages', labelKey: 'tab.pages', routeId: 'page' },
+  { id: 'favorites', labelKey: 'favorite.section' },
   { id: 'recents', labelKey: 'recents' },
   { id: 'project', labelKey: 'project:sidebar.title' },
   { id: 'private', labelKey: 'navPanel.privateAgents' },

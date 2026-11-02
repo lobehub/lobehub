@@ -2,6 +2,7 @@ import type {
   AcceptanceCommentAnchorType,
   AcceptanceCommentAttachmentRef,
   AcceptanceCommentKind,
+  AcceptanceCommentMetadata,
   AcceptanceCommentSource,
   AcceptanceReviewAnnotation,
   DocumentCommentJson,
@@ -21,7 +22,8 @@ import { workspaces } from './workspace';
  * checklist, regions circled on evidence images, and reviewers' approvals.
  * Rows never enter the verify execution tables — a comment changes no check
  * result, no round, and no acceptance status. The decider still closes the
- * acceptance through `verify_runs.user_decision`.
+ * acceptance through `verify_runs.user_decision`; a granted access request only
+ * widens who may make that decision's reject.
  */
 /**
  * Short on purpose: this id is the addressable part of a comment's URL, and a
@@ -58,8 +60,10 @@ export const acceptanceComments = pgTable(
     parentCommentId: text('parent_comment_id').references((): AnyPgColumn => acceptanceComments.id),
     /**
      * `comment` (a remark), `approval` (a reviewer's "fine by me" for a round),
-     * `reaction` (one emoji on one comment), or `proposal` (the round's own
-     * note, which renders as part of the round rather than as a message).
+     * `reaction` (one emoji on one comment), `proposal` (the round's own
+     * note, which renders as part of the round rather than as a message), or
+     * `access_request` (asking the deciders for reject access; the answer is
+     * server-owned `metadata.accessRequest`, read by the reject path).
      */
     kind: text('kind').$type<AcceptanceCommentKind>().default('comment').notNull(),
 
@@ -107,11 +111,11 @@ export const acceptanceComments = pgTable(
      */
     source: jsonb('source').$type<AcceptanceCommentSource>(),
     /**
-     * Open bag for per-remark facts that do not warrant a column of their own
-     * yet, so a new kind of annotation does not need a migration. Server-written
-     * only; nothing reads it as a contract until a field earns a real column.
+     * Server-owned per-remark facts. Video comments store their time in
+     * evidenceAnchor.time, e.g. { evidenceAnchor: { time: { start: 2.5 } } }.
+     * Other producers' keys remain separate from this typed anchor.
      */
-    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+    metadata: jsonb('metadata').$type<AcceptanceCommentMetadata>(),
     /** Client-generated idempotency key for retried creates. */
     clientId: text('client_id').notNull(),
 

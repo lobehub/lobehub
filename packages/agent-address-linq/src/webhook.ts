@@ -132,6 +132,12 @@ export const verifyLinqWebhookSignature = (
  */
 export interface LinqWebhookDedupeStore {
   claim: (id: string, ttlSeconds: number) => Promise<boolean>;
+  /**
+   * Give a claim back so the provider's retry is processed instead of being
+   * acknowledged as a duplicate. Used when a claimed delivery failed after the
+   * claim (a transient fetch error), so the event is not dropped for good.
+   */
+  release?: (id: string) => Promise<void>;
 }
 
 export interface InMemoryLinqWebhookDedupeStoreOptions {
@@ -174,6 +180,9 @@ export const createInMemoryLinqWebhookDedupeStore = (
 
       claims.set(id, current + ttlSeconds * 1000);
       return true;
+    },
+    async release(id: string): Promise<void> {
+      claims.delete(id);
     },
   };
 };

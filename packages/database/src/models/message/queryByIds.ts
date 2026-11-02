@@ -1,4 +1,3 @@
-import { parse } from '@lobechat/conversation-flow';
 import type {
   ChatAudioItem,
   ChatFileItem,
@@ -7,7 +6,6 @@ import type {
   ThreadStatus,
   UIChatMessage,
 } from '@lobechat/types';
-import { MessageGroupType } from '@lobechat/types';
 import { logTimingSink as logTiming, runTimedSinkStage as runTimedStage } from '@lobechat/utils';
 import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -15,6 +13,7 @@ import pMap from 'p-map';
 import {
   documents,
   files,
+  type MessageGroupItem,
   messageGroups,
   messagePlugins,
   messageQueries,
@@ -37,6 +36,12 @@ import {
   materializeChatAudioItem,
   toFileDocumentsMap,
 } from './attachments';
+import {
+  buildMessageGroupNode,
+  compressedStateMarkerColumns,
+  loadCompressedStateRows,
+  planMessageGroupHydration,
+} from './groupNodes';
 import type { MessageRelationQueries } from './relations';
 import type { MessageScopeArgs } from './scope';
 import { MessageScope } from './scope';
@@ -424,7 +429,7 @@ export class MessageByIdsQueries extends MessageScope {
       whereConditions.push(sql`${messageGroups.createdAt} < ${options.window.before}::timestamptz`);
     }
 
-    const groups = await runTimedStage(
+    const groups: MessageGroupItem[] = await runTimedStage(
       timing,
       'db.message.messageGroups.groups.select',
       () =>
@@ -451,8 +456,11 @@ export class MessageByIdsQueries extends MessageScope {
             favorite: messages.favorite,
             id: messages.id,
             messageGroupId: messages.messageGroupId,
+            ...compressedStateMarkerColumns,
+            role: messages.role,
           })
           .from(messages)
+          .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
           .where(
             and(
               // The parent topic has already been classified by the caller
@@ -471,89 +479,25 @@ export class MessageByIdsQueries extends MessageScope {
       rowCount: groupMessageRecords.length,
     });
 
-    // 3. Query full message data using queryByIds (reuses all transformation logic)
-    const allMessageIds = groupMessageRecords.map((m) => m.id as string);
-    const fullMessages = await runTimedStage(
-      timing,
-      'db.message.messageGroups.queryByIds',
-      () => this.queryByIds(allMessageIds, { allowShareVisitor: includeVisitor, postProcessUrl }),
-      { messageCount: allMessageIds.length },
-    );
+    // A compression group only hydrates its newest members (see
+    // `MAX_COMPRESSED_GROUP_MEMBERS`) plus the pinned ones.
+    const plan = planMessageGroupHydration(groups, groupMessageRecords);
 
-    // Create a map for quick lookup
-    const messageMap = new Map(fullMessages.map((m) => [m.id, m]));
-    const favoriteMap = new Map(groupMessageRecords.map((m) => [m.id, m.favorite]));
+    // 3. Query full message data using queryByIds (reuses all transformation logic),
+    // and only the plugin state of omitted members that carry runtime state
+    const [fullMessages, stateRows] = await Promise.all([
+      runTimedStage(
+        timing,
+        'db.message.messageGroups.queryByIds',
+        () =>
+          this.queryByIds(plan.idsToHydrate, { allowShareVisitor: includeVisitor, postProcessUrl }),
+        { messageCount: plan.idsToHydrate.length, totalMemberCount: groupMessageRecords.length },
+      ),
+      loadCompressedStateRows(this.db, plan.stateIds),
+    ]);
 
     // 4. Build MessageGroup nodes
-    return groups.map((group) => {
-      // Get messages for this group
-      const groupMsgIds = groupMessageRecords
-        .filter((m) => m.messageGroupId === group.id)
-        .map((m) => m.id as string);
-
-      const groupMsgs = groupMsgIds
-        .map((id) => messageMap.get(id))
-        .filter(Boolean) as UIChatMessage[];
-
-      if (group.type === MessageGroupType.Compression) {
-        // compressedGroup: extract pinnedMessages (favorite=true)
-        const pinnedMessages = groupMsgIds
-          .filter((id) => favoriteMap.get(id) === true)
-          .map((id) => {
-            const m = messageMap.get(id);
-            return m
-              ? {
-                  content: m.content,
-                  createdAt: m.createdAt,
-                  id: m.id,
-                  model: m.model,
-                  provider: m.provider,
-                  role: m.role,
-                }
-              : null;
-          })
-          .filter(Boolean);
-
-        // compressedMessages: parse messages through conversation-flow for proper grouping
-        // This transforms raw messages into displayMessages format (e.g., assistantGroup)
-        const { flatList } = parse(groupMsgs);
-        const compressedMessages = flatList;
-
-        // Get the last message ID for parent-child linking in conversation-flow
-        const lastMessageId = groupMsgIds.at(-1);
-
-        return {
-          compressedMessages,
-          content: group.content,
-          createdAt: group.createdAt,
-          id: group.id,
-          lastMessageId,
-          metadata: group.metadata,
-          pinnedMessages,
-          role: 'compressedGroup',
-          topicId: group.topicId,
-          updatedAt: group.updatedAt,
-        } as unknown as UIChatMessage;
-      } else {
-        // compareGroup (parallel): include children with basic info
-        const children = groupMsgs.map((m) => ({
-          content: m.content,
-          createdAt: m.createdAt,
-          id: m.id,
-          model: m.model,
-          provider: m.provider,
-          role: m.role,
-        }));
-
-        return {
-          children,
-          createdAt: group.createdAt,
-          id: group.id,
-          role: 'compareGroup',
-          topicId: group.topicId,
-          updatedAt: group.updatedAt,
-        } as unknown as UIChatMessage;
-      }
-    });
+    const messageMap = new Map(fullMessages.map((m) => [m.id, m]));
+    return groups.map((group) => buildMessageGroupNode(group, plan, messageMap, stateRows));
   };
 }

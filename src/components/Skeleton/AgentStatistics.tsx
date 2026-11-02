@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, Flexbox, Grid, Skeleton } from '@lobehub/ui';
+import { Block, Flexbox, Grid, Skeleton } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
@@ -8,15 +10,21 @@ import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 import AgentProfileNavSkeleton from './AgentProfileNav';
 import SkeletonBar from './Bar';
 
-const styles = createStaticStyles(({ css }) => ({
-  tableHead: css`
-    border-radius: ${cssVar.borderRadius} ${cssVar.borderRadius} 0 0;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  tableRow: css`
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-  `,
-}));
+const styles = stylex.create({
+  tableHead: {
+    borderTopLeftRadius: cssVar.borderRadius,
+    borderTopRightRadius: cssVar.borderRadius,
+    borderBottomRightRadius: '0',
+    borderBottomLeftRadius: '0',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  tableRow: {
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+});
 
 /** Label + small Segmented pair of the controls row (`维度 [按天|按周]`). */
 const LabelledSegmentedSkeleton = ({
@@ -70,7 +78,7 @@ const ModelBreakdownRowsSkeleton = () => (
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.tableRow}
+        className={stylex.props(styles.tableRow).className}
         gap={16}
         key={index}
         paddingBlock={12}
@@ -103,7 +111,7 @@ export const AgentModelBreakdownTableSkeleton = () => (
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.tableHead}
+      className={stylex.props(styles.tableHead).className}
       gap={16}
       height={44}
       paddingInline={16}

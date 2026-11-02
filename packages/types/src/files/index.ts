@@ -23,6 +23,7 @@ export enum FileSource {
   Acceptance = 'acceptance',
   /** Original upload owned by an agent's document tree rather than the resource library. */
   AgentDocument = 'agent-document',
+  Canvas = 'canvas',
   ImageGeneration = 'image_generation',
   /** Audio recording owned by a meeting (`meetings.audio_file_id`), not the resource library. */
   Meeting = 'meeting',
@@ -45,6 +46,7 @@ export enum FileSource {
 export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
   FileSource.Acceptance,
   FileSource.AgentDocument,
+  FileSource.Canvas,
   FileSource.Meeting,
 ];
 

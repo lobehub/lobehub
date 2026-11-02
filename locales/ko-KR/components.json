@@ -148,6 +148,8 @@
   "ModelSelect.featureTag.video": "이 모델은 비디오 인식을 지원합니다.",
   "ModelSelect.featureTag.vision": "이 모델은 시각 인식을 지원합니다.",
   "ModelSelect.removed": "이 모델은 목록에 없습니다. 선택 해제 시 자동으로 제거됩니다.",
+  "ModelSelect.routing": "라우팅",
+  "ModelSelect.routingTooltip": "라우팅 그룹: 여러 제공자가 이 모델을 제공하며, 각 요청은 응답하는 제공자에게 전달됩니다.",
   "ModelSelect.staleModel.current": "현재 선택",
   "ModelSelect.staleModel.notEnabled.action": "이 모델 활성화",
   "ModelSelect.staleModel.notEnabled.actionFailed": "모델을 활성화하지 못했습니다. 다시 시도해 주세요.",
