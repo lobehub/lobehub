@@ -612,7 +612,7 @@ export class ConversationControlActionImpl {
           approval.rollbackLocalDecision();
           return true;
         }
-        await approval.prepareLegacy?.();
+        await this.#interventions.keepDecisionsAcross(toolMessageIds, approval.prepareLegacy);
         if (!gateway) return false;
       }
 

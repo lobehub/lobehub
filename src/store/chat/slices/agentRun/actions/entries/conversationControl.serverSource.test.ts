@@ -211,6 +211,41 @@ describe('server-origin intervention with client-configured agent after reload',
     );
   });
 
+  it('keeps the card approved when the Gateway legacy edit write reloads the pending row', async () => {
+    const store = seed();
+    vi.mocked(store.isGatewayModeEnabled).mockReturnValue(true);
+    sourceMutation().mockResolvedValue({ success: false } as never);
+    const key = messageMapKey(context);
+    // The edit write replaces the conversation with the server's rows, where the
+    // call is still `pending`: the server claims it only on the resume below.
+    const prepare = vi.fn(async () => {
+      const messages = useChatStore.getState().dbMessagesMap[key].map((message) => ({
+        ...message,
+        plugin: { ...message.plugin!, arguments: '{"path":"edited"}' },
+        pluginIntervention: { ...message.pluginIntervention!, status: 'pending' as const },
+      }));
+      useChatStore.setState({ dbMessagesMap: { [key]: messages } });
+    });
+    let statusAtResume: string | undefined;
+    vi.mocked(store.executeGatewayAgent).mockImplementation(async () => {
+      statusAtResume = useChatStore
+        .getState()
+        .dbMessagesMap[key].find((message) => message.id === toolMessageId)
+        ?.pluginIntervention?.status;
+      return {} as never;
+    });
+
+    await store.approveToolCalling(toolMessageId, '', context, {
+      editedArguments: { path: 'edited' },
+      onLegacyEditFallback: prepare,
+    });
+
+    expect(prepare).toHaveBeenCalledOnce();
+    // A card back in `pending` remounts its actions with a fresh Submit, and a
+    // second approval then fails the claim and ends the resumed run.
+    expect(statusAtResume).toBe('approved');
+  });
+
   it.each(['skip', 'cancel'] as const)(
     'preserves the %s legacy side effect on client fallback',
     async (action) => {
