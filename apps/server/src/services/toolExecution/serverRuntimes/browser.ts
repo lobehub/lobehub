@@ -1,3 +1,4 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import type { DeviceClient } from '@lobechat/types';
@@ -126,7 +127,7 @@ const buildCliOnlyDeviceBrowserResult = (
     publicPageHint +
     `To enable it, ask the user to install agent-browser on that machine ` +
     `(\`npm i -g agent-browser && agent-browser install\`) and restart \`lh connect\`; ` +
-    `if a signed-in browser session is required, ask them to open the LobeHub desktop app ` +
+    `if a signed-in browser session is required, ask them to open the ${BRANDING_NAME} desktop app ` +
     `on a machine and activate that device instead, then retry.`;
   return {
     content: message,
