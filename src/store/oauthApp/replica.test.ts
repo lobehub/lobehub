@@ -14,6 +14,7 @@ import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
+import { broadcastCacheScope, resetCacheScopeBroadcast } from '@/libs/replica/cacheScopeEvents';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { oauthAppService } from '@/services/oauthApp';
 import { type OAuthAppItem } from '@/types/oauthApp';
@@ -57,6 +58,7 @@ describe('oauthApp replicas', () => {
   let scope = '';
 
   beforeEach(() => {
+    resetCacheScopeBroadcast();
     scope = `oauth-user-${randomUUID()}:ws-1`;
     scopes.add(scope);
     vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
@@ -74,6 +76,7 @@ describe('oauthApp replicas', () => {
       ]),
     );
     scopes.clear();
+    resetCacheScopeBroadcast();
     vi.restoreAllMocks();
   });
 
@@ -160,5 +163,20 @@ describe('oauthApp replicas', () => {
 
     await waitFor(() => expect(oauthAppSelectors.isAppNotFound('lca_app_1')(state())).toBe(true));
     expect(oauthAppSelectors.appById('lca_app_1')(state())).toBeUndefined();
+  });
+
+  it('forgets a settled missing app when the cache scope changes', async () => {
+    vi.spyOn(oauthAppService, 'getById').mockResolvedValue(undefined);
+
+    renderHook(() => state().useFetchAppDetail('lca_app_1'), { wrapper });
+    await waitFor(() => expect(oauthAppSelectors.isAppNotFound('lca_app_1')(state())).toBe(true));
+
+    const next = `oauth-user-${randomUUID()}:ws-2`;
+    scopes.add(next);
+    act(() => broadcastCacheScope(next));
+
+    // The owning workspace must not inherit the previous scope's "gone" verdict
+    // and bounce the page back before its own answer lands.
+    expect(oauthAppSelectors.isAppNotFound('lca_app_1')(state())).toBe(false);
   });
 });

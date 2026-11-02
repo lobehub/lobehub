@@ -8,6 +8,7 @@ import {
   type ReplicaSyncResult,
   singleEntity,
 } from '@/libs/replica';
+import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { oauthAppService } from '@/services/oauthApp';
 import { type StoreSetter } from '@/store/types';
 import {
@@ -71,6 +72,13 @@ export class OAuthAppActionImpl {
       view: recordLens<OAuthAppStore, OAuthAppItem>('appDetailMap'),
     });
     this.#apps = linkReplicaEntity<OAuthAppItem>([this.#list, this.#detail]);
+
+    // A settled "no such app" belongs to the workspace that observed it. The two
+    // replica views reset themselves on a scope switch (`useSync` re-runs), but
+    // this map is not a replica: left alone, opening the same app in the workspace
+    // that owns it would read the previous scope's flag and send the page back
+    // before the new scope's answer lands.
+    subscribeCacheScope(this.#forgetMissingOnScopeChange);
   }
 
   createApp = async (params: CreateOAuthAppParams) => {
@@ -139,6 +147,12 @@ export class OAuthAppActionImpl {
       false,
       n('setNotFound'),
     );
+  };
+
+  /** The store is an app-lifetime singleton, so the subscription is never torn down. */
+  #forgetMissingOnScopeChange = (): void => {
+    if (Object.keys(this.#get().appNotFoundMap).length === 0) return;
+    this.#set({ appNotFoundMap: {} }, false, n('scopeChanged'));
   };
 }
 
