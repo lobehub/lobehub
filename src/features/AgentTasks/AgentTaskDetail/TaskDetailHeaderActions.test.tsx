@@ -283,6 +283,10 @@ describe('TaskDetailHeaderActions', () => {
   it('archives the task from the header button', async () => {
     render(<TaskDetailHeaderActions />);
 
+    expect(
+      screen.getByRole('button', { name: 'taskList.contextMenu.archive' }),
+    ).not.toHaveAttribute('aria-disabled');
+
     fireEvent.click(screen.getByRole('button', { name: 'taskList.contextMenu.archive' }));
 
     await waitFor(() => expect(mocks.archiveTask).toHaveBeenCalledWith('T-1', true));
@@ -304,7 +308,8 @@ describe('TaskDetailHeaderActions', () => {
     render(<TaskDetailHeaderActions />);
 
     const button = screen.getByRole('button', { name: 'taskList.contextMenu.archive' });
-    // Not natively disabled, so keyboard users can focus it and read the reason.
+    // aria-disabled but not natively disabled, so keyboard users can focus it and read the reason.
+    expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).not.toBeDisabled();
     expect(button).toHaveAttribute('aria-description', 'taskList.contextMenu.archiveBlocked');
     fireEvent.click(button);

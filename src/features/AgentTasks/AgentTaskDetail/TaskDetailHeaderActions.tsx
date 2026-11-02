@@ -93,6 +93,17 @@ const TaskDetailHeaderActions = memo(() => {
     );
   }, [archiveTask, canArchive, isArchived, t, taskId]);
 
+  // ActionIcon overwrites an `aria-disabled` prop with its own `disabled` state,
+  // so the blocked state is set on the element directly.
+  const archiveButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      if (!node) return;
+      if (canArchive) node.removeAttribute('aria-disabled');
+      else node.setAttribute('aria-disabled', 'true');
+    },
+    [canArchive],
+  );
+
   const triggerPublish = useCallback(() => {
     if (!canEditTask) return;
     if (!taskId) return;
@@ -273,13 +284,14 @@ const TaskDetailHeaderActions = memo(() => {
   return (
     <>
       {favoriteTarget && <FavoriteButton {...favoriteTarget} />}
-      {/* A blocked archive stays focusable instead of natively disabled, so hover
+      {/* A blocked archive is aria-disabled but not natively disabled, so hover
           and keyboard users can still read why; toggleArchive no-ops. */}
       <ActionIcon
         aria-description={archiveDeniedReason}
         aria-label={archiveLabel}
         color={canArchive ? undefined : cssVar.colorTextDisabled}
         icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon}
+        ref={archiveButtonRef}
         size={DESKTOP_HEADER_ICON_SMALL_SIZE}
         style={canArchive ? undefined : { cursor: 'not-allowed' }}
         title={archiveDeniedReason ?? archiveLabel}
