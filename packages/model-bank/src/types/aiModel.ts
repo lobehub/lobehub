@@ -7,12 +7,19 @@ import {
   type VideoModelParamsSchema,
 } from '../standard-parameters';
 import {
+  LEGACY_EXTEND_PARAMS,
+  LEGACY_REASONING_EFFORT_KEYS,
+  migrateModelSettings,
+  type MigrateModelSettingsContext,
+} from './legacyReasoningEffort';
+import {
   type AiModelReasoningEffortSettings,
   AiModelReasoningEffortSettingsSchema,
   type ReasoningEffortLevel,
   ReasoningEffortLevelSchema,
 } from './reasoningEffort';
 
+export * from './legacyReasoningEffort';
 export * from './reasoningEffort';
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
@@ -375,6 +382,18 @@ export const AiModelReasoningConfigSchema = z.object({
 });
 
 /**
+ * `AiModelReasoningConfigSchema` for client writes. Released clients still send
+ * the per-model legacy keys (`gpt5_6ReasoningEffort`, `thinkingLevel`, ...),
+ * which the plain object schema would strip, saving an empty pick. This schema
+ * keeps them so the write path can move them to `reasoningEffort` with the
+ * model in hand (`translateLegacyReasoningConfig`). The declared type stays the
+ * current shape, which is all current callers may send.
+ */
+export const AiModelReasoningConfigWriteSchema = AiModelReasoningConfigSchema.extend(
+  Object.fromEntries(LEGACY_REASONING_EFFORT_KEYS.map((key) => [key, z.string().optional()])),
+) as unknown as z.ZodType<AiModelReasoningConfig, AiModelReasoningConfig>;
+
+/**
  * The AiModelReasoningConfig keys, i.e. the chat config fields that are user-level
  * per-model settings rather than agent settings.
  */
@@ -479,6 +498,32 @@ export const AiModelSettingsSchema = z.object({
   searchImpl: ModelSearchImplementTypeSchema.optional(),
   searchProvider: z.string().optional(),
 });
+
+/**
+ * `AiModelSettingsSchema` for client writes. Released clients still offer the
+ * legacy effort extend params (`gpt5ReasoningEffort`, ...) in the custom-model
+ * form, which `ExtendParamsTypeSchema` rejects; they are accepted here so the
+ * router can move them to `settings.reasoningEffort` (see `migrateModelSettings`).
+ */
+export const AiModelSettingsWriteSchema = AiModelSettingsSchema.extend({
+  extendParams: z
+    .array(z.union([ExtendParamsTypeSchema, z.enum(LEGACY_EXTEND_PARAMS as [string, ...string[]])]))
+    .optional(),
+});
+
+export type AiModelSettingsWrite = z.infer<typeof AiModelSettingsWriteSchema>;
+
+/**
+ * Moves the legacy effort extend params of a client-written `settings` to
+ * `settings.reasoningEffort`; `hasProviderCard` as in `migrateModelSettings`.
+ */
+export const translateLegacyModelSettings = (
+  settings: AiModelSettingsWrite | undefined,
+  context: MigrateModelSettingsContext,
+): AiModelSettings | undefined => {
+  if (!settings) return;
+  return AiModelSettingsSchema.parse(migrateModelSettings(settings, context) ?? settings);
+};
 
 export interface AIChatModelCard extends AIBaseModelCard {
   abilities?: ModelAbilities;

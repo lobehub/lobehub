@@ -1,5 +1,5 @@
 import type { AiModelReasoningConfig } from 'model-bank';
-import { AiModelReasoningConfigSchema } from 'model-bank/aiModel';
+import { AiModelReasoningConfigWriteSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
 import type { HeterogeneousRuntimeConfigField } from '../agent/heterogeneousRuntimeConfig';
@@ -664,7 +664,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
     .optional(),
   provider: z.string().optional(),
   lastSettledOperationId: z.string().optional(),
-  reasoningConfig: AiModelReasoningConfigSchema.optional(),
+  reasoningConfig: AiModelReasoningConfigWriteSchema.optional(),
   repos: z.array(z.string()).optional(),
   // Runtime state and hooks are server-owned; clients may only clear a stale marker.
   runningOperation: z.null().optional(),

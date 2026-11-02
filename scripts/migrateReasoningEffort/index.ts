@@ -24,8 +24,7 @@
  *   bun scripts/migrateReasoningEffort/index.ts
  *   bun scripts/migrateReasoningEffort/index.ts --apply --batch-size=500
  */
-import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
-import { ModelProvider } from 'model-bank/modelProvider';
+import { hasProviderModelCard } from 'model-bank';
 import pg from 'pg';
 
 import {
@@ -55,8 +54,6 @@ const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error('DATABASE_URL is required');
 
 const pool = new Pool({ connectionString });
-
-const providerCards = new Set(LOBE_DEFAULT_MODEL_LIST.map((m) => `${m.providerId}/${m.id}`));
 
 interface Stats {
   applied: number;
@@ -173,10 +170,7 @@ const aiModelsJob: TableJob<AiModelRow, AiModelChange> = {
   toChange: (row) => {
     const result = migrateAiModelRow({
       chatConfig: row.config?.chatConfig,
-      // LobeHub's model list is managed server-side; its cards always apply.
-      hasProviderCard:
-        row.provider_id === ModelProvider.LobeHub ||
-        providerCards.has(`${row.provider_id}/${row.id}`),
+      hasProviderCard: hasProviderModelCard(row.provider_id, row.id),
       model: row.id,
       provider: row.provider_id,
       settings: row.settings,

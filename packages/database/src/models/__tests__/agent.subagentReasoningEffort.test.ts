@@ -46,6 +46,30 @@ describe('AgentModel.updateConfig sub-agent reasoning effort', () => {
     expect(await readChatConfig(agent.id)).toEqual({ reasoningEffort: 'xhigh', urlContext: true });
   });
 
+  it("translates a released client's legacy pick instead of ignoring it", async () => {
+    const agent = await createAgent({ reasoningEffort: 'low', urlContext: true });
+
+    await agentModel.updateConfig(agent.id, {
+      agencyConfig: { subagent: { chatConfig: { gpt5_2ReasoningEffort: 'xhigh' } as any } },
+    });
+
+    expect(await readChatConfig(agent.id)).toEqual({ reasoningEffort: 'xhigh', urlContext: true });
+  });
+
+  it("translates a released client's legacy pick when creating an agent", async () => {
+    const agent = await agentModel.create({
+      agencyConfig: {
+        subagent: {
+          chatConfig: { gpt5_2ReasoningEffort: 'high', thinkingLevel: 'low' } as any,
+          model: 'gpt-5.2',
+          provider: 'openai',
+        },
+      },
+    });
+
+    expect(await readChatConfig(agent.id)).toEqual({ reasoningEffort: 'high' });
+  });
+
   it('keeps legacy effort keys for unrelated patches', async () => {
     const agent = await createAgent({ gpt5_2ReasoningEffort: 'low' });
 

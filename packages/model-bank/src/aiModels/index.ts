@@ -206,6 +206,19 @@ const staticModelMap: ModelsMap = {
 
 export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList(staticModelMap);
 
+let providerCardKeys: Set<string> | undefined;
+
+/**
+ * Whether the provider's card governs a model: a bundled card exists for
+ * `providerId/id`, or the provider is LobeHub, whose model list is managed
+ * server-side so its cards always apply.
+ */
+export const hasProviderModelCard = (providerId: string, id: string) => {
+  if (providerId === 'lobehub') return true;
+  providerCardKeys ??= new Set(LOBE_DEFAULT_MODEL_LIST.map((m) => `${m.providerId}/${m.id}`));
+  return providerCardKeys.has(`${providerId}/${id}`);
+};
+
 export const loadModels = async (
   options?: LoadModelsOptions,
 ): Promise<LobeDefaultAiModelListItem[]> => {

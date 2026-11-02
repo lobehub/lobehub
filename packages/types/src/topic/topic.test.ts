@@ -20,6 +20,11 @@ describe.each([chatTopicCreateMetadataSchema, chatTopicMetadataUpdateSchema])(
         expect(schema.parse({ reasoningConfig })).toEqual({ reasoningConfig });
       }
     });
+    it("keeps a released client's legacy effort keys for the write path", () => {
+      expect(schema.parse({ reasoningConfig: { thinkingLevel: 'high' } })).toEqual({
+        reasoningConfig: { thinkingLevel: 'high' },
+      });
+    });
   },
 );
 

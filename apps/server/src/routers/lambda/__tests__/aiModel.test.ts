@@ -361,4 +361,82 @@ describe('aiModelRouter', () => {
 
     expect(mockUpdate).not.toHaveBeenCalled();
   });
+
+  describe('released clients sending legacy effort keys', () => {
+    it('keeps a legacy model-instance pick', async () => {
+      const mockUpdate = vi.fn().mockResolvedValue([]);
+      vi.mocked(AiModelModel).mockImplementation(function () {
+        return { updateModelReasoningConfig: mockUpdate } as any;
+      });
+
+      const caller = aiModelRouter.createCaller(mockCtx);
+      await caller.updateAiModelReasoningConfig({
+        id: 'gpt-5.6-sol',
+        providerId: 'openai',
+        value: { gpt5_6ReasoningEffort: 'max' } as any,
+      });
+
+      expect(mockUpdate).toHaveBeenCalledWith('gpt-5.6-sol', 'openai', { reasoningEffort: 'max' });
+    });
+
+    it('declares the legacy levels on a custom model', async () => {
+      const mockCreate = vi.fn().mockResolvedValue({ id: 'my-model' });
+      vi.mocked(AiModelModel).mockImplementation(function () {
+        return {
+          create: mockCreate,
+          findByIdAndProvider: vi.fn().mockResolvedValue(null),
+        } as any;
+      });
+
+      const caller = aiModelRouter.createCaller(mockCtx);
+      await caller.createAiModel({
+        id: 'my-model',
+        providerId: 'my-provider',
+        settings: { extendParams: ['deepseekV4ReasoningEffort'] } as any,
+      });
+
+      expect(mockCreate).toHaveBeenCalledWith({
+        id: 'my-model',
+        providerId: 'my-provider',
+        settings: {
+          reasoningEffort: { controlsThinking: true, levels: ['none', 'high', 'max'] },
+        },
+      });
+    });
+
+    it("only drops the legacy key of a model the provider's card governs", async () => {
+      const mockUpdate = vi.fn().mockResolvedValue([]);
+      vi.mocked(AiModelModel).mockImplementation(function () {
+        return { update: mockUpdate } as any;
+      });
+
+      const caller = aiModelRouter.createCaller(mockCtx);
+      await caller.updateAiModel({
+        id: 'some-model',
+        providerId: 'lobehub',
+        value: { settings: { extendParams: ['gpt5ReasoningEffort', 'textVerbosity'] } as any },
+      });
+
+      expect(mockUpdate).toHaveBeenCalledWith('some-model', 'lobehub', {
+        settings: { extendParams: ['textVerbosity'] },
+      });
+    });
+
+    it('declares the legacy levels on synced remote models', async () => {
+      const mockBatchUpdate = vi.fn().mockResolvedValue([]);
+      vi.mocked(AiModelModel).mockImplementation(function () {
+        return { batchUpdateAiModels: mockBatchUpdate } as any;
+      });
+
+      const caller = aiModelRouter.createCaller(mockCtx);
+      await caller.batchUpdateAiModels({
+        id: 'my-provider',
+        models: [{ id: 'remote-model', settings: { extendParams: ['thinkingLevel2'] } }],
+      });
+
+      expect(mockBatchUpdate).toHaveBeenCalledWith('my-provider', [
+        { id: 'remote-model', settings: { reasoningEffort: { levels: ['low', 'high'] } } },
+      ]);
+    });
+  });
 });
