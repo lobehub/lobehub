@@ -44,7 +44,6 @@ const mockUserState = vi.hoisted(() => ({
 vi.mock('@/store/user', () => ({ useUserStore: { getState: vi.fn(() => mockUserState) } }));
 
 vi.mock('@/store/user/selectors', () => ({
-  labPreferSelectors: { enableGatewayMux: () => false },
   settingsSelectors: { defaultAgentConfig: () => ({ chatConfig: {} }) },
   toolInterventionSelectors: { allowList: () => [], approvalMode: () => 'manual' },
   userProfileSelectors: { userId: (state: typeof mockUserState) => state.profile.id },

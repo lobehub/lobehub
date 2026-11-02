@@ -1,6 +1,11 @@
+import { isLocalHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
-import type { ChatErrorBudgetContext, ChatMessageError } from '@lobechat/types';
+import type {
+  ChatErrorBudgetContext,
+  ChatErrorDispatchContext,
+  ChatMessageError,
+} from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
 import { formatPgError, pgErrorType, unwrapPgError } from './pgError';
@@ -59,4 +64,30 @@ export const readErrorBudgetContext = (
   };
 
   return Object.values(context).some((value) => value !== undefined) ? context : undefined;
+};
+
+/** Credential names are environment-variable shaped; anything else is dropped. */
+const CREDENTIAL_NAME = /^[A-Z][\dA-Z]*(?:_[\dA-Z]+)+$/;
+
+/**
+ * Read the fail-fast dispatch context a hetero dispatch attached to its error
+ * (`body.dispatch`) out of an already-normalized error, field by field, so
+ * only allowlisted values reach hook consumers and IM replies.
+ */
+export const readDispatchErrorContext = (
+  error: ChatMessageError | undefined,
+): ChatErrorDispatchContext | undefined => {
+  const dispatch = isRecord(error?.body) ? error.body.dispatch : undefined;
+  if (!isRecord(dispatch) || dispatch.stage !== 'sandbox_spawn') return undefined;
+  if (typeof dispatch.agentType !== 'string' || !isLocalHeterogeneousType(dispatch.agentType))
+    return undefined;
+
+  const { missingCredential } = dispatch;
+  return {
+    agentType: dispatch.agentType,
+    ...(dispatch.deviceAccessDenied === true && { deviceAccessDenied: true }),
+    ...(typeof missingCredential === 'string' &&
+      CREDENTIAL_NAME.test(missingCredential) && { missingCredential }),
+    stage: 'sandbox_spawn',
+  };
 };

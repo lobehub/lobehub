@@ -43,7 +43,7 @@ const styles = stylex.create({
   },
   resultDetail: {
     color: cssVar.colorTextTertiary,
-    fontFamily: 'monospace',
+    fontFamily: cssVar.fontFamilyCode,
     fontSize: 12,
     wordBreak: 'break-all',
   },
@@ -56,7 +56,7 @@ const styles = stylex.create({
     color: cssVar.colorTextSecondary,
     flexGrow: 1,
     flexShrink: 1,
-    fontFamily: 'monospace',
+    fontFamily: cssVar.fontFamilyCode,
     fontSize: 13,
     height: cssVar.controlHeight,
     lineHeight: cssVar.controlHeight,
@@ -271,6 +271,8 @@ FooterNotices.displayName = 'ChannelFooterNotices';
 
 interface FooterActionsProps {
   connecting: boolean;
+  /** Remove and Test connection act on the connection, so they live on the Connect tab only. */
+  connectionActions?: boolean;
   disabled?: boolean;
   form: FormInstance<ChannelFormValues>;
   hasConfig: boolean;
@@ -293,6 +295,7 @@ export const FooterActions = memo<FooterActionsProps>(
   ({
     platformDef,
     form,
+    connectionActions = true,
     hasConfig,
     hideSave,
     isDirty,
@@ -318,51 +321,56 @@ export const FooterActions = memo<FooterActionsProps>(
       ? `${origin}/api/agent/webhooks/${platformId}/${applicationId}`
       : `${origin}/api/agent/webhooks/${platformId}`;
 
+    const showConnectionActions = connectionActions && hasConfig;
+    const showActionBar = showConnectionActions || isDirty || !hideSave;
+
     return (
       <div {...stylex.props(styles.bottom)}>
-        <div {...stylex.props(styles.actionBar)}>
-          {hasConfig ? (
-            <Button
-              danger
-              disabled={disabled || saving || connecting}
-              icon={<Trash2 size={16} />}
-              onClick={onDelete}
-            >
-              {t('channel.removeChannel')}
-            </Button>
-          ) : (
-            <div />
-          )}
-          <Flexbox horizontal gap={12}>
-            {hasConfig && (
+        {showActionBar && (
+          <div {...stylex.props(styles.actionBar)}>
+            {showConnectionActions ? (
               <Button
-                disabled={writeDisabled || saving || connecting}
-                icon={<RefreshCw size={16} />}
-                loading={testing}
-                onClick={onTestConnection}
+                danger
+                disabled={disabled || saving || connecting}
+                icon={<Trash2 size={16} />}
+                onClick={onDelete}
               >
-                {t('channel.testConnection')}
+                {t('channel.removeChannel')}
               </Button>
+            ) : (
+              <div />
             )}
-            {isDirty && (
-              <Button disabled={writeDisabled || saving || connecting} onClick={onDiscard}>
-                {t('channel.discard')}
-              </Button>
-            )}
-            {!hideSave && (
-              <Button
-                disabled={writeDisabled}
-                loading={saving || connecting}
-                type="primary"
-                onClick={onSave}
-              >
-                {connecting
-                  ? t('channel.connecting')
-                  : t(hasConfig ? 'channel.save' : 'channel.saveAndConnect')}
-              </Button>
-            )}
-          </Flexbox>
-        </div>
+            <Flexbox horizontal gap={12}>
+              {showConnectionActions && (
+                <Button
+                  disabled={writeDisabled || saving || connecting}
+                  icon={<RefreshCw size={16} />}
+                  loading={testing}
+                  onClick={onTestConnection}
+                >
+                  {t('channel.testConnection')}
+                </Button>
+              )}
+              {isDirty && (
+                <Button disabled={writeDisabled || saving || connecting} onClick={onDiscard}>
+                  {t('channel.discard')}
+                </Button>
+              )}
+              {!hideSave && (
+                <Button
+                  disabled={writeDisabled}
+                  loading={saving || connecting}
+                  type="primary"
+                  onClick={onSave}
+                >
+                  {connecting
+                    ? t('channel.connecting')
+                    : t(hasConfig ? 'channel.save' : 'channel.saveAndConnect')}
+                </Button>
+              )}
+            </Flexbox>
+          </div>
+        )}
 
         {hasConfig && showWebhookUrl && (
           <Flexbox gap={8}>

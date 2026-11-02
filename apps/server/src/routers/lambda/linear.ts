@@ -170,6 +170,25 @@ export const linearRouter = router({
     }),
 
   /** The project's recent background syncs, newest first. */
+  /**
+   * Stop a background sync of this project. A round already running finishes
+   * the tasks it is writing; no further round starts, and tasks already
+   * written are kept.
+   */
+  cancelSync: linearTaskWriteProcedure
+    .input(projectInput.extend({ jobId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await requireProject(ctx, input.projectId);
+      await requireWritableScope(ctx);
+      const canceled = await LinearSyncJobModel.cancel(
+        ctx.serverDB,
+        ctx.scope,
+        input.projectId,
+        input.jobId,
+      );
+      return { canceled };
+    }),
+
   listSyncJobs: linearProcedure.input(projectInput).query(async ({ ctx, input }) => {
     await requireProject(ctx, input.projectId);
     const rows = await LinearSyncJobModel.listByProject(ctx.serverDB, ctx.scope, input.projectId);

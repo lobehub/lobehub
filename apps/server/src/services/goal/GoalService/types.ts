@@ -59,6 +59,7 @@ import type {
   updateTitle,
 } from './editing';
 import type {
+  archiveSignedOffTasks,
   close,
   deleteGoal,
   pause,
@@ -197,6 +198,7 @@ export interface GoalServiceContext {
   readonly agentModel: AgentModel;
   answerClarifications: Bound<typeof answerClarifications>;
   answerReleaseGate: GoalReleaseReview['answerReleaseGate'];
+  archiveSignedOffTasks: Bound<typeof archiveSignedOffTasks>;
   attachTaskDeliverables: Bound<typeof attachTaskDeliverables>;
   bindTopic: Bound<typeof bindTopic>;
   readonly briefs: GoalBriefService;

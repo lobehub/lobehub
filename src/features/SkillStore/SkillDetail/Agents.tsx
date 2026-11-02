@@ -19,6 +19,8 @@ import VirtuosoLoading from './VirtuosoLoading';
 
 const PAGE_SIZE = 12;
 
+const FooterSpacer = () => <div style={{ height: 16 }} />;
+
 const Agents = memo(() => {
   const { t } = useTranslation('plugin');
   const { identifier } = useDetailContext();
@@ -106,7 +108,7 @@ const Agents = memo(() => {
       overscan={24}
       style={{ height: '50vh', width: '100%' }}
       components={{
-        Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
+        Footer: isLoading ? VirtuosoLoading : FooterSpacer,
       }}
     />
   );

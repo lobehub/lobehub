@@ -114,14 +114,14 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
             onRefreshAll={() => void handleRefreshAll()}
           />
           <div className={gridStyles.grid} data-dashboard-grid={'view'}>
-            {ordered.map(({ item, widget }) => (
+            {ordered.map(({ item, view, widget }) => (
               <div
                 className={gridStyles.cell}
                 data-layout-cell={item.id}
                 key={item.id}
                 style={cellStyle(layouts[item.id])}
               >
-                <BoardWidgetCard widget={widget} onOpen={setOpenWidgetId} />
+                <BoardWidgetCard view={view} widget={widget} onOpen={setOpenWidgetId} />
               </div>
             ))}
           </div>
