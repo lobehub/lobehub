@@ -35,12 +35,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
         { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
       ],
     },
     releasedAt: '2026-09-02',
@@ -72,7 +66,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
-    // input 1.5 / output 7.5 / cacheRead 0.15 / cacheWrite lookup { '1h': 1 } (per million tokens).
+    // input 1.5 / output 7.5 / cacheRead 0.15 (per million tokens).
     // See https://cloud.google.com/vertex-ai/generative-ai/pricing
     pricing: {
       units: [
@@ -82,12 +76,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
         { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
       ],
     },
     releasedAt: '2026-08-13',
@@ -119,7 +107,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2026-03',
     maxOutput: 65_536,
     // Introductory pricing, in effect through 2026-12-31. From 2027-01-01 standard rates apply:
-    // input 1.5 / output 7.5 / cacheRead 0.15 / cacheWrite lookup { '1h': 1 } (per million tokens).
+    // input 1.5 / output 7.5 / cacheRead 0.15 (per million tokens).
     // See https://cloud.google.com/vertex-ai/generative-ai/pricing
     pricing: {
       units: [
@@ -129,12 +117,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
         { name: 'videoInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'audioInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3.75, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 0.5 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
       ],
     },
     releasedAt: '2026-07-21',
@@ -173,12 +155,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
         { name: 'videoInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'audioInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 9, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
       ],
     },
     releasedAt: '2026-05-19',
@@ -217,12 +193,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
         { name: 'videoInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'audioInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
       ],
     },
     releasedAt: '2026-07-21',
@@ -344,12 +314,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
           ],
           unit: 'millionTokens',
         },
-        {
-          lookup: { prices: { '1h': 4.5 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
       ],
     },
     releasedAt: '2026-02-19',
@@ -388,7 +352,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
         { name: 'videoInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'audioInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-05-07',
@@ -483,12 +446,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
           ],
           unit: 'millionTokens',
         },
-        {
-          lookup: { prices: { '1h': 4.5 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
       ],
     },
     releasedAt: '2025-11-18',
@@ -525,12 +482,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
         { name: 'videoInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'audioInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '1h': 1 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
       ],
     },
     releasedAt: '2025-12-17',

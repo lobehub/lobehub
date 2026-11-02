@@ -370,7 +370,7 @@ describe('computeChatPricing', () => {
       expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(519);
     });
 
-    it('charges Gemini 3.1 Flash-Lite cached audio and cache writes across Google cards', () => {
+    it('charges Gemini 3.1 Flash-Lite cached audio across Google cards without a cache-write fee', () => {
       const modelLists = [googleChatModels, vertexAiModels];
 
       for (const models of modelLists) {
@@ -399,7 +399,7 @@ describe('computeChatPricing', () => {
         const result = computeChatCost(pricing, usage);
         expect(result).toBeDefined();
         expect(result?.issues).toHaveLength(0);
-        expect(result?.totalCredits).toBe(1068);
+        expect(result?.totalCredits).toBe(768);
 
         const { breakdown } = result!;
         expect(breakdown.find((item) => item.unit.name === 'textInput_cacheRead')?.credits).toBe(
@@ -414,8 +414,8 @@ describe('computeChatPricing', () => {
         expect(breakdown.find((item) => item.unit.name === 'audioInput')?.credits).toBe(300);
         expect(breakdown.find((item) => item.unit.name === 'textOutput')?.credits).toBe(150);
 
-        const cacheWrite = breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
-        expect(cacheWrite?.credits).toBe(300);
+        // Implicit caching has no write charge; Gemini's storage fee applies to explicit caches only.
+        expect(breakdown.find((item) => item.unit.name === 'textInput_cacheWrite')).toBeUndefined();
       }
     });
 
