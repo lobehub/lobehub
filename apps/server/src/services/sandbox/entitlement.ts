@@ -7,7 +7,24 @@ import debug from 'debug';
 
 import { resolveSandboxStorageEntitlement } from '@/business/server/sandboxStorage';
 
+import { createFailureCooldown, warnSandboxDegraded } from './failureCooldown';
+
 const log = debug('lobe-server:sandbox:entitlement');
+
+const lookupFailures = createFailureCooldown();
+
+/**
+ * Why a principal has no claim. The first three are lasting answers, "this run
+ * never gets a drive"; the last two are "cannot tell right now", the only ones
+ * that say anything is wrong.
+ */
+export type SandboxStorageClaimDenial =
+  'lookupBackoff' | 'lookupFailed' | 'noStorageKey' | 'notEntitled' | 'shareVisitor';
+
+export interface SandboxStorageClaimResult {
+  claim: SandboxStorageClaim | null;
+  denial?: SandboxStorageClaimDenial;
+}
 
 export interface SandboxStorageClaimInput extends SandboxStorageScope {
   /**
@@ -41,37 +58,52 @@ export interface SandboxStorageClaimInput extends SandboxStorageScope {
  *
  * Never throws: a subscription lookup that fails must not take the sandbox
  * down with it. The run degrades to an ephemeral sandbox, which is
- * what every session does today.
+ * what every session does today, and the lookup is left alone for a moment
+ * rather than asked again by every tool call.
  */
-export const resolveSandboxStorageClaim = async ({
+export const resolveSandboxStorageClaimResult = async ({
   drive,
   isShareVisitorRun,
   userId,
   workspaceId,
-}: SandboxStorageClaimInput): Promise<SandboxStorageClaim | null> => {
-  if (isShareVisitorRun) return null;
+}: SandboxStorageClaimInput): Promise<SandboxStorageClaimResult> => {
+  if (isShareVisitorRun) return { claim: null, denial: 'shareVisitor' };
 
   // The drive picks the key and nothing else: a workspace's public drive and
   // every member's personal drive draw on the workspace plan's one pool, so
   // each is issued the whole pool as its soft quota and the execution plane
   // judges the workspace on their sum.
   const key = deriveSandboxStorageKey({ drive, userId, workspaceId });
-  if (!key) return null;
+  if (!key) return { claim: null, denial: 'noStorageKey' };
+
+  if (lookupFailures.isCoolingDown(key)) return { claim: null, denial: 'lookupBackoff' };
 
   try {
     const entitlement = await resolveSandboxStorageEntitlement({ userId, workspaceId });
     const quotaBytes = entitlement?.quotaBytes;
     if (typeof quotaBytes !== 'number' || !Number.isSafeInteger(quotaBytes) || quotaBytes <= 0) {
-      return null;
+      return { claim: null, denial: 'notEntitled' };
     }
 
     // Only when true. An entitlement that says nothing about overage means the
     // quota is a hard limit — the reading that cannot bill anyone by accident.
-    return entitlement?.overageAllowed
-      ? { key, overageAllowed: true, quotaBytes }
-      : { key, quotaBytes };
+    return {
+      claim: entitlement?.overageAllowed
+        ? { key, overageAllowed: true, quotaBytes }
+        : { key, quotaBytes },
+    };
   } catch (error) {
     log('Failed to resolve the sandbox workspace entitlement for %s: %O', key, error);
-    return null;
+    warnSandboxDegraded('entitlement', { drive, key, reason: 'lookupFailed' }, error);
+    lookupFailures.record(key);
+    return { claim: null, denial: 'lookupFailed' };
   }
 };
+
+/** {@link resolveSandboxStorageClaimResult} for a caller that only needs the claim. */
+export const resolveSandboxStorageClaim = async (
+  input: SandboxStorageClaimInput,
+): Promise<SandboxStorageClaim | null> => (await resolveSandboxStorageClaimResult(input)).claim;
+
+/** For tests: forget the lookups that failed. */
+export const clearSandboxClaimFailures = () => lookupFailures.clear();

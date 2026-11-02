@@ -521,6 +521,21 @@ export async function runStep(c: Context): Promise<Response> {
   } catch (error: any) {
     const executionTime = Date.now() - startTime;
     console.error('Error in execution: %O', error);
+    // The one line that says why this delivery got a 500. Debug output from the
+    // same request (a sandbox placement falling to ephemeral, say) sits next to
+    // it in the logs and is not the cause.
+    console.error(
+      JSON.stringify({
+        error: error?.message,
+        errorName: error?.name,
+        event: 'agent.run_step.failed',
+        executionTime,
+        externalRetryCount,
+        operationId: body?.operationId,
+        qstashMessageId: getQStashMessageId(c),
+        stepIndex: body?.stepIndex || 0,
+      }),
+    );
 
     return c.json(
       {
