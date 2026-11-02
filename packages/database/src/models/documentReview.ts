@@ -572,24 +572,48 @@ export class DocumentReviewModel {
   /**
    * Materialize one `unchecked` result per rule of the session's confirmed rule
    * set. Idempotent: existing results keep their status.
+   *
+   * The session row is locked for the whole read-then-insert, because switching
+   * the rule set (`updateSession`) both rewrites this row and deletes every
+   * existing result. Without the lock a switch that lands between the read and
+   * the insert leaves results of the **already replaced** set behind: they show
+   * up as orphans in the checklist and `runChecks` still judges them by their
+   * old rules. Taking the row lock here and in that update serializes the two.
    */
   initializeChecks = async (sessionId: string): Promise<DocumentReviewCheckResultItem[]> => {
     const workspaceId = this.requireWorkspaceId();
-    const session = await this.findSessionById(sessionId);
-    if (!session?.ruleSetId) throw new Error(DOCUMENT_REVIEW_NOT_FOUND);
-    const ruleSet = await this.findRuleSetById(session.ruleSetId);
-    if (!ruleSet) throw new Error(DOCUMENT_REVIEW_NOT_FOUND);
-    if (ruleSet.status !== 'confirmed') throw new Error(DOCUMENT_REVIEW_RULE_SET_NOT_CONFIRMED);
+    return this.db.transaction(async (trx) => {
+      const tx = trx as LobeChatDatabase;
+      const [session] = await tx
+        .select({
+          id: documentReviewSessions.id,
+          ruleSetId: documentReviewSessions.ruleSetId,
+        })
+        .from(documentReviewSessions)
+        .where(
+          and(
+            eq(documentReviewSessions.id, sessionId),
+            eq(documentReviewSessions.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1)
+        .for('update');
+      if (!session?.ruleSetId) throw new Error(DOCUMENT_REVIEW_NOT_FOUND);
 
-    if (ruleSet.rules.length > 0) {
-      await this.db
-        .insert(documentReviewCheckResults)
-        .values(ruleSet.rules.map((rule) => ({ ruleId: rule.id, sessionId, workspaceId })))
-        .onConflictDoNothing({
-          target: [documentReviewCheckResults.sessionId, documentReviewCheckResults.ruleId],
-        });
-    }
-    return this.listCheckResults(sessionId);
+      const ruleSet = await this.scoped(tx).findRuleSetById(session.ruleSetId);
+      if (!ruleSet) throw new Error(DOCUMENT_REVIEW_NOT_FOUND);
+      if (ruleSet.status !== 'confirmed') throw new Error(DOCUMENT_REVIEW_RULE_SET_NOT_CONFIRMED);
+
+      if (ruleSet.rules.length > 0) {
+        await tx
+          .insert(documentReviewCheckResults)
+          .values(ruleSet.rules.map((rule) => ({ ruleId: rule.id, sessionId, workspaceId })))
+          .onConflictDoNothing({
+            target: [documentReviewCheckResults.sessionId, documentReviewCheckResults.ruleId],
+          });
+      }
+      return this.scoped(tx).listCheckResults(sessionId);
+    });
   };
 
   listCheckResults = async (sessionId: string): Promise<DocumentReviewCheckResultItem[]> => {
