@@ -53,8 +53,12 @@ vi.mock('../../hooks/useFileItemClick', () => ({
 }));
 
 vi.mock('./FileListItemMenu', () => ({
-  default: ({ focusOnMount }: { focusOnMount?: boolean }) => (
-    <span data-focus-on-mount={String(!!focusOnMount)} data-testid="row-menu" />
+  default: ({ focusOnMount, openOnMount }: { focusOnMount?: boolean; openOnMount?: boolean }) => (
+    <span
+      data-focus-on-mount={String(!!focusOnMount)}
+      data-open-on-mount={String(!!openOnMount)}
+      data-testid="row-menu"
+    />
   ),
 }));
 
@@ -173,6 +177,16 @@ describe('FileListItem', () => {
     fireEvent.focus(trigger);
 
     expect(screen.getByTestId('row-menu')).toHaveAttribute('data-focus-on-mount', 'true');
+    expect(screen.getByTestId('row-menu')).toHaveAttribute('data-open-on-mount', 'false');
+  });
+
+  // Assistive tech and programmatic clicks activate without focus/hover first.
+  it('opens the real menu when the placeholder trigger is clicked', () => {
+    render(<FileListItem {...baseProps} selectable={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'more' }));
+
+    expect(screen.getByTestId('row-menu')).toHaveAttribute('data-open-on-mount', 'true');
   });
 
   it('disables selection for rows the workspace member did not upload', () => {

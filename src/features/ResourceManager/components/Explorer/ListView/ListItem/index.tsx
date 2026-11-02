@@ -271,12 +271,15 @@ const FileListItem = ({
   // The row menu (its hooks plus a Base UI menu tree) mounts on first hover or
   // focus instead of for every row Virtuoso renders; scrolling a long list used
   // to mount and tear down dozens of closed menus per frame.
-  const [menuActivation, setMenuActivation] = useState<'focus' | 'pointer' | null>(null);
+  const [menuActivation, setMenuActivation] = useState<'click' | 'focus' | 'pointer' | null>(null);
   const menuActivated = menuActivation !== null;
   const activateMenu = useCallback(() => setMenuActivation((prev) => prev ?? 'pointer'), []);
   // Keyboard users reach the placeholder trigger first; hand focus to the real
   // trigger once it mounts so Tab/Enter keep working.
   const activateMenuFromFocus = useCallback(() => setMenuActivation((prev) => prev ?? 'focus'), []);
+  // A click on the placeholder (assistive tech, programmatic `click()`) opens
+  // the real menu right away instead of only swapping the trigger in.
+  const activateMenuFromClick = useCallback(() => setMenuActivation((prev) => prev ?? 'click'), []);
   const menuItemsRef = useRef<FileListItemMenuGetter | null>(null);
   const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);
 
@@ -286,12 +289,13 @@ const FileListItem = ({
       fileId={fileId}
       fileType={fileType}
       filename={name}
-      focusOnMount={menuActivation === 'focus'}
+      focusOnMount={menuActivation === 'focus' || menuActivation === 'click'}
       id={id}
       isFolder={isFolder}
       isPage={isPage}
       libraryId={resourceManagerState.libraryId}
       menuItemsRef={menuItemsRef}
+      openOnMount={menuActivation === 'click'}
       size={size}
       sourceType={sourceType}
       url={url}
@@ -305,7 +309,7 @@ const FileListItem = ({
       aria-label={t('more', { ns: 'common' })}
       className={cx(styles.menuPlaceholder, styles.hover)}
       type="button"
-      onClick={activateMenuFromFocus}
+      onClick={activateMenuFromClick}
       onFocus={activateMenuFromFocus}
     />
   );

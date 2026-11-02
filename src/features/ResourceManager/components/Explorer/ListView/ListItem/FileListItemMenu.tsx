@@ -33,6 +33,8 @@ interface FileListItemMenuProps extends Pick<
   isPage: boolean;
   /** Receives the base item getter for the row's right-click menu. */
   menuItemsRef: RefObject<FileListItemMenuGetter | null>;
+  /** Open the menu on mount (the placeholder trigger was clicked or activated). */
+  openOnMount?: boolean;
 }
 
 /**
@@ -48,6 +50,7 @@ const FileListItemMenu = memo<FileListItemMenuProps>(
     className,
     fileId,
     focusOnMount,
+    openOnMount,
     fileType,
     filename,
     id,
@@ -102,7 +105,7 @@ const FileListItemMenu = memo<FileListItemMenuProps>(
 
     return (
       <span ref={wrapperRef} style={{ display: 'contents' }}>
-        <DropdownMenu className={className} items={getMenuItems} />
+        <DropdownMenu className={className} defaultOpen={openOnMount} items={getMenuItems} />
       </span>
     );
   },
