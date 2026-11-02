@@ -146,8 +146,12 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
   const displayLabel = (shouldResolveTitle && entity?.title) || label;
   // A click on the link opens the acceptance in the side panel, which another
   // surface (a session overlay) can cover; this one-click way out to the full
-  // browser page needs no hover on the preview first.
-  const browserUrl = useAcceptanceBrowserUrl(reference);
+  // browser page needs no hover on the preview first. Mobile opens it in a
+  // modal on top of everything, and a small icon right beside the link would
+  // be a mis-tap target there, so the action stays off the mobile build.
+  const isMobile = typeof __MOBILE__ !== 'undefined' && __MOBILE__;
+  const acceptanceBrowserUrl = useAcceptanceBrowserUrl(reference);
+  const browserUrl = isMobile ? undefined : acceptanceBrowserUrl;
 
   const linkedAgentId = reference.type === 'document' ? reference.agentId : undefined;
   const shouldResolveAgentDocument = !!linkedAgentId && linkedAgentId === activeAgentId;

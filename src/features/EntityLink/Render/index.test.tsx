@@ -394,6 +394,22 @@ describe('Link Render — internal entities', () => {
     expect(container.querySelector('[data-acceptance-browser]')).toBeNull();
   });
 
+  it('keeps the inline browser action off mobile, where a tap beside the link would misfire', () => {
+    vi.stubGlobal('__MOBILE__', true);
+
+    try {
+      const { container } = renderLink({
+        linkHref: '/acceptance/acceptance-1',
+        linkKind: 'generic',
+        linkLabel: 'Acceptance',
+      });
+
+      expect(container.querySelector('[data-acceptance-browser]')).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('replaces a pasted URL label with the resolved entity title', () => {
     // A raw acceptance URL says nothing about what it points to; once the
     // entity resolves, the link reads as its title.
