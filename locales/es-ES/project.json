@@ -116,8 +116,6 @@
   "knowledgeBases.searchPlaceholder": "Buscar bibliotecas",
   "knowledgeBases.updateFailed": "No se pudo actualizar la biblioteca",
   "list.deleteAction": "Eliminar proyecto",
-  "list.deleteConfirmDescription": "¿Eliminar “{{name}}”? Sus tareas del proyecto, objetivos, temas y vínculos se eliminarán permanentemente.",
-  "list.deleteConfirmTitle": "¿Eliminar proyecto?",
   "list.deleteError": "No se pudo eliminar el proyecto.",
   "list.deleteSuccess": "“{{name}}” eliminado",
   "list.emptyDescription": "Crea tu primer proyecto para organizar objetivos, tareas y recursos.",
