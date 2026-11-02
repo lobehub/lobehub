@@ -57,7 +57,8 @@ export const useLinearSyncJobNotifier = (
         toast.success(
           t('linear.sync.job.finished', { result: formatLinearSyncResult(job.result, t) }),
         );
-      } else if (job.status === 'error') {
+      } else if (job.status === 'error' && job.error !== 'canceled') {
+        // A stopped run was the user's own doing; it needs no toast.
         toast.error(linearSyncJobErrorMessage(job.error, t));
       }
     }

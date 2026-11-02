@@ -13,6 +13,7 @@ const { mockTrpcClient } = vi.hoisted(() => ({
       deployments: {
         commitWorkspaceHtmlUpload: { mutate: vi.fn() },
         prepareWorkspaceHtmlUpload: { mutate: vi.fn() },
+        unpublish: { mutate: vi.fn() },
       },
     },
   },
@@ -255,6 +256,71 @@ describe('artifact publish', () => {
       await publish('--new');
       expect(exitSpy).not.toHaveBeenCalled();
       expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-1' });
+    });
+  });
+
+  describe('unpublishing', () => {
+    const runUnpublish = async (...args: string[]) => {
+      const program = new Command();
+      program.exitOverride();
+      registerArtifactCommand(program);
+      await program.parseAsync(['node', 'lh', 'artifact', 'unpublish', ...args]);
+    };
+
+    const boundFile = () => path.join(workingDirectory, 'index.html');
+
+    beforeEach(() => {
+      fs.writeFileSync(boundFile(), '<title>Bound</title>');
+      mockTrpcClient.market.deployments.unpublish.mutate
+        .mockReset()
+        .mockResolvedValue({ data: { id: 'dep-bound', status: 'unpublished', title: 'Bound' } });
+    });
+
+    it('takes the deployment bound to the file offline', async () => {
+      writeManifest({ 'index.html': { deploymentId: 'dep-bound' } });
+
+      await runUnpublish(boundFile());
+
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).toHaveBeenCalledWith({
+        id: 'dep-bound',
+      });
+      // Kept on purpose: republishing the same file reactivates this deployment.
+      expect(readManifest().artifacts['index.html']).toEqual({ deploymentId: 'dep-bound' });
+    });
+
+    it('--deployment targets an id without a file', async () => {
+      await runUnpublish('--deployment', 'dep-oneoff');
+
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).toHaveBeenCalledWith({
+        id: 'dep-oneoff',
+      });
+    });
+
+    it('refuses to guess when neither a file nor --deployment is given', async () => {
+      await runUnpublish();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).not.toHaveBeenCalled();
+    });
+
+    it('refuses a file with no bound deployment', async () => {
+      writeManifest({});
+
+      await runUnpublish(boundFile());
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockTrpcClient.market.deployments.unpublish.mutate).not.toHaveBeenCalled();
+    });
+
+    it('reports a server failure instead of claiming success', async () => {
+      writeManifest({ 'index.html': { deploymentId: 'dep-gone' } });
+      mockTrpcClient.market.deployments.unpublish.mutate.mockRejectedValueOnce(
+        new Error('Deployment not found'),
+      );
+
+      await runUnpublish(boundFile());
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 });

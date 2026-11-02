@@ -1,4 +1,4 @@
-/* eslint-disable no-restricted-imports -- the lazy wrapper in @/components/LobeIcons is the only importer */
+/* eslint-disable eslint-core/no-restricted-imports -- the lazy wrapper in @/components/LobeIcons is the only importer */
 import {
   ProviderCombine as LobeProviderCombine,
   ProviderIcon as LobeProviderIcon,

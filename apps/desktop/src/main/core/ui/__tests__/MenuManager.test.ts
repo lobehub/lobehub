@@ -108,6 +108,14 @@ describe('MenuManager', () => {
       expect(result).toEqual({ success: true });
     });
 
+    it('binds the popup to the originating window when given', () => {
+      const window = { id: 2 } as any;
+
+      menuManager.showContextMenu('default', { mediaType: 'image' }, window);
+
+      expect(mockMenu.popup).toHaveBeenCalledWith({ window });
+    });
+
     it('should build context menu without data', () => {
       const type = 'simple-menu';
 

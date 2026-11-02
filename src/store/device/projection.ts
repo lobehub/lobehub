@@ -1,7 +1,11 @@
 import type { DeviceListItem, DeviceMetricSeries, DeviceScope } from '@lobechat/types';
 
-import { AppLocalStorage } from '@/libs/replica';
-import { defineReplica, REPLICA_INDEX_KEY, type ReplicaStorage } from '@/libs/replica';
+import {
+  AppLocalStorage,
+  defineReplica,
+  REPLICA_INDEX_KEY,
+  type ReplicaStorage,
+} from '@/libs/replica';
 
 /** The store reads every device of the active scope, so the list has one entry. */
 export const DEVICE_LIST_KEY = 'all';

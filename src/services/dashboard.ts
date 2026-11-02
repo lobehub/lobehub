@@ -13,6 +13,8 @@ export type DashboardDetail = QueryData<DashboardRouter['detail']>;
 /** One placed widget: the placement row plus the widget's hot read model. */
 export type DashboardBoardItem = DashboardDetail['items'][number];
 export type DashboardWidgetItem = DashboardBoardItem['widget'];
+/** A project widget, with its published version's view. */
+export type DashboardProjectWidgetItem = QueryData<WidgetRouter['listByProject']>[number];
 export type DashboardWidgetDetail = QueryData<WidgetRouter['detail']>;
 export type DashboardWidgetVersionItem = QueryData<WidgetRouter['listVersions']>[number];
 export type DashboardWidgetRunItem = QueryData<WidgetRouter['listRuns']>[number];

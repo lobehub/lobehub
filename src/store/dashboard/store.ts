@@ -28,6 +28,7 @@ import {
   dashboardDetailResource,
   type DashboardListItem,
   dashboardListResource,
+  type DashboardProjectWidgetItem,
   type DashboardTrendSeries,
   type DashboardWidgetDetail,
   type DashboardWidgetItem,
@@ -153,7 +154,7 @@ export interface DashboardAction {
     enabled?: boolean,
   ) => DashboardRequest<DashboardListItem[]>;
   useFetchProjectDashboards: (projectId?: string) => DashboardRequest<DashboardListItem[]>;
-  useFetchProjectWidgets: (projectId?: string) => DashboardRequest<DashboardWidgetItem[]>;
+  useFetchProjectWidgets: (projectId?: string) => DashboardRequest<DashboardProjectWidgetItem[]>;
   useFetchWidgetDetail: (widgetId?: string) => DashboardRequest<DashboardWidgetDetail>;
   useFetchWidgetRun: (
     widgetId?: string,
@@ -192,11 +193,11 @@ export const useDashboardStore = createWithEqualityFn<DashboardStore>()(
     });
     const projectWidgets = createReplicaSlice(projectWidgetListResource, {
       actionPrefix: 'dashboard/projectWidgets',
-      entity: arrayEntity<DashboardWidgetItem>((widget) => widget.id),
+      entity: arrayEntity<DashboardProjectWidgetItem>((widget) => widget.id),
       get,
       set,
       stateKey: 'projectWidgetsReplica',
-      view: recordLens<DashboardStore, DashboardWidgetItem[]>('projectWidgetsMap'),
+      view: recordLens<DashboardStore, DashboardProjectWidgetItem[]>('projectWidgetsMap'),
     });
     const detail = createReplicaSlice(dashboardDetailResource, {
       actionPrefix: 'dashboard/detail',

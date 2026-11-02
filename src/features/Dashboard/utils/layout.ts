@@ -18,6 +18,8 @@ const DEFAULT_SIZE: Record<WidgetOutputType, { h: number; w: number }> = {
   // Three rows (240px): header, label, value, description, the 28px trend line
   // and the updated-at footer. Two rows squeezed the trend line to nothing.
   stat: { h: 3, w: 3 },
+  // A layout card (weather, progress, …) reads best close to square.
+  data: { h: 4, w: 4 },
   table: { h: 4, w: 12 },
 };
 
