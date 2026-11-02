@@ -1,0 +1,55 @@
+---
+title: Using Synap in LobeHub
+description: >-
+  Configure Synap, an OpenAI-compatible gateway for open-weight models, in LobeHub — free tier, pay-as-you-go credits, and zero-data-retention routing.
+tags:
+  - LobeHub
+  - Synap
+  - Model gateway
+  - Zero data retention
+---
+
+# Using Synap in LobeHub
+
+[Synap](https://synap.linkrra.com) is a gateway for open-weight models. Pick a model and its price directly, or use `synap-v1` to route to the cheapest model that can do the job — billed at the price of whichever model actually ran. Every request is checked against a zero-data-retention allowlist before it leaves; a provider that cannot guarantee that is refused rather than used.
+
+This guide walks through using Synap in LobeHub:
+
+<Steps>
+  ### Step 1: Get a Synap API key
+
+  - Sign in with Google at [synap.linkrra.com/login.html](https://synap.linkrra.com/login.html) — this alone unlocks a free daily allowance, no card required.
+  - Create a key on your [account page](https://synap.linkrra.com/account.html#keys). It starts with `sk-pool-`.
+  - To use models beyond the free tier, buy credits from the [pricing page](https://synap.linkrra.com/pricing.html#payg) (from $10 by card, $1 in TON or USDC). Credits never expire.
+
+  ### Step 2: Configure Synap in LobeHub
+
+  - Open **Settings → AI Provider** and find `Synap`.
+  - Enable the provider and paste in the API key from Step 1.
+  - Click **Fetch Models** to read Synap's current catalogue, or check [synap.linkrra.com/models.html](https://synap.linkrra.com/models.html) for the full list and prices.
+  - Enable the models you want to use.
+
+  <Callout type={'info'}>
+    `synap-v1` and `synap-v1-pro` are routers rather than a single model: `synap-v1` picks the cheapest model in Synap's own fleet that can do the job, and `synap-v1-pro` adds external models to that pool for problems that need the strongest model rather than the cheapest one. Both are billed at the price of whichever model actually answered.
+  </Callout>
+</Steps>
+
+## Free tier
+
+Signing in with Google is enough to get 100,000 tokens a day on `qwen3-coder-30b`, with no card and no trial clock — see [synap.linkrra.com/free.html](https://synap.linkrra.com/free.html) for the exact limits. A free key that asks for a model outside the free tier gets a 402 with a top-up link, never a surprise charge.
+
+## Zero data retention
+
+Synap checks every outbound request in code against a zero-data-retention allowlist before it leaves — a provider that cannot guarantee zero retention is refused before it ever runs, rather than relying on a separate account-level agreement.
+
+## Troubleshooting
+
+**A chat request returns 402**
+
+The key is on the free tier and the selected model is outside its daily allowance. Either switch to the free model (`qwen3-coder-30b`) or add credits on the [pricing page](https://synap.linkrra.com/pricing.html#payg).
+
+**A model is missing after enabling the provider**
+
+Click **Fetch Models** again; Synap's catalogue changes as fleet capacity and external models change. Models running only on Synap's own GPUs return a `503` rather than routing to a different provider when no fleet node is online — this is intentional, not a missing model.
+
+You can now chat with Synap's models in LobeHub.
