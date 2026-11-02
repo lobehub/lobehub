@@ -770,6 +770,7 @@ export default {
   'devices.detail.tabs.agents': 'Agent runtimes',
   'devices.detail.tabs.files': 'Directories',
   'devices.detail.tabs.overview': 'Overview',
+  'devices.detail.usage': 'Usage',
   'devices.edit.browse': 'Browse…',
   'devices.edit.cancel': 'Cancel',
   'devices.edit.defaultCwd': 'Default working directory',
