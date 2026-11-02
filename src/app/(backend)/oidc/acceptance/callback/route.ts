@@ -12,7 +12,7 @@ const scriptJson = (value: unknown) =>
 
 const page = (script: string) =>
   new NextResponse(
-    `<!doctype html><meta charset="utf-8"><title>LobeHub Review</title><body><script>${script};window.close();</script></body>`,
+    `<!doctype html><meta charset="utf-8"><title>LobeHub Acceptance</title><body><script>${script};window.close();</script></body>`,
     { headers: { 'cache-control': 'no-store', 'content-type': 'text/html; charset=utf-8' } },
   );
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       `${READ_QUERY};window.opener&&window.opener.postMessage({code:q.get("code"),state:q.get("state"),type:"lobehub-acceptance:authorized"},${scriptJson(site.origin)})`,
     );
   } catch (error) {
-    log('review callback failed: %O', error);
+    log('acceptance callback failed: %O', error);
     return page('');
   }
 }

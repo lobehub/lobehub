@@ -59,7 +59,7 @@ export interface CreateAcceptanceCommentParams {
    * commits, which is exactly how a flood arrives.
    */
   rateLimit?: { max: number; since: Date };
-  /** The product page the remark was made on (embedded review toolbar). */
+  /** The product page the remark was made on (embedded acceptance toolbar). */
   source?: AcceptanceCommentSource;
   workspaceId?: string | null;
 }

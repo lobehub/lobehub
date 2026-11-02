@@ -40,6 +40,7 @@ describe('GET /oidc/acceptance/callback', () => {
 
     expect(response.headers.get('content-type')).toContain('text/html');
     expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(html).toContain('<title>LobeHub Acceptance</title>');
     expect(findAuthorizationCodeResource).toHaveBeenCalledWith('abc123');
     expect(runPage(html, query)).toEqual([
       [

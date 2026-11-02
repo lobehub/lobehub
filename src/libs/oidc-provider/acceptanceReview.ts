@@ -10,7 +10,7 @@ import {
 export const isAcceptanceReviewClient = (clientId: string | undefined) =>
   clientId === ACCEPTANCE_CLIENT_ID;
 
-// The review toolbar's token lives on third-party preview pages, so it must
+// The acceptance toolbar's token lives on third-party preview pages, so it must
 // only ever carry one acceptance's audience — never the full API audience.
 const DEVICE_ROUTES = new Set(['code_verification', 'device_authorization', 'device_resume']);
 const DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code';

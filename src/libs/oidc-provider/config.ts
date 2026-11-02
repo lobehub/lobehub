@@ -82,7 +82,7 @@ export const defaultClients: ClientMetadata[] = [
   {
     application_type: 'web',
     client_id: ACCEPTANCE_CLIENT_ID,
-    client_name: 'LobeHub Review',
+    client_name: 'LobeHub Acceptance',
     grant_types: ['urn:ietf:params:oauth:grant-type:device_code', 'authorization_code'],
     scope: ACCEPTANCE_REVIEW_SCOPE,
     logo_uri: 'https://hub-apac-1.lobeobjects.space/lobehub-desktop-icon.png',
