@@ -1,6 +1,6 @@
 import type { CreateThreadParams, ThreadMetadata } from '@lobechat/types';
-import { RequestTrigger, ThreadStatus } from '@lobechat/types';
-import { and, desc, eq, isNull, notExists, sql } from 'drizzle-orm';
+import { IN_FLIGHT_OPERATION_STATUS_LIST, RequestTrigger, ThreadStatus } from '@lobechat/types';
+import { and, desc, eq, inArray, isNull, ne, notExists, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
 import { agentOperations, messages, threads } from '../schemas';
@@ -196,6 +196,59 @@ export class ThreadModel {
       .returning({ id: threads.id });
 
     return rows.length > 0;
+  };
+
+  /**
+   * Move the thread an operation ran in out of its running status once that
+   * operation settles.
+   *
+   * Only a `processing` / `inReview` row moves, and only while no other
+   * operation on the thread is still in flight — a late completion must not
+   * settle a thread a newer follow-up run has already claimed.
+   *
+   * @returns the settled thread id, or undefined when nothing changed
+   */
+  settleForOperation = async (
+    operationId: string,
+    status: ThreadStatus,
+    metadata: Pick<ThreadMetadata, 'completedAt' | 'error'> = {},
+  ): Promise<string | undefined> => {
+    const [op] = await this.db
+      .select({ threadId: agentOperations.threadId })
+      .from(agentOperations)
+      .where(eq(agentOperations.id, operationId))
+      .limit(1);
+    if (!op?.threadId) return undefined;
+
+    const rows = await this.db
+      .update(threads)
+      .set({
+        metadata: sql`COALESCE(${threads.metadata}, '{}'::jsonb) || ${JSON.stringify(metadata)}::jsonb`,
+        status,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(threads.id, op.threadId),
+          this.ownership(),
+          inArray(threads.status, [ThreadStatus.Processing, ThreadStatus.InReview]),
+          notExists(
+            this.db
+              .select({ id: agentOperations.id })
+              .from(agentOperations)
+              .where(
+                and(
+                  eq(agentOperations.threadId, threads.id),
+                  ne(agentOperations.id, operationId),
+                  inArray(agentOperations.status, [...IN_FLIGHT_OPERATION_STATUS_LIST]),
+                ),
+              ),
+          ),
+        ),
+      )
+      .returning({ id: threads.id });
+
+    return rows[0]?.id;
   };
 
   update = async (id: string, value: Partial<ThreadItem>) => {

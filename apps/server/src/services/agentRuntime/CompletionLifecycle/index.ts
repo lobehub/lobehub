@@ -27,6 +27,7 @@ import { extractOutboundAttachments, extractTextFromMessageContent } from './mes
 import { persistCompletion } from './persistence';
 import { recallUserOnCompletion } from './recall';
 import { emitSignalEvents, isAgentShareRun } from './signals';
+import { settleOperationThread } from './threadStatus';
 import type {
   CompleteOperationOptions,
   CompletionLifecycleDeps,
@@ -361,6 +362,15 @@ export class CompletionLifecycle {
       }
 
       if (isAsyncToolPark) return;
+
+      await settleOperationThread({
+        db: this.serverDB,
+        error: state?.error ? formatErrorForState(state.error) : undefined,
+        operationId,
+        reason,
+        userId: runOrigin.userId || this.userId,
+        workspaceId: this.workspaceId,
+      });
 
       // `lastAssistantContent` comes off the Redis-backed `state.messages`,
       // while the assistant message row is persisted through a separate

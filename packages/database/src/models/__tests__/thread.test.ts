@@ -478,6 +478,85 @@ describe('ThreadModel', () => {
     });
   });
 
+  describe('settleForOperation', () => {
+    beforeEach(async () => {
+      await serverDB.delete(agentOperations);
+    });
+
+    const seed = async ({
+      operations = [{ id: 'op-run', status: 'done' }],
+      status = ThreadStatus.Processing,
+    }: {
+      operations?: { id: string; status: string }[];
+      status?: ThreadStatus;
+    } = {}) => {
+      await serverDB.insert(threads).values({
+        id: 'thread-run',
+        metadata: { operationId: 'op-run', startedAt: 's' },
+        status,
+        topicId,
+        type: ThreadType.Isolation,
+        userId,
+      });
+      await serverDB.insert(agentOperations).values(
+        operations.map((op) => ({
+          id: op.id,
+          status: op.status as any,
+          threadId: 'thread-run',
+          topicId,
+          userId,
+        })),
+      );
+    };
+    const readThread = () =>
+      serverDB.query.threads.findFirst({ where: eq(threads.id, 'thread-run') });
+
+    it('moves the thread of a settled operation out of processing', async () => {
+      await seed();
+
+      const settled = await threadModel.settleForOperation('op-run', ThreadStatus.Completed, {
+        completedAt: 'c',
+      });
+
+      const row = await readThread();
+      expect(settled).toBe('thread-run');
+      expect(row?.status).toBe(ThreadStatus.Completed);
+      expect(row?.metadata).toEqual({ completedAt: 'c', operationId: 'op-run', startedAt: 's' });
+    });
+
+    it('leaves a thread a newer in-flight run has claimed', async () => {
+      await seed({
+        operations: [
+          { id: 'op-run', status: 'interrupted' },
+          { id: 'op-next', status: 'running' },
+        ],
+      });
+
+      await expect(
+        threadModel.settleForOperation('op-run', ThreadStatus.Cancel),
+      ).resolves.toBeUndefined();
+      expect((await readThread())?.status).toBe(ThreadStatus.Processing);
+    });
+
+    it('does not rewrite a thread that already settled', async () => {
+      await seed({ status: ThreadStatus.Failed });
+
+      await threadModel.settleForOperation('op-run', ThreadStatus.Completed);
+
+      expect((await readThread())?.status).toBe(ThreadStatus.Failed);
+    });
+
+    it('ignores an operation that ran outside a thread', async () => {
+      await serverDB
+        .insert(agentOperations)
+        .values({ id: 'op-topic', status: 'done', topicId, userId });
+
+      await expect(
+        threadModel.settleForOperation('op-topic', ThreadStatus.Completed),
+      ).resolves.toBeUndefined();
+    });
+  });
+
   describe('delete', () => {
     it('should delete a thread', async () => {
       await serverDB.insert(threads).values({

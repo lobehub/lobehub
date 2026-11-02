@@ -26,6 +26,15 @@ vi.mock('@/server/services/workRegistration', async (importOriginal) => ({
   registerWorksForOperation: vi.fn(),
 }));
 
+const { settleForOperation } = vi.hoisted(() => ({
+  settleForOperation: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/database/models/thread', () => ({
+  ThreadModel: vi.fn(function () {
+    return { settleForOperation };
+  }),
+}));
+
 const buildLifecycle = () => new CompletionLifecycle({} as any, 'user-1');
 
 describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
@@ -404,5 +413,48 @@ describe('CompletionLifecycle.dispatchHooks — the topic running mark', () => {
     mockSettleRunningOperation.mockRejectedValue(new Error('topic row is locked'));
 
     await expect(lifecycle.dispatchHooks('op-1', state(), 'interrupted')).resolves.toBeUndefined();
+  });
+});
+
+// T-2706: the thread run hooks are in-process handlers that queue mode never
+// calls, so an isolation thread stayed `processing` after its run ended.
+describe('CompletionLifecycle.dispatchHooks — the run thread', () => {
+  beforeEach(() => {
+    settleForOperation.mockClear();
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const dispatch = async (reason: string) => {
+    const lifecycle = buildLifecycle();
+    (lifecycle as any).messageModel = { update: vi.fn().mockResolvedValue({ success: true }) };
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    await lifecycle.dispatchHooks(
+      'op-member',
+      { host: { hooks: [] }, metadata: { assistantMessageId: 'msg-1' }, status: reason },
+      reason,
+    );
+  };
+
+  it.each([
+    ['done', 'completed'],
+    ['max_steps', 'completed'],
+    ['error', 'failed'],
+    ['interrupted', 'cancel'],
+    ['waiting_for_human', 'inReview'],
+  ])('settles the thread of a %s run as %s', async (reason, status) => {
+    await dispatch(reason);
+
+    expect(settleForOperation).toHaveBeenCalledWith('op-member', status, expect.any(Object));
+  });
+
+  it('leaves the thread running while the run is parked on an async tool', async () => {
+    await dispatch('waiting_for_async_tool');
+
+    expect(settleForOperation).not.toHaveBeenCalled();
   });
 });
