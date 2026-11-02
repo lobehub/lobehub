@@ -795,6 +795,7 @@ export default {
   'upgradePlans.desc':
     'Plan upgrade takes effect immediately after paying the difference. Start date inherits from previous plan.',
   'upgradePlans.title': 'Upgrade to {{plan}}',
+  'usage.credit.addon.thisMonth': 'Top-up Credits This Month (Used / Added)',
   'usage.credit.addon.used': 'Top-up Credits',
   'usage.credit.desc': 'Credits usage for AI chat, image generation, speech synthesis',
   'usage.credit.free.expired': 'Expired on {{date}}',

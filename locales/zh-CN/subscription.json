@@ -679,6 +679,7 @@
   "upgradePlan": "升级计划",
   "upgradePlans.desc": "升级计划将在支付差价后立即生效，起始日期继承原计划。",
   "upgradePlans.title": "升级至 {{plan}}",
+  "usage.credit.addon.thisMonth": "本月充值积分（消耗 / 充值）",
   "usage.credit.addon.used": "充值积分",
   "usage.credit.desc": "用于 AI 聊天、图像生成、语音合成的积分使用情况",
   "usage.credit.free.expired": "已于 {{date}} 过期",
