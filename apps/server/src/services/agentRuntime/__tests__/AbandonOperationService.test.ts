@@ -47,12 +47,14 @@ const recordCompletionMock = vi.fn().mockResolvedValue(undefined);
 const settleLiveMock = vi.fn().mockResolvedValue(true);
 const claimForAbandonmentMock = vi.fn().mockResolvedValue(true);
 const markAbandonmentFinalizedMock = vi.fn().mockResolvedValue(undefined);
+const markAbandonmentHandoffPendingMock = vi.fn().mockResolvedValue(undefined);
 vi.mock('@/database/models/agentOperation', () => ({
   AgentOperationModel: vi.fn().mockImplementation(function () {
     return {
       claimForAbandonment: claimForAbandonmentMock,
       findById: findOperationMock,
       markAbandonmentFinalized: markAbandonmentFinalizedMock,
+      markAbandonmentHandoffPending: markAbandonmentHandoffPendingMock,
       recordCompletion: recordCompletionMock,
       settleLive: settleLiveMock,
     };
@@ -133,6 +135,7 @@ describe('AbandonOperationService', () => {
     settleLiveMock.mockReset().mockResolvedValue(true);
     claimForAbandonmentMock.mockReset().mockResolvedValue(true);
     markAbandonmentFinalizedMock.mockReset().mockResolvedValue(undefined);
+    markAbandonmentHandoffPendingMock.mockReset().mockResolvedValue(undefined);
     latestSpineMessageIdMock.mockReset().mockResolvedValue(undefined);
     messageCreateMock.mockReset().mockResolvedValue({ id: 'msg_new_failure' });
     topicSettleRunningOperationMock
@@ -209,6 +212,55 @@ describe('AbandonOperationService', () => {
         type: 'AgentRuntimeError',
       }),
     });
+  });
+
+  it('preserves the counters a resumed claim already recorded', async () => {
+    // Regression: `CompletionLifecycle` persists the run's usage before the
+    // finalise mark lands, so a retry that entered the no-state branch used to
+    // rewrite `llmCalls` / `stepCount` / `toolCalls` / `totalTokens` with zeros
+    // and silently erase the run's statistics.
+    const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
+    const db = buildDb({
+      operationRow: {
+        agentId: 'agt_x',
+        id: 'op_x',
+        llmCalls: 7,
+        metadata: {
+          abandonment: {
+            at: '2026-11-03T00:00:00.000Z',
+            phase: 'claimed',
+            reason: 'inactivity_watchdog',
+          },
+        },
+        startedAt: new Date('2026-06-30T11:51:14.745Z'),
+        status: 'error',
+        stepCount: 3,
+        toolCalls: 2,
+        topicId: 'tpc_x',
+        totalTokens: 900,
+        userId: 'user_x',
+        workspaceId: 'ws_x',
+      },
+    });
+
+    const svc = new AbandonOperationService(db, {
+      coordinator: coord as any,
+      snapshotStore: buildStore() as any,
+    });
+
+    await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+    expect(recordCompletionMock).toHaveBeenCalledWith(
+      'op_x',
+      expect.objectContaining({
+        completionReason: 'error',
+        llmCalls: 7,
+        status: 'error',
+        stepCount: 3,
+        toolCalls: 2,
+        totalTokens: 900,
+      }),
+    );
   });
 
   describe('no-state lifecycle hooks', () => {
@@ -571,6 +623,116 @@ describe('AbandonOperationService', () => {
       );
       // Only once everything landed does the claim stop being resumable.
       expect(markAbandonmentFinalizedMock).toHaveBeenCalledWith('op_x');
+    });
+
+    it('replays only the parent-resume hand-off when the finalisation already landed', async () => {
+      // Regression: the finalized mark used to be written before the caller
+      // handed the parent over to a resume. A host recycled in that gap left a
+      // child that read as finalized, so no later invocation returned the
+      // linkage and the parent stayed parked in `waiting_for_async_tool`.
+      // `handoff_pending` keeps exactly that step replayable — and only it.
+      const coord = buildCoordinator({ loadAgentState: vi.fn() });
+
+      const result = await new AbandonOperationService(
+        buildDb({
+          operationRow: {
+            ...settledRow('error'),
+            metadata: {
+              abandonment: {
+                at: '2026-11-03T00:00:00.000Z',
+                handoff: {
+                  resume: {
+                    errorMessage: 'Operation abandoned: inactivity_watchdog',
+                    parentOperationId: 'op_parent',
+                    threadId: 'thread_1',
+                    toolMessageId: 'msg_tool',
+                    userId: 'user_x',
+                  },
+                },
+                phase: 'handoff_pending',
+              },
+            },
+          },
+        }),
+        { coordinator: coord as any, snapshotStore: buildStore() as any },
+      ).finalizeAbandoned('op_x', 'inactivity_watchdog');
+
+      expect(result).toEqual({
+        abandoned: true,
+        assistantMessageUpdated: false,
+        finalized: true,
+        found: true,
+        subAgentResume: {
+          errorMessage: 'Operation abandoned: inactivity_watchdog',
+          parentOperationId: 'op_parent',
+          threadId: 'thread_1',
+          toolMessageId: 'msg_tool',
+          userId: 'user_x',
+        },
+      });
+      // Nothing is redone: no second claim, no second Redis read, no duplicate
+      // error bubble and no duplicate hooks.
+      expect(coord.loadAgentState).not.toHaveBeenCalled();
+      expect(claimForAbandonmentMock).not.toHaveBeenCalled();
+      expect(messageUpdateMock).not.toHaveBeenCalled();
+      expect(dispatchHooksMock).not.toHaveBeenCalled();
+      expect(markAbandonmentFinalizedMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps the claim resumable until the parent hand-off is delivered', async () => {
+      // The sub-agent's parent is resumed by the *caller*, after this method
+      // returns. Retiring the mark here would make a crash in that window
+      // unrecoverable.
+      findOperationMock.mockResolvedValue({
+        parentOperationId: 'op_parent',
+        threadId: 'thread_1',
+        userId: 'user_x',
+        workspaceId: null,
+      });
+      findThreadMock.mockResolvedValue({ sourceMessageId: 'msg_tool' });
+
+      const coord = buildCoordinator({
+        loadAgentState: vi.fn().mockResolvedValue(
+          stateWith({
+            metadata: { assistantMessageId: 'msg_assist_1' },
+            origin: {
+              threadId: 'thread_1',
+              userId: 'user_x',
+              lineage: { isSubAgent: true },
+            },
+          }),
+        ),
+      });
+
+      const svc = new AbandonOperationService(
+        buildDb({
+          operationRow: {
+            agentId: 'agt_x',
+            id: 'op_child',
+            startedAt: new Date('2026-10-01T15:32:22.480Z'),
+            status: 'running',
+            topicId: 'tpc_x',
+            userId: 'user_x',
+            workspaceId: null,
+          },
+        }),
+        {
+          coordinator: coord as any,
+          snapshotStore: buildPartiallessStore() as any,
+        },
+      );
+
+      const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
+
+      expect(result.subAgentResume).toBeDefined();
+      expect(markAbandonmentHandoffPendingMock).toHaveBeenCalledWith('op_child', {
+        resume: expect.objectContaining({ parentOperationId: 'op_parent' }),
+      });
+      expect(markAbandonmentFinalizedMock).not.toHaveBeenCalled();
+
+      // Once the caller confirms the resume landed, the claim is retired.
+      await svc.completeAbandonmentHandoff('op_child');
+      expect(markAbandonmentFinalizedMock).toHaveBeenCalledWith('op_child');
     });
 
     it('leaves a finalised abandonment alone', async () => {

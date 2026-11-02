@@ -30,15 +30,24 @@ export type VerifyStatus = VerifyRunStatus;
 /**
  * Provenance of an abandonment claim, persisted under `metadata.abandonment`.
  *
- * Two phases rather than a boolean because the window that matters is the one
- * *between* them: `claimed` means a watchdog retired the row and still owes the
- * conversation its side effects, so a retry must finish the job; `finalized`
- * means everything landed and a retry must leave the row alone.
+ * Three phases rather than a boolean because the windows that matter are the
+ * ones *between* them: `claimed` means a watchdog retired the row and still
+ * owes the conversation its side effects, so a retry must finish the job;
+ * `handoff_pending` means those side effects landed but the caller still has to
+ * hand the sub-agent's parent over to a resume, so a retry replays only that
+ * step; `finalized` means everything landed and a retry must leave the row
+ * alone.
  */
 export interface AgentAbandonmentMark {
   /** ISO timestamp of the claim; absent on the `finalized` rewrite. */
   at?: string;
-  phase: 'claimed' | 'finalized';
+  /**
+   * Linkage for the parent-resume hand-off this abandonment still owes. Kept
+   * durable so a retry can replay the hand-off after the finalising host dies,
+   * instead of stranding the parent in `waiting_for_async_tool`.
+   */
+  handoff?: Record<string, unknown>;
+  phase: 'claimed' | 'finalized' | 'handoff_pending';
   reason?: string;
 }
 
@@ -434,6 +443,34 @@ export class AgentOperationModel {
    */
   async markAbandonmentFinalized(operationId: string): Promise<void> {
     const mark: AgentAbandonmentMark = { phase: 'finalized' };
+    await this.db
+      .update(agentOperations)
+      .set({
+        metadata: sql`coalesce(${agentOperations.metadata}, '{}'::jsonb) || ${JSON.stringify({ abandonment: mark })}::jsonb`,
+      })
+      .where(and(eq(agentOperations.id, operationId), this.ownership()));
+  }
+
+  /**
+   * Keep the claim resumable while the parent-resume hand-off is still owed.
+   *
+   * The conversation side effects have landed by this point, but a sub-agent's
+   * parent is only resumed by the *caller*, after `finalizeAbandoned` returns.
+   * Retiring the mark here would make a crash in that window permanent: the
+   * child reads as finalised, so no later invocation returns the linkage the
+   * parent needs, and the parent stays parked in `waiting_for_async_tool`.
+   * Persisting the linkage in the same UPDATE makes the hand-off itself
+   * durable, so a retry replays exactly that step — and nothing else.
+   */
+  async markAbandonmentHandoffPending(
+    operationId: string,
+    handoff: Record<string, unknown>,
+  ): Promise<void> {
+    const mark: AgentAbandonmentMark = {
+      at: new Date().toISOString(),
+      handoff,
+      phase: 'handoff_pending',
+    };
     await this.db
       .update(agentOperations)
       .set({

@@ -96,6 +96,32 @@ export interface FinalizeAbandonedResult {
 /** Terminal status an abandonment wrote when it claimed the durable row. */
 type ClaimedStatus = 'abandoned' | 'error';
 
+/**
+ * Read back the parent-resume linkage persisted with a `handoff_pending` mark.
+ *
+ * Validated field by field because it round-trips through jsonb: a truncated or
+ * hand-edited mark must degrade to "nothing to resume" rather than construct a
+ * bridge with `undefined` ids.
+ */
+const readAbandonmentHandoff = (
+  mark: AgentAbandonmentMark | undefined,
+): AbandonedSubAgentResume | undefined => {
+  const resume = mark?.handoff?.resume;
+  if (!resume || typeof resume !== 'object') return undefined;
+
+  const candidate = resume as Partial<AbandonedSubAgentResume>;
+  if (
+    !candidate.parentOperationId ||
+    !candidate.threadId ||
+    !candidate.toolMessageId ||
+    !candidate.userId
+  ) {
+    return undefined;
+  }
+
+  return candidate as AbandonedSubAgentResume;
+};
+
 export class AbandonOperationService {
   private readonly coordinator: AgentRuntimeCoordinator;
   private readonly snapshotStore: ISnapshotStore | null;
@@ -156,6 +182,19 @@ export class AbandonOperationService {
     const abandonmentMark = (row?.metadata as { abandonment?: AgentAbandonmentMark } | undefined)
       ?.abandonment;
     const resumableClaim = abandonmentMark?.phase === 'claimed';
+    // Every side effect already landed in the invocation that wrote
+    // `handoff_pending`; the only thing still owed is the caller's parent-resume
+    // hand-off. Replaying the full finalisation would fire the same
+    // `onComplete` / `onError` hooks a second time, so hand back the persisted
+    // linkage and let the caller retry just that step.
+    if (row && !callerClaimed && abandonmentMark?.phase === 'handoff_pending') {
+      result.abandoned = true;
+      result.finalized = true;
+      result.found = true;
+      result.subAgentResume = readAbandonmentHandoff(abandonmentMark);
+      log('[%s] abandonment hand-off replayed: parent resume still owed', operationId);
+      return result;
+    }
     if (row && !callerClaimed && !resumableClaim && isAgentOperationSettled(row.status)) {
       log('[%s] abandon skipped: operation already %s', operationId, row.status);
       result.abandoned = false;
@@ -439,7 +478,17 @@ export class AbandonOperationService {
     // Close the claim only after every side effect above has run — hooks last,
     // so an interruption before this point still looks resumable, and one after
     // it can never fire them twice (nor re-resume the same parent).
-    await this.markAbandonmentFinalized(operationId, row, callerClaimed);
+    //
+    // A pending parent resume is the exception: it happens in the *caller*,
+    // after this method returns, and the process can die in that gap. Keeping
+    // the mark resumable and carrying the linkage lets the retry replay the
+    // hand-off; the caller retires the mark once the resume actually landed
+    // (`completeAbandonmentHandoff`).
+    if (result.subAgentResume) {
+      await this.markAbandonmentHandoffPending(operationId, row, result.subAgentResume);
+    } else {
+      await this.markAbandonmentFinalized(operationId, row, callerClaimed);
+    }
 
     log('[%s] abandoned op finalized (reason=%s): %O', operationId, reason, result);
     return result;
@@ -468,6 +517,45 @@ export class AbandonOperationService {
     } catch (e) {
       log('[%s] abandonment finalize mark failed (non-fatal): %O', operationId, e);
     }
+  }
+
+  /**
+   * Persist the parent-resume linkage and keep the claim resumable.
+   *
+   * Skipped for caller-claimed rows for the same reason as
+   * {@link markAbandonmentFinalized}. A failure here is logged, not thrown: it
+   * only costs a redundant replay, never the abandonment itself.
+   */
+  private async markAbandonmentHandoffPending(
+    operationId: string,
+    row: { userId?: string | null; workspaceId?: string | null } | null | undefined,
+    resume: AbandonedSubAgentResume,
+  ): Promise<void> {
+    if (!row?.userId) return;
+    try {
+      await new AgentOperationModel(
+        this.db,
+        row.userId,
+        row.workspaceId ?? undefined,
+      ).markAbandonmentHandoffPending(operationId, { resume });
+    } catch (e) {
+      log('[%s] abandonment hand-off mark failed (non-fatal): %O', operationId, e);
+    }
+  }
+
+  /**
+   * Retire the abandonment claim once the caller's parent-resume hand-off has
+   * landed, so a later invocation neither replays the hand-off nor re-fires the
+   * hooks.
+   *
+   * Called by the endpoint right after `resumeAbandonedParent` returns. A
+   * failure is swallowed: the mark stays `handoff_pending`, which is the safe
+   * direction (one redundant replay) rather than the unsafe one (a stranded
+   * parent).
+   */
+  async completeAbandonmentHandoff(operationId: string): Promise<void> {
+    const row = await this.findOperationRow(operationId);
+    await this.markAbandonmentFinalized(operationId, row, false);
   }
 
   private async finalizeRunningOperationWithoutState(
@@ -514,12 +602,17 @@ export class AbandonOperationService {
           completedAt: new Date(),
           completionReason: 'error',
           error: { message, type: String(error.type) },
-          llmCalls: 0,
+          // A resumed claim may already carry the real counters —
+          // `CompletionLifecycle` persists usage before the finalise mark
+          // lands — so writing zeros here would erase the run's statistics.
+          // On a fresh claim these are the row's current values (usually 0),
+          // which is exactly what "no state was recorded" should look like.
+          llmCalls: op.llmCalls ?? 0,
           processingTimeMs: op.startedAt ? Date.now() - new Date(op.startedAt).getTime() : null,
           status: 'error',
-          stepCount: 0,
-          toolCalls: 0,
-          totalTokens: 0,
+          stepCount: op.stepCount ?? 0,
+          toolCalls: op.toolCalls ?? 0,
+          totalTokens: op.totalTokens ?? 0,
         });
       } catch (e) {
         log('[%s] no-state abandon: recordCompletion failed (non-fatal): %O', operationId, e);
