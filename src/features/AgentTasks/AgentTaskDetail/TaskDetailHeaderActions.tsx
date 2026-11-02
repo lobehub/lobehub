@@ -5,6 +5,7 @@ import {
   DropdownMenu,
   Icon,
   toast,
+  Tooltip,
 } from '@lobehub/ui';
 import {
   ArchiveIcon,
@@ -22,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { FavoriteButton, useFavoriteMenuItem } from '@/features/Favorites';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -185,15 +187,6 @@ const TaskDetailHeaderActions = memo(() => {
       { type: 'divider' },
       ...(favoriteMenuItem ? [favoriteMenuItem, { type: 'divider' as const }] : []),
       {
-        desc: archiveDeniedKey && t(archiveDeniedKey),
-        disabled: !canArchive,
-        icon: <Icon icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon} />,
-        key: 'archive',
-        label: t(isArchived ? 'taskList.contextMenu.unarchive' : 'taskList.contextMenu.archive'),
-        onClick: toggleArchive,
-      },
-      { type: 'divider' },
-      {
         danger: true,
         disabled: !canEditTask,
         icon: <Icon icon={Trash} />,
@@ -264,10 +257,6 @@ const TaskDetailHeaderActions = memo(() => {
     takesOver,
     t,
     triggerDelete,
-    toggleArchive,
-    isArchived,
-    archiveDeniedKey,
-    canArchive,
     triggerPublish,
     triggerMakePrivate,
     canEditTask,
@@ -276,9 +265,32 @@ const TaskDetailHeaderActions = memo(() => {
 
   if (!taskId) return null;
 
+  const archiveLabel = t(
+    isArchived ? 'taskList.contextMenu.unarchive' : 'taskList.contextMenu.archive',
+  );
+  const archiveButton = (
+    <ActionIcon
+      aria-label={archiveLabel}
+      disabled={!canArchive}
+      icon={isArchived ? ArchiveRestoreIcon : ArchiveIcon}
+      size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+      title={canArchive ? archiveLabel : undefined}
+      tooltipProps={{ placement: 'bottom' }}
+      onClick={() => void toggleArchive()}
+    />
+  );
+
   return (
     <>
       {favoriteTarget && <FavoriteButton {...favoriteTarget} />}
+      {canArchive ? (
+        archiveButton
+      ) : (
+        // A disabled button swallows hover, so the reason tooltip sits on a wrapper.
+        <Tooltip placement={'bottom'} title={archiveDeniedKey && t(archiveDeniedKey)}>
+          <span style={{ display: 'inline-flex' }}>{archiveButton}</span>
+        </Tooltip>
+      )}
       <DropdownMenu items={menuItems}>
         <ActionIcon icon={MoreHorizontal} size={'small'} />
       </DropdownMenu>
