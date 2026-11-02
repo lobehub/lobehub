@@ -379,15 +379,43 @@ describe('PlatformDetail saving', () => {
       saveBlock(en['channel.wake.section.pace']);
 
       await waitFor(() =>
-        expect(toastError).toHaveBeenCalledWith(en['channel.access.identity.requiredToSave']),
+        expect(toastError).toHaveBeenCalledWith(en['channel.access.identity.savePendingFirst']),
       );
       expect(mocks.updateBotProvider).not.toHaveBeenCalled();
-      await waitFor(() => expect(ownerInput()).toHaveFocus());
+      // The Access tab opens for the block that still has to be saved.
+      await waitFor(() => expect(ownerInput()).toBeVisible());
       expect(ownerInput()).not.toHaveAttribute('aria-invalid', 'true');
 
       saveBlock(en['channel.access.section.identity']);
       await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1));
       expect(mocks.updateBotProvider.mock.calls[0][2].settings.userId).toBe('42');
+    });
+
+    it('asks to save the changed policy, not to fill the ID, when the form no longer needs one', async () => {
+      const legacy = { ...config, settings: { ...config.settings, dmPolicy: 'pairing' } };
+      render(<PlatformDetail agentId="agt" currentConfig={legacy} platformDef={platformDef} />, {
+        wrapper: MemoryRouter,
+      });
+      openTab(en['channel.tab.access']);
+      fireEvent.click(screen.getByText(en['channel.access.dm.everyone']));
+      fireEvent.change(screen.getByPlaceholderText(en['channel.serverId']), {
+        target: { value: '7' },
+      });
+      fireEvent.blur(screen.getByPlaceholderText(en['channel.serverId']));
+      await waitFor(() =>
+        expect(screen.getAllByText(en['channel.module.unsaved'])).toHaveLength(2),
+      );
+      saveBlock(en['channel.access.section.identity']);
+
+      await waitFor(() =>
+        expect(toastError).toHaveBeenCalledWith(en['channel.access.identity.savePendingFirst']),
+      );
+      expect(mocks.updateBotProvider).not.toHaveBeenCalled();
+      expect(ownerInput()).not.toHaveAttribute('aria-invalid', 'true');
+
+      saveBlock(en['channel.access.section.conversation']);
+      await waitFor(() => expect(mocks.updateBotProvider).toHaveBeenCalledTimes(1));
+      expect(mocks.updateBotProvider.mock.calls[0][2].settings.dmPolicy).toBe('open');
     });
 
     it('saves the approval choice together with the owner ID once it is filled', async () => {

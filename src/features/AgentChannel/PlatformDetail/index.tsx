@@ -564,11 +564,15 @@ const PlatformDetail = memo<PlatformDetailProps>(
     // person to it, whichever block's Save they pressed. The focus waits for the tab to be open.
     const [ownerIdRevealing, setOwnerIdRevealing] = useState(false);
     const revealMissingOwnerId = useCallback(() => {
-      toast.error(t('channel.access.identity.requiredToSave'));
-      // An ID typed but not saved yet is not wrong: marking it would block its own block's Save.
-      if (ownerIdMissing(form.getValues().settings ?? {}))
-        form.setErrors({ 'settings.userId': t('channel.access.identity.required') });
       setPickedTab('access');
+      // The form already settles it (an ID typed, or the policy changed) but that is not stored yet.
+      // There is nothing to fill in, and marking a typed ID would block its own block's Save.
+      if (!ownerIdMissing(form.getValues().settings ?? {})) {
+        toast.error(t('channel.access.identity.savePendingFirst'));
+        return;
+      }
+      toast.error(t('channel.access.identity.requiredToSave'));
+      form.setErrors({ 'settings.userId': t('channel.access.identity.required') });
       setOwnerIdRevealing(true);
     }, [form, setPickedTab, t]);
     useEffect(() => {

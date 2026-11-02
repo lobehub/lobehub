@@ -616,6 +616,8 @@ export default {
   'channel.access.identity.desc':
     'Lets the bot reach you with reminders and notices, and makes you the one who approves strangers. The settings below never block you.',
   'channel.access.identity.required': 'Required to approve strangers',
+  'channel.access.identity.savePendingFirst':
+    "This bot's saved settings still need Your Platform User ID. Save your change to Owner identity or Conversation access first.",
   'channel.access.identity.requiredToSave':
     'Approving strangers needs Your Platform User ID. Fill it in first.',
   'channel.access.identity.approverMissing':

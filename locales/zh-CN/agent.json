@@ -29,6 +29,7 @@
   "channel.access.identity.desc": "用于主动联系你（提醒、通知），也是批准陌生人的人。下面的设置不会限制你自己。",
   "channel.access.identity.required": "批准陌生人需要填写你的 ID",
   "channel.access.identity.requiredToSave": "批准陌生人需要先填写「你的平台用户 ID」。",
+  "channel.access.identity.savePendingFirst": "这个机器人已保存的设置仍需要「你的平台用户 ID」。请先保存「所有者身份」或「对话权限」里的改动。",
   "channel.access.list.approved": "已批准的人",
   "channel.access.list.clearContent": "改成「所有人」会同时移除名单里的 {{count}} 个人，因为名单一旦有人，就会限制所有人。",
   "channel.access.list.clearOk": "切换并清空",
