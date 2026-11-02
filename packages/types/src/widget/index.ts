@@ -257,7 +257,7 @@ export interface WidgetView {
   /**
    * A self-contained HTML document that draws the card in a sandboxed frame:
    * no network, no access to the app. It receives the output and theme by
-   * `postMessage` as `window.lobeWidget`. Takes precedence over `layout`.
+   * `postMessage` as `window.widgetData`. Takes precedence over `layout`.
    */
   html?: string;
   /**

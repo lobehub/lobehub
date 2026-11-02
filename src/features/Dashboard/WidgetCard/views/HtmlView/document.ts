@@ -25,7 +25,7 @@ export type WidgetHtmlFrameMessage =
   | { source: typeof WIDGET_HTML_FRAME_SOURCE; type: 'open'; url: string };
 
 /**
- * Runs before the author's markup. `window.lobeWidget` exposes the latest
+ * Runs before the author's markup. `window.widgetData` exposes the latest
  * output (`data` is `output.data` for a data output, else the whole output,
  * matching layout bindings) and calls `onUpdate` listeners on every refresh.
  */
@@ -37,7 +37,7 @@ const BRIDGE = `(() => {
   const notify = (listener) => {
     try { listener(state); } catch (error) { console.error(error); }
   };
-  window.lobeWidget = {
+  window.widgetData = {
     get data() { return state.data; },
     get output() { return state.output; },
     get theme() { return state.theme; },

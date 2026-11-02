@@ -73,10 +73,10 @@ Example — weather (outputType "data", network.allow ["api.open-meteo.com"], ma
 <card_html>
 Prefer view.layout. When the user asks for a visual it cannot draw — an illustrated scene (a farm whose crops are the items, a city skyline, a garden), custom charts, animation — set view.html instead: one self-contained HTML document that draws the card. It replaces layout and surface.
 - It runs in a sandboxed frame with no network: no external scripts, styles, fonts or images. Inline everything (CSS, JS, SVG, canvas); images only as data: URLs. It cannot read cookies or call any API.
-- The script still collects the data; the HTML only draws it. Read it from window.lobeWidget: .data (output.data for outputType data, else the whole output), .output, .theme.appearance ("light" | "dark"). Register window.lobeWidget.onUpdate((state) => draw(state.data)) — it fires once the output arrives and again on every refresh; the document is not reloaded between runs.
-- window.lobeWidget.open(url) opens an http(s) link in a new tab, e.g. when a part of the scene is clicked. Plain <a> navigation does not work.
+- The script still collects the data; the HTML only draws it. Read it from window.widgetData: .data (output.data for outputType data, else the whole output), .output, .theme.appearance ("light" | "dark"). Register window.widgetData.onUpdate((state) => draw(state.data)) — it fires once the output arrives and again on every refresh; the document is not reloaded between runs.
+- window.widgetData.open(url) opens an http(s) link in a new tab, e.g. when a part of the scene is clicked. Plain <a> navigation does not work.
 - The frame fills the card body (default card ≈ 300×220 px, larger on the drill-down) and resizes with it: size from the viewport (100vw / 100vh, a resize listener or a scaled SVG viewBox), never a fixed pixel canvas. The page background is transparent; paint your own. Follow theme.appearance for text and background contrast. Keep it under 200 KB; draw from the data, do not hard-code values.
-Skeleton: <style>…</style><svg id="scene" viewBox="0 0 320 200" width="100%" height="100%"></svg><script>window.lobeWidget.onUpdate(({ data, theme }) => { /* draw data into #scene */ });</script>
+Skeleton: <style>…</style><svg id="scene" viewBox="0 0 320 200" width="100%" height="100%"></svg><script>window.widgetData.onUpdate(({ data, theme }) => { /* draw data into #scene */ });</script>
 </card_html>
 
 <metric_definition>

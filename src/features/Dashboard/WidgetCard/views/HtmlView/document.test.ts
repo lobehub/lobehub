@@ -15,7 +15,7 @@ describe('createWidgetHtmlDocument', () => {
     const csp = doc.indexOf(`content="${WIDGET_HTML_CSP}"`);
     expect(csp).toBeGreaterThanOrEqual(0);
     expect(csp).toBeLessThan(doc.indexOf('<!doctype html>'));
-    expect(doc.indexOf('window.lobeWidget')).toBeLessThan(doc.indexOf('<!doctype html>'));
+    expect(doc.indexOf('window.widgetData')).toBeLessThan(doc.indexOf('<!doctype html>'));
   });
 
   it('blocks network access', () => {
