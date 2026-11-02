@@ -42,6 +42,7 @@ Supported crawler types are listed below:
 | Value         | Description                                                                                                         | Environment Variable                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `browserless` | Headless browser crawler based on [Browserless](https://www.browserless.io/), suitable for rendering complex pages. | `BROWSERLESS_TOKEN`                                                         |
+| `deepseek`    | Markdown web fetch API provided by [DeepSeek](https://api-docs.deepseek.com/guides/search).                         | `DEEPSEEK_SEARCH_API_KEY` `DEEPSEEK_SEARCH_API_URL`                         |
 | `exa`         | Crawler capabilities provided by [Exa](https://exa.ai/), API required.                                              | `EXA_API_KEY`                                                               |
 | `firecrawl`   | [Firecrawl](https://firecrawl.dev/) headless browser API, ideal for modern websites.                                | `FIRECRAWL_API_KEY`                                                         |
 | `jina`        | Crawler service from [Jina AI](https://jina.ai/), supports fast content summarization.                              | `JINA_READER_API_KEY`                                                       |
@@ -103,6 +104,7 @@ Supported search engines include:
 | `anspire`    | Search service provided by [Anspire](https://anspire.ai/).                              | `ANSPIRE_API_KEY`                                                           |
 | `bocha`      | Search service from [Bocha](https://open.bochaai.com/).                                 | `BOCHA_API_KEY`                                                             |
 | `brave`      | [Brave](https://search.brave.com/help/api), a privacy-friendly search source.           | `BRAVE_API_KEY`                                                             |
+| `deepseek`   | Search service powered by [DeepSeek](https://api-docs.deepseek.com/guides/search).      | `DEEPSEEK_SEARCH_API_KEY` `DEEPSEEK_SEARCH_API_URL`                         |
 | `exa`        | [Exa](https://exa.ai/), a search API designed for AI.                                   | `EXA_API_KEY`                                                               |
 | `firecrawl`  | Search capabilities via [Firecrawl](https://firecrawl.dev/).                            | `FIRECRAWL_API_KEY`                                                         |
 | `google`     | Uses [Google Programmable Search Engine](https://programmablesearchengine.google.com/). | `GOOGLE_PSE_API_KEY` `GOOGLE_PSE_ENGINE_ID`                                 |
