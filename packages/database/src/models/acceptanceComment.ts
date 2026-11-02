@@ -475,6 +475,23 @@ export class AcceptanceCommentModel {
     return row;
   };
 
+  resolveRoots = async (acceptanceId: string, rootIds: string[], userId: string) => {
+    if (!rootIds.length) return [];
+    return this.db
+      .update(acceptanceComments)
+      .set({ resolvedAt: new Date(), resolvedByUserId: userId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(acceptanceComments.acceptanceId, acceptanceId),
+          inArray(acceptanceComments.id, rootIds),
+          isNull(acceptanceComments.parentCommentId),
+          isNull(acceptanceComments.resolvedAt),
+          isNull(acceptanceComments.deletedAt),
+        ),
+      )
+      .returning();
+  };
+
   /** Mark a thread root handled (or reopen it). Replies are not resolvable. */
   setResolved = async (rootId: string, resolved: boolean, userId: string) => {
     const [row] = await this.db

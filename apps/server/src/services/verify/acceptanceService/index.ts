@@ -58,6 +58,7 @@ import {
   completeTaskForDelivery,
   completeTaskSubject,
   reopenRejectedTaskSubject,
+  resolveRepairComments,
 } from './taskLifecycle';
 
 export type { AttachedRun } from './attachGuards';
@@ -484,8 +485,10 @@ export class AcceptanceService {
     // the way, and those rejections are exactly the material.
     this.distilSettledRound(acceptanceId, settled);
 
-    if (acceptance.subjectType === 'task')
+    if (acceptance.subjectType === 'task') {
       await completeTaskSubject(this.deps, acceptance.subjectId);
+      await resolveRepairComments(this.deps, acceptance);
+    }
 
     return (await this.acceptanceModel.findById(acceptanceId))!;
   };
@@ -524,8 +527,10 @@ export class AcceptanceService {
     await this.acceptanceModel.updateStatus(acceptanceId, 'accepted');
     notifyAcceptance(acceptanceId, 'session', this.actorUserId);
     if (current) this.distilSettledRound(acceptanceId, current.id);
-    if (acceptance.subjectType === 'task')
+    if (acceptance.subjectType === 'task') {
       await completeTaskSubject(this.deps, acceptance.subjectId);
+      await resolveRepairComments(this.deps, acceptance);
+    }
 
     log(
       'acceptance %s accepted by merge of %s#%d (was %s)',
