@@ -28,7 +28,7 @@ export class FileContentRepository {
         this.workspaceId,
       );
 
-      await fileModel.deleteFileChunks(tx, [file.id]);
+      await fileModel.deleteFileChunks(tx as any, [file.id]);
       await tx
         .delete(documents)
         .where(
