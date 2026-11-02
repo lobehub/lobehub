@@ -290,6 +290,26 @@ export class FileService {
   }
 
   /**
+   * Sync the existing row for a storage key whose object was just overwritten,
+   * so re-uploading one key keeps a single record. Resolves to `undefined` when
+   * no accessible row owns the key yet.
+   */
+  public async refreshFileRecordByUrl(
+    url: string,
+    params: { fileType: string; size: number },
+  ): Promise<{ fileId: string; url: string } | undefined> {
+    const existing = await this.fileModel.findByUrl(url);
+    if (!existing) return;
+
+    await this.fileModel.replaceStoredContent(existing, params);
+
+    return {
+      fileId: existing.id,
+      url: await this.getFileAccessUrl({ id: existing.id, url }),
+    };
+  }
+
+  /**
    * Delete user file record but keep globalFiles record
    * Used for GitHub skill imports where we only need globalFiles for foreign key
    *

@@ -499,6 +499,38 @@ describe('FileService', () => {
     });
   });
 
+  describe('refreshFileRecordByUrl', () => {
+    beforeEach(() => {
+      mockFileModel.findByUrl = vi.fn();
+      mockFileModel.replaceStoredContent = vi.fn();
+    });
+
+    it('updates the row that owns the key and returns its access url', async () => {
+      mockFileModel.findByUrl.mockResolvedValue({ id: 'file-1' });
+
+      const result = await service.refreshFileRecordByUrl('files/a.docx', {
+        fileType: 'application/docx',
+        size: 42,
+      });
+
+      expect(mockFileModel.replaceStoredContent).toHaveBeenCalledWith(
+        { id: 'file-1' },
+        { fileType: 'application/docx', size: 42 },
+      );
+      expect(result?.fileId).toBe('file-1');
+      expect(result?.url).toContain('file-1');
+    });
+
+    it('resolves undefined without writing when no row owns the key', async () => {
+      mockFileModel.findByUrl.mockResolvedValue(undefined);
+
+      await expect(
+        service.refreshFileRecordByUrl('files/a.docx', { fileType: 'x', size: 1 }),
+      ).resolves.toBeUndefined();
+      expect(mockFileModel.replaceStoredContent).not.toHaveBeenCalled();
+    });
+  });
+
   describe('createFileRecord', () => {
     beforeEach(() => {
       mockFileModel.checkHash = vi.fn();

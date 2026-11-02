@@ -53,6 +53,7 @@ import {
   libraryVisibleFile,
   notAgentShareFile,
 } from '../utils/fileVisibility';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -194,37 +195,17 @@ export class FileModel {
 
     const fileHash = file.fileHash;
 
-    // 1. Delete related chunks
-    await this.deleteFileChunks(tx as any, [id]);
+    await this.deleteDerivedData(tx, file);
 
-    // 2. Delete mirror documents whose source is this file. Without this,
-    // documents.fileId would be set null by FK and leave orphan rows behind
-    // (still indexed by BM25, still occupying KB slots).
-    await tx
-      .delete(documents)
-      .where(
-        and(
-          eq(documents.fileId, id),
-          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
-          eq(documents.sourceType, 'file'),
-        ),
-      );
-
-    // 3. Delete the chunk/embedding asyncTasks tied to this file. files.chunkTaskId
-    // and embeddingTaskId are `set null` on the asyncTasks side, so without this
-    // the task rows would dangle in the DB forever.
-    const taskIds = [file.chunkTaskId, file.embeddingTaskId].filter((taskId): taskId is string =>
-      Boolean(taskId),
-    );
-    if (taskIds.length > 0) {
-      await tx.delete(asyncTasks).where(inArray(asyncTasks.id, taskIds));
-    }
-
-    // 4. Delete file record
+    // Delete file record
     await tx.delete(files).where(and(eq(files.id, id), this.ownership()));
 
     if (!fileHash) {
-      return removeGlobalFile && getAgentShareFileProvenance(file.metadata) ? file : undefined;
+      if (!removeGlobalFile || !getAgentShareFileProvenance(file.metadata)) return undefined;
+
+      return (await this.findReferencedStorageUrls(tx, [file.url])).has(file.url)
+        ? undefined
+        : file;
     }
 
     const result = await tx
@@ -239,10 +220,78 @@ export class FileModel {
     if (fileCount === 0 && removeGlobalFile) {
       await tx.delete(globalFiles).where(eq(globalFiles.hashId, fileHash));
 
-      return file;
+      return (await this.findReferencedStorageUrls(tx, [file.url])).has(file.url)
+        ? undefined
+        : file;
     }
 
     return undefined;
+  };
+
+  /** Remove what was parsed or embedded from a file's stored content. */
+  private deleteDerivedData = async (tx: Transaction, file: FileItem) => {
+    // 1. Delete related chunks
+    await this.deleteFileChunks(tx as any, [file.id]);
+
+    // 2. Delete mirror documents whose source is this file. Without this,
+    // documents.fileId would be set null by FK and leave orphan rows behind
+    // (still indexed by BM25, still occupying KB slots).
+    await tx
+      .delete(documents)
+      .where(
+        and(
+          eq(documents.fileId, file.id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+          eq(documents.sourceType, 'file'),
+        ),
+      );
+
+    // 3. Delete the chunk/embedding asyncTasks tied to this file. files.chunkTaskId
+    // and embeddingTaskId are `set null` on the asyncTasks side, so without this
+    // the task rows would dangle in the DB forever.
+    const taskIds = [file.chunkTaskId, file.embeddingTaskId].filter((taskId): taskId is string =>
+      Boolean(taskId),
+    );
+    if (taskIds.length > 0) {
+      await tx.delete(asyncTasks).where(inArray(asyncTasks.id, taskIds));
+    }
+  };
+
+  /**
+   * Point a row at the new content of its overwritten storage object, dropping
+   * parsed data so later reads cannot return the previous version.
+   */
+  replaceStoredContent = async (file: FileItem, value: Pick<FileItem, 'fileType' | 'size'>) => {
+    await this.db.transaction(async (tx) => {
+      await this.deleteDerivedData(tx, file);
+      await tx
+        .update(files)
+        .set({ ...value, updatedAt: new Date() })
+        .where(and(eq(files.id, file.id), this.ownership()));
+    });
+  };
+
+  /**
+   * Storage keys still pointed at by a surviving row. Rows can share one object
+   * under different hashes (a sandbox re-export overwrites the same key), so a
+   * hash reference count alone cannot prove the object is unused. Recycle-bin
+   * rows count because they can still be restored.
+   */
+  private findReferencedStorageUrls = async (tx: Transaction, urls: string[]) => {
+    const rows = await tx
+      .select({ url: files.url })
+      .from(files)
+      .where(
+        and(
+          inArray(files.url, urls),
+          // Not `ownership()`: another member's private row still needs the object.
+          this.workspaceId
+            ? or(eq(files.userId, this.userId), eq(files.workspaceId, this.workspaceId))
+            : eq(files.userId, this.userId),
+        ),
+      );
+
+    return new Set(rows.map((row) => row.url));
   };
 
   /** Delete a file row within the caller's access scope. */
@@ -471,7 +520,22 @@ export class FileModel {
       const hashesToDeleteSet = new Set(hashesToDelete);
 
       // Return only files whose backing global object became unreferenced.
-      return fileList.filter((file) => file.fileHash && hashesToDeleteSet.has(file.fileHash));
+      const unreferenced = fileList.filter(
+        (file) => file.fileHash && hashesToDeleteSet.has(file.fileHash),
+      );
+      if (unreferenced.length === 0) return [];
+
+      const referencedUrls = await this.findReferencedStorageUrls(
+        trx,
+        unreferenced.map((file) => file.url),
+      );
+      const seenUrls = new Set<string>();
+
+      return unreferenced.filter((file) => {
+        if (referencedUrls.has(file.url) || seenUrls.has(file.url)) return false;
+        seenUrls.add(file.url);
+        return true;
+      });
     });
   };
 
@@ -615,6 +679,19 @@ export class FileModel {
         inArray(files.id, ids),
         this.ownership(),
         fileMatchesAccessScope(files.metadata, accessScope),
+      ),
+    });
+  };
+
+  /** Latest row the caller can access for a storage key. */
+  findByUrl = async (url: string) => {
+    return this.db.query.files.findFirst({
+      orderBy: [desc(files.createdAt)],
+      where: and(
+        eq(files.url, url),
+        notTrashed(files.isDeleted),
+        this.ownership(),
+        fileMatchesAccessScope(files.metadata, ordinaryFileAccessScope),
       ),
     });
   };

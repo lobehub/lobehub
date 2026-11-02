@@ -241,6 +241,7 @@ describe('SandboxMiddlewareService', () => {
         contentLength: 42,
         contentType: 'text/csv',
       })),
+      refreshFileRecordByUrl: vi.fn(async () => undefined),
     } as unknown as FileService;
 
     const service = new TestSandboxMiddlewareService(provider, {
@@ -276,6 +277,48 @@ describe('SandboxMiddlewareService', () => {
         ),
       }),
     );
+  });
+
+  it('reuses the existing record when exporting the same key again', async () => {
+    const { SandboxMiddlewareService: TestSandboxMiddlewareService } = await import('../service');
+    const provider = {
+      capabilities: {
+        backgroundCommands: true,
+        exportFile: true,
+        files: true,
+        languages: ['python'],
+        persistentSession: true,
+        shell: true,
+        skillScripts: true,
+      },
+      callTool: vi.fn(),
+      exportFileToUploadUrl: vi.fn(async () => ({ success: true })),
+      kind: 'onlyboxes',
+    } satisfies SandboxProvider;
+    const fileService = {
+      createFileRecord: vi.fn(),
+      createPreSignedUpload: vi.fn(async () => ({
+        headers: {},
+        url: 'https://uploads.example.com',
+      })),
+      getFileMetadata: vi.fn(async () => ({ contentLength: 42, contentType: 'text/csv' })),
+      refreshFileRecordByUrl: vi.fn(async () => ({ fileId: 'file-1', url: '/f/file-1' })),
+    } as unknown as FileService;
+    const service = new TestSandboxMiddlewareService(provider, {
+      fileService,
+      marketService: {} as MarketService,
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const result = await service.exportAndUploadFile('/workspace/result.csv', 'result.csv');
+
+    expect(result).toMatchObject({ fileId: 'file-1', size: 42, success: true, url: '/f/file-1' });
+    expect(fileService.refreshFileRecordByUrl).toHaveBeenCalledWith(
+      expect.stringMatching(/\/topic-1\/result\.csv$/),
+      { fileType: 'text/csv', size: 42 },
+    );
+    expect(fileService.createFileRecord).not.toHaveBeenCalled();
   });
 
   it('keys the object on storageName while keeping filename as the display name', async () => {

@@ -347,14 +347,23 @@ export class SandboxMiddlewareService implements SandboxService {
         'application/octet-stream';
       const fileHash = sha256(key + now.toString());
 
-      const { fileId, url } = await fileService.createFileRecord({
-        fileHash,
-        fileType: mimeType,
-        ...(options?.metadata ? { metadata: options.metadata } : {}),
-        name: filename,
-        size: fileSize,
-        url: key,
-      });
+      // Without a `storageName` the key is stable per (day, topic, filename), so
+      // exporting again overwrote the object the existing row already points at:
+      // keep that one row instead of adding a second record for the same object.
+      const reusedRecord = options?.storageName
+        ? undefined
+        : await fileService.refreshFileRecordByUrl(key, { fileType: mimeType, size: fileSize });
+
+      const { fileId, url } =
+        reusedRecord ??
+        (await fileService.createFileRecord({
+          fileHash,
+          fileType: mimeType,
+          ...(options?.metadata ? { metadata: options.metadata } : {}),
+          name: filename,
+          size: fileSize,
+          url: key,
+        }));
 
       return {
         fileId,
