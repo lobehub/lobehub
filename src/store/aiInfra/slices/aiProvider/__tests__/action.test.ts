@@ -7,6 +7,7 @@ import {
   filterHiddenBuiltinModels,
   getAsrModelList,
   getChatModelList,
+  getDecisionModelList,
   getEmbeddingModelList,
   getImageModelList,
   normalizeChatModel,
@@ -396,6 +397,27 @@ describe('aiProvider action helpers', () => {
       );
 
       expect(result.map((model) => model.id)).toEqual(['whisper-1']);
+    });
+  });
+
+  describe('getDecisionModelList', () => {
+    it('collects only visible decision models for a provider', async () => {
+      const result = await getDecisionModelList(
+        [
+          createChatModel({ id: 'gpt-4o-mini', providerId: 'openrouter' }),
+          createEmbeddingModel({ id: 'jev', providerId: 'openrouter', type: 'decision' }),
+          createEmbeddingModel({
+            id: 'hidden-jev',
+            providerId: 'openrouter',
+            type: 'decision',
+            visible: false,
+          }),
+          createEmbeddingModel({ id: 'other-jev', providerId: 'typesafe', type: 'decision' }),
+        ],
+        'openrouter',
+      );
+
+      expect(result.map((model) => model.id)).toEqual(['jev']);
     });
   });
 

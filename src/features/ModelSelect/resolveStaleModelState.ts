@@ -1,4 +1,4 @@
-import { type LobeDefaultAiModelListItem } from 'model-bank';
+import { type AiModelType, type LobeDefaultAiModelListItem } from 'model-bank';
 
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
@@ -21,6 +21,8 @@ export interface StaleModelState {
 export interface ResolveStaleModelStateContext {
   builtinAiModelList: LobeDefaultAiModelListItem[];
   enabledList: EnabledProviderWithModels[];
+  /** Other model types the picker also offers, e.g. `decision` next to `chat`. */
+  extraModelTypes?: AiModelType[];
   modelRedirects?: Record<string, string>;
   modelType: 'asr' | 'chat' | 'embedding';
 }
@@ -67,7 +69,13 @@ export const resolveEnableTargetProviderId = (
  */
 export const resolveStaleModelState = (
   value: { model: string; provider?: string } | undefined,
-  { builtinAiModelList, enabledList, modelRedirects, modelType }: ResolveStaleModelStateContext,
+  {
+    builtinAiModelList,
+    enabledList,
+    extraModelTypes,
+    modelRedirects,
+    modelType,
+  }: ResolveStaleModelStateContext,
 ): StaleModelState | undefined => {
   if (!value?.model) return;
 
@@ -82,7 +90,7 @@ export const resolveStaleModelState = (
       (m) =>
         m.id === id &&
         (providerId === undefined || m.providerId === providerId) &&
-        m.type === modelType,
+        (m.type === modelType || Boolean(m.type && extraModelTypes?.includes(m.type))),
     );
 
   const meta = findBuiltin(value.model, value.provider) ?? findBuiltin(value.model);

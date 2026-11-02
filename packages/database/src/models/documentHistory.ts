@@ -1,4 +1,8 @@
-import { and, desc, eq, lt, or } from 'drizzle-orm';
+import {
+  DOCUMENT_HISTORY_AUTOSAVE_SOURCE_LIMIT,
+  DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS,
+} from '@lobechat/const';
+import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
 
 import type { DocumentHistoryItem, NewDocumentHistory } from '../schemas';
 import { documentHistories, documents } from '../schemas';
@@ -52,6 +56,90 @@ export class DocumentHistoryModel {
       .returning();
 
     return result!;
+  };
+
+  /**
+   * Appends one revision to a Document the caller has already authorized.
+   *
+   * Use when:
+   * - A unit of work resolved the Document through its owning aggregate in the same transaction.
+   *
+   * Expects:
+   * - `documentId` is accessible to this scope; unlike {@link create}, no Document lookup runs.
+   *
+   * Returns:
+   * - The inserted revision.
+   */
+  append = async (
+    params: Pick<NewDocumentHistory, 'documentId' | 'editorData' | 'saveSource' | 'savedAt'>,
+  ): Promise<DocumentHistoryItem> => {
+    const [result] = await this.db
+      .insert(documentHistories)
+      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
+      .returning();
+
+    return result!;
+  };
+
+  /**
+   * Records the previous editor state as an autosave revision of an authorized Document.
+   *
+   * Use when:
+   * - A source edit replaces Document content and the old state must stay recoverable.
+   *
+   * Expects:
+   * - `documentId` is accessible to this scope.
+   * - Autosaves coalesce into fixed clock buckets of {@link DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS}
+   *   and keep at most {@link DOCUMENT_HISTORY_AUTOSAVE_SOURCE_LIMIT} autosave rows.
+   */
+  recordAutosave = async (documentId: string, editorData: Record<string, any>, savedAt: Date) => {
+    const [latestHistory] = await this.db
+      .select()
+      .from(documentHistories)
+      .where(and(eq(documentHistories.documentId, documentId), this.ownership()))
+      .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
+      .limit(1);
+    // Match the canonical Document history policy: fixed clock buckets keep
+    // continuous typing bounded without turning the anchor into a sliding window.
+    const withinAutosaveWindow =
+      latestHistory?.saveSource === 'autosave' &&
+      Math.floor(latestHistory.savedAt.getTime() / DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS) ===
+        Math.floor(savedAt.getTime() / DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS);
+
+    if (withinAutosaveWindow) {
+      await this.db
+        .update(documentHistories)
+        .set({ editorData, savedAt })
+        .where(and(eq(documentHistories.id, latestHistory.id), this.ownership()));
+      return;
+    }
+
+    await this.append({ documentId, editorData, saveSource: 'autosave', savedAt });
+
+    // Retain the same bounded autosave lineage as the Document service.
+    const expiredAutosaves = await this.db
+      .select({ id: documentHistories.id })
+      .from(documentHistories)
+      .where(
+        and(
+          eq(documentHistories.documentId, documentId),
+          eq(documentHistories.saveSource, 'autosave'),
+          this.ownership(),
+        ),
+      )
+      .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
+      .offset(DOCUMENT_HISTORY_AUTOSAVE_SOURCE_LIMIT);
+    if (expiredAutosaves.length > 0) {
+      await this.db.delete(documentHistories).where(
+        and(
+          inArray(
+            documentHistories.id,
+            expiredAutosaves.map(({ id }) => id),
+          ),
+          this.ownership(),
+        ),
+      );
+    }
   };
 
   delete = async (id: string) => {

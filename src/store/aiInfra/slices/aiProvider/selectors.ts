@@ -17,6 +17,7 @@ const disabledCustomAiProviderList = (s: AIProviderStoreState) =>
 
 const enabledEmbeddingModelList = (s: AIProviderStoreState) => s.enabledEmbeddingModelList || [];
 const enabledAsrModelList = (s: AIProviderStoreState) => s.enabledAsrModelList || [];
+const enabledDecisionModelList = (s: AIProviderStoreState) => s.enabledDecisionModelList || [];
 
 const enabledImageModelList = (s: AIProviderStoreState) => s.enabledImageModelList || [];
 
@@ -117,6 +118,7 @@ export const aiProviderSelectors = {
   disabledCustomAiProviderList,
   enabledAiProviderList,
   enabledAsrModelList,
+  enabledDecisionModelList,
   enabledEmbeddingModelList,
   enabledImageModelList,
   enabledVideoModelList,

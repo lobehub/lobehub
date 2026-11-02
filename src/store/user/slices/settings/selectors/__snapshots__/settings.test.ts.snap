@@ -103,6 +103,10 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5.6-luna",
     "provider": "openai",
   },
+  "quickNoteDecision": {
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
+  },
   "replyMessage": "Custom auto reply",
   "thread": {
     "model": "gpt-5.6-luna",

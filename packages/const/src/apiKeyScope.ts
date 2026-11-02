@@ -279,6 +279,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // project environments and working directories: same agent domain as `project`
   projectWorkingDirectory: rw('agent:read', 'agent:write'),
   pushToken: 'blocked',
+  // Preserve restricted-key denial until Quick Note has an explicit scoped API contract.
+  quickNote: 'blocked',
   ragEval: 'blocked',
   recent: rw('chat:read', null),
   referral: 'blocked',

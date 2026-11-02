@@ -357,3 +357,66 @@ export const applyLiteXMLOperations = async ({
       editor.destroy();
     }
   });
+
+/**
+ * Appends Markdown after the last top-level node of a document, keeping the existing nodes and
+ * their ids.
+ *
+ * Use when:
+ * - A product action (a Quick Note "write into this Page" Proposal) adds a section to an existing
+ *   document without an Agent reading node ids first.
+ *
+ * Expects:
+ * - `markdown` is Markdown, not LiteXML or raw JSON (same guards as
+ *   {@link createAgentMarkdownSnapshot}).
+ * - The document state follows the same `editorData` → Markdown fallback as other agent writes.
+ *
+ * Returns:
+ * - The full snapshot to persist: Markdown `content` and the merged Lexical `editorData`.
+ */
+export const appendMarkdownSnapshot = async ({
+  editorData,
+  fallbackContent,
+  markdown,
+}: LoadEditorStateParams & { markdown: string }): Promise<AgentDocumentEditorSnapshot> => {
+  // Runs the LiteXML / JSON / empty-result guards before touching the document.
+  const appended = await createAgentMarkdownSnapshot(markdown);
+
+  return withHeadlessEditorLock(() => {
+    const { editor: base } = createEditorWithState(createDocumentHeadlessEditor, {
+      editorData,
+      fallbackContent,
+    });
+    let merged: ReturnType<typeof createDocumentHeadlessEditor> | undefined;
+
+    try {
+      const baseSnapshot = exportSnapshot(base);
+      const baseState = baseSnapshot.editorData as SerializedEditorState<SerializedLexicalNode>;
+      const appendedState = appended.editorData as SerializedEditorState<SerializedLexicalNode>;
+      // An empty document is a single empty paragraph; replace it instead of keeping a blank line.
+      const baseChildren =
+        baseSnapshot.content.trim().length > 0 ? (baseState.root.children ?? []) : [];
+
+      merged = createDocumentHeadlessEditor();
+      merged.hydrateEditorData(
+        {
+          ...baseState,
+          root: {
+            ...baseState.root,
+            children: [...baseChildren, ...(appendedState.root.children ?? [])],
+          },
+        } as SerializedEditorState<SerializedLexicalNode>,
+        { keepId: true },
+      );
+
+      const snapshot = exportSnapshot(merged);
+      if (snapshot.content.trim().length === 0) {
+        throw new Error('Appending Markdown unexpectedly produced an empty document');
+      }
+      return snapshot;
+    } finally {
+      merged?.destroy();
+      base.destroy();
+    }
+  });
+};

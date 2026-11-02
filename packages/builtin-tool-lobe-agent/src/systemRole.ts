@@ -274,3 +274,10 @@ ${subAgentSection}`;
  * instructs the model to use a tool that isn't in its tool list.
  */
 export const systemPromptWithoutSubAgent = baseSystemPrompt;
+
+/**
+ * Prompt variant for contexts that expose only `analyzeMedia` (Quick Note). Keeps the media
+ * fallback guidance and drops every section about tools that are not mounted.
+ */
+export const systemPromptMediaOnly = `Use Lobe Agent capabilities only when the active model needs built-in assistance. Prefer the active model's native capabilities whenever they are sufficient. Follow each tool's description and schema, and use tool results to answer the user directly.
+${multimodalAnalysisSection}`;

@@ -36,6 +36,7 @@ import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces'
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
 import { agentPageChildren } from '@/spa/router/agentPageRoutes';
 import { memoryChildren } from '@/spa/router/memoryRoutes';
+import { noteChildren } from '@/spa/router/noteRoutes';
 import { onboardingRoute } from '@/spa/router/onboardingRoute';
 import { pageListLoader } from '@/spa/router/pageListLoader';
 import { projectWorkspaceRoute } from '@/spa/router/projectWorkspaceRoutes';
@@ -599,6 +600,18 @@ export const sharedMainAreaChildren: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     loader: pageListLoader,
     path: 'page',
+  },
+
+  // Quick Note routes
+  {
+    children: noteChildren,
+    element: dynamicLayout(
+      () => import('@/routes/(main)/note/_layout'),
+      'Desktop > Note > Layout',
+      { preloadId: 'note' },
+    ),
+    errorElement: <ErrorBoundary />,
+    path: 'note',
   },
 ];
 

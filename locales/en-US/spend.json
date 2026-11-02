@@ -42,6 +42,7 @@
   "table.columns.trigger.enums.openapi": "OpenAPI",
   "table.columns.trigger.enums.prompt_rewrite": "Prompt Rewrite",
   "table.columns.trigger.enums.provider_check": "Provider Check",
+  "table.columns.trigger.enums.quick_note": "Quick Note",
   "table.columns.trigger.enums.scheduled": "Scheduled Run",
   "table.columns.trigger.enums.scm": "Pull Request",
   "table.columns.trigger.enums.semantic_search": "Knowledge Search",

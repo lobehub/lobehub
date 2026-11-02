@@ -70,6 +70,11 @@ const TIERS: { key: ServiceModelTier; modelKind: ModelKind; rows: RowKey[] }[] =
   { key: 'embedding', modelKind: 'embedding', rows: SERVICE_MODEL_TIER_SLOTS.embedding },
 ] as { key: ServiceModelTier; modelKind: ModelKind; rows: RowKey[] }[];
 
+/** Rows whose picker lists a different model kind than their tier's picker. */
+const ROW_MODEL_KIND: Partial<Record<RowKey, ModelKind>> = {
+  quickNoteDecision: 'chatOrDecision',
+};
+
 /** Speech-to-text follows no tier; it is its own row after the tiers. */
 const ASR_ROW = 'asr' satisfies RowKey;
 
@@ -311,7 +316,7 @@ const ServiceModelForm = ({ hidePersonalPreferences }: ServiceModelFormProps) =>
         </Flexbox>
         {open && (
           <Flexbox style={{ paddingBlockStart: 8 }}>
-            {rows.map((row) => renderRow(row, modelKind))}
+            {rows.map((row) => renderRow(row, ROW_MODEL_KIND[row] ?? modelKind))}
           </Flexbox>
         )}
       </Flexbox>

@@ -16,9 +16,10 @@ import { AgentManagementApiName } from './types';
  * switches to the variant without the dispatch guidance plus an explicit note
  * that delegation is unavailable — otherwise the prompt would keep instructing
  * the model to dispatch a tool that is no longer in its tool list.
+ * Quick Note also uses this restricted surface so analysis stays in the current run.
  */
 export const resolveAgentManagementManifest: BuiltinManifestResolver = (context) => {
-  if (context.isSubAgent !== true) return AgentManagementManifest;
+  if (context.isSubAgent !== true && context.scope !== 'quick_note') return AgentManagementManifest;
 
   return {
     ...AgentManagementManifest,

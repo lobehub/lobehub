@@ -36,6 +36,7 @@ vi.mock('@/store/resourcePermission', () => ({
   resourcePermissionActions: { reset: resourcePermissionReset },
 }));
 vi.mock('@/store/sandbox', () => ({ sandboxActions: { reset: sandboxReset } }));
+vi.mock('@/store/quickNote', () => ({ useQuickNoteStore: fakeStore() }));
 vi.mock('@/store/session', () => ({ useSessionStore: fakeStore() }));
 vi.mock('@/store/task', () => ({ useTaskStore: fakeStore() }));
 vi.mock('@/store/tool', () => ({ useToolStore: fakeStore() }));
@@ -62,7 +63,7 @@ describe('stores.reset', () => {
     stores.reset();
 
     expect(resetGatewayMuxRegistry).toHaveBeenCalledTimes(1);
-    expect(storeResets).toHaveLength(19);
+    expect(storeResets).toHaveLength(20);
     expect(pageReset).toHaveBeenCalledTimes(1);
     // Confirmed manage grants and the memory-only collaborator roster must not
     // outlive the data context, even when the next one reuses the scope string.

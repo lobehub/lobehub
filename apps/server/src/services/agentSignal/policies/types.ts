@@ -2,9 +2,11 @@ import type { BaseAction, BaseSignal } from '@lobechat/agent-signal';
 import type {
   SourceAgentExecutionCompleted,
   SourceAgentExecutionFailed,
+  SourceQuickNoteProposalDecided,
   SourceRuntimeAfterStep,
   SourceRuntimeBeforeStep,
 } from '@lobechat/agent-signal/source';
+import type { QuickNoteDelegatePreset, QuickNoteRunDecision } from '@lobechat/types';
 
 /** Server-owned built-in AgentSignal policy identifiers. */
 export const AGENT_SIGNAL_POLICIES = {
@@ -25,6 +27,12 @@ export const AGENT_SIGNAL_POLICY_SIGNAL_TYPES = {
   nudgeMemoryConditionMatched: 'signal.nudge.memory.condition-matched',
   nudgeMemoryConditionMismatched: 'signal.nudge.memory.condition-mismatched',
   procedureBucketScored: 'signal.procedure.bucket.scored',
+  /** A Quick Note edit changed what the note means; its pending Proposals may no longer fit. */
+  quickNoteContentMeaningChanged: 'quick_note.content.meaning_changed',
+  /** First-step intent judgement of a Quick Note Analyze Run, with its gated action plan. */
+  quickNoteIntentDecided: 'quick_note.intent.decided',
+  /** A user (or score-4 auto) reaction to a Quick Note Proposal, kept as feedback data. */
+  quickNoteProposalFeedback: 'quick_note.proposal.feedback',
   selfReflectionNeeded: 'signal.self-reflection-analysis.reflect-needed',
   selfReflectionSkipped: 'signal.self-reflection-analysis.reflect-skipped',
   toolOutcome: 'signal.tool.outcome',
@@ -37,6 +45,12 @@ export const AGENT_SIGNAL_POLICY_ACTION_TYPES = {
   // proposal payload, apply/revert path, and UI projection. The current analyze-intent path must
   // not silently mutate persona state from prompt-shaped feedback.
   personaHandle: 'action.persona.handle',
+  /** Complete a Quick Note Run whose judgement planned nothing beyond keeping it. */
+  quickNoteComplete: 'action.quick-note.complete',
+  /** Start the follow-up Agent run for planned enrich / link / delegate output. */
+  quickNoteGenerate: 'action.quick-note.generate',
+  /** Mark a Quick Note's current pending Proposals stale. */
+  quickNoteMarkProposalsStale: 'action.quick-note.mark-proposals-stale',
   skillManagementHandle: 'action.skill-management.handle',
   userMemoryHandle: 'action.user-memory.handle',
 } as const;
@@ -270,6 +284,19 @@ export interface AgentSignalPolicySignalPayloadMap {
     recordIds: string[];
     suggestedActions: string[];
   };
+  [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.quickNoteContentMeaningChanged]: {
+    baselineRunId: string;
+    /** `meaningChanged` boolean probability (0 when the model refused). */
+    probability: number;
+    quickNoteId: string;
+  };
+  [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.quickNoteIntentDecided]: {
+    decision: QuickNoteRunDecision;
+    plan: AgentSignalQuickNoteActionPlan;
+    quickNoteId: string;
+    runId: string;
+  };
+  [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.quickNoteProposalFeedback]: SourceQuickNoteProposalDecided['payload'];
   [AGENT_SIGNAL_POLICY_SIGNAL_TYPES.selfReflectionNeeded]: {
     agentId?: string;
     operationId: string;
@@ -307,6 +334,13 @@ export interface AgentSignalPolicySignalPayloadMap {
   };
 }
 
+/** Gated actions planned from one Quick Note intent judgement. */
+export interface AgentSignalQuickNoteActionPlan {
+  delegate?: { autoApply: boolean; preset: QuickNoteDelegatePreset; score: number };
+  enrich: boolean;
+  link: boolean;
+}
+
 /** Server-owned built-in AgentSignal action payloads keyed by action type. */
 export interface AgentSignalPolicyActionPayloadMap {
   [AGENT_SIGNAL_POLICY_ACTION_TYPES.nudgeHandle]: {
@@ -324,6 +358,19 @@ export interface AgentSignalPolicyActionPayloadMap {
     serializedContext?: string;
     topicId?: string;
     update?: Record<string, unknown>;
+  };
+  [AGENT_SIGNAL_POLICY_ACTION_TYPES.quickNoteComplete]: {
+    quickNoteId: string;
+    runId: string;
+  };
+  [AGENT_SIGNAL_POLICY_ACTION_TYPES.quickNoteGenerate]: {
+    plan: AgentSignalQuickNoteActionPlan;
+    quickNoteId: string;
+    runId: string;
+  };
+  [AGENT_SIGNAL_POLICY_ACTION_TYPES.quickNoteMarkProposalsStale]: {
+    baselineRunId: string;
+    quickNoteId: string;
   };
   [AGENT_SIGNAL_POLICY_ACTION_TYPES.skillManagementHandle]: {
     agentId?: string;

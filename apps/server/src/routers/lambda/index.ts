@@ -92,6 +92,7 @@ import { projectRouter } from './project';
 import { projectReviewRouter } from './projectReview';
 import { projectWorkingDirectoryRouter } from './projectWorkingDirectory';
 import { pushTokenRouter } from './pushToken';
+import { quickNoteRouter } from './quickNote';
 import { ragEvalRouter } from './ragEval';
 import { recentRouter } from './recent';
 import { resourcePermissionRouter } from './resourcePermission';
@@ -197,6 +198,7 @@ export const lambdaRouter = router({
   projectReview: projectReviewRouter,
   projectWorkingDirectory: projectWorkingDirectoryRouter,
   pushToken: pushTokenRouter,
+  quickNote: quickNoteRouter,
   ragEval: ragEvalRouter,
   recent: recentRouter,
   resourcePermission: resourcePermissionRouter,

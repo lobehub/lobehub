@@ -1,5 +1,6 @@
 import type { BriefArtifacts } from '../brief';
 import type { ChatFileItem } from '../message/ui/chat';
+import type { QuickNoteTaskSource } from '../quickNote';
 
 export * from './archive';
 export * from './execution';
@@ -323,6 +324,11 @@ export interface TaskContext {
   lifecycle?: TaskLifecycleAudit;
   origin?: TaskOriginContext;
   scheduler?: TaskSchedulerContext;
+  /**
+   * Product surface that created the Task on the user's behalf. A `quick_note` source keeps the
+   * Task out of task lists; the Quick Note sidebar lists it instead.
+   */
+  source?: QuickNoteTaskSource;
 }
 
 // ── Task list item (shared between router response and client) ──

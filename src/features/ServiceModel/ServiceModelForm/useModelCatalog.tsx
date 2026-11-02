@@ -2,14 +2,18 @@ import { type SelectOptions } from '@lobehub/ui';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { mergeProviderModelLists } from '@/features/ModelSelect/mergeProviderModelLists';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { decisionModelProviders } from '../decisionModelProviders';
 import { type ModelRef } from '../serviceModelState';
 import ModelLabel from './ModelLabel';
 
-/** `vision` is the chat models that can read images. */
-export type ModelKind = 'asr' | 'chat' | 'decision' | 'embedding' | 'vision';
+/**
+ * `vision` is the chat models that can read images. `chatOrDecision` is for slots whose server
+ * path answers through `decide`, which takes decision models natively and emulates chat ones.
+ */
+export type ModelKind = 'asr' | 'chat' | 'chatOrDecision' | 'decision' | 'embedding' | 'vision';
 
 // lobe-design-ignore DETAIL-NO-EMPTY: with no enabled model the picker still offers its follow item, so the list is never empty
 export const toOptionValue = ({ model, provider }: ModelRef) => `${provider}/${model}`;
@@ -23,6 +27,9 @@ export const useModelOptions = (kind: ModelKind) => {
   const decisionModels = useAiInfraStore((s) => s.enabledAiModels);
   const enabledProviders = useAiInfraStore((s) => s.enabledAiProviders);
   const runtimeConfig = useAiInfraStore((s) => s.aiProviderRuntimeConfig);
+  const decisionModelList = useAiInfraStore((s) =>
+    kind === 'chatOrDecision' ? aiProviderSelectors.enabledDecisionModelList(s) : undefined,
+  );
   const providers = useAiInfraStore((s) =>
     kind === 'embedding'
       ? aiProviderSelectors.enabledEmbeddingModelList(s)
@@ -35,7 +42,9 @@ export const useModelOptions = (kind: ModelKind) => {
     const candidates =
       kind === 'decision'
         ? decisionModelProviders(decisionModels ?? [], enabledProviders ?? [], runtimeConfig)
-        : providers;
+        : decisionModelList
+          ? mergeProviderModelLists(providers, decisionModelList)
+          : providers;
     const withModels = candidates
       .map((provider) =>
         kind === 'vision'
@@ -57,7 +66,7 @@ export const useModelOptions = (kind: ModelKind) => {
         value: toOptionValue({ model: model.id, provider: provider.id }),
       })),
     }));
-  }, [decisionModels, enabledProviders, kind, providers, runtimeConfig, t]);
+  }, [decisionModelList, decisionModels, enabledProviders, kind, providers, runtimeConfig, t]);
 
   /** Option value → model ref; the model id may itself contain slashes. */
   const parseValue = useCallback((value: string): ModelRef => {

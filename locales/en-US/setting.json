@@ -1924,6 +1924,8 @@
   "systemAgent.promptRewrite.label": "Model",
   "systemAgent.promptRewrite.modelDesc": "Improves prompts before generation. When enabled, this model rewrites the prompt.",
   "systemAgent.promptRewrite.title": "Prompt Rewriting",
+  "systemAgent.quickNoteDecision.modelDesc": "Model used to decide what to do with each Quick Note, such as enriching, linking, or delegating it.",
+  "systemAgent.quickNoteDecision.title": "Quick Note Triage",
   "systemAgent.thread.label": "Model",
   "systemAgent.thread.modelDesc": "Model used to rename subtopics",
   "systemAgent.thread.title": "Subtopic Auto-Naming",

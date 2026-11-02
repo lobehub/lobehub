@@ -87,6 +87,7 @@ export type AiProviderRuntimeStateView = AiProviderRuntimeState & {
   builtinAiModelList: LobeDefaultAiModelListItem[];
   enabledAsrModelList?: EnabledProviderWithModels[];
   enabledChatModelList?: EnabledProviderWithModels[];
+  enabledDecisionModelList?: EnabledProviderWithModels[];
   enabledEmbeddingModelList?: EnabledProviderWithModels[];
   enabledImageModelList?: EnabledProviderWithModels[];
   enabledVideoModelList?: EnabledProviderWithModels[];
@@ -99,6 +100,7 @@ const RUNTIME_STATE_DISPLAY_FIELDS = [
   'enabledAsrModelList',
   'enabledChatAiProviders',
   'enabledChatModelList',
+  'enabledDecisionModelList',
   'enabledEmbeddingModelList',
   'enabledImageAiProviders',
   'enabledImageModelList',

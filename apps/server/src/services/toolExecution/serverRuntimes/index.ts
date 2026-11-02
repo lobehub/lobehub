@@ -43,6 +43,7 @@ import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
 import { pageAgentRuntime } from './pageAgent';
+import { quickNoteRuntime } from './quickNote';
 import { remoteDeviceRuntime } from './remoteDevice';
 import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
 import { skillManagementRuntime } from './skillManagement';
@@ -115,6 +116,7 @@ registerRuntimes([
   agentSignalFeedbackIntentRuntime,
   pageAgentRuntime,
   verifyResultRuntime,
+  quickNoteRuntime,
 ]);
 
 // Goal calls approved after the rename still name the tool `lobe-goal`.

@@ -51,6 +51,8 @@ export type IFeatureFlagsState = {
    */
   enableLlmRelay: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
+  /** Whether the current user can access Quick Note. */
+  enableQuickNote: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;

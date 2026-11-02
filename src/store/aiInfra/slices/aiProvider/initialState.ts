@@ -37,6 +37,8 @@ export interface AIProviderState {
   enabledAsrModelList?: EnabledProviderWithModels[];
   // used for select
   enabledChatModelList?: EnabledProviderWithModels[];
+  /** Decision models (`type: 'decision'`), offered only where a slot accepts them. */
+  enabledDecisionModelList?: EnabledProviderWithModels[];
   enabledEmbeddingModelList?: EnabledProviderWithModels[];
   enabledImageModelList?: EnabledProviderWithModels[];
   enabledVideoModelList?: EnabledProviderWithModels[];

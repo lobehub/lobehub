@@ -1924,6 +1924,8 @@
   "systemAgent.promptRewrite.label": "模型",
   "systemAgent.promptRewrite.modelDesc": "生成前优化提示词。开启后，由该模型改写提示词。",
   "systemAgent.promptRewrite.title": "提示词改写",
+  "systemAgent.quickNoteDecision.modelDesc": "用于判断每条随手记该如何处理（补充信息、关联资源或委派执行）的模型。",
+  "systemAgent.quickNoteDecision.title": "随手记分拣",
   "systemAgent.thread.label": "模型",
   "systemAgent.thread.modelDesc": "用于自动命名子话题的模型",
   "systemAgent.thread.title": "子话题自动命名",

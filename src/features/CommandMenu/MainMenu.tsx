@@ -21,6 +21,7 @@ import { useHomeDashboardFeature } from '@/features/Dashboard/hooks/useDashboard
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
@@ -28,6 +29,7 @@ import ContextCommands from './ContextCommands';
 import { useCommandMenu } from './useCommandMenu';
 
 const MainMenu = memo(() => {
+  const enableQuickNote = useServerConfigStore((s) => s.featureFlags.enableQuickNote);
   const { pathname, menuContext, setPages, pages, onClose } = useCommandMenuContext();
   const { t } = useTranslation('common');
   const { allowed: canCreate } = usePermission('create_content');
@@ -146,6 +148,7 @@ const MainMenu = memo(() => {
         {getNavigableRoutes()
           // The home dashboard is personal-only and behind the `dashboard` flag.
           .filter((route) => route.id !== 'dashboard' || dashboardEnabled)
+          .filter((route) => route.id !== 'note' || enableQuickNote)
           .map((route) => {
             const RouteIcon = route.icon;
             const keywords = route.keywordsKey

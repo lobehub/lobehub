@@ -54,8 +54,15 @@ export interface TaskListFilterOptions {
   createdByUserId?: string;
   /** Archived tasks are user-closed and hidden from every list unless asked for. */
   includeArchived?: boolean;
+  /**
+   * Tasks a Quick Note created (`context.source.type = 'quick_note'`) are listed in the Quick
+   * Note sidebar, so task lists hide them unless asked for.
+   */
+  includeQuickNoteTasks?: boolean;
   parentTaskId?: string | null;
   projectId?: string;
+  /** Only Tasks created by this Quick Note (its applied Proposals and Dives). */
+  quickNoteId?: string;
   visibility?: 'private' | 'public';
 }
 
@@ -74,6 +81,17 @@ export interface TaskListOptions extends TaskListFilterOptions {
   statuses?: string[];
 }
 
+/**
+ * Rows not created by a Quick Note. The COALESCE keeps tasks whose context has no source (the
+ * JSON path is NULL), which a bare `<>` would drop. It is spelled this way rather than
+ * `IS DISTINCT FROM` because a null test on an extracted jsonb value crashes the pg_search
+ * planner (see `jsonbNullTest.test.ts`).
+ */
+export const NOT_QUICK_NOTE_TASK = sql`COALESCE(${tasks.context} -> 'source' ->> 'type', '') <> 'quick_note'`;
+
+/** Rows a Quick Note created, the complement of {@link NOT_QUICK_NOTE_TASK}. */
+export const QUICK_NOTE_TASK = sql`(${tasks.context} -> 'source' ->> 'type') = 'quick_note'`;
+
 /** The list filters shared by `list` and `groupList`; ownership is added by the model. */
 export const buildTaskListFilters = ({
   assigneeAgentId,
@@ -82,7 +100,9 @@ export const buildTaskListFilters = ({
   closedAfter,
   createdByUserId,
   includeArchived,
+  includeQuickNoteTasks,
   parentTaskId,
+  quickNoteId,
   projectId,
   visibility,
 }: TaskListFilterOptions): SQL[] => {
@@ -96,6 +116,14 @@ export const buildTaskListFilters = ({
   // runnable expression NULL for manual tasks, and WHERE would drop them.
   if (automated === false) conditions.push(sql`${LIVE_AUTOMATION} IS NOT TRUE`);
   if (!includeArchived) conditions.push(isNull(tasks.archivedAt));
+  if (quickNoteId) {
+    conditions.push(
+      QUICK_NOTE_TASK,
+      sql`(${tasks.context} -> 'source' ->> 'quickNoteId') = ${quickNoteId}`,
+    );
+  } else if (!includeQuickNoteTasks) {
+    conditions.push(NOT_QUICK_NOTE_TASK);
+  }
   if (closedAfter) {
     conditions.push(
       or(

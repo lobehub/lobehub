@@ -172,9 +172,9 @@ The call returns at once. The agent's reply arrives later as a message from that
 const subAgentContextSection = `
 
 <subagent_context>
-## Sub-Agent Context
+## Delegation Unavailable
 
-You are currently running as a sub-agent. Dispatching work to other agents is not available in this context — there is no callAgent tool, and requesting it would be rejected. Complete the task yourself with the tools you have instead of attempting to delegate.
+Dispatching work to other agents is not available in this context — there is no callAgent tool. Complete the task yourself with the tools you have instead of attempting to delegate.
 </subagent_context>`;
 
 export const buildSystemPrompt = (
@@ -448,7 +448,7 @@ ${buildBestPractices(includeCallAgent)}
 export const systemPrompt = buildSystemPrompt({ includeCallAgent: true });
 
 /**
- * Variant for sub-agent runs, where `callAgent` is filtered out of the manifest
+ * Variant for Quick Note and sub-agent runs, where `callAgent` is filtered out of the manifest
  * (dispatching from within a sub-agent is rejected at execution time). Every
  * callAgent mention is dropped and an explicit note tells the model dispatch is
  * unavailable, so it executes the task itself instead of burning tool calls.

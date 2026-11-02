@@ -10,6 +10,7 @@ import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { AgentSignalWorkflow } from '@/server/workflows/agentSignal';
 
 import type { AgentSignalExecutionContext, AgentSignalSourceEventInput } from './emitter';
+import { isQuickNoteSourceType } from './quickNoteSources';
 import { isAgentSignalScenarioEnabled } from './scenarios/meta';
 
 const log = debug('lobe-server:agent-signal:service');
@@ -56,7 +57,10 @@ export const enqueueAgentSignalSourceEvent = async <TSourceType extends AgentSig
     });
   }
 
-  if (!(await isAgentSignalScenarioEnabled('self-iteration', { db, userId: context.userId }))) {
+  if (
+    !isQuickNoteSourceType(input.sourceType) &&
+    !(await isAgentSignalScenarioEnabled('self-iteration', { db, userId: context.userId }))
+  ) {
     return {
       accepted: false,
       scopeKey: input.scopeKey ?? getSourceEventScopeKey(input.payload),

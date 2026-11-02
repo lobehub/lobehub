@@ -9,6 +9,8 @@ describe('desktop tab scope', () => {
     expect(resolveTabScope('/settings/profile')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/verify/run_1')).toEqual({ type: 'personal' });
     expect(resolveTabScope('/invite/abc')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/note')).toEqual({ type: 'personal' });
+    expect(resolveTabScope('/note/note-1')).toEqual({ type: 'personal' });
   });
 
   // Regression: mirrored routes missing from the personal segment list used to

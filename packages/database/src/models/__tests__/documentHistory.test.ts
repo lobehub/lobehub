@@ -1,4 +1,8 @@
 // @vitest-environment node
+import {
+  DOCUMENT_HISTORY_AUTOSAVE_SOURCE_LIMIT,
+  DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS,
+} from '@lobechat/const';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -388,5 +392,43 @@ describe('DocumentHistoryModel.list cursor', () => {
     });
 
     expect(rows).toHaveLength(3);
+  });
+});
+
+/** @example Autosave revisions coalesce per clock bucket and keep a bounded lineage. */
+describe('DocumentHistoryModel.recordAutosave', () => {
+  /** @example Two saves in one window share one row holding the latest previous state. */
+  it('coalesces saves within one autosave window', async () => {
+    const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
+    const bucketStart = Math.floor(Date.now() / DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS);
+    const savedAt = new Date(bucketStart * DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS);
+
+    await historyModel.recordAutosave(documentId, { tag: 1 }, savedAt);
+    await historyModel.recordAutosave(documentId, { tag: 2 }, new Date(savedAt.getTime() + 1000));
+
+    const rows = await historyModel.list({ documentId });
+
+    /** @example The second save overwrote the open autosave row instead of appending. */
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ editorData: { tag: 2 }, saveSource: 'autosave' });
+  });
+
+  /** @example Saves in distinct windows append and prune beyond the autosave limit. */
+  it('retains at most the autosave limit across windows', async () => {
+    const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
+
+    for (let i = 0; i <= DOCUMENT_HISTORY_AUTOSAVE_SOURCE_LIMIT; i++) {
+      await historyModel.recordAutosave(
+        documentId,
+        { tag: i },
+        new Date(Date.UTC(2026, 0, 1) + i * DOCUMENT_HISTORY_AUTOSAVE_WINDOW_MS),
+      );
+    }
+
+    const rows = await historyModel.list({ documentId, limit: 1000 });
+
+    /** @example The oldest autosave is dropped once the bound is exceeded. */
+    expect(rows).toHaveLength(DOCUMENT_HISTORY_AUTOSAVE_SOURCE_LIMIT);
+    expect(rows.at(-1)?.editorData).toEqual({ tag: 1 });
   });
 });

@@ -116,6 +116,13 @@ export class DocumentModel {
       documents,
     );
 
+  /** {@link ownership} without the recycle-bin filter, for id-targeted writes from owning aggregates. */
+  private trashScope = () =>
+    buildWorkspaceWhere(
+      { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
+      documents,
+    );
+
   private readScope = () =>
     and(
       this.ownership(),
@@ -191,6 +198,22 @@ export class DocumentModel {
     return this.db.delete(documents).where(this.readScope());
   };
 
+  /**
+   * Hard delete by id that also reaches rows already in the recycle bin.
+   *
+   * Use when:
+   * - A cascade path resolved the ids through its owning aggregate (for example a
+   *   Quick Note's private backing Documents) and they must not survive their parent.
+   *
+   * Expects:
+   * - The ids belong to this scope; rows outside it are left untouched.
+   */
+  batchDeleteIncludingTrashed = async (ids: string[]) => {
+    if (ids.length === 0) return;
+
+    await this.db.delete(documents).where(and(inArray(documents.id, ids), this.trashScope()));
+  };
+
   query = async ({
     creator,
     current = 0,
@@ -255,7 +278,9 @@ export class DocumentModel {
       conditions.push(
         inArray(
           documents.sourceType,
-          sourceTypes as ('file' | 'web' | 'api' | 'topic' | 'agent' | 'agent-signal')[],
+          sourceTypes as (
+            'file' | 'web' | 'api' | 'topic' | 'agent' | 'agent-signal' | 'quick-note'
+          )[],
         ),
       );
     } else {
@@ -459,6 +484,33 @@ export class DocumentModel {
       .returning({ updatedAt: documents.updatedAt });
 
     return row?.updatedAt;
+  };
+
+  /**
+   * Replaces a Document's body and its derived size counters at an explicit time.
+   *
+   * Use when:
+   * - A unit of work owns this Document through another aggregate (a Quick Note source,
+   *   Annotation or Proposal) and must stamp `updatedAt` with its own save time.
+   *
+   * Expects:
+   * - `id` was resolved through that owning aggregate; recycle-bin state does not block the write.
+   */
+  replaceContent = async (
+    id: string,
+    params: { content: string; editorData: Record<string, any> },
+    updatedAt: Date,
+  ) => {
+    await this.db
+      .update(documents)
+      .set({
+        content: params.content,
+        editorData: params.editorData,
+        totalCharCount: params.content.length,
+        totalLineCount: params.content.length === 0 ? 0 : params.content.split('\n').length,
+        updatedAt,
+      })
+      .where(and(eq(documents.id, id), this.trashScope()));
   };
 
   /**

@@ -16,6 +16,7 @@ import type { LobeChatDatabase } from '../type';
 import { notShareVisitorTopic } from '../utils/shareVisitor';
 import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { NOT_QUICK_NOTE_TASK } from './taskListFilters';
 
 export interface RecentDbItem {
   description?: string | null;
@@ -56,7 +57,15 @@ const SYSTEM_TOPIC_TRIGGERS = [
 
 // Excluded so tool-owned document rows don't surface as generic recent docs;
 // only user-authored pages ('api') and legacy 'topic' rows remain.
-const TOOL_DOCUMENT_SOURCE_TYPES = ['agent', 'agent-signal', 'file', 'web'] as const;
+// Quick Note source Documents are the note's private backing store: the note itself is the
+// product object (opened from Quick Note), so they would only show as "Untitled Document".
+const EXCLUDED_DOCUMENT_SOURCE_TYPES = [
+  'agent',
+  'agent-signal',
+  'file',
+  'web',
+  'quick-note',
+] as const;
 
 const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 const TOPIC_INBOX_STATUSES: ChatTopicStatus[] = ['running', 'unread'];
@@ -203,7 +212,7 @@ export class RecentModel {
           : and(
               buildWorkspaceWhere(scope, documents),
               mineDocumentWhere,
-              not(inArray(documents.sourceType, TOOL_DOCUMENT_SOURCE_TYPES)),
+              not(inArray(documents.sourceType, EXCLUDED_DOCUMENT_SOURCE_TYPES)),
               isNull(documents.knowledgeBaseId),
               ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
             ),
@@ -233,7 +242,13 @@ export class RecentModel {
       .where(
         requestedTypes && !requestedTypes.has('task')
           ? sql`false`
-          : and(taskScopeWhere, mineTaskWhere, not(inArray(tasks.status, TASK_FINAL_STATUSES))),
+          : and(
+              taskScopeWhere,
+              mineTaskWhere,
+              not(inArray(tasks.status, TASK_FINAL_STATUSES)),
+              // Quick Note Tasks are listed in their note's sidebar, like every other task list.
+              NOT_QUICK_NOTE_TASK,
+            ),
       );
 
     const rows = await unionAll(topicArm, documentArm, taskArm)

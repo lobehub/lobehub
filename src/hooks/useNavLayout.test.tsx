@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   enableDashboard: false,
   enableGoals: false,
   showMarket: true,
+  enableQuickNote: false,
 }));
 
 vi.mock('@/config/routes', () => ({
@@ -30,7 +31,7 @@ vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: (selector: unknown) =>
     selector === ENABLE_DASHBOARD
       ? mocks.enableDashboard
-      : { hideGitHub: false, showMarket: mocks.showMarket },
+      : { enableQuickNote: mocks.enableQuickNote, hideGitHub: false, showMarket: mocks.showMarket },
 }));
 
 const ENABLE_GOALS = 'enableGoals';
@@ -51,6 +52,7 @@ describe('useNavLayout', () => {
     mocks.activeWorkspaceSlug = null;
     mocks.showMarket = true;
     mocks.enableDashboard = false;
+    mocks.enableQuickNote = false;
     mocks.enableGoals = false;
   });
 
@@ -124,5 +126,16 @@ describe('useNavLayout', () => {
     const memoryItem = result.current.bottomMenuItems.find((item) => item.key === 'memory');
 
     expect(memoryItem?.hidden).toBe(true);
+  });
+  /** @example Quick Note appears only after the server grants rollout access. */
+  it('updates the Note entry when rollout access changes', async () => {
+    const { useNavLayout } = await import('./useNavLayout');
+    const { result, rerender } = renderHook(() => useNavLayout());
+    /** @example Disabled users cannot see the note navigation entry. */
+    expect(result.current.topNavItems.find((item) => item.key === 'note')?.hidden).toBe(true);
+    mocks.enableQuickNote = true;
+    rerender();
+    /** @example Enabling the flag reveals the same navigation entry. */
+    expect(result.current.topNavItems.find((item) => item.key === 'note')?.hidden).toBe(false);
   });
 });

@@ -104,6 +104,7 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   userMemoryEmbedding: DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM,
   userMemoryPersonaWriter: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   promptRewrite: DEFAULT_PROMPT_REWRITE_SYSTEM_AGENT_ITEM,
+  quickNoteDecision: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   thread: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   topic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   topicAutoSummary: DEFAULT_TOPIC_AUTO_SUMMARY_SYSTEM_AGENT_ITEM,
@@ -131,6 +132,7 @@ export const SERVICE_MODEL_TIER_SLOTS: Record<ServiceModelTier, UserServiceModel
     'userMemoryPersonaWriter',
     'inputCompletion',
     'followUpAction',
+    'quickNoteDecision',
   ],
   main: ['agentMeta', 'expertise', 'goal', 'topicAutoSummary'],
   // Must stay vision-capable: the picker for this tier lists only vision models.

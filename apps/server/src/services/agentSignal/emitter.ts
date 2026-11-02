@@ -18,6 +18,7 @@ import {
   type GeneratedAgentSignalEmissionResult,
 } from './orchestrator';
 import type { CreateDefaultAgentSignalPoliciesOptions } from './policies';
+import { isQuickNoteSourceType } from './quickNoteSources';
 import type { BotWakeConfig, CreateBotWakePolicyOptions } from './scenarios/botWake';
 import { getAgentSignalScenarioMeta, isAgentSignalScenarioEnabled } from './scenarios/meta';
 import type { AgentSignalScenarioId } from './scenarios/types';
@@ -108,10 +109,12 @@ export const emitAgentSignalSourceEvent = async <TSourceType extends AgentSignal
   context: AgentSignalExecutionContext,
   options: AgentSignalEmitOptions = {},
 ): Promise<DedupedSourceEventResult | GeneratedAgentSignalEmissionResult | undefined> => {
-  const selfIterationEnabled = await isAgentSignalScenarioEnabled('self-iteration', {
-    db: context.db,
-    userId: context.userId,
-  });
+  const selfIterationEnabled =
+    isQuickNoteSourceType(input.sourceType) ||
+    (await isAgentSignalScenarioEnabled('self-iteration', {
+      db: context.db,
+      userId: context.userId,
+    }));
 
   if (!selfIterationEnabled) {
     return undefined;

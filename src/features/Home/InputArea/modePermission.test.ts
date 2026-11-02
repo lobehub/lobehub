@@ -12,5 +12,7 @@ describe('home mode permission', () => {
     expect(isHomeModeDisabled('chat', false)).toBe(false);
     expect(resolvePermittedHomeMode('chat', false)).toBe('chat');
     expect(resolvePermittedHomeMode('task', true)).toBe('task');
+    expect(isHomeModeDisabled('note', false)).toBe(false);
+    expect(resolvePermittedHomeMode('note', false)).toBe('note');
   });
 });

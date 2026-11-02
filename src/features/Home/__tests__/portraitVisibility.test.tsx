@@ -83,6 +83,10 @@ const renderHome = async ({
     });
   }
   vi.doMock('@/store/global', () => ({ useGlobalStore: selectFromGlobalStore }));
+  function selectFromServerConfigStore(selector: (state: unknown) => unknown) {
+    return selector({ featureFlags: { enableQuickNote: false } });
+  }
+  vi.doMock('@/store/serverConfig', () => ({ useServerConfigStore: selectFromServerConfigStore }));
   function selectFromUserStore(selector: (state: unknown) => unknown) {
     return selector({ isSignedIn: isLogin });
   }

@@ -4,6 +4,7 @@ import {
   DEFAULT_AGENT_META,
   DEFAULT_HOTKEY_CONFIG,
   DEFAULT_MEMORY_SETTINGS,
+  DEFAULT_QUICK_NOTE_SETTINGS,
   DEFAULT_SYSTEM_AGENT_CONFIG,
   DEFAULT_TTS_CONFIG,
 } from '@lobechat/const';
@@ -31,6 +32,9 @@ const currentImageSettings = (s: UserStore) => currentSettings(s).image;
 const currentMemorySettings = (s: UserStore) =>
   merge(DEFAULT_MEMORY_SETTINGS, currentSettings(s).memory);
 
+const currentQuickNoteSettings = (s: UserStore) =>
+  merge(DEFAULT_QUICK_NOTE_SETTINGS, currentSettings(s).quickNote);
+
 const memoryEnabled = (s: UserStore) => currentMemorySettings(s).enabled !== false;
 
 const currentTTS = (s: UserStore) => merge(DEFAULT_TTS_CONFIG, currentSettings(s).tts);
@@ -51,6 +55,7 @@ const getHotkeyById = (id: HotkeyId) => (s: UserStore) =>
 export const settingsSelectors = {
   currentImageSettings,
   currentMemorySettings,
+  currentQuickNoteSettings,
   currentSettings,
   currentSystemAgent,
   currentTTS,

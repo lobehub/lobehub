@@ -14,6 +14,7 @@ export const BUILTIN_AGENT_SLUGS = {
   onboardingUnderstanding: 'onboarding-understanding',
   onboardingTaskRecommender: 'onboarding-task-recommender',
   pageAgent: 'page-agent',
+  quickNoteAnalyze: 'quick-note-analyze',
   selfFeedbackIntent: 'self-feedback-intent',
   selfReflection: 'self-reflection',
   skillManagement: 'skill-management',
@@ -30,10 +31,16 @@ export type BuiltinAgentSlug = (typeof BUILTIN_AGENT_SLUGS)[keyof typeof BUILTIN
 export interface BuiltinAgentPersistConfig {
   /** Default chat configuration */
   chatConfig?: Partial<LobeAgentChatConfig>;
+  /** Default description shown on direct configuration surfaces. */
+  description?: string;
   /** Default model */
   model?: string;
+  /** Default tools stored with the lazily materialized Agent. */
+  plugins?: string[];
   /** Default provider */
   provider?: string;
+  /** Default display title shown on direct configuration surfaces. */
+  title?: string;
 }
 
 /**
@@ -128,4 +135,6 @@ export interface BuiltinAgentDefinition {
    * Unique identifier for the builtin agent
    */
   slug: BuiltinAgentSlug;
+  /** Whether product defaults stop overwriting the materialized Agent after creation. */
+  userConfigurable?: boolean;
 }

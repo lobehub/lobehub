@@ -20,7 +20,7 @@ import type {
 } from './emitter';
 import { projectAgentSignalObservability } from './observability/projector';
 import { persistAgentSignalObservability } from './observability/store';
-import type { CreateDefaultAgentSignalPoliciesOptions } from './policies';
+import type { CreateDefaultAgentSignalPoliciesOptions, QuickNotePolicyOptions } from './policies';
 import { createDefaultAgentSignalPolicies } from './policies';
 import { createProcedurePolicyOptions } from './procedure';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
@@ -102,6 +102,28 @@ const buildRuntimeOrchestrationResult = (
   };
 };
 
+/**
+ * Binds the injected Quick Note processor to this execution's procedure stores.
+ *
+ * Returns `undefined` when the entry point supplied no processor, so the Quick Note policy is not
+ * installed and Quick Note sources conclude without processing.
+ */
+const createQuickNotePolicyOptions = (
+  quickNoteAnalyze: QuickNotePolicyOptions | undefined,
+  procedure: NonNullable<CreateDefaultAgentSignalPoliciesOptions['procedure']>,
+): QuickNotePolicyOptions | undefined => {
+  if (!quickNoteAnalyze) return undefined;
+
+  return {
+    ...quickNoteAnalyze,
+    procedure: quickNoteAnalyze.procedure ?? {
+      now: procedure.now,
+      receiptStore: procedure.receiptStore,
+      recordStore: procedure.recordStore,
+    },
+  };
+};
+
 const createPolicyOptions = (
   context: AgentSignalExecutionContext,
   options: ExecuteAgentSignalSourceEventOptions,
@@ -164,6 +186,10 @@ const createPolicyOptions = (
     classifierDiagnostics: policyOptions?.classifierDiagnostics,
     nightlyReview: policyOptions?.nightlyReview,
     procedure: procedurePolicyOptions,
+    quickNoteAnalyze: createQuickNotePolicyOptions(
+      policyOptions?.quickNoteAnalyze,
+      procedurePolicyOptions,
+    ),
     selfFeedbackIntent: policyOptions?.selfFeedbackIntent,
     selfReflection: policyOptions?.selfReflection,
     userMemory: {

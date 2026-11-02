@@ -266,6 +266,7 @@ describe('systemStatusSelectors', () => {
         'agent',
         'recents',
         'pages',
+        'note',
         'tasks',
         'image',
         'community',
@@ -287,6 +288,7 @@ describe('systemStatusSelectors', () => {
         'project',
         SIDEBAR_SPACER_ID,
         'pages',
+        'note',
         'tasks',
         'image',
         'community',
@@ -298,6 +300,7 @@ describe('systemStatusSelectors', () => {
     it('should preserve a canonically-positioned spacer', () => {
       const stored = [
         'pages',
+        'note',
         'goals',
         'dashboard',
         'favorites',
@@ -324,6 +327,7 @@ describe('systemStatusSelectors', () => {
       const stored = [
         'tasks',
         'pages',
+        'note',
         SIDEBAR_SPACER_ID,
         'recents',
         'private',
@@ -339,6 +343,7 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual([
         'tasks',
         'pages',
+        'note',
         'goals',
         'dashboard',
         'favorites',
@@ -383,6 +388,7 @@ describe('systemStatusSelectors', () => {
         'private',
         'agent',
         SIDEBAR_SPACER_ID,
+        'note',
         'image',
         'community',
         'memory',
@@ -396,6 +402,7 @@ describe('systemStatusSelectors', () => {
       const items = systemStatusSelectors.sidebarItems(null)(s);
       const spacerIdx = items.indexOf(SIDEBAR_SPACER_ID);
       // every known key is present
+      expect(items).toContain('note');
       expect(items).toContain('tasks');
       expect(items).toContain('community');
       expect(items).toContain('resource');
@@ -411,6 +418,7 @@ describe('systemStatusSelectors', () => {
       expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
       // Pages live in Docs now; the retired entry is not backfilled
       expect(items).not.toContain('pages');
+      expect(items.indexOf('note')).toBeGreaterThan(spacerIdx);
     });
 
     it('should migrate legacy `sidebarSectionOrder` accordion order into the default layout', () => {
@@ -433,6 +441,7 @@ describe('systemStatusSelectors', () => {
         SIDEBAR_SPACER_ID,
         'image',
         'community',
+        'note',
         'memory',
       ]);
     });
@@ -457,6 +466,7 @@ describe('systemStatusSelectors', () => {
         SIDEBAR_SPACER_ID,
         'image',
         'community',
+        'note',
         'memory',
       ]);
     });

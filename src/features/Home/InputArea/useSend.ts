@@ -18,9 +18,11 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useHomeStore } from '@/store/home';
+import { useQuickNoteStore } from '@/store/quickNote';
 import { useTaskStore } from '@/store/task';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
+import { useHomeMinimalLayout } from '../CustomizeModal/useHomeCustomization';
 import type { HomeMode } from '../types';
 import { appendTaskAttachments } from './taskAttachments';
 import { taskNameFromMessage } from './taskName';
@@ -61,6 +63,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
   const createTask = useTaskStore((s) => s.createTask);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const minimalLayout = useHomeMinimalLayout();
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { agentId: selectedAgentId } = useResolvedHomeAgentId();
@@ -114,13 +117,18 @@ export const useSend = (mode: HomeMode = 'chat') => {
         ? undefined
         : (getEditorData?.() ?? mainInputEditor?.getJSONState());
 
-      if (!canCreateContent) return;
+      if (mode !== 'note' && !canCreateContent) return;
 
-      if ((mode === 'task' || !inputActiveMode) && !canUseResource) return;
+      if (mode !== 'note' && (mode === 'task' || !inputActiveMode) && !canUseResource) return;
 
       // Selected context is separate from the task editor's persisted attachments.
       if (mode === 'task' && contextList.length > 0) {
         toast.error(t('dashboard.task.unsupportedContext'));
+        return;
+      }
+
+      if (mode === 'note' && (fileList.length > 0 || contextList.length > 0)) {
+        toast.error(t('dashboard.note.unsupportedContext'));
         return;
       }
 
@@ -130,6 +138,19 @@ export const useSend = (mode: HomeMode = 'chat') => {
       let submitted = false;
       try {
         const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
+
+        if (mode === 'note') {
+          if (!message) return;
+          setIsSubmitting(true);
+          const { createNote, initNotes } = useQuickNoteStore.getState();
+          // A note created before the store hydrates would be overwritten by the
+          // hydration snapshot, so settle initNotes first.
+          await initNotes();
+          const noteId = await createNote(message, editorData);
+          submitted = true;
+          if (minimalLayout) router.push(`/note/${noteId}`);
+          return;
+        }
 
         // Task mode records a task; it does not start one. Pressing send here
         // writes the row and keeps the user on the Home composer, where the new
@@ -266,6 +287,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
     [
       activeWorkspaceSlug,
       activeWorkspaceId,
+      minimalLayout,
       sendMessage,
       clearChatContextSelections,
       restoreChatContextSelections,

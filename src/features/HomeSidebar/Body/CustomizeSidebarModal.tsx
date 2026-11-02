@@ -73,6 +73,7 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
   { id: 'goals', labelKey: 'tab.goals', routeId: 'goals' },
   { id: 'dashboard', labelKey: 'tab.dashboard', routeId: 'dashboard' },
+  { id: 'note', labelKey: 'tab.note', routeId: 'note' },
   { id: 'favorites', labelKey: 'favorite.section' },
   { id: 'recents', labelKey: 'recents' },
   { id: 'project', labelKey: 'project:sidebar.title' },
@@ -403,11 +404,13 @@ const CustomizeSidebarContent = memo(() => {
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const isWorkspaceMode = !!useActiveWorkspaceSlug();
   const dashboardEnabled = useServerConfigStore(serverConfigSelectors.enableDashboard);
+  const enableQuickNote = useServerConfigStore((s) => s.featureFlags.enableQuickNote);
   const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
-  const sortableItemIds = useMemo(
-    () => getSortableSidebarItemIds(isWorkspaceMode, { dashboardEnabled, goalsEnabled }),
-    [isWorkspaceMode, dashboardEnabled, goalsEnabled],
-  );
+  const sortableItemIds = useMemo(() => {
+    const ids = getSortableSidebarItemIds(isWorkspaceMode, { dashboardEnabled, goalsEnabled });
+    if (!enableQuickNote) ids.delete('note');
+    return ids;
+  }, [isWorkspaceMode, dashboardEnabled, goalsEnabled, enableQuickNote]);
   const filteredStoreItems = useMemo(
     () => storeItems.filter((id) => sortableItemIds.has(id)),
     [storeItems, sortableItemIds],

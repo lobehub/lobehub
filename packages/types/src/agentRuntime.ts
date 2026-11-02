@@ -52,6 +52,8 @@ export enum RequestTrigger {
   PromptRewrite = 'prompt_rewrite',
   /** Connectivity check from the provider settings page. */
   ProviderCheck = 'provider_check',
+  /** Quick Note background analysis: intent decisions and the follow-up actions they start. */
+  QuickNote = 'quick_note',
   /** A run the user deferred to a future time (`topic.metadata.scheduledRun`). */
   Scheduled = 'scheduled',
   /** A provider event on a pull request (CI failure, review) woke the agent that opened it. */

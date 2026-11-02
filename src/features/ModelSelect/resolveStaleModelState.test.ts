@@ -77,6 +77,28 @@ describe('resolveStaleModelState', () => {
     expect(state?.status).toBe('removed');
   });
 
+  it('resolves a disabled decision model only when the picker also offers decision models', () => {
+    const withDecision = {
+      ...context,
+      builtinAiModelList: [
+        ...builtinAiModelList,
+        {
+          displayName: 'Jev',
+          enabled: false,
+          id: 'jev',
+          providerId: 'openrouter',
+          type: 'decision',
+        },
+      ] as unknown as LobeDefaultAiModelListItem[],
+    };
+    const value = { model: 'jev', provider: 'openrouter' };
+
+    expect(resolveStaleModelState(value, withDecision)?.status).toBe('removed');
+    expect(
+      resolveStaleModelState(value, { ...withDecision, extraModelTypes: ['decision'] }),
+    ).toMatchObject({ meta: { type: 'decision' }, status: 'notEnabled' });
+  });
+
   describe('resolveEnableTargetProviderId', () => {
     it('prefers the persisted provider when it has enabled models of this type', () => {
       expect(

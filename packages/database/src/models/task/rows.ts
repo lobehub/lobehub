@@ -30,26 +30,31 @@ export const insertWithNextSeq = async (
       // seq lookup filter out private rows, a private creator would compute
       // a max seq that skips another member's existing identifier and hit
       // PG error 23505 on insert.
-      const seqResult = await ctx.db
-        .select({ maxSeq: sql<number>`COALESCE(MAX(${tasks.seq}), 0)` })
-        .from(tasks)
-        .where(seqOwnership(ctx));
+      //
+      // Each attempt runs in its own (nested) transaction so a unique violation rolls back
+      // only that savepoint and never aborts a caller-owned transaction.
+      return await ctx.db.transaction(async (tx) => {
+        const seqResult = await tx
+          .select({ maxSeq: sql<number>`COALESCE(MAX(${tasks.seq}), 0)` })
+          .from(tasks)
+          .where(seqOwnership(ctx));
 
-      const nextSeq = Number(seqResult[0].maxSeq) + 1;
-      const identifier = `${identifierPrefix}-${nextSeq}`;
+        const nextSeq = Number(seqResult[0].maxSeq) + 1;
+        const identifier = `${identifierPrefix}-${nextSeq}`;
 
-      const [task] = await ctx.db
-        .insert(tasks)
-        .values({
-          ...createData,
-          createdByUserId: ctx.userId,
-          identifier,
-          seq: nextSeq,
-          workspaceId: ctx.workspaceId ?? null,
-        } as NewTask)
-        .returning();
+        const [task] = await tx
+          .insert(tasks)
+          .values({
+            ...createData,
+            createdByUserId: ctx.userId,
+            identifier,
+            seq: nextSeq,
+            workspaceId: ctx.workspaceId ?? null,
+          } as NewTask)
+          .returning();
 
-      return task;
+        return task;
+      });
     } catch (error: any) {
       // Retry on unique constraint violation (concurrent seq conflict)
       // Check error itself, cause, and stringified message for PG error code 23505

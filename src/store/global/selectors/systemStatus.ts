@@ -228,6 +228,7 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   SIDEBAR_SPACER_ID,
   'image',
   'community',
+  'note',
   'memory',
 ];
 

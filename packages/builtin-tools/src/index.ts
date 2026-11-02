@@ -39,6 +39,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
+import { QuickNoteManifest, resolveQuickNoteManifest } from '@lobechat/builtin-tool-quick-note';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
 import { selfFeedbackIntentManifest } from '@lobechat/builtin-tool-self-iteration';
 import { SkillMaintainerManifest } from '@lobechat/builtin-tool-skill-maintainer';
@@ -585,6 +586,16 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: BriefManifest.identifier,
     manifest: BriefManifest,
+    type: 'builtin',
+  },
+  {
+    // Mounted only by Quick Note follow-up runs (`additionalPluginIds`); the resolver hides it
+    // outside the `quick_note` scope.
+    discoverable: false,
+    hidden: true,
+    identifier: QuickNoteManifest.identifier,
+    manifest: QuickNoteManifest,
+    resolveManifest: resolveQuickNoteManifest,
     type: 'builtin',
   },
   {

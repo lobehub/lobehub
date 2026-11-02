@@ -9,6 +9,7 @@ import type {
 import type { CreateFeedbackDomainJudgePolicyOptions } from './analyzeIntent/feedbackDomain';
 import type { CreateFeedbackSatisfactionJudgePolicyOptions } from './analyzeIntent/feedbackSatisfaction';
 import type { CreateCompletionPolicyOptions } from './completionPolicy';
+import type { QuickNotePolicyOptions } from './quickNoteAnalyze';
 import type { CreateReviewNightlyPolicyOptions } from './reviewNightly';
 
 export * from './actionIdempotency';
@@ -19,6 +20,7 @@ export * from './analyzeIntent/feedbackDomain';
 export * from './analyzeIntent/feedbackDomainAgent';
 export * from './analyzeIntent/feedbackSatisfaction';
 export * from './completionPolicy';
+export * from './quickNoteAnalyze';
 export * from './reviewNightly';
 export * from './types';
 
@@ -29,6 +31,7 @@ export interface CreateDefaultAgentSignalPoliciesOptions extends CreateFeedbackD
   feedbackSatisfactionJudge?: CreateFeedbackSatisfactionJudgePolicyOptions;
   nightlyReview?: CreateReviewNightlyPolicyOptions['nightlyReview'];
   procedure?: CreateAnalyzeIntentPolicyOptions['procedure'];
+  quickNoteAnalyze?: QuickNotePolicyOptions;
   selfFeedbackIntent?: CreateReviewNightlyPolicyOptions['selfFeedbackIntent'];
   selfReflection?: CreateReviewNightlyPolicyOptions['selfReflection'];
   skillIntentClassifier?: CreateAnalyzeIntentPolicyOptions['skillIntentClassifier'];

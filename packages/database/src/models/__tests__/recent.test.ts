@@ -552,6 +552,58 @@ describe('RecentModel', () => {
         expect(result.map((r) => r.id)).toEqual(['task-running']);
       });
 
+      /** @example A Quick Note's private source Document is not a Recent page. */
+      it('excludes Quick Note source documents', async () => {
+        await serverDB.insert(documents).values([
+          {
+            ...baseDocFields,
+            id: 'doc-quick-note',
+            sourceType: 'quick-note',
+            title: null,
+            updatedAt: now(),
+            userId,
+          },
+          {
+            ...baseDocFields,
+            id: 'doc-page',
+            sourceType: 'api',
+            title: 'Page',
+            updatedAt: now(),
+            userId,
+          },
+        ]);
+
+        const result = await recentModel.queryRecent();
+        expect(result.map((r) => r.id)).toEqual(['doc-page']);
+      });
+
+      /** @example A Task a Quick Note started stays in the note sidebar, not in Recent. */
+      it('excludes tasks created from a Quick Note', async () => {
+        await serverDB.insert(tasks).values([
+          {
+            context: { source: { quickNoteId: 'note-1', type: 'quick_note' } },
+            createdByUserId: userId,
+            id: 'task-quick-note',
+            identifier: 'T-5',
+            status: 'running',
+            updatedAt: now(),
+            ...baseTaskFields,
+          },
+          {
+            context: { foo: 'bar' },
+            createdByUserId: userId,
+            id: 'task-plain',
+            identifier: 'T-6',
+            status: 'running',
+            updatedAt: now(),
+            ...baseTaskFields,
+          },
+        ]);
+
+        const result = await recentModel.queryRecent();
+        expect(result.map((r) => r.id)).toEqual(['task-plain']);
+      });
+
       it('falls back from name → instruction → "Untitled Task"', async () => {
         await serverDB.insert(tasks).values([
           {

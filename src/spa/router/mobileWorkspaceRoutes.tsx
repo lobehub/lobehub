@@ -11,6 +11,7 @@ import { dashboardRouteMeta, dashboardsRouteMeta } from '@/features/Dashboard/ro
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import { projectsRouteMeta } from '@/features/Projects/routeMeta';
 import { memoryChildren } from '@/spa/router/memoryRoutes';
+import { noteChildren } from '@/spa/router/noteRoutes';
 import { pageListLoader } from '@/spa/router/pageListLoader';
 import { projectWorkspaceRoute } from '@/spa/router/projectWorkspaceRoutes';
 import { resourceRoute as desktopResourceRoute } from '@/spa/router/resourceRoutes';
@@ -21,7 +22,7 @@ import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@
 
 /**
  * The desktop workspace surfaces (tasks, goals, projects, resources, memory,
- * pages, generation, dashboards) mounted on mobile. Every page reuses its
+ * Quick Note, pages, generation, dashboards) mounted on mobile. Every page reuses its
  * desktop segment; desktop layouts that only paint a sidebar are kept because
  * the sidebar they register opens from the mobile page header as a drawer.
  * Mounted under both `/` and `/:workspaceSlug` by `mobileRouter.config.tsx`.
@@ -148,6 +149,24 @@ const memoryRoute: RouteObject = {
   path: 'memory',
 };
 
+const noteRoute: RouteObject = {
+  children: [
+    {
+      // The note editor paints no NavHeader; the note list is the sidebar drawer.
+      children: overlayRoutes(noteChildren, {
+        ':id': withHandle({ mobileShellHeader: true }),
+      }),
+      element: dynamicLayout(
+        () => import('@/routes/(main)/note/_layout'),
+        'Mobile > Note > Layout',
+      ),
+    },
+  ],
+  element: pageLayout('Mobile > Note > Page Layout'),
+  errorElement: <ErrorBoundary />,
+  path: 'note',
+};
+
 const pageRoute: RouteObject = {
   children: [
     {
@@ -254,6 +273,7 @@ export const mobileWorkspaceRoutes: RouteObject[] = [
   ...projectRoutes,
   resourceRoute,
   memoryRoute,
+  noteRoute,
   pageRoute,
   generationRoute('image'),
   generationRoute('video'),

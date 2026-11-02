@@ -1,4 +1,4 @@
-import { getAgentPersistConfig } from '@lobechat/builtin-agents';
+import { getAgentPersistConfig, isBuiltinAgentUserConfigurable } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { and, eq } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -190,7 +190,7 @@ export const getBuiltinAgent = async (
   });
 
   if (existing) {
-    if (persistConfig?.chatConfig) {
+    if (persistConfig?.chatConfig && !isBuiltinAgentUserConfigurable(slug)) {
       const [updated] = await ctx.db
         .update(agents)
         .set({ chatConfig: persistConfig.chatConfig })
@@ -250,10 +250,14 @@ export const getBuiltinAgent = async (
         { userId: ctx.userId, workspaceId: ctx.workspaceId },
         {
           agencyConfig: ctx.withWorkspaceSelectionPolicyDefaults(undefined),
+          avatar: persistConfig.avatar,
           chatConfig: persistConfig.chatConfig,
+          description: persistConfig.description,
           model: persistConfig.model,
+          plugins: persistConfig.plugins,
           provider: persistConfig.provider,
           slug: persistConfig.slug,
+          title: persistConfig.title,
           virtual: true,
         },
       ),

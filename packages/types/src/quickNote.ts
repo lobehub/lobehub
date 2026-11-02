@@ -203,8 +203,8 @@ export interface QuickNoteRunDecision {
   /** The `delegate` preset hit by the judgement, when any. */
   preset?: QuickNoteDelegatePreset | null;
   /**
-   * 0–4 fit per `delegate` preset from the preset choice: its probability on the 0–4 scale for
-   * native decisions, 4 for the chosen preset for emulated ones.
+   * 0–4 fit level per `delegate` preset, from its own `score` question (a rounded native mean or
+   * an emulated integer level).
    */
   presetScores?: Partial<Record<QuickNoteDelegatePreset, QuickNoteActionScore>>;
   /** Highest-scoring label; `keep` on ties or when nothing else scores. */

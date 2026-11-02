@@ -267,6 +267,11 @@ export const getEmbeddingModelList = createProviderModelCollector(
 
 export const getAsrModelList = createProviderModelCollector('asr', normalizeEmbeddingModel);
 
+export const getDecisionModelList = createProviderModelCollector(
+  'decision',
+  normalizeEmbeddingModel,
+);
+
 export const getImageModelList = createProviderModelCollector('image', normalizeImageModel);
 
 export const getVideoModelList = createProviderModelCollector('video', normalizeVideoModel);
@@ -321,6 +326,14 @@ const buildAsrProviderModelLists = async (
 ) => buildProviderModelLists(providers, enabledAiModels, getAsrModelList);
 
 /**
+ * Build decision-model provider model lists with proper async handling
+ */
+const buildDecisionProviderModelLists = async (
+  providers: EnabledProvider[],
+  enabledAiModels: EnabledAiModel[],
+) => buildProviderModelLists(providers, enabledAiModels, getDecisionModelList);
+
+/**
  * Build video provider model lists with proper async handling
  */
 const buildVideoProviderModelLists = async (
@@ -367,6 +380,11 @@ const fetchAiProviderRuntimeState = async (
       enabledAiModels,
       'asr',
     );
+    const enabledDecisionAiProviders = filterEnabledProvidersByModelType(
+      data.enabledAiProviders,
+      enabledAiModels,
+      'decision',
+    );
     const enabledImageAiProviders = filterEnabledProvidersByModelType(
       data.enabledImageAiProviders,
       enabledAiModels,
@@ -385,12 +403,14 @@ const fetchAiProviderRuntimeState = async (
       enabledAsrModelList,
       enabledImageModelList,
       enabledVideoModelList,
+      enabledDecisionModelList,
     ] = await Promise.all([
       buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
       buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
       buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
       buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
       buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
+      buildDecisionProviderModelLists(enabledDecisionAiProviders, enabledAiModels),
     ]);
 
     return {
@@ -400,6 +420,7 @@ const fetchAiProviderRuntimeState = async (
       enabledAsrModelList,
       enabledChatAiProviders,
       enabledChatModelList,
+      enabledDecisionModelList,
       enabledEmbeddingModelList,
       enabledImageAiProviders,
       enabledImageModelList,
@@ -454,18 +475,25 @@ const fetchAiProviderRuntimeState = async (
     enabledAiModels,
     'asr',
   );
+  const enabledDecisionAiProviders = filterEnabledProvidersByModelType(
+    enabledAiProviders,
+    enabledAiModels,
+    'decision',
+  );
   const [
     enabledChatModelList,
     enabledEmbeddingModelList,
     enabledAsrModelList,
     enabledImageModelList,
     enabledVideoModelList,
+    enabledDecisionModelList,
   ] = await Promise.all([
     buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
     buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
     buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
     buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
     buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
+    buildDecisionProviderModelLists(enabledDecisionAiProviders, enabledAiModels),
   ]);
 
   return {
@@ -475,6 +503,7 @@ const fetchAiProviderRuntimeState = async (
     enabledAsrModelList,
     enabledChatAiProviders,
     enabledChatModelList,
+    enabledDecisionModelList,
     enabledEmbeddingModelList,
     enabledImageAiProviders,
     enabledImageModelList,
@@ -521,6 +550,7 @@ const projectRuntimeState = (data: AiProviderRuntimeStateView): Partial<AiInfraS
   enabledAiProviders: data.enabledAiProviders,
   enabledAsrModelList: data.enabledAsrModelList || [],
   enabledChatModelList: data.enabledChatModelList || [],
+  enabledDecisionModelList: data.enabledDecisionModelList || [],
   enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
   enabledImageModelList: data.enabledImageModelList || [],
   enabledVideoModelList: data.enabledVideoModelList || [],
@@ -541,6 +571,7 @@ const projectRuntimeStateDisplay = (
         enabledAiProviders: data.enabledAiProviders,
         enabledAsrModelList: data.enabledAsrModelList || [],
         enabledChatModelList: data.enabledChatModelList || [],
+        enabledDecisionModelList: data.enabledDecisionModelList || [],
         enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
         enabledImageModelList: data.enabledImageModelList || [],
         enabledVideoModelList: data.enabledVideoModelList || [],
@@ -557,6 +588,7 @@ const aiProviderRuntimeStateLens: ReplicaLens<AiInfraStore, AiProviderRuntimeSta
     enabledAiProviders: undefined,
     enabledAsrModelList: [],
     enabledChatModelList: [],
+    enabledDecisionModelList: [],
     enabledEmbeddingModelList: [],
     enabledImageModelList: [],
     enabledVideoModelList: [],

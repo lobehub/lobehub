@@ -33,6 +33,8 @@ export interface UserSystemAgentConfig {
   /** Model used to synthesize connector evidence into the onboarding understanding. */
   onboardingUnderstanding: SystemAgentItem;
   promptRewrite: PromptRewriteSystemAgent;
+  /** Model used to classify Quick Note intent and answer other Quick Note decision questions. */
+  quickNoteDecision: SystemAgentItem;
   thread: SystemAgentItem;
   topic: SystemAgentItem;
   /** Background workflow that summarizes inactive topics into description/historySummary. */

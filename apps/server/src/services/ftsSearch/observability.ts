@@ -39,6 +39,7 @@ export type FtsSearchUsage =
   | 'memory_tool'
   | 'message_search'
   | 'message_search_mobile'
+  | 'quick_note_analyze'
   | 'topic_search'
   | 'unattributed'
   | 'unified_search';
