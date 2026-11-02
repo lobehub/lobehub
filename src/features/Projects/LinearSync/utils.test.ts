@@ -2,7 +2,12 @@ import type { LinearSyncResult } from '@lobechat/types';
 import type { TFunction } from 'i18next';
 import { describe, expect, it } from 'vitest';
 
-import { formatLinearSyncResult, isActiveLinearSyncJob, linearSyncJobErrorMessage } from './utils';
+import {
+  formatLinearSyncResult,
+  isActiveLinearSyncJob,
+  linearSyncJobErrorMessage,
+  linearSyncJobProgress,
+} from './utils';
 
 const t = ((key: string, options?: { count?: number }) =>
   options?.count === undefined
@@ -65,5 +70,17 @@ describe('background sync jobs', () => {
     expect(linearSyncJobErrorMessage('timeout', t)).toBe('linear.sync.job.error.timeout');
     expect(linearSyncJobErrorMessage('failed', t)).toBe('linear.sync.error.generic');
     expect(linearSyncJobErrorMessage(null, t)).toBe('linear.sync.error.generic');
+  });
+});
+
+describe('linearSyncJobProgress', () => {
+  it('shows how many a run that keeps going has created so far', () => {
+    expect(linearSyncJobProgress({ result: null }, t)).toBe('linear.sync.job.inProgress');
+    expect(linearSyncJobProgress({ result: result({ created: 0, truncated: true }) }, t)).toBe(
+      'linear.sync.job.inProgress',
+    );
+    expect(linearSyncJobProgress({ result: result({ created: 200, truncated: true }) }, t)).toBe(
+      'linear.sync.job.inProgressCreated:200',
+    );
   });
 });

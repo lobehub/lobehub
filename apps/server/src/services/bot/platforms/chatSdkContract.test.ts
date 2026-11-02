@@ -13,7 +13,7 @@ import { patchDiscordForwardedInteractions } from './discord/patch';
  * change reaches production without passing through any commit of ours.
  *
  * Two safety nets already exist and are NOT duplicated here:
- *   - `tsgo` covers every typed surface, including the five in-house adapters
+ *   - `tsrs` covers every typed surface, including the five in-house adapters
  *     that `implements Adapter<…>`;
  *   - each patch has unit tests for its own branching logic.
  *
@@ -155,7 +155,7 @@ afterEach(() => {
 describe('chat-sdk contract · adapter registry', () => {
   it('exposes adapters through an `adapters` Map keyed by platform id', () => {
     // `DiscordClient` / `QQClient` / both Discord patches all reach the adapter
-    // this way, through an `any` cast that hides a rename from tsgo:
+    // this way, through an `any` cast that hides a rename from tsrs:
     //   (bot as any).adapters.get('discord')
     const chatBot = createRealBot({ patch: false });
     const registry = (chatBot as any).adapters;
@@ -336,7 +336,7 @@ describe('chat-sdk contract · overlapping-message strategies', () => {
   // sentence about it, a few hundred ms apart. `burst` is what folds them into
   // a single agent turn, and it is the WeChat channel default in
   // `wechat/schema.ts`. `debounce` looks similar but is documented to keep only
-  // the final message of the window. The difference is invisible to tsgo and
+  // the final message of the window. The difference is invisible to tsrs and
   // decides whether a user's picture reaches the model, so pin it here.
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));

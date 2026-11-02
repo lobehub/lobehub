@@ -19,7 +19,10 @@ export const AWSBedrockClaudeStream = (
     payload?: Parameters<typeof transformAnthropicStream>[2];
   },
 ): ReadableStream<Uint8Array> => {
-  const streamStack: StreamContext = { id: 'chat_' + nanoid() };
+  const streamStack: StreamContext = {
+    id: 'chat_' + nanoid(),
+    pricingOptions: options?.payload?.pricingOptions,
+  };
 
   const stream = res instanceof ReadableStream ? res : createBedrockStream(res);
 
@@ -37,5 +40,5 @@ export const AWSBedrockClaudeStream = (
       // Same Messages event contract as `AnthropicStream`: closing without a terminal event is a truncation.
       createSSEProtocolTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
     )
-    .pipeThrough(createCallbacksTransformer(options?.callbacks));
+    .pipeThrough(createCallbacksTransformer(options?.callbacks, { streamStack }));
 };

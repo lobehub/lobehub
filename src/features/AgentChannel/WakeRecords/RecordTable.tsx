@@ -52,14 +52,21 @@ const styles = stylex.create({
 interface RecordTableProps {
   disabled?: boolean;
   items: BotWakeDecisionItem[];
+  loading?: boolean;
   onMark: (decisionId: string, label: BotWakeUserLabel | null) => Promise<void>;
+  pagination: {
+    current: number;
+    onChange: (page: number) => void;
+    pageSize: number;
+    total: number;
+  };
 }
 
 /**
  * One row per judged message: when, what it said (with a link to it on the platform, shown on
  * hover), what the bot did, the model score behind it, why, and the owner's ✓ / ✗ mark.
  */
-export const RecordTable = ({ disabled, items, onMark }: RecordTableProps) => {
+export const RecordTable = ({ disabled, items, loading, onMark, pagination }: RecordTableProps) => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string, options?: Record<string, unknown>) => string;
   // The pipeline's vocabulary grows; a reason this build has no copy for shows as recorded.
@@ -209,9 +216,15 @@ export const RecordTable = ({ disabled, items, onMark }: RecordTableProps) => {
     <Table<BotWakeDecisionItem>
       columns={columns}
       dataSource={items}
-      pagination={false}
+      loading={loading}
       rowKey={'id'}
       size={'small'}
+      pagination={{
+        ...pagination,
+        showSizeChanger: false,
+        showTotal: (total) => t('channel.records.total', { count: total }),
+        size: 'small',
+      }}
       // Each row marks itself so the message link can show on hovering it.
       onRow={() => stylex.props(stylex.defaultMarker())}
     />

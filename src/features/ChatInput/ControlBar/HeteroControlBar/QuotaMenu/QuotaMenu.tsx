@@ -43,6 +43,13 @@ const styles = stylex.create({
     borderBlockEndColor: cssVar.colorBorderSecondary,
   },
   popover: { width: '292px' },
+  progressFill: {
+    height: '100%',
+    borderRadius: 'inherit',
+    backgroundColor: cssVar.colorSuccess,
+    backgroundImage: 'none',
+  },
+  progressFillWarning: { backgroundColor: cssVar.colorWarning },
   progressTrack: {
     overflow: 'hidden',
     flex: '1',
@@ -575,6 +582,9 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
           <div
             data-quota-level={lowQuota ? 'low' : 'normal'}
             style={{ width: `${leftPercent}%` }}
+            className={
+              stylex.props(styles.progressFill, lowQuota && styles.progressFillWarning).className
+            }
           />
         </div>
         <Text

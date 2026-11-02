@@ -985,6 +985,8 @@
   "hotkey.errors.NO_MODIFIER": "快捷键必须包含修饰键（Ctrl、Alt、Shift等）",
   "hotkey.errors.SYSTEM_OCCUPIED": "快捷键已被系统或其他应用程序占用",
   "hotkey.errors.UNKNOWN": "更新失败：未知错误",
+  "hotkey.group.appMenu": "应用菜单",
+  "hotkey.group.appMenuDesc": "桌面端应用菜单内置的快捷键，随系统平台变化，暂不支持自定义。",
   "hotkey.group.conversation": "会话",
   "hotkey.group.desktop": "桌面端",
   "hotkey.group.essential": "基础",

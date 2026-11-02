@@ -13,8 +13,8 @@ import { FolderIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
 import FolderTree from '@/features/ResourceManager/components/FolderTree';
+import { type FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
 import { fileService } from '@/services/file';
 import { useFileStore } from '@/store/file';
 import { useTreeStore } from '@/store/tree';

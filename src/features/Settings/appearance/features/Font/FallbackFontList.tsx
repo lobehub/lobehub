@@ -1,7 +1,15 @@
 'use client';
 
-import { createStaticStyles, Flexbox, SortableList } from '@lobehub/ui';
-import { ActionIcon, Button, Select, type SelectOption, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Select,
+  type SelectOption,
+  SortableList,
+  Text,
+} from '@lobehub/ui';
 import { PlusIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

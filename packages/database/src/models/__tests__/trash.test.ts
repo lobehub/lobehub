@@ -379,11 +379,52 @@ describe('TrashModel', () => {
         (await wsModel.list({ visibility })).items.map((item) => item.resourceId);
       expect(await sideIds('public')).toEqual([]);
       expect(await sideIds('private')).toEqual(['tpc_flip']);
+    });
 
-      // A row registered before the snapshot existed cannot prove it was shared.
-      await serverDB.update(trashItems).set({ meta: null }).where(eq(trashItems.id, root.id));
-      expect(await sideIds('public')).toEqual([]);
-      expect(await sideIds('private')).toEqual(['tpc_flip']);
+    it('sides a root registered before the snapshot existed by its live visibility', async () => {
+      const wsModel = new TrashModel(serverDB, userId, workspaceId);
+      await serverDB.insert(agents).values([
+        { id: 'agt_legacy_private', userId, visibility: 'private', workspaceId },
+        { id: 'agt_legacy_public', userId, visibility: 'public', workspaceId },
+      ]);
+      await serverDB.insert(topics).values([
+        { agentId: 'agt_legacy_private', id: 'tpc_legacy_private', userId, workspaceId },
+        { agentId: 'agt_legacy_public', id: 'tpc_legacy_public', userId, workspaceId },
+      ]);
+      await serverDB.insert(messages).values({
+        content: 'shared',
+        id: 'msg_legacy_public',
+        role: 'user',
+        topicId: 'tpc_legacy_public',
+        userId,
+      });
+      const legacyRoots = [
+        ['agt_legacy_private', 'agent'],
+        ['agt_legacy_public', 'agent'],
+        ['tpc_legacy_private', 'topic'],
+        ['msg_legacy_public', 'message'],
+      ] as const;
+      for (const [resourceId, resourceType] of legacyRoots) {
+        await wsModel.register({
+          deletedAt: at('2026-08-01T00:00:00Z'),
+          root: { projectId: null, resourceId, resourceType },
+        });
+      }
+      // Rows trashed before #21537 carry no `private` key, or no meta at all.
+      await serverDB
+        .update(trashItems)
+        .set({ meta: sql`${trashItems.meta} - 'private'` })
+        .where(eq(trashItems.resourceType, 'agent'));
+      await serverDB
+        .update(trashItems)
+        .set({ meta: null })
+        .where(sql`${trashItems.resourceType} <> 'agent'`);
+
+      const sideIds = async (visibility: 'private' | 'public') =>
+        (await wsModel.list({ visibility })).items.map((item) => item.resourceId).sort();
+      expect(await sideIds('private')).toEqual(['agt_legacy_private', 'tpc_legacy_private']);
+      expect(await sideIds('public')).toEqual(['agt_legacy_public', 'msg_legacy_public']);
+      expect(await wsModel.countByType({ visibility: 'private' })).toEqual({ agent: 1, topic: 1 });
     });
 
     it('keeps a root whose source or project is gone off the public side', async () => {

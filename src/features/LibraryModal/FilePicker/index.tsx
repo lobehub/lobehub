@@ -27,8 +27,8 @@ import type { ResourceItem } from '@/types/resource';
 import Item from '../AssignKnowledgeBase/Item';
 import MasonryItem from '../AssignKnowledgeBase/Item/MasonryItem';
 import Loading from '../AssignKnowledgeBase/Loading';
-import { type ViewMode } from '../AssignKnowledgeBase/ViewSwitcher';
 import ViewSwitcher from '../AssignKnowledgeBase/ViewSwitcher';
+import { type ViewMode } from '../AssignKnowledgeBase/ViewSwitcher';
 
 const PAGE_SIZE = 50;
 
