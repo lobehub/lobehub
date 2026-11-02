@@ -11,8 +11,7 @@
  */
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { builtinTools } from '@lobechat/builtin-tools';
-import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
-import { ToolsEngine } from '@lobechat/context-engine';
+import { createEnableChecker, type LobeToolManifest, ToolsEngine } from '@lobechat/context-engine';
 import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
 import { type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';

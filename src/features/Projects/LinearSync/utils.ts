@@ -36,6 +36,18 @@ export const formatLinearSyncResult = (
 export const isActiveLinearSyncJob = (job: Pick<LinearSyncJobView, 'status'>) =>
   job.status === 'pending' || job.status === 'processing';
 
+/**
+ * Progress of a running sync. A rule run that goes on by itself carries the
+ * total of its finished rounds, so the count grows while it runs.
+ */
+export const linearSyncJobProgress = (
+  job: Pick<LinearSyncJobView, 'result'>,
+  t: TFunction<'integration'>,
+): string =>
+  job.result?.created
+    ? t('linear.sync.job.inProgressCreated', { count: job.result.created })
+    : t('linear.sync.job.inProgress');
+
 /** Why a background sync did not finish, for the user. */
 export const linearSyncJobErrorMessage = (
   code: LinearSyncJobErrorCode | null,
@@ -50,6 +62,9 @@ export const linearSyncJobErrorMessage = (
     }
     case 'timeout': {
       return t('linear.sync.job.error.timeout');
+    }
+    case 'canceled': {
+      return t('linear.sync.job.error.canceled');
     }
     default: {
       return t('linear.sync.error.generic');

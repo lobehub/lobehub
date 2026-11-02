@@ -11,6 +11,7 @@ import {
   Icon,
   Input,
   Popover,
+  type PopoverPlacement,
   Switch,
   Text,
   toast,
@@ -27,8 +28,8 @@ import {
   PaperclipIcon,
   WrenchIcon,
 } from 'lucide-react';
-import { type ReactNode } from 'react';
-import { memo, useCallback, useRef, useState } from 'react';
+import { type ReactNode, type RefObject } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ArticleSkeleton } from '@/components/Skeleton';
@@ -280,32 +281,49 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
 interface SharePopoverProps {
   /** Owner of the topic — carries the agent-level topic-share policy. */
   agentId?: string;
+  /**
+   * Positions the popover against this element instead of `children`, for a
+   * popover opened programmatically (e.g. from a menu item) rather than by
+   * pressing its own trigger. Focus returns here when it closes.
+   */
+  anchor?: RefObject<HTMLElement | null>;
   children?: ReactNode;
+  onOpenChange?: (open: boolean) => void;
   onOpenModal?: () => void;
+  open?: boolean;
+  placement?: PopoverPlacement;
   topicId?: string;
 }
 
-const SharePopover = memo<SharePopoverProps>(({ agentId, children, onOpenModal, topicId }) => {
-  const isMobile = useIsMobile();
+const SharePopover = memo<SharePopoverProps>(
+  ({ agentId, anchor, children, onOpenChange, onOpenModal, open, placement, topicId }) => {
+    const isMobile = useIsMobile();
+    const positionerProps = useMemo(() => (anchor ? { anchor } : undefined), [anchor]);
+    const popupProps = useMemo(() => (anchor ? { finalFocus: anchor } : undefined), [anchor]);
 
-  return (
-    <Popover
-      arrow={false}
-      placement={isMobile ? 'top' : 'bottomRight'}
-      trigger={['click']}
-      content={
-        <SharePopoverContent agentId={agentId} topicId={topicId} onOpenModal={onOpenModal} />
-      }
-      styles={{
-        content: {
-          padding: 0,
-          width: isMobile ? '100vw' : 366,
-        },
-      }}
-    >
-      {children}
-    </Popover>
-  );
-});
+    return (
+      <Popover
+        arrow={false}
+        open={open}
+        placement={placement ?? (isMobile ? 'top' : 'bottomRight')}
+        popupProps={popupProps}
+        positionerProps={positionerProps}
+        trigger={['click']}
+        content={
+          <SharePopoverContent agentId={agentId} topicId={topicId} onOpenModal={onOpenModal} />
+        }
+        styles={{
+          content: {
+            padding: 0,
+            width: isMobile ? '100vw' : 366,
+          },
+        }}
+        onOpenChange={onOpenChange}
+      >
+        {children}
+      </Popover>
+    );
+  },
+);
 
 export default SharePopover;

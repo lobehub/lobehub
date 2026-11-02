@@ -26,9 +26,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { ArticleSkeleton } from '@/components/Skeleton';
+import { useAcceptanceOrigin } from '@/features/Acceptance/origin';
 import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
 import { documentService } from '@/services/document';
@@ -247,7 +247,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     const { t } = useTranslation('chat');
     const { t: tVerify } = useTranslation('verify');
     const [open, setOpen] = useState(false);
-    const appOrigin = useAppOrigin();
+    const appOrigin = useAcceptanceOrigin();
     const activeWorkspaceSlug = useActiveWorkspaceSlug();
     // A click on the link opens the acceptance in the side panel; this is the
     // explicit way out to a full browser page. Without an origin the URL would

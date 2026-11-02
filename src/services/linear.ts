@@ -31,6 +31,9 @@ class LinearService {
   startImport = async (params: { connectionId: string; issueIds: string[]; projectId: string }) =>
     lambdaClient.linear.startImport.mutate(params);
 
+  cancelSync = async (projectId: string, jobId: string) =>
+    lambdaClient.linear.cancelSync.mutate({ jobId, projectId });
+
   listSyncJobs = async (projectId: string) => lambdaClient.linear.listSyncJobs.query({ projectId });
 
   listSyncRules = async (projectId: string) =>

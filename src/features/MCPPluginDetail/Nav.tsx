@@ -1,8 +1,7 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
-import { Tabs, type TabsItem, Tag } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon, Tabs, type TabsItem, Tag } from '@lobehub/ui';
 import {
   BookOpenIcon,
   BotIcon,

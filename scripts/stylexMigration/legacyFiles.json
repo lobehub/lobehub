@@ -741,7 +741,6 @@
   "src/features/Integrations/Linear/Connections.tsx",
   "src/features/Integrations/Linear/index.tsx",
   "src/features/Integrations/Overview.tsx",
-  "src/features/Integrations/OverviewSkeleton.tsx",
   "src/features/LibraryModal/AssignKnowledgeBase/Item/MasonryItem.tsx",
   "src/features/LibraryModal/AssignKnowledgeBase/Item/index.tsx",
   "src/features/LibraryModal/AssignKnowledgeBase/MasonrySkeleton.tsx",

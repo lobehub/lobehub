@@ -1,9 +1,13 @@
 'use client';
 
 import { OFFICIAL_URL } from '@lobechat/const';
-import { Center, createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
   Table,
   type TableColumn,
@@ -12,6 +16,7 @@ import {
   Text,
   TextArea,
   toast,
+  Tooltip,
   Upload,
 } from '@lobehub/ui';
 import {

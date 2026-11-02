@@ -30,8 +30,6 @@
   "features.inAppBrowser.title": "In-App-Browser",
   "features.inputMarkdown.desc": "Markdown in Echtzeit im Eingabebereich rendern (fetter Text, Codeblöcke, Tabellen usw.).",
   "features.inputMarkdown.title": "Markdown-Darstellung im Eingabefeld",
-  "features.integrations.desc": "Zeigen Sie die Seite mit den Integrationseinstellungen an: Verbinden Sie die GitHub-App, damit zusammengeführte Pull-Requests Lieferungen akzeptieren und fehlgeschlagene Prüfungen oder Überprüfungen den Agenten erreichen, der sie geöffnet hat. Standardmäßig ausgeblendet.",
-  "features.integrations.title": "Integrationen",
   "features.messageTextSelectionActions.desc": "Zeigt eine Schnellaktion beim Auswählen von Text in Chatnachrichten an, damit der ausgewählte Text dem Kontext des nächsten Gesprächs hinzugefügt werden kann.",
   "features.messageTextSelectionActions.title": "Aktionen zur Textauswahl in Nachrichten",
   "features.oauthApps.desc": "Zeige die Verwaltung von OAuth-Apps in den persönlichen und Arbeitsbereichseinstellungen. Diese Funktion ist standardmäßig ausgeblendet.",
