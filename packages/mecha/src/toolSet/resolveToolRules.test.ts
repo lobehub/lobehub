@@ -147,6 +147,27 @@ describe('resolveToolRules', () => {
     );
     expect(browserPinned.rules['lobe-browser']).toBe(true);
 
+    // Manual skill activation drops the activator and the Tools popover hides
+    // runtime-managed tools, so an unpinned browser could never be turned on:
+    // it stays resident instead of disappearing.
+    const browserManualMode = resolveToolRules(
+      request({
+        agent: { chatConfig: { skillActivateMode: 'manual' }, plugins: [] },
+        executionTarget: 'local',
+        localExecutionReady: true,
+      }),
+    );
+    expect(browserManualMode.rules['lobe-browser']).toBe(true);
+    // A local target that cannot reach a machine keeps it off either way.
+    expect(
+      resolveToolRules(
+        request({
+          agent: { chatConfig: { skillActivateMode: 'manual' }, plugins: [] },
+          executionTarget: 'local',
+        }),
+      ).rules['lobe-browser'],
+    ).toBe(false);
+
     const disabledLocal = resolveToolRules(
       request({ disableLocalSystem: true, executionTarget: 'local', localExecutionReady: true }),
     );
