@@ -2,7 +2,7 @@ import {
   type AIChatModelCard,
   type AIImageModelCard,
   type AIVideoModelCard,
-} from '../types/aiModel';
+} from '../../types/aiModel';
 
 // USD price: https://docs.z.ai/guides/overview/pricing
 // CNY price (cards z.ai does not sell): https://bigmodel.cn/pricing

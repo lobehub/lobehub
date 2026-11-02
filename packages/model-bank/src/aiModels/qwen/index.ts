@@ -2,7 +2,7 @@ import {
   type AIChatModelCard,
   type AIImageModelCard,
   type AIVideoModelCard,
-} from '../types/aiModel';
+} from '../../types/aiModel';
 
 // https://help.aliyun.com/zh/model-studio/models?spm=a2c4g.11186623
 
