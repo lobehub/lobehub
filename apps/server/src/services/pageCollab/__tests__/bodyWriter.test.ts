@@ -3,7 +3,11 @@ import { createHeadlessEditor } from '@lobehub/editor/headless';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 
-import { updateDocumentThroughRoom, writePageBodyThroughRoom } from '../bodyWriter';
+import {
+  replaceTextThroughRoom,
+  updateDocumentThroughRoom,
+  writePageBodyThroughRoom,
+} from '../bodyWriter';
 import { openPageFork, projectPageState } from '../fork';
 
 const room = vi.hoisted(() => ({ bootstrapped: true, doc: null as any, pushes: [] as any[] }));
@@ -222,5 +226,69 @@ describe('updateDocumentThroughRoom', () => {
 
     expect(room.pushes).toHaveLength(0);
     expect(documents.updateDocument).toHaveBeenCalledWith('doc_1', { parentId: 'p1' });
+  });
+});
+
+describe('replaceTextThroughRoom', () => {
+  beforeEach(async () => {
+    env.ENABLE_PAGE_COLLAB = true;
+    room.bootstrapped = true;
+    room.pushes = [];
+    persisted.length = 0;
+    await seedRoom('Payment within 90 days.\n\npara two\n');
+  });
+
+  it('replaces the text on the live draft and keeps edits made since the stored snapshot', async () => {
+    // Someone types into another block while the caller still holds the row's
+    // snapshot: the edit is in the room but not yet projected.
+    const user = await openPageFork(Y.encodeStateAsUpdate(room.doc));
+    const userXml = user.editor.export({ litexml: true }).litexml!;
+    const userBlock = userXml.match(/<p id="(\w+)">\s*(?:<span[^>]*>)?para two/)?.[1];
+    await user.editor.applyLiteXML({
+      action: 'replace',
+      litexml: `<p id="${userBlock}">para TWO</p>`,
+    });
+    const typed = user.diff();
+    user.destroy();
+
+    const applied = await replaceTextThroughRoom(
+      {} as any,
+      'doc_1',
+      { newText: '30 days', searchText: '90 days' },
+      { saveSource: 'llm_call', userId: 'u1' },
+    );
+    Y.applyUpdate(room.doc, typed);
+
+    expect(applied?.replacementCount).toBe(1);
+    const markdown = await markdownOfRoom();
+    expect(markdown).toContain('Payment within 30 days.');
+    expect(markdown).toContain('para TWO');
+  });
+
+  it('reports a missing anchor without writing to the room', async () => {
+    const applied = await replaceTextThroughRoom(
+      {} as any,
+      'doc_1',
+      { newText: '30 days', searchText: 'nothing like this' },
+      { saveSource: 'llm_call', userId: 'u1' },
+    );
+
+    expect(applied?.replacementCount).toBe(0);
+    expect(room.pushes).toEqual([]);
+    expect(await markdownOfRoom()).toBe('Payment within 90 days.\n\npara two\n');
+  });
+
+  it('leaves the write to the caller when nobody uses the room yet', async () => {
+    room.bootstrapped = false;
+
+    const applied = await replaceTextThroughRoom(
+      {} as any,
+      'doc_1',
+      { newText: '30 days', searchText: '90 days' },
+      { saveSource: 'llm_call', userId: 'u1' },
+    );
+
+    expect(applied).toBeUndefined();
+    expect(room.pushes).toEqual([]);
   });
 });
