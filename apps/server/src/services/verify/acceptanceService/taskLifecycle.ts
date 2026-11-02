@@ -1,8 +1,11 @@
 import debug from 'debug';
+import { eq } from 'drizzle-orm';
 
 import { AcceptanceCommentModel } from '@/database/models/acceptanceComment';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
+import { acceptances } from '@/database/schemas';
+import { resolveReviewAccess } from '@/server/services/acceptanceReview/access';
 import { notifyAcceptance } from '@/server/services/acceptanceReview/events';
 import { TaskService } from '@/server/services/task';
 
@@ -53,32 +56,59 @@ const pendingCompletionOperation = (task: { context?: unknown }) =>
   (task.context as { completion?: { requestedByOperationId?: string | null } } | null)?.completion
     ?.requestedByOperationId ?? undefined;
 
-/**
- * The task whose status follows its acceptance's lifecycle: delivered →
- * completed, rejected → reopened. Goal graph tasks are driven by their
- * coordinator (a paused task is its retry signal) and recurring tasks stay
- * on their schedule, so neither follows the acceptance.
- */
-export const resolveRepairComments = async (deps: AcceptanceServiceDeps, subjectId: string) => {
+export const resolveRepairComments = async (
+  deps: AcceptanceServiceDeps,
+  deliveryId: string,
+  subjectId: string,
+) => {
   try {
     const task = await new TaskModel(deps.db, deps.userId, deps.workspaceId).resolve(subjectId);
-    const repair = (
-      task?.config as { acceptanceRepair?: { acceptanceId?: unknown; commentIds?: unknown } }
+    if (!task) return;
+    const link = (
+      task.config as { acceptanceRepair?: { acceptanceId?: unknown; requestId?: unknown } } | null
     )?.acceptanceRepair;
-    if (typeof repair?.acceptanceId !== 'string' || !Array.isArray(repair.commentIds)) return;
-    const ids = repair.commentIds.filter((id): id is string => typeof id === 'string');
-    const resolved = await new AcceptanceCommentModel(deps.db).resolveRoots(
-      repair.acceptanceId,
-      ids,
-      deps.actorUserId,
-    );
-    if (resolved.length) notifyAcceptance(repair.acceptanceId, 'comments', deps.actorUserId);
+    if (typeof link?.acceptanceId !== 'string' || typeof link.requestId !== 'string') return;
+
+    // Task config is user-editable, so it only points at the source. The
+    // handoff record the server wrote on the source is what proves the link.
+    const source = await deps.db.query.acceptances.findFirst({
+      where: eq(acceptances.id, link.acceptanceId),
+    });
+    const request = source?.metadata?.repair;
+    if (
+      !source ||
+      request?.id !== link.requestId ||
+      request.taskId !== task.id ||
+      request.deliveryAcceptanceId !== deliveryId
+    )
+      return;
+
+    // Same rule as resolving a thread by hand: reviewers close any handed-off
+    // thread, everyone else only the threads they opened.
+    const access = await resolveReviewAccess(deps.db, deps.actorUserId, source.id);
+    if (!access) return;
+    const comments = new AcceptanceCommentModel(deps.db);
+    const rows = new Map((await comments.listByAcceptance(source.id)).map((row) => [row.id, row]));
+    const rootIds = new Set(request.commentIds.map((id) => rows.get(id)?.parentCommentId ?? id));
+    const ids = [...rootIds].filter((id) => {
+      const root = rows.get(id);
+      return root && (access.can.moderate || root.authorUserId === deps.actorUserId);
+    });
+
+    const resolved = await comments.resolveRoots(source.id, ids, deps.actorUserId);
+    if (resolved.length) notifyAcceptance(source.id, 'comments', deps.actorUserId);
     log('acceptance → task %s resolved %d handed-off comments', subjectId, resolved.length);
   } catch (error) {
     log('acceptance → task %s comment resolve failed: %O', subjectId, error);
   }
 };
 
+/**
+ * The task whose status follows its acceptance's lifecycle: delivered →
+ * completed, rejected → reopened. Goal graph tasks are driven by their
+ * coordinator (a paused task is its retry signal) and recurring tasks stay
+ * on their schedule, so neither follows the acceptance.
+ */
 export const resolveLifecycleTask = async (deps: AcceptanceServiceDeps, subjectId: string) => {
   const task = await new TaskModel(deps.db, deps.userId, deps.workspaceId).resolve(subjectId);
   if (!task || task.automationMode) return null;

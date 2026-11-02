@@ -487,7 +487,7 @@ export class AcceptanceService {
 
     if (acceptance.subjectType === 'task') {
       await completeTaskSubject(this.deps, acceptance.subjectId);
-      await resolveRepairComments(this.deps, acceptance.subjectId);
+      await resolveRepairComments(this.deps, acceptanceId, acceptance.subjectId);
     }
 
     return (await this.acceptanceModel.findById(acceptanceId))!;
@@ -529,7 +529,7 @@ export class AcceptanceService {
     if (current) this.distilSettledRound(acceptanceId, current.id);
     if (acceptance.subjectType === 'task') {
       await completeTaskSubject(this.deps, acceptance.subjectId);
-      await resolveRepairComments(this.deps, acceptance.subjectId);
+      await resolveRepairComments(this.deps, acceptanceId, acceptance.subjectId);
     }
 
     log(

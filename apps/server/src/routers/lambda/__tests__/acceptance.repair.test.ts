@@ -267,6 +267,46 @@ describe('acceptance repair handoff', () => {
     expect(after?.resolvedAt).toBeNull();
   });
 
+  it('ignores a repair link a user writes into their own Task config', async () => {
+    await handOff();
+    const source = await serverDB.query.acceptances.findFirst({
+      where: eq(acceptances.id, acceptanceId),
+    });
+    const tasksOf = taskRouter.createCaller(createTestContext(outsiderId));
+    const { data: own } = await tasksOf.create({ instruction: 'Unrelated work', name: 'Mine' });
+    await tasksOf.updateConfig({
+      config: {
+        acceptanceRepair: {
+          acceptanceId,
+          commentIds: [commentId],
+          requestId: source!.metadata!.repair!.id,
+        },
+      },
+      id: own.id,
+    });
+    const [delivery] = await serverDB
+      .insert(acceptances)
+      .values({ status: 'delivered', subjectId: own.id, subjectType: 'task', userId: outsiderId })
+      .returning();
+    await serverDB
+      .insert(verifyRuns)
+      .values({ acceptanceId: delivery.id, roundIndex: 1, userId: outsiderId });
+
+    await new AcceptanceService(serverDB, outsiderId).accept(delivery.id);
+
+    expect((await rootState())?.resolvedAt).toBeNull();
+  });
+
+  it('does not resolve handed-off comments for someone who cannot resolve them by hand', async () => {
+    const deliveryId = await handOff();
+
+    await new AcceptanceService(serverDB, userId, undefined, { actorUserId: outsiderId }).accept(
+      deliveryId,
+    );
+
+    expect((await rootState())?.resolvedAt).toBeNull();
+  });
+
   it('deduplicates concurrent requests and does not sweep in feedback posted during execution', async () => {
     const caller = acceptanceRouter.createCaller(createTestContext(userId));
     const results = await Promise.all([
