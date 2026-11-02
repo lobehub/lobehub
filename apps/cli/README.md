@@ -2,6 +2,53 @@
 
 LobeHub command-line interface.
 
+## Publish local artifacts
+
+```bash
+# Publish ordinary HTML and its referenced local resources
+lh artifact publish ./page.html --root . --json
+
+# Read the Canvas component and generation rules
+lh artifact guide canvas
+
+# Publish a self-contained Canvas HTML file
+lh artifact publish ./report.html --type canvas --json
+
+# The binding remembers the type; subsequent publishes update the same artifact
+lh artifact publish ./report.html --json
+
+# Create a separate Canvas and bind future publishes to it
+lh artifact publish ./report.html --new --json
+
+# Take a published artifact offline (the deployment and its releases are kept)
+lh artifact unpublish ./report.html --json
+```
+
+Bindings and pending operations live in the project's `.lobehub/artifacts.json`.
+Retry the same command with unchanged input after a failed Canvas save or publish;
+the CLI resumes that operation without creating another Canvas or saved version.
+Restore the original input before retrying if you edited it during recovery.
+An explicit validation or version-conflict rejection releases the pending save,
+so you can correct the file or inspect the latest version before trying again.
+If publication explicitly rejects a slug, correct `--slug` and retry with the same
+content and target; the CLI reuses the saved Canvas and version.
+Canvas bindings are scoped to the authenticated account, server and workspace.
+
+Canvas input is a single HTML file with inline styles, scripts and data, subject
+to the Canvas guide's validation and size limits. Publication saves a version in
+LobeHub and returns a public URL; it requires a server with Canvas publishing and
+a compatible runtime. JSON errors retain any saved Canvas ID and version.
+
+`--slug <name>` requests the readable prefix for a new deployment. Market adds an
+eight-character suffix; both HTML and Canvas use the same rule. Existing deployments
+retain their address when updated, including older records without a stored label.
+JSON `publicUrl` is the direct hosting URL; `shareUrl` is the LobeHub product share
+page, and `subdomainLabel` is the actual assigned label when the server returns it.
+
+`--deployment <id>` overrides the deployment for this run without changing the
+canonical binding. `--new` and `--deployment` cannot be combined. Changing an
+existing artifact's content type requires `--new`.
+
 ## Acceptance skill
 
 The acceptance skill is maintained in [lobehub/acceptance](https://github.com/lobehub/acceptance).
@@ -17,8 +64,8 @@ Update the installed skill:
 lh acceptance update
 ```
 
-Creating acceptances and publishing reports require authentication. Run `lh login`
-before using those commands.
+Publishing reports to LobeHub requires authentication (`lh login`). Without a
+login, acceptance runs locally — see [Local reports](#local-reports).
 
 This selects the same source as `npx skills add lobehub/acceptance --skill acceptance`.
 Changes merged into the default branch are available on the next install or
@@ -40,6 +87,31 @@ To select an existing version tag explicitly, use `lh acceptance update --skill-
 with `npx skills add`. A later `lh acceptance update` without `--skill-version`
 returns to the current default-branch source.
 
+## Local reports
+
+A machine that has never signed in renders acceptance reports locally instead
+of publishing them; `lh acceptance preflight --json` reports `"mode": "local"`.
+
+```bash
+lh acceptance run render .acceptances/<subject>/<round> --requirement "<business goal>"
+```
+
+This writes `report.html` beside the rounds: the acceptance page, offline — the
+checklist, evidence, before/after pairs, video chapters and round history,
+rendered from every round of that acceptance. Nothing is uploaded. The reader
+can accept or reject checks and circle regions on screenshots there; **Save
+reviews** downloads the decisions, and the next
+`lh acceptance feedback .acceptances/<subject>` (or `view`) files them as
+`reviews.json` and reports them like hosted feedback.
+
+Comments, mentions and shared links need LobeHub. After `lh login`,
+`lh acceptance publish .acceptances/<subject>` publishes the unpublished rounds
+in order into one acceptance and carries the standing review decisions over;
+running it again publishes only newer rounds.
+
+The page is built by `apps/workbench` (`bun run --cwd ../workbench build:report`);
+`bun run build` copies it to `dist/acceptance-report.html` when it exists.
+
 ## Local Development
 
 | Task                                       | Command                    |
@@ -49,7 +121,7 @@ returns to the current default-branch source.
 | Link `lh`/`lobe`/`lobehub` into your shell | `bun run cli:link`         |
 | Remove the global link                     | `bun run cli:unlink`       |
 
-- `bun run build` only generates `dist/index.js`.
+- `bun run build` generates `dist/index.js`, plus `dist/acceptance-report.html` when the local report page is built.
 - To make `lh` available in your shell, run `bun run cli:link`.
 - After linking, if your shell still cannot find `lh`, run `rehash` in `zsh`.
 
@@ -123,3 +195,24 @@ Signal and VFS tests additionally require their documented Agent ID variables.
 Search fixtures wait up to 60 seconds for asynchronous indexing; a timeout fails
 the suite rather than accepting empty results. The command above supplies a live
 network budget explicitly; this does not change unit-test timeouts or enable retries.
+
+### Native Codex app-server on a connected device
+
+A current CLI advertises `codex-app-server-v1` only after its resolved Codex binary
+completes a native app-server handshake. The probe runs once per gateway connection
+(and again after 10 minutes), not once per system-info request. `lh connect capabilities`
+reports that same capability as JSON without logging in, connecting a device, or creating
+a conversation. Desktop gateway connections invoke this command through their bundled
+CLI, so an unrelated global CLI cannot determine support. Missing, incompatible, or
+timed-out binaries do not advertise native support.
+
+Codex topics run through `codex exec` unless the user enables the
+**Codex App Server Runtime** Lab. With the Lab on and a capable connection, the server
+runs them through app-server and persists each message's native session and turn IDs.
+These topics keep the `codex exec` recovery: a missing native session is retried fresh
+with the topic transcript.
+
+The internal `lh hetero exec --codex-app-server` transport uses a per-operation process
+that owns cancellation and shell identity. This transport rejects unsupported approval
+or sandbox arguments instead of weakening permissions. The richer permission bridge is
+maintained separately.

@@ -3,9 +3,9 @@
 import { isDesktop } from '@lobechat/const';
 import type { WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Input, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { ActionIcon, Flexbox, Icon, Input, Popover, toast, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -18,8 +18,7 @@ import {
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useConversationStore } from '@/features/Conversation/store';
-import { openAddWorkingDirModal } from '@/features/WorkingDirectory';
+import { openPickWorkingDirModal } from '@/features/WorkingDirectory';
 import {
   resolveAgentWorkingDirectorySource,
   resolveTargetDeviceId,
@@ -29,7 +28,6 @@ import {
   getWorkingDirectoryPathString,
 } from '@/helpers/workingDirectoryPath';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
@@ -39,156 +37,104 @@ import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+import { useTopicId } from '../hooks/useTopicId';
 import DashedFolderIcon from './DashedFolderIcon';
 import DirIcon from './DirIcon';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 import { useMigrateDeviceRecents } from './useMigrateDeviceRecents';
+import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
 // Show the in-place search box only once the list is long enough that scanning
 // gets tedious — a short list doesn't need the extra chrome.
 const SEARCH_THRESHOLD = 8;
 
-const styles = createStaticStyles(({ css }) => ({
-  badge: css`
-    flex: none;
-
-    padding-inline: 5px;
-    border-radius: 999px;
-
-    font-size: 10px;
-    line-height: 15px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  button: css`
-    cursor: pointer;
-
-    display: flex;
-    flex: none;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    white-space: nowrap;
-
-    transition: background 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  buttonLabel: css`
-    overflow: hidden;
-    max-width: 140px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  chooseFolderItem: css`
-    cursor: pointer;
-
-    padding-block: 8px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 13px;
-    color: ${cssVar.colorTextSecondary};
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  clearText: css`
-    cursor: pointer;
-
-    padding-block: 6px 2px;
-    padding-inline: 8px;
-
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-
-    transition: color 0.2s;
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  dirItem: css`
-    cursor: pointer;
-
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadius};
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-
-    /* Reveal the row actions (set-default / remove) only on hover. */
-    &:hover .wd-row-actions {
-      display: flex;
-    }
-  `,
-  dirItemActive: css`
-    background: ${cssVar.colorFillTertiary};
-  `,
-  dirName: css`
-    overflow: hidden;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  dirPath: css`
-    overflow: hidden;
-
-    font-size: 11px;
-    color: ${cssVar.colorTextDescription};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  rowActions: css`
-    display: none;
-    flex: none;
-    gap: 2px;
-    align-items: center;
-  `,
-  scrollContainer: css`
-    overflow-y: auto;
-    max-height: 320px;
-  `,
-  searchBar: css`
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorSplit};
-  `,
-  sectionTitle: css`
-    padding-block: 6px 2px;
-    padding-inline: 8px;
-
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  badge: {
+    flex: 'none',
+    paddingInline: '5px',
+    borderRadius: '999px',
+    fontSize: '10px',
+    lineHeight: '15px',
+    color: cssVar.colorTextTertiary,
+    backgroundColor: cssVar.colorFillSecondary,
+    backgroundImage: 'none',
+  },
+  chooseFolderItem: {
+    cursor: 'pointer',
+    paddingBlock: '8px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '13px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  clearText: {
+    cursor: 'pointer',
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '2px',
+    paddingInline: '8px',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    transition: 'color 0.2s',
+  },
+  dirItem: {
+    cursor: 'pointer',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: cssVar.borderRadius,
+    transition: 'background-color 0.2s',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  dirItemActive: { backgroundColor: cssVar.colorFillTertiary, backgroundImage: 'none' },
+  dirName: {
+    overflow: 'hidden',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  dirPath: {
+    overflow: 'hidden',
+    fontSize: '11px',
+    color: cssVar.colorTextDescription,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  // Reveal the row actions (set-default / remove) only on hover of the row
+  // (the `defaultMarker` on `dirItem`).
+  rowActions: {
+    display: { default: 'none', [stylex.when.ancestor(':hover')]: 'flex' },
+    flex: 'none',
+    gap: '2px',
+    alignItems: 'center',
+  },
+  scrollContainer: { overflowY: 'auto', maxHeight: '320px' },
+  searchBar: {
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorSplit,
+  },
+  sectionTitle: {
+    paddingBlockStart: '6px',
+    paddingBlockEnd: '2px',
+    paddingInline: '8px',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: cssVar.colorTextQuaternary,
+  },
+});
 
 const isValidWorkingDirEntry = (entry: WorkingDirEntry): boolean =>
   !!getWorkingDirectoryPathString(entry.path);
 
-type FolderEntry = { path: string; repoType?: 'git' | 'github' };
+type FolderEntry = { environmentId?: string; path: string; repoType?: 'git' | 'github' };
 
 /** This machine: browse the filesystem via the native Electron folder dialog. */
 const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: FolderEntry) => void }>(
@@ -205,7 +151,7 @@ const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: Folder
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.chooseFolderItem}
+        className={stylex.props(styles.chooseFolderItem).className}
         gap={8}
         onClick={handleClick}
       >
@@ -226,33 +172,22 @@ const AddRemoteFolderRow = memo<{
 }>(({ defaultCwd, deviceId, onBeforeOpen, onPick }) => {
   const { t } = useTranslation('device');
 
-  // Validate the selected or manually entered path on the target device: block
-  // on a definitive negative, otherwise commit with the detected repoType so the
-  // recent entry shows the right (git / github) icon. An unreachable device
-  // (null) is treated as "can't verify" and allowed through without a repoType.
-  const handleSubmit = async (path: string): Promise<string | undefined> => {
-    const result = deviceId ? await deviceService.statPath(deviceId, path) : undefined;
-    if (result) {
-      if (!result.exists) return t('workingDirectory.pathNotExist');
-      if (!result.isDirectory) return t('workingDirectory.pathNotDirectory');
-    }
-    onPick({ path, repoType: result?.repoType });
-    return undefined;
-  };
-
   const handleClick = () => {
     onBeforeOpen();
-    openAddWorkingDirModal({
+    // A folder picked on a device may go with a code environment. Only the
+    // association is kept — nothing clones or sets up on the device.
+    openPickWorkingDirModal({
       defaultPath: defaultCwd || undefined,
       deviceId,
-      onSubmit: handleSubmit,
+      onPick,
+      withEnvironment: true,
     });
   };
   return (
     <Flexbox
       horizontal
       align={'center'}
-      className={styles.chooseFolderItem}
+      className={stylex.props(styles.chooseFolderItem).className}
       gap={8}
       onClick={handleClick}
     >
@@ -280,7 +215,7 @@ interface WorkingDirectoryPickerProps {
  * runs in when nothing is picked is never invisible.
  */
 const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) => {
-  const topicId = useConversationStore((s) => s.context.topicId);
+  const topicId = useTopicId();
   const { t } = useTranslation('device');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -296,7 +231,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   // Effective config (shared row + this member's device override)
   // so recents / default cwd / the selected-repo label all resolve against the
   // device THIS member's run actually targets.
-  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId);
+  const { agencyConfig, workspaceScoped } = useEffectiveAgencyConfig(agentId, { topicId });
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId, {
     workspaceScoped,
@@ -435,29 +370,32 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
       <Flexbox
         horizontal
         align={'center'}
-        className={cx(styles.dirItem, isActive && styles.dirItemActive)}
         gap={8}
         key={entry.path}
         ref={isActive ? activeRowRef : undefined}
+        className={
+          stylex.props(stylex.defaultMarker(), styles.dirItem, isActive && styles.dirItemActive)
+            .className
+        }
         onClick={() => void pick(entry)}
       >
         <DirIcon repoType={entry.repoType} />
         <Flexbox flex={1} style={{ minWidth: 0 }}>
           <Flexbox horizontal align={'center'} gap={6}>
-            <div className={styles.dirName}>
+            <div {...stylex.props(styles.dirName)}>
               {getWorkingDirectoryName(entry.path) ?? entry.path}
             </div>
             {isDefault && (
-              <span className={styles.badge}>{t('workingDirectory.defaultBadge')}</span>
+              <span {...stylex.props(styles.badge)}>{t('workingDirectory.defaultBadge')}</span>
             )}
           </Flexbox>
-          <div className={styles.dirPath}>{entry.path}</div>
+          <div {...stylex.props(styles.dirPath)}>{entry.path}</div>
         </Flexbox>
         <Flexbox horizontal align={'center'} gap={2} style={{ flex: 'none' }}>
           {/* The same Star toggles the device default in both directions. Remove
               (X) is hidden on the active row: you can't remove the selection out
               from under yourself. */}
-          <div className={cx('wd-row-actions', styles.rowActions)}>
+          <div {...stylex.props(styles.rowActions)}>
             <ActionIcon
               active={isDefault}
               aria-label={defaultActionLabel}
@@ -488,7 +426,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const content = (
     <Flexbox gap={4} style={{ maxWidth: 'calc(100vw - 48px)', width: 320 }}>
       {showSearch && (
-        <div className={styles.searchBar}>
+        <div {...stylex.props(styles.searchBar)}>
           <Input
             autoFocus
             placeholder={t('workingDirectory.searchPlaceholder')}
@@ -502,14 +440,17 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
         </div>
       )}
       <Flexbox horizontal align={'center'} distribution={'space-between'}>
-        <div className={styles.sectionTitle}>{t('workingDirectory.recent')}</div>
+        <div {...stylex.props(styles.sectionTitle)}>{t('workingDirectory.recent')}</div>
         {hasClearableSelection && (
-          <div className={styles.clearText} onClick={() => void clear().then(() => setOpen(false))}>
+          <div
+            {...stylex.props(styles.clearText)}
+            onClick={() => void clear().then(() => setOpen(false))}
+          >
             {t('workingDirectory.clear')}
           </div>
         )}
       </Flexbox>
-      <div className={styles.scrollContainer}>
+      <div {...stylex.props(styles.scrollContainer)}>
         {filtered.length === 0 ? (
           <Flexbox
             align={'center'}
@@ -543,13 +484,13 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     : t('workingDirectory.unselected');
 
   const trigger = (
-    <div className={styles.button}>
+    <div {...stylex.props(workingDirectoryChipStyles.chip)}>
       {selectedDir ? (
         <DirIcon repoType={recents.find((r) => r.path === selectedDir)?.repoType} />
       ) : (
         <DashedFolderIcon size={14} />
       )}
-      <span className={styles.buttonLabel}>{displayName}</span>
+      <span {...stylex.props(workingDirectoryChipStyles.label)}>{displayName}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );

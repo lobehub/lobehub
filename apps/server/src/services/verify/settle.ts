@@ -2,6 +2,7 @@ import {
   ACCEPTANCE_REVIEW_ERRORED_ERROR,
   VERIFICATION_ERRORED_ERROR,
   VERIFICATION_FAILED_ERROR,
+  VERIFICATION_OUT_OF_CREDITS_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
 } from '@lobechat/const/goal';
 import debug from 'debug';
@@ -17,11 +18,13 @@ import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { TaskService } from '@/server/services/task';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
+import { AcceptanceService } from './acceptanceService';
 import { reviewGoalDelivery } from './goalReview';
-import { maybeAutoRepair } from './repairService';
+import { maybeAutoRepair, repairRejectedReview } from './repairService';
 import { VerifyReporterService } from './reporter';
 import { VerifyStatusService } from './statusService';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
+import { isOutOfCreditsFailure } from './verifierError';
 
 const log = debug('lobe-server:verify-settle');
 
@@ -179,6 +182,17 @@ export const driveTaskFromVerify = async (
     const task = await taskModel.findById(taskOperation.taskId);
     if (!task || TERMINAL_TASK_STATUS.has(task.status)) return; // task already settled
 
+    // A Goal graph task is steered by its coordinator, which reads a paused task
+    // as "start another attempt". A failed lookup counts as Goal so a failure
+    // never silently skips the retry.
+    let goal: Awaited<ReturnType<GoalModel['findByGraphTask']>> | 'unknown';
+    try {
+      goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(taskOperation.taskId);
+    } catch (error) {
+      log('verify-settle goal lookup failed for task %s: %O', taskOperation.taskId, error);
+      goal = 'unknown';
+    }
+
     // The review already retries a check whose review could not run. An
     // `errored` result here is the reviewer's problem, and another builder
     // attempt would only re-deliver into the same broken review.
@@ -186,6 +200,36 @@ export const driveTaskFromVerify = async (
       run.status === 'passed'
         ? await reviewGoalDelivery(db, userId, taskOperation.taskId, operationId, workspaceId)
         : undefined;
+
+    // A rejected check that can be repaired is fixed inside this round, by the
+    // same builder in the same topic, rather than pausing the Task into a whole
+    // new attempt. The repair round settles the Task when it finishes; this run's
+    // drive claim stays stamped so it is never driven twice.
+    if (
+      goalReview?.status === 'rejected' &&
+      goalReview.rejectedChecks?.length &&
+      !task.automationMode
+    ) {
+      const repair = await repairRejectedReview(
+        db,
+        userId,
+        operationId,
+        goalReview.rejectedChecks,
+        workspaceId,
+      ).catch((error) => {
+        log('verify-settle review repair failed for op %s: %O', operationId, error);
+        return null;
+      });
+      if (repair) {
+        log(
+          'acceptance review rejected → repairing op %s in round (%s)',
+          operationId,
+          repair.repairOperationId,
+        );
+        return;
+      }
+    }
+
     const outcome =
       goalReview?.status === 'rejected'
         ? 'failed'
@@ -194,6 +238,25 @@ export const driveTaskFromVerify = async (
           : goalReview?.status === 'unjudgeable'
             ? 'unjudgeable'
             : run.status;
+
+    // A verifier refused for want of credits stays refused however often the
+    // builder re-delivers. Name that cause, so the Goal coordinator asks for
+    // credits instead of starting builder attempt after builder attempt into
+    // the same refusal. An unreadable cause keeps the ordinary errored path.
+    const outOfCredits =
+      outcome === 'errored' &&
+      (await new VerifyCheckResultModel(db, userId, workspaceId)
+        .listByRun(run.id)
+        .then((results) =>
+          results.some(
+            (r) =>
+              r.required && r.status === 'errored' && isOutOfCreditsFailure(r.toulmin?.limitation),
+          ),
+        )
+        .catch((error) => {
+          log('verify-settle errored causes unavailable for %s: %O', run.id, error);
+          return false;
+        }));
 
     if (outcome === 'passed') {
       // Verify and, for Goal tasks, Acceptance review must pass before completing
@@ -219,7 +282,10 @@ export const driveTaskFromVerify = async (
       // rejected delivery:
       // - failed:         the verifier ran and judged the delivery short of the criteria.
       // - errored:        the verifier could not run (infra) — the delivery was NOT
-      //                   evaluated, so we must not claim it "did not pass".
+      //                   evaluated, so we must not claim it "did not pass". When
+      //                   the cause is a credit refusal it gets its own summary:
+      //                   another builder attempt cannot fix that, so it routes
+      //                   to a person.
       // - review_errored: the verifiers passed, but the Acceptance review on top of
       //                   them still could not run after its retry. The builder
       //                   cannot fix a broken reviewer, so this routes to a person.
@@ -238,9 +304,11 @@ export const driveTaskFromVerify = async (
           ? VERIFICATION_UNJUDGEABLE_ERROR
           : outcome === 'review_errored'
             ? ACCEPTANCE_REVIEW_ERRORED_ERROR
-            : isErrored
-              ? VERIFICATION_ERRORED_ERROR
-              : VERIFICATION_FAILED_ERROR;
+            : outOfCredits
+              ? VERIFICATION_OUT_OF_CREDITS_ERROR
+              : isErrored
+                ? VERIFICATION_ERRORED_ERROR
+                : VERIFICATION_FAILED_ERROR;
       if (task.automationMode) {
         // Mirror of the pass branch: verify judges THIS tick, not the lifetime
         // schedule. Pausing here would permanently disarm the cron (the
@@ -252,6 +320,20 @@ export const driveTaskFromVerify = async (
             : 'verify failed → recurring task %s remains scheduled',
           taskOperation.taskId,
         );
+      } else if (
+        outcome === 'failed' &&
+        run.acceptanceId &&
+        !goal &&
+        // A failed round still delivers the Acceptance — the verdict is advice and
+        // the user's accept / reject decides, so the task follows the Acceptance
+        // and completes. A reject that already landed (or lands mid-write) keeps
+        // the task open instead, falling through to the pause below.
+        (await new AcceptanceService(db, userId, workspaceId).completeTaskForDelivery(
+          run.acceptanceId,
+          taskOperation.taskId,
+        )) === 'completed'
+      ) {
+        log('verify failed → acceptance delivered → task %s completed', taskOperation.taskId);
       } else {
         // Verification outcomes belong to the task itself. Do not create an inbox
         // brief here: a verifier rejection/error is not a separate user todo.
@@ -282,11 +364,13 @@ export const driveTaskFromVerify = async (
                 }),
               goalReview?.status === 'rejected' ? goalReview.feedback : undefined,
             )
-          : outcome === 'errored' || outcome === 'review_errored'
-            ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
-            : outcome === 'unjudgeable'
-              ? 'Acceptance review could not judge this delivery from the captured evidence. Review it manually, or restate the check so evidence can settle it.'
-              : undefined;
+          : outOfCredits
+            ? 'Verification could not run because the account is out of credits for the verifier model; the delivery was not evaluated. Top up credits, then retry.'
+            : outcome === 'errored' || outcome === 'review_errored'
+              ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
+              : outcome === 'unjudgeable'
+                ? 'Acceptance review could not judge this delivery from the captured evidence. Review it manually, or restate the check so evidence can settle it.'
+                : undefined;
       await new TaskResultBridgeService(db, userId, workspaceId).deliver({
         operationId,
         reason: outcome === 'passed' ? 'done' : 'error',
@@ -309,10 +393,7 @@ export const driveTaskFromVerify = async (
     // this is the server-side driver for long-horizon goals, and without it a
     // goal only progresses while some client keeps ticking it.
     try {
-      const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(
-        taskOperation.taskId,
-      );
-      if (goal) {
+      if (goal && goal !== 'unknown') {
         await scheduleGoalAdvance({ goalId: goal.id, trigger: 'settle', userId, workspaceId });
         log('verify-settle → queued goal advance for %s', goal.id);
       }

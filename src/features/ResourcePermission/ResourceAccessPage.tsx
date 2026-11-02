@@ -1,9 +1,7 @@
 'use client';
 
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Icon } from '@lobehub/ui';
-import { Alert, Breadcrumb, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Alert, Breadcrumb, createStaticStyles, Flexbox, Icon, Text, toast } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { ChevronRight, InfoIcon, UsersIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -94,10 +92,8 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
     const { t } = useTranslation('setting');
     const navigate = useWorkspaceAwareNavigate();
     const activeWorkspaceSlug = useActiveWorkspaceSlug();
-    const { data, error, isLoading, mutate, setAccessLevel, updating } = useResourcePermission(
-      resourceType,
-      resourceId,
-    );
+    const { data, error, isConfirmed, isLoading, mutate, setAccessLevel, updating } =
+      useResourcePermission(resourceType, resourceId);
 
     const isPrivate = data?.visibility === 'private';
     const accessOptions = useAccessLevelOptions({
@@ -105,19 +101,20 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
       isPrivate,
       resourceType,
     });
+    const form = useForm();
 
     // Managing member access is a manager-only surface, like Agent's page: a
     // non-manager (or a private resource that is not the caller's) gets a
-    // reason toast and lands back where they came from.
-    const isDenied =
-      (!!error && isForbiddenError(error)) || (!isLoading && !!data && !data.canManage);
+    // reason toast and lands back where they came from. A persisted record may
+    // predate a grant, so only a record re-fetched this session redirects.
+    const isDenied = (!!error && isForbiddenError(error)) || (isConfirmed && !data?.canManage);
     useEffect(() => {
       if (!isDenied) return;
       toast.error(t('permission.noManagePermission'));
       navigate(redirectPath, { replace: true });
     }, [isDenied, navigate, redirectPath, t]);
 
-    const accessGroup: FormGroupItemType = {
+    const accessGroup: FormGroupItem = {
       children: [
         {
           avatar: (
@@ -140,7 +137,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
       title: t('permission.page.memberGroup'),
     };
 
-    const formGroups: FormGroupItemType[] = [accessGroup];
+    const formGroups: FormGroupItem[] = [accessGroup];
     if (showCollaborators) {
       formGroups.push({
         children: <CollaboratorList resourceId={resourceId} resourceType={resourceType} />,
@@ -206,7 +203,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
                       type={'info'}
                     />
                   ) : null}
-                  <Form items={formGroups} itemsType={'group'} {...FORM_STYLE} />
+                  <Form form={form} items={formGroups} itemsType={'group'} {...FORM_STYLE} />
                 </>
               )}
             </Flexbox>

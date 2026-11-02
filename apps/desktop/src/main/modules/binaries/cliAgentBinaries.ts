@@ -238,6 +238,3 @@ export const cliAgentBinaries: BinarySpec[] = [
   qwenCodeBinary,
   aiderBinary,
 ];
-
-export const listHeterogeneousCliBinaryTypes = (): LocalHeterogeneousAgentType[] =>
-  Object.keys(heterogeneousCliAgentBinaries) as LocalHeterogeneousAgentType[];

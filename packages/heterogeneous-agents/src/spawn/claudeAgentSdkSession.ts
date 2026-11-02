@@ -12,6 +12,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { spawnManaged } from '@lobechat/utils/managedProcess';
 
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
 
 const CLAUDE_SDK_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
@@ -76,8 +77,10 @@ export const buildClaudeSdkUserMessageFromStreamJson = (stdinPayload: string): S
 
 const parseClaudeSdkExtraArgs = (
   args: string[],
-): Pick<ClaudeAgentSdkOptions, 'effort' | 'extraArgs' | 'model'> => {
+): Pick<ClaudeAgentSdkOptions, 'effort' | 'extraArgs' | 'model' | 'plugins'> => {
   const extraArgs: Record<string, string | null> = {};
+  // `--plugin-dir` repeats, which `extraArgs` (one value per flag) cannot carry.
+  const plugins: NonNullable<ClaudeAgentSdkOptions['plugins']> = [];
   let model: string | undefined;
   let effort: ClaudeAgentSdkOptions['effort'];
 
@@ -101,6 +104,12 @@ const parseClaudeSdkExtraArgs = (
       continue;
     }
 
+    if (key === 'plugin-dir' && hasValue) {
+      plugins.push({ path: next, type: 'local' });
+      index += 1;
+      continue;
+    }
+
     extraArgs[key] = hasValue ? next : null;
     if (hasValue) index += 1;
   }
@@ -109,6 +118,7 @@ const parseClaudeSdkExtraArgs = (
     ...(effort ? { effort } : {}),
     extraArgs: Object.keys(extraArgs).length > 0 ? extraArgs : undefined,
     ...(model ? { model } : {}),
+    ...(plugins.length > 0 ? { plugins } : {}),
   };
 };
 
@@ -156,6 +166,8 @@ export interface HeterogeneousAgentRuntimeStatus {
 export interface ClaudeAgentSdkSessionOptions {
   args: string[];
   commandPath: string;
+  /** Claude profile root the transcript lives under; defaults to `env.CLAUDE_CONFIG_DIR`. */
+  configDir?: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
   onEvents: (events: AgentStreamEvent[]) => Promise<void> | void;
@@ -246,6 +258,17 @@ export class ClaudeAgentSdkSession {
     this.armInactivityTimer();
 
     try {
+      if (this.options.resumeSessionId) {
+        this.pipeline.configureSession({
+          initialSessionCostUsd: await readClaudeCodeSessionCost({
+            configDir: this.options.configDir ?? this.options.env.CLAUDE_CONFIG_DIR,
+            cwd: this.options.cwd,
+            home: this.options.env.HOME,
+            sessionId: this.options.resumeSessionId,
+          }),
+        });
+      }
+
       const { query } = await import('@anthropic-ai/claude-agent-sdk');
       const userMessage = buildClaudeSdkUserMessageFromStreamJson(this.options.stdinPayload);
 

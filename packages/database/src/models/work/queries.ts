@@ -18,6 +18,7 @@ import { documents } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
 import { topics } from '../../schemas/topic';
 import { works, workVersions } from '../../schemas/work';
+import { nonNull } from '../utils/rows';
 import { type WorkContext, workOwnership } from './context';
 import { getTotalCostByWorkIds } from './cost';
 import {
@@ -27,6 +28,7 @@ import {
   currentWorkListFields,
   documentSummaryJoin,
   resourceDeletedField,
+  resourceLiveFilter,
   taskSummaryJoin,
 } from './internal';
 import {
@@ -66,6 +68,7 @@ export const listByRootOperation = async (
     rootOperationIds: [params.rootOperationId],
   });
 
+  /* v8 ignore next -- unreachable: listByRootOperations pre-seeds an entry for every requested id */
   return map[params.rootOperationId] ?? [];
 };
 
@@ -104,10 +107,14 @@ export const listByRootOperations = async (
     .sort((a, b) => b.version.createdAt.getTime() - a.version.createdAt.getTime());
 
   for (const item of items) {
-    const rootOperationId = item.version.rootOperationId;
-    if (!rootOperationId || !(rootOperationId in result)) continue;
-    if (result[rootOperationId].length >= limit) continue;
-    result[rootOperationId].push(item);
+    // Every adapter filters rows by inArray(rootOperationId, rootOperationIds),
+    // and `result` holds a bucket for each of those ids.
+    const bucket = nonNull(
+      result[nonNull(item.version.rootOperationId, 'work_versions.root_operation_id')],
+      'the work summary bucket of a requested root operation',
+    );
+    if (bucket.length >= limit) continue;
+    bucket.push(item);
   }
 
   return result;
@@ -158,8 +165,9 @@ export const listSummariesByRootOperations = async (
 
   const anchorByWorkId = new Map<string, string>();
   for (const row of eventRows) {
-    if (!row.rootOperationId) continue;
-    if (!anchorByWorkId.has(row.workId)) anchorByWorkId.set(row.workId, row.rootOperationId);
+    // The query filters on inArray(rootOperationId, rootOperationIds).
+    const rootOperationId = nonNull(row.rootOperationId, 'work_versions.root_operation_id');
+    if (!anchorByWorkId.has(row.workId)) anchorByWorkId.set(row.workId, rootOperationId);
   }
   if (anchorByWorkId.size === 0) return result;
 
@@ -197,6 +205,7 @@ export const listSummariesByRootOperations = async (
 
   for (const summary of summaries) {
     const rootOperationId = anchorByWorkId.get(summary.id);
+    /* v8 ignore next -- unreachable: rows are filtered to anchorByWorkId keys, whose values are requested ids */
     if (!rootOperationId || !(rootOperationId in result)) continue;
     if (result[rootOperationId].length >= limit) continue;
     result[rootOperationId].push(summary);
@@ -328,6 +337,9 @@ export const listByWorkspace = async (
     // Row-level gate: un-opted-in requests never see `file` works, even in the
     // combined (no `type`) view (see resolveAllowedWorkTypes).
     inArray(works.type, resolveAllowedWorkTypes(params.includeFileWorks)),
+    // Orphaned Works (backing resource deleted or trashed) are hidden here
+    // rather than shown as dead cards; see resourceLiveFilter.
+    resourceLiveFilter,
   ];
   if (params.type) filters.push(eq(works.type, params.type));
   if (params.originAgentId) filters.push(eq(works.originAgentId, params.originAgentId));
@@ -372,11 +384,9 @@ export const listByWorkspace = async (
     })
     .from(works)
     .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
+    // LEFT JOINs feed resourceLiveFilter, which drops rows whose backing
+    // task / document is gone instead of surfacing them as orphans.
     .leftJoin(tasks, taskSummaryJoin(ctx))
-    // LEFT JOIN, like the tasks one: an orphaned document Work (backing row
-    // hard-deleted outside the tool path) must still surface, so the UI can
-    // render it as "document deleted" and offer removal instead of showing a
-    // live-looking card that 404s on click.
     .leftJoin(documents, documentSummaryJoin)
     .leftJoin(topics, eq(works.originTopicId, topics.id))
     .where(and(...filters))

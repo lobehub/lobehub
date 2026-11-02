@@ -78,4 +78,38 @@ describe('categorizeImageGenerationError', () => {
       errorType: AsyncTaskErrorType.ServerError,
     });
   });
+
+  it('should keep the nested upstream message when the router rethrows a normalized error', () => {
+    // Shape recorded for the last (azure) channel attempt when gpt-image rejected `height`.
+    const result = categorizeImageGenerationError({
+      error: {
+        error: {
+          error: {
+            code: 'unknown_parameter',
+            message: "Unknown parameter: 'height'.",
+            type: 'invalid_request_error',
+          },
+          status: 400,
+        },
+        errorType: 'UpstreamHttpError',
+      },
+      isAborted: false,
+      isEditingImage: false,
+    });
+
+    expect(result).toEqual({
+      errorMessage: "400 Unknown parameter: 'height'.",
+      errorType: AsyncTaskErrorType.ServerError,
+    });
+  });
+
+  it('should not repeat the status when the upstream message already starts with it', () => {
+    const result = categorizeImageGenerationError({
+      error: { message: '400 prompt is required', status: 400 },
+      isAborted: false,
+      isEditingImage: false,
+    });
+
+    expect(result.errorMessage).toBe('400 prompt is required');
+  });
 });

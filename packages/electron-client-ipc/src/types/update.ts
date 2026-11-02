@@ -27,6 +27,8 @@ export interface UpdateInfo {
 }
 
 export interface CoreUpdateStatus {
+  /** Renderer update confirmed healthy in this process, including after hot reload. */
+  appliedVersion?: string | null;
   applyMode: 'reload' | 'relaunch' | null;
   current: string | null;
   disabledReasons: string[];
@@ -38,7 +40,19 @@ export interface CoreUpdateStatus {
   staged: string | null;
 }
 
-export type UpdaterStage = 'idle' | 'checking' | 'downloading' | 'downloaded' | 'latest' | 'error';
+export type UpdaterStage =
+  | 'idle'
+  | 'checking'
+  | 'downloading'
+  | 'downloaded'
+  | 'latest'
+  | 'error'
+  /**
+   * The running installation cannot update itself — a snap (snapd owns the
+   * refresh), the plain `tar.gz` archive, or an AppImage started without its
+   * runtime. The only way forward is downloading a new build manually.
+   */
+  | 'unsupported';
 
 export interface UpdaterState {
   errorMessage?: string;

@@ -3,12 +3,15 @@ import { describe, expect, it } from 'vitest';
 import type { RuleGroup } from '@/services/expertise';
 
 import {
+  agentSectionsByCount,
   appendException,
   findMove,
+  nextRunsSort,
   revisionAuthorKey,
   ruleOrigin,
   sectionBody,
   sectionsByOwner,
+  sortByRuns,
 } from './labels';
 
 describe('appendException', () => {
@@ -66,10 +69,25 @@ describe('revisionAuthorKey', () => {
 });
 
 describe('ruleOrigin', () => {
-  const rule = (rejectionHitCount: number, conversationHitCount: number, authored = false) => ({
+  const rule = (
+    rejectionHitCount: number,
+    conversationHitCount: number,
+    authored = false,
+    materialHitCount = 0,
+  ) => ({
     authored,
     conversationHitCount,
+    materialHitCount,
     rejectionHitCount,
+  });
+
+  it('says a rule was read from material until practice confirms it', () => {
+    expect(ruleOrigin(rule(0, 0, false, 2))).toEqual({
+      key: 'fromMaterial',
+      params: { count: 2 },
+    });
+    // Once it is also rejected for, the rejection is what the reviewer cares about.
+    expect(ruleOrigin(rule(1, 0, false, 2))).toEqual({ key: 'distilled', params: { hits: 1 } });
   });
 
   it('does not say the reviewer rejected anything for a rule learned in conversation', () => {
@@ -120,5 +138,59 @@ describe('sectionsByOwner', () => {
     const sections = sectionsByOwner([group('fox-1', agent('fox'))]);
 
     expect(sections[0]).toMatchObject({ groups: [], key: 'mine' });
+  });
+});
+
+describe('sortByRuns', () => {
+  const rules = [
+    { hitRunCount: 1, id: 'a' },
+    { hitRunCount: 3, id: 'b' },
+    { hitRunCount: 1, id: 'c' },
+    { hitRunCount: 0, id: 'd' },
+  ];
+
+  it("leaves the reviewer's own order alone when the sort is off", () => {
+    expect(sortByRuns(rules, null)).toBe(rules);
+  });
+
+  it('puts the most-checked first and keeps ties in their own order', () => {
+    expect(sortByRuns(rules, 'desc').map((rule) => rule.id)).toEqual(['b', 'a', 'c', 'd']);
+  });
+
+  it('puts the least-checked first when ascending', () => {
+    expect(sortByRuns(rules, 'asc').map((rule) => rule.id)).toEqual(['d', 'a', 'c', 'b']);
+  });
+
+  it('steps off → most first → fewest first → off on each header click', () => {
+    expect(nextRunsSort(null)).toBe('desc');
+    expect(nextRunsSort('desc')).toBe('asc');
+    expect(nextRunsSort('asc')).toBeNull();
+  });
+});
+
+describe('agentSectionsByCount', () => {
+  const agentGroup = (agentId: string, statuses: string[]) =>
+    ({
+      domain: { id: `d-${agentId}` },
+      owner: {
+        agent: { avatar: null, backgroundColor: null, id: agentId, title: agentId },
+        kind: 'agent',
+      },
+      rules: statuses.map((status, index) => ({ id: `${agentId}-${index}`, status })),
+      scopes: [],
+    }) as unknown as RuleGroup;
+
+  it('lists agents by lessons in force, most first, without the reviewer part', () => {
+    const sections = sectionsByOwner([
+      agentGroup('few', ['active']),
+      agentGroup('many', ['active', 'active', 'active']),
+      // Archived lessons do not count toward the number on the option.
+      agentGroup('archived', ['active', 'retired', 'retired', 'retired']),
+    ]);
+    expect(agentSectionsByCount(sections).map((section) => section.key)).toEqual([
+      'agent:many',
+      'agent:few',
+      'agent:archived',
+    ]);
   });
 });

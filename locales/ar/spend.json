@@ -19,6 +19,7 @@
   "table.columns.trigger.enums.agent_share": "مشاركة الوكيل",
   "table.columns.trigger.enums.agent_signal": "إشارة الوكيل",
   "table.columns.trigger.enums.api": "استدعاء API",
+  "table.columns.trigger.enums.asr": "نسخ الصوت",
   "table.columns.trigger.enums.bot": "رسالة بوت",
   "table.columns.trigger.enums.builder_suggestion": "اقتراحات المنشئ",
   "table.columns.trigger.enums.chat": "رسالة دردشة",

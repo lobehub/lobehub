@@ -5,15 +5,14 @@ import { useTranslation } from 'react-i18next';
 import { type PortalMoreMenuConfig } from '@/features/Portal/components/PortalMoreMenu/types';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { useFileStore } from '@/store/file';
 import { downloadFile } from '@/utils/client/downloadFile';
+
+import { usePreviewFileItem } from './usePreviewFileItem';
 
 export const useFilePreviewMoreMenu = (): PortalMoreMenuConfig | undefined => {
   const { t } = useTranslation('portal');
   const previewFileId = useChatStore(chatPortalSelectors.previewFileId);
-  const useFetchFileItem = useFileStore((s) => s.useFetchKnowledgeItem);
-  // Same SWR key as the title and body, so this shares their request.
-  const { data, mutate } = useFetchFileItem(previewFileId);
+  const { data, mutate } = usePreviewFileItem();
 
   if (!previewFileId) return;
 
@@ -29,6 +28,6 @@ export const useFilePreviewMoreMenu = (): PortalMoreMenuConfig | undefined => {
           },
         ]
       : undefined,
-    refresh: () => mutate(),
+    refresh: mutate ? () => mutate() : undefined,
   };
 };

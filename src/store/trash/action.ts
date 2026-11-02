@@ -1,31 +1,48 @@
-import type {
-  TrashCountByType,
-  TrashItem,
-  TrashListResult,
-  TrashResourceType,
-} from '@lobechat/types';
-import { useLayoutEffect } from 'react';
-import type { SWRResponse } from 'swr';
+import type { TrashCountByType, TrashItem } from '@lobechat/types';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { trashKeys } from '@/libs/swr/keys';
-import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
-import { trashService } from '@/services/trash';
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import {
+  cacheScope,
+  createReplicaSlice,
+  recordLens,
+  type ReplicaPageResult,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
+import { mutate } from '@/libs/swr';
+import { type TrashCountFilter, trashService, type TrashViewFilter } from '@/services/trash';
+import { channelActions } from '@/store/channel';
 import type { StoreSetter } from '@/store/types';
+import { setNamespace } from '@/utils/storeDebug';
 
+import type { TrashListData } from './initialState';
+import {
+  trashCountKey,
+  trashCountResource,
+  trashListKey,
+  type TrashListParams,
+  trashListResource,
+} from './projection';
+import { trashSelectors } from './selectors';
 import type { TrashStore } from './store';
+
+const n = setNamespace('trash');
 
 type Setter = StoreSetter<TrashStore>;
 
 /** SWR key roots whose lists can regain rows after a restore. */
 const RESTORE_AFFECTED_KEY_PREFIXES = [
   'agent:',
+  // Agent sidebar sync keys (#18913) live outside `agent:` so they skip SWR persistence.
+  'agentSync:',
   'document:',
   'file:',
   'group:',
   'home:',
   'image:',
-  'knowledgeBase:',
+  // Replicas (topic list, …) sync through `replica:sync` keys (`local-replica`).
+  'replica:',
+  // conversation transcripts — a restored message must reappear in its thread
+  'message:',
   'page',
   'project',
   'recent:',
@@ -36,36 +53,89 @@ const RESTORE_AFFECTED_KEY_PREFIXES = [
   'video:',
 ];
 
+/**
+ * "Empty trash" stopped because the user switched to another scope (account /
+ * workspace) while it was running. Every batch already sent ran in the scope
+ * the sweep started in; nothing was purged anywhere else.
+ */
+export class TrashEmptyScopeChangedError extends Error {
+  constructor() {
+    super('The active scope changed while emptying the trash');
+    this.name = 'TrashEmptyScopeChangedError';
+  }
+}
+
 export const trashSlice = (set: Setter, get: () => TrashStore, _api?: unknown) =>
   new TrashActionImpl(set, get, _api);
 
 /**
- * Recycle-bin store. Rows are removed optimistically on restore / purge and
- * the list + counts are revalidated afterwards so a failed call self-corrects.
+ * Recycle-bin store. The list and the per-type counts are local-first replicas:
+ * each filter keeps its own persisted page (first frame paints from storage,
+ * the network confirms), and a restore / purge drops the row from every loaded
+ * filter before the counts revalidate.
  */
 export class TrashActionImpl {
   readonly #get: () => TrashStore;
   readonly #set: Setter;
+  readonly #trashCount;
+  readonly #trashList;
 
   constructor(set: Setter, get: () => TrashStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#trashList = createReplicaSlice(trashListResource, {
+      actionPrefix: n('trashList'),
+      fetcher: this.#fetchPage,
+      get,
+      set,
+      stateKey: 'trashListReplica',
+      view: recordLens<TrashStore, TrashListData>('trashListMap'),
+    });
+    this.#trashCount = createReplicaSlice(trashCountResource, {
+      actionPrefix: n('trashCount'),
+      fetcher: (filter) => trashService.countByType(filter),
+      get,
+      set,
+      stateKey: 'trashCountReplica',
+      view: recordLens<TrashStore, TrashCountByType>('trashCountMap'),
+    });
   }
 
-  setActiveType = (activeType?: TrashResourceType) => {
-    this.#set(
-      { activeType, isTrashInit: false, items: [], nextCursor: null },
-      false,
-      'setActiveType',
-    );
+  /** One recycle-bin page: `cursor` undefined = the head (newest first). */
+  #fetchPage = async (
+    filter: TrashListParams,
+    cursor?: string,
+  ): Promise<ReplicaPageResult<TrashItem, string>> => {
+    const { items, nextCursor } = await trashService.list(cursor ? { ...filter, cursor } : filter);
+    return { items, nextCursor };
   };
 
+  /**
+   * Switch the view. Each view is its own keyed entry, so a late response for
+   * the previous one lands in that entry and never repaints this one; the
+   * entry switched to starts again from its head page instead of the pages
+   * loaded on an earlier visit. `scope` binds the project to the scope it was
+   * chosen in (see `trashSelectors.activeProjectId`).
+   */
+  setFilter = (filter: TrashViewFilter, scope: string) => {
+    const { projectId, resourceType, visibility } = filter;
+    this.#set(
+      {
+        activeType: resourceType,
+        // A personal view has no side; keep the workspace side for the next visit.
+        ...(visibility ? { activeVisibility: visibility } : {}),
+        projectSelection: { projectId, scope },
+      },
+      false,
+      n('setFilter'),
+    );
+    this.#trashList.collapse(trashListKey(filter));
+  };
+
+  /** Re-fetch the list(s) and the counts of the active identity. */
   refresh = async () => {
-    await Promise.all([
-      mutate(trashKeys.list(this.#get().activeType)),
-      mutate(trashKeys.countByType()),
-    ]);
+    await Promise.all([this.#trashList.revalidate(), this.#trashCount.revalidate()]);
   };
 
   /**
@@ -84,33 +154,46 @@ export class TrashActionImpl {
     );
   };
 
-  loadMore = async () => {
-    const { activeType, isLoadingMore, nextCursor, scope } = this.#get();
-    if (!nextCursor || isLoadingMore) return;
-    this.#set({ isLoadingMore: true }, false, 'loadMore/start');
-    try {
-      const page = await trashService.list({ cursor: nextCursor, resourceType: activeType });
-      // The filter, cursor or workspace may have moved on while this page was
-      // in flight; appending it then would mix another list's rows in.
-      const current = this.#get();
-      if (
-        current.activeType !== activeType ||
-        current.nextCursor !== nextCursor ||
-        current.scope !== scope
-      )
-        return;
-      this.#set(
-        { items: [...current.items, ...page.items], nextCursor: page.nextCursor },
-        false,
-        'loadMore',
-      );
-    } finally {
-      this.#set({ isLoadingMore: false }, false, 'loadMore/end');
+  /** Next page of one view, using its loaded head page's params. */
+  loadMore = async (filter: TrashViewFilter) => {
+    await this.#trashList.loadMore(trashListKey(filter), filter);
+  };
+
+  /** Drop a row from every loaded filter (the engine also patches persisted rows). */
+  #dropRows = (ids: Iterable<string>) => {
+    for (const id of ids) this.#trashList.updateEntity(id, () => undefined);
+  };
+
+  /**
+   * After a write, the counts of every view but the one on screen are stale,
+   * and so are their rows after a sweep (it reaches past the loaded pages).
+   * Drop them, memory and persisted copy, so a later visit loads them instead
+   * of painting numbers or rows that no longer exist. The view on screen is
+   * revalidated in place by `refresh`.
+   */
+  #dropOtherViews = ({ rows }: { rows: boolean }) => {
+    const state = this.#get();
+    const { activeType, trashCountMap, trashListMap } = state;
+    const projectId = trashSelectors.activeProjectId(cacheScope.get())(state);
+    const visibility = trashSelectors.activeVisibility(!!getActiveWorkspaceId())(state);
+    const countKey = trashCountKey({ projectId, visibility });
+    for (const key of Object.keys(trashCountMap)) {
+      if (key !== countKey) this.#trashCount.remove(key);
+    }
+    if (!rows) return;
+    const listKey = trashListKey({ projectId, resourceType: activeType, visibility });
+    for (const key of Object.keys(trashListMap)) {
+      if (key !== listKey) this.#trashList.remove(key);
     }
   };
 
-  #withLoading = async (ids: string[], run: () => Promise<void>) => {
-    this.#set({ loadingIds: [...this.#get().loadingIds, ...ids] }, false, 'loading/start');
+  #withLoading = async (
+    ids: string[],
+    run: () => Promise<void>,
+    { sweep = false }: { sweep?: boolean } = {},
+  ) => {
+    const scope = cacheScope.get();
+    this.#set({ loadingIds: [...this.#get().loadingIds, ...ids] }, false, n('loading/start'));
     try {
       await run();
     } finally {
@@ -118,8 +201,10 @@ export class TrashActionImpl {
       this.#set(
         { loadingIds: this.#get().loadingIds.filter((id) => !done.has(id)) },
         false,
-        'loading/end',
+        n('loading/end'),
       );
+      // Views of another scope are not ours to drop (a switch resets them anyway).
+      if (cacheScope.get() === scope) this.#dropOtherViews({ rows: sweep });
       await this.refresh();
     }
   };
@@ -136,87 +221,96 @@ export class TrashActionImpl {
       const gone = new Set(outcome.restored.map((item) => item.id));
       // `notFound` rows were dropped from the registry server-side.
       for (const failure of outcome.failed) if (failure.code === 'notFound') gone.add(failure.id);
-      this.#set(
-        { items: this.#get().items.filter((item) => !gone.has(item.id)) },
-        false,
-        'restore',
-      );
+      this.#dropRows(gone);
     });
+    const threadIds = outcome.restored
+      .filter((item) => item.resourceType === 'channelThread')
+      .map((item) => item.resourceId);
+    // The Channel store keeps hiding deleted threads; a restored one keeps its ID.
+    if (threadIds.length > 0) channelActions.forgetThreadRemovals(threadIds);
     if (outcome.restored.length > 0) void this.revalidateRestoredScopes();
     return outcome;
   };
 
+  /**
+   * Purge roots. Returns the server outcome: a root its owner cannot delete
+   * yet (a channel still stopping its replies) is `blocked` and stays listed.
+   */
   purge = async (ids: string[]) => {
+    let outcome: Awaited<ReturnType<typeof trashService.purge>> = { blocked: [], purged: 0 };
     await this.#withLoading(ids, async () => {
-      await trashService.purge(ids);
-      const gone = new Set(ids);
-      this.#set({ items: this.#get().items.filter((item) => !gone.has(item.id)) }, false, 'purge');
+      outcome = await trashService.purge(ids);
+      const blocked = new Set(outcome.blocked);
+      this.#dropRows(ids.filter((id) => !blocked.has(id)));
     });
+    return outcome;
   };
 
-  emptyTrash = async () => {
-    const { activeType, items } = this.#get();
+  /**
+   * Purge every root `filter` covers, across all pages, in the scope the call
+   * starts in. The filter and scope are fixed for the whole sweep: switching
+   * the view (or the workspace) while batches run never widens what is
+   * purged — a scope switch stops the sweep with `TrashEmptyScopeChangedError`.
+   * Returns how many roots had to stay in the bin for now.
+   */
+  emptyTrash = async (filter: TrashViewFilter) => {
+    const scope = cacheScope.get();
+    const workspaceId = getActiveWorkspaceId();
+    const key = trashListKey(filter);
+    const ids = this.#get().trashListMap[key]?.items.map((item) => item.id) ?? [];
+    // A blocked root stays listed, so later batches report it again: the largest
+    // batch count is the number left behind, not the sum.
+    let blocked = 0;
     await this.#withLoading(
-      items.map((item) => item.id),
+      ids,
       async () => {
-        // The server purges one bounded batch per call so no single request
-        // runs away on a large bin; keep going until it reports nothing left.
+        // The server purges one bounded batch per call so no single request runs
+        // away on a large bin; keep going until it reports nothing left.
         for (;;) {
-          const { hasMore } = await trashService.emptyTrash(activeType);
-          if (!hasMore) break;
+          if (cacheScope.get() !== scope) throw new TrashEmptyScopeChangedError();
+          const batch = await trashService.emptyTrash(filter, workspaceId);
+          blocked = Math.max(blocked, batch.blocked);
+          if (!batch.hasMore) break;
         }
-        this.#set({ items: [], nextCursor: null }, false, 'emptyTrash');
+        // The view lives in the scope the sweep ran in; do not touch another's.
+        // Blocked roots are still in the bin: leave the rows to the refresh that
+        // follows instead of collapsing the view to empty.
+        if (cacheScope.get() !== scope || blocked > 0) return;
+        // Its rows are gone from every other loaded view too (the same root can
+        // sit under "All", its type and its project).
+        this.#dropRows(ids);
+        // The view is swept server-side across every page, so it collapses to an
+        // empty head page rather than dropping only loaded rows.
+        this.#trashList.update(key, (data) =>
+          data
+            ? {
+                ...data,
+                currentPage: 0,
+                hasMore: false,
+                items: [],
+                nextCursor: null,
+                pages: [{ count: 0, next: null }],
+                total: 0,
+              }
+            : data,
+        );
       },
+      { sweep: true },
     );
+    return { blocked };
   };
 
-  useFetchTrash = (
-    enabled: boolean,
-    resourceType?: TrashResourceType,
-  ): SWRResponse<TrashListResult> => {
-    const scope = useCacheScope();
+  /**
+   * Fetch orchestration for one view's recycle-bin page. Hydrates the
+   * persisted projection, then revalidates; rows land in `trashListMap` — read
+   * them through `trashSelectors`, never from this hook.
+   */
+  useFetchTrash = (enabled: boolean, filter: TrashViewFilter): ReplicaSyncResult =>
+    this.#trashList.useSync(enabled ? filter : null);
 
-    // A workspace (or user) switch inside the SPA: drop the previous scope's
-    // rows before paint instead of showing them until — or, if the fetch
-    // fails, instead of — the new scope's list.
-    useLayoutEffect(() => {
-      if (!enabled || this.#get().scope === scope) return;
-      this.#set(
-        { countByType: {}, isTrashInit: false, items: [], nextCursor: null, scope },
-        false,
-        'fetchTrash/scope',
-      );
-    }, [enabled, scope]);
-
-    return useClientDataSWR<TrashListResult>(
-      enabled ? trashKeys.list(resourceType) : null,
-      () => trashService.list({ resourceType }),
-      {
-        onSuccess: (data) => {
-          if (scope !== getCacheScope()) return;
-          this.#set(
-            { isTrashInit: true, items: data.items, nextCursor: data.nextCursor, scope },
-            false,
-            'fetchTrash',
-          );
-        },
-      },
-    );
-  };
-
-  useFetchTrashCount = (enabled: boolean): SWRResponse<TrashCountByType> => {
-    const scope = useCacheScope();
-    return useClientDataSWR<TrashCountByType>(
-      enabled ? trashKeys.countByType() : null,
-      () => trashService.countByType(),
-      {
-        onSuccess: (data) => {
-          if (scope !== getCacheScope()) return;
-          this.#set({ countByType: data }, false, 'fetchTrashCount');
-        },
-      },
-    );
-  };
+  /** Fetch orchestration for one side and project filter's per-type counts; read them via `trashSelectors`. */
+  useFetchTrashCount = (enabled: boolean, filter: TrashCountFilter): ReplicaSyncResult =>
+    this.#trashCount.useSync(enabled ? filter : null);
 }
 
 export type TrashAction = Pick<TrashActionImpl, keyof TrashActionImpl>;

@@ -164,6 +164,51 @@ describe('VideoGenerationExecutionRuntime', () => {
     expect(result.content).toContain('Use getVideoGenerationStatus');
   });
 
+  it('reports a rejected pre-charge instead of a started task in no-wait mode', async () => {
+    const service = createService({
+      getGenerationStatus: vi.fn().mockResolvedValue({
+        asyncTaskId: 'task-1',
+        error: {
+          body: { detail: 'Insufficient balance to start this video generation.' },
+          name: 'InsufficientBalance',
+        },
+        generation: null,
+        generationId: 'generation-1',
+        status: AsyncTaskStatus.Error,
+      }),
+    });
+    const runtime = new VideoGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateVideo({
+      prompt: 'A paper airplane gliding over a miniature city',
+      waitUntilComplete: false,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ type: 'GenerateVideoFailed' });
+    expect(result.content).toContain('Insufficient balance to start this video generation.');
+    expect(result.content).not.toContain('Video generation started');
+    expect(service.getGenerationStatus).toHaveBeenCalledWith({
+      asyncTaskId: 'task-1',
+      generationId: 'generation-1',
+    });
+  });
+
+  it('keeps reporting a started task when the first status read fails', async () => {
+    const service = createService({
+      getGenerationStatus: vi.fn().mockRejectedValue(new Error('status endpoint unavailable')),
+    });
+    const runtime = new VideoGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateVideo({
+      prompt: 'A calm ocean aerial shot',
+      waitUntilComplete: false,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('Use getVideoGenerationStatus');
+  });
+
   it('falls back to the selected model latency for estimated progress', async () => {
     const runtime = new VideoGenerationExecutionRuntime(createService());
 

@@ -1,8 +1,8 @@
 import type { WriteLocalFileParams } from '@lobechat/electron-client-ipc';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Icon, Markdown, PatchDiff } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Skeleton } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import path from 'path-browserify-esm';
 import { memo } from 'react';

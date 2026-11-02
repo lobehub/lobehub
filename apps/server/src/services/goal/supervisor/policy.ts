@@ -9,7 +9,12 @@ import { isAgentOperationInFlight } from '@lobechat/types';
 import type { AgentOperationItem } from '@/database/schemas/agentOperations';
 import { HETERO_DISPATCH_ERROR_HEADLINES } from '@/server/services/aiAgent/helpers/heteroErrors';
 
-import { countChargedTaskAttempts, resolveTaskAttemptBudget } from '../recoveryPolicy';
+import { classifyGoalFailure } from '../failureClass';
+import {
+  classifyRunFailure,
+  countChargedTaskAttempts,
+  resolveTaskAttemptBudget,
+} from '../recoveryPolicy';
 
 export const SUPERVISOR_DIAGNOSIS_TIMEOUT_MS = 10 * 60 * 1000;
 export const MAX_SUPERVISION_INCIDENTS = 100;
@@ -93,8 +98,8 @@ export const recoveryEligibility = (
   operation?: AgentOperationItem,
   /** Whether the Task's current status was written by a person or an agent tool. */
   actorAuthoredStatus = false,
-  /** Runs the Task's device lost; they are not charged to its attempt budget. */
-  deviceOfflineRuns = 0,
+  /** Runs lost to a machine problem; they are not charged to its attempt budget. */
+  unchargedRuns = 0,
 ): { eligible: boolean; reason: string } => {
   if (!graph.goal.config?.supervision?.enabled && !graph.goal.config?.manager)
     return { eligible: false, reason: 'Supervision is disabled' };
@@ -122,15 +127,17 @@ export const recoveryEligibility = (
   if (actorAuthoredStatus) {
     return { eligible: false, reason: 'Someone set this status themselves' };
   }
-  if (countChargedTaskAttempts(task, deviceOfflineRuns) >= resolveTaskAttemptBudget(graph.goal)) {
+  if (countChargedTaskAttempts(task, unchargedRuns) >= resolveTaskAttemptBudget(graph.goal)) {
     return { eligible: false, reason: 'Task attempt budget exhausted' };
   }
   const error = `${operation?.error?.type ?? ''} ${operation?.error?.message ?? ''} ${task.error ?? ''}`;
-  if (
-    /auth|credential|api.?key|permission|approv|forbidden|unauthor|usage.?limit|quota|billing|budget|cancel|用户|授权|凭据|额度/i.test(
-      error,
-    )
-  ) {
+  const failure = classifyRunFailure(operation?.error, task.error ?? '');
+  // A usage window that reports its reset is not a person's call: the coordinator
+  // holds the Task until the reset (`waitForQuotaReset`) and only then lets it here.
+  if (failure.kind === 'quota_reset') {
+    return { eligible: true, reason: 'Usage window has reset; retry within existing authority' };
+  }
+  if (failure.kind === 'needs_user') {
     return {
       eligible: false,
       reason: 'Credentials, permission, cancellation or spending requires user action',
@@ -141,11 +148,15 @@ export const recoveryEligibility = (
   // an actor can author — a Task marked failed through the API, a settled run someone
   // reopened — arrives looking exactly like a dropped dispatch. Recognising the
   // failures instead keeps an authored decision with the person who made it.
+  //
+  // The transient class is part of that allowlist: every real incident this policy
+  // escalated was a run the server discarded (`operation-not-running`), a tool
+  // result that did not persist, or a gateway timeout — failures a fresh attempt
+  // got past each time a person pressed Retry.
   if (
     !isRetryableDispatchFailure(error) &&
-    !/ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|fetch failed|network error|socket hang up|service unavailable|bad gateway|gateway timeout|\b50[234]\b/i.test(
-      error,
-    )
+    failure.kind !== 'transient' &&
+    classifyGoalFailure(error).class !== 'transient'
   ) {
     return {
       eligible: false,

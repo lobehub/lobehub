@@ -8,6 +8,7 @@ import Header from './Header';
 
 const mocks = vi.hoisted(() => ({
   useUserProfile: vi.fn(),
+  userProfileMap: {} as Record<string, unknown>,
 }));
 
 vi.mock('@/features/NavHeader', () => ({
@@ -34,20 +35,16 @@ vi.mock('@/routes/(main)/community/features/UserAvatar', () => ({
 }));
 
 vi.mock('@/store/discover', () => ({
-  useDiscoverStore: (
-    selector: (state: { useUserProfile: typeof mocks.useUserProfile }) => unknown,
-  ) => selector({ useUserProfile: mocks.useUserProfile }),
+  useDiscoverStore: (selector: (state: any) => unknown) =>
+    selector({ userProfileMap: mocks.userProfileMap, useUserProfile: mocks.useUserProfile }),
 }));
 
 describe('Community detail Header', () => {
   it('shows the viewed organization avatar in the right corner', () => {
-    mocks.useUserProfile.mockReturnValue({
-      data: {
-        user: {
-          avatarUrl: 'sad-avatar',
-        },
-      },
-    });
+    // The sync hook reports the fetch flags + the entry key; the profile itself
+    // is read from the replica view through the selector.
+    mocks.useUserProfile.mockReturnValue({ queryKey: 'org:sad' });
+    mocks.userProfileMap = { 'org:sad': { user: { avatarUrl: 'sad-avatar' } } };
 
     render(
       <MemoryRouter initialEntries={['/011/community/org/sad']}>

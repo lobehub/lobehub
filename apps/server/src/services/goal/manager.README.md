@@ -11,6 +11,37 @@ creates to a dedicated executor; without it the goal agent does its own Tasks.
 `lh goal set-agent` hands supervision to another agent; `lh goal set-task-agent`
 changes the executor. Neither replaces the other.
 
+`lh goal bind-topic <goal-id> [--force] [--goal-only]`, run inside an agent
+topic, attaches an existing goal to that topic and leaves it where
+`lh goal create --topic` would have: the topic's agent is the goal
+agent (unfinished Tasks follow as with `set-agent`), the topic is the
+goal's `topic` subject, `config.manager` exists (an existing policy is kept), and
+`managerState.topicId` is the topic, so later planning turns are
+dispatched there. Graph, Tasks, budgets and status are untouched. The binding run
+is adopted as a planning turn (and prints its `--token`) only when nothing is in
+flight — no unsettled turn and no unfinished Task — because an adopted turn holds
+task coordination until it settles. A goal bound to another topic or task
+needs `--force`; the previous topic joins `previousTopicIds`, and the move is
+recorded as a goal event. Finished goals and goals with a planning turn in flight
+elsewhere are refused. Like `create --topic`, the topic comes from
+the run's operation; an operation-token run (device or gateway) needs the
+`goal:manage` capability that `/goal` grants.
+
+A topic goal (`create --topic`, `/goal`) opens as a `draft` when the CLI asks
+for one (`draft: true`, sent by every CLI that has `lh goal start`; an older CLI
+gets a goal that runs at once). The coordinator leaves a draft alone: its agent
+arranges the graph — seed tasks, `add-node`, `add-edge`, even a submitted plan —
+and `lh goal start` (or the goal page's Start) moves it to `running`
+(`start.ts`). `pause` and `resume` refuse a draft, so `start` stays the only way
+in. Starting a draft that already holds work settles the adopted planning turn
+on the spot, so dispatch does not wait for the creating run to exit; a plan
+submitted on that turn afterwards is refused (`started_from_draft`). An empty
+draft keeps the turn open for a plan. `start --rollout` folds the seed tasks
+into a batch: the probes are re-created inside it and the other seeds leave the
+graph as roster units, their descriptions kept as unit notes
+(`rollout.unitBriefs`). A folded seed may depend only on a probe, and folded
+seeds need distinct titles; anything else is refused rather than dropped.
+
 The main Agent must have a working shell and an authenticated `lh` CLI in its
 execution environment (for example a configured device Kimi/Codex Agent). Its
 normal Agent configuration selects the runtime; dispatch uses the same
@@ -39,6 +70,25 @@ commands. It submits a JSON file through `lh goal plan <goal-id> --token <turn> 
   is written. All existing work must first be settled. The coordinator creates
   and runs ordinary Tasks. The terminal acceptance Task depends on the delivered
   leaf Tasks, so it renders after the work it closes.
+  A `tasks` plan may add `rollout` — `recipe`, `units` (titles or
+  `{title, description}`) and optional `variants` — to declare one repeated
+  mould. Its `tasks` (2-5) become the probes of a `batch`, the units wait in
+  `rolloutState`, and the coordinator's gate releases them wave by wave
+  (`rolloutBatch.ts`, the same builder the system planner uses after `spec.ts`).
+  The judgement is the main Agent's: only a malformed declaration, a Goal with
+  rollout `off`, a takeover turn or a batch already in flight is refused. While
+  a batch is in flight no uninvited turn starts, so the gate — not a planning
+  turn — answers the moment its members settle. The probe wave is the
+  exception: once a round's probes settle, the coordinator first hands them to
+  the main Agent as a `rollout_distill` takeover (`probeDistill.ts`). It reads
+  what the probes ran into and answers `revise_plan` with the full plan, which
+  becomes the plan skill's next version, and the same advance judges the gate
+  straight from that step, so the owner reviews the probes against the plan
+  they taught. A probe whose delivery falls short of that plan (a skipped step,
+  failing CI, open review) the Agent names in `rerun`: it re-opens in place on
+  the plan, continuing its delivery, and the round is distilled again once the
+  re-runs settle, before the gate judges it. Without a
+  turn to spend, the gate judges them on the plan as written.
 - `verify`: reason; requests the ordinary independent final acceptance Task.
   This does not mark the Goal achieved.
 - `retry`: reason (checkpoint-aware recovery instruction), taskId and exact
@@ -121,7 +171,24 @@ Read `config.managerState` in the Goal graph for the current receipt and Topic.
 
 Wakeups use the existing Goal scheduler (queued mode for restart durability).
 After a confirmed terminal main operation without a plan, another turn can
-reread the durable graph within the turn budget. An unconfirmed running/missing
+reread the durable graph within the turn budget. A turn that ended in an error
+gates the next one through `managerState.retryAfter`. The error is classified by
+`classifyRunFailure` (`recoveryPolicy.ts`), the same classifier Task recovery
+uses:
+
+- A quota rejection that reports its reset, such as an external Agent's session
+  limit, waits for that reset. The refused turn is not charged to the budget.
+- A device that cannot be reached follows the Task offline schedule: 30 minutes,
+  doubling to 8 hours, over six retries. These turns are not charged, and seeing
+  the device online again ends the wait early. When the schedule runs out, the
+  Goal pauses.
+- Credentials, spend, permission or configuration errors pause the Goal at once.
+- Anything else backs off exponentially from one minute up to 30 minutes and is
+  charged. Five such turns in a row pause the Goal on the last error.
+
+A pause clears these streaks, so resuming starts a fresh schedule. Before this, a
+failing Agent was re-dispatched on every tick and spent the whole turn budget in
+minutes. An unconfirmed running/missing
 operation times out after 20 minutes and pauses without launching a replacement;
 confirm its exit before resuming. Parked human/async-tool operations retain
 ownership; a human wait is surfaced without starting another planning turn.
@@ -139,7 +206,9 @@ which checks the live operation principal and then the Goal turn binding. Normal
 user credentials retain the existing scoped endpoint. Prompt instructions are not a
 shell sandbox. Do not install a broad personal credential in an untrusted runtime.
 
-Legacy `--supervise` Goals retain their existing behavior and cancellation fixes.
+Supervision is now a creation invariant — every new Goal gets it — so a Goal
+created before that change keeps its original behavior, and `--supervise` no
+longer exists as a flag.
 
 Each new planning turn includes up to 20 recent Task comments (2,000 characters
 per comment); the main Agent can read full comments through `lh task view`. A
@@ -153,3 +222,37 @@ main-Agent handoff context. This keeps document corrections and evidence notes
 available to both the first delivery and repair attempts. The original Goal
 requirement remains authoritative; handoff assertions are not acceptance evidence
 or permission to weaken its criteria.
+
+## Durable waits and measured continuation
+
+The main Agent may submit `{"action":"wait","reason":"Await external evidence",
+"until":"2026-12-01T00:00:00Z","event":{"type":"external.result","key":"job-123"}}`.
+`until` must be in the future; it is always a fallback check, including when an
+event is declared. All existing task nodes must be settled before waiting. The
+Goal remains running, but no new model turn runs before the deadline or event.
+The submitting operation must exit before a successor starts.
+
+An authenticated producer delivers a result using `lh goal wake <id> --token <managerState.token> --event <delivery-id> --type external.result --key job-123 --reference <evidence-reference> --summary <short-observation> --json`. Type,
+key and the current turn token must match; the first wake wins. Repeated or late
+deliveries cannot wake a later wait. Events are evidence to reconsider, not proof
+that the Goal succeeded. Store large datasets separately and pass references.
+
+The server-owned manager receipt persists the wait across restarts. Queue
+callbacks re-read it; the sweep includes elapsed waits and excludes quiet future
+waits. In local scheduler mode, restart recovery requires the sweep. User pauses,
+terminal states and pending human decisions prevent continuation. A stopped Goal
+rejects events; redeliver after explicit resume or rely on the fallback deadline.
+Events arriving before the wait commits are unmatched. This is not an event inbox
+or an automatic webhook subscription service.
+
+`goal.recordObservation` emits `metric.observed` with the metric key. Historical
+observations predating the waiting turn are ignored; fresh below-target values
+still wake an explicit observation wait. Direct generic metric writes do not emit
+this event. Unmet measured acceptance on managed Goals returns the same contract
+to another bounded planning turn, including when exploration normally leads.
+Unmanaged Goals retain their measured-pause behavior. Goal budgets and manager
+turn limits still apply; waiting does not itself spend another model turn.
+
+Deploy wait-capable coordinators before enabling wait-producing prompts. Old
+coordinators do not understand the new receipt; pause active waiting Goals before
+rolling back. Final delivery-verification repair remains a separate lifecycle.

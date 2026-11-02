@@ -1,8 +1,6 @@
 import type { GoalEventType, GoalGraphEvent, GoalNodeKind } from '@lobechat/types';
-import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar, cx, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   Archive,
@@ -24,12 +22,12 @@ import {
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
 import {
   artifactIconOf,
   openTargetOf,
   useOpenGoalArtifact,
 } from '@/features/AgentGoals/ProcessControl/Deliverables';
+import { AgentActor, UserActor } from '@/features/AgentGoals/ProcessControl/GoalActors';
 import type {
   GoalArtifactView,
   GoalGraphView,
@@ -37,18 +35,10 @@ import type {
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { KIND_ICON } from '@/features/AgentGoals/ProcessControl/shared';
 import { useGoalNodeSelect } from '@/features/AgentGoals/ProcessControl/useGoalProcessActions';
-import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
-import UserAvatar from '@/features/User/UserAvatar';
 import { goalSelectors, useGoalStore } from '@/store/goal';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
-import {
-  type LifecycleNote,
-  type LifecyclePresentation,
-  nodeTwinKey,
-  presentLifecycleEvent,
-} from './lifecycleEvent';
+import type { LifecycleNote } from './lifecycleEvent';
+import { buildLifecycleDays, type LifecycleGroup, type LifecycleRow } from './lifecycleRows';
 
 /**
  * The goal's history as a timeline, newest first and grouped by day. Each event
@@ -57,6 +47,10 @@ import {
  * for a quick scan — never coded in color. Only the leading glyph carries tone:
  * a resolve reads green, a reject red, everything else stays neutral, so the eye
  * can skim the outcomes.
+ *
+ * Which events share a line is decided in `lifecycleRows`: one line per
+ * deliverable and one line per moment, so a settle that attached five artifacts
+ * reads as one event with five cards instead of five identical sentences.
  */
 
 const BADGE = 20;
@@ -132,6 +126,14 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorBgContainer};
   `,
+  // The same header for a host that scrolls the whole page instead of owning a
+  // padded scroller: nothing to cancel, so it simply reads as a label.
+  dayPlain: css`
+    padding-block: 12px 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: ${cssVar.colorTextTertiary};
+  `,
   item: css`
     position: relative;
     padding-block-end: 14px;
@@ -172,8 +174,8 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 12px;
     line-height: 1.6;
     color: ${cssVar.colorTextSecondary};
-    white-space: pre-line;
     overflow-wrap: anywhere;
+    white-space: pre-line;
 
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -376,52 +378,6 @@ const ArtifactCard = memo<{ artifact: GoalArtifactView }>(({ artifact }) => {
 
 ArtifactCard.displayName = 'GoalMetricLifecycleArtifact';
 
-const AgentActor = memo<{ agentId: string }>(({ agentId }) => {
-  const { t } = useTranslation('chat');
-  const meta = useAgentDisplayMeta(agentId);
-
-  // The node titles give way first — who acted stays readable, and only a very
-  // long agent name is capped.
-  return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
-      <AssigneeProfileAvatar agentId={agentId} size={16} />
-      <Text ellipsis fontSize={13} style={{ maxWidth: 120 }} weight={500}>
-        {meta?.title ?? t('goalProcess.actor.agent')}
-      </Text>
-    </Flexbox>
-  );
-});
-
-AgentActor.displayName = 'GoalMetricLifecycleAgentActor';
-
-const UserActor = memo<{ userId?: string | null }>(({ userId }) => {
-  const { t } = useTranslation('chat');
-  const [currentUserId, nickName] = useUserStore((s) => [
-    userProfileSelectors.userId(s),
-    userProfileSelectors.nickName(s),
-  ]);
-
-  // Only the signed-in user can be shown by face; another member's event reads
-  // as "Member" rather than borrowing this user's identity or calling it "You".
-  if (userId && userId !== currentUserId)
-    return (
-      <Text fontSize={13} style={{ flex: 'none' }} weight={500}>
-        {t('goalProcess.actor.member')}
-      </Text>
-    );
-
-  return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={6}>
-      <UserAvatar size={16} />
-      <Text ellipsis fontSize={13} style={{ maxWidth: 120 }} weight={500}>
-        {nickName || t('goalProcess.actor.user')}
-      </Text>
-    </Flexbox>
-  );
-});
-
-UserActor.displayName = 'GoalMetricLifecycleUserActor';
-
 const Actor = memo<{ event: GoalGraphEvent }>(({ event }) => {
   const { t } = useTranslation('chat');
   if (event.actorType === 'agent' && event.actorId) return <AgentActor agentId={event.actorId} />;
@@ -442,22 +398,24 @@ Actor.displayName = 'GoalMetricLifecycleActor';
 
 const noteText = (note: LifecycleNote, t: (key: any, options?: any) => string) => {
   if (!('key' in note)) return note.text;
-  if (note.key === 'mainAgent') return t('goalProcess.lifecycle.note.mainAgent', { text: note.text });
+  if (note.key === 'mainAgent')
+    return t('goalProcess.lifecycle.note.mainAgent', { text: note.text });
   return t(`goalProcess.lifecycle.note.${note.key}` as const);
 };
 
 const EventItem = memo<{
-  event: GoalGraphEvent;
   graph: GoalGraphView;
+  group: LifecycleGroup;
   onSelect: (nodeId: string) => void;
-  presentation: Exclude<LifecyclePresentation, { hidden: true }>;
-}>(({ event, graph, onSelect, presentation }) => {
+}>(({ graph, group, onSelect }) => {
   const { t } = useTranslation('chat');
+  const { event, presentation } = group.rows[0] as LifecycleRow;
   const visual = EVENT_VISUAL[event.eventType] ?? { icon: History, tone: NEUTRAL };
   const tone = visual.tone;
   // A recognised event names what happened more precisely than its raw type:
   // a canceled task or a delivered Work is not an "edit".
-  const icon = (presentation.action && ACTION_ICON[presentation.action.split('.')[0]]) || visual.icon;
+  const icon =
+    (presentation.action && ACTION_ICON[presentation.action.split('.')[0]]) || visual.icon;
   const subjects = subjectNodes(event, graph);
   const kind = eventKind(event, subjects);
   const phrase = `${event.eventType}.${kind}`;
@@ -468,9 +426,15 @@ const EventItem = memo<{
       : t(`goalProcess.lifecycle.action.${event.eventType}` as const, {
           kind: kind ? t(`goalProcess.lifecycle.kind.${kind}` as const) : '',
         }).trim();
-  const artifact = presentation.workVersion
-    ? graph.artifacts.find((item) => item.workVersionId === presentation.workVersion!.id)
-    : undefined;
+  // One row can carry several deliverables: a settle attaches each of them, and
+  // the fold in `buildLifecycleDays` merged them back into the moment they were
+  // attached in. The row names the task, each card is one thing it delivered.
+  const artifacts = group.rows.flatMap((row) => {
+    const version = row.presentation.workVersion;
+    if (!version) return [];
+    const artifact = graph.artifacts.find((item) => item.workVersionId === version.id);
+    return artifact ? [artifact] : [];
+  });
   const note = presentation.note ? noteText(presentation.note, t) : undefined;
 
   return (
@@ -510,7 +474,9 @@ const EventItem = memo<{
             {dayjs(event.createdAt).format('HH:mm')}
           </Text>
         </Flexbox>
-        {artifact && <ArtifactCard artifact={artifact} />}
+        {artifacts.map((artifact) => (
+          <ArtifactCard artifact={artifact} key={artifact.workVersionId} />
+        ))}
         {note && (
           <div className={styles.reason} title={note}>
             {note}
@@ -535,40 +501,44 @@ const useDayLabel = () => {
   };
 };
 
-const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, graph }) => {
+interface LifecycleProps {
+  goalId: string;
+  graph: GoalGraphView;
+  /**
+   * Click landing for a row's subject. A host that also renders the graph passes
+   * its own handler so a timeline click keeps the map's selection in sync —
+   * without it the timeline would open the node but leave the graph stale.
+   */
+  onSelect?: (nodeId: string) => void;
+  /**
+   * Pins each day label under the host's top edge. Only right inside the metric
+   * panel, whose padded scroller the offsets are computed against; a host that
+   * scrolls the page turns it off.
+   */
+  stickyDays?: boolean;
+}
+
+const Lifecycle = memo<LifecycleProps>(({ goalId, graph, stickyDays = true, onSelect }) => {
   const { t } = useTranslation('chat');
   const dayLabel = useDayLabel();
   const snapshot = useGoalStore(goalSelectors.goalGraph(goalId));
   // Same landing as a click anywhere else on the goal: a Task opens its Task
-  // panel, other nodes their drill-down.
-  const onSelect = useGoalNodeSelect(goalId, graph);
+  // panel, other nodes their drill-down. A host that owns the graph's selection
+  // passes its own handler instead, so the click updates both surfaces.
+  const openNode = useGoalNodeSelect(goalId, graph);
+  const select = onSelect ?? openNode;
 
   const days = useMemo(() => {
-    const events = snapshot?.events ?? [];
     const workTypes = new Map(
       (snapshot?.workVersions ?? []).map((link) => [link.workVersionId, link.work?.type]),
     );
-    const nodeTwins = new Set(
-      events.filter((event) => event.entityType === 'node' && event.reason).map(nodeTwinKey),
+    const workIds = new Map(
+      (snapshot?.workVersions ?? []).map((link) => [link.workVersionId, link.work?.workId]),
     );
-    const sorted = [...events].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    type Row = { event: GoalGraphEvent; presentation: Exclude<LifecyclePresentation, { hidden: true }> };
-    const groups: { day: dayjs.Dayjs; rows: Row[] }[] = [];
-    for (const event of sorted) {
-      const presentation = presentLifecycleEvent(event, {
-        hasNodeTwin: event.entityType === 'goal' && nodeTwins.has(nodeTwinKey(event)),
-        workTypeOf: (id) => workTypes.get(id),
-      });
-      // Bookkeeping rows are dropped before grouping so a day holding nothing
-      // else does not leave an empty header behind.
-      if (presentation.hidden) continue;
-      const row = { event, presentation };
-      const day = dayjs(event.createdAt).startOf('day');
-      const last = groups.at(-1);
-      if (last?.day.isSame(day)) last.rows.push(row);
-      else groups.push({ day, rows: [row] });
-    }
-    return groups;
+    return buildLifecycleDays(snapshot?.events ?? [], {
+      workIdOf: (id) => workIds.get(id),
+      workTypeOf: (id) => workTypes.get(id),
+    });
   }, [snapshot]);
 
   if (days.length === 0)
@@ -576,17 +546,16 @@ const Lifecycle = memo<{ goalId: string; graph: GoalGraphView }>(({ goalId, grap
 
   return (
     <Flexbox gap={0}>
-      {days.map(({ day, rows }) => (
+      {days.map(({ day, groups }) => (
         <Flexbox gap={2} key={day.valueOf()}>
-          <div className={styles.day}>{dayLabel(day)}</div>
+          <div className={stickyDays ? styles.day : styles.dayPlain}>{dayLabel(day)}</div>
           <Flexbox gap={0}>
-            {rows.map(({ event, presentation }) => (
+            {groups.map((group) => (
               <EventItem
-                event={event}
                 graph={graph}
-                key={event.id}
-                presentation={presentation}
-                onSelect={onSelect}
+                group={group}
+                key={group.rows[0].event.id}
+                onSelect={select}
               />
             ))}
           </Flexbox>

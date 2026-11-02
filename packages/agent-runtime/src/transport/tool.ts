@@ -27,6 +27,12 @@ export interface ToolRunResult {
   stop?: boolean;
   success: boolean;
   /**
+   * The tool message the tool already created for this call (e.g. a background
+   * sub-agent's placeholder). Transports lift it onto
+   * {@link ToolRunExecution.toolMessageId} so the result lands in that row.
+   */
+  toolMessageId?: string;
+  /**
    * Work-registration intent produced by the tool execution (task / skill /
    * document identity). The executor forwards it to
    * {@link ToolTransport.registerWork} once cumulative cost is known.
@@ -76,6 +82,8 @@ export interface ToolRunExecution {
   interrupted?: boolean;
   mocked?: boolean;
   result: ToolRunResult;
+  /** Server-owned verdict; tools cannot supply this through their result. */
+  resultBlocked?: boolean;
   /** The transport already persisted the result into its tool message. */
   resultPersisted?: boolean;
   /** Existing/pre-created tool message owned by the transport. */

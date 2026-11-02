@@ -23,6 +23,14 @@ const {
   pluginQuery: vi.fn(),
 }));
 
+const mockResolveSandboxSessionConfig = vi.hoisted(() =>
+  vi.fn(async () => ({ claim: null, mode: 'ephemeral' as const })),
+);
+
+vi.mock('@/server/services/sandbox', () => ({
+  resolveSandboxSessionConfig: mockResolveSandboxSessionConfig,
+}));
+
 vi.mock('@/database/models/user', () => ({
   UserModel: Object.assign(
     class {
@@ -249,5 +257,34 @@ describe('createServerContextFactProviders', () => {
         visitorUserId: 'visitor-1',
       },
     );
+  });
+
+  describe('resolveSandboxPersistence', () => {
+    // Regression: this provider read the raw context id while every other fact
+    // here is scoped to the run's workspace. On the paths that do not carry it,
+    // the topic was looked up in the personal scope and came back missing, so a
+    // run with a persistent instance was described to the model as disposable —
+    // and the model, told its files would not survive, worked in /tmp.
+    it('scopes the lookup to the run workspace, not the raw context', async () => {
+      mockResolveSandboxSessionConfig.mockResolvedValueOnce({
+        claim: { key: 'ws-org-ws-from-origin', quotaBytes: 1024 },
+        cwd: 'lobehub-dev',
+        mode: 'persistent',
+      } as never);
+
+      const providers = createServerContextFactProviders({
+        ctx: { serverDB: {}, topicId: 'tpc_1', userId: 'owner-1' } as never,
+        state: { origin: { workspaceId: 'ws-from-origin' } } as never,
+      });
+
+      await expect(providers.resolveSandboxPersistence!()).resolves.toEqual({
+        cwd: 'lobehub-dev',
+        mode: 'persistent',
+        workingDir: undefined,
+      });
+      expect(mockResolveSandboxSessionConfig).toHaveBeenLastCalledWith(
+        expect.objectContaining({ topicId: 'tpc_1', workspaceId: 'ws-from-origin' }),
+      );
+    });
   });
 });

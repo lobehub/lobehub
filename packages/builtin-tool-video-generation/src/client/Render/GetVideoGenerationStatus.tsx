@@ -2,8 +2,8 @@
 
 import type { BuiltinRenderProps, VideoGenerationAsset } from '@lobechat/types';
 import { Block } from '@lobehub/ui';
-import { Alert, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Alert, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

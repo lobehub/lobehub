@@ -318,6 +318,24 @@ describe('modelParse', () => {
         expect(out[0].type).toBe('chat');
       });
 
+      it('google: Nano Banana ids without "-image-" infer image output and thinking but no function calling', async () => {
+        const out = await processModelList(
+          [{ id: 'gemini-nano-banana-2.1' }, { id: 'nano-banana-pro-preview' }],
+          MODEL_LIST_CONFIGS.google,
+          'google',
+        );
+        expect(out).toHaveLength(2);
+        for (const model of out) {
+          expect(model.type).toBe('chat');
+          expect(model.imageOutput).toBe(true);
+          expect(model.reasoning).toBe(true);
+          expect(model.functionCall).toBe(false);
+        }
+        // Only versioned ids get Google Search at runtime (`supportsGoogleSearchOnImageResponseModel`)
+        expect(out.find((m) => m.id === 'gemini-nano-banana-2.1')?.search).toBe(true);
+        expect(out.find((m) => m.id === 'nano-banana-pro-preview')?.search).toBe(false);
+      });
+
       it('google: gemini-* without "-image-" should not infer imageOutput and get search=true via known google model', async () => {
         const out = await processModelList(
           [{ id: 'gemini-2.5-pro' }],

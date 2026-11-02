@@ -10,6 +10,19 @@ const formatPrice = (price?: string) => {
   return Number((Number(price) * 1e6).toPrecision(5));
 };
 
+const fetchOpenRouterModels = async (outputModality?: string) => {
+  const url = new URL('https://openrouter.ai/api/v1/models');
+  if (outputModality) url.searchParams.set('output_modalities', outputModality);
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`OpenRouter models API request failed with status ${response.status}`);
+  }
+
+  const data = (await response.json()) as { data: OpenRouterModelCard[] };
+  return data.data;
+};
+
 export const params = {
   baseURL: 'https://openrouter.ai/api/v1',
   chatCompletion: {
@@ -84,22 +97,39 @@ export const params = {
     },
   },
   constructorOptions: {
+    // App attribution for OpenRouter rankings: https://openrouter.ai/docs/app-attribution
+    // Categories accept at most 2 recognized values per request and cannot be removed once merged.
     defaultHeaders: {
       'HTTP-Referer': 'https://lobehub.com',
-      'X-Title': 'LobeHub',
+      'X-OpenRouter-Categories': 'personal-agent,general-chat',
+      'X-OpenRouter-Title': 'LobeHub',
     },
   },
   debug: {
     chatCompletion: () => process.env.DEBUG_OPENROUTER_CHAT_COMPLETION === '1',
   },
+  decide: { path: '/systemone', protocol: 'systemone' },
   models: async () => {
-    const response = await fetch('https://openrouter.ai/api/v1/models');
-    if (!response.ok) {
-      throw new Error(`OpenRouter models API request failed with status ${response.status}`);
-    }
+    // The default listing omits decision models; they are only returned when filtering by
+    // their output modality, so fetch both lists.
+    const [modelList, decisionModelList] = await Promise.all([
+      fetchOpenRouterModels(),
+      fetchOpenRouterModels('decisions').catch((error) => {
+        console.error('[OpenRouter] Failed to fetch decision models:', error);
+        return [];
+      }),
+    ]);
 
-    const data = (await response.json()) as { data: OpenRouterModelCard[] };
-    const modelList = data.data;
+    const decisionModels = decisionModelList.map((model) => ({
+      contextWindowTokens: model.top_provider?.context_length || model.context_length,
+      description: model.description,
+      displayName: model.name,
+      id: model.id,
+      // Decision models bill input tokens only.
+      pricing: { input: formatPrice(model.pricing.prompt) },
+      releasedAt: new Date(model.created * 1000).toISOString().split('T')[0],
+      type: 'decision' as const,
+    }));
 
     // Process the model info fetched from the frontend and convert to standard format
     const formattedModels = modelList.map((model) => {
@@ -197,7 +227,10 @@ export const params = {
       };
     });
 
-    return await processMultiProviderModelList(formattedModels, 'openrouter');
+    return await processMultiProviderModelList(
+      [...formattedModels, ...decisionModels],
+      'openrouter',
+    );
   },
   provider: ModelProvider.OpenRouter,
 } satisfies OpenAICompatibleFactoryOptions;

@@ -12,15 +12,18 @@ import { AgentDetail } from './AgentDetail';
 import { Artifacts } from './Artifacts';
 import Header from './components/Header';
 import { PortalMoreMenuProvider } from './components/PortalMoreMenu/context';
+import { DashboardWidget } from './DashboardWidget';
 import { Document } from './Document';
 import { FilePreview } from './FilePreview';
 import { Goal } from './Goal';
 import { GoalMetric } from './GoalMetric';
 import { GoalNode } from './GoalNode';
+import { GoalNorthStar } from './GoalNorthStar';
 import { GoalReport, GoalReportChapter } from './GoalReport';
 import { GroupThread } from './GroupThread';
 import { HomeBody, HomeTitle } from './Home';
 import { LocalFile } from './LocalFile';
+import { MemoryDetail } from './MemoryDetail';
 import { MessageDetail } from './MessageDetail';
 import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
@@ -43,15 +46,18 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
     Title: HomeTitle,
   },
   [PortalViewType.Artifact]: Artifacts,
+  [PortalViewType.DashboardWidget]: DashboardWidget,
   [PortalViewType.Document]: Document,
   [PortalViewType.Notebook]: Notebook,
   [PortalViewType.FilePreview]: FilePreview,
   [PortalViewType.Goal]: Goal,
   [PortalViewType.GoalMetric]: GoalMetric,
   [PortalViewType.GoalNode]: GoalNode,
+  [PortalViewType.GoalNorthStar]: GoalNorthStar,
   [PortalViewType.GoalReport]: GoalReport,
   [PortalViewType.GoalReportChapter]: GoalReportChapter,
   [PortalViewType.LocalFile]: LocalFile,
+  [PortalViewType.MemoryDetail]: MemoryDetail,
   [PortalViewType.MessageDetail]: MessageDetail,
   [PortalViewType.ToolUI]: Plugins,
   [PortalViewType.TaskDetail]: TaskDetail,

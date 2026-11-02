@@ -1,3 +1,4 @@
+import { getLlmCallCount } from '@lobechat/agent-runtime';
 import debug from 'debug';
 import { eq } from 'drizzle-orm';
 import type { Context } from 'hono';
@@ -10,8 +11,10 @@ import {
   AbandonOperationService,
   type AgentExecutionResult,
   type AgentStepContinuation,
+  scheduleOpportunisticStaleSweep,
 } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { runWithInvocationDeadline } from '@/server/utils/invocationDeadline';
 import {
   flushScheduledWork,
   runWithScheduledWorkScope,
@@ -57,6 +60,12 @@ const INLINE_STEP_START_DEADLINE_MS = Number(process.env.AGENT_INLINE_STEP_DEADL
  * anything still running keeps going.
  */
 const STEP_BOUNDARY_FLUSH_TIMEOUT_MS = 10_000;
+
+/**
+ * The route's `maxDuration`: when the host kills this invocation, counted from
+ * the start of the request.
+ */
+const STEP_INVOCATION_MAX_DURATION_MS = 600_000;
 
 const toIsoString = (value: Date | string | null | undefined): null | string => {
   if (!value) return null;
@@ -106,8 +115,13 @@ async function getOperationRowDiagnostic(operationId: string) {
 /**
  * How long a `running` row may go without a lease refresh before a delivery
  * that finds no coordinator metadata treats the run as dead. A live step
- * refreshes the lease every 90s (see `touchRunning`), and this matches the
- * agent-gateway idle watchdog window.
+ * refreshes the lease every 90s (see `touchRunning`).
+ *
+ * This is NOT the gateway's inactivity window and does not track it: the
+ * gateway judges silence in the *event stream* (30 min, see
+ * `INACTIVITY_WATCHDOG_TIMEOUT`), while this judges the outright absence of the
+ * coordinator metadata every step needs. Missing metadata is far stronger
+ * evidence than a quiet stream, so this stays far shorter than that window.
  */
 const ORPHANED_RUNNING_LEASE_MS = 10 * 60 * 1000;
 
@@ -202,6 +216,8 @@ export async function runStep(c: Context): Promise<Response> {
       toolMessageId,
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
+      resumeClientLlm,
+      clientLlmWaitExpired,
       lockRetryAttempt,
     } = { ...body, ...body.payload };
 
@@ -210,6 +226,14 @@ export async function runStep(c: Context): Promise<Response> {
     }
 
     log(`[${operationId}] Starting step ${stepIndex}`);
+
+    // Ride the always-exercised step path to run the stale-operation sweep, at
+    // most once a minute cluster-wide. The sweep's only other entry point is a
+    // Vercel cron this deployment does not schedule, so without this a run
+    // whose next step never dispatched is left to the gateway's destructive
+    // inactivity watchdog. Fire-and-forget: it is background repair and must
+    // not add latency to, or fail, this delivery.
+    scheduleOpportunisticStaleSweep();
 
     // Get userId from operation metadata stored in Redis
     const coordinator = new AgentRuntimeCoordinator();
@@ -286,6 +310,8 @@ export async function runStep(c: Context): Promise<Response> {
       !resumeAsyncTool &&
       !finishAfterAsyncTool &&
       !verifyAsyncToolBarrier &&
+      !resumeClientLlm &&
+      !clientLlmWaitExpired &&
       !groupMemberTimeout;
 
     // A previous invocation may have died part-way through its own inline loop.
@@ -313,116 +339,122 @@ export async function runStep(c: Context): Promise<Response> {
       // reserved until the loop ends and squeeze the next reservation. Scoping
       // it to the loop starts that work immediately and lets each boundary wait
       // for it, which is how it behaved when every step was its own request.
-      await runWithScheduledWorkScope(async () => {
-        // The first iteration carries this delivery's one-shot payload (human
-        // input, approvals, resume flags). Later iterations are plain steps, so
-        // they must not replay any of it, and neither must a resumed run — it
-        // stands in for a later iteration of a dead loop, not for the original
-        // message.
-        //
-        // `externalRetryCount` is the exception, because it describes this
-        // delivery rather than the step's payload. A parked approval whose Review
-        // failed to persist is only replayed when the count is nonzero, so
-        // dropping it here would leave that approval permanently unavailable.
-        result = resumeFrom
-          ? await aiAgentService.executeStep({
-              context: resumeFrom.context,
-              externalRetryCount,
-              inlineContinuation: true,
-              operationId,
-              retainStepLock: true,
-              stepIndex: resumeFrom.stepIndex,
-              stepLockOwner,
-            })
-          : await aiAgentService.executeStep({
-              approvedToolCall,
-              asyncToolVerifyAttempt,
-              context,
-              externalRetryCount,
-              finishAfterAsyncTool,
-              groupMemberTimeout,
-              humanInput,
-              inlineContinuation: true,
-              lockRetryAttempt,
-              operationId,
-              rejectAndContinue,
-              rejectionReason,
-              resumeAsyncTool,
-              retainStepLock: true,
-              stepIndex,
-              stepLockOwner,
-              toolMessageId,
-              verifyAsyncToolBarrier,
-            });
-        pendingContinuation = result.continuation;
-        touchedEnvelope ||= Boolean(pendingContinuation);
-
-        while (pendingContinuation) {
-          // Let the previous step's deferred work finish first. Its budget
-          // hold is released there, and the next step reserves again.
-          const settled = await flushScheduledWork({ timeoutMs: STEP_BOUNDARY_FLUSH_TIMEOUT_MS });
-          if (!settled) {
-            // The deferred work cannot be told apart, so a slow telemetry call
-            // and a slow budget settlement look the same. Reserving again on
-            // top of an unreleased hold is exactly the false "over budget"
-            // this wait exists to prevent, so stop inlining and hand the step
-            // to the queue, the way it ran before steps were inlined.
-            log(
-              `[${operationId}] Deferred work still running after ${STEP_BOUNDARY_FLUSH_TIMEOUT_MS}ms, handing step ${pendingContinuation.stepIndex} back to the queue`,
-            );
-            break;
-          }
-
-          const elapsed = Date.now() - startTime;
-          if (elapsed >= INLINE_STEP_START_DEADLINE_MS) {
-            log(
-              `[${operationId}] Inline budget spent after ${inlinedSteps} extra step(s) (${elapsed}ms), handing step ${pendingContinuation.stepIndex} back to the queue`,
-            );
-            break;
-          }
-
-          const next = pendingContinuation;
-          pendingContinuation = undefined;
-          currentStepIndex = next.stepIndex;
-
-          result = await aiAgentService.executeStep({
-            context: next.context,
-            inlineContinuation: true,
-            operationId,
-            retainStepLock: true,
-            stepIndex: next.stepIndex,
-            stepLockOwner,
-          });
-          inlinedSteps += 1;
+      // Long waits inside a step (a relayed LLM attempt) size themselves to
+      // what is left of this invocation.
+      await runWithInvocationDeadline(startTime + STEP_INVOCATION_MAX_DURATION_MS, () =>
+        runWithScheduledWorkScope(async () => {
+          // The first iteration carries this delivery's one-shot payload (human
+          // input, approvals, resume flags). Later iterations are plain steps, so
+          // they must not replay any of it, and neither must a resumed run — it
+          // stands in for a later iteration of a dead loop, not for the original
+          // message.
+          //
+          // `externalRetryCount` is the exception, because it describes this
+          // delivery rather than the step's payload. A parked approval whose Review
+          // failed to persist is only replayed when the count is nonzero, so
+          // dropping it here would leave that approval permanently unavailable.
+          result = resumeFrom
+            ? await aiAgentService.executeStep({
+                context: resumeFrom.context,
+                externalRetryCount,
+                inlineContinuation: true,
+                operationId,
+                retainStepLock: true,
+                stepIndex: resumeFrom.stepIndex,
+                stepLockOwner,
+              })
+            : await aiAgentService.executeStep({
+                approvedToolCall,
+                asyncToolVerifyAttempt,
+                clientLlmWaitExpired,
+                context,
+                externalRetryCount,
+                finishAfterAsyncTool,
+                groupMemberTimeout,
+                humanInput,
+                inlineContinuation: true,
+                lockRetryAttempt,
+                operationId,
+                rejectAndContinue,
+                rejectionReason,
+                resumeAsyncTool,
+                resumeClientLlm,
+                retainStepLock: true,
+                stepIndex,
+                stepLockOwner,
+                toolMessageId,
+                verifyAsyncToolBarrier,
+              });
           pendingContinuation = result.continuation;
           touchedEnvelope ||= Boolean(pendingContinuation);
 
-          // A lock conflict mid-loop means another worker took over this
-          // operation. Stop rather than fight it — that worker owns the rest.
-          if (result.locked) break;
-        }
+          while (pendingContinuation) {
+            // Let the previous step's deferred work finish first. Its budget
+            // hold is released there, and the next step reserves again.
+            const settled = await flushScheduledWork({ timeoutMs: STEP_BOUNDARY_FLUSH_TIMEOUT_MS });
+            if (!settled) {
+              // The deferred work cannot be told apart, so a slow telemetry call
+              // and a slow budget settlement look the same. Reserving again on
+              // top of an unreleased hold is exactly the false "over budget"
+              // this wait exists to prevent, so stop inlining and hand the step
+              // to the queue, the way it ran before steps were inlined.
+              log(
+                `[${operationId}] Deferred work still running after ${STEP_BOUNDARY_FLUSH_TIMEOUT_MS}ms, handing step ${pendingContinuation.stepIndex} back to the queue`,
+              );
+              break;
+            }
 
-        // Whatever is still pending goes back to the queue so the operation
-        // resumes in a fresh invocation.
-        if (pendingContinuation) {
-          await aiAgentService.scheduleContinuation(pendingContinuation);
-          result = { ...result, nextStepScheduled: true };
-          pendingContinuation = undefined;
-        }
+            const elapsed = Date.now() - startTime;
+            if (elapsed >= INLINE_STEP_START_DEADLINE_MS) {
+              log(
+                `[${operationId}] Inline budget spent after ${inlinedSteps} extra step(s) (${elapsed}ms), handing step ${pendingContinuation.stepIndex} back to the queue`,
+              );
+              break;
+            }
 
-        // Drop the envelope once this invocation is done with it: either the queue
-        // owns the next step again, or the operation stopped. Leaving it behind
-        // would let a late redelivery re-run a step someone else already owns.
-        // Skipped when nothing was ever parked, to keep the flag-off path free of
-        // an extra Redis round-trip.
-        //
-        // Scoped to our lock owner, because "done with it" is only true while we
-        // still hold the operation. A delivery that read an envelope and then lost
-        // the lock race must not delete the newer one the live worker parked.
-        if (touchedEnvelope) {
-          await coordinator.clearInlineResume(operationId, stepLockOwner);
-        }
-      });
+            const next = pendingContinuation;
+            pendingContinuation = undefined;
+            currentStepIndex = next.stepIndex;
+
+            result = await aiAgentService.executeStep({
+              context: next.context,
+              inlineContinuation: true,
+              operationId,
+              retainStepLock: true,
+              stepIndex: next.stepIndex,
+              stepLockOwner,
+            });
+            inlinedSteps += 1;
+            pendingContinuation = result.continuation;
+            touchedEnvelope ||= Boolean(pendingContinuation);
+
+            // A lock conflict mid-loop means another worker took over this
+            // operation. Stop rather than fight it — that worker owns the rest.
+            if (result.locked) break;
+          }
+
+          // Whatever is still pending goes back to the queue so the operation
+          // resumes in a fresh invocation.
+          if (pendingContinuation) {
+            await aiAgentService.scheduleContinuation(pendingContinuation);
+            result = { ...result, nextStepScheduled: true };
+            pendingContinuation = undefined;
+          }
+
+          // Drop the envelope once this invocation is done with it: either the queue
+          // owns the next step again, or the operation stopped. Leaving it behind
+          // would let a late redelivery re-run a step someone else already owns.
+          // Skipped when nothing was ever parked, to keep the flag-off path free of
+          // an extra Redis round-trip.
+          //
+          // Scoped to our lock owner, because "done with it" is only true while we
+          // still hold the operation. A delivery that read an envelope and then lost
+          // the lock race must not delete the newer one the live worker parked.
+          if (touchedEnvelope) {
+            await coordinator.clearInlineResume(operationId, stepLockOwner);
+          }
+        }),
+      );
     } finally {
       // Owner-scoped, so this is a no-op when the first step never claimed the
       // lock (a conflicting delivery, a terminal operation, a watchdog probe).
@@ -477,7 +509,7 @@ export async function runStep(c: Context): Promise<Response> {
       stepIndex: currentStepIndex,
       success: result.success,
       totalCost: result.state.cost?.total || 0,
-      totalSteps: result.state.stepCount,
+      totalSteps: getLlmCallCount(result.state),
       waitingForHuman: result.state.status === 'waiting_for_human',
     };
 

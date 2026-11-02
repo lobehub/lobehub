@@ -22,27 +22,23 @@ The one-line contract:
 The mechanism is generic, but it lands one layer — and then one entity — at a time, so each step is
 small enough to verify on its own:
 
-| Step | Scope                                                                                              | Where                            |
-| ---- | -------------------------------------------------------------------------------------------------- | -------------------------------- |
-| 1    | Schema: `trash_items` + `is_deleted` / `deleted_at` on 19 content tables                           | merged (`0152`)                  |
-| 2    | Read side: every ownership-scoped read hides stamped rows                                          | `feat/soft-delete-schema`        |
-| 3    | **Topics** end to end — stamp, register, restore, purge, sweep — plus the recycle-bin UI           | `feat/trash-topic` (this branch) |
-| 4    | Agents (cascading to their topics) and messages (tree rewrite)                                     | `feat/soft-delete-mvp`           |
-| 5    | Chat groups, Pages / documents, files, knowledge bases, projects, tasks + goals, generation topics | `feat/soft-delete-recycle-bin`   |
+| Step | Scope                                                                                              | Where                          |
+| ---- | -------------------------------------------------------------------------------------------------- | ------------------------------ |
+| 1    | Schema: `trash_items` + `is_deleted` / `deleted_at` on 19 content tables                           | merged (`0152`)                |
+| 2    | Read side: every ownership-scoped read hides stamped rows                                          | `feat/soft-delete-schema`      |
+| 3    | **Topics** end to end — stamp, register, restore, purge, sweep — plus the recycle-bin UI           | `feat/trash-topic`             |
+| 4    | Agents (cascading to their topics) and messages (tree rewrite)                                     | `feat/soft-delete-mvp`         |
+| 5    | Chat groups, Pages / documents, files, knowledge bases, projects, tasks + goals, generation topics | `feat/soft-delete-recycle-bin` |
 
 Step 3 is the smallest slice that is useful on its own: deleting a conversation is the most frequent
 destructive action in the product, and a topic's cascade is the simplest one (messages and threads
 are hidden by their parent and hard-cascade at purge, so nothing below the topic needs a stamp).
 
-While only topics are trashable, a few edges stay deliberately simple:
-
-- `removeTopic({ removeFiles })` no longer deletes attachments at delete time — the flag is
-  remembered on the registry row and the still-exclusive attachments are removed when the topic is
-  **purged**. Files have no stamp yet, so they stay visible in the meantime.
-- The restore path has no parent-in-bin check: a topic's containers (agent, chat group) cannot be
-  trashed yet, so they can never be sitting in the bin. The check arrives with the agent handler.
-- Bulk "clear conversation" sweeps (`removeMessagesByAssistant/ByGroup`) and every non-topic delete
-  remain hard deletes.
+With agents and messages wired in, the topic restore path regains its
+parent-in-bin check (a topic under a trashed agent cannot come back on its own), and messages carry
+the tree data a restore needs. Still deliberately simple: `removeTopic({ removeFiles })` removes the
+still-exclusive attachments at **purge** time rather than at delete time (files have no stamp yet),
+and bulk "clear conversation" sweeps (`removeMessagesByAssistant/ByGroup`) remain hard deletes.
 
 ## 1. Audit — what deletion looked like before
 
@@ -177,7 +173,7 @@ delete stopped:
 
 | Root              | Stamped + registered as children                                                      | Stamped, not registered (restored by parent key)   | Hidden by parent only (no stamp)                                                                            |
 | ----------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `topic`           | — (phase 2: attachments only this topic references, when `removeFiles`)               | —                                                  | messages, threads, comments, topic\_documents                                                               |
+| `topic`           | — (phase 2: attachments only this topic references, when `removeFiles`)               | —                                                  | messages, threads, comments, topic_documents                                                                |
 | `agent`           | topics (via `agent_id` and via legacy `session_id`)                                   | —                                                  | everything under topics; the legacy `sessions` shell (hidden through the agent join, hard-deleted at purge) |
 | `message`         | tool-result companions of a trashed assistant turn                                    | —                                                  | plugins / tts / translate rows                                                                              |
 | `chatGroup`       | topics (group + owned virtual member agents)                                          | owned virtual member agents                        | —                                                                                                           |
@@ -218,9 +214,9 @@ session groups …) were given an `isDeleted` entry. Raw-SQL scopes (`TaskModel.
 Restore / purge internals pass `includeTrashed: true`. Each trash-aware model exposes a `scope()`
 (no filter) next to its `ownership()` (filter) so those internals are explicit and greppable.
 
-Consequence to keep in mind: a relational query that reuses another table's predicate
-(`db.query.sessionGroups.findMany({ where: sessionsPredicate })`) now fails loudly instead of
-silently rebinding — one such case in `SessionModel.queryWithGroups` was fixed.
+Relational queries must use predicates built for the table being queried. A `sessionGroups`
+query must use a predicate built from `sessionGroups`, rather than one built from `sessions`;
+cross-table predicate reuse now fails instead of silently rebinding.
 
 ### 2.5 Server architecture
 
@@ -236,7 +232,7 @@ packages/database/src/models/trash.ts          TrashModel — registry reads/wri
 - `TrashService.trashXxx` runs the handler's stamping and the registry insert **in one
   transaction**, so rows can never end up hidden but unlisted.
 - Every user-facing delete procedure in scope (phase 1: `topic.removeTopic`/`batchDelete*`/
-  `removeAllTopics`, `agent.removeAgent`, `session.removeSession`, `message.removeMessage(s)` via
+  `removeAllTopics`, `agent.removeAgent`, `message.removeMessage(s)` via
   `MessageService`; phase 2 adds `group.deleteGroup`, `document.deleteDocument(s)`,
   `notebook.deleteDocument`, `file.removeFile(s)`, `knowledgeBase.removeKnowledgeBase`,
   `project.delete`, `task.delete`/`deleteGoal`, `generationTopic.deleteTopic`) keeps its permission

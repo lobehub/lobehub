@@ -122,6 +122,51 @@ export const fetchGitHubInstallation = async (
   return snapshot;
 };
 
+/**
+ * Mint an installation token narrowed to ONE repository and ONE permission,
+ * for a build that is about to clone it.
+ *
+ * `app.getInstallationOctokit` would hand back the installation's full grant —
+ * every repository it was given, every permission the App declares. A build
+ * only ever reads one checkout, so the token it carries is scoped down to
+ * exactly that: a request that names `repositories` and `permissions` gets a
+ * token that can do nothing else, and it expires within the hour on its own.
+ *
+ * Narrowing can only ever subtract. Asking for `contents: read` on an App that
+ * was not granted it fails here rather than producing a token that fails later
+ * inside a sandbox, which is why this returns null instead of throwing: the
+ * caller falls back to the other credential path, and the clone still reports
+ * its own failure in the build log where someone can read it.
+ *
+ * Never log the returned token.
+ */
+export const mintGitHubRepositoryToken = async (params: {
+  installationId: string;
+  repoFullName: string;
+}): Promise<{ expiresAt: string; token: string } | null> => {
+  const app = getGitHubApp();
+  if (!app) return null;
+
+  try {
+    const { data } = await app.octokit.request(
+      'POST /app/installations/{installation_id}/access_tokens',
+      {
+        installation_id: Number(params.installationId),
+        permissions: { contents: 'read' },
+        // The short name, not `owner/name`: this endpoint scopes by repository
+        // within the installation's own account.
+        repositories: [parseRepo(params.repoFullName).repo],
+      },
+    );
+
+    return { expiresAt: data.expires_at, token: data.token };
+  } catch (error) {
+    // By shape, never by content — the one path here that holds a credential.
+    log('could not mint a clone token for %s: %s', params.repoFullName, (error as Error)?.message);
+    return null;
+  }
+};
+
 export const listGitHubInstallationRepositories = async (
   installationId: string,
 ): Promise<ScmInstallationRepository[]> => {

@@ -1,22 +1,18 @@
 'use client';
 
-import { Button, Input, TextArea, toast, Upload } from '@lobehub/ui/base-ui';
+import { Button, Input, TextArea, toast, Upload } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
-import { Form } from 'antd';
-import { createStaticStyles } from 'antd-style';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CredsApi } from '../useCredsApi';
+import { credErrorKey } from '../credError';
+import { createExtras, type CredsApi } from '../useCredsApi';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-block-start: 24px;
-  `,
-}));
+const styles = stylex.create({
+  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
+});
 
 interface FileCredFormProps {
   credsApi: CredsApi;
@@ -33,7 +29,7 @@ interface FormValues {
 
 const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
   const { t } = useTranslation(['setting', 'common']);
-  const [form] = Form.useForm<FormValues>();
+  const form = useForm<FormValues>({ onSubmit: (values) => handleSubmit(values) });
   const [fileHashId, setFileHashId] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
@@ -52,7 +48,11 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
         fileName,
         key: values.key,
         name: values.name,
+        ...createExtras(credsApi),
       });
+    },
+    onError: (error) => {
+      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
     },
     onSuccess: () => {
       onSuccess();
@@ -103,8 +103,8 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
   };
 
   return (
-    <Form<FormValues> form={form} layout="vertical" onFinish={handleSubmit}>
-      <Form.Item required label={t('creds.form.file')}>
+    <Form form={form} layout="vertical">
+      <Form.Field required label={t('creds.form.file')}>
         <Upload
           dragger
           description={t('creds.form.uploadDesc')}
@@ -130,36 +130,32 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
             </Button>
           </div>
         )}
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
+      <Form.Field
         label={t('creds.form.key')}
         name="key"
-        rules={[
-          { required: true, message: t('creds.form.keyRequired') },
-          { pattern: /^[\w-]+$/, message: t('creds.form.keyPattern') },
-        ]}
+        required={t('creds.form.keyRequired')}
+        validate={(value?: string) =>
+          value && !/^[\w-]+$/.test(value) ? t('creds.form.keyPattern') : undefined
+        }
       >
         <Input disabled={disabled} placeholder="e.g., gcp-service-account" />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
-        label={t('creds.form.name')}
-        name="name"
-        rules={[{ required: true, message: t('creds.form.nameRequired') }]}
-      >
+      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
         <Input disabled={disabled} placeholder="e.g., GCP Service Account" />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('creds.form.description')} name="description">
+      <Form.Field label={t('creds.form.description')} name="description">
         <TextArea
           disabled={disabled}
           placeholder={t('creds.form.descriptionPlaceholder')}
           rows={2}
         />
-      </Form.Item>
+      </Form.Field>
 
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <Button onClick={onBack}>{t('creds.form.back')}</Button>
         <Button
           disabled={!fileHashId || disabled}

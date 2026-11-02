@@ -44,6 +44,7 @@ describe('TrayManager', () => {
     mockApp = {
       menuManager: {
         buildTrayMenu: vi.fn(() => ({ _mockMenu: true }) as any),
+        updateDockMenu: vi.fn(),
       },
       storeManager: {
         get: vi.fn(() => true),
@@ -87,6 +88,14 @@ describe('TrayManager', () => {
 
       expect(mockApp.menuManager.buildTrayMenu).toHaveBeenCalled();
       expect(mockTray.setMenu).toHaveBeenCalledWith({ _mockMenu: true });
+    });
+
+    it('should forward navigation snapshots to the dock menu even without a tray', () => {
+      const snapshot = { agents: [], pinned: [], recent: [] };
+
+      trayManager.updateNavigationSnapshot(snapshot);
+
+      expect(mockApp.menuManager.updateDockMenu).toHaveBeenCalledWith(snapshot);
     });
 
     it('should skip tray initialization when app tray is disabled', () => {

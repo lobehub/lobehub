@@ -6,8 +6,7 @@ import {
   useAskUserForm,
 } from '@lobechat/shared-tool-ui/ask-user';
 import type { BuiltinInterventionProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import { Alert, Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -27,6 +26,7 @@ import {
   readClarificationDraft,
   writeClarificationDraft,
 } from './draftStorage';
+import { ClarificationAnswerDeclined, submitClarification } from './submit';
 import { useAskUserLabels } from './useAskUserLabels';
 
 export type { ClarificationAnswer, ClarificationQuestion } from './answers';
@@ -41,15 +41,25 @@ export interface ClarificationQuestionsProps {
   draftKey?: string;
   /** Mirror the answers the draft would submit, for hosts that own the result. */
   onAnswersChange?: (answers: ClarificationAnswer[]) => void;
-  /** What "skip" means is the host's call: proceed on assumptions, or without answers. */
-  onSkip: () => Promise<void> | void;
-  onSubmit: (answers: ClarificationAnswer[]) => Promise<void> | void;
+  /**
+   * What "skip" means is the host's call: proceed on assumptions, or without
+   * answers. A question that must be answered passes none and the form offers
+   * no skip at all.
+   */
+  onSkip?: () => Promise<void> | void;
+  /**
+   * Sends the answers. Return `false` to decline them unsent (after telling the
+   * user why): the form stays editable and keeps the draft.
+   */
+  onSubmit: (answers: ClarificationAnswer[]) => Promise<boolean | void> | boolean | void;
   questions: ClarificationQuestion[];
   /** Defaults to `true`; pass `false` when every question is optional. */
   requireAllAnswered?: boolean;
   /** Host wording for the two footer buttons, when "Submit" / "Skip" undersell them. */
   skipLabel?: string;
   submitLabel?: string;
+  /** Host wording for the notes box, when its notes go somewhere specific. */
+  supplementPlaceholder?: string;
 }
 
 /**
@@ -73,9 +83,14 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
     requireAllAnswered,
     skipLabel,
     submitLabel,
+    supplementPlaceholder,
   }) => {
     const { t } = useTranslation('tool');
-    const labels = useAskUserLabels({ skip: skipLabel, submit: submitLabel });
+    const labels = useAskUserLabels({
+      skip: onSkip ? skipLabel : '',
+      submit: submitLabel,
+      supplementPlaceholder,
+    });
     const userId = useUserStore(userProfileSelectors.userId);
     const storageKey = accountDraftKey(userId, draftKey);
     const [draft, setDraft] = useState<AskUserDraft | undefined>(() =>
@@ -99,13 +114,19 @@ const ClarificationQuestions = memo<ClarificationQuestionsProps>(
       async (action) => {
         setFailed(false);
         try {
-          if (action.type === 'skip') await onSkip();
-          else if (action.type === 'submit')
-            await onSubmit(toClarificationAnswers(questions, action.payload ?? {}));
+          if (action.type === 'skip') {
+            if (!onSkip) return;
+            await onSkip();
+          } else if (action.type === 'submit')
+            await submitClarification(
+              onSubmit,
+              toClarificationAnswers(questions, action.payload ?? {}),
+            );
           // Sent: nothing left to restore. A failed send keeps the draft.
           if (storageKey) clearClarificationDraft(storageKey);
         } catch (error) {
-          setFailed(true);
+          // A declined answer was never sent: the host already said why.
+          if (!(error instanceof ClarificationAnswerDeclined)) setFailed(true);
           // Rethrow so the form leaves its submitting state and can be retried.
           throw error;
         }

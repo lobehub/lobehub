@@ -7,7 +7,9 @@ import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import type { EditLockService } from '@/server/services/editLock';
 import type { TaskService } from '@/server/services/task';
 
+import { assertArchivedTaskStaysIdle } from './archiveGuard';
 import { assertResultingScheduleValid } from './scheduleValidation';
+import { findTaskOrThrow, resolveTaskOrThrow } from './utils';
 
 /**
  * The invariants a task patch must satisfy, shared by every write boundary: the
@@ -51,12 +53,6 @@ export interface TaskPatchInvariantContext {
   workspaceId?: string;
 }
 
-async function resolveOrThrow(model: TaskModel, id: string): Promise<ResolvedTask> {
-  const task = await model.resolve(id);
-  if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
-  return task;
-}
-
 export async function assertAssigneeAgentBelongsToUser(
   db: LobeChatDatabase,
   callerCtx: { userId: string; workspaceId?: string },
@@ -85,7 +81,7 @@ async function resolveSafeParentTaskId(
 ): Promise<string | null> {
   if (parentTaskId === null) return null;
 
-  const parent = await resolveOrThrow(model, parentTaskId);
+  const parent = await findTaskOrThrow(model, parentTaskId);
   if (parent.id === taskId) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -101,7 +97,7 @@ async function resolveSafeParentTaskId(
     });
   }
 
-  const task = await resolveOrThrow(model, taskId);
+  const task = await findTaskOrThrow(model, taskId);
   if (task.projectId !== parent.projectId) {
     throw new TRPCError({
       code: 'BAD_REQUEST',
@@ -133,8 +129,9 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
     data.assigneeAgentId,
   );
 
-  const resolved = await resolveOrThrow(ctx.taskModel, id);
+  const resolved = await resolveTaskOrThrow(ctx.taskModel, id);
   assertResultingScheduleValid(resolved, data);
+  assertArchivedTaskStaysIdle(resolved, data);
 
   // Collaborative edit lock: reject writes to a workspace task another member
   // is actively editing. Inert until a client acquires the lock.
@@ -168,7 +165,11 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
   const resolvedParentTaskId =
     parentTaskId === undefined
       ? undefined
-      : await resolveSafeParentTaskId(ctx.taskModel, resolved.id, parentTaskId);
+      : await resolveSafeParentTaskId(
+          ctx.taskModel,
+          resolved.id,
+          parentTaskId === null ? null : (await resolveTaskOrThrow(ctx.taskModel, parentTaskId)).id,
+        );
 
   // Reparenting a public task under a private one breaks the parent visibility
   // invariant — a subtask cannot be more public than its parent (otherwise

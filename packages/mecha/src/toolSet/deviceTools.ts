@@ -2,7 +2,7 @@ import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
-import type { LobeBuiltinTool } from '@lobechat/types';
+import type { DeviceClient, LobeBuiltinTool } from '@lobechat/types';
 
 /** Builtin tools that only exist for a run with a device (local machine or routed device). */
 export const DEVICE_TOOL_MANIFESTS = [
@@ -23,6 +23,17 @@ export const REMOTE_DEVICE_TOOL_IDENTIFIERS: ReadonlySet<string> = new Set([
 
 export const isDeviceToolIdentifier = (identifier: string): boolean =>
   DEVICE_TOOL_IDENTIFIERS.has(identifier);
+
+const DEVICE_TOOL_CLIENTS: ReadonlyMap<string, DeviceClient[] | undefined> = new Map(
+  DEVICE_TOOL_MANIFESTS.map((m) => [m.identifier, m.deviceClients]),
+);
+
+/**
+ * Device clients that can run a device tool, from its manifest's
+ * `deviceClients`; `undefined` means any client (or not a device tool).
+ */
+export const deviceToolClients = (identifier: string): DeviceClient[] | undefined =>
+  DEVICE_TOOL_CLIENTS.get(identifier);
 
 export interface DeviceToolWallParams {
   /** The run's access policy allows a device at all (external bot senders do not). */

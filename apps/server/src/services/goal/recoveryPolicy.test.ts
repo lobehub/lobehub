@@ -2,8 +2,10 @@ import type { GoalItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
+  classifyRunFailure,
   countChargedTaskAttempts,
   countConsecutiveDeviceOfflineRuns,
+  countUnchargedRuns,
   DEFAULT_MANAGER_MAX_TURNS,
   managerTurnsSpent,
   MIN_OPERATION_LEASE_TIMEOUT_MS,
@@ -76,5 +78,79 @@ describe('offline run accounting', () => {
   it('marks a failed run offline only for device-unavailable errors', () => {
     expect(resolveFailedRunStatus('DEVICE_OFFLINE (HTTP 503)')).toBe('device_offline');
     expect(resolveFailedRunStatus('Delivery did not pass verification.')).toBe('failed');
+  });
+});
+
+describe('classifyRunFailure', () => {
+  it('reads a usage window reset from the structured error', () => {
+    expect(
+      classifyRunFailure({
+        body: { code: 'rate_limit', rateLimitInfo: { resetsAt: 1_791_232_200 } },
+        category: 'quota',
+        message: "You've hit your session limit",
+      }),
+    ).toEqual({ kind: 'quota_reset', resetsAt: 1_791_232_200_000 });
+  });
+
+  it('ignores a window the provider allowed, which a later unrelated failure can carry', () => {
+    expect(
+      classifyRunFailure({
+        body: {
+          code: 'rate_limit',
+          rateLimitInfo: { resetsAt: 1_791_232_200, status: 'allowed' },
+        },
+        message: 'fetch failed: ECONNRESET',
+      }).kind,
+    ).toBe('transient');
+  });
+
+  it.each([
+    [{ message: 'DEVICE_OFFLINE (HTTP 503)' }, '', 'device_unavailable'],
+    [undefined, 'DEVICE_NOT_FOUND', 'device_unavailable'],
+    [{ category: 'quota', message: 'Insufficient balance' }, '', 'needs_user'],
+    [{ category: 'auth', message: 'Invalid API key' }, '', 'needs_user'],
+    [
+      { body: { code: 'rate_limit' }, category: 'quota', message: 'session limit' },
+      '',
+      'needs_user',
+    ],
+    [{ message: 'approval required' }, '', 'needs_user'],
+    [{ category: 'capacity', message: 'upstream busy' }, '', 'transient'],
+    [{ message: 'fetch failed: ECONNRESET' }, '', 'transient'],
+    [{ message: 'Too Many Requests (429)' }, '', 'transient'],
+    [{ message: 'DEVICE_GATEWAY_ERROR (HTTP 500)' }, '', 'transient'],
+    [{ message: 'spawn claude ENOENT' }, '', 'unknown'],
+    [undefined, '', 'unknown'],
+  ])('classifies %j / %s as %s', (error, text, kind) => {
+    expect(classifyRunFailure(error, text).kind).toBe(kind);
+  });
+});
+
+describe('machine-failure run accounting', () => {
+  it('marks a run that hit a usage limit or a transient fault as uncharged', () => {
+    expect(
+      resolveFailedRunStatus("You've hit your session limit · resets 4:30am (Asia/Shanghai)"),
+    ).toBe('quota_limited');
+    expect(
+      resolveFailedRunStatus(
+        "Server discarded the agent's output (operation-not-running): this run is no longer the topic's active operation, so nothing it produced was saved",
+      ),
+    ).toBe('transient_failed');
+    expect(resolveFailedRunStatus('Working directory does not exist: /Users/user/x')).toBe(
+      'failed',
+    );
+  });
+
+  it('charges none of the machine-failure runs to the attempt budget', () => {
+    const runs = [
+      { status: 'quota_limited' },
+      { status: 'transient_failed' },
+      { status: 'device_offline' },
+      { status: 'failed' },
+      { status: 'completed' },
+    ];
+    expect(countChargedTaskAttempts({ totalTopics: runs.length }, countUnchargedRuns(runs))).toBe(
+      2,
+    );
   });
 });

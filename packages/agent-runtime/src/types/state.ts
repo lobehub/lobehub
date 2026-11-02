@@ -13,6 +13,7 @@ import type {
   UserMemoryConfig,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
   AgentShareVisitorContext,
   AgentSignalOperationMarker,
   ChatToolPayload,
@@ -29,7 +30,7 @@ import type {
   UserInterventionConfig,
 } from '@lobechat/types';
 
-import type { AgentInstructionRequestHumanApprove } from './instruction';
+import type { AgentInstructionRequestHumanApprove, AgentRuntimeContext } from './instruction';
 import type { Cost, CostLimit, Usage } from './usage';
 
 /**
@@ -79,6 +80,8 @@ export interface AgentRunOrigin {
   // --- Conversation node ---
   /** Effective message owner for this run (the group member when applicable). */
   agentId?: string;
+  /** Assistant row the run streams into: its spinner anchor and error sink. */
+  assistantMessageId?: string;
   /** Set when this run continues a durable human-intervention claim. */
   continuation?: InterventionContinuation;
   // --- Trigger ---
@@ -92,6 +95,8 @@ export interface AgentRunOrigin {
   groupId?: string;
   // --- Run tree ---
   lineage?: AgentRunLineage;
+  /** Project the conversation (or the run's task) belongs to. */
+  projectId?: string;
   scope?: string;
   sessionId?: string;
   /** Run-scoped Agent Signal marker for background self-iteration / memory runs. */
@@ -168,12 +173,83 @@ export interface AgentRunPlan {
  * carried by the runtime without interpretation.
  */
 export interface AgentRunHostEnvelope {
+  /**
+   * The client that started this run renders `file` Works, so the pushed
+   * `uiMessages` snapshots and `message_patch` revisions may carry them.
+   * Declared by the client, like `clientProtocol`; absent keeps them out, which
+   * is what a released desktop build without the `file` descriptor needs.
+   */
+  acceptsFileWorks?: boolean;
+  /**
+   * Wire protocol the client that started this run asked for. `2` means that
+   * client reconciles its message list from `message_patch` revisions, so the
+   * host may stop pushing whole `uiMessages` snapshots with the step and
+   * terminal events.
+   *
+   * Absent means `1`: an older bundle that only learns the settled list from
+   * what the server pushes, or a client the rollout has not reached.
+   * Deliberately declared by the client rather than derived from a preference
+   * or a transport check — a desktop build months behind the server reads the
+   * same events over the same socket, and guessing on its behalf is how it ends
+   * up rendering a run it cannot reconstruct.
+   */
+  clientProtocol?: 1 | 2;
   /** Serialized lifecycle hook configs (webhook mode), so a queue worker can rebuild the dispatcher. */
   hooks?: SerializedAgentHook[];
   /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
   includeFinalState?: boolean;
+  /**
+   * The client that started this run can execute single LLM attempts the
+   * server relays to it (`llm_execute`), for model providers only the user's
+   * device can reach (a local Ollama, a private-network endpoint). Declared by
+   * the client, like `clientProtocol`; absent means no client will pick up a
+   * relayed call, so such a provider fails fast instead of waiting.
+   */
+  llmExecutor?: AgentRunLlmExecutor;
   /** Queue retry policy for step scheduling. */
   queue?: { retries?: number; retryDelay?: string };
+}
+
+/**
+ * A run parked because the LLM call of its next step can only run on the
+ * user's device, and no client was there to take it (U4c). The step is
+ * replayed from `resume` once a client that can execute `provider` asks to
+ * continue; past `expiresAt` the run ends with an actionable error instead.
+ */
+export interface AgentRunClientLlmWait {
+  /** The step's assistant row; the resumed call fills it instead of a new one. */
+  assistantMessageId?: string;
+  /**
+   * The context the parked step ran with (minus per-step data), replayed on
+   * resume so the call is rebuilt exactly — some phases add prompt content the
+   * state does not hold. Absent on parks recorded before it existed.
+   */
+  context?: Pick<AgentRuntimeContext, 'initialContext' | 'metadata' | 'payload' | 'phase'>;
+  expiresAt: string;
+  /** Parent of the parked call's assistant row, for the replayed step. */
+  parentMessageId?: string;
+  /** Identifies this park, so a stale expiry check of an earlier one is a no-op. */
+  parkedAt: string;
+  provider: string;
+  /** Why nobody executed the call (`no_executor`, `claim_timeout`, `not_delivered`). */
+  reason: string;
+}
+
+/** A client's declaration that it can run relayed LLM attempts. */
+export interface AgentRunLlmExecutor {
+  /** Relay protocol versions the client speaks, e.g. `llm_relay@1`. */
+  capabilities: string[];
+  /**
+   * Operation whose gateway channel the client listens on, when it is not the
+   * run's own: a sub-agent inherits its parent's executor, but the tab only
+   * subscribed to the parent's run, so the sub-agent's `llm_execute` rides that
+   * channel. Set by the server, never by the client.
+   */
+  channelOperationId?: string;
+  /** Stable id of the declaring client (tab / desktop window), preferred as the executor. */
+  clientId: string;
+  /** Provider ids this client confirmed it can reach directly. */
+  providers: string[];
 }
 
 /**
@@ -294,6 +370,11 @@ export interface AgentState {
    * Current calculated cost for this session.
    * Updated after each billable operation.
    */
+  /**
+   * Set while the run is parked in `waiting_for_client`: the step's LLM call
+   * needs the user's device and no client was there to run it.
+   */
+  clientLlmWait?: AgentRunClientLlmWait;
   cost: Cost;
   /**
    * Optional cost limits configuration.
@@ -339,6 +420,14 @@ export interface AgentState {
     canResume: boolean;
   };
   lastModified: string;
+
+  /**
+   * User-facing count of LLM calls made by this operation.
+   *
+   * Kept in sync with `usage.llm.apiCalls` at every step boundary. Unlike
+   * {@link stepCount}, tool-only runtime iterations do not increase it.
+   */
+  llmCalls?: number;
 
   /**
    * Optional maximum number of steps allowed.
@@ -392,7 +481,6 @@ export interface AgentState {
       provider: string;
     };
   };
-
   /**
    * Credentials this run listed once when it was created. A step renders
    * `{{CREDS_LIST}}` from here instead of asking the Market API again; absent
@@ -403,13 +491,13 @@ export interface AgentState {
   operationId: string;
   /** Operation-level tool set snapshot (immutable after creation) */
   operationToolSet?: OperationToolSet;
+
   // --- Origin ---
   /**
    * Where this run came from and where it sits in the run tree. Frozen when
    * the operation is created.
    */
   origin?: AgentRunOrigin;
-
   pendingApprovalBatch?: {
     assistantMessageId: string;
     id: string;
@@ -437,8 +525,8 @@ export interface AgentState {
    * Cleared once consumed.
    */
   pendingAssistantMessageId?: string;
-  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
 
+  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
   pendingHumanSelect?: {
     metadata?: Record<string, unknown>;
     multi?: boolean;
@@ -458,14 +546,30 @@ export interface AgentState {
   // --- Principal ---
   /** Under whose authority the run acts and what it may do. Frozen at creation. */
   principal?: AgentRunPrincipal;
+  /**
+   * The turn's raw ask, kept ONLY while the run still owes its init.
+   *
+   * A run can be created before tool discovery and the context assembly have
+   * happened; the step-0 worker does them and clears this in the same write that
+   * saves what they produced. Its presence is therefore the signal:
+   * a state carrying a request has not been initialized yet.
+   *
+   * Everything else the init needs is already on the other slots (`world.agent`,
+   * `world.channel`, `principal.policy`, `host.hooks`, `modelRuntimeConfig` …) —
+   * this is the residue those slots have no claim on.
+   */
+  request?: AgentRunInitRequest;
+
   /** @deprecated Use `principal.policy.securityBlacklist`. */
   securityBlacklist?: SecurityBlacklistConfig;
+
   // --- State Machine ---
   status:
     | 'idle'
     | 'running'
     | 'waiting_for_human'
     | 'waiting_for_async_tool'
+    | 'waiting_for_client'
     | 'done'
     | 'error'
     | 'interrupted';
@@ -474,6 +578,11 @@ export interface AgentState {
   /**
    * Number of execution steps in this session.
    * Incremented on each runtime.step() call.
+   *
+   * This is the scheduling/idempotency counter (QStash `stepIndex`, stale
+   * delivery guards, resume). It intentionally keeps its original meaning so
+   * workers from the previous build can keep scheduling during a rolling
+   * deploy.
    */
   stepCount: number;
 

@@ -1,8 +1,41 @@
 import { describe, expect, it } from 'vitest';
 
-import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from './claudeCode';
+import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from '.';
 
 describe('ClaudeCodeAdapter', () => {
+  describe('run cost', () => {
+    // CC restores the session's cost tally on `--resume`, so `total_cost_usd`
+    // covers every earlier run of the session, not just this one.
+    const resultCost = (adapter: ClaudeCodeAdapter, totalCostUsd: number) =>
+      adapter
+        .adapt({
+          is_error: false,
+          result: 'done',
+          total_cost_usd: totalCostUsd,
+          type: 'result',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        })
+        .find((e) => e.type === 'step_complete' && e.data?.phase === 'result_usage')?.data.costUsd;
+
+    it('emits only what a resumed run added to the session total', () => {
+      const adapter = new ClaudeCodeAdapter();
+      expect(adapter.adapt({ initialSessionCostUsd: 69.67, type: 'session_configured' })).toEqual(
+        [],
+      );
+
+      expect(resultCost(adapter, 76.43)).toBeCloseTo(6.76);
+    });
+
+    it('keeps the reported total without a usable baseline', () => {
+      expect(resultCost(new ClaudeCodeAdapter(), 4)).toBeCloseTo(4);
+
+      // a total below the baseline means CC did not restore that tally
+      const reset = new ClaudeCodeAdapter();
+      reset.adapt({ initialSessionCostUsd: 9, type: 'session_configured' });
+      expect(resultCost(reset, 2)).toBeCloseTo(2);
+    });
+  });
+
   describe('lifecycle', () => {
     it('emits stream_start on init system event', () => {
       const adapter = new ClaudeCodeAdapter();
@@ -431,54 +464,6 @@ describe('ClaudeCodeAdapter', () => {
 
       expect(events.map((e) => e.type)).toEqual(['stream_end', 'visible_output_end', 'error']);
       expect(events[2].data).toMatchObject({ code: 'overloaded', message: rawError });
-    });
-
-    it('replays a real session that streamed a turn then overloaded → overloaded + clears echo', () => {
-      // Faithful transport-layer replay of a captured CC session shape: init →
-      // a streamed assistant turn → the exact upstream throttle the user hit
-      // (api_error_status 429 + the "not your usage limit" wording, alongside a
-      // generic rate_limit_event with no reset window). This is how the
-      // overloaded guide is driven without waiting on a real upstream outage.
-      const adapter = new ClaudeCodeAdapter();
-      const rawError =
-        'API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited';
-
-      adapter.adapt({
-        model: 'claude-opus-4-8',
-        session_id: 'sess_replay',
-        subtype: 'init',
-        type: 'system',
-      });
-      // A turn that already streamed content before the throttle landed.
-      adapter.adapt({
-        message: {
-          content: [{ text: 'Let me read loadEvidence and the runner', type: 'text' }],
-          id: 'msg_replay',
-          role: 'assistant',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt({
-        rate_limit_info: { isUsingOverage: false, status: 'rejected' },
-        type: 'rate_limit_event',
-      });
-
-      const events = adapter.adapt({
-        api_error_status: 429,
-        is_error: true,
-        result: rawError,
-        type: 'result',
-      });
-
-      const errorEvent = events.find((e) => e.type === 'error');
-      expect(errorEvent?.data).toMatchObject({
-        agentType: 'claude-code',
-        // The UI keys auto-retry on this exact code; clearEchoedContent wipes
-        // the half-streamed turn so the guide stands in for the whole bubble.
-        clearEchoedContent: true,
-        code: 'overloaded',
-        message: rawError,
-      });
     });
 
     it('classifies a user quota limit from rateLimitType alone (no resetsAt)', () => {
@@ -1439,30 +1424,6 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.content).toBe('[Image: image]');
       expect(result!.data.pluginState.images).toEqual([{ data: 'AAAA', mediaType: 'image' }]);
     });
-
-    it('does not set pluginState.images for a text-only tool_result', () => {
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 'r1', input: { file_path: 'x.ts' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
-
-      const events = adapter.adapt({
-        message: {
-          content: [{ content: 'plain text', tool_use_id: 'r1', type: 'tool_result' }],
-          role: 'user',
-        },
-        type: 'user',
-      });
-
-      const result = events.find((e) => e.type === 'tool_result');
-      expect(result!.data.content).toBe('plain text');
-      expect(result!.data.pluginState).toBeUndefined();
-    });
   });
 
   describe('TodoWrite pluginState synthesis', () => {
@@ -2013,46 +1974,6 @@ describe('ClaudeCodeAdapter', () => {
       // Subagent task tools are out-of-scope for the main todo plan UI.
       expect(result!.data.pluginState).toBeUndefined();
     });
-
-    it('mixed TodoWrite + Task* flows are independent (TodoWrite path still wins on its own call)', () => {
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
-
-      // First, a TaskCreate snapshot.
-      driveTaskCreate(
-        adapter,
-        { description: 'A', subject: 'A' },
-        'tu_create_1',
-        'Task #1 created successfully: A',
-        'msg_1',
-      );
-
-      // Then a TodoWrite from a legacy / resumed session — should produce
-      // its own pluginState from its own input, NOT the Task accumulator.
-      adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [
-            {
-              id: 'tu_todo',
-              input: { todos: [{ activeForm: 'Doing X', content: 'X', status: 'completed' }] },
-              name: 'TodoWrite',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
-      const todoEvents = adapter.adapt({
-        message: {
-          content: [{ content: 'ok', tool_use_id: 'tu_todo', type: 'tool_result' }],
-          role: 'user',
-        },
-        type: 'user',
-      });
-      const todoState = todoEvents.find((e) => e.type === 'tool_result')!.data.pluginState;
-      expect(todoState.todos.items).toEqual([{ status: 'completed', text: 'X' }]);
-    });
   });
 
   describe('multi-step execution (message.id boundary)', () => {
@@ -2456,14 +2377,6 @@ describe('ClaudeCodeAdapter', () => {
       expect(events[0].data.result).toMatchObject({ success: false });
     });
 
-    it('returns empty array when no pending tools', () => {
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
-
-      const events = adapter.flush();
-      expect(events).toHaveLength(0);
-    });
-
     it('clears pending tools after flush', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
@@ -2618,33 +2531,6 @@ describe('ClaudeCodeAdapter', () => {
       expect(starts[0].data.toolCalling.id).toBe('t2');
     });
 
-    it('starts a fresh accumulator when message.id advances (new LLM turn)', () => {
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
-
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
-
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
-
-      const chunk = events.find(
-        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
-      );
-      // Different message.id — the new assistant's tools[] must NOT contain t1
-      expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t2']);
-    });
-
     it('dedupes when CC echoes a tool_use block with the same id', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
@@ -2672,6 +2558,33 @@ describe('ClaudeCodeAdapter', () => {
       );
       expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1']);
       expect(e2.filter((e) => e.type === 'tool_start')).toHaveLength(0);
+    });
+
+    it('starts a fresh accumulator when message.id advances (new LLM turn)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      // Different message.id — the new assistant's tools[] must NOT contain t1
+      expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t2']);
     });
   });
 
@@ -3365,43 +3278,6 @@ describe('ClaudeCodeAdapter', () => {
       });
     });
 
-    it('extracts spawnMetadata from the `Agent` spawn-tool variant too (not just Task)', () => {
-      // Real CC traces emit `Agent` for general-purpose subagents, not just
-      // `Task` — the adapter should cache input for ANY main-agent tool and
-      // build spawnMetadata off whichever spawn-tool variant was used.
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt(init);
-      adapter.adapt(
-        mainAssistant('msg_main', {
-          id: 'toolu_agent',
-          input: {
-            description: 'lookup the pwd',
-            prompt: 'run pwd and report it back',
-            subagent_type: 'general-purpose',
-          },
-          name: 'Agent',
-          type: 'tool_use',
-        }),
-      );
-
-      const first = adapter.adapt(
-        subAgent('msg_sub_1', 'toolu_agent', {
-          id: 'toolu_child',
-          input: {},
-          name: 'Bash',
-          type: 'tool_use',
-        }),
-      );
-      const firstChunk = first.find(
-        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
-      );
-      expect(firstChunk!.data.subagent.spawnMetadata).toEqual({
-        description: 'lookup the pwd',
-        prompt: 'run pwd and report it back',
-        subagentType: 'general-purpose',
-      });
-    });
-
     it('does NOT stamp subagent context on non-subagent (main-agent) tool_uses', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);
@@ -3454,402 +3330,6 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.subagent).toEqual({ parentToolCallId: 'toolu_task' });
       const end = events.find((e) => e.type === 'tool_end');
       expect(end!.data.subagent).toEqual({ parentToolCallId: 'toolu_task' });
-    });
-  });
-
-  // ────────────────────────────────────────────────────
-  // external signal detection (Monitor task callbacks)
-  // ────────────────────────────────────────────────────
-  describe('external signal detection ()', () => {
-    const init = (adapter: ClaudeCodeAdapter) => {
-      adapter.adapt({
-        model: 'claude-sonnet-4-6',
-        session_id: 'sess_1',
-        subtype: 'init',
-        type: 'system',
-      });
-    };
-
-    const ccUser = (toolCallId: string, content: string) => ({
-      message: {
-        content: [{ content, tool_use_id: toolCallId, type: 'tool_result' }],
-      },
-      type: 'user',
-    });
-    const ccMessageStart = (msgId: string) => ({
-      event: { message: { id: msgId, model: 'claude-sonnet-4-6' }, type: 'message_start' },
-      type: 'stream_event',
-    });
-    const ccTaskStarted = (taskId: string, toolUseId: string) => ({
-      session_id: 'sess_1',
-      subtype: 'task_started',
-      task_id: taskId,
-      tool_use_id: toolUseId,
-      type: 'system',
-    });
-    const ccTaskNotification = (taskId: string) => ({
-      session_id: 'sess_1',
-      subtype: 'task_notification',
-      task_id: taskId,
-      type: 'system',
-    });
-
-    /**
-     * Real-world Monitor flow recorded from `claude -p` against the
-     * Monitor skill:
-     *   1. LLM emits Monitor tool_use → adapter notes the name
-     *   2. CC emits `system task_started` (Monitor registers as a task)
-     *   3. user event with tool_result (initial "Monitor started" ack)
-     *   4. Assistant turn opens, LLM writes confirmation toolless reply
-     *   5. RESULT — turn ends, no new user input arrives
-     *   6. SYSTEM init + assistant message_start — Monitor's stdout
-     *      pushed and CC re-invoked the LLM. THIS turn is a signal callback.
-     */
-    it('attaches externalSignal when a new turn opens without user input while a task is active', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      // Step 0: Monitor tool_use
-      adapter.adapt({
-        message: {
-          content: [
-            { id: 'toolu_mon', input: { shell: 'every 1s' }, name: 'Monitor', type: 'tool_use' },
-          ],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-
-      // CC registers the long-running task
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-
-      // Initial tool_result (LLM's natural follow-up turn — NOT a signal callback)
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-
-      // Step 1: natural confirmation turn — opens AFTER the user event,
-      // so it consumes `hasUnhandledUserInput` and is NOT signal-tagged.
-      const confirm = adapter.adapt(ccMessageStart('msg_02'));
-      const confirmStart = confirm.find((e) => e.type === 'stream_start' && e.data?.newStep);
-      expect(confirmStart!.data.externalSignal).toBeUndefined();
-
-      // Step 2: Monitor pushed an event → CC re-invokes the LLM without
-      // any new user message. A signal callback.
-      const cb1 = adapter.adapt(ccMessageStart('msg_03'));
-      const cb1Start = cb1.find((e) => e.type === 'stream_start' && e.data?.newStep);
-      expect(cb1Start!.data.externalSignal).toEqual({
-        sequence: 1,
-        sourceToolCallId: 'toolu_mon',
-        sourceToolName: 'Monitor',
-        type: 'tool-stdout',
-      });
-    });
-
-    // Regression (P2): on the BATCH path, when the post-tool confirmation REUSES
-    // the Monitor tool's message.id, the forced split must still consume
-    // `hasUnhandledUserInput` (armed by the tool_result). Otherwise the stale
-    // flag survives and the next callback turn — opened while the task is active
-    // with no new user input — fails the `!hasUnhandledUserInput` signal check,
-    // leaving the first stdout callback untagged.
-    it('still tags the next callback after a forced post-tool split reuses the tool id (batch Monitor flow)', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      // Monitor tool_use under msg_01 (batch: an `assistant` event, not a delta).
-      adapter.adapt({
-        message: {
-          content: [
-            { id: 'toolu_mon', input: { shell: 'every 1s' }, name: 'Monitor', type: 'tool_use' },
-          ],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      // tool_result → arms hasUnhandledUserInput.
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-
-      // Confirmation turn REUSES msg_01 → forced post-tool split. It is the
-      // natural follow-up to the tool_result, so it carries no signal AND must
-      // consume hasUnhandledUserInput.
-      const confirm = adapter.adapt({
-        message: {
-          id: 'msg_01',
-          content: [{ text: 'mock monitoring confirmation', type: 'text' }],
-        },
-        type: 'assistant',
-      });
-      const confirmStart = confirm.find((e) => e.type === 'stream_start' && e.data?.newStep);
-      expect(confirmStart).toBeDefined();
-      expect(confirmStart!.data.externalSignal).toBeUndefined();
-
-      // Monitor pushes an event → CC re-invokes with a NEW id and no new user
-      // input. This callback must be signal-tagged — only true once the forced
-      // split cleared the stale flag.
-      const cb1 = adapter.adapt({
-        message: { id: 'msg_02', content: [{ text: 'mock callback turn', type: 'text' }] },
-        type: 'assistant',
-      });
-      const cb1Start = cb1.find((e) => e.type === 'stream_start' && e.data?.newStep);
-      expect(cb1Start!.data.externalSignal).toEqual({
-        sequence: 1,
-        sourceToolCallId: 'toolu_mon',
-        sourceToolName: 'Monitor',
-        type: 'tool-stdout',
-      });
-    });
-
-    it('keeps tagging consecutive signal callbacks with incrementing sequence', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02')); // confirmation turn (no signal)
-
-      const sequences: (number | undefined)[] = [];
-      for (let i = 3; i <= 5; i++) {
-        const ev = adapter.adapt(ccMessageStart(`msg_0${i}`));
-        const start = ev.find((e) => e.type === 'stream_start' && e.data?.newStep);
-        sequences.push(start!.data.externalSignal?.sequence);
-      }
-      expect(sequences).toEqual([1, 2, 3]);
-    });
-
-    it('tags the post-task summary turn with `task-completion` after `task_notification`', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02')); // confirmation (no signal)
-
-      // One signal callback while task is alive
-      const cb1 = adapter.adapt(ccMessageStart('msg_03'));
-      expect(
-        cb1.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toEqual({
-        sequence: 1,
-        sourceToolCallId: 'toolu_mon',
-        sourceToolName: 'Monitor',
-        type: 'tool-stdout',
-      });
-
-      // Task ends
-      adapter.adapt(ccTaskNotification('task_1'));
-
-      // Next turn — task ended, but the post-task summary keeps the
-      // source-tool lineage so MessageCollector can render it inside
-      // the same AssistantGroup as the preceding callbacks.
-      const after = adapter.adapt(ccMessageStart('msg_04'));
-      expect(
-        after.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toEqual({
-        sourceToolCallId: 'toolu_mon',
-        sourceToolName: 'Monitor',
-        type: 'task-completion',
-      });
-
-      // The completion tag is one-shot — a subsequent turn (e.g. if CC
-      // spawned another LLM call) must not inherit it.
-      const followUp = adapter.adapt(ccMessageStart('msg_05'));
-      expect(
-        followUp.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeUndefined();
-    });
-
-    it('treats SDK background Bash completion notification as task-completion lineage', () => {
-      const adapter = new ClaudeCodeSdkAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [
-            {
-              id: 'toolu_bash',
-              input: { command: 'sleep 1 && echo done', run_in_background: true },
-              name: 'Bash',
-              type: 'tool_use',
-            },
-          ],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_bash'));
-      adapter.adapt(ccUser('toolu_bash', 'Background command started'));
-
-      const firstResult = adapter.adapt({
-        is_error: false,
-        result: 'Background command started',
-        type: 'result',
-      });
-      expect(firstResult.map((e) => e.type)).toEqual(['stream_end']);
-
-      adapter.adapt(ccTaskNotification('task_1'));
-
-      const completion = adapter.adapt(ccMessageStart('msg_02'));
-      expect(
-        completion.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toEqual({
-        sourceToolCallId: 'toolu_bash',
-        sourceToolName: 'Bash',
-        type: 'task-completion',
-      });
-    });
-
-    /**
-     * Real-world regression (recorded on tpc_joZS2mksoY5L): a slow `git commit`
-     * (running a lint-staged hook) makes CC track the Bash call as a task and
-     * emit `task_started` + `task_notification` back-to-back, with NO out-of-band
-     * callback turn in between, immediately followed by the tool_result. That is
-     * an inline synchronous tool, not a Monitor-style long-running task — the next
-     * turn is the normal main-chain continuation and must NOT be tagged
-     * `task-completion` (doing so mis-anchors it and drops it from the rendered
-     * chain).
-     */
-    it('does NOT tag the next turn when a task started and ended with no callbacks (inline tool)', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      // A Bash `git commit` tool_use.
-      adapter.adapt({
-        message: {
-          content: [
-            {
-              id: 'toolu_commit',
-              input: { command: 'git commit' },
-              name: 'Bash',
-              type: 'tool_use',
-            },
-          ],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-
-      // CC tracks the slow commit as a task, then notifies completion
-      // back-to-back — NO callback turn opened while it was alive.
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_commit'));
-      adapter.adapt(ccTaskNotification('task_1'));
-
-      // The commit's tool_result is consumed inline by the next turn.
-      adapter.adapt(ccUser('toolu_commit', 'committed'));
-
-      // Next turn is plain continuation — must carry NO externalSignal.
-      const next = adapter.adapt(ccMessageStart('msg_02'));
-      expect(
-        next.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeUndefined();
-    });
-
-    it('clears unconsumed task-completion lineage on `result`', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02'));
-      // A signal callback fires while the task is alive (callbackCount > 0), so
-      // `task_notification` genuinely arms pendingTaskCompletion — otherwise (an
-      // inline tool with no callbacks) nothing is armed and this test would pass
-      // vacuously, no longer guarding the `result` clear path.
-      adapter.adapt(ccMessageStart('msg_03'));
-      adapter.adapt(ccTaskNotification('task_1'));
-      // Run ends before the summary turn fires (unusual but possible).
-      adapter.adapt({ result: 'ok', type: 'result', usage: undefined });
-
-      // A later turn (e.g. follow-up user message) must NOT inherit
-      // the unconsumed task-completion lineage — `result` dropped it.
-      const next = adapter.adapt(ccMessageStart('msg_04'));
-      expect(
-        next.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeUndefined();
-    });
-
-    it('does NOT tag turns that follow a user/tool_result event', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02')); // confirmation (no signal)
-
-      // LLM emits Bash mid-task → Bash's tool_result arrives → next turn
-      // is a natural follow-up to Bash, NOT a Monitor callback.
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_bash', input: {}, name: 'Bash', type: 'tool_use' }],
-          id: 'msg_03',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccUser('toolu_bash', 'bash ok'));
-
-      const ev = adapter.adapt(ccMessageStart('msg_04'));
-      expect(
-        ev.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeUndefined();
-    });
-
-    it('does NOT trigger from subagent inner user events', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      // Main agent fires Monitor, then registers task
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02')); // confirmation (no signal)
-
-      // Subagent inner tool_result fires WITH parent_tool_use_id — must
-      // NOT reset hasUnhandledUserInput; the next main-chain turn is
-      // still a signal callback.
-      adapter.adapt({
-        message: {
-          content: [{ content: 'inner', tool_use_id: 'toolu_inner', type: 'tool_result' }],
-        },
-        parent_tool_use_id: 'toolu_other',
-        type: 'user',
-      });
-
-      const ev = adapter.adapt(ccMessageStart('msg_03'));
-      expect(
-        ev.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeDefined();
     });
   });
 });

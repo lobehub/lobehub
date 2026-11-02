@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Accordion, Text } from '@lobehub/ui/base-ui';
+import { Accordion, Flexbox, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { Link } from 'react-router';
 
@@ -16,6 +15,7 @@ import { SettingsGroupKey, useCategory } from '../../hooks/useCategory';
 
 const Body = memo(() => {
   const categoryGroups = useCategory();
+  const searchScope = useMemo(() => ({ categoryGroups }), [categoryGroups]);
   const navigate = useWorkspaceAwareNavigate();
   const location = useActiveLocation();
 
@@ -31,7 +31,7 @@ const Body = memo(() => {
 
   return (
     <Flexbox gap={4} paddingInline={4}>
-      <SearchSection>
+      <SearchSection scope={searchScope}>
         <Accordion
           gap={8}
           indicatorPlacement="inline"

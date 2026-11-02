@@ -1,24 +1,14 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { type FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form } from '@lobehub/ui';
-import { Button, Switch, toast } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
-import { DownloadIcon, FileText } from 'lucide-react';
+import { Button, Center, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
+import { DownloadIcon, RotateCwIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { FORM_STYLE } from '@/const/layoutTokens';
-import { useIsMobile } from '@/hooks/useIsMobile';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-
-import { useShareData } from '../ShareDataProvider';
-import { generateMarkdown } from '../ShareText/template';
+import ExportLayout from '../components/ExportLayout';
+import TextOptions from '../ShareText/TextOptions';
 import { type FieldType } from '../ShareText/type';
-import { containerStyles, styles } from '../style';
 import PdfPreview from './PdfPreview';
-import { usePdfGeneration } from './usePdfGeneration';
+import { useSharePdfExport } from './useSharePdfExport';
 
 const DEFAULT_FIELD_VALUE: FieldType = {
   includeTool: true,
@@ -27,163 +17,111 @@ const DEFAULT_FIELD_VALUE: FieldType = {
   withSystemRole: false,
 };
 
-const SharePdf = memo((props: { message?: UIChatMessage }) => {
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  updating: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 10;
+    inset-block-start: 60px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    height: 32px;
+    padding-inline: 12px;
+    border-radius: 16px;
+
+    font-size: 12px;
+    color: ${cssVar.colorBgContainer};
+
+    background: ${cssVar.colorText};
+    box-shadow: ${cssVar.boxShadowSecondary};
+  `,
+  updatingSpinner: css`
+    width: 10px;
+    height: 10px;
+    border: 2px solid color-mix(in srgb, ${cssVar.colorBgContainer} 35%, transparent);
+    border-block-start-color: ${cssVar.colorBgContainer};
+    border-radius: 50%;
+
+    animation: share-pdf-spin 800ms linear infinite;
+
+    @keyframes share-pdf-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      animation: none;
+    }
+  `,
+}));
+
+const SharePdf = memo<{ message?: UIChatMessage }>(({ message }) => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
   const { t } = useTranslation(['chat', 'common']);
 
-  const { message: outerMessage } = props;
-  const isMobile = useIsMobile();
-
-  const settings: FormItemProps[] = [
-    {
-      children: <Switch />,
-      label: t('shareModal.withSystemRole'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'withSystemRole',
-      valuePropName: 'checked',
-    },
-    {
-      children: <Switch />,
-      label: t('shareModal.withRole'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'withRole',
-      valuePropName: 'checked',
-    },
-    {
-      children: <Switch />,
-      label: t('shareModal.includeUser'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'includeUser',
-      valuePropName: 'checked',
-    },
-    {
-      children: <Switch />,
-      label: t('shareModal.includeTool'),
-      layout: 'horizontal',
-      minWidth: undefined,
-      name: 'includeTool',
-      valuePropName: 'checked',
-    },
-  ];
-
-  // Use the same data gathering logic as ShareText
-  const [systemRole] = useAgentStore((s) => [agentSelectors.currentAgentSystemRole(s)]);
-  const activeId = useChatStore((s) => s.activeAgentId);
-  const { context, displayMessages, title } = useShareData();
-
-  const { generatePdf, downloadPdf, pdfData, loading, error } = usePdfGeneration();
-
-  const handleGeneratePdf = async () => {
-    if (activeId && displayMessages.length > 0) {
-      // Generate markdown with current field values
-      const currentMarkdownContent = generateMarkdown({
-        ...fieldValue,
-        messages: outerMessage ? [outerMessage] : displayMessages,
-        systemRole,
-        title,
-      }).replaceAll('\n\n\n', '\n');
-
-      if (currentMarkdownContent.trim()) {
-        await generatePdf({
-          content: currentMarkdownContent,
-          sessionId: activeId,
-          title,
-          topicId: context.topicId || undefined,
-        });
-      }
-    }
-  };
-
-  // Update configuration when form changes
-  const handleConfigChange = (_changedValues: any, allValues: FieldType) => {
-    setFieldValue(allValues);
-  };
+  const { downloadPdf, error, isEmpty, loading, messageCount, pdfData, regenerate } =
+    useSharePdfExport(fieldValue, message);
 
   const handleDownload = async () => {
-    if (pdfData) {
-      try {
-        await downloadPdf();
-        toast.success(t('shareModal.downloadSuccess'));
-      } catch {
-        toast.error(t('shareModal.downloadError'));
-      }
+    try {
+      await downloadPdf();
+      toast.success(t('shareModal.downloadSuccess'));
+    } catch {
+      toast.error(t('shareModal.downloadError'));
     }
   };
 
-  const generateButton = (
-    <Button
-      block
-      disabled={loading}
-      icon={loading ? undefined : FileText}
-      loading={loading}
-      size={isMobile ? undefined : 'large'}
-      type="primary"
-      onClick={handleGeneratePdf}
-    >
-      {loading
-        ? t('shareModal.generatingPdf')
-        : pdfData
-          ? t('shareModal.regeneratePdf')
-          : t('shareModal.generatePdf')}
-    </Button>
-  );
-
-  const downloadButton = pdfData ? (
-    <Button
-      block
-      icon={DownloadIcon}
-      size={isMobile ? undefined : 'large'}
-      type="default"
-      onClick={handleDownload}
-    >
-      {t('shareModal.downloadPdf')}
-    </Button>
-  ) : null;
-
-  if (error) {
-    return (
-      <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
-        <div
-          className={cx(containerStyles.preview, containerStyles.previewWide)}
-          style={{ padding: 12 }}
-        >
-          <div style={{ color: 'red', textAlign: 'center' }}>
-            {t('shareModal.pdfGenerationError')}: {error}
-          </div>
-        </div>
-        <Flexbox className={styles.sidebar} gap={12}>
-          <div>{t('shareModal.pdfErrorDescription')}</div>
-          <Form
-            initialValues={DEFAULT_FIELD_VALUE}
-            items={settings}
-            itemsType={'flat'}
-            onValuesChange={handleConfigChange}
-            {...FORM_STYLE}
-          />
-          {generateButton}
-        </Flexbox>
-      </Flexbox>
-    );
-  }
+  const showError = error && !loading;
 
   return (
-    <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
-      <PdfPreview loading={loading} pdfData={pdfData} onGeneratePdf={handleGeneratePdf} />
-      <Flexbox className={styles.sidebar} gap={12}>
-        <Form
-          initialValues={DEFAULT_FIELD_VALUE}
-          items={settings}
-          itemsType={'flat'}
-          onValuesChange={handleConfigChange}
-          {...FORM_STYLE}
-        />
-        {pdfData && generateButton}
-        {downloadButton}
-      </Flexbox>
-    </Flexbox>
+    <ExportLayout
+      meta={[t('shareModal.meta.messages', { count: messageCount }), '.pdf'].join(' · ')}
+      toolbar={<TextOptions value={fieldValue} onChange={setFieldValue} />}
+      actions={
+        <Button
+          disabled={!pdfData || loading || !!error}
+          icon={DownloadIcon}
+          type={'primary'}
+          onClick={handleDownload}
+        >
+          {t('shareModal.actions.download')}
+        </Button>
+      }
+      overlay={
+        loading &&
+        pdfData && (
+          <div aria-live={'polite'} className={styles.updating} role={'status'}>
+            <span className={styles.updatingSpinner} />
+            {t('shareModal.pdfUpdating')}
+          </div>
+        )
+      }
+    >
+      {isEmpty ? (
+        <Center height={'100%'} paddingBlock={48}>
+          <Text type={'secondary'}>{t('shareModal.noPdfData')}</Text>
+        </Center>
+      ) : showError ? (
+        <Center height={'100%'} paddingBlock={48}>
+          <Flexbox align={'center'} gap={12} style={{ maxWidth: 360, textAlign: 'center' }}>
+            <Text strong>{t('shareModal.pdfGenerationError')}</Text>
+            <Text type={'secondary'}>{t('shareModal.pdfErrorDescription')}</Text>
+            <Button icon={RotateCwIcon} onClick={regenerate}>
+              {t('retry', { ns: 'common' })}
+            </Button>
+          </Flexbox>
+        </Center>
+      ) : (
+        <PdfPreview pdfData={pdfData} />
+      )}
+    </ExportLayout>
   );
 });
 

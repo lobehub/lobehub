@@ -76,6 +76,25 @@ describe('AgentRuntimeCoordinator', () => {
       expect(mockStreamManager.publishAgentRuntimeInit).toHaveBeenCalledWith(operationId, metadata);
     });
 
+    it('adds the routing meta to the init event without persisting it', async () => {
+      const operationId = 'test-operation-id';
+      const data = { userId: 'user-123' };
+      const metadata = { createdAt: '2024-01-01T00:00:00.000Z', status: 'idle', ...data };
+      mockStateManager.getOperationMetadata.mockResolvedValue(metadata);
+
+      await coordinator.createAgentOperation(operationId, data, {
+        agentId: 'agt_1',
+        topicId: 'tpc_1',
+      });
+
+      expect(mockStateManager.createOperationMetadata).toHaveBeenCalledWith(operationId, data);
+      expect(mockStreamManager.publishAgentRuntimeInit).toHaveBeenCalledWith(operationId, {
+        ...metadata,
+        agentId: 'agt_1',
+        topicId: 'tpc_1',
+      });
+    });
+
     it('should not publish init event if metadata creation fails', async () => {
       const operationId = 'test-operation-id';
       const data = { userId: 'user-123' };
@@ -674,7 +693,7 @@ describe('AgentRuntimeCoordinator', () => {
 
     it('marks a protocol-v2 patched terminal event with its expected revision', async () => {
       const coordinatorWithResolver = new AgentRuntimeCoordinator({
-        messagePatchModeResolver: vi.fn().mockResolvedValue(true),
+        messagePatchModeResolver: vi.fn().mockReturnValue(true),
         stateManager: mockStateManager,
         streamEventManager: mockStreamManager,
         uiMessagesResolver: vi.fn().mockResolvedValue(undefined),

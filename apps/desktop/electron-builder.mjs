@@ -14,7 +14,17 @@ import {
   getAsarUnpackPatterns,
   getNativeModulesFilesConfig,
 } from './native-deps.config.mjs';
+import {
+  COMPUTER_USE_HELPER_BUNDLE_PATH,
+  COMPUTER_USE_HELPER_SIGN_IGNORE,
+  embedComputerUseHelper,
+  resolveComputerUseHelperVersion,
+  verifyComputerUseHelper,
+} from './scripts/computerUseHelper.mjs';
+import { notarizeMacApp } from './scripts/notarizeMacApp.mjs';
 import { packBuiltinCore } from './scripts/packBuiltinCore.mjs';
+import { toSparkleBuildVersion } from './scripts/sparkleBuildVersion.mjs';
+import { resolveSparklePackaging } from './scripts/sparklePackaging.mjs';
 import { verifyFontListSignature } from './scripts/verifyFontListSigning.mjs';
 
 dotenv.config();
@@ -23,11 +33,28 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const packageJSON = JSON.parse(await fs.readFile(path.join(__dirname, 'package.json'), 'utf8'));
 
+const computerUseHelperVersion = resolveComputerUseHelperVersion(packageJSON);
+
 const channel = process.env.UPDATE_CHANNEL;
 const arch = os.arch();
 const hasAppleCertificate = Boolean(process.env.CSC_LINK);
 
-const macAppId = 'com.lobehub.lobehub-desktop';
+/**
+ * Distribution identity. A downstream build (private deployment, white-label)
+ * sets these through env instead of forking this file; unset keeps upstream's
+ * values.
+ *
+ * `appId` is not cosmetic: the updater and the OS key the installed app's
+ * identity off it, so a distribution must pick one before its first release and
+ * never change it. The packaged `productName` (which names the per-user data
+ * directory) is stamped into package.json by
+ * `scripts/electronWorkflow/setDesktopVersion.ts` from the same
+ * DESKTOP_PRODUCT_NAME; `brandName` here is the channel-less form for
+ * user-facing strings.
+ */
+const appId = process.env.DESKTOP_APP_ID || 'com.lobehub.lobehub-desktop';
+const brandName = process.env.DESKTOP_PRODUCT_NAME || 'LobeHub';
+const executableName = process.env.DESKTOP_EXECUTABLE_NAME || 'LobeHub';
 // Communication notifications need the restricted
 // `com.apple.developer.usernotifications.communication` entitlement, and
 // macOS refuses to launch an app carrying it without a provisioning profile
@@ -53,7 +80,7 @@ if (macCommunicationEntitlements) {
   );
   const communicationKeys = [
     '    <key>com.apple.application-identifier</key>',
-    `    <string>${macTeamId}.${macAppId}</string>`,
+    `    <string>${macTeamId}.${appId}</string>`,
     '    <key>com.apple.developer.team-identifier</key>',
     `    <string>${macTeamId}</string>`,
     '    <key>com.apple.developer.usernotifications.communication</key>',
@@ -121,12 +148,44 @@ if (!hasAppleCertificate) {
 
 // 根据版本类型确定协议 scheme
 const getProtocolScheme = () => {
+  // Schemes are registered OS-wide, so a distribution needs its own: two builds
+  // claiming `lobehub://` on one machine race for the handler, and the loser's
+  // deep links and OAuth handoffs open the other app. Must match the value the
+  // main process is built with (see vite.main.config.ts).
+  const scheme = process.env.DESKTOP_PROTOCOL_SCHEME;
+  if (scheme) {
+    // URL parsing lowercases schemes, so the main process can only ever match a
+    // lowercase one — fail the build rather than ship an app that drops its own
+    // deep links.
+    if (!/^[a-z][\d+.a-z-]*$/.test(scheme)) {
+      throw new Error(
+        `DESKTOP_PROTOCOL_SCHEME "${scheme}" must be a lowercase URL scheme (a-z, then a-z, 0-9, "+", "-", ".")`,
+      );
+    }
+    return scheme;
+  }
   if (isCanary) return 'lobehub-canary';
   if (isNightly) return 'lobehub-nightly';
   return 'lobehub';
 };
 
 const protocolScheme = getProtocolScheme();
+
+const sparklePublicKey = process.env.SPARKLE_ED_PUBLIC_KEY;
+const { useSparkle } = resolveSparklePackaging({
+  channel,
+  hasAppleCertificate,
+  platform: process.platform,
+  sparklePublicKey,
+  updateServerUrl,
+});
+const sparklePackageDir = useSparkle
+  ? await fs.realpath(path.join(__dirname, 'node_modules/electron-sparkle-updater'))
+  : null;
+const sparkleFeedUrl =
+  useSparkle && updateServerUrl
+    ? `${stripChannelSuffix(updateServerUrl).replace(/\/$/, '')}/${isCanary || channel === 'beta' ? 'canary' : 'stable'}/appcast-${arch}.xml`
+    : undefined;
 
 // Determine icon file based on version type
 const getIconFileName = () => {
@@ -146,6 +205,14 @@ const config = {
    */
   beforePack: async (context) => {
     buildFirstPartyNativeAddons();
+
+    if (sparklePackageDir) {
+      console.info('🔧 Building Sparkle bridge addon...');
+      execSync(
+        `node "${path.join(sparklePackageDir, 'bin/electron-sparkle-updater.js')}" rebuild --arch ${arch}`,
+        { cwd: __dirname, stdio: 'inherit' },
+      );
+    }
 
     await copyNativeModulesToSource();
     await copyExternalRuntimeModulesToSource();
@@ -167,6 +234,23 @@ const config = {
 
     console.info('📦 Building CLI for embedding...');
     execSync('npm run build:cli', { stdio: 'inherit', cwd: __dirname });
+
+    // The shell window has no React/i18next runtime. Bundle only its translated strings.
+    const updateStrings = {};
+    for (const locale of ['en-US', 'zh-CN']) {
+      const messages = JSON.parse(
+        await fs.readFile(path.join(__dirname, '../../locales', locale, 'electron.json'), 'utf8'),
+      );
+      updateStrings[locale] = Object.fromEntries(
+        Object.entries(messages)
+          .filter(([key]) => key.startsWith('startupUpdate.'))
+          .map(([key, value]) => [key.slice('startupUpdate.'.length), value]),
+      );
+    }
+    await fs.writeFile(
+      path.join(__dirname, 'shell/update/strings.json'),
+      JSON.stringify(updateStrings, null, 2) + '\n',
+    );
 
     execSync('node scripts/shellAbi.mjs --write', { stdio: 'inherit', cwd: __dirname });
     const { shellAbi } = JSON.parse(
@@ -194,12 +278,19 @@ const config = {
       return;
     }
 
-    const resourcesPath = path.join(
-      context.appOutDir,
-      `${context.packager.appInfo.productFilename}.app`,
-      'Contents',
-      'Resources',
-    );
+    const appPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+    const resourcesPath = path.join(appPath, 'Contents', 'Resources');
+
+    // The Mac App Store sandbox cannot register the helper's LaunchAgent.
+    if (context.electronPlatformName === 'darwin') {
+      await embedComputerUseHelper({
+        appPath,
+        arch: arch === 'arm64' ? 'arm64' : 'x64',
+        cacheDir: path.join(__dirname, 'node_modules', '.cache', 'lobehub-computer-use'),
+        version: computerUseHelperVersion,
+      });
+    }
+
     const iconFileName = getIconFileName();
     const assetsCarSource = path.join(__dirname, 'build', `${iconFileName}.Assets.car`);
     const assetsCarDest = path.join(resourcesPath, 'Assets.car');
@@ -214,8 +305,28 @@ const config = {
       console.info(`⏭️  Skipping Assets.car (not found or copy failed)`);
     }
   },
-  afterSign: verifyFontListSignature,
-  appId: macAppId,
+  afterSign: async (context) => {
+    await verifyFontListSignature(context);
+
+    if (context.electronPlatformName === 'darwin') {
+      verifyComputerUseHelper(
+        path.join(
+          context.appOutDir,
+          `${context.packager.appInfo.productFilename}.app`,
+          COMPUTER_USE_HELPER_BUNDLE_PATH,
+        ),
+        { version: computerUseHelperVersion },
+      );
+      console.info('✅ Computer Use helper kept its notarized signature');
+
+      if (hasAppleCertificate) {
+        await notarizeMacApp(
+          path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`),
+        );
+      }
+    }
+  },
+  appId,
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
   },
@@ -228,6 +339,8 @@ const config = {
   // Native modules must be unpacked from asar to work correctly
   asarUnpack: getAsarUnpackPatterns(),
 
+  ...(useSparkle ? { buildVersion: toSparkleBuildVersion(packageJSON.version) } : {}),
+
   detectUpdateChannel: true,
 
   directories: {
@@ -238,6 +351,7 @@ const config = {
   dmg: {
     artifactName: '${productName}-${version}-${arch}.${ext}',
     background: 'resources/dmg.png',
+    format: 'UDBZ',
     contents: [
       { type: 'file', x: 150, y: 240 },
       { type: 'link', path: '/Applications', x: 450, y: 240 },
@@ -259,6 +373,7 @@ const config = {
   files: [
     'shell/**',
     '!shell/__tests__',
+    ...(useSparkle ? ['!shell/rescue/electron-updater.cjs'] : []),
     'package.json',
     // Exclude all node_modules first
     '!node_modules',
@@ -279,7 +394,8 @@ const config = {
       'Contents/Resources/app.asar.unpacked/node_modules/font-list/libs/darwin/fontlist',
       'Contents/Resources/bin/auv',
     ],
-    compression: 'maximum',
+    // 'maximum' zips with 15-pass deflate: 7.7x slower for 0.2% smaller, up to 20 min on Intel CI. dmg.format keeps UDBZ separately.
+    compression: 'normal',
     entitlementsInherit: 'build/entitlements.mac.plist',
     ...(macCommunicationEntitlements
       ? {
@@ -288,10 +404,19 @@ const config = {
         }
       : {}),
     extendInfo: {
+      ...(useSparkle
+        ? {
+            SUDeltaChainHistory: 6,
+            SUEnableAutomaticChecks: false,
+            SUEnableInstallerLauncherService: false,
+            SUFeedURL: sparkleFeedUrl,
+            SUPublicEDKey: sparklePublicKey,
+          }
+        : {}),
       CFBundleIconName: 'AppIcon',
       CFBundleURLTypes: [
         {
-          CFBundleURLName: 'LobeHub Protocol',
+          CFBundleURLName: `${brandName} Protocol`,
           CFBundleURLSchemes: [protocolScheme],
         },
       ],
@@ -302,6 +427,7 @@ const config = {
         "Application requests access to the user's Documents folder.",
       NSDownloadsFolderUsageDescription:
         "Application requests access to the user's Downloads folder.",
+      NSLocalNetworkUsageDescription: `${brandName} connects to self-hosted servers, model providers, and other services on your local network.`,
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
       NSScreenCaptureUsageDescription:
         'Application requests access to record and analyze screen content for AI assistance.',
@@ -309,7 +435,10 @@ const config = {
     },
     gatekeeperAssess: false,
     hardenedRuntime: hasAppleCertificate,
-    notarize: hasAppleCertificate,
+    // Ship the notarized helper as built; re-signing drops its stapled ticket.
+    signIgnore: [COMPUTER_USE_HELPER_SIGN_IGNORE],
+    // Notarized in afterSign so a transient staple failure retries instead of failing the build.
+    notarize: false,
     ...(hasAppleCertificate ? {} : { identity: null }),
     target: [
       { arch: [arch === 'arm64' ? 'arm64' : 'x64'], target: 'dmg' },
@@ -330,7 +459,7 @@ const config = {
   },
   protocols: [
     {
-      name: 'LobeHub Protocol',
+      name: `${brandName} Protocol`,
       schemes: [protocolScheme],
     },
   ],
@@ -343,10 +472,30 @@ const config = {
     releaseNotes: process.env.RELEASE_NOTES || undefined,
   },
 
+  ...(sparklePackageDir
+    ? {
+        extraFiles: [
+          {
+            from: path.join(sparklePackageDir, 'native/vendor/Sparkle.framework'),
+            to: 'Frameworks/Sparkle.framework',
+          },
+        ],
+      }
+    : {}),
   extraResources: [
     { from: 'resources/bin', to: 'bin' },
     { from: 'core.asar', to: 'core.asar' },
     { from: 'core.asar.unpacked', to: 'core.asar.unpacked' },
+    // The Sparkle bridge addon is loaded by an explicit path outside app.asar; pnpm's
+    // symlinked package dir cannot be matched by asarUnpack, so it ships as a resource.
+    ...(sparklePackageDir
+      ? [
+          {
+            from: path.join(sparklePackageDir, 'native/build/Release/sparkle_bridge.node'),
+            to: 'sparkle/sparkle_bridge.node',
+          },
+        ]
+      : []),
     // Local Sandbox helper binaries. The sandbox spawns these by path, so they
     // must be real files — not entries inside app.asar, and not something the
     // user is expected to install separately.
@@ -373,7 +522,7 @@ const config = {
   ],
 
   win: {
-    executableName: 'LobeHub',
+    executableName,
   },
 };
 

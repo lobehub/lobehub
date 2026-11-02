@@ -1,15 +1,18 @@
 import type { GoalItem, TaskItem } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
+import { clearDeviceDispatchStreak, parkDeviceUnavailableDispatch } from './deviceDispatchStreak';
 import {
   countChargedTaskAttempts,
-  countDeviceOfflineRuns,
+  countUnchargedRuns,
   isDeviceUnavailableFailure,
   resolveTaskAttemptBudget,
   resolveTaskMaxSteps,
@@ -19,6 +22,13 @@ import { claimGoalTask } from './taskClaim';
 
 const log = debug('lobe-server:goal-task-recovery');
 
+/**
+ * Goal statuses under which no recovery may start a run. `close` fences a goal
+ * by pausing it under its row lock before scanning live runs, so a recovery
+ * claim has to recheck the goal under that same lock.
+ */
+const GOAL_FENCED_STATUSES = new Set(['paused', 'achieved', 'failed', 'canceled']);
+
 export type TaskRecoveryOutcome =
   /** This call spawned the retry, and `operationId` is its run. */
   | 'started'
@@ -26,6 +36,8 @@ export type TaskRecoveryOutcome =
   | 'already-running'
   /** Someone settled the Task while this recovery was being decided. */
   | 'settled'
+  /** The goal was paused or ended (e.g. being closed) before the claim. */
+  | 'goal-stopped'
   | 'exhausted-cost'
   | 'exhausted-rounds'
   | 'spawn-failed';
@@ -39,10 +51,36 @@ export type TaskRecoveryOutcome =
 export interface TaskRecoveryResult {
   /** Present only on `spawn-failed` when the retry could not reach its device. */
   deviceUnavailable?: boolean;
+  /**
+   * Present only on `spawn-failed`: why the run did not start, when the cause is
+   * one the person answering the gate can act on (see {@link describeSpawnFailure}).
+   */
+  error?: string;
   /** Present only on `started`. The drill-down link into `agent_operations`. */
   operationId?: string;
   outcome: TaskRecoveryOutcome;
 }
+
+/** Longest spawn failure carried into a gate reason. */
+const MAX_SPAWN_FAILURE_LENGTH = 300;
+
+/**
+ * The part of a spawn failure that may reach the person answering the gate.
+ *
+ * The gate used to say only that recovery "could not start the next attempt",
+ * so its owner asked what had gone wrong and pressed Retry blind. `runTask`
+ * refuses with a TRPC error written for its caller — a running topic it names,
+ * a missing agent — and that sentence is what they need. Any other error may
+ * carry SQL, identifiers or provider diagnostics; it stays in the server log.
+ */
+export const describeSpawnFailure = (error: unknown): string | undefined => {
+  if (!(error instanceof TRPCError) || error.code === 'INTERNAL_SERVER_ERROR') return;
+  const message = error.message.trim().replace(/\.$/, '');
+  if (!message) return;
+  return message.length > MAX_SPAWN_FAILURE_LENGTH
+    ? `${message.slice(0, MAX_SPAWN_FAILURE_LENGTH - 1)}…`
+    : message;
+};
 
 /** Retry budget and spawn boundary for a Goal Graph Task. */
 export class TaskRecoveryCoordinator {
@@ -58,12 +96,13 @@ export class TaskRecoveryCoordinator {
     task: TaskItem;
   }): Promise<TaskRecoveryResult> => {
     const { goal, task } = params;
-    // A run its device lost was never judged, so it does not spend the budget;
-    // the coordinator's offline schedule bounds those retries instead.
+    // A run lost to a machine problem was never judged, so it does not spend the
+    // budget; the coordinator's offline / quota / transient schedules bound those
+    // retries instead.
     const runs = await new TaskTopicModel(this.db, this.userId, this.workspaceId).findByTaskId(
       task.id,
     );
-    const attempts = countChargedTaskAttempts(task, countDeviceOfflineRuns(runs));
+    const attempts = countChargedTaskAttempts(task, countUnchargedRuns(runs));
     const attemptBudget = resolveTaskAttemptBudget(goal);
     if (attempts >= attemptBudget) return { outcome: 'exhausted-rounds' };
 
@@ -110,10 +149,24 @@ export class TaskRecoveryCoordinator {
       log('task %s was paused by an actor; leaving it alone', task.identifier);
       return { outcome: 'settled' };
     }
-    const claimed = await claimGoalTask(taskModel, { id: task.id, status: 'paused' }, 'running', {
-      error: null,
-      startedAt: new Date(),
+    // Claimed under the goal row lock, like `dispatchWork`: the tick decided on
+    // a goal snapshot, and a `close` may have fenced the goal (paused it) since.
+    // Claiming after that fence would start a run its running-topic scan never
+    // sees, and the goal would then be closed over a run still spending.
+    const claimed = await this.db.transaction(async (tx) => {
+      const currentGoal = await new GoalModel(tx, this.userId, this.workspaceId).lockById(goal.id);
+      if (!currentGoal || GOAL_FENCED_STATUSES.has(currentGoal.status)) return 'goal-stopped';
+      return claimGoalTask(
+        new TaskModel(tx, this.userId, this.workspaceId),
+        { id: task.id, status: 'paused' },
+        'running',
+        { error: null, startedAt: new Date() },
+      );
     });
+    if (claimed === 'goal-stopped') {
+      log('task %s recovery skipped: goal %s is no longer running', task.identifier, goal.id);
+      return { outcome: 'goal-stopped' };
+    }
     if (!claimed) {
       log('task %s recovery lost the claim race', task.identifier);
       return { outcome: 'already-running' };
@@ -126,6 +179,9 @@ export class TaskRecoveryCoordinator {
         trigger: 'goal',
       });
       log('task %s → recovery attempt %d spawned', task.identifier, attempts + 1);
+      await clearDeviceDispatchStreak(taskModel, current.id).catch((clearError) => {
+        log('task %s failed to clear the device dispatch streak: %O', task.identifier, clearError);
+      });
       return { operationId: run.operationId, outcome: 'started' };
     } catch (error) {
       log('task %s recovery spawn failed (non-fatal): %O', task.identifier, error);
@@ -134,14 +190,18 @@ export class TaskRecoveryCoordinator {
       const message = error instanceof Error ? error.message : String(error);
       const deviceUnavailable = isDeviceUnavailableFailure(message);
       // We own the claim, so nothing else will put the task back.
-      await taskModel
-        .updateStatusIfCurrent(task.id, 'running', 'paused', {
-          error: deviceUnavailable ? message : current.error,
-        })
-        .catch((releaseError) => {
-          log('task %s failed to release the recovery claim: %O', task.identifier, releaseError);
-        });
-      return { deviceUnavailable, outcome: 'spawn-failed' };
+      await (
+        deviceUnavailable
+          ? parkDeviceUnavailableDispatch(taskModel, current, message)
+          : taskModel.updateStatusIfCurrent(task.id, 'running', 'paused', { error: current.error })
+      ).catch((releaseError) => {
+        log('task %s failed to release the recovery claim: %O', task.identifier, releaseError);
+      });
+      return {
+        deviceUnavailable,
+        error: deviceUnavailable ? undefined : describeSpawnFailure(error),
+        outcome: 'spawn-failed',
+      };
     }
   };
 }

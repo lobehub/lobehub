@@ -142,4 +142,25 @@ describe('TopicAutoSummaryService', () => {
     expect(result).toEqual({ summarized: true });
     expect(mocks.generateObject).toHaveBeenCalled();
   });
+
+  it('skips the summary when a device-only model has no tab to run in', async () => {
+    mocks.generateObject.mockRejectedValue({
+      error: { reason: 'no_executor', recoverable: true },
+      errorType: 'ClientLlmExecutorUnavailable',
+      provider: 'ollama',
+    });
+    const service = new TopicAutoSummaryService(createDb(), 'user-1');
+
+    const result = await service.summarize('topic-1', { force: true });
+
+    expect(result).toEqual({ reason: 'no-executor', summarized: false });
+    expect(mocks.updateSummaryIfCurrent).not.toHaveBeenCalled();
+  });
+
+  it('still fails the step on any other generation error', async () => {
+    mocks.generateObject.mockRejectedValue(new Error('provider down'));
+    const service = new TopicAutoSummaryService(createDb(), 'user-1');
+
+    await expect(service.summarize('topic-1', { force: true })).rejects.toThrow('provider down');
+  });
 });

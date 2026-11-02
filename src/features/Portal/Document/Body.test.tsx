@@ -9,7 +9,7 @@ vi.mock('@/features/FileViewer/FileDocumentPreview', () => ({
   ),
 }));
 
-vi.mock('antd-style', async (importOriginal) => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
 
   return {
@@ -61,9 +61,9 @@ const mockDocumentMeta = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: () => ({ data: mockDocumentMeta.current }),
-}));
+const mockDocumentError = vi.hoisted(() => ({ current: undefined as Error | undefined }));
+/** The persisted row has been read; `false` = the replica is still hydrating. */
+const mockDocumentHydrated = vi.hoisted(() => ({ current: true }));
 
 const mockUpdateDocument = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
@@ -84,20 +84,6 @@ vi.mock('./TodoList', () => ({
 
 vi.mock('@/features/FloatingChatPanel', () => ({
   default: () => <div data-testid="floating-chat-panel" />,
-}));
-
-vi.mock('./FooterActions', () => ({
-  default: ({ fileBacked }: { fileBacked?: boolean }) => (
-    <div data-testid="footer-actions">
-      {!fileBacked && <button data-testid="footer-export" type={'button'} />}
-    </div>
-  ),
-}));
-// The body no longer resolves a doc-anchored topic itself — the footer's chat
-// entry calls `getOrCreateChatTopic` on demand. Keep the mock registered so the
-// historical test comments below still name the right constraint owner.
-vi.mock('@/features/FloatingChatPanel/useDocumentChatTopic', () => ({
-  useDocumentChatTopic: () => ({ error: undefined, isLoading: false, topicId: undefined }),
 }));
 
 const mockChatState = vi.hoisted(() => ({
@@ -133,8 +119,18 @@ const mockDocumentState = vi.hoisted(() => ({
       'document-1': {},
     },
     internal_dispatchDocument: vi.fn(),
+    beginDocumentDetailPatch: vi.fn(() => vi.fn()),
     performSave: vi.fn(),
     updateSkillFrontmatter: vi.fn(),
+    // The document's replica entry, as the store's read hook reports it.
+    useFetchDocumentDetail: vi.fn(() => ({
+      data: mockDocumentMeta.current,
+      error: mockDocumentError.current,
+      isHydrated: mockDocumentHydrated.current,
+      isLoading: mockDocumentMeta.current === undefined && !mockDocumentError.current,
+      isValidating: false,
+      mutate: vi.fn(),
+    })),
   },
 }));
 
@@ -143,6 +139,20 @@ vi.mock('@/store/document', () => ({
 }));
 
 describe('DocumentBody', () => {
+  afterEach(() => {
+    mockDocumentError.current = undefined;
+    mockDocumentHydrated.current = true;
+  });
+
+  it('paints nothing while the persisted document is still being read', () => {
+    mockDocumentMeta.current = undefined as never;
+    mockDocumentHydrated.current = false;
+
+    const { container } = render(<DocumentBody />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   /** @example A file-backed document previews its upload and keeps the portal actions. */
   it('shows the original upload without mounting either editor', () => {
     // ROOT CAUSE:
@@ -152,25 +162,9 @@ describe('DocumentBody', () => {
     render(<DocumentBody />);
     /** @example The original file id reaches the read-only preview. */
     expect(screen.getByTestId('original-file-preview').dataset.fileId).toBe('file-original');
-    /** @example Neither editor mounts. The portal footer (chat to edit / export)
-        replaces the inline conversation panel this PR's body used to render. */
+    /** @example Neither editor mounts. */
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
     expect(screen.queryByTestId('editor-canvas')).toBeNull();
-    expect(screen.getByTestId('footer-actions')).toBeTruthy();
-  });
-
-  it('hides the markdown export for a file-backed preview', () => {
-    // ROOT CAUSE:
-    // A file-backed document's markdown `content` is empty — its data lives
-    // behind `fileId` — so exporting here would download an empty `.md`
-    // instead of the displayed file. Mirrors the standalone page menu, which
-    // already filters out export when `fileBacked` is set.
-    mockDocumentMeta.current = { content: '', fileId: 'file-original', filename: 'source.unknown' };
-    render(<DocumentBody />);
-    /** @example The footer stays (chat-to-edit still applies)… */
-    expect(screen.getByTestId('footer-actions')).toBeTruthy();
-    /** @example …but the markdown export button is gone. */
-    expect(screen.queryByTestId('footer-export')).toBeNull();
   });
 
   beforeEach(() => {
@@ -186,41 +180,13 @@ describe('DocumentBody', () => {
     vi.useRealTimers();
   });
 
-  it('renders the footer actions for an agent document', () => {
-    render(<DocumentBody />);
-
-    expect(screen.getByTestId('footer-actions')).toBeDefined();
-  });
-
-  it('holds the footer until the document is agent-bound', () => {
-    // The useDocumentChatTopic hook is not mounted by the body anymore — the
-    // footer's own chat entry resolves the topic on demand. The comment above
-    // the original panel tests is kept for history: the NOT_FOUND constraint
-    // now lives in ./FooterActions instead of the body's render gate.
-    mockChatState.current.portalStack[0].agentDocumentId = undefined;
+  it('keeps the cached document on screen when the background refresh fails', () => {
+    mockDocumentMeta.current = { content: 'cached log', filename: 'topic_call.txt' };
+    mockDocumentError.current = new Error('Failed to fetch');
 
     render(<DocumentBody />);
 
-    expect(screen.queryByTestId('footer-actions')).toBeNull();
-  });
-
-  it('does not render footer actions without an active agent', () => {
-    mockAgentState.current.activeAgentId = undefined;
-
-    render(<DocumentBody />);
-
-    expect(screen.queryByTestId('footer-actions')).toBeNull();
-  });
-
-  // A plain notebook document is opened as `openDocument(document.id)` — no
-  // agentDocumentId. It has no `agent_documents` row, so the footer's
-  // `getOrCreateChatTopic` would throw NOT_FOUND. The footer must not render.
-  it('does not render footer actions for a plain document with no agentDocumentId', () => {
-    mockChatState.current.portalStack[0].agentDocumentId = undefined;
-
-    render(<DocumentBody />);
-
-    expect(screen.queryByTestId('footer-actions')).toBeNull();
+    expect(screen.getByTestId('highlight-editor')).toHaveValue('cached log');
   });
 
   it('renders highlight editor for non-markdown files', () => {
@@ -238,6 +204,23 @@ describe('DocumentBody', () => {
     render(<DocumentBody />);
 
     expect(screen.getByTestId('editor-canvas')).toBeDefined();
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
+  });
+
+  it('renders an HTML page in a sandboxed frame without mounting either editor', () => {
+    mockDocumentMeta.current = {
+      content: '<!doctype html><html><body><h1>Goal report</h1></body></html>',
+      fileType: 'custom/html',
+      filename: 'Goal report',
+      title: 'Goal report',
+    };
+
+    const { container } = render(<DocumentBody />);
+
+    const frame = container.querySelector('iframe')!;
+    expect(frame.getAttribute('srcdoc')).toContain('<h1>Goal report</h1>');
+    expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
+    expect(screen.queryByTestId('editor-canvas')).toBeNull();
     expect(screen.queryByTestId('highlight-editor')).toBeNull();
   });
 

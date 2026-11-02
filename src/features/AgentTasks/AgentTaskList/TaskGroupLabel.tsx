@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { CalendarClock, HeartPulse, UserRound } from 'lucide-react';
 import { memo } from 'react';
 

@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
   fetchAgentList: vi.fn(),
   homeState: {
     agentGroups: [] as any[],
-    agentOptimisticPatches: {},
     isAgentListInit: true,
     pinnedAgents: [] as any[],
     privateAgentGroups: [] as any[],
@@ -100,7 +99,7 @@ vi.mock('@/hooks/useFetchAgentList', () => ({
   useFetchAgentList: () => mocks.fetchAgentList(),
 }));
 
-vi.mock('@/features/HomeSidebar/Body/Agent/List/AgentItem/Avatar', () => ({
+vi.mock('@/components/AgentAvatar', () => ({
   default: ({ avatar }: { avatar?: string }) => <span data-avatar={avatar} data-testid="avatar" />,
 }));
 

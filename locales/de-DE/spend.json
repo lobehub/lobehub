@@ -19,6 +19,7 @@
   "table.columns.trigger.enums.agent_share": "Agentenanteil",
   "table.columns.trigger.enums.agent_signal": "Agentensignal",
   "table.columns.trigger.enums.api": "API-Aufruf",
+  "table.columns.trigger.enums.asr": "Sprachtranskription",
   "table.columns.trigger.enums.bot": "Bot-Nachricht",
   "table.columns.trigger.enums.builder_suggestion": "Builder-Vorschläge",
   "table.columns.trigger.enums.chat": "Chat-Nachricht",

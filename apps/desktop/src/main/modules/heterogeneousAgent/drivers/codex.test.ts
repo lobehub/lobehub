@@ -1,9 +1,10 @@
 import path from 'node:path';
 
+import { buildCodexAppServerThreadParams } from '@lobechat/heterogeneous-agents/spawn';
 import { describe, expect, it } from 'vitest';
 
 import type { PrepareProviderBindingContext } from '../types';
-import { codexDriver, sanitizeCodexProviderBindingArgs } from './codex';
+import { codexDriver, sanitizeCodexProviderBindingArgs, withCodexContextArgs } from './codex';
 
 const bindingContext = (): PrepareProviderBindingContext => ({
   args: ['--model', 'stale-model', '-c', 'model_provider="other"', '--json'],
@@ -123,6 +124,86 @@ describe('codexDriver provider binding', () => {
     },
   );
 
+  it('describes any non-native relay model to Codex from its model card', async () => {
+    const profileDir = '/managed/codex';
+    const plan = await codexDriver.prepareServerDefaultBinding!({
+      args: [],
+      endpoint: 'https://app.example.com',
+      env: {},
+      model: 'kimi-k3',
+      modelDescriptor: {
+        abilities: { reasoning: true, vision: true },
+        contextWindowTokens: 262_144,
+        displayName: 'Kimi K3',
+        model: 'kimi-k3',
+        nativeResponses: false,
+      },
+      profileDir,
+    });
+    const config = plan.profileFiles?.find(({ path }) => path === 'config.toml')?.content ?? '';
+    const catalog = JSON.parse(
+      plan.profileFiles?.find(({ path }) => path === 'models.json')?.content ?? '{}',
+    );
+    const model = catalog.models?.[0];
+
+    expect(config).toContain(
+      `model_catalog_json = ${JSON.stringify(path.join(profileDir, 'models.json'))}`,
+    );
+    expect(model).toMatchObject({
+      context_window: 262_144,
+      default_reasoning_level: 'medium',
+      display_name: 'Kimi K3',
+      input_modalities: ['text', 'image'],
+      max_context_window: 262_144,
+      slug: 'lobehub/kimi-k3',
+      supports_parallel_tool_calls: true,
+      truncation_policy: { limit: 10_000, mode: 'tokens' },
+    });
+    expect(
+      model.supported_reasoning_levels.map(({ effort }: { effort: string }) => effort),
+    ).toEqual(['low', 'medium', 'high']);
+  });
+
+  it('falls back to defaults for a model it could not read the card of', async () => {
+    const plan = await codexDriver.prepareServerDefaultBinding!({
+      args: [],
+      endpoint: 'https://app.example.com',
+      env: {},
+      model: 'claude-sonnet-4-6',
+      profileDir: '/managed/codex',
+    });
+    const catalog = JSON.parse(
+      plan.profileFiles?.find(({ path }) => path === 'models.json')?.content ?? '{}',
+    );
+
+    expect(catalog.models?.[0]).toMatchObject({
+      context_window: 128_000,
+      default_reasoning_level: null,
+      display_name: 'claude-sonnet-4-6',
+      input_modalities: ['text'],
+      slug: 'lobehub/claude-sonnet-4-6',
+      supported_reasoning_levels: [],
+    });
+  });
+
+  it('leaves a native Responses model to the entry Codex ships for it', async () => {
+    const plan = await codexDriver.prepareServerDefaultBinding!({
+      args: [],
+      endpoint: 'https://app.example.com',
+      env: {},
+      model: 'gpt-7',
+      modelDescriptor: {
+        abilities: { reasoning: true, vision: true },
+        model: 'gpt-7',
+        nativeResponses: true,
+      },
+      profileDir: '/managed/codex',
+    });
+
+    expect(plan.profileFiles).toHaveLength(1);
+    expect(plan.profileFiles?.[0]?.content).not.toContain('model_catalog_json');
+  });
+
   it('writes a secret-free Responses provider config and injects the key through env', async () => {
     const plan = await codexDriver.prepareProviderBinding!(bindingContext());
     const config = plan.profileFiles?.[0]?.content ?? '';
@@ -151,5 +232,59 @@ describe('codexDriver provider binding', () => {
         'sandbox_workspace_write.network_access=true',
       ]),
     ).toEqual(['-c', 'sandbox_workspace_write.network_access=true']);
+  });
+});
+
+describe('withCodexContextArgs', () => {
+  const env = {
+    LOBEHUB_AGENT_ID: 'agt_1',
+    LOBEHUB_OPERATION_ID: 'op "1"',
+    LOBEHUB_TOPIC_ID: 'tpc_1',
+    LOBEHUB_WORKSPACE_ID: 'ws_1',
+  };
+  const cliPath = path.join(
+    '/mock/userData',
+    'bin',
+    process.platform === 'win32' ? 'lh.cmd' : 'lh',
+  );
+
+  it('prefixes Codex args with shell_environment_policy.set overrides for the run ids', () => {
+    expect(withCodexContextArgs('codex', env, ['--model', 'gpt-test'])).toEqual([
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_AGENT_ID="agt_1"',
+      '-c',
+      `shell_environment_policy.set.LOBEHUB_CLI=${JSON.stringify(cliPath)}`,
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_OPERATION_ID="op \\"1\\""',
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_TOPIC_ID="tpc_1"',
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_WORKSPACE_ID="ws_1"',
+      '--model',
+      'gpt-test',
+    ]);
+  });
+
+  it('reaches the app-server thread config as plain strings', () => {
+    const params = buildCodexAppServerThreadParams(withCodexContextArgs('codex', env), '/work');
+    expect(params.config).toEqual({
+      'shell_environment_policy.set.LOBEHUB_AGENT_ID': 'agt_1',
+      'shell_environment_policy.set.LOBEHUB_CLI': cliPath,
+      'shell_environment_policy.set.LOBEHUB_OPERATION_ID': 'op "1"',
+      'shell_environment_policy.set.LOBEHUB_TOPIC_ID': 'tpc_1',
+      'shell_environment_policy.set.LOBEHUB_WORKSPACE_ID': 'ws_1',
+    });
+  });
+
+  it('lets the session env name its own CLI', () => {
+    expect(withCodexContextArgs('codex', { LOBEHUB_CLI: '/custom/lh' })).toEqual([
+      '-c',
+      'shell_environment_policy.set.LOBEHUB_CLI="/custom/lh"',
+    ]);
+  });
+
+  it('leaves other agents and env-less sessions unchanged', () => {
+    expect(withCodexContextArgs('claude-code', env, ['-p'])).toEqual(['-p']);
+    expect(withCodexContextArgs('codex', undefined, ['--json'])).toEqual(['--json']);
   });
 });

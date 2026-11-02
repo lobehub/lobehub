@@ -1,14 +1,15 @@
 import type { SidebarAgentListResponse } from '@lobechat/types';
 
-import {
-  LocalStorageQueryProjectionStorage,
-  QueryProjectionWriteQueue,
-} from '@/libs/queryProjectionStorage';
+import { defineReplica } from '@/libs/replica';
 
-export const AGENT_LIST_QUERY = 'sidebar';
-export const agentListProjection = new LocalStorageQueryProjectionStorage<SidebarAgentListResponse>(
-  {
-    namespace: 'lobechat-agent-list-v1',
-  },
-);
-export const agentListWriteQueue = new QueryProjectionWriteQueue(agentListProjection);
+/** The sidebar agent list is one entry per scope. */
+export const AGENT_LIST_KEY = 'sidebar';
+
+/** Sidebar agents (pinned / grouped / ungrouped, plus private buckets). */
+export const agentListResource = defineReplica<Record<string, never>, SidebarAgentListResponse>({
+  key: () => AGENT_LIST_KEY,
+  name: 'agentList',
+  // localStorage: the sidebar is the first thing painted on boot.
+  storage: 'localStorage',
+  version: 1,
+});

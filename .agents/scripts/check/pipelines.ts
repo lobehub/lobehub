@@ -16,24 +16,20 @@ export const lobehubPipelines: PipelineEntry[] = [
   },
   {
     exts: ['.mdx'],
-    tools: [
-      ['remark', '-r', './.remarkrc.mdx.mjs', '--silent', '--output', '--'],
-      ['eslint', '--quiet', '--fix'],
-    ],
+    tools: [['remark', '-r', './.remarkrc.mdx.mjs', '--silent', '--output', '--']],
   },
   { exts: ['.json'], tools: [['prettier', '--write']] },
   {
     exts: ['.mjs', '.cjs'],
     tools: [
-      ['eslint', '--fix'],
+      ['oxlint', '--fix'],
       ['prettier', '--write'],
     ],
   },
   {
     exts: ['.js', '.jsx'],
     tools: [
-      ['eslint', '--fix'],
-      ['stylelint', '--fix'],
+      ['oxlint', '--fix'],
       ['prettier', '--write'],
     ],
   },
@@ -41,10 +37,15 @@ export const lobehubPipelines: PipelineEntry[] = [
     // .mts/.cts are outside lint-staged's globs but belong to the same pipeline
     exts: ['.ts', '.tsx', '.mts', '.cts'],
     tools: [
-      ['stylelint', '--fix'],
-      ['eslint', '--fix'],
+      ['oxlint', '--fix'],
       ['prettier', '--write'],
     ],
   },
-  { exts: ['.yml', '.yaml'], tools: [['eslint', '--fix']] },
+  {
+    exts: ['.css', '.less'],
+    tools: [
+      ['stylelint', '--fix'],
+      ['prettier', '--write'],
+    ],
+  },
 ];

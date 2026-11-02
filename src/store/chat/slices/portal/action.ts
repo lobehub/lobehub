@@ -1,8 +1,10 @@
-import type { TopicCommentItem } from '@lobechat/types';
+import type { LayersEnum, TopicCommentItem } from '@lobechat/types';
 
 import { projectFileService } from '@/services/projectFile';
 import { type ChatStore } from '@/store/chat/store';
 import { useGlobalStore } from '@/store/global';
+import { canvasTabKey } from '@/store/global/initialState';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
@@ -512,6 +514,10 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ agentDocumentId, documentId, type: PortalViewType.Document });
   };
 
+  openMemoryDetail = (params: { id: string; layer: LayersEnum }): void => {
+    this.#get().pushPortalView({ ...params, type: PortalViewType.MemoryDetail });
+  };
+
   openFilePreview = (file: PortalFile): void => {
     this.#get().pushPortalView({ file, type: PortalViewType.FilePreview });
   };
@@ -685,6 +691,31 @@ export class ChatPortalActionImpl {
 
   openMessageDetail = (messageId: string): void => {
     this.#get().pushPortalView({ messageId, type: PortalViewType.MessageDetail });
+  };
+
+  /** A dashboard widget in full: data, the dry run that produced a preview, versions and logs. */
+  openDashboardWidget = (widgetId: string, runId?: string): void => {
+    // The widget view only exists while the `dashboard` feature flag is on.
+    if (getServerConfigStoreState()?.featureFlags.enableDashboard !== true) return;
+    this.#get().pushPortalView({
+      ...(runId ? { runId } : {}),
+      type: PortalViewType.DashboardWidget,
+      widgetId,
+    });
+  };
+
+  openCanvas = (canvasId: string, version?: number): void => {
+    const { [canvasId]: _previous, ...canvasTabVersions } = this.#get().canvasTabVersions;
+    this.#set(
+      {
+        canvasTabVersions: version
+          ? { ...canvasTabVersions, [canvasId]: version }
+          : canvasTabVersions,
+      },
+      false,
+      'openCanvas',
+    );
+    useGlobalStore.getState().openWorkingSidebar(canvasTabKey(canvasId));
   };
 
   openNotebook = (): void => {

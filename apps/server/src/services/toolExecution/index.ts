@@ -1,6 +1,7 @@
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload } from '@lobechat/types';
-import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
+import { safeParseJSON } from '@lobechat/utils';
+import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -24,7 +25,9 @@ import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
+import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
 import { resolveRunWorkspaceId } from './serverRuntimes/resolveWorkspaceScope';
+import { withoutDeviceReplay } from './serverRuntimes/withoutDeviceReplay';
 import {
   type ToolExecutionContext,
   type ToolExecutionResult,
@@ -282,26 +285,43 @@ export class ToolExecutionService {
       mcpParams.type,
     );
 
+    const isDeviceOnlyMcp = isDeviceOnlyMcpEndpoint(mcpParams);
+
+    // Agent Share visitor runs execute with the CREATOR's identity, so a
+    // device-only MCP would access the creator's device or private network
+    // on a visitor's behalf. The tool-set gate already drops
+    // these manifests (`applyShareGateToToolSet`); this is the unbypassable
+    // dispatch-site check, mirroring `isShareBlockedBuiltinDispatch`.
+    if (context.agentShareVisitor && isDeviceOnlyMcp) {
+      log('Share gate blocked device-only MCP dispatch: %s:%s', identifier, apiName);
+      const message = `MCP server '${identifier}' runs on the agent owner's own machine and is not available in shared conversations.`;
+      return {
+        content: message,
+        error: { code: 'SHARE_GATE_BLOCKED', message },
+        success: false,
+      };
+    }
+
     try {
       // Check if this is a cloud MCP endpoint
       if (mcpParams.type === 'cloud') {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
-      // MCP servers only the user's machine can reach must not be called from
-      // the cloud: stdio (the binary lives on the user's machine) and
-      // localhost / private-network HTTP endpoints (the cloud's fetch can't
-      // reach them, #16533). When a device gateway is configured (cloud
-      // deployment), such calls MUST tunnel to a device — with no reachable
-      // device, fail fast with an actionable error instead of spawning the
-      // command / fetching the private URL on the server (the same rule the
-      // classic-path guard in connector exec enforces). Standalone Electron /
-      // self-host (no gateway) falls through to the in-process MCP service
-      // below, which legitimately runs on the user's machine or LAN.
-      const isDeviceOnlyMcp =
-        mcpParams.type === 'stdio' ||
-        (mcpParams.type === 'http' && isLocalOrPrivateUrl(mcpParams.url));
-      if (isDeviceOnlyMcp && deviceGateway.isConfigured) {
+      // Stdio must run on a desktop device. Without a configured gateway or a
+      // reachable device, fail instead of executing the command on the server.
+      // Private HTTP also uses the device when a gateway is configured, while
+      // self-hosted servers without one can still access their LAN over HTTP.
+      if (mcpParams.type === 'stdio' || (isDeviceOnlyMcp && deviceGateway.isConfigured)) {
+        if (!deviceGateway.isConfigured) {
+          const message = `MCP server '${identifier}' uses stdio and must run on a desktop device, but this server's device gateway is not configured. Configure a device gateway on the server and connect the desktop app on the machine that hosts this MCP server, then retry.`;
+          return {
+            content: message,
+            error: { code: 'MCP_GATEWAY_NOT_CONFIGURED', message },
+            success: false,
+          };
+        }
+
         const tunnelTarget = context.userId
           ? await this.resolveMcpTunnelTarget(context)
           : undefined;
@@ -317,22 +337,35 @@ export class ToolExecutionService {
         return await this.executeMcpViaDevice(payload, context, mcpParams, tunnelTarget);
       }
 
-      // For stdio (in-process) / http/sse types, use standard MCP service
+      // HTTP MCP endpoints can execute through the server-side MCP service.
       const result = await this.mcpService.callTool({
         argsStr: args,
         clientParams: mcpParams,
         toolName: apiName,
       });
 
-      log('MCP tool execution successful for: %s:%s', identifier, apiName);
+      log('MCP tool execution completed for: %s:%s', identifier, apiName);
 
       return {
         content: typeof result === 'string' ? result : JSON.stringify(result),
+        ...(result?.success === false
+          ? { error: { code: 'MCP_TOOL_ERROR', message: result.error?.message ?? result.content } }
+          : {}),
         state: typeof result === 'object' ? result : undefined,
-        success: true,
+        success: result?.success !== false,
       };
     } catch (error) {
       log('MCP tool execution failed for %s:%s: %O', identifier, apiName, error);
+      if (isMcpAuthorizationError(error)) {
+        const content = buildMcpAuthorizationErrorContent(identifier, {
+          isShareVisitor: !!context.agentShareVisitor,
+        });
+        return {
+          content,
+          error: { code: 'UNAUTHORIZED', message: (error as Error).message },
+          success: false,
+        };
+      }
       return {
         content: (error as Error).message,
         error: {
@@ -491,7 +524,9 @@ export class ToolExecutionService {
     );
 
     if (!result.success) {
-      return {
+      // The device may already be running the call, so never let the retry
+      // classifier replay it (see withoutDeviceReplay).
+      return withoutDeviceReplay({
         content: result.content,
         error: result.errorData ?? {
           code: 'MCP_DEVICE_EXECUTION_ERROR',
@@ -499,7 +534,7 @@ export class ToolExecutionService {
         },
         errorData: result.errorData,
         success: false,
-      };
+      });
     }
 
     return {

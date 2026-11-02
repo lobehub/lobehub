@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { Flexbox, useTheme } from '@lobehub/ui';
 import { Activity, type FC, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Outlet, useLocation } from 'react-router';
 

@@ -1,4 +1,8 @@
+import { readRequiredEvidence as readSpecs } from '@lobechat/const/verify';
 import type { RequiredEvidenceSpec, VerifyEvidenceType } from '@lobechat/types';
+import { type CoverageEvidence, coverageGaps } from '@lobechat/utils/verify/evidenceCoverage';
+
+export { coverageGaps, executionGapTypes } from '@lobechat/utils/verify/evidenceCoverage';
 
 /**
  * Read the (optional) evidence requirement a criterion declares on its config.
@@ -7,24 +11,11 @@ import type { RequiredEvidenceSpec, VerifyEvidenceType } from '@lobechat/types';
  */
 export const readRequiredEvidence = (
   config: Record<string, unknown> | undefined | null,
-): RequiredEvidenceSpec[] | undefined => {
-  const raw = config?.requiredEvidence;
-  return Array.isArray(raw) ? (raw as RequiredEvidenceSpec[]) : undefined;
-};
+): RequiredEvidenceSpec[] | undefined => readSpecs<RequiredEvidenceSpec>(config);
 
-/**
- * Which required evidence types are still missing for a criterion — pure, so the
- * structural gate is unit-testable without a database. Returns `[]` when the
- * item declares no evidence requirement (nothing to gate on).
- */
-export const coverageGaps = (
-  required: RequiredEvidenceSpec[] | undefined,
-  evidence: { type: VerifyEvidenceType }[],
-): VerifyEvidenceType[] => {
-  if (!required?.length) return [];
-  const present = new Set(evidence.map((e) => e.type));
-  return [...new Set(required.map((r) => r.type))].filter((t) => !present.has(t));
-};
+/** The requirements the run itself must evidence — see {@link runEvidenceGaps}. */
+export const runEvidenceSpecs = (config: Record<string, unknown> | undefined | null) =>
+  readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence');
 
 /**
  * Run-evidence types a criterion still misses. `deliverable` / `task_artifacts`
@@ -36,9 +27,5 @@ export const coverageGaps = (
  */
 export const runEvidenceGaps = (
   config: Record<string, unknown> | undefined | null,
-  evidence: { type: VerifyEvidenceType }[],
-): VerifyEvidenceType[] =>
-  coverageGaps(
-    readRequiredEvidence(config)?.filter((spec) => !spec.scope || spec.scope === 'run_evidence'),
-    evidence,
-  );
+  evidence: CoverageEvidence[],
+): VerifyEvidenceType[] => coverageGaps(runEvidenceSpecs(config), evidence);

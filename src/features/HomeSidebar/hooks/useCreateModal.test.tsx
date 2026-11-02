@@ -1,4 +1,4 @@
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal, type ModalInstance } from '@lobehub/ui';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -48,32 +48,70 @@ vi.mock('@/libs/analytics/client', () => ({
   analyticsClient: { track: analyticsTrack },
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Button: ({
-    children,
-    disabled,
-    loading,
-    onClick,
-    type,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    loading?: boolean;
-    onClick?: () => void;
-    type?: string;
-  }) => (
-    <button
-      data-button-loading={loading ? 'true' : undefined}
-      data-button-type={type}
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  ),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Button: ({
+        children,
+        disabled,
+        loading,
+        onClick,
+        type,
+      }: {
+        children?: ReactNode;
+        disabled?: boolean;
+        loading?: boolean;
+        onClick?: () => void;
+        type?: string;
+      }) => (
+        <button
+          data-button-loading={loading ? 'true' : undefined}
+          data-button-type={type}
+          disabled={disabled}
+          type="button"
+          onClick={onClick}
+        >
+          {children}
+        </button>
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Button: ({
+        children,
+        disabled,
+        loading,
+        onClick,
+        type,
+      }: {
+        children?: ReactNode;
+        disabled?: boolean;
+        loading?: boolean;
+        onClick?: () => void;
+        type?: string;
+      }) => (
+        <button
+          data-button-loading={loading ? 'true' : undefined}
+          data-button-type={type}
+          disabled={disabled}
+          type="button"
+          onClick={onClick}
+        >
+          {children}
+        </button>
+      ),
+      createModal: vi.fn(),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('@/services/marketApi', () => ({
   marketApiService: {
@@ -85,34 +123,6 @@ vi.mock('@/services/skill', () => ({
   agentSkillService: {
     importFromMarket: skillServiceMocks.importFromMarket,
   },
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Button: ({
-    children,
-    disabled,
-    loading,
-    onClick,
-    type,
-  }: {
-    children?: ReactNode;
-    disabled?: boolean;
-    loading?: boolean;
-    onClick?: () => void;
-    type?: string;
-  }) => (
-    <button
-      data-button-loading={loading ? 'true' : undefined}
-      data-button-type={type}
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  ),
-  createModal: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({

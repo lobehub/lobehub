@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -45,10 +44,10 @@ const InputArea = ({
 }: InputAreaProps) => {
   const { t } = useTranslation('home');
   const { agentId, contextSelectionKey, loading, send } = useSend(mode);
-  // Subscribe to the SWR key so `internal_refreshAgentConfig`'s `mutate(...)`
-  // has a listener after toggleFile / toggleKnowledgeBase — otherwise the
-  // Library submenu doesn't reflect server-side toggles. Pass `agentId`
-  // explicitly so AgentSelect switches refetch too.
+  // Mount the config sync so `internal_refreshAgentConfig`'s revalidation has
+  // a listener after toggleFile / toggleKnowledgeBase — otherwise the Library
+  // submenu doesn't reflect server-side toggles. Pass `agentId` explicitly so
+  // AgentSelect switches refetch too.
   useInitAgentConfig(agentId);
   // Use the "config absent from agentMap" loading shape (same as Memory /
   // Search / History) instead of SWR's `isLoading`, which would flash on
@@ -101,17 +100,13 @@ const InputArea = ({
   return (
     <Flexbox>
       <Flexbox ref={chatInputRef}>
-        {mode === 'chat' ? (
-          <InputDragUpload
-            radius={20}
-            style={{ position: 'relative', zIndex: 1 }}
-            onUploadFiles={handleUploadFiles}
-          >
-            {editorSlot}
-          </InputDragUpload>
-        ) : (
-          editorSlot
-        )}
+        <InputDragUpload
+          radius={20}
+          style={{ position: 'relative', zIndex: 1 }}
+          onUploadFiles={handleUploadFiles}
+        >
+          {editorSlot}
+        </InputDragUpload>
         {showInputBanners && (
           <InputBannerQueue>
             {showNewModelShortcuts && (

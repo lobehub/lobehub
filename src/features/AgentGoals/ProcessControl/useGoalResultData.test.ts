@@ -30,9 +30,13 @@ const wrapper = ({ children }: { children: ReactNode }) =>
   );
 
 /** A Goal whose final acceptance Task carries acceptance `acc-1`. */
-const graphWith = (acceptanceStatus: string, nodeStatus: string) =>
+const graphWith = (acceptanceStatus: string, nodeStatus: string, goalStatus = 'achieved') =>
   ({
-    goal: { config: { acceptance: { criteriaIds: ['crit-1'] } }, id: 'goal-1' },
+    goal: {
+      config: { acceptance: { criteriaIds: ['crit-1'] } },
+      id: 'goal-1',
+      status: goalStatus,
+    },
     nodes: [
       {
         acceptance: { id: 'acc-1', status: acceptanceStatus },
@@ -77,6 +81,90 @@ describe('useGoalResultData', () => {
     rerender({ graph: graphWith('delivered', 'resolved') });
 
     await waitFor(() => expect(result.current.acceptanceStatus).toBe('delivered'));
+    expect(mocks.getAcceptanceBundle).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * Regression: a rework ends by putting the Goal back on `achieved` — exactly
+   * when the graph poll stops. The snapshot it stops on can still carry the
+   * acceptance node's pre-rework status, so keyed on the acceptance alone the
+   * bundle stayed on the rejected round: the sign-off strip kept reading 修改中
+   * with no accept button, and the criteria count froze at the rework's starting
+   * point (2/3) until the page was reloaded. The Goal moving on is its own
+   * reason to re-read the latest round.
+   */
+  it('re-reads the latest round when the Goal returns to achieved after a rework', async () => {
+    const criteriaIds = ['crit-1', 'crit-2', 'crit-3'];
+    mocks.getCriteria.mockResolvedValue(criteriaIds.map((id) => ({ id, title: id })));
+
+    const reworkGraph = (goalStatus: string) =>
+      ({
+        goal: { config: { acceptance: { criteriaIds } }, id: 'goal-1', status: goalStatus },
+        nodes: [
+          {
+            // The graph the poll stops on: the Goal has moved back on, the
+            // acceptance node still reads the rejected round from the rework.
+            acceptance: { id: 'acc-1', status: 'rejected' },
+            node: {
+              id: 'node-acceptance',
+              kind: 'task',
+              status: 'active',
+              title: GOAL_ACCEPTANCE_TASK_TITLE,
+            },
+          },
+        ],
+      }) as unknown as GoalGraphView;
+
+    const round = (id: string, roundIndex: number) => ({ run: { id, roundIndex } });
+    const check = (criterionId: string, roundId: string, verdict: string) => ({
+      evidence: [],
+      id: criterionId,
+      result: {
+        id: `res-${criterionId}-${roundId}`,
+        sourceCriterionId: criterionId,
+        status: verdict,
+        verdict,
+        verifyRunId: roundId,
+      },
+    });
+
+    mocks.getAcceptanceBundle.mockResolvedValueOnce({
+      acceptance: { status: 'rejected' },
+      canReview: true,
+      checks: [
+        check('crit-1', 'run-1', 'passed'),
+        check('crit-2', 'run-1', 'passed'),
+        check('crit-3', 'run-1', 'failed'),
+      ],
+      rounds: [round('run-1', 1)],
+    });
+
+    const { rerender, result } = renderHook(({ graph }) => useGoalResultData(graph), {
+      initialProps: { graph: reworkGraph('running') },
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.acceptanceStatus).toBe('rejected'));
+    expect(result.current.outcomes.filter((outcome) => outcome.state === 'passed')).toHaveLength(2);
+
+    // 返工完成：Goal 回到「已达成」，新一轮验收 3/3 落地。
+    mocks.getAcceptanceBundle.mockResolvedValueOnce({
+      acceptance: { status: 'delivered' },
+      canReview: true,
+      checks: [
+        check('crit-1', 'run-2', 'passed'),
+        check('crit-2', 'run-2', 'passed'),
+        check('crit-3', 'run-2', 'passed'),
+      ],
+      rounds: [round('run-1', 1), round('run-2', 2)],
+    });
+    rerender({ graph: reworkGraph('achieved') });
+
+    await waitFor(() => expect(result.current.acceptanceStatus).toBe('delivered'));
+    await waitFor(() =>
+      expect(result.current.outcomes.filter((outcome) => outcome.state === 'passed')).toHaveLength(
+        3,
+      ),
+    );
     expect(mocks.getAcceptanceBundle).toHaveBeenCalledTimes(2);
   });
 

@@ -514,6 +514,31 @@ export class VideoGenerationExecutionRuntime {
     }
   }
 
+  /**
+   * Read the freshly created task once. Returns the task when it is already in a terminal
+   * error, so no-wait callers do not report a rejected pre-charge as a started generation.
+   * Returns undefined when the task is still running or the status cannot be read — the run
+   * did start, so the caller keeps reporting it as started instead of inventing a failure.
+   */
+  private async readFailedTask(task: GeneratedVideoTask): Promise<GeneratedVideoTask | undefined> {
+    try {
+      const status = await this.service.getGenerationStatus({
+        asyncTaskId: task.asyncTaskId,
+        generationId: task.generationId,
+      });
+      if (status.status !== AsyncTaskStatus.Error) return undefined;
+
+      return {
+        ...task,
+        asset: status.generation?.asset ?? task.asset,
+        error: status.error,
+        status: status.status,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
   async generateVideo(
     args: GenerateVideoParams,
     context: GenerateVideoRuntimeContext = {},
@@ -594,6 +619,18 @@ export class VideoGenerationExecutionRuntime {
       };
 
       if (!waitUntilComplete) {
+        // A pre-charge failure (insufficient budget, frozen workspace, …) still inserts the
+        // generation and links it to an already errored async task, so the batch no longer
+        // tells the two cases apart. Read the task once and report a terminal failure as a
+        // failure instead of announcing a generation that never started.
+        const failedTask = await this.readFailedTask(state.generation);
+        if (failedTask) {
+          const failedState: GenerateVideoState = { ...state, generation: failedTask };
+          return errorOutput('GenerateVideoFailed', formatFailedContent(failedState), {
+            ...failedState,
+          });
+        }
+
         return {
           content: formatStartedContent(state),
           state,

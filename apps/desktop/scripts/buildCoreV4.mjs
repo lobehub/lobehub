@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { constants, zstdCompress, zstdDecompress } from 'node:zlib';
@@ -13,22 +13,34 @@ const decompress = promisify(zstdDecompress);
 const hash = (content) => createHash('sha256').update(content).digest('hex');
 const PATCH_SCOPE = /^(?:dist\/renderer|cli)\//;
 
+// Values may be lazy producers so compressed frames need not accumulate in memory.
 export async function writeCorePack(entries, output) {
-  const chunks = [];
   const index = {};
+  const digest = createHash('sha256');
   let offset = 0;
-  for (const [key, bytes] of [...entries].sort(([a], [b]) => a.localeCompare(b))) {
-    index[key] = { compressedSha256: hash(bytes), length: bytes.length, offset };
-    chunks.push(bytes);
-    offset += bytes.length;
-  }
-  const bytes = Buffer.concat(chunks);
-  const sha256 = hash(bytes);
-  const pack = { path: `packs/${sha256}.pack`, sha256, size: bytes.length };
   await mkdir(path.join(output, 'packs'), { recursive: true });
-  await writeFile(path.join(output, pack.path), bytes);
-  for (const frame of Object.values(index)) frame.packSha256 = sha256;
-  return { index, pack };
+  const temporary = await mkdtemp(path.join(output, 'packs', '.building-'));
+  try {
+    const file = await open(path.join(temporary, 'pack'), 'w');
+    try {
+      for (const [key, value] of [...entries].sort(([a], [b]) => a.localeCompare(b))) {
+        const bytes = typeof value === 'function' ? await value() : value;
+        index[key] = { compressedSha256: hash(bytes), length: bytes.length, offset };
+        await file.writeFile(bytes);
+        digest.update(bytes);
+        offset += bytes.length;
+      }
+    } finally {
+      await file.close();
+    }
+    const sha256 = digest.digest('hex');
+    const pack = { path: `packs/${sha256}.pack`, sha256, size: offset };
+    await rename(path.join(temporary, 'pack'), path.join(output, pack.path));
+    for (const frame of Object.values(index)) frame.packSha256 = sha256;
+    return { index, pack };
+  } finally {
+    await rm(temporary, { force: true, recursive: true });
+  }
 }
 
 async function boundedBody(response, limit) {
@@ -100,7 +112,7 @@ export async function buildCoreV4({
     rollout > 1
   )
     throw new Error('Invalid core release metadata');
-  const { objects, tree } = readCoreTree(coreDir);
+  const { objects, tree } = readCoreTree(coreDir, { retainContents: false });
   if (!tree.length || tree.some((file) => file.size > 256 * 1024 ** 2))
     throw new Error('Invalid core file size');
   const old = new Map(previousManifest?.tree.map((file) => [file.path, file.sha256]) ?? []);
@@ -112,10 +124,16 @@ export async function buildCoreV4({
     throw new EmptyReleaseError();
   const output = path.join(outDir, 'core-v4', platform);
   const encoded = new Map();
-  for (const [sha256, bytes] of objects) {
-    encoded.set(
-      sha256,
-      await compress(bytes, { params: { [constants.ZSTD_c_compressionLevel]: 19 } }),
+  const readObject = async (sha256) => {
+    const bytes = await readFile(objects.get(sha256));
+    if (hash(bytes) !== sha256) throw new Error(`Core object changed during build: ${sha256}`);
+    return bytes;
+  };
+  for (const sha256 of objects.keys()) {
+    encoded.set(sha256, async () =>
+      compress(await readObject(sha256), {
+        params: { [constants.ZSTD_c_compressionLevel]: 19 },
+      }),
     );
   }
   const { index, pack } = await writeCorePack(encoded, output);
@@ -136,7 +154,7 @@ export async function buildCoreV4({
           previousBaseUrl,
           fetchImpl,
         );
-        const patch = await generateZstdPatch(base, objects.get(pair.to.sha256));
+        const patch = await generateZstdPatch(base, await readObject(pair.to.sha256));
         if (patch && patch.length < index[pair.to.sha256].length) patchBytes.set(key, patch);
       } catch (error) {
         console.warn(`Skipping optional patch ${key}: ${error.message}`);

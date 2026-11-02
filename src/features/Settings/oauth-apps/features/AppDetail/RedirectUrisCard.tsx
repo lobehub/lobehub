@@ -1,9 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Alert, Button, Input, Text } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Button, createStaticStyles, Flexbox, Input, Text } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,8 +17,15 @@ import {
 import SectionCard from './SectionCard';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  // antd's ErrorList only picks up error styling inside a Form.Item that has an
-  // error status; the list-level message sits outside one, so it is colored here.
+  empty: css`
+    padding: 16px;
+    border: 1px dashed ${cssVar.colorBorder};
+    border-radius: ${cssVar.borderRadius};
+  `,
+  fieldError: css`
+    font-size: 12px;
+    color: ${cssVar.colorError};
+  `,
   listError: css`
     font-size: 14px;
     line-height: 1.5;
@@ -51,8 +56,9 @@ interface RedirectUrisCardProps {
 
 /**
  * The redirect URIs a web app may send users back to. A freshly created app has
- * none, which is a legitimate "not yet configured" state shown as a warning;
- * once the user opens the editor, a save needs at least one URI.
+ * none, which is a legitimate "not yet configured" state: it reads as the next
+ * setup step with its own button, not as a warning competing with the one-time
+ * secret card above it. Once the editor is open, a save needs at least one URI.
  */
 const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit }) => {
   const { t } = useTranslation('auth');
@@ -70,75 +76,85 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
     }
   };
 
+  const form = useForm<RedirectUrisValues>({ onSubmit: handleFinish });
+
+  const startEditing = () => {
+    form.reset({ redirectUris: saved.length > 0 ? saved : [''] });
+    setEditing(true);
+  };
+
   return (
     <SectionCard
       title={t('oauthApp.redirectUris.title')}
       extra={
-        !editing && (
+        !editing &&
+        saved.length > 0 && (
           <Button
             disabled={!canEdit}
             icon={<PencilIcon size={14} />}
             size={'small'}
-            onClick={() => setEditing(true)}
+            onClick={startEditing}
           >
-            {t(saved.length > 0 ? 'oauthApp.detail.edit' : 'oauthApp.redirectUris.configure')}
+            {t('oauthApp.detail.edit')}
           </Button>
         )
       }
     >
       {editing ? (
-        <Form
-          colon={false}
-          initialValues={{ redirectUris: saved.length > 0 ? saved : [''] }}
-          layout={'vertical'}
-          onFinish={handleFinish}
-        >
+        <Form form={form} layout={'vertical'}>
           <Flexbox gap={12}>
             <Text style={{ fontSize: 12 }} type={'secondary'}>
               {t('oauthApp.form.redirectUris.extra')}
             </Text>
 
-            <Form.List
-              name={'redirectUris'}
-              rules={[
-                {
-                  validator: async (_, values?: (string | undefined)[]) => {
-                    const messageKey = redirectUriListMessageKey(values);
-                    if (messageKey)
-                      throw new Error(t(messageKey, { count: MAX_OAUTH_REDIRECT_URIS }));
-                  },
-                },
-              ]}
-            >
-              {(fields, { add, remove }, { errors }) => (
+            <Form.List name={'redirectUris'}>
+              {({ fields, add, remove }) => (
                 <Flexbox gap={8}>
                   {fields.map((field) => (
                     <Flexbox horizontal align={'flex-start'} gap={8} key={field.key}>
-                      <Form.Item
-                        name={field.name}
-                        style={{ flex: 1, marginBottom: 0 }}
-                        rules={[
-                          {
-                            validator: async (_, value?: string) => {
-                              const messageKey = redirectUriMessageKey(value);
-                              if (messageKey) throw new Error(t(messageKey));
-                            },
-                          },
-                        ]}
-                      >
-                        <Input placeholder={t('oauthApp.form.redirectUris.placeholder')} />
-                      </Form.Item>
+                      <Form.Field
+                        bare
+                        name={`redirectUris.${field.index}`}
+                        render={({ error, onBlur, onChange, value }) => (
+                          <Flexbox flex={1} gap={4}>
+                            <Input
+                              aria-invalid={error ? true : undefined}
+                              placeholder={t('oauthApp.form.redirectUris.placeholder')}
+                              value={value}
+                              onBlur={onBlur}
+                              onChange={(e) => onChange(e.target.value)}
+                            />
+                            {error && <div className={styles.fieldError}>{error}</div>}
+                          </Flexbox>
+                        )}
+                        validate={(value?: string) => {
+                          const messageKey = redirectUriMessageKey(value);
+                          return messageKey ? t(messageKey) : undefined;
+                        }}
+                      />
                       <ActionIcon
                         aria-label={t('oauthApp.redirectUris.remove')}
                         icon={Trash2Icon}
                         style={{ marginTop: 4 }}
                         title={t('oauthApp.redirectUris.remove')}
-                        onClick={() => remove(field.name)}
+                        onClick={() => remove(field.index)}
                       />
                     </Flexbox>
                   ))}
 
-                  {errors.length > 0 && <div className={styles.listError}>{errors}</div>}
+                  <Form.Field
+                    bare
+                    name={'redirectUris'}
+                    render={({ error }) =>
+                      error ? <div className={styles.listError}>{error}</div> : null
+                    }
+                    validate={(values?: (string | undefined)[]) => {
+                      const messageKey = redirectUriListMessageKey(values);
+                      return messageKey
+                        ? t(messageKey, { count: MAX_OAUTH_REDIRECT_URIS })
+                        : undefined;
+                    }}
+                  />
 
                   <Button
                     block
@@ -148,6 +164,11 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
                   >
                     {t('oauthApp.redirectUris.add')}
                   </Button>
+                  {fields.length >= MAX_OAUTH_REDIRECT_URIS && (
+                    <Text style={{ fontSize: 12 }} type={'secondary'}>
+                      {t('oauthApp.redirectUris.limitReached', { count: MAX_OAUTH_REDIRECT_URIS })}
+                    </Text>
+                  )}
                 </Flexbox>
               )}
             </Form.List>
@@ -169,7 +190,23 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
           ))}
         </Flexbox>
       ) : (
-        <Alert showIcon message={t('oauthApp.redirectUris.empty')} type={'warning'} />
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={styles.empty}
+          gap={16}
+          justify={'space-between'}
+        >
+          <Text type={'secondary'}>{t('oauthApp.redirectUris.empty')}</Text>
+          <Button
+            disabled={!canEdit}
+            icon={<PlusIcon size={14} />}
+            style={{ flex: 'none' }}
+            onClick={startEditing}
+          >
+            {t('oauthApp.redirectUris.add')}
+          </Button>
+        </Flexbox>
       )}
     </SectionCard>
   );

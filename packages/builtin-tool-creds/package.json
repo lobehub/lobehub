@@ -10,8 +10,14 @@
     "./executor": "./src/executor/index.ts"
   },
   "main": "./src/index.ts",
-  "dependencies": {},
+  "dependencies": {
+    "@lobechat/shared-tool-ui": "workspace:*"
+  },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^6.0.4",
+    "react": "^19"
   }
 }

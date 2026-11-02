@@ -1,5 +1,6 @@
 import type {
   ChatErrorBudgetContext,
+  ChatErrorDispatchContext,
   ChatErrorHeterogeneousContext,
   ExecutionPlan,
   ToolExecutor,
@@ -20,7 +21,7 @@ import type { ToolRunResult } from '../transport/tool';
  */
 export type AgentHookType =
   | 'afterStep' // After each step completes
-  | 'afterToolCall' // After a tool call completes (observation only)
+  | 'afterToolCall' // After a tool call completes (supports result allow/deny controls)
   | 'beforeStep' // Before each step executes
   | 'beforeToolCall' // Before a tool call executes (supports mocking via event.mock())
   | 'beforeCallAgent' // Before calling a sub-agent
@@ -88,6 +89,12 @@ export interface AgentHookEvent {
   errorBudget?: ChatErrorBudgetContext;
   // Content
   errorDetail?: string;
+  /**
+   * Allowlisted cause of a run that failed before its agent started (e.g. the
+   * cloud sandbox is missing a credential), so consumers can say what went
+   * wrong without forwarding the free-form dispatch detail.
+   */
+  errorDispatch?: ChatErrorDispatchContext;
   errorHeterogeneous?: ChatErrorHeterogeneousContext;
 
   errorMessage?: string;
@@ -212,7 +219,7 @@ export type BeforeToolCallObservationEvent = ToolCallHookContext;
 export interface AfterToolCallHookEvent extends ToolCallHookContext {
   /** Whether a beforeToolCall hook supplied the result through mock(). */
   mocked: boolean;
-  /** Structured result after archival, including errors and state (e.g. blocked). */
+  /** Complete pre-archive result for controls; post-archive result for notifications. */
   result: ToolRunResult;
 }
 

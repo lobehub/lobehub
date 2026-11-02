@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ExternalLink, FileDown, FileText, Link2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +9,7 @@ import { isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
 
+import { dedupeArtifacts } from './deliverableList';
 import type { GoalArtifactView, GoalGraphView } from './goalGraphViewModel';
 import { KindDot } from './shared';
 
@@ -52,7 +51,10 @@ const styles = createStaticStyles(({ css }) => ({
     text-align: end;
   `,
   row: css`
-    width: 100%;
+    width: calc(100% + 16px);
+
+    /* Same column edge as the section title, like the findings and activity rows. */
+    margin-inline: -8px;
     padding-block: 8px;
     padding-inline: 8px;
     border: none;
@@ -169,7 +171,15 @@ const Deliverables = memo<{ graph: GoalGraphView }>(({ graph }) => {
   const { t } = useTranslation('chat');
   const open = useOpenGoalArtifact();
 
-  if (graph.artifacts.length === 0)
+  // Several nodes can declare the same Work as their own delivery, because each
+  // later run's version was claimed by whoever wrote it: a shared document
+  // listed once per task. Folding here — one row per deliverable, under the node
+  // that delivered it first — is the same rule the activity timeline applies.
+  // `graph.artifacts` keeps the raw join because timeline rows resolve their
+  // card by version id.
+  const artifacts = dedupeArtifacts(graph.artifacts);
+
+  if (artifacts.length === 0)
     return (
       <Flexbox horizontal align={'center'} gap={6}>
         <Icon color={cssVar.colorTextQuaternary} icon={Link2} size={14} />
@@ -181,7 +191,7 @@ const Deliverables = memo<{ graph: GoalGraphView }>(({ graph }) => {
 
   return (
     <Flexbox gap={0}>
-      {graph.artifacts.map((artifact) => (
+      {artifacts.map((artifact) => (
         <DeliverableRow
           artifact={artifact}
           key={artifact.workVersionId}

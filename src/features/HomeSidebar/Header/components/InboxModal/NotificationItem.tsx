@@ -2,14 +2,24 @@
 
 import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
 import type { NotificationMetadata } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, ContextMenuTrigger, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Avatar,
+  Block,
+  Button,
+  ContextMenuTrigger,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
 import { ArchiveIcon, BellIcon, ImageIcon, MegaphoneIcon, VideoIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { ProductLogo } from '@/components/Branding';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
@@ -148,11 +158,12 @@ const NotificationItem = memo<NotificationItemProps>(
                 style={{ flex: 'none' }}
               />
             ) : agent ? (
-              <Avatar
-                emojiScaleWithBackground
+              <AgentAvatar
+                agentId={agent.id}
                 alt={agent.title}
                 avatar={agent.avatar}
                 background={agent.backgroundColor}
+                name={agent.title}
                 shape="circle"
                 size={32}
                 style={{ flex: 'none' }}

@@ -2,8 +2,8 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Markdown } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ListTree } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

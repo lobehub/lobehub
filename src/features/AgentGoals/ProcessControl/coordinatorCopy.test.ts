@@ -1,9 +1,12 @@
+import { GOAL_BATCH_RELEASE_TITLE, GOAL_MACHINE_GATE_TITLE } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
 import {
   coordinatorGateKind,
   coordinatorGateReason,
   coordinatorReasonCopy,
+  gateOptionLabelKey,
+  localizedCoordinatorReason,
 } from './coordinatorCopy';
 
 const decision = (ids: string[]) => ({ options: ids.map((id) => ({ id, label: id })) }) as any;
@@ -17,6 +20,21 @@ describe('coordinatorGateKind', () => {
     expect(coordinatorGateKind(decision(['option-1', 'assume', 'answer']))).toBe('clarifyGoal');
     expect(coordinatorGateKind(decision(['approve', 'reject']))).toBeUndefined();
     expect(coordinatorGateKind(undefined)).toBeUndefined();
+  });
+
+  it('tells a held batch release from a batch break', () => {
+    expect(coordinatorGateKind(decision(['release', 'revise']))).toBe('batchRelease');
+    expect(coordinatorGateKind(decision(['revise', 'new_class']))).toBe('batchPatternBreak');
+    expect(gateOptionLabelKey({ id: 'release' }, 'batchRelease')).toBe(
+      'goalProcess.gate.option.releaseBatch',
+    );
+    // A sent-back release is rewritten by the main Agent, not re-probed.
+    expect(gateOptionLabelKey({ id: 'revise' }, 'batchRelease')).toBe(
+      'goalProcess.gate.option.sendBackBatch',
+    );
+    expect(gateOptionLabelKey({ id: 'revise' }, 'batchPatternBreak')).toBe(
+      'goalProcess.gate.option.reviseBatch',
+    );
   });
 });
 
@@ -33,6 +51,9 @@ describe('coordinatorNodeTitleKey', () => {
         view({ kind: 'decision', title: 'x' }, decision(['retry', 'retire'])),
       ),
     ).toBe('goalProcess.gate.title.recoverTask');
+    expect(
+      coordinatorNodeTitleKey(view({ kind: 'decision', title: GOAL_BATCH_RELEASE_TITLE })),
+    ).toBe('goalProcess.gate.title.batchRelease');
     expect(coordinatorNodeTitleKey(view({ kind: 'task', title: '普通任务' }))).toBeUndefined();
   });
 });
@@ -98,6 +119,22 @@ describe('coordinatorReasonCopy', () => {
     expect(coordinatorReasonCopy('Automatic recovery could not start the next attempt')).toEqual({
       key: 'goalProcess.gate.reason.recoveryFailed',
     });
+    expect(
+      coordinatorReasonCopy(
+        'Automatic recovery could not start the next attempt: Task already has a running topic (tpc_1). Cancel it first or use --continue',
+      ),
+    ).toEqual({
+      key: 'goalProcess.gate.reason.recoveryFailedWithError',
+      params: {
+        error: 'Task already has a running topic (tpc_1). Cancel it first or use --continue',
+      },
+    });
+    expect(
+      coordinatorReasonCopy('Task T-12 failed verification the same way 2 times in a row'),
+    ).toEqual({
+      key: 'goalProcess.gate.reason.verifyStalled',
+      params: { count: '2', id: 'T-12' },
+    });
   });
 
   it('wraps a bare runtime error type in a localized sentence', () => {
@@ -111,5 +148,53 @@ describe('coordinatorReasonCopy', () => {
   it('passes unknown reasons through as undefined so the raw text renders', () => {
     expect(coordinatorReasonCopy('some future reason')).toBeUndefined();
     expect(coordinatorReasonCopy(undefined)).toBeUndefined();
+  });
+});
+
+describe('machine gate copy', () => {
+  it('reads the machine gate off its title and gives its Retry the "fixed it" label', () => {
+    expect(coordinatorGateKind(decision(['retry', 'retire']), GOAL_MACHINE_GATE_TITLE)).toBe(
+      'fixSetup',
+    );
+    expect(gateOptionLabelKey({ id: 'retry' }, 'fixSetup')).toBe(
+      'goalProcess.gate.option.fixedRetry',
+    );
+    expect(gateOptionLabelKey({ id: 'retry' }, 'recoverTask')).toBe(
+      'goalProcess.gate.option.retry',
+    );
+    expect(gateOptionLabelKey({ id: 'option-1' })).toBeUndefined();
+  });
+
+  it('strips the machine gate question down to what broke', () => {
+    expect(
+      coordinatorGateReason(
+        'Setup problem: Working directory does not exist: /tmp/x. Create /tmp/x on the device the agent runs on, or point the agent at a working directory that exists there. Fix it, then retry or retire this task node?',
+      ),
+    ).toBe(
+      'Setup problem: Working directory does not exist: /tmp/x. Create /tmp/x on the device the agent runs on, or point the agent at a working directory that exists there',
+    );
+    expect(coordinatorReasonCopy('Task device stayed offline')).toEqual({
+      key: 'goalProcess.gate.reason.deviceStayedOffline',
+    });
+  });
+});
+
+describe('localizedCoordinatorReason', () => {
+  const t = (key: string, params?: Record<string, unknown>) =>
+    `${key}${params?.count === undefined ? '' : `(${params.count})`}`;
+
+  it('localizes every blocker of a compound batch reason', () => {
+    expect(
+      localizedCoordinatorReason(
+        '1 unit(s) did not succeed; a human decision is still open in this batch',
+        t,
+      ),
+    ).toBe('goalProcess.gate.reason.batchBroken(1); goalProcess.gate.reason.batchOpenDecision');
+  });
+
+  it('keeps a reason it does not recognize as stored', () => {
+    expect(localizedCoordinatorReason('Something else went wrong', t)).toBe(
+      'Something else went wrong',
+    );
   });
 });

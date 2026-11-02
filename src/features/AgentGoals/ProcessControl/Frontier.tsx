@@ -1,10 +1,18 @@
 'use client';
 
-import type { AcceptanceStatus, GoalDecisionOption } from '@lobechat/types';
-import { Block, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Divider, Tag, Text, TextArea } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import type { AcceptanceStatus } from '@lobechat/types';
+import {
+  Block,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Divider,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+} from '@lobehub/ui';
+import { ChevronDown, ChevronRight, History, ListTodo, Plus } from 'lucide-react';
 import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,14 +23,21 @@ import { useActivityTime } from '@/hooks/useActivityTime';
 import { useChatStore } from '@/store/chat';
 
 import GoalClarification, { type PendingGoalClarification } from '../GoalClarification';
+import GoalDecisionCase, {
+  type GoalGateCategory,
+  goalGateCategory,
+  useGateSummary,
+} from '../GoalDecision';
 import AssigneeProfileAvatar from './AssigneeProfileAvatar';
 import {
   coordinatorGateReason,
   coordinatorNodeTitleKey,
-  coordinatorReasonCopy,
+  coordinatorReasonCopies,
   viewGateKind,
 } from './coordinatorCopy';
 import type { FrontierItem, GoalGraphView, GoalNodeView } from './goalGraphViewModel';
+import ReleaseGateEntry from './ReleaseGateEntry';
+import { TASK_HOLD_VISUALS, useQuotaResumeText } from './taskHold';
 import { useElapsed } from './useElapsed';
 
 /**
@@ -65,6 +80,16 @@ const styles = createStaticStyles(({ css }) => ({
     /* Aligned with the row title (glyph + gap), not floated on its own indent. */
     padding-block: 8px 14px;
     padding-inline: 26px 12px;
+  `,
+  // A gate is an intent card: lifted off the list so it reads as the one thing
+  // asking for the owner, not another row.
+  decisionCard: css`
+    padding: 16px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowTertiary};
   `,
   deps: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -112,7 +137,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface FrontierActions {
   addTask: (title: string, description?: string) => Promise<void>;
-  decide: (decisionId: string, optionId: string, resolution?: string) => void;
+  decide: (decisionId: string, optionId: string, resolution?: string) => Promise<unknown>;
 }
 
 interface FrontierProps {
@@ -123,27 +148,6 @@ interface FrontierProps {
   /** The coordinator is still decomposing — the empty list is a promise, not a lull. */
   planning?: boolean;
 }
-
-/** Server option ids are stable; their labels are English strings from the coordinator. */
-export const useGateOptionLabel = () => {
-  const { t } = useTranslation('chat');
-  return (option: GoalDecisionOption) => {
-    switch (option.id) {
-      case 'fail': {
-        return t('goalProcess.gate.option.fail');
-      }
-      case 'retire': {
-        return t('goalProcess.gate.option.retire');
-      }
-      case 'retry': {
-        return t('goalProcess.gate.option.retry');
-      }
-      default: {
-        return option.label;
-      }
-    }
-  };
-};
 
 const RowGlyph = memo<{ kind: FrontierItem['kind']; view: GoalNodeView }>(({ kind, view }) => {
   switch (kind) {
@@ -169,8 +173,17 @@ const RowGlyph = memo<{ kind: FrontierItem['kind']; view: GoalNodeView }>(({ kin
     case 'stale': {
       return (
         <Icon
-          color={TASK_STATUS_VISUALS.failed.color}
-          icon={TASK_STATUS_VISUALS.failed.icon}
+          color={TASK_HOLD_VISUALS.stalled.color}
+          icon={TASK_HOLD_VISUALS.stalled.icon}
+          size={16}
+        />
+      );
+    }
+    case 'quota': {
+      return (
+        <Icon
+          color={TASK_HOLD_VISUALS.waitingQuota.color}
+          icon={TASK_HOLD_VISUALS.waitingQuota.icon}
           size={16}
         />
       );
@@ -191,10 +204,10 @@ RowGlyph.displayName = 'GoalFrontierRowGlyph';
 
 const AttemptReason = memo<{ reason?: string | null }>(({ reason }) => {
   const { t } = useTranslation('chat');
-  const copy = coordinatorReasonCopy(reason);
+  const copies = coordinatorReasonCopies(reason);
   return (
     <Text ellipsis fontSize={12} style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
-      {copy ? t(copy.key as any, copy.params) : (reason ?? '')}
+      {copies ? copies.map((copy) => t(copy.key as any, copy.params)).join('; ') : (reason ?? '')}
     </Text>
   );
 });
@@ -259,6 +272,19 @@ const RunningClock = memo<{ startedAt?: Date }>(({ startedAt }) => {
 
 RunningClock.displayName = 'GoalRunningClock';
 
+const QuotaResumeTime = memo<{ retryAt?: Date }>(({ retryAt }) => {
+  const { t } = useTranslation('chat');
+  const text = useQuotaResumeText(retryAt);
+  if (!text) return null;
+  return (
+    <Text fontSize={12} title={t('goalProcess.quota.tooltip')} type={'secondary'}>
+      {text}
+    </Text>
+  );
+});
+
+QuotaResumeTime.displayName = 'GoalQuotaResumeTime';
+
 const DoneTime = memo<{ view: GoalNodeView }>(({ view }) => {
   const { text, title } = useActivityTime(view.node.resolvedAt ?? view.node.updatedAt);
   return (
@@ -275,7 +301,7 @@ const StaleBody = memo<{ view: GoalNodeView }>(({ view }) => {
   const { text } = useActivityTime(view.heartbeatAt);
   return (
     <Text fontSize={13} type={'secondary'}>
-      {t('goalProcess.stale.description', { duration: text })}
+      {t('goalProcess.stalled.description', { duration: text })}
     </Text>
   );
 });
@@ -331,18 +357,151 @@ const AcceptanceChip = memo<{ view: GoalNodeView }>(({ view }) => {
 
 AcceptanceChip.displayName = 'GoalAcceptanceChip';
 
-const FrontierRow = memo<{
+/**
+ * What a gate's answer should be weighed against: the Task it stopped, one
+ * click from its run and its acceptance, and what each attempt did. Folded to
+ * one line until opened — the question leads, the proof is on demand.
+ */
+/**
+ * The way into what a gate stands on, as quiet links on its answer row: open
+ * the Task's run, and fold its attempts open beneath the card.
+ */
+const GateLinks = memo<{
+  ledgerOpen: boolean;
+  onOpen: () => void;
+  onToggleLedger: () => void;
+  subject: GoalNodeView;
+}>(({ ledgerOpen, onOpen, onToggleLedger, subject }) => {
+  const { t } = useTranslation('chat');
+  const attempts = subject.attempts.length;
+  const quiet = { color: cssVar.colorTextSecondary };
+
+  return (
+    <>
+      <Button icon={ListTodo} size={'small'} style={quiet} type={'text'} onClick={onOpen}>
+        {t('goalProcess.decision.viewRun')}
+      </Button>
+      {attempts > 0 && (
+        <Button
+          icon={ledgerOpen ? ChevronDown : History}
+          size={'small'}
+          style={quiet}
+          type={'text'}
+          onClick={onToggleLedger}
+        >
+          {t('goalProcess.decision.attempts', { count: attempts })}
+        </Button>
+      )}
+      <AcceptanceChip view={subject} />
+    </>
+  );
+});
+
+GateLinks.displayName = 'GoalGateLinks';
+
+/**
+ * A gate the owner answers, as one card of its own above the task list: who is
+ * asking, what about, the question and its answers. Lifted out of the list —
+ * a decision is the one thing on the page waiting for the reader, not another
+ * row in it.
+ */
+const GateCard = memo<{
   actions: FrontierActions;
   canEdit: boolean;
+  category: Exclude<GoalGateCategory, 'clarify'>;
+  goalAgentId?: string | null;
+  numbers: Map<string, number>;
+  onSelect: (nodeId: string) => void;
+  /** Set when this gate is a held batch release reviewed on its own page. */
+  releaseGateAcceptanceId?: string;
+  subject?: GoalNodeView;
+  view: GoalNodeView;
+}>(
+  ({
+    actions,
+    canEdit,
+    category,
+    goalAgentId,
+    numbers,
+    onSelect,
+    releaseGateAcceptanceId,
+    subject,
+    view,
+  }) => {
+    const { t } = useTranslation('chat');
+    const gateSummary = useGateSummary();
+    const [ledgerOpen, setLedgerOpen] = useState(false);
+    const taskSubject = subject?.node.kind === 'task' ? subject : undefined;
+    const subjectTitle =
+      subject?.node.kind === 'task'
+        ? (() => {
+            const key = coordinatorNodeTitleKey(subject);
+            return key ? t(key as any) : subject.node.title;
+          })()
+        : undefined;
+    if (releaseGateAcceptanceId)
+      return (
+        <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
+          <ReleaseGateEntry
+            acceptanceId={releaseGateAcceptanceId}
+            decision={view.decision!}
+            goalId={view.node.goalId}
+          />
+        </div>
+      );
+    return (
+      <div className={styles.decisionCard} data-goal-gate={view.decision!.id}>
+        <GoalDecisionCase
+          agentId={goalAgentId}
+          basis={view.node.description}
+          canAnswer={canEdit}
+          category={category}
+          decision={view.decision!}
+          evidence={taskSubject && ledgerOpen ? <AttemptLedger view={taskSubject} /> : undefined}
+          summary={gateSummary(category, subjectTitle)}
+          footer={
+            // A goal-level question (the main Agent asking about the goal itself)
+            // stopped no Task, so there is no run to open.
+            taskSubject ? (
+              <GateLinks
+                ledgerOpen={ledgerOpen}
+                subject={taskSubject}
+                onOpen={() => onSelect(taskSubject.node.id)}
+                onToggleLedger={() => setLedgerOpen(!ledgerOpen)}
+              />
+            ) : undefined
+          }
+          task={
+            taskSubject && subjectTitle
+              ? {
+                  description: taskSubject.node.description,
+                  onOpen: () => onSelect(taskSubject.node.id),
+                  title:
+                    numbers.get(taskSubject.node.id) !== undefined
+                      ? `#${numbers.get(taskSubject.node.id)} ${subjectTitle}`
+                      : subjectTitle,
+                }
+              : undefined
+          }
+          onDecide={(optionId, resolution) =>
+            actions.decide(view.decision!.id, optionId, resolution)
+          }
+        />
+      </div>
+    );
+  },
+);
+
+GateCard.displayName = 'GoalGateCard';
+
+const FrontierRow = memo<{
   item: FrontierItem;
   numbers: Map<string, number>;
   onSelect: (nodeId: string) => void;
   /** A gate's ledger is the ledger of the Task it was opened for. */
   subject?: GoalNodeView;
-}>(({ actions, canEdit, item, numbers, onSelect, subject }) => {
+}>(({ item, numbers, onSelect, subject }) => {
   const { t } = useTranslation('chat');
-  const optionLabel = useGateOptionLabel();
-  const [note, setNote] = useState('');
   const { view } = item;
   const { node } = view;
   const deps = view.dependsOn.map((id) => numbers.get(id)).filter(Boolean);
@@ -352,9 +511,9 @@ const FrontierRow = memo<{
   const coordinatorTitleKey = coordinatorNodeTitleKey(view);
   const gateKind = item.kind === 'gate' ? viewGateKind(view) : undefined;
   const rawGateReason = gateKind ? coordinatorGateReason(view.decision?.question) : undefined;
-  const gateReasonCopy = coordinatorReasonCopy(rawGateReason);
-  const gateReasonText = gateReasonCopy
-    ? t(gateReasonCopy.key as any, gateReasonCopy.params)
+  const gateReasonCopies = coordinatorReasonCopies(rawGateReason);
+  const gateReasonText = gateReasonCopies
+    ? gateReasonCopies.map((copy) => t(copy.key as any, copy.params)).join('; ')
     : rawGateReason;
 
   // Gate rows carry no tag: the expanded card with its action buttons already
@@ -369,18 +528,18 @@ const FrontierRow = memo<{
         ? null
         : { color: 'info', text: t('goalProcess.tag.verifying') }
       : item.kind === 'stale'
-        ? { color: 'error', text: t('goalProcess.tag.lost') }
-        : item.kind === 'done'
-          ? {
-              color: undefined,
-              text:
-                node.status === 'resolved'
-                  ? t('goalProcess.tag.done')
-                  : t('goalProcess.tag.retired'),
-            }
-          : null;
-
-  const stop = (event: React.MouseEvent) => event.stopPropagation();
+        ? { color: 'warning', text: t('goalProcess.tag.stalled') }
+        : item.kind === 'quota'
+          ? { color: 'warning', text: t('goalProcess.tag.waitingQuota') }
+          : item.kind === 'done'
+            ? {
+                color: undefined,
+                text:
+                  node.status === 'resolved'
+                    ? t('goalProcess.tag.done')
+                    : t('goalProcess.tag.retired'),
+              }
+            : null;
 
   return (
     <Block
@@ -411,6 +570,7 @@ const FrontierRow = memo<{
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
           <AcceptanceChip view={view} />
           {item.kind === 'running' && <RunningClock startedAt={view.startedAt} />}
+          {item.kind === 'quota' && <QuotaResumeTime retryAt={view.quotaRetryAt} />}
           {item.kind === 'done' && <DoneTime view={view} />}
         </Flexbox>
       </Flexbox>
@@ -425,9 +585,6 @@ const FrontierRow = memo<{
         // out.
         <Flexbox className={styles.body} gap={14}>
           {item.kind === 'gate' && view.decision && (
-            // State the problem itself, in the user's language when the
-            // coordinator's vocabulary is recognized — the buttons below
-            // already carry the choices, so no extra framing sentence.
             <Text fontSize={13} weight={500}>
               {gateReasonText ?? view.decision.question}
             </Text>
@@ -439,40 +596,12 @@ const FrontierRow = memo<{
               {node.description}
             </Text>
           )}
-          {item.kind === 'stale' && <StaleBody view={view} />}
-          <AttemptLedger view={subject ?? view} />
-          {item.kind === 'gate' && canEdit && (
-            // A click here is aimed at the note field or a decision button —
-            // never at "open this node".
-            <Flexbox gap={14} onClick={stop}>
-              <Flexbox gap={4}>
-                <span className={styles.label}>{t('goalProcess.gate.noteLabel')}</span>
-                <TextArea
-                  autoSize={{ maxRows: 3, minRows: 1 }}
-                  placeholder={t('goalProcess.gate.notePlaceholder')}
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                />
-              </Flexbox>
-              {/* Actions close the card: read the situation, add guidance, then decide. */}
-              <Flexbox horizontal gap={8}>
-                {view.decision?.options?.map((option) => (
-                  <Tooltip key={option.id} title={option.description}>
-                    <Button
-                      type={
-                        option.id === view.decision?.recommendedOptionId ? 'primary' : 'default'
-                      }
-                      onClick={(event) => {
-                        stop(event);
-                        actions.decide(view.decision!.id, option.id, note.trim() || undefined);
-                      }}
-                    >
-                      {optionLabel(option)}
-                    </Button>
-                  </Tooltip>
-                ))}
-              </Flexbox>
-            </Flexbox>
+          {item.kind === 'stale' ? (
+            // The open attempt would read "Running" under a "Stalled" badge; the
+            // body already says when it went quiet and what happens next.
+            <StaleBody view={view} />
+          ) : (
+            <AttemptLedger view={subject ?? view} />
           )}
         </Flexbox>
       )}
@@ -514,7 +643,18 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
         (item) => item.kind === 'gate' && viewGateKind(item.view) === 'clarifyGoal',
       )
     : [];
-  const rows = graph.frontier.filter((item) => !clarifyItems.includes(item));
+  // Every other gate is its own decision card above the list.
+  const gateCards = graph.frontier.flatMap((item) => {
+    if (item.kind !== 'gate' || !item.view.decision) return [];
+    const category = goalGateCategory({
+      nodeTitle: item.view.node.title,
+      options: item.view.decision.options,
+    });
+    return category === 'clarify' ? [] : [{ category, item }];
+  });
+  const rows = graph.frontier.filter(
+    (item) => !clarifyItems.includes(item) && !gateCards.some((gate) => gate.item === item),
+  );
   const pendingClarifications: PendingGoalClarification[] = clarifyItems.map(({ view }) => ({
     decisionId: view.decision!.id,
     description: view.node.description,
@@ -541,88 +681,111 @@ const Frontier = memo<FrontierProps>(({ actions, canEdit, graph, onSelect, plann
         {canEdit && <AddTaskButton onAdd={actions.addTask} />}
       </Flexbox>
 
-      <div className={styles.list}>
-        <Block gap={0} padding={2} variant={'borderless'}>
-          {graph.frontier.length === 0 &&
-            (planning ? (
-              <Flexbox horizontal align={'center'} gap={10} padding={12}>
-                <RunningGlyph size={16} />
-                <Flexbox gap={2}>
-                  <Text weight={500}>{t('goalProcess.planning.title')}</Text>
+      {gateCards.map(({ category, item }) => (
+        <GateCard
+          actions={actions}
+          canEdit={canEdit}
+          category={category}
+          goalAgentId={graph.goal.agentId}
+          key={item.key}
+          numbers={numbers}
+          subject={item.view.gateSubjectId ? graph.byId[item.view.gateSubjectId] : undefined}
+
+          view={item.view}
+          releaseGateAcceptanceId={
+            graph.goal.config?.rolloutState?.releaseReviewNodeId === item.view.node.id
+              ? graph.goal.config.rolloutState.releaseGateAcceptanceId
+              : undefined
+          }
+          onSelect={onSelect}
+        />
+      ))}
+
+      {(rows.length > 0 ||
+        pendingClarifications.length > 0 ||
+        graph.blocked.length > 0 ||
+        graph.frontier.length === 0) && (
+        <div className={styles.list}>
+          <Block gap={0} padding={2} variant={'borderless'}>
+            {graph.frontier.length === 0 &&
+              (planning ? (
+                <Flexbox horizontal align={'center'} gap={10} padding={12}>
+                  <RunningGlyph size={16} />
+                  <Flexbox gap={2}>
+                    <Text weight={500}>{t('goalProcess.planning.title')}</Text>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('goalProcess.planning.description')}
+                    </Text>
+                  </Flexbox>
+                </Flexbox>
+              ) : (
+                <Flexbox gap={2} padding={12}>
+                  <Text weight={500}>
+                    {achieved
+                      ? t('goalProcess.frontier.achievedTitle')
+                      : t('goalProcess.frontier.emptyTitle')}
+                  </Text>
                   <Text fontSize={12} type={'secondary'}>
-                    {t('goalProcess.planning.description')}
+                    {achieved
+                      ? t('goalProcess.frontier.achievedDescription')
+                      : t('goalProcess.frontier.emptyDescription')}
                   </Text>
                 </Flexbox>
-              </Flexbox>
-            ) : (
-              <Flexbox gap={2} padding={12}>
-                <Text weight={500}>
-                  {achieved
-                    ? t('goalProcess.frontier.achievedTitle')
-                    : t('goalProcess.frontier.emptyTitle')}
-                </Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {achieved
-                    ? t('goalProcess.frontier.achievedDescription')
-                    : t('goalProcess.frontier.emptyDescription')}
-                </Text>
-              </Flexbox>
-            ))}
-          {pendingClarifications.length > 0 && (
-            // Filled so the one thing blocking the goal stands apart from the
-            // task rows around it.
-            <Block gap={12} padding={12} variant={'filled'}>
-              <Flexbox gap={2}>
-                <Text weight={500}>{t('goalProcess.clarify.title')}</Text>
-                <Text fontSize={12} type={'secondary'}>
-                  {t('goalProcess.clarify.description')}
-                </Text>
-              </Flexbox>
-              <GoalClarification goalId={graph.goal.id} pending={pendingClarifications} />
-            </Block>
-          )}
-          {rows.map((item, index) => (
-            <Fragment key={item.key}>
-              {(index > 0 || pendingClarifications.length > 0) && (
-                <Divider dashed style={{ margin: 0 }} />
-              )}
-              <FrontierRow
-                actions={actions}
-                canEdit={canEdit}
-                item={item}
-                numbers={numbers}
-                subject={item.view.gateSubjectId ? graph.byId[item.view.gateSubjectId] : undefined}
-                onSelect={onSelect}
-              />
-            </Fragment>
-          ))}
-        </Block>
-        {graph.blocked.length > 0 && (
-          <>
-            <Divider dashed style={{ margin: 0 }} />
-            <div className={styles.blockedHead} onClick={() => setShowBlocked(!showBlocked)}>
-              <Icon icon={showBlocked ? ChevronDown : ChevronRight} size={12} />
-              <span>{t('goalProcess.frontier.blocked', { count: graph.blocked.length })}</span>
-            </div>
-            {showBlocked && (
-              <Block gap={0} padding={2} variant={'borderless'}>
-                {graph.blocked.map((view, index) => (
-                  <Fragment key={view.node.id}>
-                    {index > 0 && <Divider dashed style={{ margin: 0 }} />}
-                    <FrontierRow
-                      actions={actions}
-                      canEdit={canEdit}
-                      item={{ key: view.node.id, kind: 'ready', rank: 3, view }}
-                      numbers={numbers}
-                      onSelect={onSelect}
-                    />
-                  </Fragment>
-                ))}
+              ))}
+            {pendingClarifications.length > 0 && (
+              // Filled so the one thing blocking the goal stands apart from the
+              // task rows around it.
+              <Block gap={12} padding={12} variant={'filled'}>
+                <Flexbox gap={2}>
+                  <Text weight={500}>{t('goalProcess.clarify.title')}</Text>
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('goalProcess.clarify.description')}
+                  </Text>
+                </Flexbox>
+                <GoalClarification goalId={graph.goal.id} pending={pendingClarifications} />
               </Block>
             )}
-          </>
-        )}
-      </div>
+            {rows.map((item, index) => (
+              <Fragment key={item.key}>
+                {(index > 0 || pendingClarifications.length > 0) && (
+                  <Divider dashed style={{ margin: 0 }} />
+                )}
+                <FrontierRow
+                  item={item}
+                  numbers={numbers}
+                  subject={
+                    item.view.gateSubjectId ? graph.byId[item.view.gateSubjectId] : undefined
+                  }
+                  onSelect={onSelect}
+                />
+              </Fragment>
+            ))}
+          </Block>
+          {graph.blocked.length > 0 && (
+            <>
+              <Divider dashed style={{ margin: 0 }} />
+              <div className={styles.blockedHead} onClick={() => setShowBlocked(!showBlocked)}>
+                <Icon icon={showBlocked ? ChevronDown : ChevronRight} size={12} />
+                <span>{t('goalProcess.frontier.blocked', { count: graph.blocked.length })}</span>
+              </div>
+              {showBlocked && (
+                <Block gap={0} padding={2} variant={'borderless'}>
+                  {graph.blocked.map((view, index) => (
+                    <Fragment key={view.node.id}>
+                      {index > 0 && <Divider dashed style={{ margin: 0 }} />}
+                      <FrontierRow
+                        item={{ key: view.node.id, kind: 'ready', rank: 3, view }}
+                        numbers={numbers}
+                        onSelect={onSelect}
+                      />
+                    </Fragment>
+                  ))}
+                </Block>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </Flexbox>
   );
 });

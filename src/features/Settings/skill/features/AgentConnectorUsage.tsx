@@ -1,11 +1,11 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 
 /**
@@ -28,14 +28,20 @@ const AgentConnectorUsage = memo<{
       gap={12}
       justify="space-between"
       style={{
-        background: 'var(--ant-color-fill-quaternary)',
+        background: 'var(--lobe-color-fill-quaternary)',
         borderRadius: 8,
         marginBottom: 16,
         padding: '10px 12px',
       }}
     >
       <Flexbox horizontal align="center" gap={10} style={{ flex: 1, overflow: 'hidden' }}>
-        <Avatar avatar={agentAvatar || undefined} size={32} title={agentTitle || undefined} />
+        <AgentAvatar
+          agentId={agentId}
+          avatar={agentAvatar}
+          shape={'circle'}
+          size={32}
+          title={agentTitle || undefined}
+        />
         <Flexbox style={{ overflow: 'hidden' }}>
           <Text style={{ fontSize: 12 }} type="secondary">
             {t('agentConnectorUsage.label')}

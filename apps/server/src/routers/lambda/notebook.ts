@@ -98,6 +98,24 @@ export const notebookRouter = router({
         ? await resolveRootOperation((id) => ctx.operationModel.findOwnOperationById(id), operation)
         : null;
 
+      // One report written twice — through the agent documents tool and through
+      // this one — used to land as two documents: two entries in the topic's
+      // document list, two Works, and two deliverable cards on the goal graph,
+      // all for one piece of work. A byte-identical document of the same kind
+      // already in this topic is that second write, so it reuses the row
+      // instead of forking the document. Nothing changed, so nothing is
+      // registered either. The kind travels with the search, because a document
+      // is found by its type: `agent/plan` and the labelled kinds (`article` /
+      // `note` / `report`) stay distinct, so a plan is never answered with a
+      // markdown note and a note is never answered with a markdown row.
+      const twin = await ctx.topicDocumentModel.findVerbatimTwin({
+        content: input.content,
+        fileType: input.type,
+        title: input.title,
+        topicId: input.topicId,
+      });
+      if (twin) return twin;
+
       // Create the document
       const document = await ctx.documentModel.create({
         content: input.content,

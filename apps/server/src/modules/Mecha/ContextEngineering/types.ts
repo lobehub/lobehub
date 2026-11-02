@@ -20,7 +20,7 @@ import type {
   UserMemoryData,
   WorkspaceContext,
 } from '@lobechat/context-engine';
-import type { AgentIdentityContext, PageContentContext } from '@lobechat/prompts';
+import type { AgentIdentityContext } from '@lobechat/prompts';
 import type {
   ExpertiseContextSnapshot,
   RuntimeAdditionalContextFragment,
@@ -85,6 +85,11 @@ export interface ServerMessagesEngineParams {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   /** Additional variable values to merge with defaults (e.g. device paths) */
   additionalVariables?: Record<string, string>;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (planned by `shouldCompress`).
+   */
+  attachmentPreviewFileIds?: string[];
   /** Agent documents to inject into context based on load rules and positions */
   agentDocuments?: AgentContextDocument[];
   /** Immutable expertise captured when the operation started. */
@@ -166,9 +171,6 @@ export interface ServerMessagesEngineParams {
   /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */
   modelKnowledgeCutoff?: string;
 
-  /** Page content context (optional, for document editing) */
-  pageContentContext?: PageContentContext;
-
   /** Plan document TODO state used when conversation messages contain no TODO state */
   planTodo?: PlanTodoConfig;
 
@@ -211,4 +213,3 @@ export {
   type TopicReferenceItem,
   type UserMemoryData,
 } from '@lobechat/context-engine';
-export type { PageContentContext } from '@lobechat/prompts';

@@ -1,4 +1,5 @@
 import { MirroredTerminalEchoGuard } from './mirroredTerminalEcho';
+import { isSessionTerminalEvent } from './terminalEvent';
 import type {
   AgentStreamClientEvents,
   AgentStreamClientOptions,
@@ -79,6 +80,7 @@ export class AgentStreamClient extends TypedEmitter {
   private resumeMode = false;
   private resumeFlushTimer: ReturnType<typeof setTimeout> | null = null;
 
+  private readonly clientId?: string;
   private readonly gatewayUrl: string;
   private readonly operationId: string;
   private readonly autoReconnect: boolean;
@@ -88,6 +90,7 @@ export class AgentStreamClient extends TypedEmitter {
 
   constructor(options: AgentStreamClientOptions) {
     super();
+    this.clientId = options.clientId;
     this.gatewayUrl = options.gatewayUrl;
     this.operationId = options.operationId;
     this.token = options.token;
@@ -216,7 +219,11 @@ export class AgentStreamClient extends TypedEmitter {
   private handleOpen = (): void => {
     this.reconnectDelay = INITIAL_RECONNECT_DELAY;
     this.setStatus('authenticating');
-    this.sendMessage({ token: this.token, type: 'auth' });
+    this.sendMessage({
+      ...(this.clientId && { clientId: this.clientId }),
+      token: this.token,
+      type: 'auth',
+    });
   };
 
   private handleMessage = (event: MessageEvent): void => {
@@ -290,7 +297,7 @@ export class AgentStreamClient extends TypedEmitter {
           // sibling/supervisor streaming. Events with no operationId (legacy
           // gateway) are treated as this op's, preserving old behavior.
           const isOwnTerminal =
-            (agentEvent.type === 'agent_runtime_end' || agentEvent.type === 'error') &&
+            isSessionTerminalEvent(agentEvent) &&
             (!agentEvent.operationId || agentEvent.operationId === this.operationId);
 
           if (this.resumeMode) {

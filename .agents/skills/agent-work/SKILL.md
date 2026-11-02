@@ -19,6 +19,11 @@ Two tables (`packages/database/src/schemas/work.ts`):
 
 **Read-path compatibility gate**: `OPT_IN_WORK_TYPES` (currently `{'file'}`) hides newer types from clients that did not opt in (`includeFileWorks`). Released Electron clients lag by weeks and crash on unknown type descriptors (`descriptor.getIcon` on `undefined`), so a request without the opt-in receives exactly the pre-`file` set. Any NEW Work type must ship behind the same kind of opt-in.
 
+The gate has two kinds of emission points, and both must honor the client's declaration:
+
+- **Pulled reads** (`message.getMessages`, `work.*` lists, `shareChat.getMessages`): the client service passes `includeFileWorks: true` on the request.
+- **Pushed payloads** (the `uiMessages` snapshots and `message_patch` revisions built by `AgentRuntimeService.queryUiMessages`): no request carries the opt-in, so the starting client declares the `file_works` stream feature and the run stores it as `state.host.acceptsFileWorks`; approval continuations and group members inherit it. A pushed path that skips this check drops the card until the user reloads the page.
+
 ## Access scope (Agent Share visitors)
 
 A share visitor's run executes as the creator, so owner scope alone cannot separate its Works. Every Work read and write takes a `WorkAccessScope` (`packages/types/src/work.ts`): `ordinary` sees only rows without share provenance; `agentShare` sees only rows stamped in `works.metadata.agentShare` with exactly that share/topic/visitor.
@@ -27,6 +32,13 @@ A share visitor's run executes as the creator, so owner scope alone cannot separ
 - Any registration path reachable from a visitor run (skill results, completion scans, anchor stamping) must build its `WorkModel` with the run's scope via `resolveRunWorkAccessScope`. A visitor run without a topic yields `null`: skip registration (fail closed) rather than registering unscoped into the creator's lists.
 - The resource unique indexes include the visitor topic id, so the creator and each visitor topic keep separate rows for the same external resource.
 - Visitor read payloads drop the creator's `userId` / `workspaceId` and gate spend on `showModelInfo` (`toVisitorMessage`).
+
+## Orphaned Works (backing resource deleted)
+
+`works.resourceId` has no FK, and deleting a document, task, or file never cascades into its Work (LOBE-13917). Deleting the Work would also drop its version history and its project and goal references. Each read surface handles orphans itself:
+
+- **Resource-page galleries hide orphans.** These are `listByWorkspace` surfaces: `/resource`, `/resource/works`, and the project dashboard. They filter orphans out with `resourceLiveFilter` (`packages/database/src/models/work/internal.ts`). A task or document must still exist and not be trashed. A file Work's current-version `fileId` must point to a `files` row that exists and is not trashed. Restoring the resource brings the card back. Any new gallery-style Work list must apply the same filter.
+- **Conversation surfaces keep the card.** These are `listByConversation` and the cards under messages; the conversation did produce the Work. `resourceDeleted` drives a click-time prompt (`useResourceDeletedPrompt`) that lets the user remove it.
 
 ## Registration write paths
 
@@ -87,7 +99,7 @@ The whole scan returns `{attempted, failed}` and the completion backstop (`Compl
 ## Key decisions (from the Work PRs)
 
 - **Only successful create/edit results become Works** (LOBE-10967). Read-only queries, comments, merges/closes, and branch/repo operations are excluded — `gh pr view` printing an entity URL must NOT register.
-- **`owner/repo#number` is the canonical github identity**, not node\_id: the gh CLI surface never returns node\_id, and the same entity touched via REST tools and CLI must land on one Work row.
+- **`owner/repo#number` is the canonical github identity**, not node_id: the gh CLI surface never returns node_id, and the same entity touched via REST tools and CLI must land on one Work row.
 - **stdout is the source of truth for identity** on the CLI path (`gh … create/edit` prints the entity URL); the command's edit target is the fallback. The LAST gh create/edit segment of a chained command owns the trailing URL.
 - **Persisted URLs are http(s)-allowlisted** (`sanitizeExternalUrl`): gh stdout / tool results are member-controlled and the URL reaches `shell.openExternal` on desktop.
 - **The tokenizer is deliberately hand-rolled** (no `shell-quote` dep): a real parser would expand what must stay literal, and the worst failure mode is skipping a bookkeeping registration.

@@ -16,8 +16,10 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { GenerationService } from '@/server/services/generation';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
+import { measureVideoOutputUsage } from '@/server/services/generation/videoOutputUsage';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 import type { VideoGenerationAsset } from '@/types/generation';
@@ -127,6 +129,12 @@ export async function processBackgroundVideoPolling(
       FileSource.VideoGeneration,
     );
 
+    // Before marking Success so the client's post-success topic refresh sees it
+    await new GenerationService(db, userId, workspaceId).ensureTopicCover(
+      generationTopicId,
+      processResult.thumbnailKey,
+    );
+
     const duration = Date.now() - asyncTaskCreatedAt.getTime();
 
     await asyncTaskModel.update(asyncTaskId, {
@@ -151,6 +159,7 @@ export async function processBackgroundVideoPolling(
       const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
       await chargeAfterGenerate({
         computePriceParams: {
+          duration: (batch?.config as RuntimeVideoGenParams | undefined)?.duration,
           generateAudio: (batch?.config as RuntimeVideoGenParams | undefined)?.generateAudio,
           resolution: (batch?.config as RuntimeVideoGenParams | undefined)?.resolution,
         },
@@ -169,7 +178,7 @@ export async function processBackgroundVideoPolling(
         model: resolvedModelId,
         prechargeResult,
         provider,
-        usage: pollResult.usage,
+        usage: pollResult.usage ?? measureVideoOutputUsage(resolvedModelId, processResult),
         userId,
         workspaceId,
       });

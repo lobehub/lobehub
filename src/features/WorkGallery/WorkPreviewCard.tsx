@@ -1,19 +1,25 @@
 'use client';
 
-import type { WorkSummaryItem } from '@lobechat/types';
-import { formatTokenNumber } from '@lobechat/utils/format';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Trash2Icon } from 'lucide-react';
-import { memo } from 'react';
+import type { CanvasStorageItem, WorkSummaryItem } from '@lobechat/types';
+import { formatSize, formatTokenNumber } from '@lobechat/utils/format';
+import {
+  ActionIcon,
+  Avatar,
+  createStaticStyles,
+  cssVar,
+  cx,
+  DropdownMenu,
+  Flexbox,
+  Tag,
+} from '@lobehub/ui';
+import { MoreHorizontalIcon } from 'lucide-react';
+import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import { useCanvasCardMenu } from '@/features/CanvasStorage/useCanvasCardMenu';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
-import { useRemoveWork } from '@/features/Work/useRemoveWork';
-import { useResourceDeletedPrompt } from '@/features/Work/useResourceDeletedPrompt';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -61,26 +67,6 @@ const styles = createStaticStyles(({ css }) => ({
       border-color: ${cssVar.colorBorder};
     }
   `,
-  removeAction: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 12px;
-    inset-inline-end: 12px;
-
-    opacity: 0;
-
-    transition: opacity ${cssVar.motionDurationFast};
-
-    &:focus-visible,
-    .work-preview-card:hover & {
-      opacity: 1;
-    }
-
-    /* Touch devices have no hover to reveal it; keep the only removal control visible. */
-    @media (hover: none) {
-      opacity: 1;
-    }
-  `,
   footer: css`
     overflow: hidden;
     margin-block-start: 8px;
@@ -101,6 +87,10 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   metaRow: css`
     min-width: 0;
+  `,
+  more: css`
+    flex: none;
+    margin-inline-start: auto;
   `,
   meta: css`
     flex: none;
@@ -146,12 +136,17 @@ const styles = createStaticStyles(({ css }) => ({
 interface WorkPreviewCardProps {
   item: WorkSummaryItem;
   onOpen: (item: WorkSummaryItem) => void;
-  /** Refresh the owning (infinite) list after an orphan card is removed; see `useRemoveWork`. */
-  onRemoved?: () => void | Promise<void>;
+  /** File storage a canvas Work holds, when it is the caller's own canvas. */
+  storage?: CanvasStorageItem;
 }
+
+const stopPropagation = (event: MouseEvent) => event.stopPropagation();
 
 const workTypeKey = (item: WorkSummaryItem) => {
   switch (item.resourceType) {
+    case 'canvas': {
+      return 'work.type.canvas';
+    }
     case 'document': {
       return 'work.type.document';
     }
@@ -176,11 +171,14 @@ const workTypeKey = (item: WorkSummaryItem) => {
   }
 };
 
-const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, onRemoved }) => {
+/**
+ * Gallery card for a live Work. Orphans (backing resource deleted or trashed)
+ * never reach it: `listByWorkspace` filters them out server-side, so the card
+ * has no "resource deleted" state.
+ */
+const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, storage }) => {
   const { t, i18n } = useTranslation(['chat', 'common', 'file']);
   const agent = useAgentDisplayMeta(item.originAgentId);
-  const removeWork = useRemoveWork({ onRemoved });
-  const promptResourceDeleted = useResourceDeletedPrompt({ onRemoved });
   const descriptor = getWorkTypeDescriptor(item);
   const title =
     descriptor.getTitle(item)?.trim() ||
@@ -192,13 +190,6 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, onRemoved })
     item.resourceType.startsWith('github_') && identifier?.includes('#')
       ? `#${identifier.split('#').at(-1)}`
       : identifier;
-  // The backing resource was deleted outside the tool path: the Work lingers as
-  // an orphan rendered from its snapshot and opening it would 404. The card
-  // keeps its normal look; a click explains that the resource is gone and
-  // offers removal in the same dialog — the only way the user can clear the
-  // card, since the resource it points at is already gone. The hover trash
-  // action reaches the same confirm for users who already know.
-  const resourceDeleted = item.resourceDeleted;
   const openTarget = descriptor.getOpenTarget(item);
   const clickable = !!openTarget && (openTarget.kind !== 'filePreview' || !!openTarget.url);
   const eventDate = item.event.changeType === 'created' ? item.createdAt : item.updatedAt;
@@ -213,28 +204,14 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, onRemoved })
   });
   const totalTokens = getWorkVersionTotalTokens(item.event.cumulativeUsage);
   const cost = formatWorkVersionCost(item.totalCost);
+  const size = storage ? formatSize(storage.totalSize) : null;
+  const menuItems = useCanvasCardMenu(item, storage);
 
   return (
     <Flexbox
       className={cx('work-preview-card', styles.card, clickable && styles.clickable)}
-      onClick={
-        clickable ? () => (resourceDeleted ? promptResourceDeleted(item) : onOpen(item)) : undefined
-      }
+      onClick={clickable ? () => onOpen(item) : undefined}
     >
-      {resourceDeleted && (
-        <ActionIcon
-          danger
-          className={styles.removeAction}
-          icon={Trash2Icon}
-          size={'small'}
-          title={t('workingPanel.works.remove', { ns: 'chat' })}
-          variant={'filled'}
-          onClick={(event) => {
-            event.stopPropagation();
-            removeWork(item);
-          }}
-        />
-      )}
       <WorkPreview item={item} title={title} />
       <div className={styles.cardInfo}>
         <Flexbox horizontal align={'center'} className={styles.metaRow} gap={6}>
@@ -251,6 +228,18 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, onRemoved })
             <Tag size={'small'} style={{ marginInlineStart: 'auto' }}>
               {item.status}
             </Tag>
+          )}
+          {menuItems.length > 0 && (
+            <div className={styles.more} onClick={stopPropagation}>
+              <DropdownMenu items={menuItems} placement={'bottomRight'}>
+                <ActionIcon
+                  icon={MoreHorizontalIcon}
+                  size={'small'}
+                  title={t('more', { ns: 'common' })}
+                  onClick={stopPropagation}
+                />
+              </DropdownMenu>
+            </div>
           )}
         </Flexbox>
         <div className={styles.title}>{title}</div>
@@ -288,9 +277,9 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, onRemoved })
               )}
             </Flexbox>
           )}
-          {(totalTokens || cost) && (
+          {(size || totalTokens || cost) && (
             <span className={styles.usage}>
-              {[totalTokens ? `${formatTokenNumber(totalTokens)} tokens` : null, cost]
+              {[size, totalTokens ? `${formatTokenNumber(totalTokens)} tokens` : null, cost]
                 .filter(Boolean)
                 .join(' · ')}
             </span>

@@ -1,7 +1,13 @@
-import { DEVICE_OFFLINE_RUN_STATUS } from '@lobechat/const/goal';
+import {
+  DEVICE_OFFLINE_RUN_STATUS,
+  QUOTA_LIMITED_RUN_STATUS,
+  TRANSIENT_FAILED_RUN_STATUS,
+} from '@lobechat/const/goal';
 import type { GoalItem, TaskItem } from '@lobechat/types';
 
 import { HETERO_DISPATCH_ERROR_HEADLINES } from '@/server/services/aiAgent/helpers/heteroErrors';
+
+import { classifyGoalFailure } from './failureClass';
 
 /**
  * Attempts a Task gets before the coordinator opens a decision gate, when the
@@ -124,13 +130,44 @@ export const countConsecutiveDeviceOfflineRuns = (runs: readonly { status: strin
 };
 
 /**
- * Attempts charged to a Task's budget: every run it produced except the ones
- * its device lost. Those retry on the offline schedule above instead.
+ * Runs that ended on a machine problem nothing judged: the device was gone, a
+ * usage limit was hit, or a transport fault lost the run. Each retries on its
+ * own bounded schedule instead of spending the attempt budget.
+ */
+const UNCHARGED_RUN_STATUSES = new Set<string>([
+  DEVICE_OFFLINE_RUN_STATUS,
+  QUOTA_LIMITED_RUN_STATUS,
+  TRANSIENT_FAILED_RUN_STATUS,
+]);
+
+export const isUnchargedRun = (run: { status: string }): boolean =>
+  UNCHARGED_RUN_STATUSES.has(run.status);
+
+/** Runs not charged to the Task's attempt budget (see `UNCHARGED_RUN_STATUSES`). */
+export const countUnchargedRuns = (runs: readonly { status: string }[]): number =>
+  runs.filter(isUnchargedRun).length;
+
+/**
+ * Consecutive runs that ended with `status`, `runs` newest first. Like the
+ * offline count, the streak restarts once any other run ends, so a usage limit
+ * hit once a week is not held to last week's retries.
+ */
+export const countConsecutiveRunsWithStatus = (
+  runs: readonly { status: string }[],
+  status: string,
+): number => {
+  const firstOther = runs.findIndex((run) => run.status !== status);
+  return firstOther === -1 ? runs.length : firstOther;
+};
+
+/**
+ * Attempts charged to a Task's budget: every run it produced except the
+ * uncharged ones (`countUnchargedRuns`). Those retry on their own schedules.
  */
 export const countChargedTaskAttempts = (
   task: Pick<TaskItem, 'totalTopics'>,
-  deviceOfflineRuns: number,
-): number => Math.max(0, (task.totalTopics ?? 0) - deviceOfflineRuns);
+  unchargedRuns: number,
+): number => Math.max(0, (task.totalTopics ?? 0) - unchargedRuns);
 
 /**
  * Dispatch failures that only say the device is not reachable right now. A
@@ -157,11 +194,86 @@ export const isDeviceUnavailableFailure = (error?: string | null): boolean =>
 /**
  * The `task_topics.status` a run that errored ends with. Every writer of a failed
  * run goes through this, so the dispatch result and a lifecycle hook delivered
- * later agree on an offline run instead of the later one turning it back into a
- * charged failure.
+ * later agree on an uncharged run (offline device, usage limit, transport fault)
+ * instead of the later one turning it back into a charged failure.
  */
-export const resolveFailedRunStatus = (error?: string | null): string =>
-  isDeviceUnavailableFailure(error) ? DEVICE_OFFLINE_RUN_STATUS : 'failed';
+export const resolveFailedRunStatus = (error?: string | null): string => {
+  if (isDeviceUnavailableFailure(error)) return DEVICE_OFFLINE_RUN_STATUS;
+  const failure = classifyGoalFailure(error);
+  if (failure.class === 'quota') return QUOTA_LIMITED_RUN_STATUS;
+  if (failure.class === 'transient') return TRANSIENT_FAILED_RUN_STATUS;
+  return 'failed';
+};
+
+/**
+ * What a failed run's error says about retrying it.
+ *
+ * - `quota_reset`: a usage window rejected the run and reports when it reopens
+ *   (`resetsAt`, epoch ms). Retrying earlier fails the same way.
+ * - `device_unavailable`: the run never reached its device; a reconnect fixes it.
+ * - `needs_user`: credentials, permission, spend or a cancellation. Retrying
+ *   cannot help until a person acts.
+ * - `transient`: network, gateway 5xx or provider capacity. A later retry can work.
+ * - `unknown`: nothing above matched.
+ *
+ * One classification for Task runs and main Agent turns, so the two lanes stop
+ * disagreeing about the same error. Earlier, a Task waited a day for an offline
+ * device while a planning turn on that device was re-dispatched every few seconds.
+ */
+export type RunFailureKind =
+  'device_unavailable' | 'needs_user' | 'quota_reset' | 'transient' | 'unknown';
+
+/** A retry after a quota reset waits this much longer, so the window has actually reopened. */
+export const QUOTA_RESET_MARGIN_MS = 60_000;
+
+export interface RunFailure {
+  kind: RunFailureKind;
+  /** Only on `quota_reset`: when the usage window reopens, epoch ms. */
+  resetsAt?: number;
+}
+
+const NEEDS_USER_PATTERN =
+  /auth|credential|api.?key|permission|approv|forbidden|unauthor|usage.?limit|session limit|quota|billing|budget|insufficient|balance|cancel|用户|授权|凭据|额度|余额/i;
+const TRANSIENT_PATTERN =
+  /ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|fetch failed|network error|socket hang up|service unavailable|bad gateway|gateway timeout|\b50[234]\b|\b429\b|too many requests|overloaded|upstream.?busy|concurrency.?limit|DEVICE_GATEWAY_ERROR|DEVICE_GATEWAY_UNREACHABLE|DEVICE_GATEWAY_RATE_LIMITED/i;
+/** `ErrorCategory` values from the model-runtime taxonomy. */
+const NEEDS_USER_CATEGORIES = new Set(['auth', 'config', 'quota']);
+const TRANSIENT_CATEGORIES = new Set(['capacity', 'network']);
+
+/**
+ * Classify a failed run from its operation error and any stored error text.
+ * The structured fields win over text; text is all a Task run that failed at
+ * dispatch leaves behind.
+ */
+export const classifyRunFailure = (error: unknown, text = ''): RunFailure => {
+  const e = (error ?? {}) as {
+    body?: { code?: unknown; rateLimitInfo?: { resetsAt?: unknown; status?: unknown } };
+    category?: unknown;
+    message?: unknown;
+    type?: unknown;
+  };
+  const category = typeof e.category === 'string' ? e.category : undefined;
+  const info = e.body?.rateLimitInfo;
+  const resetsAt = Number(info?.resetsAt) * 1000;
+  // Anthropic stamps rolling-window metadata on calls it allowed too, and a later
+  // unrelated failure can carry it (see `isUserQuotaRateLimit` in the Claude Code
+  // adapter). Only a rejected window, or a legacy record without a status, says
+  // the run was refused until that reset.
+  if (
+    (category === 'quota' || e.body?.code === 'rate_limit') &&
+    (info?.status === undefined || info.status === 'rejected') &&
+    Number.isFinite(resetsAt) &&
+    resetsAt > 0
+  )
+    return { kind: 'quota_reset', resetsAt };
+  const message = `${typeof e.type === 'string' ? e.type : ''} ${typeof e.message === 'string' ? e.message : ''} ${text}`;
+  if (isDeviceUnavailableFailure(message)) return { kind: 'device_unavailable' };
+  if ((category && NEEDS_USER_CATEGORIES.has(category)) || NEEDS_USER_PATTERN.test(message))
+    return { kind: 'needs_user' };
+  if ((category && TRANSIENT_CATEGORIES.has(category)) || TRANSIENT_PATTERN.test(message))
+    return { kind: 'transient' };
+  return { kind: 'unknown' };
+};
 
 /** Whether a goal's main Agent has used every turn its policy allows. */
 export const managerTurnsSpent = (config: GoalItem['config']): boolean =>

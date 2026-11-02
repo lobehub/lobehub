@@ -11,6 +11,7 @@ import { CLI_DISPLAY_NAME } from '../constants/identity';
 // which would point outside the package once bundled into dist/index.js.
 import { cliPackageName, cliVersion } from '../pkg';
 import { log } from '../utils/logger';
+import { printConnectStatus } from './connectStatus';
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
@@ -152,11 +153,13 @@ export function registerUpdateCommand(program: Command) {
       log.info(`Latest version:  ${pc.bold(latest)} ${pc.dim(`(${tag})`)}`);
 
       if (!isNewerVersion(latest, current)) {
-        log.info(pc.green('Already on the latest version.'));
+        log.info(pc.green('Installed CLI is already on the latest version.'));
+        await printConnectStatus();
         return;
       }
 
       if (options.check) {
+        await printConnectStatus();
         log.info(
           `Update available: ${current} → ${pc.green(latest)}. Run ${pc.cyan('lh update')} to upgrade.`,
         );
@@ -171,11 +174,13 @@ export function registerUpdateCommand(program: Command) {
 
       try {
         await runInstall(command, args);
-        log.info(pc.green(`Successfully updated to ${latest}. Restart any running sessions.`));
       } catch (error) {
         log.error(`Update failed: ${(error as Error).message}`);
         log.error(`You can upgrade manually: ${[command, ...args].join(' ')}`);
         process.exit(1);
+        return;
       }
+      log.info(pc.green(`Successfully installed CLI ${latest}.`));
+      await printConnectStatus({ installedVersion: latest });
     });
 }

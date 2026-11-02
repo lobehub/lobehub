@@ -1,18 +1,30 @@
 import type { TrashResourceType } from '@lobechat/types';
 
+import { agentHandler } from './agent';
+import { channelHandler } from './channel';
+import { channelThreadHandler } from './channelThread';
+import { dashboardHandler } from './dashboard';
+import { messageHandler } from './message';
 import { topicHandler } from './topic';
 import type { TrashHandler } from './types';
+import { widgetHandler } from './widget';
 
 /**
  * One handler per trashable kind. `Partial` on purpose: `TrashResourceType`
  * already names the kinds this feature will cover, and they are wired in one
- * at a time (topic first — see the phasing table in
+ * at a time (see the phasing table in
  * docs/development/soft-delete-recycle-bin-design.md). Nothing can register a
  * registry row for a kind with no handler, since registration happens inside
  * the handler itself.
  */
 export const TRASH_HANDLERS: Partial<Record<TrashResourceType, TrashHandler>> = {
+  agent: agentHandler,
+  channel: channelHandler,
+  channelThread: channelThreadHandler,
+  message: messageHandler,
+  dashboard: dashboardHandler,
   topic: topicHandler,
+  widget: widgetHandler,
 };
 
 /**
@@ -26,5 +38,7 @@ export const resolveTrashHandler = (resourceType: TrashResourceType): TrashHandl
   return handler;
 };
 
+export { softDeleteAgent } from './agent';
+export { softDeleteMessages } from './message';
 export { topicCascades } from './topic';
 export * from './types';

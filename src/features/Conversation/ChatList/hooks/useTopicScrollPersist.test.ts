@@ -9,7 +9,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadScrollSnapshot, saveScrollSnapshot } from '../utils/scrollSnapshotStore';
 import { useTopicScrollPersist } from './useTopicScrollPersist';
 
+const ROW_HEIGHT = 200;
+const rowsOf = (length: number) => Array.from({ length }, (_, index) => `m${index}`);
+const ROWS = rowsOf(50);
+
+const anchoredAt = (offset: number) => {
+  const index = Math.min(ROWS.length - 1, Math.floor(offset / ROW_HEIGHT));
+  return { anchorId: ROWS[index], anchorOffset: offset - index * ROW_HEIGHT };
+};
+
+interface FakeScroller extends HTMLElement {
+  /** Fires the listeners the hook registered for `type` */
+  emit: (type: string) => void;
+  /** Records every `scrollTop` write made by the hook */
+  setScrollTop: ReturnType<typeof vi.fn<(value: number) => void>>;
+}
+
 interface FakeVList {
+  findItemIndex: (offset: number) => number;
+  getItemOffset: (index: number) => number;
+  scroller: FakeScroller;
   scrollOffset: number;
   scrollSize: number;
   scrollTo: ReturnType<typeof vi.fn>;
@@ -17,14 +36,48 @@ interface FakeVList {
   viewportSize: number;
 }
 
-const createFakeVList = (overrides: Partial<FakeVList> = {}): FakeVList => ({
-  scrollOffset: 0,
-  scrollSize: 0,
-  scrollTo: vi.fn(),
-  scrollToIndex: vi.fn(),
-  viewportSize: 800,
-  ...overrides,
-});
+/** Scroll element whose `scrollHeight` mirrors virtua's `scrollSize` */
+const createFakeScroller = (handle: FakeVList): FakeScroller => {
+  const setScrollTop = vi.fn<(value: number) => void>();
+  const listeners = new Map<string, Set<() => void>>();
+  return {
+    addEventListener: (type: string, listener: () => void) => {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type)!.add(listener);
+    },
+    emit: (type: string) => {
+      for (const listener of listeners.get(type) ?? []) listener();
+    },
+    removeEventListener: (type: string, listener: () => void) => {
+      listeners.get(type)?.delete(listener);
+    },
+    get scrollHeight() {
+      return handle.scrollSize;
+    },
+    get scrollTop() {
+      return handle.scrollOffset;
+    },
+    set scrollTop(value: number) {
+      setScrollTop(value);
+    },
+    setScrollTop,
+  } as unknown as FakeScroller;
+};
+
+const createFakeVList = (overrides: Partial<Omit<FakeVList, 'scroller'>> = {}): FakeVList => {
+  const handle = {
+    findItemIndex: (offset: number) => Math.max(0, Math.floor(offset / ROW_HEIGHT)),
+    getItemOffset: (index: number) => index * ROW_HEIGHT,
+    scrollOffset: 0,
+    scrollSize: 0,
+    scrollTo: vi.fn(),
+    scrollToIndex: vi.fn(),
+    viewportSize: 800,
+    ...overrides,
+  } as FakeVList;
+  handle.scroller = createFakeScroller(handle);
+  return handle;
+};
 
 const refOf = (handle: FakeVList | null): RefObject<VListHandle | null> => ({
   current: handle as unknown as VListHandle | null,
@@ -52,6 +105,7 @@ describe('useTopicScrollPersist', () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 5000,
+        ...anchoredAt(5000),
         savedAt: Date.now(),
       });
       const handle = createFakeVList({ scrollSize: 6000 });
@@ -60,7 +114,8 @@ describe('useTopicScrollPersist', () => {
       renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           headerOffset: 1,
           messageDeepLink: {
             displayMessageId: 'assistant-group',
@@ -76,7 +131,7 @@ describe('useTopicScrollPersist', () => {
       await advanceFrames(4);
 
       expect(handle.scrollToIndex).toHaveBeenCalledWith(13, { align: 'center' });
-      expect(handle.scrollTo).not.toHaveBeenCalled();
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalled();
       expect(onHandled).toHaveBeenCalledTimes(1);
     });
 
@@ -96,7 +151,8 @@ describe('useTopicScrollPersist', () => {
           useTopicScrollPersist({
             containerRef: { current: container },
             contextKey: 'main_agt_1_tpc_a',
-            dataSourceLength: 50,
+            dataSource: ROWS,
+            getScroller: () => handle.scroller,
             messageDeepLink: {
               displayMessageId: 'assistant-group',
               id: 'assistant-child',
@@ -133,7 +189,8 @@ describe('useTopicScrollPersist', () => {
           useTopicScrollPersist({
             containerRef: { current: container },
             contextKey: 'main_agt_1_tpc_a',
-            dataSourceLength: 50,
+            dataSource: ROWS,
+            getScroller: () => handle.scroller,
             messageDeepLink: {
               displayMessageId: 'assistant-group',
               id: 'assistant-child',
@@ -174,7 +231,8 @@ describe('useTopicScrollPersist', () => {
           useTopicScrollPersist({
             containerRef: { current: container },
             contextKey: 'main_agt_1_tpc_a',
-            dataSourceLength: 50,
+            dataSource: ROWS,
+            getScroller: () => handle.scroller,
             messageDeepLink: {
               displayMessageId: 'assistant-group',
               id: 'assistant-child',
@@ -201,6 +259,7 @@ describe('useTopicScrollPersist', () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 5000,
+        ...anchoredAt(5000),
         savedAt: Date.now(),
       });
       const handle = createFakeVList({ scrollSize: 1000, viewportSize: 800 });
@@ -208,7 +267,8 @@ describe('useTopicScrollPersist', () => {
         ({ navigationKey }: { navigationKey?: string }) =>
           useTopicScrollPersist({
             contextKey: 'main_agt_1_tpc_a',
-            dataSourceLength: 50,
+            dataSource: ROWS,
+            getScroller: () => handle.scroller,
             messageDeepLink: navigationKey
               ? {
                   displayMessageId: 'target',
@@ -229,7 +289,7 @@ describe('useTopicScrollPersist', () => {
       await advanceFrames(6);
 
       expect(handle.scrollToIndex).toHaveBeenCalledWith(8, { align: 'center' });
-      expect(handle.scrollTo).not.toHaveBeenCalled();
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalled();
     });
 
     it('handles another hash navigation within the same topic', async () => {
@@ -238,7 +298,8 @@ describe('useTopicScrollPersist', () => {
         ({ index, navigationKey }: { index: number; navigationKey: string }) =>
           useTopicScrollPersist({
             contextKey: 'main_agt_1_tpc_a',
-            dataSourceLength: 50,
+            dataSource: ROWS,
+            getScroller: () => handle.scroller,
             messageDeepLink: {
               displayMessageId: `message-${index}`,
               id: `message-${index}`,
@@ -258,42 +319,116 @@ describe('useTopicScrollPersist', () => {
       expect(handle.scrollToIndex).toHaveBeenNthCalledWith(2, 20, { align: 'center' });
     });
 
-    it('falls back to scrollToIndex(last, end) when there is no snapshot', async () => {
+    it('jumps to the end without a virtua imperative scroll when there is no snapshot', async () => {
+      // Regression: virtua's scrollToIndex re-applies its target on every item
+      // resize within 150ms, so a restore landing while a reply streamed kept
+      // pulling the user back to the bottom after they scrolled up.
       const handle = createFakeVList({ scrollSize: 5000 });
       renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
 
-      await advanceFrames(2);
+      await advanceFrames(4);
 
-      expect(handle.scrollToIndex).toHaveBeenCalledTimes(1);
-      expect(handle.scrollToIndex).toHaveBeenCalledWith(49, { align: 'end' });
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(5000);
+      expect(handle.scrollToIndex).not.toHaveBeenCalled();
       expect(handle.scrollTo).not.toHaveBeenCalled();
     });
 
-    it('translates the restore target by headerOffset when a header slot row is present', async () => {
+    it('keeps jumping to the end until the measured height stops changing', async () => {
       const handle = createFakeVList({ scrollSize: 5000 });
       renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
-          headerOffset: 1,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      // virtua measures the rows revealed by the first jump.
+      handle.scrollSize = 5600;
+      await advanceFrames(6);
+
+      expect(handle.scroller.setScrollTop).toHaveBeenLastCalledWith(5600);
+      const writes = handle.scroller.setScrollTop.mock.calls.length;
+
+      await advanceFrames(6);
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledTimes(writes);
+    });
+
+    it('keeps jumping while virtua takes several frames to grow the list', async () => {
+      // Regression: stopping after a single unchanged frame left a freshly
+      // opened topic short of the bottom once virtua re-rendered the
+      // measured rows a few frames later.
+      const handle = createFakeVList({ scrollSize: 5000 });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(3);
+      handle.scrollSize = 7600;
+      await advanceFrames(12);
+
+      expect(handle.scroller.setScrollTop).toHaveBeenLastCalledWith(7600);
+    });
+
+    it('stops jumping once the user scrolls', async () => {
+      const handle = createFakeVList({ scrollSize: 5000 });
+      handle.scroller.setScrollTop.mockImplementation(() => {
+        handle.scrollSize += 50;
+      });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
 
       await advanceFrames(2);
+      handle.scroller.emit('wheel');
+      await advanceFrames(1);
+      const writes = handle.scroller.setScrollTop.mock.calls.length;
 
-      // Last message sits at virtua row 50 (header row 0 + 50 messages).
-      expect(handle.scrollToIndex).toHaveBeenCalledTimes(1);
-      expect(handle.scrollToIndex).toHaveBeenCalledWith(50, { align: 'end' });
+      await advanceFrames(10);
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledTimes(writes);
     });
 
-    it('falls back to scrollToIndex(last, end) when snapshot.atBottom is true', async () => {
+    it('stops jumping after the time cap while a streaming reply keeps growing', async () => {
+      const handle = createFakeVList({ scrollSize: 5000 });
+      handle.scroller.setScrollTop.mockImplementation(() => {
+        handle.scrollSize += 50;
+      });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await vi.advanceTimersByTimeAsync(1200);
+      const writes = handle.scroller.setScrollTop.mock.calls.length;
+      expect(writes).toBeGreaterThan(1);
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledTimes(writes);
+    });
+
+    it('jumps to the end when snapshot.atBottom is true', async () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: true,
         offset: 9999,
@@ -303,28 +438,31 @@ describe('useTopicScrollPersist', () => {
       renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
 
-      await advanceFrames(2);
+      await advanceFrames(4);
 
-      expect(handle.scrollToIndex).toHaveBeenCalledWith(49, { align: 'end' });
-      expect(handle.scrollTo).not.toHaveBeenCalled();
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(5000);
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalledWith(9999);
     });
 
-    it('does not call scrollTo immediately when virtua scrollSize is too small', async () => {
+    it('does not write the saved offset immediately when virtua scrollSize is too small', async () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 5000,
+        ...anchoredAt(5000),
         savedAt: Date.now(),
       });
       const handle = createFakeVList({ scrollSize: 1000, viewportSize: 800 });
       renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
@@ -332,74 +470,81 @@ describe('useTopicScrollPersist', () => {
       // A few frames in, virtua still hasn't measured items below the fold —
       // scrollTo would be clamped, so the hook must keep polling instead.
       await advanceFrames(4);
-      expect(handle.scrollTo).not.toHaveBeenCalled();
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalled();
     });
 
-    it('calls scrollTo with the saved offset once virtua has measured enough', async () => {
+    it('writes the saved offset once virtua has measured enough', async () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 5000,
+        ...anchoredAt(5000),
         savedAt: Date.now(),
       });
       const handle = createFakeVList({ scrollSize: 1000, viewportSize: 800 });
       renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
 
       await advanceFrames(3);
-      expect(handle.scrollTo).not.toHaveBeenCalled();
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalled();
 
       // Simulate virtua finishing layout — now scrollSize is big enough to
       // accommodate target + viewport.
       handle.scrollSize = 6000;
       await advanceFrames(3);
 
-      expect(handle.scrollTo).toHaveBeenCalledTimes(1);
-      expect(handle.scrollTo).toHaveBeenCalledWith(5000);
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledTimes(1);
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(5000);
+      // Written directly so a streaming reply cannot keep re-applying it.
+      expect(handle.scrollTo).not.toHaveBeenCalled();
     });
 
-    it('gives up polling after the cap and calls scrollTo anyway', async () => {
+    it('gives up polling after the cap and writes the saved offset anyway', async () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 999_999,
+        ...anchoredAt(999_999),
         savedAt: Date.now(),
       });
       const handle = createFakeVList({ scrollSize: 1000, viewportSize: 800 });
       renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
 
-      // 30-frame cap + a few extra for the release rAFs.
-      await advanceFrames(40);
+      // 30-frame cap + a few extra for the release rAFs, then the anchor row reveal.
+      await advanceFrames(80);
 
-      expect(handle.scrollTo).toHaveBeenCalledTimes(1);
-      expect(handle.scrollTo).toHaveBeenCalledWith(999_999);
+      expect(handle.scroller.setScrollTop).toHaveBeenLastCalledWith(999_999);
     });
 
     it('converges the snapshot to the actual landing position after capping out', async () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 999_999,
+        ...anchoredAt(999_999),
         savedAt: Date.now() - 60_000,
       });
       const handle = createFakeVList({ scrollSize: 1500, viewportSize: 800 });
       // Simulate virtua clamping the request to the actual scrollable range.
-      handle.scrollTo.mockImplementation((offset: number) => {
+      handle.scroller.setScrollTop.mockImplementation((offset: number) => {
         handle.scrollOffset = Math.min(offset, handle.scrollSize - handle.viewportSize);
       });
 
       renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
@@ -418,17 +563,19 @@ describe('useTopicScrollPersist', () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 5000,
+        ...anchoredAt(5000),
         savedAt: originalSavedAt,
       });
       const handle = createFakeVList({ scrollSize: 6000, viewportSize: 800 });
-      handle.scrollTo.mockImplementation((offset: number) => {
+      handle.scroller.setScrollTop.mockImplementation((offset: number) => {
         handle.scrollOffset = offset;
       });
 
       renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
@@ -441,10 +588,11 @@ describe('useTopicScrollPersist', () => {
       expect(persisted?.savedAt).toBe(originalSavedAt);
     });
 
-    it('skips the entire restore until dataSourceLength becomes non-zero', async () => {
+    it('skips the entire restore until the data source has rows', async () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 5000,
+        ...anchoredAt(5000),
         savedAt: Date.now(),
       });
       const handle = createFakeVList({ scrollSize: 6000 });
@@ -452,33 +600,40 @@ describe('useTopicScrollPersist', () => {
         ({ length }: { length: number }) =>
           useTopicScrollPersist({
             contextKey: 'main_agt_1_tpc_a',
-            dataSourceLength: length,
+            dataSource: rowsOf(length),
+            getScroller: () => handle.scroller,
             virtuaRef: refOf(handle),
           }),
         { initialProps: { length: 0 } },
       );
 
       await advanceFrames(3);
-      expect(handle.scrollTo).not.toHaveBeenCalled();
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalled();
       expect(handle.scrollToIndex).not.toHaveBeenCalled();
 
       rerender({ length: 50 });
       await advanceFrames(3);
 
-      expect(handle.scrollTo).toHaveBeenCalledWith(5000);
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(5000);
     });
   });
 
   describe('recordScroll suppression during restore', () => {
     it('drops recordScroll calls fired before the restore lands', async () => {
-      const startingSnapshot = { atBottom: false, offset: 5000, savedAt: Date.now() };
+      const startingSnapshot = {
+        atBottom: false,
+        offset: 5000,
+        ...anchoredAt(5000),
+        savedAt: Date.now(),
+      };
       saveScrollSnapshot('main_agt_1_tpc_a', startingSnapshot);
       const handle = createFakeVList({ scrollSize: 6000 });
 
       const { result } = renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
@@ -501,6 +656,7 @@ describe('useTopicScrollPersist', () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 5000,
+        ...anchoredAt(5000),
         savedAt: Date.now(),
       });
       const handle = createFakeVList({ scrollSize: 6000 });
@@ -508,7 +664,8 @@ describe('useTopicScrollPersist', () => {
       const { result } = renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
@@ -532,10 +689,11 @@ describe('useTopicScrollPersist', () => {
       saveScrollSnapshot('main_agt_1_tpc_b', {
         atBottom: false,
         offset: 3000,
+        ...anchoredAt(3000),
         savedAt: fixedNow,
       });
       const handle = createFakeVList({ scrollSize: 6000, viewportSize: 800 });
-      handle.scrollTo.mockImplementation((offset: number) => {
+      handle.scroller.setScrollTop.mockImplementation((offset: number) => {
         handle.scrollOffset = offset;
       });
 
@@ -543,13 +701,15 @@ describe('useTopicScrollPersist', () => {
         ({ contextKey, length }: { contextKey: string; length: number }) =>
           useTopicScrollPersist({
             contextKey,
-            dataSourceLength: length,
+            dataSource: rowsOf(length),
+            getScroller: () => handle.scroller,
             virtuaRef: refOf(handle),
           }),
         { initialProps: { contextKey: 'main_agt_1_tpc_a', length: 50 } },
       );
 
-      await advanceFrames(4);
+      // The bottom restore settles after its 150ms quiet window.
+      await advanceFrames(10);
       act(() => {
         result.current.recordScroll(1200, false);
       });
@@ -562,7 +722,7 @@ describe('useTopicScrollPersist', () => {
       const persistedA = loadScrollSnapshot('main_agt_1_tpc_a');
       expect(persistedA?.offset).toBe(1200);
       expect(persistedA?.savedAt).toBe(fixedNow + 60_000);
-      expect(handle.scrollTo).toHaveBeenCalledWith(3000);
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(3000);
     });
 
     it('falls back to the bottom when the new topic has no snapshot', async () => {
@@ -572,19 +732,21 @@ describe('useTopicScrollPersist', () => {
         ({ contextKey, length }: { contextKey: string; length: number }) =>
           useTopicScrollPersist({
             contextKey,
-            dataSourceLength: length,
+            dataSource: rowsOf(length),
+            getScroller: () => handle.scroller,
             virtuaRef: refOf(handle),
           }),
         { initialProps: { contextKey: 'main_agt_1_tpc_a', length: 50 } },
       );
 
       await advanceFrames(4);
-      handle.scrollToIndex.mockClear();
+      handle.scroller.setScrollTop.mockClear();
+      handle.scrollSize = 4000;
 
       rerender({ contextKey: 'main_agt_1_tpc_b', length: 30 });
       await advanceFrames(4);
 
-      expect(handle.scrollToIndex).toHaveBeenCalledWith(29, { align: 'end' });
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(4000);
     });
   });
 
@@ -597,13 +759,14 @@ describe('useTopicScrollPersist', () => {
       const { result, unmount } = renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
 
       // Initial restore (no snapshot) settles, then the user scrolls up.
-      await advanceFrames(2);
+      await advanceFrames(10);
       act(() => {
         result.current.recordScroll(2000, false);
       });
@@ -629,17 +792,19 @@ describe('useTopicScrollPersist', () => {
       saveScrollSnapshot('main_agt_1_tpc_a', {
         atBottom: false,
         offset: 5000,
+        ...anchoredAt(5000),
         savedAt: fixedNow,
       });
       const handle = createFakeVList({ scrollSize: 6000, viewportSize: 800 });
-      handle.scrollTo.mockImplementation((offset: number) => {
+      handle.scroller.setScrollTop.mockImplementation((offset: number) => {
         handle.scrollOffset = offset;
       });
 
       const { unmount } = renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_a',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
@@ -663,7 +828,8 @@ describe('useTopicScrollPersist', () => {
       const { unmount } = renderHook(() =>
         useTopicScrollPersist({
           contextKey: 'main_agt_1_tpc_empty',
-          dataSourceLength: 50,
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
           virtuaRef: refOf(handle),
         }),
       );
@@ -674,6 +840,243 @@ describe('useTopicScrollPersist', () => {
       // Either no snapshot, or an at-bottom one — both restore to the bottom.
       const persisted = loadScrollSnapshot('main_agt_1_tpc_empty');
       expect(persisted?.atBottom ?? true).toBe(true);
+    });
+  });
+
+  describe('message anchor', () => {
+    it('restores to the anchor row plus its offset', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        anchorId: 'm30',
+        anchorOffset: 40,
+        atBottom: false,
+        offset: 100,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 10_000 });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(4);
+
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(30 * ROW_HEIGHT + 40);
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalledWith(100);
+    });
+
+    it('renders a tall anchor row before aiming deep inside it', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        anchorId: 'm30',
+        anchorOffset: 1500,
+        atBottom: false,
+        offset: 7500,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 20_000 });
+      handle.scroller.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+      // Virtua under-estimates the unmeasured rows above; the rendered row sits 900px lower.
+      const renderedRow = {
+        getBoundingClientRect: () => ({ top: 30 * ROW_HEIGHT + 900 - handle.scrollOffset }),
+      };
+      let anchorRendered = false;
+      const container = {
+        querySelector: (selector: string) =>
+          anchorRendered && selector === '[data-index="30"]' ? renderedRow : null,
+      } as unknown as HTMLDivElement;
+      renderHook(() =>
+        useTopicScrollPersist({
+          containerRef: { current: container },
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(4);
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(30 * ROW_HEIGHT);
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalledWith(30 * ROW_HEIGHT + 1500);
+
+      anchorRendered = true;
+      await advanceFrames(4);
+      expect(handle.scroller.setScrollTop).toHaveBeenLastCalledWith(30 * ROW_HEIGHT + 900 + 1500);
+    });
+
+    it('still reaches a tall anchor when its row never shows up', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        anchorId: 'm30',
+        anchorOffset: 1500,
+        atBottom: false,
+        offset: 7500,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 20_000 });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(40);
+
+      expect(handle.scroller.setScrollTop).toHaveBeenLastCalledWith(30 * ROW_HEIGHT + 1500);
+    });
+
+    it('re-aims at the anchor while rows above it are measured', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        anchorId: 'm30',
+        anchorOffset: 40,
+        atBottom: false,
+        offset: 100,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 20_000 });
+      let measuredRows = 0;
+      handle.getItemOffset = (index: number) => index * ROW_HEIGHT + Math.min(measuredRows, 3) * 50;
+      handle.scroller.setScrollTop.mockImplementation(() => {
+        measuredRows += 1;
+      });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(30);
+
+      expect(handle.scroller.setScrollTop).toHaveBeenLastCalledWith(30 * ROW_HEIGHT + 150 + 40);
+    });
+
+    it('stops re-aiming once the user scrolls', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        anchorId: 'm30',
+        anchorOffset: 40,
+        atBottom: false,
+        offset: 100,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 20_000 });
+      let shift = 0;
+      handle.getItemOffset = (index: number) => index * ROW_HEIGHT + shift;
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(2);
+      handle.scroller.emit('wheel');
+      const writes = handle.scroller.setScrollTop.mock.calls.length;
+      shift = 500;
+      await advanceFrames(10);
+
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledTimes(writes);
+    });
+
+    it('counts header rows when locating the anchor', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        anchorId: 'm30',
+        anchorOffset: 40,
+        atBottom: false,
+        offset: 100,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 10_000 });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          headerOffset: 1,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(4);
+
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(31 * ROW_HEIGHT + 40);
+    });
+
+    it('opens at the bottom when the anchor row is not loaded', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        anchorId: 'msg_trimmed',
+        anchorOffset: 40,
+        atBottom: false,
+        offset: 2000,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 6000 });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(4);
+
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(6000);
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalledWith(2000);
+    });
+
+    it('opens at the bottom for a snapshot saved without an anchor', async () => {
+      saveScrollSnapshot('main_agt_1_tpc_a', {
+        atBottom: false,
+        offset: 2000,
+        savedAt: Date.now(),
+      });
+      const handle = createFakeVList({ scrollSize: 6000 });
+      renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(4);
+
+      expect(handle.scroller.setScrollTop).toHaveBeenCalledWith(6000);
+      expect(handle.scroller.setScrollTop).not.toHaveBeenCalledWith(2000);
+    });
+
+    it('records the message at the top of the viewport as the anchor', async () => {
+      const handle = createFakeVList({ scrollSize: 6000 });
+      const { result } = renderHook(() =>
+        useTopicScrollPersist({
+          contextKey: 'main_agt_1_tpc_a',
+          dataSource: ROWS,
+          getScroller: () => handle.scroller,
+          headerOffset: 1,
+          virtuaRef: refOf(handle),
+        }),
+      );
+
+      await advanceFrames(10);
+      act(() => {
+        result.current.recordScroll(21 * ROW_HEIGHT + 50, false);
+      });
+      await vi.advanceTimersByTimeAsync(300);
+
+      const persisted = loadScrollSnapshot('main_agt_1_tpc_a');
+      expect(persisted?.anchorId).toBe('m20');
+      expect(persisted?.anchorOffset).toBe(50);
     });
   });
 });

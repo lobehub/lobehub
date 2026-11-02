@@ -1,5 +1,6 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
 import type { ClaudeCodeQuotaSnapshot } from '@lobechat/electron-client-ipc';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +8,10 @@ import { useTranslation } from 'react-i18next';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useSingleton } from '@/hooks/useSingleton';
 import { agentQuotaService } from '@/services/agentQuota';
+import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { fetchClaudeCodeQuotaSnapshot } from '@/services/heteroAgentQuota';
+import { getAgentQuotaStoreState } from '@/store/agentQuota';
+import { getElectronStoreState } from '@/store/electron';
 
 import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
@@ -51,6 +55,34 @@ const unavailableSnapshot = (
   weekly: null,
 });
 
+/**
+ * Persisted windows merged with a live sample that came back unavailable keep
+ * the live reason, so the panel can say why the windows stopped refreshing.
+ */
+type ClaudeCodePanelSnapshot = ClaudeCodeQuotaSnapshot & {
+  refreshUnavailableReason?: ClaudeCodeQuotaSnapshot['reason'];
+  sampleFailed?: boolean;
+};
+
+/**
+ * Env that samples the local login a pinned account runs on: its profile, the
+ * default login, or `null` when this desktop has no login for it (sampling
+ * the default login then would paint another account's quota under its name).
+ * An agent env that picks its own profile already wins over routing.
+ */
+const resolvePinnedSampleEnv = async (
+  externalAccountId: string | null | undefined,
+  env: Record<string, string> | undefined,
+): Promise<Record<string, string> | undefined | null> => {
+  if (!isDesktop || !externalAccountId || env?.CLAUDE_CONFIG_DIR) return env;
+  const resolution = await heterogeneousAgentService
+    .resolveClaudeCodeAccount(externalAccountId)
+    .catch(() => null);
+  if (resolution?.kind === 'profile') return { ...env, CLAUDE_CONFIG_DIR: resolution.configDir };
+  if (resolution?.kind === 'missing') return null;
+  return env;
+};
+
 const isRateLimitError = (quota: ClaudeCodeQuotaSnapshot) => quota.error?.includes('429') ?? false;
 
 interface ClaudeCodeQuotaMenuProps {
@@ -62,7 +94,7 @@ interface ClaudeCodeQuotaMenuProps {
 const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
-  const sourceKey = createQuotaSourceKey('claude-code', deviceId ?? 'local', env);
+  const sourceKey = createQuotaSourceKey('claude-code', agentId, deviceId ?? 'local', env);
   // A persisted account becomes eligible for a device only after this mounted
   // menu has observed that device return the same external account identity.
   // This avoids painting another machine's pinned/first account on a device
@@ -79,29 +111,44 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
    */
   const fetchQuota = useCallback(
     async (
-      options?: FetchQuotaOptions<ClaudeCodeQuotaSnapshot>,
-    ): Promise<ClaudeCodeQuotaSnapshot> => {
+      options?: FetchQuotaOptions<ClaudeCodePanelSnapshot>,
+    ): Promise<ClaudeCodePanelSnapshot> => {
       const force = !!options?.force;
+      const quotaStore = getAgentQuotaStoreState();
 
-      // 1) Resolve the account to display — pinned for this agent, else the first.
-      const [initialAccounts, bindings] = await Promise.all([
-        agentQuotaService.listAccounts().catch(() => []),
-        agentId ? agentQuotaService.listBindings(agentId).catch(() => []) : [],
+      // 1) Resolve the account to display — pinned for this agent on this
+      // desktop (its own pick, else the agent-wide pin), else the first.
+      const localDeviceId =
+        isDesktop && !deviceId && agentId
+          ? await getElectronStoreState().resolveGatewayDeviceId()
+          : undefined;
+      const [initialAccounts, bindings, deviceAccount] = await Promise.all([
+        quotaStore.readQuotaAccounts().catch(() => []),
+        agentId ? quotaStore.readQuotaBindings(agentId).catch(() => []) : [],
+        agentId && localDeviceId
+          ? quotaStore.readQuotaDeviceAccount(agentId, localDeviceId).catch(() => null)
+          : null,
       ]);
       let accounts = initialAccounts;
       let claude = accounts.filter((a) => a.provider === 'claude-code');
-      const pinnedId = bindings.find((b) => b.role === 'pinned')?.accountId;
+      // A pick whose account has since left the agent's rotation no longer
+      // routes runs (as at spawn), so it is not what this panel shows either.
+      const devicePickId = bindings.some(
+        (b) => b.accountId === deviceAccount?.accountId && b.enabled && b.role !== 'disabled',
+      )
+        ? deviceAccount?.accountId
+        : undefined;
+      const pinnedId = devicePickId ?? bindings.find((b) => b.role === 'pinned')?.accountId;
       const trustedExternalAccountId = deviceId ? trustedDeviceAccounts.get(deviceId) : undefined;
       let account = deviceId
         ? claude.find((a) => a.externalAccountId === trustedExternalAccountId)
         : (claude.find((a) => a.id === pinnedId) ?? claude[0]);
-      let readings = account
-        ? await agentQuotaService.getLatestReadings(account.id).catch(() => [])
-        : [];
+      let readings = account ? await quotaStore.readQuotaReadings(account.id).catch(() => []) : [];
 
       // 2) Throttled live refresh + ingest. Paint the persisted windows before
       // awaiting the live fetch so the panel never blocks on it.
       let live: ClaudeCodeQuotaSnapshot | null = null;
+      let liveFailed = false;
       if (
         force ||
         options?.revalidate ||
@@ -112,7 +159,23 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
           const interim = buildClaudePanelSnapshot(account, readings, null);
           if (hasRenderableWindow(interim)) options?.onInterim?.(interim);
         }
-        live = await fetchClaudeCodeQuotaSnapshot({ deviceId, env, force }).catch(() => null);
+        // Auto mode may route a run to any local login, and it balances on
+        // their readings: keep every local login sampled, not just this one.
+        // Never awaited — the panel must not wait on the other logins.
+        if (isDesktop && !deviceId) void quotaStore.refreshClaudeLocalAccounts().catch(() => {});
+        // A local pin runs on that account's own login: sample that login, not
+        // the default one, or the panel would show another account's quota.
+        const sampleEnv =
+          !deviceId && pinnedId && account?.id === pinnedId
+            ? await resolvePinnedSampleEnv(account.externalAccountId, env)
+            : env;
+        live =
+          sampleEnv === null
+            ? null
+            : await fetchClaudeCodeQuotaSnapshot({ deviceId, env: sampleEnv, force }).catch(() => {
+                liveFailed = true;
+                return null;
+              });
 
         const externalAccountId = live?.identity?.externalAccountId;
         if (live?.status === 'ok' && externalAccountId && live.readings?.length) {
@@ -127,7 +190,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
             (candidate) => candidate.externalAccountId === externalAccountId,
           );
           const matchingReadings = matchingAccount
-            ? await agentQuotaService.getLatestReadings(matchingAccount.id).catch(() => [])
+            ? await quotaStore.readQuotaReadings(matchingAccount.id).catch(() => [])
             : [];
           const isCachedEcho =
             !!matchingAccount && liveCapturedAt <= newestCapturedAt(matchingReadings);
@@ -136,14 +199,16 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
             await agentQuotaService
               .ingestClaudeSnapshot({ deviceId, identity: live.identity!, readings: live.readings })
               .catch(() => {});
-            accounts = await agentQuotaService.listAccounts().catch(() => accounts);
+            accounts = await quotaStore.readQuotaAccounts({ fresh: true }).catch(() => accounts);
             claude = accounts.filter((a) => a.provider === 'claude-code');
             account =
               claude.find((a) => a.externalAccountId === externalAccountId) ??
               claude.find((a) => a.id === pinnedId) ??
               claude[0];
             readings = account
-              ? await agentQuotaService.getLatestReadings(account.id).catch(() => readings)
+              ? await quotaStore
+                  .readQuotaReadings(account.id, { fresh: true })
+                  .catch(() => readings)
               : readings;
           } else {
             account = matchingAccount;
@@ -158,7 +223,14 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       // reading wins. With no account resolved at all there is nothing to
       // attribute the sample to, so the live snapshot stands on its own.
       const merged = account ? buildClaudePanelSnapshot(account, readings, live) : null;
-      if (merged && hasRenderableWindow(merged)) return merged;
+      if (merged && hasRenderableWindow(merged)) {
+        return live?.status === 'unavailable' && live.reason
+          ? { ...merged, refreshUnavailableReason: live.reason }
+          : merged;
+      }
+      // A failed live fetch with nothing to show still reads as "unavailable",
+      // but flagged, so the panel keeps the last snapshot it already shows.
+      if (!live && liveFailed) return { ...unavailableSnapshot(), sampleFailed: true };
       return live ?? merged ?? unavailableSnapshot();
     },
     [agentId, deviceId, env, trustedDeviceAccounts],
@@ -197,9 +269,9 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
     [t],
   );
 
-  const getUnavailableText = useCallback(
-    (quota: ClaudeCodeQuotaSnapshot) => {
-      switch (quota.reason) {
+  const getReasonText = useCallback(
+    (reason: ClaudeCodeQuotaSnapshot['reason']) => {
+      switch (reason) {
         case 'credentials-expired': {
           return t('heteroAgent.claudeQuota.unavailableExpired');
         }
@@ -209,12 +281,26 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
         case 'external-auth': {
           return t('heteroAgent.claudeQuota.unavailableExternalAuth');
         }
+        case 'request-blocked': {
+          return t('heteroAgent.claudeQuota.unavailableRequestBlocked');
+        }
         default: {
           return undefined;
         }
       }
     },
     [t],
+  );
+
+  const getUnavailableText = useCallback(
+    (quota: ClaudeCodeQuotaSnapshot) => getReasonText(quota.reason),
+    [getReasonText],
+  );
+
+  const getStaleNotice = useCallback(
+    (quota: ClaudeCodePanelSnapshot) =>
+      quota.refreshUnavailableReason ? getReasonText(quota.refreshUnavailableReason) : undefined,
+    [getReasonText],
   );
 
   const getErrorText = useCallback(
@@ -236,18 +322,27 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
 
   return (
     <QuotaMenu
+      // The account manager is where accounts are added and switched, and an
+      // account with no readings yet is exactly when it is needed.
+      alwaysRenderHeader
       autoRefreshMs={QUOTA_REFRESH_MS}
       createErrorSnapshot={createErrorSnapshot}
       fetchQuota={fetchQuota}
       getErrorText={getErrorText}
       getRefreshErrorText={getRefreshErrorText}
+      getStaleNotice={getStaleNotice}
       getUnavailableText={getUnavailableText}
       getWindows={getWindows}
       sourceKey={sourceKey}
       title={t('heteroAgent.claudeQuota.title')}
       tooltip={t('heteroAgent.claudeQuota.tooltip')}
       renderHeader={(quota) => (
-        <QuotaAccountSwitcher placement="top" provider="claude-code" snapshot={quota} />
+        <QuotaAccountSwitcher
+          deviceId={deviceId}
+          placement="top"
+          provider="claude-code"
+          snapshot={quota}
+        />
       )}
     />
   );

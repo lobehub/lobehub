@@ -10,6 +10,7 @@ import type {
   ExpertiseReasonKind,
   ExpertiseReasonSource,
   ExpertiseRevisionEvidence,
+  ExpertiseRuleDirection,
 } from '@lobechat/types';
 import { isNotNull, isNull, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -74,7 +75,14 @@ export const EXPERTISE_ACTOR_TYPES = ['agent', 'user', 'system'] as const;
  * acceptance-driven run inherits that acceptance's own subject rather than inventing one.
  * `standalone` exists because 36 of this owner's 193 acceptances carry no in-product subject.
  */
-export const EXPERTISE_SUBJECT_TYPES = ['topic', 'task', 'document', 'standalone'] as const;
+export const EXPERTISE_SUBJECT_TYPES = [
+  'topic',
+  'task',
+  'document',
+  'standalone',
+  'goal_gate',
+  'site',
+] as const;
 /**
  * Two values only. There used to be a third, false_positive, and in practice it was systematically
  * misused: the model recorded "this rule does not apply to this topic" as fp (fp 29 > pass 19 on
@@ -379,6 +387,11 @@ export const expertiseLessons = pgTable(
     enforcement: text('enforcement')
       .$type<ExpertiseEnforcement>()
       .$defaultFn(() => 'remind'),
+    /**
+     * Whether the rule guides toward something (`positive`) or names what gets a delivery sent back
+     * (`negative`). Null until judged; nullable without a default so adding it never rewrites rows.
+     */
+    direction: text('direction').$type<ExpertiseRuleDirection>(),
 
     /** Where a lesson ends up: compiled into a machine-runnable criterion. Mental-model-layer lessons are always not-compilable. */
     compilability: text('compilability', { enum: EXPERTISE_COMPILABILITIES })

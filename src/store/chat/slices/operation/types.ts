@@ -5,6 +5,8 @@ import type {
   UploadFileItem,
 } from '@lobechat/types';
 
+import type { QueuedFollowUpRequest } from '@/services/aiAgent';
+
 /**
  * Operation Type Definitions
  * Unified operation state management for all async operations
@@ -132,6 +134,12 @@ export interface OperationMetadata {
   // Cancel information
   cancelReason?: string;
   duration?: number;
+  /**
+   * The run ended without completing — stopped from another tab, device or the
+   * API — though it settles as `completed` here. Nothing drains its queue next.
+   */
+  endedWithoutCompletion?: boolean;
+
   endTime?: number;
 
   // Error information
@@ -142,16 +150,40 @@ export interface OperationMetadata {
     details?: any;
   };
 
+  /**
+   * One-use automatic retry grant for a run explicitly dispatched by this client.
+   * Consumed by the error card; absent for restored/reconnected operations.
+   * @default undefined
+   */
+  heteroAutoRetryAvailable?: boolean;
+
+  /**
+   * External heterogeneous producer (e.g. `claude-code`) the server dispatched
+   * this Gateway run to. `null` denotes the native AgentRuntime; `undefined`
+   * means an older server or topic marker did not report it, so it may still
+   * be an external producer.
+   * @default undefined
+   */
+  heteroType?: string | null;
+
   // UI state (for sendMessage operation)
   inputEditorTempState?: any | null; // Editor state snapshot for cancel restoration
-
   inputSendErrorMsg?: string; // Error message to display in UI
+  /**
+   * User-facing LLM-call total for the running operation.
+   *
+   * Counts only actual model invocations — tool-only runtime iterations do not
+   * increment it. `stepCount` in operation metadata remains the internal
+   * scheduling/execution index.
+   */
+  llmCalls?: number;
   // Progress information
   progress?: {
     current: number;
     total: number;
     percentage?: number;
   };
+
   // Runtime hooks (collected during execution, executed after completion)
   runtimeHooks?: RuntimeHooks;
 
@@ -170,6 +202,9 @@ export interface OperationMetadata {
    * assistant output has arrived yet.
    */
   streamRetry?: StreamRetryMetadata;
+
+  /** A persisted server terminal snapshot already retired this local operation. */
+  terminalReconciled?: boolean;
 
   /**
    * Start of the turn a steered run continues. Elapsed timers count from here so
@@ -252,6 +287,23 @@ export interface QueuedFile {
  * optimistic-message path uses the `fileUrl || base64Url || previewUrl` fallback
  * chain, while the desktop chat-input file preview only reads `previewUrl`.
  */
+/**
+ * Snapshot file previews so the tray can render thumbnails and the resumed
+ * sendMessage can rebuild audioList/imageList/videoList — by the time the
+ * queue drains, chatUploadFileList has long been cleared.
+ */
+export const snapshotQueuedFiles = (files?: UploadFileItem[]): QueuedFile[] | undefined => {
+  if (!files?.length) return undefined;
+
+  return files.map((f) => ({
+    audioMetadata: f.audioMetadata,
+    id: f.id,
+    mimeType: f.file?.type ?? '',
+    name: f.file?.name ?? f.id,
+    url: f.fileUrl || f.base64Url || f.previewUrl || '',
+  }));
+};
+
 export const reconstructUploadFilesFromQueue = (files: QueuedFile[]): UploadFileItem[] =>
   files.map((f) => ({
     audioMetadata: f.audioMetadata,
@@ -279,7 +331,29 @@ export interface QueuedMessage {
   id: string;
   interruptMode: 'soft' | 'hard';
   metadata?: MessageMetadata;
+  /**
+   * Where the server holds this follow-up: `appending` while it is being
+   * handed to the server queue behind the running Gateway run, `server` once
+   * it is there. The server then joins it into that run or starts it as the
+   * next turn, so this client never sends it. Unset: only this client has it.
+   */
+  serverDelivery?: 'appending' | 'server';
+  /**
+   * The run request the server starts this follow-up with. Set when the send
+   * could be queued on the server; such an item may be handed over later.
+   */
+  serverRequest?: QueuedFollowUpRequest;
+  /**
+   * The append's answer was lost, so it may or may not be on the server. It
+   * stays the server's — never sent from here — until the same id is appended
+   * again and the server says where it is.
+   */
+  serverUnconfirmed?: boolean;
 }
+
+/** Whether only this client holds the queued message, so only it can send it. */
+export const isClientHeldQueuedMessage = (message: QueuedMessage): boolean =>
+  !message.serverDelivery;
 
 /**
  * Merged message ready for injection
@@ -417,7 +491,7 @@ export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMess
  */
 export interface OperationFilter {
   agentId?: string;
-  groupId?: string;
+  groupId?: string | null;
   isNew?: boolean;
   messageId?: string;
   scope?: MessageMapScope;
@@ -485,17 +559,61 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
   // after the round-trips. See INTERIM_LOADING_OPERATION_TYPES for the bridge
   // semantics and why they stay out of AI_RUNTIME_OPERATION_TYPES.
   //
-  // Known limitation (accepted): this also makes Stop appear during the pre-
-  // generation window. The approve/submit/skip gateway branches don't forward
-  // `parentOperationId` to `executeGatewayAgent`, so hitting Stop in that
-  // narrow window doesn't actually abort the in-flight request (loading
-  // briefly flickers, generation proceeds). No stuck state; wiring the abort
-  // handoff through those branches is deferred. The `regenerate` branch DOES
+  // This also makes Stop appear during the pre-generation window. The approve
+  // gateway branches forward `parentOperationId` to `executeGatewayAgent`, so
+  // Stop there interrupts the resumed run: approval cards resolve instantly
+  // and no longer cover the composer, which keeps this window reachable.
+  // Known limitation (accepted): the submit/skip gateway branches don't
+  // forward it yet, so Stop in that narrow window doesn't abort (loading
+  // briefly flickers, generation proceeds). The `regenerate` branch DOES
   // forward it — an unsettled regenerate wrapper is what the retry guard
   // reads, so it must never outlive phase-1 (a WS drop before session end
   // would otherwise brick retry for that turn permanently).
   ...INTERIM_LOADING_OPERATION_TYPES,
 ];
+
+/**
+ * Operation types whose in-flight state pins a topic row's `running` ring and
+ * elapsed clock — the set `operationSelectors.isTopicVisiblyRunning` /
+ * `visiblyRunningTopicIds` read.
+ *
+ * The stale-run sweep must be able to retire a leaked op from this set (see
+ * {@link SETTLEABLE_TOPIC_RUN_OPERATION_TYPES}): one that pins the row but sits
+ * outside the sweeper's filter strands the row spinning and counting over a
+ * finished topic until a full reload. That is exactly what an intervention
+ * continuation's interim op (`approveToolCalling` / `submitToolInteraction` /
+ * `skipToolInteraction`) did while the sweeps only looked at
+ * {@link AI_RUNTIME_OPERATION_TYPES}.
+ */
+export const TOPIC_VISIBLY_RUNNING_OPERATION_TYPES: OperationType[] = INPUT_LOADING_OPERATION_TYPES;
+
+/**
+ * Row-pinning operations that deliberately live WITHOUT a server-side run, so
+ * the stale-run sweep must never retire them.
+ *
+ * `autoRetryPending` is the entire reason this list exists. It is held for the
+ * heterogeneous overload backoff (`HETERO_OVERLOAD_BACKOFF_SECONDS` reaches 30s
+ * ± 20% jitter) precisely so the turn keeps its busy state across the wait. The
+ * sweep's own settle age is 30s, so without this exclusion it would retire the
+ * wait op mid-countdown — and `isHeteroOverloadWaitAborted` reads a non-running
+ * op as "the user cancelled", which would silently exhaust the retry sequence.
+ */
+export const LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES: OperationType[] = ['autoRetryPending'];
+
+/**
+ * {@link TOPIC_VISIBLY_RUNNING_OPERATION_TYPES} minus the
+ * {@link LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES}: the operations
+ * `ChatAgentRunGatewayAction.settleAllUnbackedTopicRuns` may retire once the
+ * server reports no live run.
+ *
+ * Anything that can pin the row and IS server-backed has to be in here, or it
+ * leaks a permanently-spinning row. Anything local-only has to stay out, or the
+ * sweep kills the wait it is holding.
+ */
+export const SETTLEABLE_TOPIC_RUN_OPERATION_TYPES: OperationType[] =
+  TOPIC_VISIBLY_RUNNING_OPERATION_TYPES.filter(
+    (type) => !LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES.includes(type),
+  );
 
 /**
  * Operation types that block a fresh `sendMessage`: a send fired while one of

@@ -129,6 +129,18 @@ describe('AgentStreamClient', () => {
       expect(JSON.parse(ws.sent[0])).toEqual({ token: 'test-token', type: 'auth' });
     });
 
+    it('should send its client id with auth so the gateway can target it', async () => {
+      const client = createClient({ clientId: 'tab-1' });
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(JSON.parse(getLatestWs().sent[0])).toEqual({
+        clientId: 'tab-1',
+        token: 'test-token',
+        type: 'auth',
+      });
+    });
+
     it('should transition through connection states', async () => {
       const client = createClient();
       const statuses: ConnectionStatus[] = [];
@@ -327,6 +339,40 @@ describe('AgentStreamClient', () => {
         type: 'agent_event',
       });
 
+      expect(client.connectionStatus).toBe('disconnected');
+    });
+
+    it('stays connected through a parked LLM call error, then ends on the run end', async () => {
+      // The run waits for a client (`waiting_for_client`) and streams on in
+      // this session once one resumes it.
+      const client = createClient();
+      const ws = await connectAndAuth(client);
+
+      ws.simulateMessage({
+        event: {
+          data: {
+            body: { reason: 'no_executor', recoverable: true },
+            error: 'ClientLlmExecutorUnavailable',
+          },
+          operationId: 'op-123',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'error',
+        },
+        type: 'agent_event',
+      });
+      expect(client.connectionStatus).toBe('connected');
+
+      ws.simulateMessage({
+        event: {
+          data: {},
+          operationId: 'op-123',
+          stepIndex: 1,
+          timestamp: 2,
+          type: 'agent_runtime_end',
+        },
+        type: 'agent_event',
+      });
       expect(client.connectionStatus).toBe('disconnected');
     });
 

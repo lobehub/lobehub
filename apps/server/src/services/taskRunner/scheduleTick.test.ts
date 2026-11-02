@@ -114,6 +114,15 @@ describe('runScheduleTick', () => {
     expect(mockRunner.runTask).not.toHaveBeenCalled();
   });
 
+  it('skips an archived task without running it', async () => {
+    mockSelectTask.mockResolvedValue([baseTask({ archivedAt: new Date() })]);
+
+    const outcome = await runScheduleTick(taskId, userId);
+
+    expect(outcome).toEqual({ ran: false, reason: 'archived' });
+    expect(mockRunner.runTask).not.toHaveBeenCalled();
+  });
+
   it('skips terminal / paused tasks before checking maxExecutions', async () => {
     mockSelectTask.mockResolvedValue([baseTask({ status: 'paused' })]);
 

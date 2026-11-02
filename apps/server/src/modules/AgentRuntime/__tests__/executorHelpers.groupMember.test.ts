@@ -31,6 +31,94 @@ describe('resolveGroupMemberId', () => {
 // G-05: the member runner hands the supervisor run's approval policy to every
 // forked member instead of letting them fall back to headless.
 describe('buildServerAgentMemberRunner', () => {
+  it.each(['allow', 'blocked'] as const)(
+    'publishes a failed member start only after its hook returns %s while its sibling starts',
+    async (status) => {
+      const rows: Record<string, any>[] = [];
+      const onGroupMemberResult = vi.fn(async () => {
+        expect(rows[1].content).not.toBe('');
+        return true;
+      });
+      let decide!: (value: { status: 'allow' | 'blocked' }) => void;
+      const decision = new Promise<{ status: 'allow' | 'blocked' }>((resolve) => {
+        decide = resolve;
+      });
+      let entered!: () => void;
+      const hookEntered = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const evaluateAfterToolCall = vi.fn(async () => {
+        entered();
+        return decision;
+      });
+      const messageModel = {
+        create: vi.fn(async (value) => {
+          const row = { ...value, id: `row-${rows.length}` };
+          rows.push(row);
+          return row;
+        }),
+        findById: vi.fn(async (id) => rows.find((row) => row.id === id)),
+        findMessagePlugin: vi.fn(async (id) => {
+          const row = rows.find((row) => row.id === id);
+          return row && { ...row.plugin, toolCallId: row.tool_call_id, state: row.pluginState };
+        }),
+        updateToolMessage: vi.fn(async (id, value) => {
+          Object.assign(
+            rows.find((row) => row.id === id)!,
+            value,
+          );
+          return { success: true };
+        }),
+      };
+      const runner = buildServerAgentMemberRunner(
+        {
+          execGroupMember: vi.fn(async ({ agentId }) => ({ started: agentId === 'sibling' })),
+          hookDispatcher: { hasAfterToolCallControl: () => true, evaluateAfterToolCall },
+          messageModel,
+          onGroupMemberResult,
+          operationId: 'op-sup',
+          topicId: 'topic',
+          userId: 'owner',
+        } as unknown as RuntimeExecutorContext,
+        {
+          origin: { agentId: 'supervisor', groupId: 'group', topicId: 'topic' },
+        } as AgentState,
+        {
+          apiName: 'executeAgentTasks',
+          identifier: 'lobe-group-management',
+          arguments: '{}',
+          id: 'call',
+          type: 'builtin',
+        },
+        'assistant',
+      )!;
+      const run = runner.run({
+        members: [
+          { agentId: 'failed', instruction: 'go' },
+          { agentId: 'sibling', instruction: 'go' },
+        ],
+        mode: 'in_group',
+        onComplete: 'resume',
+      });
+      await Promise.race([hookEntered, run]);
+      expect(evaluateAfterToolCall).toHaveBeenCalledTimes(1);
+      expect(rows.map((row) => row.content)).toEqual(['', '', '']);
+      expect(rows.every((row) => !row.metadata?.toolResultControl)).toBe(true);
+      expect(messageModel.updateToolMessage).not.toHaveBeenCalled();
+      expect(onGroupMemberResult).not.toHaveBeenCalled();
+      decide({ status });
+      await expect(run).resolves.toMatchObject({ started: true, startedCount: 1 });
+      expect(rows[1].content).toBe(
+        status === 'allow'
+          ? 'Agent member "failed" failed to start.'
+          : 'Tool result withheld by afterToolCall hook.',
+      );
+      expect(rows[0].metadata).toEqual({ agentCouncil: true });
+      expect(rows[2].content).toBe('');
+      expect(onGroupMemberResult).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('forwards the supervisor approval policy to each member', async () => {
     const execGroupMember = vi.fn().mockResolvedValue({ operationId: 'op-m', started: true });
     const ctx = {

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { localFileService } from './localFileService';
+import {
+  isTerminalLocalFileError,
+  LocalFileResponseError,
+  localFileService,
+} from './localFileService';
 
 const mockLocalSystem = vi.hoisted(() => ({
   getExternalAssetForPublishUrl: vi.fn(),
@@ -54,6 +58,45 @@ describe('localFileService', () => {
       resourceBaseUrl: undefined,
       type: 'text',
     });
+  });
+
+  it('reports the preview protocol status so a deleted / denied file is terminal', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/gone.md',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => ({ headers: { get: vi.fn() }, ok: false, status: 404 }) as unknown as Response,
+      ),
+    );
+
+    const error = await localFileService
+      .getLocalFilePreview({ path: '/repo/gone.md', workingDirectory: '/repo' })
+      .catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(LocalFileResponseError);
+    expect((error as LocalFileResponseError).status).toBe(404);
+    expect(isTerminalLocalFileError(error)).toBe(true);
+    expect(isTerminalLocalFileError(new LocalFileResponseError(403))).toBe(true);
+    expect(isTerminalLocalFileError(new LocalFileResponseError(500))).toBe(false);
+    expect(isTerminalLocalFileError(new Error('Failed to load local file: 404'))).toBe(false);
+  });
+
+  it('treats a file that vanished before its preview URL exists as terminal', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      code: 'not_found',
+      error: 'ENOENT: no such file or directory',
+      success: false,
+    });
+
+    const error = await localFileService
+      .getLocalFilePreview({ path: '/repo/gone.md', workingDirectory: '/repo' })
+      .catch((reason: unknown) => reason);
+
+    expect(isTerminalLocalFileError(error)).toBe(true);
+    expect((error as LocalFileResponseError).status).toBe(404);
   });
 
   it('returns the entry directory as the HTML workspace resource base URL', async () => {
@@ -158,6 +201,106 @@ describe('localFileService', () => {
       }),
     ).rejects.toThrow('Unsupported local file preview type');
     expect(textMock).not.toHaveBeenCalled();
+  });
+
+  const videoResponse = (size: number, blob = vi.fn()) =>
+    ({
+      blob,
+      body: { cancel: vi.fn(async () => {}) },
+      headers: new Headers({
+        'content-length': String(size),
+        'content-type': 'video/mp4',
+        'x-preview-modified-at': '1700000000123',
+      }),
+      ok: true,
+    }) as unknown as Response;
+
+  it('describes a local video without keeping its bytes in the preview result', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/demo.mp4',
+    });
+    const blobMock = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => videoResponse(3, blobMock)),
+    );
+
+    const preview = await localFileService.getLocalFilePreview({
+      path: '/repo/demo.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(preview).toEqual({
+      contentType: 'video/mp4',
+      revision: '3:1700000000123',
+      type: 'video',
+    });
+    expect(blobMock).not.toHaveBeenCalled();
+  });
+
+  it('marks an oversized local video as an unpreviewable binary', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/huge.mp4',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => videoResponse(500 * 1024 * 1024)),
+    );
+
+    const preview = await localFileService.getLocalFilePreview({
+      path: '/repo/huge.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(preview).toEqual({ contentType: 'video/mp4', oversized: true, type: 'binary' });
+  });
+
+  it('reads a local video for playback with the caller abort signal', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/demo.mp4',
+    });
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'video/mp4' });
+    const fetchMock = vi.fn(async () =>
+      videoResponse(
+        3,
+        vi.fn(async () => blob),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    const result = await localFileService.readLocalVideo(
+      { path: '/repo/demo.mp4', workingDirectory: '/repo' },
+      controller.signal,
+    );
+
+    expect(result).toEqual({ blob, ok: true });
+    expect(fetchMock).toHaveBeenCalledWith('localfile://preview/demo.mp4', {
+      signal: controller.signal,
+    });
+  });
+
+  it('refuses to read an oversized local video for playback', async () => {
+    mockLocalSystem.getLocalFilePreviewUrl.mockResolvedValue({
+      success: true,
+      url: 'localfile://preview/huge.mp4',
+    });
+    const blobMock = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => videoResponse(500 * 1024 * 1024, blobMock)),
+    );
+
+    const result = await localFileService.readLocalVideo({
+      path: '/repo/huge.mp4',
+      workingDirectory: '/repo',
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'oversized' });
+    expect(blobMock).not.toHaveBeenCalled();
   });
 
   it('reads local file bytes from the preview URL', async () => {

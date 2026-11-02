@@ -1,13 +1,14 @@
 'use client';
 
 import { type UserImageConfig } from '@lobechat/types';
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Form } from '@lobehub/ui';
-import { Skeleton, Spin } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Spin, Tooltip } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
+import { CircleHelpIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormSliderWithInput } from '@/components/FormInput';
+import { SettingsSectionSkeleton } from '@/components/Skeleton';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { MAX_DEFAULT_IMAGE_NUM, MIN_DEFAULT_IMAGE_NUM } from '@/const/settings';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
@@ -18,32 +19,56 @@ import { settingsSelectors } from '@/store/user/slices/settings/selectors';
 const ImageSettings = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canManageServiceModel, reason } = usePermission('manage_settings');
-  const [form] = Form.useForm<UserImageConfig>();
   const [isUpdating, setIsUpdating] = useState(false);
 
   const imageSettings = useUserStore(settingsSelectors.currentImageSettings);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
+  const form = useForm<UserImageConfig>({
+    initialValues: imageSettings,
+    values: imageSettings,
+    onValuesChange: async (values) => {
+      if (!canManageServiceModel) return;
+
+      setIsUpdating(true);
+      try {
+        await setSettings({ image: values });
+      } finally {
+        setIsUpdating(false);
+      }
+    },
+  });
 
   if (!isUserStateInit) {
-    return <Skeleton.Text rows={1} />;
+    // One filled group holding the default image count slider.
+    return <SettingsSectionSkeleton groups={[{ rows: 1, titleWidth: 136 }]} />;
   }
 
-  const items: FormGroupItemType[] = [
+  const items: FormGroupItem<UserImageConfig>[] = [
     {
       children: [
         {
-          children: (
+          desc: t('settingImage.defaultCount.desc'),
+          label: (
+            <Flexbox horizontal align={'center'} gap={4}>
+              {t('settingImage.defaultCount.label')}
+              {reason && (
+                <Tooltip title={reason}>
+                  <Icon icon={CircleHelpIcon} size={14} style={{ cursor: 'help' }} />
+                </Tooltip>
+              )}
+            </Flexbox>
+          ),
+          name: 'defaultImageNum',
+          render: ({ value, onChange }) => (
             <FormSliderWithInput
               disabled={isUpdating || !canManageServiceModel}
               max={MAX_DEFAULT_IMAGE_NUM}
               min={MIN_DEFAULT_IMAGE_NUM}
               step={1}
+              value={value}
+              onChange={onChange}
             />
           ),
-          desc: t('settingImage.defaultCount.desc'),
-          label: t('settingImage.defaultCount.label'),
-          name: 'defaultImageNum',
-          tooltip: reason,
         },
       ],
       extra: isUpdating ? <Spin size="small" style={{ opacity: 0.6 }} /> : undefined,
@@ -59,20 +84,9 @@ const ImageSettings = memo(() => {
     <Form
       collapsible={false}
       form={form}
-      initialValues={imageSettings}
       items={items}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={async (values) => {
-        if (!canManageServiceModel) return;
-
-        setIsUpdating(true);
-        try {
-          await setSettings({ image: values });
-        } finally {
-          setIsUpdating(false);
-        }
-      }}
       {...FORM_STYLE}
     />
   );

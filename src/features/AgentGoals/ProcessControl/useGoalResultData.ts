@@ -15,6 +15,13 @@ import {
  * the same acceptance id, so an id-only key held the rejected round until a
  * reload; the polled graph moving the acceptance (or its Task node) on is what
  * re-reads the bundle.
+ *
+ * The Goal's own status is part of that state too. A rework ends by putting the
+ * Goal back on `achieved` — the moment the graph poll stops — and the snapshot
+ * taken then can still carry the acceptance node's pre-rework status. Keyed on
+ * the acceptance alone, the bundle stayed on the rejected round and the
+ * sign-off strip kept reading 修改中 until the page was reloaded; the Goal
+ * moving on is its own reason to re-read the latest round.
  */
 export const goalResultAcceptanceKey = (acceptanceId: string, graphState: string) =>
   ['goal-result-acceptance', acceptanceId, graphState] as const;
@@ -31,7 +38,7 @@ export const useGoalResultData = (graph: GoalGraphView) => {
   const acceptanceId = acceptanceView?.acceptance?.id;
   const criteriaIds = graph.goal.config?.acceptance?.criteriaIds ?? [];
 
-  const graphState = `${acceptanceView?.acceptance?.status}:${acceptanceView?.node.status}`;
+  const graphState = `${graph.goal.status}:${acceptanceView?.acceptance?.status}:${acceptanceView?.node.status}`;
   const bundle = useClientDataSWR(
     acceptanceId ? goalResultAcceptanceKey(acceptanceId, graphState) : null,
     () => verifyService.getAcceptanceBundle(acceptanceId!),

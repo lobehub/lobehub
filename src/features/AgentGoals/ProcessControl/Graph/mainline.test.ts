@@ -1,22 +1,37 @@
 import type { GoalReportState } from '@lobechat/types';
+import { cssVar } from '@lobehub/ui';
 import { describe, expect, it } from 'vitest';
 
 import type { GoalGraphView } from '../goalGraphViewModel';
-import { edgeEmphasis, isNodeDimmed, nodeEmphasis, resolveMainline } from './mainline';
+import {
+  edgeEmphasis,
+  edgeMarkerColor,
+  isNodeDimmed,
+  MUTED_EDGE_OPACITY,
+  MUTED_EDGE_OPACITY_DARK,
+  nodeEmphasis,
+  resolveMainline,
+  shownMainline,
+} from './mainline';
 
 const graphWith = (
   mainline: { edgeIds: string[]; nodeIds: string[] } | undefined,
   nodeIds = ['p', 't1', 't2', 't3', 'x1'],
-) =>
-  ({
-    byId: Object.fromEntries(nodeIds.map((id) => [id, { node: { id } }])),
+  kinds: Record<string, string> = {},
+) => {
+  const nodes = nodeIds.map((id) => ({ node: { id, kind: kinds[id] } }));
+  return {
+    byId: Object.fromEntries(nodes.map((view) => [view.node.id, view])),
+    edges: [],
+    nodes,
     report: {
       latest: {
         metadata: { chapters: [], graphCursor: 'e', headline: 'H', mainline, nextSteps: [] },
       },
       status: 'completed',
     } as unknown as GoalReportState,
-  }) as unknown as Pick<GoalGraphView, 'byId' | 'report'>;
+  } as unknown as Pick<GoalGraphView, 'byId' | 'edges' | 'nodes' | 'report'>;
+};
 
 describe('resolveMainline', () => {
   it('reads the mark from the newest report version', () => {
@@ -35,6 +50,53 @@ describe('resolveMainline', () => {
       ...resolveMainline(graphWith({ edgeIds: [], nodeIds: ['t1', 'gone'] }))!.nodeIds,
     ]).toEqual(['t1']);
     expect(resolveMainline(graphWith({ edgeIds: [], nodeIds: ['gone'] }))).toBeUndefined();
+  });
+
+  it('drops a mark that reaches every card, so the map is never all mainline', () => {
+    // The wrap-up model marks every node when it cannot tell the path apart;
+    // ringing the whole map says nothing, so the plain map is drawn instead.
+    const all = graphWith({ edgeIds: [], nodeIds: ['p', 't1', 't2', 't3', 'x1'] }, undefined, {
+      p: 'problem',
+    });
+    expect(resolveMainline(all)).toBeUndefined();
+  });
+
+  it('keeps the mark while any card stands off it, the root question aside', () => {
+    const root = graphWith({ edgeIds: [], nodeIds: ['t1', 't2', 't3', 'x1'] }, undefined, {
+      p: 'problem',
+    });
+    expect(resolveMainline(root)).toBeUndefined();
+    const oneOff = graphWith({ edgeIds: [], nodeIds: ['t1', 't2', 't3'] }, undefined, {
+      p: 'problem',
+    });
+    expect(resolveMainline(oneOff)).toBeDefined();
+  });
+
+  it('treats a collapsed experiment as on the mainline when its members are', () => {
+    const nodes = [
+      { node: { id: 'p', kind: 'problem' } },
+      { node: { id: 'e1', kind: 'experiment' } },
+      { node: { id: 't1', kind: 'task' } },
+    ];
+    expect(
+      resolveMainline({
+        byId: Object.fromEntries(nodes.map((view) => [view.node.id, view])),
+        edges: [{ id: 'c1', kind: 'contains', sourceNodeId: 'e1', targetNodeId: 't1' }],
+        nodes,
+        report: {
+          latest: {
+            metadata: {
+              chapters: [],
+              graphCursor: 'e',
+              headline: 'H',
+              mainline: { edgeIds: [], nodeIds: ['t1'] },
+              nextSteps: [],
+            },
+          },
+          status: 'completed',
+        },
+      } as unknown as Pick<GoalGraphView, 'byId' | 'edges' | 'nodes' | 'report'>),
+    ).toBeUndefined();
   });
 });
 
@@ -110,5 +172,49 @@ describe('isNodeDimmed', () => {
   it('keeps a highlighted detour readable even though it is off the mainline', () => {
     // A chapter's local map calls its detours out; the mainline mark must not fade them.
     expect(isNodeDimmed({ blocked: false, emphasis: 'muted', highlighted: true })).toBe(false);
+  });
+});
+
+describe('off-mainline legibility', () => {
+  /**
+   * Regression: the dark canvas turned the border token at a third opacity into
+   * background, so an off-mainline line and the arrow ending it were barely
+   * there. Off-mainline lines step back through opacity, so the lifted token
+   * only restores legibility.
+   */
+  it('lifts the plain arrow on the dark canvas', () => {
+    expect(edgeMarkerColor('detour', true)).toBe(cssVar.colorWarning);
+    // Light mode is unchanged — the same border token as before.
+    expect(edgeMarkerColor(undefined, false)).toBe(cssVar.colorBorder);
+    expect(edgeMarkerColor('muted', false)).toBe(cssVar.colorBorder);
+    expect(edgeMarkerColor(undefined, true)).toBe(cssVar.colorTextQuaternary);
+    expect(edgeMarkerColor('muted', true)).toBe(cssVar.colorTextQuaternary);
+  });
+
+  /**
+   * Regression: a colored mainline line — near-black primary, then info blue,
+   * then light blue — read as heavier than the map. The cards carry the
+   * mainline; its lines end in the same ordinary arrow as any other line.
+   */
+  it('ends the mainline in an ordinary arrow', () => {
+    expect(edgeMarkerColor('mainline', false)).toBe(edgeMarkerColor(undefined, false));
+    expect(edgeMarkerColor('mainline', true)).toBe(edgeMarkerColor(undefined, true));
+  });
+
+  it('is more legible on the dark canvas while still stepping back', () => {
+    expect(MUTED_EDGE_OPACITY_DARK).toBeGreaterThan(MUTED_EDGE_OPACITY);
+    expect(MUTED_EDGE_OPACITY_DARK).toBeLessThan(1);
+  });
+});
+
+describe('shownMainline', () => {
+  const graph = graphWith({ edgeIds: ['e1'], nodeIds: ['t1', 't2'] });
+
+  it('leaves a finished map plain until the mainline is turned on', () => {
+    expect(shownMainline(graph, false)).toBeUndefined();
+  });
+
+  it('draws the marked mainline once it is turned on', () => {
+    expect([...shownMainline(graph, true)!.nodeIds]).toEqual(['t1', 't2']);
   });
 });

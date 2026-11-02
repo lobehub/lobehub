@@ -11,16 +11,25 @@ const importFileMock = vi.hoisted(() => vi.fn());
 const removeUnreferencedFileMock = vi.hoisted(() => vi.fn());
 const uploadWithProgressMock = vi.hoisted(() => vi.fn());
 const dispatchDockFileListMock = vi.hoisted(() => vi.fn());
+const createDocumentMock = vi.hoisted(() => vi.fn());
+const createFolderByIdMock = vi.hoisted(() => vi.fn());
+const moveDocumentsByIdMock = vi.hoisted(() => vi.fn());
+const removeDocumentMock = vi.hoisted(() => vi.fn());
+const confirmModalMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  confirmModal: vi.fn(),
+  confirmModal: confirmModalMock,
   toast: { error: toastError, success: vi.fn() },
 }));
 
 vi.mock('@/services/agentDocument', () => ({
   agentDocumentService: {
+    createDocument: createDocumentMock,
+    createFolderById: createFolderByIdMock,
     importFile: importFileMock,
+    moveDocumentsById: moveDocumentsByIdMock,
+    removeDocument: removeDocumentMock,
   },
 }));
 
@@ -173,5 +182,97 @@ describe('useDocumentTreeOps.uploadFiles', () => {
 
     expect(uploadWithProgressMock).not.toHaveBeenCalled();
     expect(importFileMock).not.toHaveBeenCalled();
+  });
+});
+
+// Parents are addressed by id, so a plain document can hold children — paths
+// could not reach anything nested under a document.
+describe('useDocumentTreeOps id-based tree edits', () => {
+  const mutate = vi.fn();
+  const sop = createDoc({
+    documentId: 'sop-doc',
+    fileType: 'custom/document',
+    filename: 'SOP',
+    id: 'sop-row',
+    isFolder: false,
+    title: 'SOP',
+  });
+  const run = createDoc({
+    documentId: 'run-doc',
+    fileType: 'custom/document',
+    filename: 'Run 1',
+    id: 'run-row',
+    isFolder: false,
+    title: 'Run 1',
+  });
+
+  beforeEach(() => {
+    toastError.mockReset();
+    mutate.mockReset();
+    createDocumentMock.mockReset().mockResolvedValue({ id: 'new-row' });
+    createFolderByIdMock.mockReset().mockResolvedValue({ created: true, folder: { id: 'f-row' } });
+    moveDocumentsByIdMock.mockReset().mockResolvedValue([{ id: 'run-row', status: 'moved' }]);
+    removeDocumentMock.mockReset().mockResolvedValue({ deleted: true, id: 'sop-row' });
+    confirmModalMock.mockReset();
+  });
+
+  const renderOps = (data: AgentDocumentItem[]) =>
+    renderHook(() => useDocumentTreeOps({ agentId: 'agent-1', data, mutate })).result.current;
+
+  it('creates a sub-document under a document parent', async () => {
+    await renderOps([sop]).createDocument('sop-row');
+
+    expect(createDocumentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agent-1', parentId: 'sop-doc' }),
+    );
+  });
+
+  it('creates a root document without a parent', async () => {
+    await renderOps([sop]).createDocument(null);
+
+    expect(createDocumentMock.mock.calls[0][0]).not.toHaveProperty('parentId');
+  });
+
+  it('creates a folder by parent id', async () => {
+    await renderOps([sop]).createFolder('sop-row');
+
+    expect(createFolderByIdMock).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agent-1', parentId: 'sop-doc' }),
+    );
+  });
+
+  it('moves rows under a document in one call and reports failures', async () => {
+    moveDocumentsByIdMock.mockResolvedValue([
+      {
+        id: 'run-row',
+        status: 'failed',
+        error: '"Run 1" already exists in the destination folder.',
+      },
+    ]);
+
+    await renderOps([sop, run]).moveDocument({
+      sourceIds: ['run-row'],
+      sourceNodes: [{ data: run }],
+      targetId: 'sop-row',
+    });
+
+    expect(moveDocumentsByIdMock).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      ids: ['run-row'],
+      parentId: 'sop-doc',
+    });
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining('already exists'));
+  });
+
+  it('deletes a parent document together with what is nested under it', async () => {
+    const nested = { ...run, parentId: 'sop-doc' };
+    renderOps([sop, nested]).deleteDocuments(['sop-row', 'run-row']);
+    const [{ onOk }] = confirmModalMock.mock.calls[0];
+    onOk();
+
+    await vi.waitFor(() => expect(removeDocumentMock).toHaveBeenCalledTimes(1));
+    expect(removeDocumentMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'sop-row', withChildren: true }),
+    );
   });
 });

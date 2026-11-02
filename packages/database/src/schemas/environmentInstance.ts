@@ -50,6 +50,18 @@ export const environmentInstances = pgTable(
     enabled: boolean('enabled').notNull().default(true),
     /** Last recorded instance state; ready is not proof that a device is currently online. */
     status: text('status').$type<EnvironmentInstanceStatus>().notNull().default('pending'),
+    /**
+     * The build that last materialized this instance, while it is worth
+     * polling. Its log is the only place a failed bootstrap explains itself,
+     * and the runtime keeps that log under an id, so losing the id loses the
+     * reason — which is exactly when someone needs it.
+     *
+     * Cleared when a build settles into {@link status}: a stale id would have
+     * the UI poll a log the runtime has already dropped.
+     */
+    buildId: text('build_id'),
+    /** Why the last build failed, in the runtime's own words. Null on success. */
+    buildError: text('build_error'),
     ...timestamps,
   },
   (t) => [

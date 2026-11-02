@@ -208,7 +208,10 @@ export const supportsClaudeEffortLevel = (
   if (!parsed) return false;
 
   const isSupportedModel =
-    (parsed.majorVersion === 5 && isClaudeFamily(parsed, CLAUDE_5_EFFORT_FAMILIES)) ||
+    (parsed.majorVersion === 5 &&
+      (isClaudeFamily(parsed, CLAUDE_5_EFFORT_FAMILIES) ||
+        // Haiku 5.5 is the first Haiku with effort, and it supports all five levels.
+        (parsed.family === 'haiku' && hasMinorVersionAtLeast(parsed, 5)))) ||
     (parsed.majorVersion === 4 &&
       ((parsed.family === 'opus' &&
         parsed.minorVersion !== undefined &&

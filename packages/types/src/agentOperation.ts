@@ -6,14 +6,19 @@ export type AgentOperationStatus =
   | 'interrupted'
   | 'running'
   | 'waiting_for_async_tool'
+  | 'waiting_for_client'
   | 'waiting_for_human';
 
-const IN_FLIGHT_OPERATION_STATUSES = new Set<AgentOperationStatus>([
+/** Statuses of an operation that has not settled yet — see {@link isAgentOperationInFlight}. */
+export const IN_FLIGHT_OPERATION_STATUS_LIST: readonly AgentOperationStatus[] = [
   'idle',
   'running',
   'waiting_for_async_tool',
+  'waiting_for_client',
   'waiting_for_human',
-]);
+];
+
+const IN_FLIGHT_OPERATION_STATUSES = new Set<AgentOperationStatus>(IN_FLIGHT_OPERATION_STATUS_LIST);
 
 /**
  * Whether the operation has not settled yet and may still write to its topic or
@@ -50,4 +55,5 @@ export type AgentOperationCompletionReason =
   /** The same tool call was requested over and over; a guard cut the run short. */
   | 'tool_call_repeat_limit'
   | 'waiting_for_async_tool'
+  | 'waiting_for_client'
   | 'waiting_for_human';

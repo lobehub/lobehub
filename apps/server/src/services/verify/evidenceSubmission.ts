@@ -9,11 +9,28 @@ import type { LobeChatDatabase } from '@/database/type';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
 
+import { readRequiredEvidence } from './evidenceCoverage';
+
+// A criterion that declares evidence types fails its structural gate until
+// each one is present, so the prompt has to name them: without the types, the
+// evidence turn sent whatever it reached for first (markdown for a `text`
+// requirement, a recording as `video` for `gif`) and failed every repair round.
+const describeRequiredEvidence = (item: VerifyCheckItem): string => {
+  const types = [
+    ...new Set(
+      (readRequiredEvidence(item.verifierConfig) ?? [])
+        .filter((spec) => !spec.scope || spec.scope === 'run_evidence')
+        .map((spec) => spec.type),
+    ),
+  ];
+  return types.length > 0 ? ` [requires evidence type: ${types.join(', ')}]` : '';
+};
+
 const buildEvidencePrompt = (
   items: VerifyCheckItem[],
 ): string => `The task execution is complete. Submit the evidence you produced for every Acceptance criterion below.
 
-${items.map((item) => `- ${item.id}: ${item.title}${item.description ? ` — ${item.description}` : ''}`).join('\n')}
+${items.map((item) => `- ${item.id}: ${item.title}${item.description ? ` — ${item.description}` : ''}${describeRequiredEvidence(item)}`).join('\n')}
 
 Call submitEvidence once for each criterion. This is evidence collection only: do not assign verdicts and do not redo the implementation.`;
 

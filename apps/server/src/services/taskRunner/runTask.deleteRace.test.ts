@@ -59,9 +59,11 @@ describe('TaskRunnerService.runTask vs. a concurrent delete', () => {
       getCheckpointConfig: vi.fn().mockReturnValue({}),
       getReviewConfig: vi.fn().mockReturnValue(undefined),
       incrementTopicCount: vi.fn(),
-      findById: vi.fn().mockResolvedValue({ ...task, status: 'running' }),
+      findById: vi
+        .fn()
+        .mockResolvedValueOnce({ ...task })
+        .mockResolvedValue({ ...task, status: 'running' }),
       lockForUpdate: vi.fn().mockResolvedValue(true),
-      resolve: vi.fn().mockResolvedValue({ ...task }),
       update: vi.fn(),
       updateCurrentTopic: vi.fn(),
       updateHeartbeat: vi.fn(),
@@ -121,6 +123,19 @@ describe('TaskRunnerService.runTask vs. a concurrent delete', () => {
       code: 'CONFLICT',
       message: 'The task was canceled while its run was starting; the run was stopped.',
     });
+
+    expect(mocks.interruptTask).toHaveBeenCalledWith({ operationId: 'op-new' });
+    expect(taskTopicModel.add).not.toHaveBeenCalled();
+  });
+
+  it('stops the run it just dispatched when its claim was withdrawn meanwhile', async () => {
+    // Closing or restarting a goal puts a claimed Task whose run is not yet
+    // recorded back to `backlog`; the run must not be recorded over that.
+    taskModel.findById.mockResolvedValue({ ...task, status: 'backlog' });
+
+    await expect(new TaskRunnerService(db, 'user-1').runTask({ taskId: 'T-1' })).rejects.toThrow(
+      'The task was withdrawn while its run was starting',
+    );
 
     expect(mocks.interruptTask).toHaveBeenCalledWith({ operationId: 'op-new' });
     expect(taskTopicModel.add).not.toHaveBeenCalled();

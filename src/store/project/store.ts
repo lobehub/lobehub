@@ -1,160 +1,331 @@
-import type { SWRResponse } from 'swr';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { isProjectDetailKey, isProjectListKey, projectKeys } from '@/libs/swr/keys';
-import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
-import { projectService } from '@/services/project';
+import {
+  arrayEntity,
+  createReplicaSlice,
+  createReplicaState,
+  linkReplicaEntity,
+  recordLens,
+  type ReplicaState,
+  type ReplicaSyncResult,
+  singleEntity,
+} from '@/libs/replica';
+import {
+  type ProjectAgentBindingPatch,
+  type ProjectKnowledgeBaseBindingPatch,
+  projectService,
+} from '@/services/project';
+import { refreshChannelListIfEnabled } from '@/store/channel/refreshIfEnabled';
 import { createDevtools } from '@/store/middleware/createDevtools';
 import { expose } from '@/store/middleware/expose';
+import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import {
-  PROJECT_LIST_QUERY,
-  projectDetailProjection,
-  projectDetailWriteQueue,
-  projectListProjection,
-  projectListWriteQueue,
+  PROJECT_LIST_KEY,
+  type ProjectDetail,
+  projectDetailResource,
+  type ProjectListItem,
+  projectListResource,
 } from './projection';
-import type { ProjectDispatchAction, ProjectEffect } from './reducer';
-import { projectReducer } from './reducer';
 
-type ProjectListResponse = Awaited<ReturnType<typeof projectService.listAll>>;
-type ProjectDetailResponse = Awaited<ReturnType<typeof projectService.detail>>;
-export type ProjectListItem = ProjectListResponse['data'][number];
-export type ProjectDetail = ProjectDetailResponse['data'];
-
-const currentScope = () => getCacheScope();
+export type { ProjectDetail, ProjectListItem } from './projection';
 
 export interface ProjectStoreState {
-  projectDetails: Record<string, Record<string, ProjectDetail>>;
-  projectLists: Record<string, ProjectListItem[]>;
-  projectOptimisticPatches: Record<string, Record<string, Partial<ProjectListItem>>>;
+  /** Project pages by route param (id or slug). */
+  projectDetailMap: Record<string, ProjectDetail>;
+  /** Replica bookkeeping for `projectDetailMap`. */
+  projectDetailReplica: ReplicaState<ProjectDetail>;
+  /** `projectListMap.all`: every project of the active scope. */
+  projectListMap: Record<string, ProjectListItem[]>;
+  /** Replica bookkeeping for `projectListMap`. */
+  projectListReplica: ReplicaState<ProjectListItem[]>;
 }
 
 interface ProjectStore extends ProjectStoreState {
+  /** Invite agents; one refetch after the batch so every loaded page shows them. */
+  addProjectAgents: (projectId: string, agentIds: string[]) => Promise<void>;
+  addProjectKnowledgeBases: (projectId: string, knowledgeBaseIds: string[]) => Promise<void>;
   createProject: (input: {
-    identifier: string;
+    avatar?: string;
+    coordinatorAgentId?: string;
+    identifier?: string;
     name: string;
     slug?: string;
   }) => Promise<ProjectListItem>;
   deleteProject: (id: string) => Promise<void>;
-  internal_dispatchProject: (action: ProjectDispatchAction) => void;
+  /**
+   * Drop a project at a new place in the shared manual order. `ids` is the list
+   * as the user now sees it; the list moves at once and the write is queued
+   * behind earlier moves so they land in drop order.
+   */
+  moveProject: (id: string, ids: string[]) => Promise<void>;
   refreshProjectList: () => Promise<void>;
-  updateProject: (id: string, input: { name: string }) => Promise<ProjectListItem>;
-  useFetchProjectDetail: (id?: string) => SWRResponse<ProjectDetailResponse>;
-  useFetchProjectList: (enabled?: boolean) => SWRResponse<ProjectListResponse>;
+  removeProjectAgent: (projectId: string, agentId: string) => Promise<void>;
+  removeProjectKnowledgeBase: (projectId: string, knowledgeBaseId: string) => Promise<void>;
+  /** Make another agent the main agent; a dedicated coordinator hands over its history and goes. */
+  replaceProjectCoordinator: (projectId: string, agentId: string) => Promise<void>;
+  updateProject: (
+    id: string,
+    input: Parameters<typeof projectService.update>[1],
+  ) => Promise<ProjectListItem>;
+  updateProjectAgent: (
+    projectId: string,
+    agentId: string,
+    patch: ProjectAgentBindingPatch,
+  ) => Promise<void>;
+  updateProjectKnowledgeBase: (
+    projectId: string,
+    knowledgeBaseId: string,
+    patch: ProjectKnowledgeBaseBindingPatch,
+  ) => Promise<void>;
+  /** Fetch orchestration only; read the value with `useCurrentProjectDetail`. */
+  useFetchProjectDetail: (idOrSlug?: string) => ReplicaSyncResult;
+  /** Fetch orchestration only; read the rows with `useCurrentProjectList`. */
+  useFetchProjectList: (enabled?: boolean) => ReplicaSyncResult;
 }
+
+export const initialProjectState: ProjectStoreState = {
+  projectDetailMap: {},
+  projectDetailReplica: createReplicaState(),
+  projectListMap: {},
+  projectListReplica: createReplicaState(),
+};
+
+const LIST_PARAMS = {} as Record<string, never>;
 
 const devtools = createDevtools('project');
 
+/**
+ * A favorited project keeps a title and icon snapshot in the sidebar. Renames
+ * and logo changes come from Project Settings, where no favorites row is
+ * mounted to refresh it, so every save pushes the new values.
+ */
+const syncProjectFavorite = (project: Pick<ProjectListItem, 'avatar' | 'id' | 'name'>): void => {
+  // Loaded on demand: a static import would pull the home store, and through
+  // it the chat store, into every chunk that touches projects.
+  void import('@/store/home')
+    .then(({ useHomeStore }) =>
+      useHomeStore.getState().syncFavoriteSnapshot('project', project.id, {
+        icon: project.avatar ?? null,
+        title: project.name,
+      }),
+    )
+    .catch((error) => console.error('[project] failed to sync the favorite snapshot', error));
+};
+
 export const useProjectStore = createWithEqualityFn<ProjectStore>()(
   devtools((set, get) => {
-    const executeEffects = (effects: ProjectEffect[]) => {
-      for (const effect of effects) {
-        const key = { queryKey: effect.projection.queryKey, scope: effect.projection.scope };
-        if (effect.type === 'invalidate') {
-          void mutate((key) =>
-            effect.projection.kind === 'list'
-              ? isProjectListKey(key, effect.projection.scope)
-              : isProjectDetailKey(key, effect.projection.scope, effect.projection.queryKey),
-          );
-        } else if (effect.projection.kind === 'list') {
-          if (effect.type === 'remove') projectListWriteQueue.remove(key);
-          else if ('value' in effect)
-            projectListWriteQueue.set(key, {
-              data: effect.value as ProjectListItem[],
-              updatedAt: Date.now(),
-            });
-        } else if (effect.type === 'remove') projectDetailWriteQueue.remove(key);
-        else if ('value' in effect)
-          projectDetailWriteQueue.set(key, {
-            data: effect.value as ProjectDetail,
-            updatedAt: Date.now(),
-          });
+    const list = createReplicaSlice(projectListResource, {
+      actionPrefix: 'project/list',
+      entity: arrayEntity<ProjectListItem>((project) => project.id),
+      fetcher: () => projectService.listAll(),
+      get,
+      merge: (response) => response.data,
+      set,
+      stateKey: 'projectListReplica',
+      view: recordLens<ProjectStore, ProjectListItem[]>('projectListMap'),
+    });
+    const detail = createReplicaSlice(projectDetailResource, {
+      actionPrefix: 'project/detail',
+      entity: singleEntity<ProjectDetail, ProjectListItem>((project) => project.id, {
+        get: (value) => value.project,
+        set: (value, project) => ({ ...value, project }),
+      }),
+      fetcher: (idOrSlug) => projectService.detail(idOrSlug),
+      get,
+      merge: (response) => response.data,
+      set,
+      stateKey: 'projectDetailReplica',
+      view: recordLens<ProjectStore, ProjectDetail>('projectDetailMap'),
+    });
+    // The same project lives in the list and in every loaded project page.
+    const projectEntity = linkReplicaEntity<ProjectListItem>([list, detail]);
+
+    const refreshList = () => list.revalidate(PROJECT_LIST_KEY);
+    let moveQueue: Promise<unknown> = Promise.resolve();
+    let moveGeneration = 0;
+    let reconciling: Promise<unknown> | undefined;
+    let pendingMoves = 0;
+
+    // A project page is keyed by its route param, so one project can sit under
+    // both its id and its slug.
+    const detailKeysOf = (projectId: string) =>
+      Object.entries(get().projectDetailMap)
+        .filter(([, value]) => value?.project.id === projectId)
+        .map(([key]) => key);
+    const refreshDetail = async (projectId: string) => {
+      await Promise.all(detailKeysOf(projectId).map((key) => detail.fetch(key, { fresh: true })));
+    };
+    /** Patch every loaded page now; the refetch afterwards reconciles server-owned fields. */
+    const patchDetail = (projectId: string, patch: (value: ProjectDetail) => ProjectDetail) => {
+      for (const key of detailKeysOf(projectId)) {
+        detail.update(key, (value) => (value ? patch(value) : value));
       }
     };
-    const dispatch = (action: ProjectDispatchAction) => {
-      const transition = projectReducer(get(), action);
-      set(transition.state, false, `project/${action.type}`);
-      executeEffects(transition.effects);
+    const mutateAndRefresh = async (projectId: string, mutation: () => Promise<unknown>) => {
+      try {
+        await mutation();
+      } finally {
+        await refreshDetail(projectId);
+      }
     };
-    const refreshList = async (scope: string) => mutate((key) => isProjectListKey(key, scope));
 
     return {
+      ...initialProjectState,
+      addProjectAgents: async (projectId, agentIds) => {
+        await mutateAndRefresh(projectId, () =>
+          Promise.all(agentIds.map((agentId) => projectService.addAgent(projectId, agentId))),
+        );
+      },
+      addProjectKnowledgeBases: async (projectId, knowledgeBaseIds) => {
+        await mutateAndRefresh(projectId, () =>
+          Promise.all(
+            knowledgeBaseIds.map((knowledgeBaseId) =>
+              projectService.addKnowledgeBase(projectId, knowledgeBaseId),
+            ),
+          ),
+        );
+      },
       createProject: async (input) => {
-        const scope = currentScope();
         const response = await projectService.create(input, getActiveWorkspaceId());
-        dispatch({ project: response.data, scope, type: 'commitCreate' });
-        void refreshList(scope);
-        return response.data;
+        const project = response.data;
+        list.update(PROJECT_LIST_KEY, (items) =>
+          items && !items.some((item) => item.id === project.id) ? [project, ...items] : items,
+        );
+        void refreshList();
+        refreshChannelListIfEnabled();
+        return project;
       },
       deleteProject: async (id) => {
-        const scope = currentScope();
         await projectService.delete(id);
-        dispatch({ id, scope, type: 'commitDelete' });
-        void refreshList(scope);
+        projectEntity.remove(id);
+        void refreshList();
       },
-      internal_dispatchProject: dispatch,
-      projectDetails: {},
-      projectLists: {},
-      projectOptimisticPatches: {},
       refreshProjectList: async () => {
-        const scope = currentScope();
-        await refreshList(scope);
+        await refreshList();
+      },
+      moveProject: (id, ids) => {
+        // After a failed move the visible order is stale until the refetch
+        // lands; a drop made in that window would be computed against it, so
+        // ignore it — the list snaps back to the server order.
+        if (reconciling) return reconciling.then(() => undefined);
+
+        const index = ids.indexOf(id);
+        const anchor =
+          index < ids.length - 1 ? { beforeId: ids[index + 1] } : { afterId: ids[index - 1] };
+        // Only the positions change: the list itself is shared with pages that
+        // show it in their own order, and the sidebar sorts by `sortOrder`.
+        const position = new Map(ids.map((itemId, i) => [itemId, i]));
+        list.update(PROJECT_LIST_KEY, (items) =>
+          items?.map((item) =>
+            position.has(item.id) ? { ...item, sortOrder: position.get(item.id)! } : item,
+          ),
+        );
+        pendingMoves += 1;
+
+        // Moves are computed against the order the user sees, which assumes
+        // every earlier move landed. Once one fails, the queued ones are stale:
+        // drop them, and hold the queue until the refetch shows the real order.
+        const generation = moveGeneration;
+        const write = moveQueue.then(() =>
+          generation === moveGeneration ? projectService.move(id, anchor) : undefined,
+        );
+        moveQueue = write.then(
+          () => {
+            pendingMoves -= 1;
+            // Once the queue is idle, read back the server order: a list
+            // revalidation that raced this write, or another member's move, may
+            // have left the local positions behind.
+            if (pendingMoves === 0 && !reconciling) void refreshList();
+          },
+          () => {
+            pendingMoves -= 1;
+            moveGeneration += 1;
+            reconciling ??= refreshList().finally(() => {
+              reconciling = undefined;
+            });
+            return reconciling;
+          },
+        );
+        return write.then(
+          () => undefined,
+          async (error) => {
+            await moveQueue;
+            throw error;
+          },
+        );
+      },
+      removeProjectAgent: async (projectId, agentId) => {
+        patchDetail(projectId, (value) => ({
+          ...value,
+          agents: value.agents?.filter(({ agent }) => agent.id !== agentId) ?? value.agents,
+        }));
+        await mutateAndRefresh(projectId, () => projectService.removeAgent(projectId, agentId));
+      },
+      removeProjectKnowledgeBase: async (projectId, knowledgeBaseId) => {
+        patchDetail(projectId, (value) => ({
+          ...value,
+          knowledgeBases:
+            value.knowledgeBases?.filter(
+              ({ knowledgeBase }) => knowledgeBase.id !== knowledgeBaseId,
+            ) ?? value.knowledgeBases,
+        }));
+        await mutateAndRefresh(projectId, () =>
+          projectService.removeKnowledgeBase(projectId, knowledgeBaseId),
+        );
+      },
+      replaceProjectCoordinator: async (projectId, agentId) => {
+        await mutateAndRefresh(projectId, () =>
+          projectService.replaceCoordinator(projectId, agentId),
+        );
+        // The handed-over conversations now group under the new main agent.
+        void useProjectDirectoryStore.getState().refreshProjectTopics(projectId);
+        void refreshList();
+      },
+      updateProjectAgent: async (projectId, agentId, patch) => {
+        patchDetail(projectId, (value) => ({
+          ...value,
+          agents:
+            value.agents?.map((item) =>
+              item.agent.id === agentId
+                ? { ...item, binding: { ...item.binding, ...patch } }
+                : item,
+            ) ?? value.agents,
+        }));
+        await mutateAndRefresh(projectId, () =>
+          projectService.updateAgent(projectId, agentId, patch),
+        );
+      },
+      updateProjectKnowledgeBase: async (projectId, knowledgeBaseId, patch) => {
+        patchDetail(projectId, (value) => ({
+          ...value,
+          knowledgeBases:
+            value.knowledgeBases?.map((item) =>
+              item.knowledgeBase.id === knowledgeBaseId
+                ? { ...item, binding: { ...item.binding, ...patch } }
+                : item,
+            ) ?? value.knowledgeBases,
+        }));
+        await mutateAndRefresh(projectId, () =>
+          projectService.updateKnowledgeBase(projectId, knowledgeBaseId, patch),
+        );
       },
       updateProject: async (id, input) => {
-        const scope = currentScope();
-        dispatch({ id, patch: input, scope, type: 'optimisticUpdate' });
-        try {
-          const response = await projectService.update(id, input);
-          dispatch({ id, project: response.data, scope, type: 'commitUpdate' });
-          void refreshList(scope);
-          return response.data;
-        } catch (error) {
-          dispatch({ id, scope, type: 'rollbackUpdate' });
-          throw error;
-        }
-      },
-      useFetchProjectDetail: (id) => {
-        const scope = useCacheScope();
-        useClientDataSWR(id ? projectKeys.detailHydration(scope, id) : null, async () => {
-          const cached = await projectDetailProjection.get({ queryKey: id!, scope });
-          if (cached && currentScope() === scope)
-            dispatch({ data: cached.data, id: id!, scope, type: 'hydrateDetail' });
-          return Date.now();
-        });
-        return useClientDataSWR(
-          id ? projectKeys.detail(scope, id) : null,
-          () => projectService.detail(id!),
-          {
-            onSuccess: (response: ProjectDetailResponse) => {
-              if (currentScope() === scope)
-                dispatch({ data: response.data, id: id!, scope, type: 'replaceDetail' });
-            },
-          },
+        const response = await projectEntity.optimistic(
+          id,
+          (project) => ({ ...project, ...input }),
+          () => projectService.update(id, input),
         );
+        // Server-owned fields (updatedAt, slug normalisation) land in every copy.
+        projectEntity.update(id, (project) => ({ ...project, ...response.data }));
+        void refreshList();
+        if ('name' in input || 'avatar' in input) syncProjectFavorite(response.data);
+        return response.data;
       },
-      useFetchProjectList: (enabled = true) => {
-        const scope = useCacheScope();
-        useClientDataSWR(enabled ? projectKeys.listHydration(scope) : null, async () => {
-          const cached = await projectListProjection.get({ queryKey: PROJECT_LIST_QUERY, scope });
-          if (cached && currentScope() === scope)
-            dispatch({ data: cached.data, scope, type: 'hydrateList' });
-          return Date.now();
-        });
-        return useClientDataSWR(
-          enabled ? projectKeys.list(scope) : null,
-          () => projectService.listAll(),
-          {
-            onSuccess: (response: ProjectListResponse) => {
-              if (currentScope() === scope)
-                dispatch({ data: response.data, scope, type: 'replaceList' });
-            },
-          },
-        );
-      },
+      useFetchProjectDetail: (idOrSlug) => detail.useSync(idOrSlug || null),
+      useFetchProjectList: (enabled = true) => list.useSync(LIST_PARAMS, { enabled }),
     };
   }),
   shallow,
@@ -162,24 +333,57 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
 
 expose('project', useProjectStore);
 
-export const useCurrentProjectList = () => {
-  const scope = useCacheScope();
-  return useProjectStore((state) => {
-    const patches = state.projectOptimisticPatches[scope];
-    const list = state.projectLists[scope] ?? [];
-    if (!patches || Object.keys(patches).length === 0) return list;
-    return list.map((project) =>
-      patches[project.id] ? { ...project, ...patches[project.id] } : project,
-    );
-  });
-};
+const EMPTY_PROJECTS: ProjectListItem[] = [];
 
-export const useCurrentProjectDetail = (id?: string) => {
-  const scope = useCacheScope();
-  return useProjectStore((state) => {
-    if (!id) return undefined;
-    const detail = state.projectDetails[scope]?.[id];
-    const patch = state.projectOptimisticPatches[scope]?.[detail?.project.id ?? id];
-    return detail && patch ? { ...detail, project: { ...detail.project, ...patch } } : detail;
-  });
+export const useCurrentProjectList = () =>
+  useProjectStore((state) => state.projectListMap[PROJECT_LIST_KEY] ?? EMPTY_PROJECTS);
+
+/**
+ * Every project of the active scope, or `undefined` until the list first loads
+ * — for callers that must tell "not loaded" from "no projects".
+ */
+export const useLoadedProjectList = () =>
+  useProjectStore((state): ProjectListItem[] | undefined => state.projectListMap[PROJECT_LIST_KEY]);
+
+export const useCurrentProjectDetail = (idOrSlug?: string) =>
+  useProjectStore((state) => (idOrSlug ? state.projectDetailMap[idOrSlug] : undefined));
+
+/**
+ * The project a route param (id or slug) points at: its loaded page, else its
+ * row in the project list. The list is light and persisted, so a project page
+ * can resolve the project without waiting for the much heavier detail request.
+ */
+export const projectByRefSelector =
+  (idOrSlug?: string) =>
+  (state: ProjectStoreState): ProjectListItem | undefined => {
+    if (!idOrSlug) return undefined;
+    const detail = state.projectDetailMap[idOrSlug];
+    if (detail) return detail.project;
+
+    // An exact id wins over a slug, as on the server (`findByReference`): one
+    // project's slug may equal another's id.
+    const list = state.projectListMap[PROJECT_LIST_KEY];
+    return (
+      list?.find((project) => project.id === idOrSlug) ??
+      list?.find((project) => project.slug === idOrSlug)
+    );
+  };
+
+export const useProjectByRef = (idOrSlug?: string) =>
+  useProjectStore(projectByRefSelector(idOrSlug));
+
+const PROJECT_ID_PREFIX = 'prj_';
+
+/**
+ * The project id behind a route param, for requests keyed by id (topics,
+ * directories). `confirmed` is false while the id is only guessed from a
+ * `prj_`-shaped param: a slug may take that shape too, so callers must not
+ * treat an empty answer for a guessed id as final.
+ */
+export const useProjectIdByRef = (idOrSlug?: string) => {
+  const project = useProjectByRef(idOrSlug);
+  if (project) return { confirmed: true, id: project.id };
+  if (idOrSlug?.startsWith(PROJECT_ID_PREFIX)) return { confirmed: false, id: idOrSlug };
+
+  return { confirmed: false, id: undefined };
 };

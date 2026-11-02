@@ -37,8 +37,16 @@ describe('tab context menu ownership', () => {
     expect(toNativeTemplate(items).template).toMatchSnapshot();
   });
 
-  it('stays native-eligible in the fully disabled single-tab state', () => {
+  it('stays native-eligible in the single-tab state', () => {
     expect(canGoNative(build(0, 1))).toBe(true);
+  });
+});
+
+describe('close entries', () => {
+  it('leaves the whole close group out for a lone tab', () => {
+    const keys = build(0, 1).map((item) => (item && 'key' in item ? item.key : item?.type));
+
+    expect(keys).toEqual(['togglePin', 'openInSplitView']);
   });
 });
 
@@ -55,7 +63,7 @@ describe('pin entry', () => {
     expect(labelOf(true)).toBe('tab.unpin');
   });
 
-  it('stays available when closing is not — a lone tab can still be pinned', () => {
+  it('stays available for a lone tab', () => {
     const items = build(0, 1);
     const pin = items.find((item) => !!item && 'key' in item && item.key === 'togglePin');
 

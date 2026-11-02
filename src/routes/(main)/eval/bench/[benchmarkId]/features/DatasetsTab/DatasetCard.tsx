@@ -1,12 +1,22 @@
-import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Spin, Tag, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Spin,
+  Tag,
+  toast,
+} from '@lobehub/ui';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { agentEvalService } from '@/services/agentEval';
+import { useEvalStore } from '@/store/eval';
 
 import { DATASET_PRESETS } from '../../../../config/datasetPresets';
 import TestCaseEmptyState from './TestCaseEmptyState';
@@ -167,6 +177,7 @@ const DatasetCard = memo<DatasetCardProps>(
     onRun,
   }) => {
     const { t } = useTranslation('eval');
+    const deleteDataset = useEvalStore((s) => s.deleteDataset);
 
     const handleDelete = useCallback(() => {
       confirmModal({
@@ -175,7 +186,7 @@ const DatasetCard = memo<DatasetCardProps>(
         okText: t('common.delete'),
         onOk: async () => {
           try {
-            await agentEvalService.deleteDataset(dataset.id);
+            await deleteDataset(dataset.id);
             toast.success(t('dataset.delete.success'));
             onRefresh();
           } catch {
@@ -184,7 +195,7 @@ const DatasetCard = memo<DatasetCardProps>(
         },
         title: t('common.delete'),
       });
-    }, [dataset.id, onRefresh, t]);
+    }, [dataset.id, deleteDataset, onRefresh, t]);
 
     return (
       <Block className={styles.card} variant={'outlined'}>

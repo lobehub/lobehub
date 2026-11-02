@@ -17,6 +17,32 @@ const status = (patch: Partial<CoreUpdateStatus>): CoreUpdateStatus => ({
 });
 
 describe('getDisplayedOtaVersion', () => {
+  it('shows a confirmed hot update without requiring a main-process restart', () => {
+    expect(
+      getDisplayedOtaVersion(
+        status({ appliedVersion: '1.0.2', current: '1.0.2', running: '1.0.1' }),
+      ),
+    ).toBe('1.0.2');
+  });
+
+  it('keeps the applied version while a newer update awaits relaunch', () => {
+    expect(
+      getDisplayedOtaVersion(
+        status({
+          appliedVersion: '1.0.2',
+          applyMode: 'relaunch',
+          current: '1.0.3',
+          running: '1.0.1',
+          staged: '1.0.3',
+        }),
+      ),
+    ).toBe('1.0.2');
+  });
+
+  it('does not show an unconfirmed hot update as applied', () => {
+    expect(getDisplayedOtaVersion(status({ current: '1.0.2', running: '1.0.1' }))).toBe('1.0.1');
+  });
+
   it('uses the running core version when present', () => {
     expect(
       getDisplayedOtaVersion(status({ current: '2.2.13', running: '2.2.14', staged: '2.2.15' })),
@@ -35,5 +61,9 @@ describe('getDisplayedOtaVersion', () => {
 describe('formatOtaVersionLabel', () => {
   it('does not add a v prefix to non-semver OTA names', () => {
     expect(formatOtaVersionLabel('r1')).toBe('OTA r1');
+  });
+
+  it('hides the core segment in the displayed version', () => {
+    expect(formatOtaVersionLabel('2.2.19-canary.33-core.2')).toBe('OTA 2.2.19-canary.33-2');
   });
 });

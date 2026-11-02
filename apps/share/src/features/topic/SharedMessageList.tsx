@@ -1,40 +1,33 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { memo, type ReactNode, useCallback, useMemo } from 'react';
+import { Flexbox, Text } from '@lobehub/ui';
+import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
-import { useChatStore } from '@/store/chat';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+
+import { type SharedTopicReadMode, toSharedConversationContext } from './sharedConversation';
 
 interface SharedMessageListProps {
   agentId: string | null;
   groupId: string | null;
   headerSlot?: ReactNode;
+  messageReadMode: SharedTopicReadMode;
   shareId: string;
   topicId: string;
 }
 
 const SharedMessageList = memo<SharedMessageListProps>((props) => {
-  const { agentId, groupId, headerSlot, shareId, topicId } = props;
+  const { agentId, groupId, headerSlot, messageReadMode, shareId, topicId } = props;
   const { t } = useTranslation('chat');
+  const [newestFirstShareId, setNewestFirstShareId] = useState<string>();
+  const readMode = newestFirstShareId === shareId ? 'backward' : messageReadMode;
   const context = useMemo(
-    () => ({
-      agentId: agentId ?? '',
-      groupId: groupId ?? undefined,
-      topicId,
-      topicShareId: shareId,
-    }),
-    [agentId, groupId, shareId, topicId],
+    () => toSharedConversationContext({ agentId, groupId, shareId, topicId }, readMode),
+    [agentId, groupId, readMode, shareId, topicId],
   );
-
-  // Sync messages to chatStore for artifact selectors to work
-  const chatKey = useMemo(() => messageMapKey(context), [context]);
-  const replaceMessages = useChatStore((s) => s.replaceMessages);
-  const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+  const readNewestFirst = useCallback(() => setNewestFirstShareId(shareId), [shareId]);
 
   const itemContent = useCallback(
     (index: number, id: string) => <MessageItem disableEditing id={id} index={index} key={id} />,
@@ -42,17 +35,12 @@ const SharedMessageList = memo<SharedMessageListProps>((props) => {
   );
 
   return (
-    <ConversationProvider
-      context={context}
-      hasInitMessages={!!messages}
-      messages={messages}
-      onMessagesChange={(messages, ctx, meta) => {
-        replaceMessages(messages, { context: ctx, source: meta?.source });
-      }}
-    >
+    <ConversationProvider context={context}>
       <ChatList
         disableActionsBar
+        rememberReadingPosition
         headerSlot={headerSlot}
+        initialScrollPosition={'top'}
         itemContent={itemContent}
         footerSlot={
           <Flexbox align={'center'} paddingBlock={24} paddingInline={24}>
@@ -61,6 +49,7 @@ const SharedMessageList = memo<SharedMessageListProps>((props) => {
             </Text>
           </Flexbox>
         }
+        onForwardPagingUnsupported={readNewestFirst}
       />
     </ConversationProvider>
   );

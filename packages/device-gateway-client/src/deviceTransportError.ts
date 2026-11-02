@@ -29,6 +29,11 @@ export const DeviceTransportErrorCode = {
   DeviceChannelUnavailable: 'DEVICE_CHANNEL_UNAVAILABLE',
   /** The gateway has no record of the addressed device. */
   DeviceNotFound: 'DEVICE_NOT_FOUND',
+  /**
+   * The device is online, but none of its connections belongs to a client that
+   * can serve the request (e.g. only `lh connect` while the desktop app is needed).
+   */
+  NoCapableClient: 'DEVICE_NO_CAPABLE_CLIENT',
   /** Delivered to the device, but no answer before the deadline. */
   DeviceResponseTimeout: 'DEVICE_RESPONSE_TIMEOUT',
   /** The gateway itself failed (5xx that is not a routing failure). */
@@ -127,6 +132,49 @@ const describeStatus = (
   }
 };
 
+const CLIENT_LABEL: Record<string, string> = {
+  cli: 'the `lh connect` CLI',
+  desktop: 'the LobeHub desktop app',
+};
+
+const describeClients = (kinds: unknown[]) =>
+  kinds.map((kind) => CLIENT_LABEL[String(kind)] ?? `\`${String(kind)}\``).join(' or ');
+
+/**
+ * A 503 `NO_CAPABLE_CONNECTION` is not a connection drop: the device is online,
+ * but no connected client can run this request. Retrying cannot help until the
+ * right client connects, so it must not get the generic "retry up to 8 times".
+ */
+const describeNoCapableClient = (
+  status: number,
+  detail: string | undefined,
+  operation: DeviceTransportOperation,
+): DeviceTransportFailure | undefined => {
+  if (status !== 503 || !detail) return undefined;
+  let body: { channels?: unknown; clientKinds?: unknown; error?: unknown };
+  try {
+    body = JSON.parse(detail);
+  } catch {
+    return undefined;
+  }
+  if (body?.error !== 'NO_CAPABLE_CONNECTION') return undefined;
+
+  const needed = Array.isArray(body.clientKinds) ? describeClients(body.clientKinds) : '';
+  const connected = Array.isArray(body.channels)
+    ? body.channels.filter((channel): channel is string => typeof channel === 'string')
+    : [];
+  return {
+    code: DeviceTransportErrorCode.NoCapableClient,
+    content:
+      `The device is online, but none of its connected clients can run this ${operation}` +
+      (needed ? ` — it needs ${needed}` : '') +
+      (connected.length > 0 ? ` and only ${connected.join(', ')} is connected` : '') +
+      `. Nothing ran on the device, and retrying will not help until that client connects: ` +
+      `tell the user to open ${needed || 'the required client'} on that machine, then retry.`,
+    error: detail,
+  };
+};
+
 /**
  * Describe a non-ok gateway HTTP response.
  *
@@ -150,8 +198,11 @@ export const describeGatewayResponseFailure = (
   operation: DeviceTransportOperation,
   target?: DeviceTransportTarget,
 ): DeviceTransportFailure => {
-  const { code, content } = describeStatus(status, operation);
   const detail = body?.trim();
+  const noCapableClient = describeNoCapableClient(status, detail, operation);
+  if (noCapableClient) return noCapableClient;
+
+  const { code, content } = describeStatus(status, operation);
   const data =
     code === DeviceTransportErrorCode.DeviceNotFound && target?.deviceId
       ? {

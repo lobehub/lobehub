@@ -12,17 +12,15 @@ import {
   agentDisplayName,
   type AgentMode,
   type AgentProfile,
+  getActivePluginIds,
+  getDisabledPluginIds,
+  getWorkingDirEffectivePath,
   type KnowledgeItem,
+  KnowledgeType,
   type LobeAgentConfig,
   type LobeAgentTTSConfig,
   type MetaData,
   type RuntimeEnvConfig,
-} from '@lobechat/types';
-import {
-  getActivePluginIds,
-  getDisabledPluginIds,
-  getWorkingDirEffectivePath,
-  KnowledgeType,
 } from '@lobechat/types';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
@@ -374,6 +372,16 @@ const currentAgentExecutionTarget = (s: AgentStoreState) =>
 const getAgentDocumentsById = (agentId: string) => (s: AgentStoreState) =>
   s.agentDocumentsMap[agentId];
 
+/** The agent a user-chosen slug names, as known locally (persisted copy first). */
+const getAgentIdBySlug = (slug?: string | null) => (s: AgentStoreState) =>
+  slug ? s.agentSlugIdMap[slug] : undefined;
+
+/** The server confirmed the slug's agent in this session (not only the persisted copy). */
+const isAgentSlugConfirmed = (slug?: string | null) => (s: AgentStoreState) =>
+  !!slug && !!s.agentSlugIdMap[slug] && s.agentSlugIdReplica.entries[slug]?.source === 'server';
+
+const heteroServerDefaultCapability = (s: AgentStoreState) => s.heteroServerDefaultCapability;
+
 export const agentSelectors = {
   currentAgentExecutionTarget,
   currentAgentHeterogeneousProviderType,
@@ -406,6 +414,9 @@ export const agentSelectors = {
   displayableAgentPlugins,
   getAgentConfigById,
   getAgentDocumentsById,
+  getAgentIdBySlug,
+  heteroServerDefaultCapability,
+  isAgentSlugConfirmed,
   getAgentFullBodyArtworkById,
   getAgentMetaById,
   getAgentProfileById,

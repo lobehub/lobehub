@@ -15,6 +15,11 @@ import { UserModel } from '@/database/models/user';
 import { WorkspaceUserSettingsModel } from '@/database/models/workspaceUserSettings';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
+import type * as AgentReferenceModule from '@/server/services/agent/resolveReference';
+import {
+  InboxNotProvisionedError,
+  resolveAgentReference,
+} from '@/server/services/agent/resolveReference';
 import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import {
@@ -30,6 +35,11 @@ import {
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 import { agentRouter } from '../agent';
+
+vi.mock('@/server/services/agent/resolveReference', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentReferenceModule>()),
+  resolveAgentReference: vi.fn(),
+}));
 
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
 vi.mock('../_helpers/workspaceAgentGuard', () => ({
@@ -140,6 +150,11 @@ describe('agentRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(resolveAgentReference).mockImplementation(async (id) => {
+      if (id === INBOX_SESSION_ID)
+        throw new TRPCError({ cause: new InboxNotProvisionedError(), code: 'NOT_FOUND' });
+      return { agentId: id, sessionId: null };
+    });
     vi.mocked(assertCanPerformResourceAction).mockResolvedValue();
     vi.mocked(isWorkspacePrimaryOwner).mockResolvedValue(false);
     vi.mocked(getResourceMeta).mockResolvedValue({
@@ -247,7 +262,7 @@ describe('agentRouter', () => {
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
     });
 
-    it('should create inbox session if user exists but no inbox session', async () => {
+    it('provisions the builtin inbox when no legacy inbox exists', async () => {
       const mockUser = { id: userId };
       const mockSession = { id: 'inboxSessionId' };
 
@@ -255,24 +270,30 @@ describe('agentRouter', () => {
       sessionModelMock.findByIdOrSlug
         .mockResolvedValueOnce(undefined)
         .mockResolvedValueOnce(mockSession);
-      agentModelMock.findBySessionId.mockResolvedValue(DEFAULT_AGENT_CONFIG);
+      agentServiceMock.getBuiltinAgent = vi.fn().mockResolvedValue(DEFAULT_AGENT_CONFIG);
 
       const caller = agentRouter.createCaller(mockCtx);
       const result = await caller.getAgentConfig({ sessionId: INBOX_SESSION_ID });
 
-      expect(agentServiceMock.createInbox).toHaveBeenCalled();
+      expect(agentServiceMock.getBuiltinAgent).toHaveBeenCalledWith(INBOX_SESSION_ID);
+      expect(agentServiceMock.createInbox).not.toHaveBeenCalled();
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
     });
 
     it('should find agent by session id if session exists', async () => {
       const mockSession = { id: 'session1' };
       sessionModelMock.findByIdOrSlug.mockResolvedValue(mockSession);
-      agentModelMock.findBySessionId.mockResolvedValue(DEFAULT_AGENT_CONFIG);
+      agentServiceMock.getAgentConfigById = vi.fn().mockResolvedValue(DEFAULT_AGENT_CONFIG);
 
       const caller = agentRouter.createCaller(mockCtx);
       const result = await caller.getAgentConfig({ sessionId: 'session1' });
 
-      expect(agentModelMock.findBySessionId).toHaveBeenCalledWith('session1');
+      expect(resolveAgentReference).toHaveBeenCalledWith(
+        'session1',
+        expect.anything(),
+        userId,
+        undefined,
+      );
       expect(result).toEqual(DEFAULT_AGENT_CONFIG);
     });
   });
@@ -842,6 +863,22 @@ describe('agentRouter', () => {
     const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
 
     describe('updateAgentConfig write guard', () => {
+      it('accepts explicit device replacement ids outside the persisted config', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ success: true });
+        const value = {
+          agencyConfig: { workingDirByDevice: { 'device-a': { path: '/new-project' } } },
+        };
+        const result = await agentRouter.createCaller(mockCtx).updateAgentConfig({
+          agentId: 'agent-1',
+          replaceWorkingDirDeviceIds: ['device-a'],
+          value,
+        });
+        expect(result).toEqual({ success: true });
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', value, [
+          'device-a',
+        ]);
+      });
+
       it('rejects the update when general access is use-only for the caller', async () => {
         agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
         const { TRPCError } = await import('@trpc/server');
@@ -891,9 +928,13 @@ describe('agentRouter', () => {
             value: { agencyConfig: { boundDeviceId: 'device-1', [policyKey]: 'fixed' } },
           });
 
-          expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', {
-            agencyConfig: { boundDeviceId: 'device-1' },
-          });
+          expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+            'agent-1',
+            {
+              agencyConfig: { boundDeviceId: 'device-1' },
+            },
+            undefined,
+          );
         },
       );
 
@@ -913,9 +954,13 @@ describe('agentRouter', () => {
           },
         });
 
-        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', {
-          agencyConfig: { boundDeviceId: 'device-1' },
-        });
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          {
+            agencyConfig: { boundDeviceId: 'device-1' },
+          },
+          undefined,
+        );
       });
 
       it('preserves policy updates from the agent creator', async () => {
@@ -928,7 +973,11 @@ describe('agentRouter', () => {
         await caller.updateAgentConfig({ agentId: 'agent-1', value });
 
         expect(isWorkspacePrimaryOwner).not.toHaveBeenCalled();
-        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', value);
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          value,
+          undefined,
+        );
       });
 
       it('preserves policy updates from the workspace primary owner', async () => {
@@ -940,7 +989,11 @@ describe('agentRouter', () => {
         const caller = agentRouter.createCaller(wsCtx());
         await caller.updateAgentConfig({ agentId: 'agent-1', value });
 
-        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', value);
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          value,
+          undefined,
+        );
       });
 
       it('allows the update when no other member holds the lock', async () => {
@@ -953,9 +1006,13 @@ describe('agentRouter', () => {
         const caller = agentRouter.createCaller(wsCtx());
         await caller.updateAgentConfig({ agentId: 'agent-1', value: { systemRole: 'x' } });
 
-        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', {
-          systemRole: 'x',
-        });
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith(
+          'agent-1',
+          {
+            systemRole: 'x',
+          },
+          undefined,
+        );
       });
 
       it('does not check the lock for personal (non-workspace) agents', async () => {

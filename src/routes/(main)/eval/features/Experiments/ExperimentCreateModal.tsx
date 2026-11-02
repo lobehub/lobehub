@@ -10,10 +10,10 @@ import {
   TextArea,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+} from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { t } from 'i18next';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { benchmarkSelectors, useEvalStore } from '@/store/eval';
@@ -34,23 +34,12 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
     const { t } = useTranslation('eval');
 
     const { close } = useModalContext();
-    const [form] = Form.useForm();
     const createExperiment = useEvalStore((s) => s.createExperiment);
     const updateExperiment = useEvalStore((s) => s.updateExperiment);
     const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
     const benchmarkList = useEvalStore(benchmarkSelectors.benchmarkList);
 
     useFetchBenchmarks();
-
-    useEffect(() => {
-      if (experiment) {
-        form.setFieldsValue({
-          benchmarkIds: experiment.benchmarks.map((benchmark) => benchmark.id),
-          description: experiment.description || undefined,
-          name: experiment.name,
-        });
-      }
-    }, [experiment, form]);
 
     const handleSubmit = async (values: {
       benchmarkIds: string[];
@@ -79,24 +68,35 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
       }
     };
 
+    const form = useForm({
+      initialValues: experiment
+        ? {
+            benchmarkIds: experiment.benchmarks.map((benchmark) => benchmark.id),
+            description: experiment.description || undefined,
+            name: experiment.name,
+          }
+        : undefined,
+      onSubmit: handleSubmit,
+    });
+
     return (
-      <Form form={form} id={formId} layout="vertical" onFinish={handleSubmit}>
-        <Form.Item
+      <Form form={form} id={formId} layout="vertical">
+        <Form.Field
           label={t('experiment.create.name.label')}
           name="name"
-          rules={[{ message: t('experiment.create.nameRequired'), required: true }]}
+          required={t('experiment.create.nameRequired')}
         >
           <Input placeholder={t('experiment.create.name.placeholder')} />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item label={t('experiment.create.description.label')} name="description">
+        <Form.Field label={t('experiment.create.description.label')} name="description">
           <TextArea placeholder={t('experiment.create.description.placeholder')} rows={3} />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item
+        <Form.Field
           label={t('experiment.create.benchmarks.label')}
           name="benchmarkIds"
-          rules={[{ message: t('experiment.create.benchmarksRequired'), required: true }]}
+          required={t('experiment.create.benchmarksRequired')}
         >
           <Select
             mode="multiple"
@@ -106,7 +106,7 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
               value: benchmark.id,
             }))}
           />
-        </Form.Item>
+        </Form.Field>
       </Form>
     );
   },

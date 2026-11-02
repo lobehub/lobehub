@@ -60,6 +60,7 @@ import {
   shouldDisableGoogleSystemInstruction,
   shouldDisableGoogleThinkingConfig,
   shouldOmitDeprecatedGoogleGenerationParams,
+  shouldOmitGoogleSamplingParams,
   shouldUseGoogleImageSearchTypes,
   supportsGoogleSearchOnImageResponseModel,
 } from './modelId';
@@ -243,7 +244,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         systemInstruction: shouldDisableGoogleSystemInstruction(model)
           ? undefined
           : (payload.system as string),
-        ...(shouldOmitDeprecatedGenerationParams
+        ...(shouldOmitDeprecatedGenerationParams || shouldOmitGoogleSamplingParams(requestModel)
           ? {}
           : {
               temperature: isImageResponseModel

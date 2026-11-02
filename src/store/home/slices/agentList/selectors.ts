@@ -1,60 +1,40 @@
 import { type SidebarAgentItem, type SidebarGroup } from '@/database/repositories/home';
 import { type HomeStore } from '@/store/home/store';
 
-const applyOptimisticPatch = (item: SidebarAgentItem, state: HomeStore): SidebarAgentItem => {
-  const optimistic = state.agentOptimisticPatches[item.id];
-  return optimistic && optimistic.scope === state.agentListScope
-    ? { ...item, ...optimistic.patch }
-    : item;
-};
-
-const applyOptimisticPatches = (items: SidebarAgentItem[], state: HomeStore) =>
-  Object.keys(state.agentOptimisticPatches).length === 0
-    ? items
-    : items.map((item) => applyOptimisticPatch(item, state));
-
-const applyGroupOptimisticPatches = (groups: SidebarGroup[], state: HomeStore) =>
-  Object.keys(state.agentOptimisticPatches).length === 0
-    ? groups
-    : groups.map((group) => ({ ...group, items: applyOptimisticPatches(group.items, state) }));
+import { AGENT_LIST_KEY } from './projection';
 
 /**
  * Get all pinned agents
  */
-const pinnedAgents = (s: HomeStore): SidebarAgentItem[] =>
-  applyOptimisticPatches(s.pinnedAgents, s);
+const pinnedAgents = (s: HomeStore): SidebarAgentItem[] => s.pinnedAgents;
 
 /**
  * Get all agent groups (folders)
  */
-const agentGroups = (s: HomeStore): SidebarGroup[] => applyGroupOptimisticPatches(s.agentGroups, s);
+const agentGroups = (s: HomeStore): SidebarGroup[] => s.agentGroups;
 
 /**
  * Get private agent groups (folders) owned by the current user.
  * Empty array in personal mode.
  */
-const privateAgentGroups = (s: HomeStore): SidebarGroup[] =>
-  applyGroupOptimisticPatches(s.privateAgentGroups, s);
+const privateAgentGroups = (s: HomeStore): SidebarGroup[] => s.privateAgentGroups;
 
 /**
  * Get pinned private agents owned by the current user.
  * Empty array in personal mode.
  */
-const privatePinnedAgents = (s: HomeStore): SidebarAgentItem[] =>
-  applyOptimisticPatches(s.privatePinnedAgents, s);
+const privatePinnedAgents = (s: HomeStore): SidebarAgentItem[] => s.privatePinnedAgents;
 
 /**
  * Get all ungrouped agents
  */
-const ungroupedAgents = (s: HomeStore): SidebarAgentItem[] =>
-  applyOptimisticPatches(s.ungroupedAgents, s);
+const ungroupedAgents = (s: HomeStore): SidebarAgentItem[] => s.ungroupedAgents;
 
 /**
  * Get ungrouped private agents owned by the current user.
  * Empty array in personal mode.
  */
-const privateUngroupedAgents = (s: HomeStore): SidebarAgentItem[] =>
-  applyOptimisticPatches(s.privateUngroupedAgents, s);
+const privateUngroupedAgents = (s: HomeStore): SidebarAgentItem[] => s.privateUngroupedAgents;
 
 /**
  * Whether the current user has any private content in this workspace.
@@ -70,7 +50,7 @@ const hasPrivateAgents = (s: HomeStore): boolean =>
 const ungroupedAgentsLimited =
   (pageSize: number) =>
   (s: HomeStore): SidebarAgentItem[] =>
-    applyOptimisticPatches(s.ungroupedAgents.slice(0, pageSize), s);
+    s.ungroupedAgents.slice(0, pageSize);
 
 /**
  * Limit private ungrouped agents for the Private sidebar bucket
@@ -78,7 +58,7 @@ const ungroupedAgentsLimited =
 const privateUngroupedAgentsLimited =
   (pageSize: number) =>
   (s: HomeStore): SidebarAgentItem[] =>
-    applyOptimisticPatches(s.privateUngroupedAgents.slice(0, pageSize), s);
+    s.privateUngroupedAgents.slice(0, pageSize);
 
 /**
  * Get ungrouped agents count
@@ -95,6 +75,10 @@ const privateUngroupedAgentsCount = (s: HomeStore): number => s.privateUngrouped
  */
 const isAgentListInit = (s: HomeStore): boolean => s.isAgentListInit;
 
+/** The server confirmed the list in this session (not only the persisted copy). */
+const isAgentListConfirmed = (s: HomeStore): boolean =>
+  s.isAgentListInit && s.agentListReplica.entries[AGENT_LIST_KEY]?.source === 'server';
+
 /**
  * Get all agents (pinned + grouped + ungrouped + private)
  */
@@ -108,8 +92,18 @@ const allAgents = (s: HomeStore): SidebarAgentItem[] => {
     ...s.privatePinnedAgents,
     ...privateGroupedAgents,
     ...s.privateUngroupedAgents,
-  ].map((item) => applyOptimisticPatch(item, s));
+  ];
 };
+
+/**
+ * Agents every workspace member can see: the sidebar list without the
+ * current user's private bucket.
+ */
+const sharedAgents = (s: HomeStore): SidebarAgentItem[] => [
+  ...s.pinnedAgents,
+  ...s.agentGroups.flatMap((g) => g.items),
+  ...s.ungroupedAgents,
+];
 
 /**
  * Get agent by id
@@ -141,6 +135,7 @@ export const homeAgentListSelectors = {
   getAgentById,
   hasCustomAgents,
   hasPrivateAgents,
+  isAgentListConfirmed,
   isAgentListInit,
   pinnedAgents,
   privateAgentGroups,
@@ -148,6 +143,7 @@ export const homeAgentListSelectors = {
   privateUngroupedAgents,
   privateUngroupedAgentsCount,
   privateUngroupedAgentsLimited,
+  sharedAgents,
   ungroupedAgents,
   ungroupedAgentsCount,
   ungroupedAgentsLimited,

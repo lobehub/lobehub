@@ -11,6 +11,14 @@ class RendererOtaService {
     return ensureElectronIpc().rendererOta.applyNow();
   };
 
+  resolveUnloadConfirmation = async (proceed: boolean) => {
+    return ensureElectronIpc().rendererOta.resolveUnloadConfirmation(proceed);
+  };
+
+  dismissAppliedNotice = async () => {
+    return ensureElectronIpc().rendererOta.dismissAppliedNotice();
+  };
+
   getStatus = async (): Promise<CoreUpdateStatus> => {
     return ensureElectronIpc().rendererOta.getStatus();
   };

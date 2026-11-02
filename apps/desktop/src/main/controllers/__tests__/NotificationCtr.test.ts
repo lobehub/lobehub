@@ -5,7 +5,8 @@ import type { App } from '@/core/App';
 
 import NotificationCtr from '../NotificationCtr';
 
-const { ipcMainHandleMock, loggerMock } = vi.hoisted(() => ({
+const { desktopEnv, ipcMainHandleMock, loggerMock } = vi.hoisted(() => ({
+  desktopEnv: { DESKTOP_APP_ID: undefined as string | undefined },
   ipcMainHandleMock: vi.fn(),
   loggerMock: {
     debug: vi.fn(),
@@ -14,6 +15,8 @@ const { ipcMainHandleMock, loggerMock } = vi.hoisted(() => ({
     warn: vi.fn(),
   },
 }));
+
+vi.mock('@/env', () => ({ getDesktopEnv: () => desktopEnv }));
 
 vi.mock('@/utils/logger', () => ({
   createLogger: () => loggerMock,
@@ -121,6 +124,21 @@ describe('NotificationCtr', () => {
 
       expect(app.setAppUserModelId).toHaveBeenCalledWith('com.lobehub.chat');
 
+      vi.mocked(windows).mockReturnValue(false);
+    });
+
+    it("should use the distribution's app ID on Windows when one is configured", async () => {
+      const { windows } = await import('@/utils/platform');
+      const { app, Notification } = await import('electron');
+      vi.mocked(windows).mockReturnValue(true);
+      vi.mocked(Notification.isSupported).mockReturnValue(true);
+      desktopEnv.DESKTOP_APP_ID = 'com.acme.work';
+
+      controller.afterAppReady();
+
+      expect(app.setAppUserModelId).toHaveBeenCalledWith('com.acme.work');
+
+      desktopEnv.DESKTOP_APP_ID = undefined;
       vi.mocked(windows).mockReturnValue(false);
     });
   });

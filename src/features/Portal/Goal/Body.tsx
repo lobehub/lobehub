@@ -1,6 +1,12 @@
-import { Flexbox } from '@lobehub/ui';
-import { Accordion, ActionIcon, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Accordion,
+  ActionIcon,
+  createStaticStyles,
+  Flexbox,
+  Skeleton,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { Maximize2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -119,7 +125,6 @@ const Body = memo(() => {
                 defaultValue={['deliverables', 'findings', 'activity']}
                 gap={0}
                 indicatorPlacement="inline"
-                styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
                 items={[
                   {
                     children: (
@@ -171,6 +176,10 @@ const Body = memo(() => {
                     ),
                   },
                 ]}
+                styles={{
+                  header: { marginInline: -8 },
+                  trigger: { paddingBlock: 6, paddingInline: 8 },
+                }}
               />
             </Flexbox>
           }

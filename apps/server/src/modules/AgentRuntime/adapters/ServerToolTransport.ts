@@ -19,7 +19,13 @@ import {
 import type { ChatToolPayload } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { isDeviceCapablePlan, isLocalSandboxEnabled } from '@/helpers/executionTarget';
+import {
+  controlDeferredToolResult,
+  loadDurableToolResultHooks,
+} from '@/server/services/agentRuntime/hooks/deferredToolResultControl';
+import { controlToolResult } from '@/server/services/agentRuntime/hooks/toolResultControl';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceToolAudit';
 import {
   isDeviceToolIdentifier,
@@ -160,7 +166,12 @@ export class ServerToolTransport implements ToolTransport {
 
     try {
       const hookResult = await this.dispatchBeforeToolCall(chatToolPayload, context);
-      if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+      if (
+        context.abortSignal?.aborted ||
+        (await isOperationInterrupted(this.ctx)) ||
+        context.abortSignal?.aborted
+      )
+        return this.abortedBeforeLaunch();
       let toolCallMocked = false;
 
       if (isDeviceToolIdentifier(chatToolPayload.identifier) && !hookResult?.isMocked) {
@@ -202,7 +213,12 @@ export class ServerToolTransport implements ToolTransport {
         // so Stop can land between entering `run` and reaching this line. The
         // executor's race has already settled the call by then — launching now
         // would start side-effecting work for a cancelled operation.
-        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+        if (
+          context.abortSignal?.aborted ||
+          (await isOperationInterrupted(this.ctx)) ||
+          context.abortSignal?.aborted
+        )
+          return this.abortedBeforeLaunch();
 
         const dispatchResult = await dispatchClientTool(chatToolPayload, {
           agentId: context.state.origin?.agentId,
@@ -234,7 +250,12 @@ export class ServerToolTransport implements ToolTransport {
 
         // Re-checked after the visibility await for the same reason as above:
         // every await between entry and launch reopens the cancellation window.
-        if (context.abortSignal?.aborted) return this.abortedBeforeLaunch();
+        if (
+          context.abortSignal?.aborted ||
+          (await isOperationInterrupted(this.ctx)) ||
+          context.abortSignal?.aborted
+        )
+          return this.abortedBeforeLaunch();
 
         log(`[${operationLogId}] Executing tool ${context.toolName} ...`);
         execution = await executeToolWithRetry(
@@ -257,6 +278,9 @@ export class ServerToolTransport implements ToolTransport {
               ...(agentVisibility !== undefined && { agentVisibility }),
               // Assistant message owning this tool call (≠ source user message).
               assistantMessageId: context.parentMessageId,
+              // Who in the IM conversation asked for this run; tools that act for the owner
+              // (changing a bot's settings) refuse anyone else.
+              botContext: context.state.principal?.actor?.bot,
               clientIp: context.state.principal?.audit?.clientIp,
               currentTodos: context.currentTodos,
               deviceCapable: context.state.plan?.execution
@@ -285,6 +309,7 @@ export class ServerToolTransport implements ToolTransport {
               memoryToolPermission: context.state.world?.agent?.chatConfig?.memory?.toolPermission,
               messageId: context.state.origin?.sourceMessageId,
               operationId,
+              projectId: context.state.origin?.projectId,
               projectSkills: resolveRunProjectSkills(context.state.plan),
               rootOperationId: operationId,
               scope: context.state.origin?.scope,
@@ -336,17 +361,79 @@ export class ServerToolTransport implements ToolTransport {
         ...execution.result,
         executionTime: execution.result.executionTime ?? 0,
       };
-      const executionResult = await archiveRuntimeToolResult(resultWithExecutionTime, {
-        agentId: context.state.origin?.agentId,
-        canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
-        identifier: chatToolPayload.identifier,
-        limit: context.toolResultMaxLength,
-        serverDB,
-        toolCallId: chatToolPayload.id,
-        topicId: this.ctx.topicId ?? context.state.origin?.topicId,
-        userId,
-        workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
-      });
+      // Evaluate the full result before truncation/archive creation. A denied
+      // archive must not remain retrievable by the model on a later tool call.
+      const originalOperationId = context.toolMessageId
+        ? (await this.ctx.messageModel.findMessagePlugin(context.toolMessageId))?.intervention
+            ?.operationId
+        : undefined;
+      let originalControl: Awaited<ReturnType<typeof controlDeferredToolResult>> | undefined;
+      if (originalOperationId && context.toolMessageId) {
+        if (!this.ctx.hookDispatcher || !this.ctx.userId) {
+          throw new Error(
+            'Cannot review a resumed tool result without its runtime owner and dispatcher',
+          );
+        }
+        originalControl = await controlDeferredToolResult(
+          {
+            dispatcher: this.ctx.hookDispatcher,
+            loadState: (operationId) =>
+              operationId === this.ctx.operationId
+                ? Promise.resolve(context.state)
+                : (this.ctx.loadAgentState?.(operationId) ?? Promise.resolve(null)),
+            loadDurableHooks: (operationId) =>
+              loadDurableToolResultHooks(
+                new AgentOperationModel(this.ctx.serverDB, this.ctx.userId!, this.ctx.workspaceId),
+                operationId,
+              ),
+            messageModel: this.ctx.messageModel,
+            userId: this.ctx.userId,
+            workspaceId: this.ctx.workspaceId,
+          },
+          {
+            operationId: originalOperationId,
+            includeServerHooks: originalOperationId === this.ctx.operationId,
+            toolMessageId: context.toolMessageId,
+            result: resultWithExecutionTime,
+            signal: context.abortSignal,
+          },
+        );
+      }
+      // Approval continuations need not inherit caller hooks. Keep the original
+      // gate; any new run controls can only narrow its decision. Never infer
+      // a control decision from the untrusted tool's result.state fields.
+      const controlled =
+        originalControl && (originalControl.blocked || originalOperationId === this.ctx.operationId)
+          ? originalControl
+          : await controlToolResult(
+              this.ctx.hookDispatcher,
+              {
+                ...buildToolCallHookContext(chatToolPayload, context, this.ctx),
+                mocked: toolCallMocked || !!execution.mocked,
+                result: originalControl?.result ?? resultWithExecutionTime,
+              },
+              context.state.host?.hooks,
+              context.abortSignal,
+            );
+      if (controlled.cancelled) {
+        return { ...execution, interrupted: true, result: controlled.result };
+      }
+      const executionResult = controlled.blocked
+        ? controlled.result
+        : await archiveRuntimeToolResult(
+            { ...controlled.result, executionTime: controlled.result.executionTime ?? 0 },
+            {
+              agentId: context.state.origin?.agentId,
+              canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
+              identifier: chatToolPayload.identifier,
+              limit: context.toolResultMaxLength,
+              serverDB,
+              toolCallId: chatToolPayload.id,
+              topicId: this.ctx.topicId ?? context.state.origin?.topicId,
+              userId,
+              workspaceId: context.state.origin?.workspaceId ?? this.ctx.workspaceId,
+            },
+          );
 
       await this.dispatchAfterToolCall(chatToolPayload, context, executionResult, toolCallMocked);
 
@@ -361,6 +448,10 @@ export class ServerToolTransport implements ToolTransport {
         ...execution,
         mocked: toolCallMocked || execution.mocked,
         result: executionResult,
+        resultBlocked: controlled.blocked,
+        // A tool that created its own row (a background sub-agent's placeholder)
+        // gets its result written there instead of into a second tool message.
+        toolMessageId: execution.toolMessageId ?? executionResult.toolMessageId,
       };
     } catch (error) {
       executeToolSpan.recordException(error as Error);

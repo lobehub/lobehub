@@ -5,6 +5,7 @@ import { browserExecutor } from '@lobechat/builtin-tool-browser/client/executor'
 import { calculatorExecutor } from '@lobechat/builtin-tool-calculator/executor';
 import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/executor';
 import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
+import { dashboardExecutor } from '@lobechat/builtin-tool-dashboard/client/executor';
 import { goalExecutor } from '@lobechat/builtin-tool-goal/client/executor';
 import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
@@ -34,16 +35,16 @@ import {
 import { activatorExecutor } from './lobe-activator';
 import { agentDocumentsExecutor } from './lobe-agent-documents';
 import { attachmentsExecutor } from './lobe-attachments';
+import { canvasExecutor } from './lobe-canvas';
 import { messageExecutor } from './lobe-message';
 import { notebookExecutor } from './lobe-notebook';
-import { pageAgentExecutor } from './lobe-page-agent';
 import { skillStoreExecutor } from './lobe-skill-store';
 import { skillsExecutor } from './lobe-skills';
-import { topicReferenceExecutor } from './lobe-topic-reference';
 import { userInteractionExecutor } from './lobe-user-interaction';
 import { webBrowsing } from './lobe-web-browsing';
 import { webOnboardingExecutor } from './lobe-web-onboarding';
 import { localSystemExecutorWithGitEffects } from './localSystem';
+import { pageAgentHookExecutor, withPageEditHooks } from './pageEdits';
 
 export const builtinToolExecutors = [
   // Hook-only executors for heterogeneous CLI agents —
@@ -67,7 +68,8 @@ export const builtinToolExecutors = [
   attachmentsExecutor,
   auvExecutor,
   calculatorExecutor,
-  cloudSandboxExecutor,
+  canvasExecutor,
+  withPageEditHooks(cloudSandboxExecutor),
   credsExecutor,
   groupAgentBuilderExecutor,
   groupManagementExecutor,
@@ -79,13 +81,13 @@ export const builtinToolExecutors = [
   memoryExecutor,
   messageExecutor,
   notebookExecutor,
-  pageAgentExecutor,
+  pageAgentHookExecutor,
   skillStoreExecutor,
-  skillsExecutor,
+  withPageEditHooks(skillsExecutor),
   taskExecutor,
+  dashboardExecutor,
   videoGenerationExecutor,
   activatorExecutor,
-  topicReferenceExecutor,
   userInteractionExecutor,
   lobeAgentExecutor,
   webOnboardingExecutor,

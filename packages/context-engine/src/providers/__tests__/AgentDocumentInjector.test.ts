@@ -304,6 +304,37 @@ describe('AgentDocumentInjector', () => {
       expect(content).toMatch(/📁 Reports\s+folder-1\s+2 docs \(1 new since last user message\)/);
     });
 
+    it('folds the docs nested under a document into a 📄 row', async () => {
+      const run = (id: string, updatedAt: string) => ({
+        filename: `${id}.md`,
+        folderTitle: 'Fix-round SOP',
+        id,
+        loadPosition: 'before-first-user' as const,
+        loadRules: { rule: 'always' as const },
+        parentId: 'docs_sop',
+        parentKind: 'document' as const,
+        policyLoad: 'progressive' as const,
+        title: id,
+        updatedAt: new Date(updatedAt),
+      });
+      const provider = new AgentDocumentContextInjector({
+        documents: [
+          run('tick-1', '2026-10-10T05:10:00.000Z'),
+          run('tick-2', '2026-10-11T05:10:00.000Z'),
+        ],
+      });
+
+      const result = await provider.process(
+        createContext([{ content: 'go', id: 'user-1', role: 'user' }]),
+      );
+      const content = result.messages[0].content as string;
+
+      expect(content).toMatch(/📄 Fix-round SOP\s+docs_sop\s+2 docs/);
+      expect(content).toContain('1 document with nested docs collapsed (📄');
+      expect(content).not.toContain('folder collapsed');
+      expect(content).not.toContain('tick-1');
+    });
+
     // The document query is agent-scoped, so a doc created after the latest
     // user message may come from another topic or tab: the marker must state the
     // known timestamp fact instead of claiming the current run created it.

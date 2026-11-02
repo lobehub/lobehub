@@ -52,20 +52,17 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   /**
    * Normalize legacy config that used local storageMode.
    * Local mode has been removed; fall back to cloud.
+   * Persistence belongs to explicit configuration updates, not reads.
    */
   private normalizeConfig = (config: DataSyncConfig): DataSyncConfig => {
     // Use type assertion to handle legacy 'local' value from stored data
     if ((config.storageMode as string) !== 'local') return config;
 
-    const nextConfig: DataSyncConfig = {
+    return {
       ...config,
       remoteServerUrl: config.remoteServerUrl || OFFICIAL_CLOUD_SERVER,
       storageMode: 'cloud',
     };
-
-    this.app.storeManager.set('dataSyncConfig', nextConfig);
-
-    return nextConfig;
   };
 
   /**
@@ -132,6 +129,17 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     // Save configuration with legacy local storage fallback
     const merged = this.normalizeConfig({ ...prev, ...config });
     storeManager.set('dataSyncConfig', merged);
+
+    // The device gateway connection belongs to the login it was opened for.
+    // Pointing at another server, or deactivating this one, ends that login:
+    // close it and drop whatever was resolved for it before anything reconnects.
+    const [prevServerUrl, nextServerUrl] = await Promise.all([
+      this.getRemoteServerUrl(prev),
+      this.getRemoteServerUrl(merged),
+    ]);
+    if (prevServerUrl !== nextServerUrl || (prev.active && !merged.active)) {
+      await this.app.getService(GatewayConnectionService)?.disconnect();
+    }
 
     this.broadcastRemoteServerConfigUpdated();
 
@@ -251,6 +259,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         lastRefreshAt: this.lastRefreshAt,
         refreshToken: this.encryptedRefreshToken,
       });
+      this.syncGatewayAccessToken(accessToken);
       return;
     }
 
@@ -272,6 +281,22 @@ export default class RemoteServerConfigCtr extends ControllerModule {
       lastRefreshAt: this.lastRefreshAt,
       refreshToken: this.encryptedRefreshToken,
     });
+
+    this.syncGatewayAccessToken(accessToken);
+  }
+
+  /**
+   * Hand a freshly stored access token to the live device-gateway socket.
+   *
+   * The gateway client caches the token it was constructed with and replays it
+   * on every backoff / heartbeat reconnect, while the token itself is rotated
+   * here (AuthCtr's auto-refresh timer). Without this push the refresh only
+   * became visible after the connection had already been torn down and rejected
+   * — the socket dropped, the client replayed the stale token, and `auth_failed`
+   * left the device offline.
+   */
+  private syncGatewayAccessToken(accessToken: string) {
+    this.app.getService(GatewayConnectionService)?.updatePersonalToken(accessToken);
   }
 
   /**

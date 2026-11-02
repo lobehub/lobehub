@@ -1,5 +1,4 @@
-import { Typography } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui/base-ui';
+import { Divider, Typography } from '@lobehub/ui';
 import { Image } from '@lobehub/ui/mdx';
 import { Fragment, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';

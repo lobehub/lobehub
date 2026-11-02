@@ -15,6 +15,7 @@ const {
   finalizeVerifyRun,
   recordHeterogeneousDeliverableEvidence,
   resolveTaskAcceptance,
+  resultListByRun,
   startEvidenceSubmission,
   updateStatus,
 } = vi.hoisted(() => ({
@@ -28,6 +29,7 @@ const {
   operationFindById: vi.fn(),
   recordHeterogeneousDeliverableEvidence: vi.fn(),
   resolveTaskAcceptance: vi.fn(),
+  resultListByRun: vi.fn(),
   startEvidenceSubmission: vi.fn(),
   updateStatus: vi.fn(),
 }));
@@ -49,6 +51,11 @@ vi.mock('@/database/models/agentOperation', () => ({
 vi.mock('@/database/models/verifyEvidence', () => ({
   VerifyEvidenceModel: vi.fn(function () {
     return { listByRun: evidenceListByRun };
+  }),
+}));
+vi.mock('@/database/models/verifyCheckResult', () => ({
+  VerifyCheckResultModel: vi.fn(function () {
+    return { listByRun: resultListByRun };
   }),
 }));
 vi.mock('@/database/models/document', () => ({
@@ -112,9 +119,11 @@ describe('runVerifyOnCompletion — verification claim', () => {
       operationFindById,
       recordHeterogeneousDeliverableEvidence,
       resolveTaskAcceptance,
+      resultListByRun,
       startEvidenceSubmission,
       updateStatus,
     ].forEach((m) => m.mockReset());
+    resultListByRun.mockResolvedValue([]);
     resolveTaskAcceptance.mockResolvedValue({
       acceptance: { id: 'acceptance-1' },
       config: { enabled: true },
@@ -155,6 +164,43 @@ describe('runVerifyOnCompletion — verification claim', () => {
 
     expect(startEvidenceSubmission).toHaveBeenCalledTimes(1);
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("leaves carried checks out of a repair round's evidence turn", async () => {
+    // Fresh rows on a carried check reopen it, so asking for them would re-judge
+    // every carried check on the repair turn's own delta reply.
+    findByOperation.mockResolvedValue({
+      ...confirmedRun,
+      plan: [
+        { id: 'carried', required: true },
+        { id: 'repaired', required: true },
+      ],
+    });
+    operationFindById.mockResolvedValue({
+      agentId: 'builder',
+      id: 'op-1',
+      model: 'm',
+      provider: 'p',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+    });
+    resultListByRun.mockResolvedValue([
+      {
+        checkItemId: 'carried',
+        metadata: { carriedFrom: { checkResultId: 'r', roundIndex: 1, verifyRunId: 'run-0' } },
+        status: 'passed',
+      },
+    ]);
+    evidenceListByRun.mockResolvedValue([
+      { checkItemId: 'carried', metadata: { carriedFromEvidenceId: 'e1' }, type: 'text' },
+    ]);
+    claimEvidenceCollection.mockResolvedValue(true);
+
+    await runVerifyOnCompletion(db, 'u1', params);
+
+    expect(startEvidenceSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({ plan: [{ id: 'repaired', required: true }] }),
+    );
   });
 
   it('still collects when a criterion is missing a declared evidence type', async () => {

@@ -1,4 +1,4 @@
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import { openRenameModal } from '@/components/RenameModal';
@@ -13,7 +13,9 @@ export const useTaskDetailMoreMenu = (): PortalMoreMenuConfig | undefined => {
   // The body marks this task active while the panel is open, so the copied
   // link is byte-for-byte the one the task page's own header copies.
   const { link, taskId } = useTaskCopyActions();
-  const name = useTaskStore((s) => (taskId ? s.taskDetailMap[taskId]?.name : undefined));
+  const name = useTaskStore((s) =>
+    taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.name : undefined,
+  );
   const [updateTask, deleteTask, refreshTaskDetail] = useTaskStore((s) => [
     s.updateTask,
     s.deleteTask,

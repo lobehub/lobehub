@@ -1,11 +1,11 @@
 import { AGENT_CHAT_TOPIC_URL, AGENT_CHAT_URL } from '@lobechat/const';
-import { toast } from '@lobehub/ui/base-ui';
-import { useCallback, useRef, useState } from 'react';
+import { toast } from '@lobehub/ui';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
-import { buildTaskHandoffPath } from '@/features/AgentTaskManager/taskHandoff';
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 import { buildMessageContextSelections } from '@/features/ChatInput/utils/contextSelections';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
@@ -17,12 +17,12 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
-import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { useTaskStore } from '@/store/task';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
 import type { HomeMode } from '../types';
+import { appendTaskAttachments } from './taskAttachments';
 import { taskNameFromMessage } from './taskName';
 
 /**
@@ -47,15 +47,9 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
   if (config) agentState.internal_dispatchAgentMap(agentId, config);
 };
 
-interface PendingTaskRun {
-  agentId: string;
-  identifier: string;
-  instruction: string;
-  workspaceId: string | null;
-}
-
 export const useSend = (mode: HomeMode = 'chat') => {
   const { t } = useTranslation('home');
+  const { t: tChat } = useTranslation('chat');
   const router = useQueryRoute();
   const activeWorkspaceId = useActiveWorkspaceId();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
@@ -66,10 +60,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
   const homeInputLoading = useHomeStore((s) => s.homeInputLoading);
   const createTask = useTaskStore((s) => s.createTask);
-  const runTask = useTaskStore((s) => s.runTask);
-  const toggleTaskAgentPanel = useGlobalStore((s) => s.toggleTaskAgentPanel);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const pendingTaskRunRef = useRef<PendingTaskRun | null>(null);
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { agentId: selectedAgentId } = useResolvedHomeAgentId();
@@ -127,10 +118,8 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
       if ((mode === 'task' || !inputActiveMode) && !canUseResource) return;
 
-      // Task persistence does not support attachments or context yet. Check
-      // this before the empty-message guard so an attachment-only submission
-      // explains why it cannot proceed instead of appearing inert.
-      if (mode === 'task' && (fileList.length > 0 || contextList.length > 0)) {
+      // Selected context is separate from the task editor's persisted attachments.
+      if (mode === 'task' && contextList.length > 0) {
         toast.error(t('dashboard.task.unsupportedContext'));
         return;
       }
@@ -142,44 +131,49 @@ export const useSend = (mode: HomeMode = 'chat') => {
       try {
         const { contextSelections, pageSelections } = buildMessageContextSelections(contextList);
 
-        // Task mode is a commitment, not a proposal: the row is written and the
-        // run is launched here. Routing it through the agent would leave both
-        // outcomes to a model that is told elsewhere not to start work on its
-        // own — pressing send in this mode IS the instruction to start.
+        // Task mode records a task; it does not start one. Pressing send here
+        // writes the row and keeps the user on the Home composer, where the new
+        // task shows up under Recent tasks. Starting the run stays an explicit
+        // action on the task itself, so a quick jot cannot launch an agent the
+        // user only meant to note down.
         if (mode === 'task') {
-          if (!message || !selectedAgentId) return;
-          setIsSubmitting(true);
-          const pendingTaskRun = pendingTaskRunRef.current;
-          const canRetryPendingTask =
-            pendingTaskRun?.agentId === selectedAgentId &&
-            pendingTaskRun.instruction === message &&
-            pendingTaskRun.workspaceId === (activeWorkspaceId ?? null);
-
-          let taskRun = canRetryPendingTask ? pendingTaskRun : null;
-          if (!taskRun) {
-            const created = await createTask({
-              assigneeAgentId: selectedAgentId,
-              editorData,
-              instruction: message,
-              name: taskNameFromMessage(message),
-              visibility: activeWorkspaceId ? 'private' : undefined,
-            });
-            if (!created?.identifier) throw new Error('Task creation returned no identifier');
-            taskRun = {
-              agentId: created.assigneeAgentId ?? selectedAgentId,
-              identifier: created.identifier,
-              instruction: message,
-              workspaceId: activeWorkspaceId ?? null,
-            };
-            pendingTaskRunRef.current = taskRun;
+          if (!selectedAgentId) return;
+          if (fileList.some((file) => file.status !== 'success' || !file.fileUrl)) {
+            toast.error(t('dashboard.task.attachmentsNotReady'));
+            return;
           }
-
-          const result = await runTask(taskRun.identifier, undefined, { throwOnError: true });
-          if (!result?.topicId) throw new Error('Task run did not return a topic');
-          pendingTaskRunRef.current = null;
+          setIsSubmitting(true);
+          const name = taskNameFromMessage(message || fileList[0]?.file.name || '');
+          const created = await createTask({
+            assigneeAgentId: selectedAgentId,
+            editorData: appendTaskAttachments(editorData, message, fileList),
+            instruction: message || name,
+            name,
+            visibility: activeWorkspaceId ? 'private' : undefined,
+          });
+          if (!created?.identifier) throw new Error('Task creation returned no identifier');
           submitted = true;
-          toggleTaskAgentPanel(true);
-          router.push(buildTaskHandoffPath(taskRun.agentId, result.topicId));
+          // The task outlives the toast, so the toast is the only handle on the
+          // thing the user just wrote. Say where it went and give it a way in,
+          // mirroring the task list's own create toast.
+          toast.success({
+            actions: [
+              {
+                label: tChat('taskIntent.openCreated'),
+                onClick: () =>
+                  router.push(
+                    taskDetailPath(
+                      created.identifier,
+                      created.assigneeAgentId ?? selectedAgentId,
+                      name,
+                    ),
+                  ),
+                variant: 'text',
+              },
+            ],
+            description: t('dashboard.task.createdHint'),
+            title: t('dashboard.task.created'),
+          });
           return;
         }
 
@@ -262,7 +256,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
         // Preserve the complete draft when creation or execution fails. The
         // editor, files and context are one unit from the user's perspective.
         if (submitted) {
-          clearChatUploadFileList();
+          clearChatUploadFileList(mode === 'task' ? fileList.map((file) => file.id) : undefined);
           clearChatContextSelections(contextSelectionKey);
           mainInputEditor?.clearContent();
         }
@@ -281,13 +275,12 @@ export const useSend = (mode: HomeMode = 'chat') => {
       currentPair,
       mode,
       createTask,
-      runTask,
-      toggleTaskAgentPanel,
       inboxAgentId,
       selectedAgentId,
       canUseResource,
       canCreateContent,
       t,
+      tChat,
     ],
   );
 

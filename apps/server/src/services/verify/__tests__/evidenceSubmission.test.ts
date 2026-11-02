@@ -151,6 +151,7 @@ describe('startEvidenceSubmission', () => {
     );
     const call = execAgent.mock.calls[0][0];
     expect(call.ephemeralUserMessage).toContain('criterion-1: Model artifact exists');
+    expect(call.ephemeralUserMessage).not.toContain('requires evidence type');
     expect(call.prompt).toBe(call.ephemeralUserMessage);
     expect(call.prompt.trim()).not.toBe('');
     expect(call.userInterventionConfig).toEqual({ approvalMode: 'headless' });
@@ -160,6 +161,37 @@ describe('startEvidenceSubmission', () => {
       parentOperationId: 'work-op',
       userId: 'user-1',
     });
+  });
+
+  it('names the run-evidence types each criterion is gated on', async () => {
+    await startEvidenceSubmission({
+      db: {} as any,
+      deliverable: 'artifact summary',
+      goal: 'ship model',
+      operation: { agentId: 'builder-agent', id: 'work-op', taskId: 't', topicId: 'tp' } as any,
+      plan: [
+        {
+          id: 'criterion-1',
+          index: 0,
+          onFail: 'auto_repair',
+          required: true,
+          title: 'Rename works in the UI',
+          verifierConfig: {
+            requiredEvidence: [
+              { scope: 'run_evidence', type: 'gif' },
+              { type: 'transcript' },
+              { scope: 'task_artifacts', type: 'markdown' },
+            ],
+          },
+          verifierType: 'agent',
+        },
+      ],
+      userId: 'user-1',
+    });
+
+    expect(execAgent.mock.calls[0][0].prompt).toContain(
+      'criterion-1: Rename works in the UI [requires evidence type: gif, transcript]',
+    );
   });
 
   it('rejects operations that cannot preserve builder identity and topic context', async () => {

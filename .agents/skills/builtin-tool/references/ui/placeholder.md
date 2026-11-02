@@ -22,8 +22,7 @@ No `pluginState` — Placeholder lives entirely in the "executing" gap.
 
 ```tsx
 import type { BuiltinPlaceholderProps, SearchQuery } from '@lobechat/types';
-import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Flexbox, Icon, Skeleton } from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 

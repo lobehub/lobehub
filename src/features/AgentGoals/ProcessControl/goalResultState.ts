@@ -225,6 +225,11 @@ export interface CheckLike {
 export type CriterionOutcomeState = 'failed' | 'passed' | 'unjudged';
 
 export interface CriterionOutcome {
+  /**
+   * The acceptance bundle's row for the latest round's check — the id the
+   * Portal's check view looks the criterion up by. Absent when no round judged it.
+   */
+  checkId?: string;
   criterion: CriterionLike;
   evidence: EvidenceLike[];
   /** Why it is unmet (or undecided); absent for a met criterion. */
@@ -302,6 +307,7 @@ export const buildCriterionOutcomes = ({
 
     return [
       {
+        checkId: check.id,
         criterion,
         evidence: check.evidence,
         ...(reason ? { reason } : {}),
@@ -361,7 +367,9 @@ export interface AbandonedNodeView {
 
 /**
  * Task nodes the Goal gave up on — rejected or retired — with the reason
- * recorded when it closed them, falling back to the attempt that ended it.
+ * recorded when it closed them, falling back to the attempt that ended it and
+ * then to the node's own description, so a dropped task still says why it was
+ * dropped even when no closing note was recorded.
  */
 export const buildAbandonedNodes = (graph: Pick<GoalGraphView, 'nodes'>): AbandonedNodeView[] =>
   graph.nodes
@@ -374,7 +382,8 @@ export const buildAbandonedNodes = (graph: Pick<GoalGraphView, 'nodes'>): Abando
       const reason = firstLine(
         view.closedReason ??
           view.attempts.findLast((attempt) => attempt.outcome !== 'running' && attempt.reason)
-            ?.reason,
+            ?.reason ??
+          view.node.description,
       );
       return { ...(reason ? { reason } : {}), view };
     });
@@ -497,6 +506,29 @@ export const resultTrailSource = (graph: Pick<GoalGraphView, 'report'>): ResultT
   if (!parsed.success) return { kind: 'derived' };
   return { kind: 'story', metadata: parsed.data, report: report.latest };
 };
+
+/**
+ * The HTML page the latest report wrote, which leads the result page. A newer
+ * wrap-up still writing keeps the previous page on screen until it lands.
+ */
+export const goalReportPageId = (graph: Pick<GoalGraphView, 'report'>): string | undefined =>
+  graph.report?.latest?.pageDocumentId || undefined;
+
+/** Whether the wrap-up agent is writing this result's storyline right now. */
+export const isGoalReportOrganizing = (graph: Pick<GoalGraphView, 'report'>): boolean =>
+  graph.report?.status === 'running';
+
+/**
+ * The one-line headline of the result.
+ *
+ * `report.latest` is the *previous* version until a new wrap-up lands, so while
+ * one is running (`report.status === 'running'`) there is no headline for this
+ * result yet. Returning the last version's here is what put the old result's
+ * title on top of a rework that had not produced its own; the caller shows the
+ * organizing state instead and the title swaps in when the run completes.
+ */
+export const goalResultHeadline = (graph: Pick<GoalGraphView, 'report'>): string | undefined =>
+  isGoalReportOrganizing(graph) ? undefined : graph.report?.latest?.metadata.headline;
 
 export interface StoryChapterView {
   artifacts: GoalArtifactView[];

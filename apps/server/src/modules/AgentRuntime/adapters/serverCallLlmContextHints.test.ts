@@ -773,6 +773,41 @@ describe('resolveServerCallLlmContextHints - frozen operation facts', () => {
     );
   });
 
+  it('freezes the user-configured deployment alias over the bundled card', async () => {
+    // Codex P1 (4256356269): the settings flow persists a user alias in
+    // ai_models.config.deploymentName; the server sourcing path must carry it
+    // into the frozen facts, or the transport injects the bundled alias and
+    // calls 404 wherever only the user's endpoint exists.
+    loadModelsMock.mockResolvedValue([
+      {
+        abilities: {},
+        config: { deploymentName: 'deepseek-v4-pro-ga-260813' },
+        displayName: 'DeepSeek V4 Pro 0813',
+        id: 'deepseek-v4-pro-ga',
+        providerId: 'volcengine',
+      },
+    ]);
+    findByIdAndProviderMock.mockResolvedValue({
+      config: { deploymentName: 'prod-endpoint' },
+      displayName: 'DeepSeek V4 Pro 0813',
+    });
+
+    const ctx = createCtx();
+    const modelFacts = await readFrozenModelFacts(
+      { agent: {}, model: 'deepseek-v4-pro-ga', provider: 'volcengine', topicId: ctx.topicId },
+      createServerModelParamsProviders({
+        builtinModels: await loadModelsMock(),
+        serverDB: ctx.serverDB,
+        userId: ctx.userId,
+      }),
+    );
+
+    expect(modelFacts.cards.find((card) => card.providerId === 'volcengine')?.deploymentName).toBe(
+      'prod-endpoint',
+    );
+    expect(modelFacts.userModelRow?.deploymentName).toBe('prod-endpoint');
+  });
+
   it('resolves live for an attempt on another model', async () => {
     await resolveServerCallLlmContextHints({
       ctx: frozenCtx(),

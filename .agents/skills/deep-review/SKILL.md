@@ -28,6 +28,18 @@ Every design choice below serves one of these. When unsure how to execute a step
 
 Do not auto-escalate light to deep. Do not run deep mode for a casual "看看这个改动" — that is light mode.
 
+### When to suggest Deep
+
+Deep still needs the user's go-ahead, but the agent must ask for it when the change is high-risk. Before a light review or before opening the PR, suggest a Deep run (one sentence naming the signal) when the diff:
+
+- touches money or entitlements: charging, billing, subscriptions, credits, payment webhooks;
+- touches auth, permissions, or user isolation;
+- adds or changes database queries, schema, migrations, or backfills, or deletes persisted data;
+- changes a contract shared across packages, repositories, or released clients;
+- is large enough that one reviewer cannot hold it (roughly 1,000+ non-test changed lines).
+
+For example, a PR adding a payment-path model query with a mocked-only test qualifies. Run Deep only after the user agrees; otherwise continue with light. The Deep-mode budget below still applies.
+
 ### Deep-mode budget
 
 Within one logical requirement (the same requirement, PR, or branch), run Deep mode at most once by

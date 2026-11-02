@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { matchesAgentInterventionContinuationProvenance } from '@/business/server/agent-run/agentInterventionIdentity';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentOperations, topics, users } from '../../schemas';
+import { agentOperations, topics, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 
@@ -687,6 +687,71 @@ describe('AgentOperationModel', () => {
 
       expect(
         await new AgentOperationModel(serverDB, otherUserId).settleLive('op-live-foreign', 'error'),
+      ).toBe(false);
+    });
+  });
+
+  describe('client wait resume claim', () => {
+    const park = async (model: AgentOperationModel, operationId: string) => {
+      await model.recordStart({ operationId });
+      await model.recordCompletion(operationId, {
+        completionReason: 'waiting_for_client',
+        status: 'waiting_for_client',
+      });
+    };
+
+    it('claims and reverts only within the caller workspace', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: 'ws-wait', name: 'ws-wait', primaryOwnerId: userId, slug: 'ws-wait' })
+        .onConflictDoNothing();
+      const inWorkspace = new AgentOperationModel(serverDB, userId, 'ws-wait');
+      await park(inWorkspace, 'op-wait-ws');
+
+      const personal = new AgentOperationModel(serverDB, userId);
+      expect(await personal.tryResumeFromClientWait('op-wait-ws')).toBe(false);
+      expect((await inWorkspace.findById('op-wait-ws'))?.status).toBe('waiting_for_client');
+
+      expect(await inWorkspace.tryResumeFromClientWait('op-wait-ws')).toBe(true);
+      expect(await personal.revertClientWaitResume('op-wait-ws')).toBe(false);
+      expect((await inWorkspace.findById('op-wait-ws'))?.status).toBe('running');
+
+      expect(await inWorkspace.revertClientWaitResume('op-wait-ws')).toBe(true);
+      expect((await inWorkspace.findById('op-wait-ws'))?.status).toBe('waiting_for_client');
+
+      await serverDB.delete(workspaces).where(eq(workspaces.id, 'ws-wait'));
+    });
+
+    it('lists only waits for the asking client providers before the limit', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId: 'op-wait-mine', provider: 'lmstudio' });
+      await model.recordCompletion('op-wait-mine', {
+        completionReason: 'waiting_for_client',
+        status: 'waiting_for_client',
+      });
+      for (const id of ['op-wait-other-1', 'op-wait-other-2']) {
+        await model.recordStart({ operationId: id, provider: 'ollama' });
+        await model.recordCompletion(id, {
+          completionReason: 'waiting_for_client',
+          status: 'waiting_for_client',
+        });
+      }
+
+      const rows = await model.listWaitingForClient({ limit: 1, providers: ['lmstudio'] });
+
+      expect(rows.map((row) => row.id)).toEqual(['op-wait-mine']);
+    });
+
+    it('resumes a personal wait once', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await park(model, 'op-wait-personal');
+
+      expect(await model.tryResumeFromClientWait('op-wait-personal')).toBe(true);
+      expect(await model.tryResumeFromClientWait('op-wait-personal')).toBe(false);
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).revertClientWaitResume(
+          'op-wait-personal',
+        ),
       ).toBe(false);
     });
   });

@@ -1,7 +1,7 @@
 {
   "name": "@lobechat/agent-address-linq",
   "version": "0.1.0",
-  "description": "Linq (iMessage / SMS) transport behind an agent's own phone address",
+  "description": "Linq (iMessage / SMS) transport for the shared messenger number pool",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

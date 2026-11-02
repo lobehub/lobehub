@@ -524,7 +524,10 @@ describe('MarketService', () => {
       (service as any).market.skills.listLiveTools = vi.fn().mockResolvedValue(liveResponse);
       (service as any).market.skills.listTools = vi.fn().mockResolvedValue({ tools: [] });
 
-      await expect(service.listSkillTools('posthog')).resolves.toBe(liveResponse);
+      await expect(service.listSkillTools('posthog')).resolves.toEqual({
+        ...liveResponse,
+        source: 'live',
+      });
 
       expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith('posthog');
       expect((service as any).market.skills.listTools).not.toHaveBeenCalled();
@@ -538,7 +541,10 @@ describe('MarketService', () => {
       (service as any).market.skills.listLiveTools = vi.fn().mockRejectedValue(new Error('boom'));
       (service as any).market.skills.listTools = vi.fn().mockResolvedValue(staticResponse);
 
-      await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
+      await expect(service.listSkillTools('posthog')).resolves.toEqual({
+        ...staticResponse,
+        source: 'static',
+      });
 
       expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith('posthog');
       expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
@@ -552,7 +558,10 @@ describe('MarketService', () => {
       (service as any).market.skills.listLiveTools = vi.fn().mockResolvedValue({ tools: [] });
       (service as any).market.skills.listTools = vi.fn().mockResolvedValue(staticResponse);
 
-      await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
+      await expect(service.listSkillTools('posthog')).resolves.toEqual({
+        ...staticResponse,
+        source: 'static',
+      });
 
       expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
     });
@@ -565,7 +574,10 @@ describe('MarketService', () => {
       (service as any).market.skills.listLiveTools = vi.fn().mockResolvedValue(null);
       (service as any).market.skills.listTools = vi.fn().mockResolvedValue(staticResponse);
 
-      await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
+      await expect(service.listSkillTools('posthog')).resolves.toEqual({
+        ...staticResponse,
+        source: 'static',
+      });
 
       expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
     });
@@ -662,6 +674,26 @@ describe('MarketService', () => {
       const manifests = await service.getLobehubSkillManifests();
       expect(manifests).toHaveLength(1);
       expect(manifests[0].identifier).toBe('linear');
+    });
+
+    it('lists tools only for the requested providers', async () => {
+      const service = new MarketService();
+      (service as any).market.connect.listConnections = vi.fn().mockResolvedValue({
+        connections: [
+          { icon: '🐦', providerId: 'twitter', providerName: 'Twitter' },
+          { icon: '📋', providerId: 'linear', providerName: 'Linear' },
+        ],
+      });
+      const listTools = vi.fn().mockResolvedValue({
+        tools: [{ description: 'Create', inputSchema: {}, name: 'create' }],
+      });
+      (service as any).market.skills.listTools = listTools;
+
+      const manifests = await service.getLobehubSkillManifests({ providerIds: ['linear'] });
+
+      expect(manifests.map((m) => m.identifier)).toEqual(['linear']);
+      expect(listTools).toHaveBeenCalledTimes(1);
+      expect(listTools.mock.calls[0][0]).toBe('linear');
     });
 
     it('should use the static Notion provider label for manifests', async () => {
@@ -987,4 +1019,22 @@ describe('MarketService.searchSkill', () => {
       }),
     );
   });
+});
+
+describe('MarketService.getSkillCategories', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it.each([{ locale: 'zh-CN', q: 'meeting' }, undefined])(
+    'should forward category filters to Market: %j',
+    async (params) => {
+      const service = new MarketService();
+      const categories = [{ category: 'productivity-tasks', count: 2 }];
+      vi.mocked(service.market.marketSkills.getCategories).mockResolvedValue(categories);
+
+      expect(await service.getSkillCategories(params)).toEqual(categories);
+      if (params) expect(service.market.marketSkills.getCategories).toHaveBeenCalledWith(params);
+    },
+  );
 });

@@ -1,20 +1,21 @@
 import { buildAgentDocumentUrl } from '@lobechat/builtin-tool-agent-documents';
 import { isDesktop } from '@lobechat/const';
 import { useEditor } from '@lobehub/editor/react';
-import { Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { cssVar, useResponsive } from 'antd-style';
+import type { DropdownItem } from '@lobehub/ui';
+import { confirmModal, cssVar, Icon, toast, useResponsive } from '@lobehub/ui';
 import { Download, Link2, Maximize2, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { formatPageEditorInfoTime } from '@/features/PageEditor/formatPageEditorInfoTime';
+import { useIsHtmlPage } from '@/features/PageEditor/HtmlPageBody';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useDocumentStore } from '@/store/document';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { exportHtmlDocument } from '@/utils/exportTextFile';
 
 interface UseMenuParams {
   agentDocumentId?: string;
@@ -47,6 +48,12 @@ export const useMenu = ({
   const appOrigin = useAppOrigin();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const dateLocale = i18n.resolvedLanguage || i18n.language;
+
+  // An HTML page has no Markdown to export: it downloads as the page itself.
+  const isHtmlPage = useIsHtmlPage(documentId);
+  const htmlContent = useDocumentStore((s) =>
+    isHtmlPage ? s.documentDetailMap[documentId]?.document?.content : undefined,
+  );
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     systemStatusSelectors.wideScreen(s),
@@ -88,6 +95,15 @@ export const useMenu = ({
       }
     };
 
+    const handleExportHtml = async () => {
+      try {
+        const result = await exportHtmlDocument(htmlContent ?? '', title);
+        if (result === 'downloaded') toast.success(t('pageEditor.exportSuccess'));
+      } catch {
+        toast.error(t('pageEditor.exportError'));
+      }
+    };
+
     const handleDelete = () => {
       if (!agentDocumentId) return;
       confirmModal({
@@ -97,7 +113,13 @@ export const useMenu = ({
         okText: t('delete', { ns: 'common' }),
         onOk: async () => {
           try {
-            await agentDocumentService.removeDocument({ agentId, documentId, id: agentDocumentId });
+            await agentDocumentService.removeDocument({
+              agentId,
+              documentId,
+              id: agentDocumentId,
+              // Documents nested under it go with it, as a folder's contents do.
+              withChildren: true,
+            });
             toast.success(t('workingPanel.resources.deleteSuccess', { ns: 'chat' }));
             onDeleted();
           } catch (error) {
@@ -133,13 +155,21 @@ export const useMenu = ({
         onClick: handleCopyLink,
       },
       {
-        children: [
-          {
-            key: 'export-markdown',
-            label: t('pageEditor.menu.export.markdown'),
-            onClick: handleExportMarkdown,
-          },
-        ],
+        children: isHtmlPage
+          ? [
+              {
+                key: 'export-html',
+                label: t('pageEditor.menu.export.html'),
+                onClick: handleExportHtml,
+              },
+            ]
+          : [
+              {
+                key: 'export-markdown',
+                label: t('pageEditor.menu.export.markdown'),
+                onClick: handleExportMarkdown,
+              },
+            ],
         icon: <Icon icon={Download} />,
         key: 'export',
         label: t('pageEditor.menu.export'),
@@ -182,6 +212,8 @@ export const useMenu = ({
     documentId,
     editor,
     fileBacked,
+    htmlContent,
+    isHtmlPage,
     lg,
     dateLocale,
     onDeleted,

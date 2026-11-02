@@ -44,6 +44,11 @@ export const goalNodes = pgTable(
     goalId: text('goal_id')
       .references(() => goals.id, { onDelete: 'cascade' })
       .notNull(),
+    /**
+     * Node role. Deliberately `text` + TS union, never a pgEnum: the vocabulary
+     * moves (`work` → `task`, and now `batch`), and a CHECK would pin it into
+     * DDL and cost an ALTER on every rename.
+     */
     kind: text('kind').$type<GoalNodeKind>().notNull(),
     status: text('status').$type<GoalNodeStatus>().default('proposed').notNull(),
     title: text('title').notNull(),

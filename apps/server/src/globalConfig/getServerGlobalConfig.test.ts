@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
 interface MockGlobalConfigOptions {
   agentGatewayProtocol?: number;
   agentGatewayUrl?: string;
+  appUrl?: string;
   enableAgentGateway?: boolean;
   toolNameMaxLengthEnv?: string;
 }
@@ -44,6 +45,7 @@ const mockGlobalConfigDependencies = (
         ? {}
         : { AGENT_GATEWAY_PROTOCOL: options.agentGatewayProtocol }),
       ...(options.agentGatewayUrl ? { AGENT_GATEWAY_URL: options.agentGatewayUrl } : {}),
+      ...(options.appUrl ? { APP_URL: options.appUrl } : {}),
       ...(options.enableAgentGateway === undefined
         ? {}
         : { ENABLE_AGENT_GATEWAY: options.enableAgentGateway }),
@@ -146,6 +148,7 @@ const loadServerConfig = async (
 describe('getServerGlobalConfig', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('should only enable LobeHub by default in business feature mode', async () => {
@@ -265,5 +268,38 @@ describe('getServerGlobalConfig', () => {
         toolNameMaxLength: expected,
       });
     }
+  });
+
+  it('should expose DEVICE_GATEWAY_PUBLIC_URL without a device gateway service token', async () => {
+    vi.stubEnv('DEVICE_GATEWAY_PUBLIC_URL', 'https://device-gateway.example.com');
+    vi.stubEnv('DEVICE_GATEWAY_SERVICE_TOKEN', undefined);
+    vi.stubEnv('DEVICE_GATEWAY_URL', undefined);
+
+    await expect(loadServerConfig(false)).resolves.toHaveProperty(
+      'deviceGatewayUrl',
+      'https://device-gateway.example.com',
+    );
+  });
+
+  it('should expose the OIDC issuer derived from APP_URL, as the provider does', async () => {
+    await expect(
+      loadServerConfig(false, { appUrl: 'https://chat.example.com/' }),
+    ).resolves.toHaveProperty('oidcIssuer', 'https://chat.example.com/oidc');
+  });
+
+  it('reports internal device gateway configuration independently of its public URL', async () => {
+    vi.stubEnv('DEVICE_GATEWAY_URL', undefined);
+    vi.stubEnv('DEVICE_GATEWAY_PUBLIC_URL', 'https://public-gateway.example.com');
+    await expect(loadServerConfig(false)).resolves.toHaveProperty('deviceGatewayConfigured', false);
+
+    vi.stubEnv('DEVICE_GATEWAY_URL', 'https://internal-gateway.example.com');
+    vi.stubEnv('DEVICE_GATEWAY_PUBLIC_URL', undefined);
+    const config = await loadServerConfig(false);
+    expect(config.deviceGatewayConfigured).toBe(true);
+    expect(config.deviceGatewayUrl).toBeUndefined();
+  });
+
+  it('should omit the OIDC issuer when APP_URL is not configured', async () => {
+    await expect(loadServerConfig(false)).resolves.not.toHaveProperty('oidcIssuer');
   });
 });

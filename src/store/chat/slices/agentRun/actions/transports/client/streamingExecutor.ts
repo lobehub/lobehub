@@ -9,10 +9,10 @@ import {
   AgentRuntime,
   computeStepContext,
   GeneralChatAgent,
+  getLlmCallCount,
   isParkedStatus,
 } from '@lobechat/agent-runtime';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
-import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
 import {
@@ -22,7 +22,7 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
-import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
+import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import {
   buildGoalOverviewContext,
   type ConversationContext,
@@ -39,8 +39,8 @@ import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
-import { localFileService } from '@/services/electron/localFileService';
 import { messageService } from '@/services/message';
+import { hydrateProjectedConversation } from '@/services/message/hydrateProjectedTools';
 import { workService } from '@/services/work';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -60,44 +60,41 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { getGoalStoreState } from '@/store/goal';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
-import { getTaskStoreState } from '@/store/task';
-import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/pageAgentRuntime';
+import { getToolStoreState } from '@/store/tool';
 import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
+import { buildViewedTaskPrompt } from '../viewedTaskPrompt';
+import { buildRunManifestMap } from './discoverableManifests';
+import { clientInterventionAudits } from './interventionAudits';
 
 const log = debug('lobe-store:streaming-executor');
-
-const dynamicInterventionAudits = {
-  pathScopeAudit: createPathScopeAudit({
-    areAllPathsSafe: async ({ paths, resolveAgainstScope }) => {
-      if (!isDesktop) return false;
-
-      const result = await localFileService.auditSafePaths({ paths, resolveAgainstScope });
-      return result.allSafe;
-    },
-  }),
-};
-
-const hasReferTopicNode = (editorData: Record<string, any> | null | undefined): boolean => {
-  if (!editorData) return false;
-  const walk = (node: any): boolean => {
-    if (!node) return false;
-    if (node.type === 'refer-topic') return true;
-    if (Array.isArray(node.children)) return node.children.some(walk);
-    return false;
-  };
-  return walk(editorData.root);
-};
 
 const getMediaAvailability = (messages: UIChatMessage[]) => ({
   hasAudios: messages.some((message) => message.role === 'user' && !!message.audioList?.length),
   hasImages: messages.some((message) => message.role === 'user' && !!message.imageList?.length),
   hasVideos: messages.some((message) => message.role === 'user' && !!message.videoList?.length),
 });
+
+/**
+ * Whether any user attachment is long enough to be sent as a preview, either because it is
+ * oversized or because the attachment budget (`planAttachmentPreviews`) previews it. Mirrors the
+ * server's `readHasOversizedFiles`, which enables `readAttachment` for those previews.
+ */
+const hasPreviewableFiles = (messages: UIChatMessage[]) =>
+  messages.some(
+    (message) =>
+      message.role === 'user' &&
+      !!message.fileList?.some((file) => {
+        const length = file.content?.length ?? 0;
+        return (
+          length > FILE_PREVIEW_CHARS || isOversizedFileContent(length, file.originalCharCount)
+        );
+      }),
+  );
 
 /**
  * Core streaming execution actions for AI chat
@@ -229,7 +226,6 @@ export class StreamingExecutorActionImpl {
     }
 
     // Dynamically inject turn-scoped builtin tools.
-    const hasTopicReference = messages.some((m) => hasReferTopicNode(m.editorData));
     const mediaAvailability = getMediaAvailability(messages);
     const serverConfigState = getServerConfigStoreState();
     const multimodalUnderstandingConfigured =
@@ -245,7 +241,6 @@ export class StreamingExecutorActionImpl {
     const runtimePluginIds = [
       ...new Set([
         ...(pluginIds || []),
-        ...(hasTopicReference ? ['lobe-topic-reference'] : []),
         ...(shouldEnableMultimodalUnderstanding ? [LobeAgentManifest.identifier] : []),
       ]),
     ];
@@ -256,11 +251,10 @@ export class StreamingExecutorActionImpl {
         : effectivePluginIds;
 
     log(
-      '[internal_createAgentState] resolved plugins=%o, isSubAgent=%s, disableTools=%s, hasTopicReference=%s',
+      '[internal_createAgentState] resolved plugins=%o, isSubAgent=%s, disableTools=%s',
       effectivePluginIds,
       isSubAgent,
       disableTools,
-      hasTopicReference,
     );
 
     // Generate tools using ToolsEngine (centralized here, passed to chatService via agentConfig)
@@ -278,6 +272,7 @@ export class StreamingExecutorActionImpl {
       // sub-agent runs. Desktop client runs also need the local environment so
       // local-system can advertise IPC-only capabilities such as direct image reads.
       { executionEnv: isDesktop ? 'local' : undefined, isSubAgent, scope },
+      { hasOversizedFiles: hasPreviewableFiles(messages) },
     );
     // When skillActivateMode is 'manual':
     // Exclude only discovery tools (activator, skill-store) so runtime-managed defaults
@@ -293,18 +288,15 @@ export class StreamingExecutorActionImpl {
     });
 
     const { enabledToolIds, enabledManifests, tools } = composeEnabledTools({
-      context: {
-        isPageEditorReady: pageAgentRuntime.isReady(),
-        scope,
-      },
+      context: { scope },
       injectedManifests: initialContext?.initialContext?.injectedManifests,
       toolsDetailed,
     });
 
     // Use enabledManifests directly to avoid getEnabledPluginManifests adding default tools again
-    const toolManifestMap = Object.fromEntries(
-      enabledManifests.map((manifest) => [manifest.identifier, manifest]),
-    );
+    const toolManifestMap = disableTools
+      ? Object.fromEntries(enabledManifests.map((manifest) => [manifest.identifier, manifest]))
+      : buildRunManifestMap(getToolStoreState(), enabledManifests);
 
     // Merge tools generation result into agentConfig for chatService to use
     const agentConfigWithTools = {
@@ -385,57 +377,12 @@ export class StreamingExecutorActionImpl {
       },
     };
 
-    // Build initialContext for page editor if lobe-page-agent is enabled
     let runtimeInitialContext: RuntimeInitialContext | undefined;
-
-    if (scope === 'page' && enabledToolIds.includes(PageAgentIdentifier)) {
-      try {
-        // Get page content context from page agent runtime
-        const pageContentContext = pageAgentRuntime.getPageContentContext('both');
-
-        runtimeInitialContext = {
-          pageEditor: {
-            markdown: pageContentContext.markdown || '',
-            xml: pageContentContext.xml || '',
-            metadata: {
-              title: pageContentContext.metadata.title,
-              charCount: pageContentContext.metadata.charCount,
-              lineCount: pageContentContext.metadata.lineCount,
-            },
-          },
-        };
-        log(
-          '[internal_createAgentState] Page Agent detected, injected initialContext.pageEditor with title: %s',
-          pageContentContext.metadata.title,
-        );
-      } catch (error) {
-        // Page agent runtime may not be initialized (e.g., editor not set)
-        // This is expected in some scenarios, so we just log and continue
-        log('[internal_createAgentState] Failed to get page content context: %o', error);
-      }
-    }
 
     const viewedTask = operation?.context.viewedTask;
     if (viewedTask) {
       try {
-        const taskState = getTaskStoreState();
-        let contextPrompt: string | undefined;
-
-        if (viewedTask.type === 'list') {
-          contextPrompt = buildTaskListPrompt({
-            defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
-            tasks: taskState.tasks,
-            total: taskState.tasksTotal || taskState.tasks.length,
-          });
-        } else {
-          const detail = taskState.taskDetailMap[viewedTask.taskId];
-          if (detail)
-            contextPrompt = buildTaskDetailPrompt({
-              defaultAssigneeAgentId: operation.context.defaultTaskAssigneeAgentId,
-              task: detail,
-            });
-        }
-
+        const contextPrompt = buildViewedTaskPrompt(operation.context);
         if (contextPrompt) {
           runtimeInitialContext = {
             ...runtimeInitialContext,
@@ -632,8 +579,18 @@ export class StreamingExecutorActionImpl {
       });
     }
 
-    // Create a new array to avoid modifying the original messages
-    const messages = [...originalMessages];
+    // The first step reads `state.messages` directly, before any
+    // `MessageTransport.query()` refill, and those are the folded display
+    // messages. A list cached while the read path projected tool payloads
+    // (Gateway mode on, since switched off) would hand the model empty tool
+    // bodies, so put the stored payloads back first. Ids come from the raw
+    // store list too: a folded tool result no longer carries `payloadOmitted`.
+    // Also returns a new array, so the caller's messages are never mutated.
+    const messages = await hydrateProjectedConversation(
+      [...originalMessages],
+      this.#get().dbMessagesMap[messageKey],
+      messageService.getToolResultPayloads,
+    );
 
     // Decide tool / function-calling capability from real data, not a guess.
     // The enabled-model list hydrates asynchronously (auth session → aiProvider
@@ -705,7 +662,7 @@ export class StreamingExecutorActionImpl {
         enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
         maxWindowToken: contextWindowTokens ?? undefined,
       },
-      dynamicInterventionAudits,
+      dynamicInterventionAudits: clientInterventionAudits,
       operationId: `${messageKey}/${params.parentMessageId}`,
       modelRuntimeConfig,
     });
@@ -778,19 +735,6 @@ export class StreamingExecutorActionImpl {
         todos,
       });
 
-      // If page agent is enabled, get the latest XML for stepPageEditor
-      if (scope === 'page' && nextContext.initialContext?.pageEditor) {
-        try {
-          const pageContentContext = pageAgentRuntime.getPageContentContext('xml');
-          stepContext.stepPageEditor = {
-            xml: pageContentContext.xml || '',
-          };
-        } catch (error) {
-          // Page agent runtime may not be available, ignore errors
-          log('[executeClientAgent] Failed to get page XML for step: %o', error);
-        }
-      }
-
       // Inject stepContext into the runtime context for this step
       nextContext = { ...nextContext, stepContext };
 
@@ -860,7 +804,11 @@ export class StreamingExecutorActionImpl {
             // Find the assistant message to update error
             const currentMessages = this.#get().messagesMap[messageKey] || [];
             const assistantMessage = currentMessages.findLast((m) => m.role === 'assistant');
-            if (assistantMessage) {
+            // A Stop during a retry backoff surfaces as the last attempt's
+            // provider error. The user ended the run, so the reply must read
+            // as stopped, not as failed.
+            const isCancelled = this.#get().operations[operationId]?.status === 'cancelled';
+            if (assistantMessage && !isCancelled) {
               await messageService.updateMessageError(assistantMessage.id, event.error, {
                 agentId,
                 groupId,
@@ -875,6 +823,9 @@ export class StreamingExecutorActionImpl {
       }
 
       state = result.newState;
+
+      // User-facing LLM-call total; `stepCount` above remains the execution index.
+      this.#get().updateOperationMetadata(operationId, { llmCalls: getLlmCallCount(state) });
 
       // Check if operation was cancelled after step completion
       const operationAfterStep = this.#get().operations[operationId];
@@ -918,6 +869,7 @@ export class StreamingExecutorActionImpl {
     // Registered Works survive message folding; anchor them before refreshing
     // the message list so its summary query can attach them to the final reply.
     const finalAssistantId = state.metadata?.workAssistantMessageId;
+    let anchoredWork = false;
     if (state.status === 'done' && typeof finalAssistantId === 'string') {
       try {
         const works = await workService.listByRootOperation({
@@ -925,6 +877,7 @@ export class StreamingExecutorActionImpl {
           rootOperationId: operationId,
         });
         if (works.length > 0) {
+          anchoredWork = true;
           await messageService.updateMessageMetadata(
             finalAssistantId,
             {
@@ -983,6 +936,10 @@ export class StreamingExecutorActionImpl {
     const { requeued } = await runLifecycle.completeRun(completeEvent);
     // A queued follow-up sendMessage was scheduled — skip the post-run notification.
     if (requeued) return;
+
+    // The run-end refresh above lands while this operation still counts as running, so
+    // the transcript keeps its streamed rows and drops the Work summaries the server attached.
+    if (anchoredWork) await this.#get().refreshMessages(context);
 
     await runLifecycle.afterRunComplete(completeEvent);
 
@@ -1134,6 +1091,8 @@ export class StreamingExecutorActionImpl {
         metadata: {
           totalCost,
           totalMessages: subTaskMessages.length,
+          totalLlmCalls: usage?.llm?.apiCalls,
+          totalSteps: usage?.llm?.apiCalls,
           totalTokens,
           totalToolCalls,
         },

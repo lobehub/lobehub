@@ -8,6 +8,7 @@ import {
   AcceptanceService,
   buildAcceptanceCheckUnion,
   buildCheckReviewOverlay,
+  tallyCheckUnion,
 } from '../acceptanceService';
 
 // Union/grouping checks never execute tasks; keep that external runtime out of this suite.
@@ -399,6 +400,56 @@ describe('buildAcceptanceCheckUnion', () => {
     expect(rows[0].fixed).toBe(true);
   });
 
+  it('folds a generation named by its authored plan id when rows are keyed by criterion', () => {
+    // An authored ingest keeps the harness's plan id (`edit-modal`) but the
+    // server mints a criterion per item, and the union keys rows by that
+    // criterion. A `supersedes` written with the authored id must still fold.
+    const rows = buildAcceptanceCheckUnion([
+      {
+        results: [result('edit-modal', 'passed')],
+        run: run('r10', 10, [
+          planItem('edit-modal', { sourceCriterionId: 'crit-20', title: '弹窗编辑' }),
+        ]),
+      },
+      {
+        results: [result('inline-edit', 'passed')],
+        run: run('r11', 11, [
+          planItem('inline-edit', {
+            sourceCriterionId: 'crit-22',
+            supersedes: ['edit-modal'],
+            title: '原地编辑',
+          }),
+        ]),
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('crit-22');
+    expect(rows[0].supersededIds).toEqual(['crit-20']);
+    expect(rows[0].timeline.map((entry) => entry.title)).toEqual(['弹窗编辑', '原地编辑']);
+  });
+
+  it('folds a whole chain written with authored plan ids', () => {
+    const rows = buildAcceptanceCheckUnion([
+      {
+        results: [result('a', 'failed')],
+        run: run('r1', 1, [planItem('a', { sourceCriterionId: 'crit-a' })]),
+      },
+      {
+        results: [result('b', 'failed')],
+        run: run('r2', 2, [planItem('b', { sourceCriterionId: 'crit-b', supersedes: ['a'] })]),
+      },
+      {
+        results: [result('c', 'passed')],
+        run: run('r3', 3, [planItem('c', { sourceCriterionId: 'crit-c', supersedes: ['b'] })]),
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('crit-c');
+    expect(rows[0].supersededIds.sort()).toEqual(['crit-a', 'crit-b']);
+  });
+
   it('reads the grouping category from the latest plan snapshot', () => {
     const rows = buildAcceptanceCheckUnion([
       { results: [], run: run('r1', 1, [planItem('x', { category: '未读区' })]) },
@@ -406,5 +457,43 @@ describe('buildAcceptanceCheckUnion', () => {
     ]);
 
     expect(rows[0].category).toBe('未读区');
+  });
+});
+
+describe('tallyCheckUnion', () => {
+  it('splits a union into passed / failed / unjudged', () => {
+    const union = buildAcceptanceCheckUnion([
+      {
+        results: [result('c1', 'passed'), result('c2', 'failed'), result('c3', 'uncertain')],
+        run: run('r1', 1, [planItem('c1'), planItem('c2'), planItem('c3'), planItem('c4')]),
+      },
+    ]);
+
+    // c4 was planned and never ran: it is still a row of the union, so it counts.
+    expect(tallyCheckUnion(union)).toEqual({ failed: 1, passed: 1, total: 4, unjudged: 2 });
+  });
+
+  it('counts a repaired acceptance by its union, not by the repair round alone', () => {
+    // Round 1 judged both checks; round 2 was asked to fix c2, re-ran only that
+    // one and carried c1 forward. Counting round 2's own result rows would put
+    // "1 passed" on a row that expands to c1 AND c2.
+    const union = buildAcceptanceCheckUnion([
+      {
+        results: [result('c1', 'passed'), result('c2', 'failed')],
+        run: run('r1', 1, [planItem('c1'), planItem('c2')]),
+      },
+      { results: [result('c2', 'passed')], run: run('r2', 2, [planItem('c1'), planItem('c2')]) },
+    ]);
+
+    expect(tallyCheckUnion(union)).toEqual({ failed: 0, passed: 2, total: 2, unjudged: 0 });
+  });
+
+  it('counts a check re-run across rounds once', () => {
+    const union = buildAcceptanceCheckUnion([
+      { results: [result('c1', 'failed')], run: run('r1', 1, [planItem('c1')]) },
+      { results: [result('c1', 'passed')], run: run('r2', 2, [planItem('c1')]) },
+    ]);
+
+    expect(tallyCheckUnion(union)).toEqual({ failed: 0, passed: 1, total: 1, unjudged: 0 });
   });
 });

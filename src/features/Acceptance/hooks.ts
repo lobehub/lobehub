@@ -1,5 +1,5 @@
-import type { AcceptanceSubjectType } from '@lobechat/types';
-import { useCallback, useEffect } from 'react';
+import type { CreatableAcceptanceSubjectType } from '@lobechat/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import useSWRInfinite from 'swr/infinite';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
@@ -7,13 +7,14 @@ import { useClientDataSWR } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import type {
+  AcceptanceBySubject,
   AcceptanceListFilter,
   AcceptanceListPage,
-  VerifyReportSummaryPage,
+  AcceptanceListQuery,
 } from '@/services/verify';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore, verifySelectors } from '@/store/verify';
 
-const VERIFY_REPORT_PAGE_SIZE = 30;
 const ACCEPTANCE_PAGE_SIZE = 30;
 const VERIFY_REPORT_SWR_CONFIG = {
   revalidateIfStale: false,
@@ -46,17 +47,29 @@ export const getAcceptanceBySubjectRefreshInterval = (acceptance: unknown) => {
   return status && TERMINAL_ACCEPTANCE_STATUSES.has(status) ? 0 : 5000;
 };
 
+/**
+ * One Agent Run's verify card, read from the verify store's replica of
+ * `verifyRunMap`: a settled run paints from IndexedDB on reload, then refreshes.
+ */
+const useVerifyRun = (operationId: string | null) => {
+  const useFetchVerifyRun = useVerifyStore((s) => s.useFetchVerifyRun);
+  const run = useVerifyStore(verifySelectors.verifyRun(operationId));
+  const sync = useFetchVerifyRun(operationId);
+
+  return { mutate: sync.revalidate, run };
+};
+
 /** Plan + rollup status for one Agent Run. Pass null operationId to skip. */
-export const useVerifyState = (operationId: string | null) =>
-  useClientDataSWR(operationId ? verifyKeys.state(operationId) : null, () =>
-    verifyService.getVerifyState(operationId!),
-  );
+export const useVerifyState = (operationId: string | null) => {
+  const { mutate, run } = useVerifyRun(operationId);
+  return { data: run?.state, mutate };
+};
 
 /** Per-item check results for one Agent Run. Pass null operationId to skip. */
-export const useVerifyResults = (operationId: string | null) =>
-  useClientDataSWR(operationId ? verifyKeys.results(operationId) : null, () =>
-    verifyService.listResults(operationId!),
-  );
+export const useVerifyResults = (operationId: string | null) => {
+  const { mutate, run } = useVerifyRun(operationId);
+  return { data: run?.results, mutate };
+};
 
 /** Full standalone report bundle (run + report + results + evidence) by verifyRunId. */
 export const useVerifyReportBundle = (verifyRunId: string | null) =>
@@ -68,22 +81,67 @@ export const useVerifyReportBundle = (verifyRunId: string | null) =>
 
 export { useAcceptanceBundle } from './Viewer/useAcceptanceBundle';
 
-/** The optional acceptance aggregate attached to a task/topic/document subject. */
+/** What `useAcceptanceBySubject` hands its readers — the former SWR response shape. */
+export interface AcceptanceBySubjectSync {
+  /** The attachment from the replica view; `undefined` until hydrated or fetched. */
+  data: AcceptanceBySubject | undefined;
+  error: unknown;
+  /** Nothing to show yet, and a hydration or fetch is still outstanding. */
+  isLoading: boolean;
+  isValidating: boolean;
+  /** Re-read the attachment and resolve with the freshly read value. */
+  mutate: () => Promise<AcceptanceBySubject | undefined>;
+}
+
+/**
+ * The optional acceptance aggregate attached to a task/topic/document subject,
+ * read from the verify store's replica of `acceptanceBySubjectMap`. A subject
+ * can mount before its first Verify Run creates the aggregate, so the sync
+ * polls fastest until one exists and then keeps it live until it settles.
+ */
 export const useAcceptanceBySubject = (
-  subjectType: AcceptanceSubjectType,
+  subjectType: CreatableAcceptanceSubjectType,
   subjectId: string | null,
-) =>
-  useClientDataSWR(
-    subjectId ? verifyKeys.acceptanceBySubject(subjectType, subjectId) : null,
-    () => verifyService.getAcceptanceBySubject(subjectType, subjectId!),
-    {
-      ...ACCEPTANCE_BUNDLE_SWR_CONFIG,
-      // A task can mount before its first Verify Run creates the aggregate.
-      // Discover that server-side transition without requiring focus/reload,
-      // then stop polling as soon as the Acceptance exists.
-      refreshInterval: getAcceptanceBySubjectRefreshInterval,
+): AcceptanceBySubjectSync => {
+  const useFetchAcceptanceBySubject = useVerifyStore((s) => s.useFetchAcceptanceBySubject);
+  const key = subjectId ? `${subjectType}:${subjectId}` : undefined;
+  const data = useVerifyStore((s) => (key ? s.acceptanceBySubjectMap[key] : undefined));
+
+  const sync = useFetchAcceptanceBySubject(subjectType, subjectId, {
+    refreshInterval: getAcceptanceBySubjectRefreshInterval(data),
+  });
+
+  // A subject without an acceptance polls every 2s. Once a request for this key
+  // has settled, "no acceptance" is a known answer: later polls must not flip the
+  // caller back to its loading placeholder (that swapped the task's Acceptance
+  // trigger for a spinner on every tick and made the section jump).
+  const validatingKeyRef = useRef<string | undefined>(undefined);
+  const [settledKey, setSettledKey] = useState<string>();
+  useEffect(() => {
+    if (!key) return;
+    if (sync.isValidating) {
+      validatingKeyRef.current = key;
+      return;
+    }
+    if (validatingKeyRef.current === key) setSettledKey(key);
+  }, [key, sync.isValidating]);
+
+  return {
+    data,
+    error: sync.error,
+    // A read with no subject has nothing to load — never report it as loading.
+    isLoading:
+      !!subjectId &&
+      !data &&
+      !sync.error &&
+      (!sync.isHydrated || (sync.isValidating && settledKey !== key)),
+    isValidating: sync.isValidating,
+    mutate: async () => {
+      await sync.revalidate();
+      return key ? useVerifyStore.getState().acceptanceBySubjectMap[key] : undefined;
     },
-  );
+  };
+};
 
 /**
  * The caller's recent acceptance aggregates (with subject headers) — the list
@@ -96,17 +154,20 @@ export const useAcceptanceBySubject = (
  */
 export const useAcceptanceList = (
   enabled: boolean,
-  options?: {
-    filter?: 'active' | 'all' | 'completed';
+  options?: AcceptanceListQuery & {
     limit?: number;
-    projectId?: string;
     q?: string;
     revalidateOnMount?: boolean;
   },
 ) =>
   useClientDataSWR(
     enabled
-      ? verifyKeys.acceptances(options?.limit, options?.q, options?.filter, options?.projectId)
+      ? verifyKeys.acceptances(options?.limit, options?.q, {
+          filter: options?.filter,
+          projectId: options?.projectId,
+          scope: options?.scope,
+          source: options?.source,
+        })
       : null,
     () =>
       verifyService.listAcceptances({
@@ -114,6 +175,8 @@ export const useAcceptanceList = (
         limit: options?.limit,
         projectId: options?.projectId,
         q: options?.q,
+        scope: options?.scope,
+        source: options?.source,
       }),
     {
       ...VERIFY_REPORT_SWR_CONFIG,
@@ -140,9 +203,10 @@ export const useAcceptancePurgePreview = (acceptanceId: string | null) =>
  */
 export const useAcceptanceListInfinite = (
   filter: AcceptanceListFilter | null,
-  projectId?: string,
+  query: Omit<AcceptanceListQuery, 'filter'> = {},
 ) => {
   const workspaceId = useActiveWorkspaceId();
+  const { projectId, scope, source } = query;
 
   const getKey = useCallback(
     (_index: number, previous: AcceptanceListPage | null) => {
@@ -150,29 +214,32 @@ export const useAcceptanceListInfinite = (
       if (!filter) return null;
       return verifyKeys.acceptancePage(
         workspaceId ?? undefined,
-        filter,
-        projectId,
+        { filter, projectId, scope, source },
         previous?.nextCursor ?? undefined,
       );
     },
-    [filter, projectId, workspaceId],
+    [filter, projectId, scope, source, workspaceId],
   );
 
   const { data, error, isLoading, mutate, setSize, size } = useSWRInfinite(
     getKey,
-    ([, , , scopedProjectId, cursor]: readonly [string, string, string, string, string]) =>
+    // Read the narrowing from the closure, not the key: the key spells the
+    // unfiled project as a sentinel string, the server wants `null`.
+    (key: readonly string[]) =>
       verifyService.listAcceptancePage({
-        cursor: cursor || undefined,
+        cursor: key.at(-1) || undefined,
         filter: filter ?? undefined,
         limit: ACCEPTANCE_PAGE_SIZE,
-        projectId: scopedProjectId || undefined,
+        projectId,
+        scope,
+        source,
       }),
     { ...VERIFY_REPORT_SWR_CONFIG, revalidateFirstPage: false },
   );
 
   useEffect(() => {
     setSize(1);
-  }, [filter, projectId, workspaceId, setSize]);
+  }, [filter, projectId, scope, source, workspaceId, setSize]);
 
   const loadMore = useCallback(() => {
     void setSize((s) => s + 1);
@@ -210,7 +277,7 @@ export const useAcceptanceListInfinite = (
  * that lands while the tab sits open has to show up without a reload.
  */
 export const useAcceptanceStatuses = (
-  subjectType: AcceptanceSubjectType,
+  subjectType: CreatableAcceptanceSubjectType,
   subjectIds: string[],
   enabled = true,
 ) =>
@@ -221,76 +288,6 @@ export const useAcceptanceStatuses = (
     () => verifyService.listAcceptanceStatuses(subjectType, subjectIds),
     ACCEPTANCE_BUNDLE_SWR_CONFIG,
   );
-
-/**
- * Cursor-paginated, infinite-scrolling report summaries. `q` drives a
- * server-side title search (spanning the whole history, not just loaded pages);
- * changing it collapses back to the first page.
- */
-export const useVerifyReportSummariesInfinite = (q: string) => {
-  const workspaceId = useActiveWorkspaceId();
-
-  const getKey = useCallback(
-    (_index: number, previous: VerifyReportSummaryPage | null) => {
-      // Stop paging once the previous page reported no further cursor.
-      if (previous && previous.nextCursor === null) return null;
-      return verifyKeys.reportSummaries(workspaceId, q, previous?.nextCursor ?? undefined);
-    },
-    [q, workspaceId],
-  );
-
-  const { data, error, isLoading, isValidating, mutate, setSize, size } = useSWRInfinite(
-    getKey,
-    ([, , query, cursor]: readonly [string, string, string, string]) =>
-      verifyService.listReportSummaries({
-        cursor: cursor || undefined,
-        limit: VERIFY_REPORT_PAGE_SIZE,
-        q: query || undefined,
-      }),
-    { ...VERIFY_REPORT_SWR_CONFIG, revalidateFirstPage: false },
-  );
-
-  // A new search term starts a fresh key series; collapse size back to 1 so we
-  // don't cascade-fetch as many pages as the previous query had loaded.
-  useEffect(() => {
-    setSize(1);
-  }, [q, setSize]);
-
-  const loadMore = useCallback(() => {
-    void setSize((s) => s + 1);
-  }, [setSize]);
-  const reload = useCallback(() => {
-    void mutate();
-  }, [mutate]);
-
-  // SWR leaves a failed/pending page's slot `undefined`, so guard the holes.
-  const items = data?.flatMap((page) => page?.items ?? []) ?? [];
-  const lastLoadedPage = data?.findLast(Boolean);
-  const reachedEnd = lastLoadedPage ? lastLoadedPage.nextCursor === null : false;
-  const hasLoadedPages = data !== undefined;
-
-  // Keep already-loaded rows visible while SWR revalidates after a focus/remount.
-  // A subsequent page is genuinely in flight only when the loaded page array has
-  // an unresolved tail slot; raw `isLoading` also covers first-load revalidation.
-  const isLoadingInitial = !error && isLoading && !hasLoadedPages;
-  const isLoadingMore =
-    !error && hasLoadedPages && size > 0 && typeof data[size - 1] === 'undefined';
-
-  // Pause the sentinel while an error is showing so it can't hot-loop the failed
-  // page; the panel offers a manual retry (`reload`) instead.
-  const hasMore = !reachedEnd && !error;
-
-  return {
-    error,
-    hasMore,
-    isLoadingInitial,
-    isLoadingMore,
-    isValidating,
-    items,
-    loadMore,
-    reload,
-  };
-};
 
 /** Model / token / latency for an LLM verifier judgment. Pass null to skip. */
 export const useVerifierTracing = (tracingId: string | null | undefined) =>

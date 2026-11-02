@@ -1,19 +1,45 @@
-import { type Meta, type ToolManifest } from '@lobechat/types';
+import { type LobeTool, type Meta, type ToolManifest } from '@lobechat/types';
 
 import { isInstalledPluginAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { type InstallPluginMeta, type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import { type ToolStoreState } from '../../initialState';
+import { INSTALLED_PLUGINS_KEY } from './projection';
 
+const EMPTY_PLUGINS: LobeTool[] = [];
+
+/**
+ * The installed-plugins list for display: identity, manifest and the runtime
+ * discriminators. On a reload it is the persisted display projection until the
+ * network answers, so it never carries `settings` or connection parameters
+ * there — read those through {@link confirmedInstalledPlugins}.
+ */
 const installedPlugins = (s: ToolStoreState) => s.installedPlugins;
+
+/**
+ * Whether the list on screen is only the persisted display projection (hydrated
+ * from IndexedDB, not yet confirmed by the server).
+ */
+const isInstalledPluginsCacheOnly = (s: ToolStoreState) =>
+  s.installedPluginsReplica?.entries[INSTALLED_PLUGINS_KEY]?.source === 'storage';
+
+/**
+ * The full installed-plugin records — settings and MCP connection included —
+ * that tool assembly, tool execution, edit forms and writes may act on. Empty
+ * while only the cached display projection is loaded — the same empty list
+ * these paths saw before the first fetch landed when there was no cache.
+ */
+const confirmedInstalledPlugins = (s: ToolStoreState) =>
+  isInstalledPluginsCacheOnly(s) ? EMPTY_PLUGINS : s.installedPlugins;
 
 const isPluginInstalled = (id: string) => (s: ToolStoreState) =>
   installedPlugins(s).some((i) => i.identifier === id);
 
+/** The full record of an installed plugin (see {@link confirmedInstalledPlugins}). */
 const getInstalledPluginById = (id?: string) => (s: ToolStoreState) => {
   if (!id) return;
 
-  return installedPlugins(s).find((p) => p.identifier === id);
+  return confirmedInstalledPlugins(s).find((p) => p.identifier === id);
 };
 
 /**
@@ -55,24 +81,25 @@ export const resolvePluginManifestMeta = (manifest?: ToolManifest | null): Meta 
 };
 
 const getPluginMetaById = (id: string) => (s: ToolStoreState) => {
-  return resolvePluginManifestMeta(getInstalledPluginById(id)(s)?.manifest);
+  return resolvePluginManifestMeta(getToolManifestById(id)(s));
 };
 
 const getCustomPluginById = (id: string) => (s: ToolStoreState) =>
-  installedPlugins(s).find((i) => i.identifier === id && i.type === 'customPlugin') as
+  confirmedInstalledPlugins(s).find((i) => i.identifier === id && i.type === 'customPlugin') as
     LobeToolCustomPlugin | undefined;
 
 const getToolManifestById = (id: string) => (s: ToolStoreState) =>
-  getInstalledPluginById(id)(s)?.manifest;
+  installedPlugins(s).find((p) => p.identifier === id)?.manifest;
 
 const getPluginSettingsById = (id: string) => (s: ToolStoreState) =>
   getInstalledPluginById(id)(s)?.settings || {};
 
 const storeAndInstallPluginsIdList = (s: ToolStoreState) =>
-  s.installedPlugins.map((i) => i.identifier);
+  installedPlugins(s).map((i) => i.identifier);
 
+/** Manifests offered to the model: only plugins whose full record is loaded. */
 const installedPluginManifestList = (s: ToolStoreState) =>
-  installedPlugins(s)
+  confirmedInstalledPlugins(s)
     .map((i) => i.manifest as ToolManifest)
     .filter((i) => !!i);
 
@@ -104,6 +131,7 @@ const isPluginHasUI = (id: string) => (s: ToolStoreState) => {
 };
 
 export const pluginSelectors = {
+  confirmedInstalledPlugins,
   getCustomPluginById,
   getInstalledPluginById,
   getPluginMetaById,
@@ -113,6 +141,7 @@ export const pluginSelectors = {
   installedPluginManifestList,
   installedPluginMetaList,
   installedPlugins,
+  isInstalledPluginsCacheOnly,
   isPluginHasUI,
   isPluginInstalled,
   storeAndInstallPluginsIdList,

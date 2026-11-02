@@ -13,28 +13,24 @@ about rendered UI.
 
 1. Run the command, test, or query that exercises the change. Prefer a machine
    output mode (`--json`, a structured dump) so the proof is assertable, not prose.
-2. Capture the output and upload it as `text` evidence — inline with `--content`
-   for short output, or `--file` for a larger dump.
+2. Save the output into the round's `assets/` and list it in the case's
+   `evidence` — ingest inlines small text files and uploads larger dumps.
 
 ```bash
-# CHECK_ITEM_ID is the criterion's plan item id (from `lh verify plan state`).
-# short result → inline
-lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
-  --content "$(your-cli command --json)" \
-  --by cli --desc "command reports the new field after the change"
-
-# larger output (test log, full dump) → file
-your-cli command --json > ./proof/result.json
-lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
-  --file ./proof/result.json --by cli --desc "full result set"
-
-# a test run is itself proof
-your-test-runner path/to/spec > ./proof/test.log 2>&1
-lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" --type text \
-  --file ./proof/test.log --by program --desc "regression spec passes"
+your-cli command --json > "$REPORT_DIR/assets/new-field.json"
+your-test-runner path/to/spec > "$REPORT_DIR/assets/regression.log" 2>&1
 ```
 
-Provenance: `cli` for command stdout, `program` for a script/test you ran. See
+```jsonc
+// the case in result.json (its id is the plan item id when a plan was handed to you)
+"evidence": [
+  { "path": "assets/new-field.json", "description": "command reports the new field after the change" },
+  { "path": "assets/regression.log", "description": "regression spec passes" }
+]
+```
+
+When supplementing with `result submit`, `--by` is `cli` for command stdout and
+`program` for a script/test you ran. See
 [../references/evidence.md](../references/evidence.md) for the evidence contract.
 
 ## Auth

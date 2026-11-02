@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { DeviceLocalFilePreviewFailure } from './deviceFilePreviewFailure';
+
 /** Structured context for an unavailable logical device. */
 export interface DeviceUnavailableErrorData {
   /** Stable machine-readable availability code. */
@@ -155,6 +157,11 @@ export interface WorkingDirGitState {
 }
 
 export interface WorkingDirConfig {
+  /**
+   * The code environment picked with this folder. Metadata only on a device:
+   * nothing clones or bootstraps there; the association is kept for later.
+   */
+  environmentId?: string;
   git?: WorkingDirGitState;
   path: string;
   repoType?: WorkingDirRepoType;
@@ -177,42 +184,7 @@ export const getWorkingDirEffectivePath = (
   return entry.git?.activeWorktree || entry.path;
 };
 
-/**
- * Derive the target directory for a new worktree: a sibling of the source repo
- * named `<repoName>-<branch>` (e.g. `/code/lobehub` + `feat/x` →
- * `/code/lobehub-feat-x`), matching the convention agents already use for their
- * linked worktrees. Preserves the source path's separator so Windows paths stay
- * intact, and folds ref-illegal characters in the branch to `-` for the folder.
- *
- * Shared by the renderer (path preview + local IPC call) and the server
- * (`device.addGitWorktree`), which re-derives the target from the trusted
- * `path` + `branch` rather than trusting a client-supplied absolute path — so a
- * crafted web request can't ask a remote device to check out at an arbitrary
- * location. Both callers must derive identically, hence the single source here.
- */
-const isSep = (ch: string): boolean => ch === '/' || ch === '\\';
-
-export const deriveWorktreePath = (sourcePath: string, branch: string): string => {
-  const sep = sourcePath.includes('\\') && !sourcePath.includes('/') ? '\\' : '/';
-  // Strip trailing path separators, then the leading/trailing '-' of the folded
-  // branch, both with linear scans rather than anchored /[…]+$/ quantifiers —
-  // those are polynomial-ReDoS shapes (flagged by CodeQL) on a long crafted
-  // input, and this runs per request on the server with untrusted path/branch.
-  let te = sourcePath.length;
-  while (te > 0 && isSep(sourcePath[te - 1])) te -= 1;
-  const trimmed = sourcePath.slice(0, te);
-  const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
-  const parent = cut >= 0 ? trimmed.slice(0, cut) : '';
-  const repoName = (cut >= 0 ? trimmed.slice(cut + 1) : trimmed) || 'repo';
-  const folded = branch.trim().replaceAll(/[\s~^:?*[\]\\/]+/g, '-');
-  let start = 0;
-  let end = folded.length;
-  while (start < end && folded[start] === '-') start += 1;
-  while (end > start && folded[end - 1] === '-') end -= 1;
-  const suffix = folded.slice(start, end);
-  const folder = suffix ? `${repoName}-${suffix}` : repoName;
-  return parent ? `${parent}${sep}${folder}` : folder;
-};
+export { deriveWorktreePath } from './worktreePath';
 
 export interface WorkingDirEntry extends WorkingDirConfig {
   /**
@@ -352,6 +324,15 @@ export interface DeviceEnroller {
   username: string | null;
 }
 
+/** What a device is running right now, as the device list summarizes it. */
+export interface DeviceRunningSummary {
+  /** Running topics on the device the caller can see. */
+  count: number;
+  deviceId: string;
+  /** Distinct members who started those runs, most recently active first. */
+  users: DeviceEnroller[];
+}
+
 export interface DeviceListItem {
   architecture?: string | null;
   channels: DeviceChannel[];
@@ -379,6 +360,13 @@ export interface DeviceListItem {
    */
   metadata?: Record<string, string> | null;
   online: boolean;
+  /**
+   * Client-only: the row was hydrated from the persisted device-list snapshot
+   * and has not been confirmed by a fresh `listDevices` yet. `online` is
+   * `false` and `channels` empty on such rows — presence is unknown, not
+   * offline. Never sent by the server.
+   */
+  onlineUnknown?: boolean;
   platform: string | null;
   registered: boolean;
   /** Personal (own) vs. workspace-enrolled device — drives picker grouping. */
@@ -833,8 +821,7 @@ export type DeviceLocalFilePreview =
  * file preview result but carries binary image content as base64 so it can cross
  * the Gateway/RPC boundary.
  */
-export interface DeviceLocalFilePreviewResult {
-  error?: string;
+export interface DeviceLocalFilePreviewResult extends DeviceLocalFilePreviewFailure {
   preview?: DeviceLocalFilePreview;
   success: boolean;
 }
@@ -951,6 +938,39 @@ export interface DeviceListProjectSkillsResult {
   source: ProjectSkillSource | null;
 }
 
+/** One Claude Code auto-memory file, from the `listClaudeCodeMemory` device RPC. */
+export interface DeviceClaudeCodeMemoryFile {
+  description?: string;
+  /** The `MEMORY.md` index Claude Code loads into every session. */
+  isIndex: boolean;
+  name: string;
+  /** Absolute path on the device. */
+  path: string;
+  /** Path within the memory directory, `/`-separated. */
+  relativePath: string;
+  size: number;
+  /** Frontmatter memory type: user / feedback / project / reference. */
+  type?: string;
+  updatedAt: number;
+}
+
+/** The agent env keys that move Claude Code's auto memory, sent with `listClaudeCodeMemory`. */
+export interface DeviceClaudeCodeMemoryRunEnv {
+  CLAUDE_CODE_PROJECT_DIR_NAME?: string;
+  CLAUDE_CONFIG_DIR?: string;
+}
+
+/**
+ * Claude Code's auto memory for a project on the device, returned by the
+ * `listClaudeCodeMemory` device RPC. Mirrors device-control's
+ * `ListClaudeCodeMemoryResult`.
+ */
+export interface DeviceListClaudeCodeMemoryResult {
+  files: DeviceClaudeCodeMemoryFile[];
+  /** `~/.claude/projects/<project key>/memory` on the device, present or not. */
+  memoryDir: string;
+}
+
 const gitLinkedPullRequestSchema = z.object({
   ciStatus: z.enum(['failure', 'pending', 'success', 'unknown']).optional(),
   isDraft: z.boolean().optional(),
@@ -965,6 +985,7 @@ const gitLinkedPullRequestSchema = z.object({
 });
 
 export const workingDirConfigSchema = z.object({
+  environmentId: z.string().max(255).optional(),
   git: z
     .object({
       activeWorktree: z.string().optional(),
@@ -1042,3 +1063,70 @@ export type DeviceAppUpdateStateResult =
 
 export type DeviceAppUpdateInstallResult =
   { status: 'ok'; targetVersion: string } | { message: string; status: DeviceAppUpdateFailure };
+
+// ─── Interactive terminal (PTY) ───
+//
+// Server-side mirror of `@lobechat/device-control`'s terminal types. An
+// interactive shell over a request/response RPC is a session plus a cursor:
+// the device holds the PTY's output, the caller drains it. Runnable bytes are
+// base64 in both directions — PTY output is not valid UTF-8 at every chunk
+// boundary, and JSON strings cannot carry arbitrary bytes.
+
+/** Result of the `createTerminalSession` device RPC. */
+export interface DeviceCreateTerminalSessionResult {
+  /** Directory the shell actually started in (a missing `cwd` falls back home). */
+  cwd: string;
+  id: string;
+  pid: number;
+  /** Absolute path of the shell binary the device spawned. */
+  shell: string;
+}
+
+/** Result of the `readTerminal` device RPC. */
+export interface DeviceReadTerminalResult {
+  /** Base64 output produced since the caller's cursor; empty when nothing new. */
+  chunk: string;
+  /** Present once the shell has exited. */
+  exitCode?: number;
+  exited: boolean;
+  /** Cursor to pass to the next read. */
+  nextCursor: number;
+}
+
+/** Result of the `closeTerminal` device RPC. */
+export interface DeviceCloseTerminalResult {
+  /** False when the session was already gone (exited, reaped, or never existed). */
+  closed: boolean;
+}
+
+/** A CLI maintenance request is acknowledged before the connection goes away. */
+export interface DeviceCliUpdateOperation {
+  error?: string;
+  fromInstanceId: string;
+  id: string;
+  kind: 'restart' | 'update';
+  stage: 'updating' | 'restarting' | 'failed';
+  targetVersion: string;
+}
+
+export interface DeviceCliUpdateState {
+  activeTasks: number;
+  currentVersion: string;
+  /** Changes on every process start; reconnecting a socket alone is not a restart. */
+  instanceId: string;
+  latestVersion?: string;
+  operation?: DeviceCliUpdateOperation;
+  /** Remote maintenance requires a standalone daemon and a stable installed CLI entry. */
+  supported: boolean;
+  unsupportedReason?: string;
+}
+
+export interface DeviceCliRestartParams {
+  /** Idempotency key, retained when retrying an ambiguous request. */
+  requestId: string;
+  update: boolean;
+}
+
+export type DeviceCliUpdateStateResult =
+  | { state: DeviceCliUpdateState; status: 'ok' }
+  | { message: string; status: 'rejected' | 'unavailable' | 'unsupported' };

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { HeterogeneousProviderConfig } from './agencyConfig';
 import {
   applyTopicModelToHeterogeneousProvider,
+  applyWorkingDirByDevicePatch,
   buildHeteroExecArgs,
   buildHeteroSpawnArgs,
   canPublishAgentTopicLink,
@@ -10,11 +11,11 @@ import {
   isServerDefaultHeterogeneousModel,
   isServerDefaultHeterogeneousRelayInvocation,
   normalizeHeterogeneousProviderConfig,
-  pruneWorkingDirByDeviceDeletes,
   resolveAgencyConfig,
   resolveAgentAgencyConfig,
   resolveAgentTopicSharePolicy,
   resolveHeterogeneousProviderTopicModel,
+  resolveHeterogeneousTopicRuntimeSnapshot,
   unwrapServerDefaultHeterogeneousModel,
 } from './agencyConfig';
 import {
@@ -111,33 +112,83 @@ describe('normalizeHeterogeneousProviderConfig', () => {
   });
 });
 
-describe('pruneWorkingDirByDeviceDeletes', () => {
+describe('applyWorkingDirByDevicePatch', () => {
+  it('replaces a device selection without retaining another repository’s Git state', () => {
+    const merged = {
+      workingDirByDevice: {
+        'device-a': {
+          git: { activeWorktree: '/repos/titu-worktree', branch: 'master' },
+          path: '/repos/lobehub',
+          repoType: 'github',
+        },
+        'device-b': '/remote/repo',
+      },
+    };
+
+    applyWorkingDirByDevicePatch(
+      merged,
+      {
+        workingDirByDevice: { 'device-a': { path: '/repos/lobehub' } },
+      },
+      ['device-a'],
+    );
+
+    expect(merged.workingDirByDevice).toEqual({
+      'device-a': { path: '/repos/lobehub' },
+      'device-b': '/remote/repo',
+    });
+  });
+
+  it('replaces Git metadata when returning from a worktree to its source repository', () => {
+    const merged = {
+      workingDirByDevice: {
+        'device-a': {
+          git: { activeWorktree: '/repos/worktree', branch: 'main' },
+          path: '/repos/source',
+        },
+      },
+    };
+
+    applyWorkingDirByDevicePatch(
+      merged,
+      {
+        workingDirByDevice: { 'device-a': { git: { branch: 'main' }, path: '/repos/source' } },
+      },
+      ['device-a'],
+    );
+
+    expect(merged.workingDirByDevice['device-a']).toEqual({
+      git: { branch: 'main' },
+      path: '/repos/source',
+    });
+  });
+
   it('deletes keys whose patch value is undefined', () => {
     const merged = { workingDirByDevice: { 'device-a': '/a', 'device-b': '/b' } };
-    pruneWorkingDirByDeviceDeletes(merged, { workingDirByDevice: { 'device-a': undefined } });
+    applyWorkingDirByDevicePatch(merged, { workingDirByDevice: { 'device-a': undefined } });
     expect(merged.workingDirByDevice).toEqual({ 'device-b': '/b' });
   });
 
   it('leaves defined patch values untouched', () => {
     const merged = { workingDirByDevice: { 'device-a': '/a' } };
-    pruneWorkingDirByDeviceDeletes(merged, { workingDirByDevice: { 'device-a': '/a' } });
+    applyWorkingDirByDevicePatch(merged, { workingDirByDevice: { 'device-a': '/a' } });
     expect(merged.workingDirByDevice).toEqual({ 'device-a': '/a' });
   });
 
   it('is a no-op when the patch has no workingDirByDevice', () => {
     const merged = { workingDirByDevice: { 'device-a': '/a' } };
-    pruneWorkingDirByDeviceDeletes(merged, {});
-    pruneWorkingDirByDeviceDeletes(merged, undefined);
-    pruneWorkingDirByDeviceDeletes(merged, null);
+    applyWorkingDirByDevicePatch(merged, {});
+    applyWorkingDirByDevicePatch(merged, undefined);
+    applyWorkingDirByDevicePatch(merged, null);
     expect(merged.workingDirByDevice).toEqual({ 'device-a': '/a' });
   });
 
   it('is a no-op when the merged target has no workingDirByDevice', () => {
     expect(() =>
-      pruneWorkingDirByDeviceDeletes({}, { workingDirByDevice: { 'device-a': undefined } }),
+      applyWorkingDirByDevicePatch({}, { workingDirByDevice: { 'device-a': undefined } }),
     ).not.toThrow();
     expect(() =>
-      pruneWorkingDirByDeviceDeletes(undefined, { workingDirByDevice: { 'device-a': undefined } }),
+      applyWorkingDirByDevicePatch(undefined, { workingDirByDevice: { 'device-a': undefined } }),
     ).not.toThrow();
   });
 });
@@ -1226,5 +1277,59 @@ describe('applyTopicModelToHeterogeneousProvider - effort pin', () => {
     const config = { model: 'global-model', type: 'cursor' } as const;
 
     expect(applyTopicModelToHeterogeneousProvider(config, { effort: 'high' })).toBe(config);
+  });
+});
+
+describe('resolveHeterogeneousTopicRuntimeSnapshot', () => {
+  it('snapshots an explicit speed, including a legacy service_tier arg', () => {
+    expect(resolveHeterogeneousTopicRuntimeSnapshot({ speed: 'fast', type: 'codex' })).toEqual({
+      heteroSpeed: 'fast',
+    });
+    expect(
+      resolveHeterogeneousTopicRuntimeSnapshot({
+        args: ['-c', 'service_tier="fast"'],
+        type: 'codex',
+      }),
+    ).toEqual({ heteroSpeed: 'fast' });
+    expect(resolveHeterogeneousTopicRuntimeSnapshot({ speed: 'default', type: 'codex' })).toEqual({
+      heteroSpeed: 'default',
+    });
+  });
+
+  it('leaves speed unpinned when the Agent sets none, so the CLI config still applies', () => {
+    expect(
+      resolveHeterogeneousTopicRuntimeSnapshot({ effort: 'high', model: 'gpt-5.5', type: 'codex' }),
+    ).toEqual({ heteroEffort: 'high' });
+    expect(resolveHeterogeneousTopicRuntimeSnapshot({ type: 'codex' })).toEqual({});
+  });
+});
+
+describe('applyTopicModelToHeterogeneousProvider - speed pin', () => {
+  it("drops the agent's Fast flag, including legacy CLI args, for a Standard topic", () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { args: ['-c', 'service_tier="fast"'], model: 'gpt-5.6-sol', type: 'codex' },
+      { speed: 'default' },
+    );
+
+    expect(resolveCodexSpeedMode(effective)).toBe('default');
+    expect(buildHeteroExecArgs(effective)?.join(' ') ?? '').not.toContain('fast');
+  });
+
+  it('applies a Fast topic pin and keeps the agent speed when the topic pins none', () => {
+    const config = { model: 'gpt-5.6-sol', type: 'codex' } as const;
+
+    expect(
+      buildHeteroExecArgs(applyTopicModelToHeterogeneousProvider(config, { speed: 'fast' })),
+    ).toEqual(['--model', 'gpt-5.6-sol', '--speed', 'fast']);
+    expect(applyTopicModelToHeterogeneousProvider(config, { effort: undefined })).toBe(config);
+  });
+
+  it('drops a Fast pin the effective model cannot run', () => {
+    const effective = applyTopicModelToHeterogeneousProvider(
+      { model: 'gpt-5.6-sol', type: 'codex' },
+      { model: 'gpt-5.3-codex', provider: 'codex', speed: 'fast' },
+    );
+
+    expect(effective.speed).toBe('default');
   });
 });

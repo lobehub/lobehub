@@ -80,4 +80,22 @@ describe('api/http auth helpers', () => {
       'X-Workspace-Id': 'workspace-1',
     });
   });
+
+  /**
+   * A reconnect must not end the process: the journal and the status endpoint may still accept the
+   * current access token, and the command's polling fallback only runs if this rejects.
+   */
+  it('should throw instead of exiting when a reconnect resolves no credential', async () => {
+    mockGetValidToken.mockResolvedValue({ status: 'no-login' });
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit must not run on a reconnect');
+    }) as unknown as typeof process.exit);
+
+    const { resolveAgentStreamAuthInfo } = await import('./http');
+
+    await expect(resolveAgentStreamAuthInfo()).rejects.toThrow(/No authentication found/);
+    expect(exit).not.toHaveBeenCalled();
+
+    exit.mockRestore();
+  });
 });

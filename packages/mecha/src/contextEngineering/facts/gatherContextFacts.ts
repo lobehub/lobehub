@@ -3,7 +3,9 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import {
   CloudSandboxIdentifier,
+  formatSandboxStoragePromptVariables,
   formatUploadedFilesPrompt,
+  isPersistentSandboxMode,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   type ComposioServiceSummary,
@@ -15,6 +17,7 @@ import {
 } from '@lobechat/builtin-tool-creds';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { LobeAgentIdentifier } from '@lobechat/builtin-tool-lobe-agent';
+import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import {
@@ -26,6 +29,7 @@ import {
   type TopicReferenceItem,
   type WorkspaceContext,
 } from '@lobechat/context-engine';
+import { agentDisplayName } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -393,10 +397,14 @@ const gatherAgentManagementContext = async (
     // Self-management (updateAgent / installPlugin on itself) stays available
     // inside a sub-agent, so its own id is kept; only the delegation list goes.
     const currentAgent = request.agentId
-      ? { id: request.agentId, title: request.agent.title ?? undefined }
+      ? {
+          id: request.agentId,
+          name: request.agent.name ?? undefined,
+          title: request.agent.title ?? undefined,
+        }
       : undefined;
 
-    if (canDelegate) {
+    if (canDelegate && request.includeRecentAgents !== false) {
       const { listRecentAgents } = providers;
       const recent =
         (await attempt('recentAgents', () => listRecentAgents(AVAILABLE_AGENTS_LIMIT + 2))) ?? [];
@@ -407,6 +415,7 @@ const gatherAgentManagementContext = async (
         availableAgents: others.slice(0, AVAILABLE_AGENTS_LIMIT).map((a) => ({
           description: a.description ?? undefined,
           id: a.id,
+          name: a.name ?? undefined,
           title: a.title ?? 'Untitled',
         })),
         availableAgentsHasMore: others.length > AVAILABLE_AGENTS_LIMIT,
@@ -448,6 +457,13 @@ export const gatherContextFacts = async (
 ): Promise<GatheredContextFacts> => {
   const docsAgentId = documentsAgentId(request);
   const sandboxEnabled = request.enabledToolIds.includes(CloudSandboxIdentifier);
+  // Two tools reach the sandbox, and the optional one is not the common case:
+  // `lobe-skills` is always on, and its runCommand / execScript open the SAME
+  // session in the SAME directory as the cloud-sandbox tool. Asking only
+  // whether the optional tool is enabled told a skills-driven run the
+  // ephemeral wording while its commands ran in a persistent workspace — so it
+  // cloned into /tmp and the user's file browser stayed empty.
+  const sandboxShellEnabled = sandboxEnabled || request.enabledToolIds.includes(SkillsIdentifier);
 
   const tasks = [
     () =>
@@ -468,6 +484,10 @@ export const gatherContextFacts = async (
           : undefined,
       ),
     () =>
+      attempt('sandboxPersistence', () =>
+        sandboxShellEnabled ? providers.resolveSandboxPersistence?.() : undefined,
+      ),
+    () =>
       attempt('topic', () =>
         request.topicId ? providers.findTopic?.(request.topicId) : undefined,
       ),
@@ -486,6 +506,7 @@ export const gatherContextFacts = async (
     onboardingContext,
     planTodo,
     sandboxFiles,
+    sandboxPersistence,
     topic,
     topicReferences,
     userInfo,
@@ -508,6 +529,7 @@ export const gatherContextFacts = async (
       CREDS_LIST: credentials ? generateCredsList(credentials) : '',
       agent_description: request.agent.description ?? '',
       agent_id: request.agentId ?? '',
+      agent_name: agentDisplayName(request.agent) ?? '',
       agent_title: request.agent.title ?? '',
       // A credential is reachable whenever the dedicated sandbox tool is
       // exposed for 'auto' (independent of device routing) or no device is
@@ -520,6 +542,12 @@ export const gatherContextFacts = async (
       memory_effort: String(request.agent.chatConfig?.memory?.effort ?? ''),
       sandbox_enabled: String(sandboxEnabled),
       sandbox_uploaded_files: sandboxFiles ? formatUploadedFilesPrompt(sandboxFiles) : '',
+      // Left out entirely for an ephemeral run so the variable generators'
+      // fallback renders the original wording; spelling it out here would mean
+      // two copies of the same ephemeral text to keep in step.
+      ...(isPersistentSandboxMode(sandboxPersistence?.mode)
+        ? formatSandboxStoragePromptVariables(sandboxPersistence)
+        : {}),
       topic_id: request.topicId ?? '',
       topic_title: topic?.title ?? '',
       username: userInfo?.username ?? '',

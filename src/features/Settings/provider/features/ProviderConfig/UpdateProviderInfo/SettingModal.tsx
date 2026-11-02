@@ -1,10 +1,12 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
   createModal,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
   ModalFooter,
   type ModalInstance,
@@ -13,9 +15,8 @@ import {
   TextArea,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
-import { cssVar } from 'antd-style';
+} from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { t as i18nT } from 'i18next';
 import { BrainIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
@@ -42,12 +43,11 @@ const SectionTitle = memo<{ children: ReactNode }>(({ children }) => (
 
 SectionTitle.displayName = 'SectionTitle';
 
-const itemStyle = { marginBottom: 0 };
+const itemStyle = { paddingBlock: 0 };
 
 const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
   const { t } = useTranslation(['modelProvider', 'common']);
   const [loading, setLoading] = useState(false);
-  const [form] = Form.useForm<UpdateAiProviderParams>();
   const [updateAiProvider, deleteAiProvider] = useAiInfraStore((s) => [
     s.updateAiProvider,
     s.deleteAiProvider,
@@ -90,6 +90,12 @@ const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
     }
   };
 
+  const form = useForm<UpdateAiProviderParams>({
+    initialValues: initialValues as UpdateAiProviderParams,
+    onSubmit: ({ description, logo, name, settings }) =>
+      onFinish({ description, logo, name, settings }),
+  });
+
   const handleDelete = () => {
     confirmModal({
       content: t('updateAiProvider.confirmDeleteDescription'),
@@ -107,31 +113,24 @@ const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
 
   return (
     <Flexbox>
-      <Form
-        colon={false}
-        form={form}
-        initialValues={initialValues}
-        layout={'vertical'}
-        scrollToFirstError={{ behavior: 'instant', block: 'end', focus: true }}
-        onFinish={onFinish}
-      >
+      <Form form={form} layout={'vertical'}>
         <Flexbox gap={16}>
           <SectionTitle>{t('createNewAiProvider.basicTitle')}</SectionTitle>
 
-          <Form.Item label={t('createNewAiProvider.id.title')} style={itemStyle}>
+          <Form.Field label={t('createNewAiProvider.id.title')} style={itemStyle}>
             <Text type={'secondary'}>{initialValues.id}</Text>
-          </Form.Item>
+          </Form.Field>
 
-          <Form.Item
+          <Form.Field
             label={t('createNewAiProvider.name.title')}
             name={'name'}
-            rules={[{ message: t('createNewAiProvider.name.required'), required: true }]}
+            required={t('createNewAiProvider.name.required')}
             style={itemStyle}
           >
             <Input placeholder={t('createNewAiProvider.name.placeholder')} variant={'filled'} />
-          </Form.Item>
+          </Form.Field>
 
-          <Form.Item
+          <Form.Field
             label={t('createNewAiProvider.description.title')}
             name={'description'}
             style={itemStyle}
@@ -141,20 +140,20 @@ const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
               style={{ minHeight: 72 }}
               variant={'filled'}
             />
-          </Form.Item>
+          </Form.Field>
 
-          <Form.Item label={t('createNewAiProvider.logo.title')} name={'logo'} style={itemStyle}>
+          <Form.Field label={t('createNewAiProvider.logo.title')} name={'logo'} style={itemStyle}>
             <Input allowClear placeholder={'https://logo-url'} variant={'filled'} />
-          </Form.Item>
+          </Form.Field>
 
           <div style={{ marginBlockStart: 8 }}>
             <SectionTitle>{t('createNewAiProvider.configTitle')}</SectionTitle>
           </div>
 
-          <Form.Item
+          <Form.Field
             label={t('createNewAiProvider.sdkType.title')}
-            name={['settings', 'sdkType']}
-            rules={[{ message: t('createNewAiProvider.sdkType.required'), required: true }]}
+            name={'settings.sdkType'}
+            required={t('createNewAiProvider.sdkType.required')}
             style={itemStyle}
           >
             <Select
@@ -171,7 +170,7 @@ const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
                 );
               }}
             />
-          </Form.Item>
+          </Form.Field>
         </Flexbox>
       </Form>
       <ModalFooter

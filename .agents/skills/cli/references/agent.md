@@ -112,37 +112,56 @@ lh agent duplicate <agentId> [-t <title>]
 
 ## `lh agent run`
 
-Start an agent execution. Streams over the agent gateway WebSocket by default, or via SSE with
-`--sse`.
+Start an agent execution. Streams over the agent gateway WebSocket.
 
 ```bash
-lh agent run [-a <id>] [-s <slug>] [-p <text>] [-t <id>] [--no-auto-start] [--device <target>] [--no-headless] [--json] [-v] [--replay <file>] [--sse]
+lh agent run [-a <id>] [-s <slug>] [-p <text>] [-t <id>] [--no-auto-start] [--device <target>] [--no-headless] [--tool <id>]... [--skill <id>]... [--json] [-v] [--replay <file>]
 ```
 
-| Option                | Description                                                                            |
-| --------------------- | -------------------------------------------------------------------------------------- |
-| `-a, --agent-id <id>` | Agent ID to run                                                                        |
-| `-s, --slug <slug>`   | Agent slug (alternative to ID)                                                         |
-| `-p, --prompt <text>` | User prompt                                                                            |
-| `-t, --topic-id <id>` | Reuse existing topic                                                                   |
-| `--no-auto-start`     | Don't auto-start the agent                                                             |
-| `--device <target>`   | Target device ID, or `local` for the current connected device                          |
-| `--no-headless`       | Wait for human approval on tool calls instead of auto-running them (default: headless) |
-| `--json`              | Output full JSON event stream                                                          |
-| `-v, --verbose`       | Show detailed tool call info                                                           |
-| `--replay <file>`     | Replay events from saved JSON file (offline)                                           |
-| `--sse`               | Force SSE stream instead of the WebSocket gateway                                      |
+| Option                | Description                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `-a, --agent-id <id>` | Agent ID to run                                                                           |
+| `-s, --slug <slug>`   | Agent slug (alternative to ID)                                                            |
+| `-p, --prompt <text>` | User prompt                                                                               |
+| `-t, --topic-id <id>` | Reuse existing topic                                                                      |
+| `--no-auto-start`     | Don't auto-start the agent                                                                |
+| `--device <target>`   | Target device ID, or `local` for the current connected device                             |
+| `--no-headless`       | Wait for human approval on tool calls instead of auto-running them (default: headless)    |
+| `--tool <id>`         | Enable a tool for this run on top of the agent's own, like an @-mention (repeatable)      |
+| `--skill <id>`        | Load a skill for this run and the rest of its topic, like picking it in chat (repeatable) |
+| `--json`              | Output full JSON event stream                                                             |
+| `-v, --verbose`       | Show detailed tool call info                                                              |
+| `--replay <file>`     | Replay events from saved JSON file (offline)                                              |
 
 ### Streaming Behavior
 
-Uses `utils/agentStream.ts`. By default, streams over the agent gateway WebSocket; pass `--sse` to
-force the legacy SSE endpoint instead. If the live stream drops before the run finishes, the CLI
-falls back to polling `agent status` every 10 seconds until the run reaches a terminal state.
+Uses `utils/agentStream.ts`. The agent gateway WebSocket delivers real-time notifications;
+the authenticated `aiAgent.getOperationStreamHistory` API supplies the ordered event journal.
+JWT and API-key authentication are supported. Reconnects refresh credentials and retry with
+exponential backoff (up to six consecutive failures, capped at 15 seconds). A heartbeat
+watchdog detects half-open sockets. History reads also check for a lost terminal notification.
+
+The journal is replayed in exclusive-cursor pages on connection and reconnect, so output
+is not duplicated or lost when the gateway buffer is trimmed or hibernated. JSON output
+remains one array. Missing/truncated/expired history is an unknown outcome (exit 3), never
+a successful recovery. Transport recovery does not restart the server-side run.
+
+Self-hosted and local servers need a matching gateway configured with `AGENT_GATEWAY_URL`
+on both the server and CLI, and a matching server-side gateway service token. The gateway
+must trust the server's JWT signing key or support API-key verification against that server.
 
 1. Sends agent run request to backend, receiving an `operationId`
-2. Connects to the gateway WebSocket (or SSE endpoint with `--sse`) and streams events in real-time
+2. Connects to the gateway WebSocket and streams events in real-time
 3. Displays: text chunks, tool call status, operation progress
 4. Shows final token usage and cost summary
+
+Task `start --follow`, `run --follow`, and `run --topics N` use the same WebSocket
+transport. Each topic waits for completion before the next begins. A failed stream
+stops the sequence without sending a completion heartbeat or starting another topic.
+Full history recovery is available within the server stream's existing two-hour inactivity
+retention window (each publish renews it). Streams are no longer trimmed at 1,000 events.
+This is temporary Redis retention, not permanent archival storage; it increases Redis
+memory requirements. Existing pre-deploy streams with a trimmed prefix cannot be recovered.
 
 ### Replay Mode
 

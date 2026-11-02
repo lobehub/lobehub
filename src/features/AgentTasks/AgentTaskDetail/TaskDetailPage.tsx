@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -115,7 +114,8 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
           {isInitialLoading ? <TaskDetailSkeleton chrome={'body'} /> : <TaskDetailSections />}
         </WideScreenContainer>
       </Flexbox>
-      <TopicChatDrawer />
+      {/* The task page has nothing else to read beside a run, so it opens wide. */}
+      <TopicChatDrawer defaultExpanded />
     </Flexbox>
   );
 });

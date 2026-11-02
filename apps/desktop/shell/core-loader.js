@@ -78,7 +78,14 @@ const verifyCandidate = (dir, { abi, builtinHashes, publicKey, storeDir }) => {
   return manifest;
 };
 
-function resolveCore({ userData, builtinDir, abi, publicKey }) {
+function resolveCore({
+  userData,
+  builtinDir,
+  abi,
+  publicKey,
+  deferBoot = false,
+  platform = process.platform,
+}) {
   const otaRoot = path.join(userData, 'core-ota');
   const bootFile = path.join(otaRoot, 'boot.json');
   const pointerFile = path.join(otaRoot, 'pointer.json');
@@ -106,6 +113,13 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
   };
 
   const builtinManifest = readJson(path.join(builtinDir, 'manifest.json')) ?? null;
+  const updateChannel =
+    readJson(path.join(userData, 'lobehub-settings.json'))?.updateChannel ??
+    builtinManifest?.channel;
+  if (platform === 'darwin' && updateChannel !== 'canary' && updateChannel !== 'beta') {
+    log.push('macOS Stable uses full updates only; ignoring external core');
+    savePointer({ channel: 'stable', current: null, previous: null, staged: null });
+  }
   const builtinSeq = typeof builtinManifest?.seq === 'number' ? builtinManifest.seq : null;
   const builtinHashes = new Set(
     Array.isArray(builtinManifest?.tree) ? builtinManifest.tree.map((file) => file.sha256) : [],
@@ -117,6 +131,15 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
   const rejectReason = (manifest) => {
     if (channel && manifest.channel && manifest.channel !== channel)
       return `channel ${manifest.channel} != ${channel}`;
+    // v4 seq counters restart for each shell version. A full update must not keep
+    // an older shell's core just because that namespace had a higher seq.
+    if (
+      manifest.schemaVersion === 4 &&
+      builtinManifest?.version &&
+      manifest.version !== builtinManifest.version &&
+      !manifest.version.startsWith(`${builtinManifest.version}-core.`)
+    )
+      return `app version ${manifest.version} does not belong to ${builtinManifest.version}`;
     if (
       builtinSeq !== null &&
       manifest.channel === builtinManifest.channel &&
@@ -194,8 +217,9 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
         break;
       }
       const healthy = boot.version === version && boot.healthy === true;
-      writeJson(bootFile, { failures: failures + 1, healthy, version });
-      return { dir, log, manifest, ...bootMarkers(version), source: 'external' };
+      const startBoot = () => writeJson(bootFile, { failures: failures + 1, healthy, version });
+      if (!deferBoot) startBoot();
+      return { dir, log, manifest, ...bootMarkers(version), source: 'external', startBoot };
     } catch (error) {
       log.push(`core ${version} rejected: ${error.message}`);
     }
@@ -208,22 +232,26 @@ function resolveCore({ userData, builtinDir, abi, publicKey }) {
     log.push(`${builtinKey} failed ${builtinFailures} boots`);
     return { dir: builtinDir, log, manifest: builtinManifest, source: 'rescue' };
   }
-  try {
-    fs.mkdirSync(otaRoot, { recursive: true });
-    writeJson(bootFile, {
-      failures: builtinFailures + 1,
-      healthy: boot.version === builtinKey && boot.healthy === true,
-      version: builtinKey,
-    });
-  } catch (error) {
-    log.push(`builtin boot count failed: ${error.message}`);
-  }
+  const startBoot = () => {
+    try {
+      fs.mkdirSync(otaRoot, { recursive: true });
+      writeJson(bootFile, {
+        failures: builtinFailures + 1,
+        healthy: boot.version === builtinKey && boot.healthy === true,
+        version: builtinKey,
+      });
+    } catch (error) {
+      log.push(`builtin boot count failed: ${error.message}`);
+    }
+  };
+  if (!deferBoot) startBoot();
   return {
     dir: builtinDir,
     log,
     manifest: builtinManifest,
     ...bootMarkers(builtinKey),
     source: 'builtin',
+    startBoot,
   };
 }
 

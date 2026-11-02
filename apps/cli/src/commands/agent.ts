@@ -5,18 +5,13 @@ import { type Command, InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
-import { getAgentStreamAuthInfo } from '../api/http';
-import { resolveAgentGatewayUrl } from '../settings';
-import {
-  replayAgentEvents,
-  streamAgentEvents,
-  streamAgentEventsViaWebSocket,
-} from '../utils/agentStream';
-import { resolveLocalDeviceId } from '../utils/device';
+import { colorStatus, readOperationStatus } from '../utils/agentRunOutcome';
 import { confirm, outputJson, printTable, truncate } from '../utils/format';
-import { log, setVerbose } from '../utils/logger';
+import { log } from '../utils/logger';
 import { resolveAgentId } from './agent/resolveAgentId';
+import { registerAgentRunCommand } from './agent/run';
 import { registerAgentSpaceFsCommand } from './agent/spaceFs';
+import { resolveUrlBuilder, resourcePath, withUrl, withUrls } from './resourceUrl';
 import { resolveAppUrlBuilder } from './task/url';
 
 const readGraphConfig = async (graphFile: string): Promise<unknown> => {
@@ -65,7 +60,16 @@ export function registerAgentCommand(program: Command) {
     .action(async (options: { json?: string | boolean; keyword?: string; limit?: string }) => {
       const client = await getTrpcClient();
 
-      const input: { keyword?: string; limit?: number; offset?: number } = {};
+      // The inbox (Lobe AI) is a real assistant the user can open, and this is
+      // exactly where they look for it — so opt in. `queryAgents` omits the
+      // product-owned inbox for callers that do not explicitly ask for it, so
+      // that older clients and CRUD/group surfaces keep their old behavior.
+      const input: {
+        includeInbox: boolean;
+        keyword?: string;
+        limit?: number;
+        offset?: number;
+      } = { includeInbox: true };
       if (options.keyword) input.keyword = options.keyword;
       if (options.limit) input.limit = Number.parseInt(options.limit, 10);
 
@@ -74,7 +78,12 @@ export function registerAgentCommand(program: Command) {
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
-        outputJson(items, fields);
+        outputJson(
+          withUrls(items, await resolveUrlBuilder(client), (item: any) =>
+            resourcePath.agent(item.id),
+          ),
+          fields,
+        );
         return;
       }
 
@@ -83,14 +92,19 @@ export function registerAgentCommand(program: Command) {
         return;
       }
 
+      // `name` (user-facing display name) and `title` (role/identity) are separate
+      // fields and both are returned — collapsing them into one column hides the
+      // only handle the user knows an agent by, e.g. the inbox shows up as
+      // `Sienna` / `Lobe`. `model` is not part of the queryAgents payload, so the
+      // column that used to sit here was always empty.
       const rows = items.map((a: any) => [
         a.id || a.agentId || '',
-        truncate(a.title || a.name || a.meta?.title || 'Untitled', 40),
+        truncate(a.name || a.meta?.name || '', 24),
+        truncate(a.title || a.meta?.title || '', 36),
         truncate(a.description || a.meta?.description || '', 50),
-        a.model || '',
       ]);
 
-      printTable(rows, ['ID', 'TITLE', 'DESCRIPTION', 'MODEL']);
+      printTable(rows, ['ID', 'NAME', 'TITLE', 'DESCRIPTION']);
     });
 
   // ── view ──────────────────────────────────────────────
@@ -117,13 +131,23 @@ export function registerAgentCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result, fields);
+          outputJson(
+            withUrl(result, await resolveUrlBuilder(client), resourcePath.agent(agentId)),
+            fields,
+          );
           return;
         }
 
         const r = result as any;
-        console.log(pc.bold(r.title || r.meta?.title || 'Untitled'));
+        // Same rule as the web UI (`agentDisplayName`): the personal `name` is the
+        // primary label and a real (non-blank) title is the supporting line — so
+        // the inbox reads `Sienna · Lobe`, while a named agent without a title
+        // reads `Alice`, not `Alice · Untitled`.
+        const name = (r.name || r.meta?.name)?.trim();
+        const title = (r.title || r.meta?.title)?.trim();
+        console.log(pc.bold(name || title || 'Untitled'));
         const meta: string[] = [];
+        if (name && title && title !== name) meta.push(title);
         if (r.description || r.meta?.description) meta.push(r.description || r.meta.description);
         if (r.model) meta.push(`Model: ${r.model}`);
         if (r.provider) meta.push(`Provider: ${r.provider}`);
@@ -184,6 +208,7 @@ export function registerAgentCommand(program: Command) {
 
   agent
     .command('edit [agentId]')
+    .alias('update')
     .description('Update agent configuration')
     .option('--slug <slug>', 'Agent slug (e.g. inbox)')
     .option('-t, --title <title>', 'New title')
@@ -296,7 +321,14 @@ export function registerAgentCommand(program: Command) {
 
         if (options.json !== undefined) {
           const fields = typeof options.json === 'string' ? options.json : undefined;
-          outputJson(result?.agent ?? result, fields);
+          outputJson(
+            withUrl(
+              result?.agent ?? result,
+              await resolveUrlBuilder(client),
+              resourcePath.agent(agentId),
+            ),
+            fields,
+          );
           return;
         }
 
@@ -342,158 +374,7 @@ export function registerAgentCommand(program: Command) {
 
   // ── run ──────────────────────────────────────────────
 
-  agent
-    .command('run')
-    .description('Run an agent with a prompt')
-    .option('-a, --agent-id <id>', 'Agent ID')
-    .option('-s, --slug <slug>', 'Agent slug')
-    .option('-p, --prompt <text>', 'User prompt')
-    .option('-t, --topic-id <id>', 'Reuse an existing topic')
-    .option('--no-auto-start', 'Do not auto-start the agent')
-    .option(
-      '--device <target>',
-      'Target device ID, or use "local" for the current connected device',
-    )
-    .option(
-      '--no-headless',
-      "Disable headless mode and wait for human approval on tool calls (default: headless — tools auto-run, matching the CLI's non-interactive nature)",
-    )
-    .option('--json', 'Output full JSON event stream')
-    .option('-v, --verbose', 'Show detailed tool call info')
-    .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
-    .option('--sse', 'Force SSE stream instead of WebSocket gateway')
-    .action(
-      async (options: {
-        agentId?: string;
-        autoStart?: boolean;
-        device?: string;
-        headless?: boolean;
-        json?: boolean;
-        prompt?: string;
-        replay?: string;
-        slug?: string;
-        sse?: boolean;
-        topicId?: string;
-        verbose?: boolean;
-      }) => {
-        if (options.verbose) setVerbose(true);
-
-        // Replay mode: render from saved JSON file, no network needed
-        if (options.replay) {
-          const data = readFileSync(options.replay, 'utf8');
-          const events = JSON.parse(data);
-          replayAgentEvents(events, { json: options.json, verbose: options.verbose });
-          return;
-        }
-
-        if (!options.agentId && !options.slug) {
-          log.error('Either --agent-id or --slug is required.');
-          process.exit(1);
-          return;
-        }
-        if (!options.prompt) {
-          log.error('--prompt is required.');
-          process.exit(1);
-          return;
-        }
-
-        const client = await getTrpcClient();
-
-        let deviceId: string | undefined;
-        if (options.device !== undefined) {
-          if (options.device === 'local') {
-            deviceId = resolveLocalDeviceId();
-            if (!deviceId) {
-              log.error(
-                "No local device found. Run 'lh connect' first, then retry with --device local.",
-              );
-              process.exit(1);
-              return;
-            }
-          } else {
-            deviceId = options.device;
-          }
-
-          const devices = await client.device.listDevices.query();
-          const matchedDevice = devices.find(
-            (device: { deviceId?: string; online?: boolean }) => device.deviceId === deviceId,
-          );
-          if (!matchedDevice) {
-            log.error(`Device "${deviceId}" was not found. Check 'lh device list' and try again.`);
-            process.exit(1);
-            return;
-          }
-          if (!matchedDevice.online) {
-            log.error(
-              options.device === 'local'
-                ? `Local device "${deviceId}" is not online. Reconnect with 'lh connect' and try again.`
-                : `Device "${deviceId}" is not online. Bring it online and try again.`,
-            );
-            process.exit(1);
-            return;
-          }
-        }
-
-        // 1. Exec agent to get operationId
-        const input: Record<string, any> = { prompt: options.prompt, trigger: 'cli' };
-        if (options.agentId) input.agentId = options.agentId;
-        if (deviceId) input.deviceId = deviceId;
-        if (options.slug) input.slug = options.slug;
-        if (options.topicId) input.appContext = { topicId: options.topicId };
-        if (options.autoStart === false) input.autoStart = false;
-        // commander's --no-headless sets `headless` to false. Anything else
-        // (undefined, true) → headless mode is on and tool calls auto-execute.
-        if (options.headless !== false) {
-          input.userInterventionConfig = { approvalMode: 'headless' };
-        }
-
-        const result = await client.aiAgent.execAgent.mutate(input as any);
-        const r = result as any;
-
-        if (!r.success) {
-          log.error(`Failed to start agent: ${r.error || r.message || 'Unknown error'}`);
-          process.exit(1);
-        }
-
-        const operationId = r.operationId;
-        if (!options.json) {
-          log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
-        }
-
-        // 2. Connect to stream (WebSocket via Gateway, or fallback to SSE)
-        const { serverUrl, headers, token, tokenType } = await getAgentStreamAuthInfo();
-        const agentGatewayUrl = options.sse ? undefined : resolveAgentGatewayUrl();
-
-        try {
-          if (agentGatewayUrl) {
-            await streamAgentEventsViaWebSocket({
-              gatewayUrl: agentGatewayUrl,
-              json: options.json,
-              operationId,
-              serverUrl,
-              token,
-              tokenType,
-              verbose: options.verbose,
-            });
-          } else {
-            const streamUrl = `${serverUrl}/api/agent/stream?operationId=${encodeURIComponent(operationId)}`;
-            await streamAgentEvents(streamUrl, headers, {
-              json: options.json,
-              verbose: options.verbose,
-            });
-          }
-        } catch (error) {
-          // The live stream (gateway WS / SSE) dropped before the run finished —
-          // the run is still executing server-side. Instead of failing, fall back
-          // to polling the run status until it reaches a terminal state.
-          if (options.json) throw error;
-          log.warn(
-            `Live stream unavailable (${(error as Error).message}). Polling run status every 10s…`,
-          );
-          await pollAgentRunStatus(client, operationId);
-        }
-      },
-    );
+  registerAgentRunCommand(agent);
 
   // ── pin / unpin ─────────────────────────────────────
 
@@ -721,14 +602,23 @@ export function registerAgentCommand(program: Command) {
           return;
         }
 
+        if (!r) {
+          log.error(
+            `No status for operation ${operationId} (unknown id, not visible to this account, or its run state already expired).`,
+          );
+          process.exit(1);
+          return;
+        }
+
+        const read = readOperationStatus(r);
         console.log(pc.bold('Operation Status'));
         console.log(`  ID:     ${operationId}`);
-        console.log(`  Status: ${colorStatus(r.status || r.state || 'unknown')}`);
+        console.log(`  Status: ${colorStatus(read.status || 'unknown')}`);
 
-        if (r.stepCount !== undefined) console.log(`  Steps:  ${r.stepCount}`);
-        if (r.usage?.total_tokens) console.log(`  Tokens: ${r.usage.total_tokens}`);
-        if (r.cost?.total !== undefined) console.log(`  Cost:   $${r.cost.total.toFixed(4)}`);
-        if (r.error) console.log(`  Error:  ${pc.red(r.error)}`);
+        if (read.stepCount !== undefined) console.log(`  Steps:  ${read.stepCount}`);
+        if (read.usage?.total_tokens) console.log(`  Tokens: ${read.usage.total_tokens}`);
+        if (read.cost?.total !== undefined) console.log(`  Cost:   $${read.cost.total.toFixed(4)}`);
+        if (read.error) console.log(`  Error:  ${pc.red(read.error)}`);
         if (r.createdAt) console.log(`  Started: ${r.createdAt}`);
         if (r.completedAt) console.log(`  Ended:   ${r.completedAt}`);
       },
@@ -780,77 +670,4 @@ export function registerAgentCommand(program: Command) {
         }
       },
     );
-}
-
-function colorStatus(status: string): string {
-  switch (status) {
-    case 'completed':
-    case 'success': {
-      return pc.green(status);
-    }
-    case 'failed':
-    case 'error': {
-      return pc.red(status);
-    }
-    case 'processing':
-    case 'running': {
-      return pc.yellow(status);
-    }
-    default: {
-      return pc.dim(status);
-    }
-  }
-}
-
-const TERMINAL_RUN_STATUSES = new Set([
-  'completed',
-  'done',
-  'success',
-  'failed',
-  'error',
-  'cancelled',
-  'canceled',
-  'aborted',
-]);
-
-/**
- * Fallback when the live stream (gateway WebSocket / SSE) drops before the run
- * finishes: the run is still executing server-side, so poll its status every 10s
- * until it reaches a terminal state (or is no longer tracked, which also means it
- * has finished). Avoids hard-exiting on a transient gateway disconnect.
- */
-async function pollAgentRunStatus(
-  client: Awaited<ReturnType<typeof getTrpcClient>>,
-  operationId: string,
-): Promise<void> {
-  const POLL_MS = 10_000;
-  let lastStatus = '';
-  for (let i = 0; ; i++) {
-    if (i > 0) await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-
-    let r: any;
-    try {
-      r = await client.aiAgent.getOperationStatus.query({ operationId } as any);
-    } catch (error) {
-      log.error(`Status poll failed: ${(error as Error).message}`);
-      process.exit(1);
-    }
-
-    if (!r) {
-      log.info('Run is no longer tracked — finished (or expired).');
-      return;
-    }
-
-    const status = r.status || r.state || 'unknown';
-    if (status !== lastStatus) {
-      lastStatus = status;
-      const steps = r.stepCount !== undefined ? ` · ${r.stepCount} step(s)` : '';
-      log.info(`Run status: ${colorStatus(status)}${steps}`);
-    }
-
-    if (TERMINAL_RUN_STATUSES.has(status)) {
-      if (r.error) log.error(`Run error: ${r.error}`);
-      return;
-    }
-  }
 }

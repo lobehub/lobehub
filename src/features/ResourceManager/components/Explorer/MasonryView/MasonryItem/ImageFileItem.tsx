@@ -1,15 +1,22 @@
-import { Icon, Image, stopPropagation, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx, keyframes } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cx,
+  Icon,
+  Image,
+  keyframes,
+  stopPropagation,
+  Tooltip,
+} from '@lobehub/ui';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
 import { formatSize } from '@/utils/format';
-import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
 import { FALLBACK_ASPECT_RATIO, readAspectRatio } from './imageAspectRatio';
@@ -196,7 +203,7 @@ const ImageFileItem = memo<ImageFileItemProps>(
       s.parseFilesToChunks,
     ]);
 
-    const isSupportedForChunking = !isChunkingUnsupported(fileType || '');
+    const isSupportedForChunking = isChunkingSupported({ fileType, name });
     const imageLoaded = status === 'loaded';
 
     return (

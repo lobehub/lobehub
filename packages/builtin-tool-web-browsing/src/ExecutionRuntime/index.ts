@@ -17,6 +17,13 @@ export interface WebBrowsingDocumentService {
   associateDocument: (documentId: string) => Promise<{ id?: string } | void>;
   createDocument: (params: {
     content: string;
+    /**
+     * Crawler content type from `CrawlSuccessResult`. The persistence layer
+     * wraps `json` bodies in a fenced code block — the markdown snapshot
+     * guard rejects raw JSON (markdown parsing would rewrite it), but fenced
+     * blocks are stored byte-exact.
+     */
+    contentType?: 'json';
     description?: string;
     title: string;
     url: string;
@@ -114,6 +121,7 @@ export class WebBrowsingExecutionRuntime {
           try {
             const doc = await this.documentService!.createDocument({
               content: pageData.content,
+              ...(pageData.contentType === 'json' && { contentType: 'json' }),
               description: pageData.description || `Crawled from ${pageData.url}`,
               title: pageData.title || pageData.url,
               url: pageData.url,

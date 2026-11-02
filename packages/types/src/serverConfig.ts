@@ -19,26 +19,43 @@ import type {
  */
 export type IFeatureFlagsState = {
   enableAgentOnboarding: boolean | undefined;
-  enableAgentSelfIteration: boolean | undefined;
   /**
    * Agent Share capability: may this user publish an Agent as a shared link AND
    * open/chat on an already-live shared agent. One allowlist gates both sides.
    */
   enableAgentShare: boolean | undefined;
   enableAuthCaptcha: boolean | undefined;
+  /**
+   * Multi-agent Channels (`channel`). Off by default: the sidebar section and Channel pages are
+   * hidden and the Channel APIs answer FORBIDDEN.
+   */
+  enableChannels: boolean | undefined;
   enableCheckUpdates: boolean | undefined;
+  /**
+   * Dashboards and the `builtin-dashboard` agent tool (`dashboard`). Off by
+   * default: the pages, Portal view, in-chat previews and the tool are hidden
+   * and the widget / dashboard APIs answer FORBIDDEN.
+   */
+  enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
-   * Rollout gate for the multiplexed gateway socket. Necessary but not
-   * sufficient: the transport also requires
-   * `GlobalServerConfig.agentGatewayProtocol === 2`.
+   * LobeHub Mobile rollout gate for the multiplexed gateway socket and
+   * protocol-v2 payloads. Web follows `GlobalServerConfig.agentGatewayProtocol`.
    */
-  enableGatewayMux: boolean | undefined;
+  enableGatewayMuxMobile: boolean | undefined;
   enableKnowledgeBase: boolean | undefined;
+  /**
+   * Rollout gate for relaying LLM calls of device-only model providers to the
+   * client that started the run (`agent_llm_relay`). The client declares itself
+   * as an executor only when this is on; the server checks it again.
+   */
+  enableLlmRelay: boolean | undefined;
   enableOnboardingV2: boolean | undefined;
   enableRAGEval: boolean | undefined;
   enableSTT: boolean | undefined;
   enableStorageOverage: boolean | undefined;
+  /** Hover previews of a topic's final answer (`topic_preview`). */
+  enableTopicPreview: boolean | undefined;
   enableVoiceDictation: boolean | undefined;
   enableWorkspace: boolean | undefined;
   hideDocs: boolean | undefined;
@@ -116,6 +133,13 @@ export interface GlobalServerConfig {
   agentGatewayUrl?: string;
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
+  /** Whether the server has DEVICE_GATEWAY_URL configured, independent of its public URL. */
+  deviceGatewayConfigured?: boolean;
+  /**
+   * Public Device Gateway base URL (`DEVICE_GATEWAY_PUBLIC_URL`). Absent when not
+   * configured; clients then keep the address they manage themselves.
+   */
+  deviceGatewayUrl?: string;
   disableEmailPassword?: boolean;
   enableBusinessFeatures?: boolean;
   enableComposio?: boolean;
@@ -132,11 +156,30 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableMultimodalUnderstanding?: boolean;
+  /** Pages collaborate live through the gateway's document rooms (LobeHub Cloud). */
+  enablePageCollab?: boolean;
   enableUploadFileToServer?: boolean;
   image?: PartialDeep<UserImageConfig>;
+  /**
+   * Whether the server can relay an LLM call to a browser tab (Agent Gateway
+   * with its service token + Redis). The one-shot relay is used only then.
+   */
+  llmRelayAvailable?: boolean;
   memory?: GlobalMemoryConfig;
   multimodalUnderstanding?: MultimodalUnderstandingConfig;
   oAuthSSOProviders?: string[];
+  /**
+   * Public issuer of the built-in OIDC provider (`APP_URL` + `/oidc`) — the
+   * exact value the provider signs into tokens and discovery. Clients show
+   * this to developers instead of their own origin, which differs behind a
+   * reverse proxy or on desktop.
+   */
+  oidcIssuer?: string;
+  /**
+   * The sandbox the page agent edits pages in: Market (needs the user's Market
+   * authorization unless the trusted client is configured), Onlyboxes, or none.
+   */
+  sandbox?: 'market' | 'onlyboxes' | 'unconfigured';
   systemAgent?: PartialDeep<UserServiceModelConfig>;
   telemetry: {
     langfuse?: boolean;

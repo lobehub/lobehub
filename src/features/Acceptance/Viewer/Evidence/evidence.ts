@@ -20,11 +20,13 @@ export const hasAnnotatableEvidence = (check: AcceptanceCheck) =>
 
 /**
  * What a reject can point into: images by region, videos by frame or span.
- * Discussion threads stay image-only ({@link isAnnotatable}) — their anchor has
- * no time yet.
+ * Discussion uses the same media capability; its video anchors carry a time.
  */
 export const isRejectable = (item: AcceptanceEvidence) =>
   isAnnotatable(item) || (Boolean(item.fileUrl) && item.type === 'video');
+
+/** Discussion can point at images and video, independently of a decision. */
+export const isCommentableEvidence = isRejectable;
 
 export const hasRejectableEvidence = (check: AcceptanceCheck) => check.evidence.some(isRejectable);
 
@@ -49,3 +51,23 @@ export const evidenceCounts = (evidence: AcceptanceEvidence[]) => {
 
 export const imageRatio = (item: AcceptanceEvidence): string | undefined =>
   item.fileWidth && item.fileHeight ? `${item.fileWidth} / ${item.fileHeight}` : undefined;
+
+/**
+ * What the shortcut floating on each picture opens. A reader comments on a
+ * region; the author, who gives region feedback through the reject, marks one.
+ * Where tapping the picture already opens that marking (a reviewer's phone),
+ * a second control for the same thing is left out.
+ */
+export const evidenceShortcut = ({
+  canComment,
+  canMark,
+  tapMarks,
+}: {
+  canComment: boolean;
+  canMark: boolean;
+  tapMarks: boolean;
+}): 'annotate' | 'comment' | undefined => {
+  if (canComment) return 'comment';
+  if (canMark && !tapMarks) return 'annotate';
+  return undefined;
+};

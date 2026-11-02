@@ -1,10 +1,67 @@
 import { z } from 'zod';
 
 import { RequestTrigger } from '../../agentRuntime';
+import type { WorkRegistrationIntent } from '../../work';
 import type { ContextSelection } from './contextSelection';
 import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
+
+const ToolWorkRegistrationSchema: z.ZodType<WorkRegistrationIntent> = z.union([
+  z.object({
+    action: z.enum(['create', 'update', 'delete']),
+    changeType: z.enum(['created', 'updated']).optional(),
+    targets: z.array(
+      z.object({ taskId: z.string().optional(), taskIdentifier: z.string().optional() }),
+    ),
+    type: z.literal('task'),
+  }),
+  z.object({
+    args: z.record(z.string(), z.unknown()).optional(),
+    data: z.unknown(),
+    provider: z.string(),
+    toolName: z.string(),
+    type: z.literal('skill'),
+  }),
+  z.object({
+    action: z.literal('register'),
+    document: z.object({
+      agentDocumentId: z.string().nullish(),
+      agentId: z.string().nullish(),
+      description: z.string().nullish(),
+      documentId: z.string(),
+      changeType: z.enum(['created', 'updated']),
+      toolName: z.string(),
+    }),
+    type: z.literal('document'),
+  }),
+  z.object({
+    action: z.literal('delete'),
+    document: z.object({
+      agentDocumentId: z.string().nullish(),
+      agentId: z.string().nullish(),
+      documentId: z.string(),
+    }),
+    type: z.literal('document'),
+  }),
+  z.object({
+    action: z.literal('register'),
+    canvas: z.object({
+      canvasId: z.string(),
+      description: z.string().nullish(),
+      title: z.string(),
+      toolName: z.string(),
+      metadata: z.object({
+        entry: z.string(),
+        fileCount: z.number(),
+        manifestKey: z.string(),
+        runtimeMajor: z.number(),
+        totalSize: z.number(),
+      }),
+    }),
+    type: z.literal('canvas'),
+  }),
+]);
 
 const LocalSystemToolSnapshotSchema = z.object({
   apiName: z.enum(['readFile', 'listFiles', 'readLocalFile', 'listLocalFiles']),
@@ -67,6 +124,11 @@ export interface ModelTokensUsage {
 
   inputCacheMissTokens?: number;
   /**
+   * Input text characters, billed through `millionCharacters` pricing units
+   * (e.g. character-billed text-to-speech models).
+   */
+  inputCharacters?: number;
+  /**
    * currently only pplx has citation_tokens
    */
   inputCitationTokens?: number;
@@ -125,6 +187,7 @@ export const ModelUsageSchema = z.object({
   inputVideoTokens: z.number().optional(),
   inputCitationTokens: z.number().optional(),
   inputToolTokens: z.number().optional(),
+  inputCharacters: z.number().optional(),
 
   // Output tokens breakdown
   outputTextTokens: z.number().optional(),
@@ -177,6 +240,13 @@ export const MessageSignalSchema = z.object({
   type: z.enum(['tool-stdout', 'tool-callback', 'task-completion']),
 });
 
+export const MessageSubAgentCallbackSchema = z.object({
+  agentId: z.string().optional(),
+  name: z.string(),
+  status: z.enum(['completed', 'error']),
+  threadId: z.string(),
+});
+
 export const MessageTaskCallbackSchema = z.object({
   // Task identifier (e.g. `T-42`) for the card header + jump link.
   identifier: z.string(),
@@ -202,6 +272,78 @@ export interface AgentDispatchMetadata {
   kind: 'callAgent';
   visibility: 'internal';
 }
+
+/**
+ * The agent that authored a user turn on another agent's behalf (agent → agent
+ * dispatch: a sibling agent calling `lh agent run`). Such rows are persisted
+ * inside the RECEIVING agent's conversation, where the joined `sender` is the
+ * human owner — so without this block the bubble reads as if the user typed it
+ * themselves. The server reads it from the OPERATION that launched the run, and
+ * the UI shows it as the author, using `topicAgentId` + `topicId` to jump back
+ * to where the run was launched.
+ */
+export interface AgentSenderMetadata {
+  /**
+   * The agent that ran the launching turn — the AUTHOR of this message. Taken
+   * from the operation's own agent, which is not always the topic's owner: a
+   * heterogeneous `callSubAgent` child executes in an isolation thread **on its
+   * spawner's topic**, so the child sends while the topic belongs to the parent.
+   */
+  agentId: string;
+  /** Sending agent's avatar at send time; snapshotted so a later delete can't blank the bubble. */
+  avatar?: string;
+  /**
+   * The group conversation the launching turn ran in, when it ran in one rather
+   * than in a one-to-one topic. A group's turns are routed under
+   * `/group/<chatGroupId>/<topicId>`; the agent route would open the supervisor's
+   * own conversation instead of the group the turn actually came from.
+   */
+  chatGroupId?: string;
+  /**
+   * How many agent → agent sends in a row led to this message: 1 when the
+   * sending turn was started by a person, one more than the message that
+   * started the sending turn otherwise. The server refuses a send past
+   * `MAX_AGENT_RELAY_HOPS`, so two agents cannot keep waking each other.
+   */
+  hop?: number;
+  /** Sending agent's personal name at send time; resolve the label with `agentDisplayName`. */
+  name?: string;
+  /**
+   * The thread the launching turn ran in, reopened with `?portalThread=<id>`.
+   * Without it the link lands on the topic's main transcript, which is not where
+   * the turn happened.
+   */
+  threadId?: string;
+  /** Sending agent's role title at send time; the fallback label when it has no name. */
+  title?: string;
+  /**
+   * The agent that OWNS `topicId`, when it is not `agentId`. The jump-back link
+   * targets `/agent/<topicAgentId>/<topicId>` — only the topic's own agent has
+   * that conversation, so a sub-agent sender must not become the link's segment.
+   */
+  topicAgentId?: string;
+  /** The topic the run was launched from, for jumping back. */
+  topicId?: string;
+  /**
+   * The source topic's own name at send time. Snapshotted rather than looked up
+   * because the source topic belongs to ANOTHER agent's conversation, so the
+   * receiving side's topic list does not carry it.
+   */
+  topicTitle?: string;
+}
+
+export const AgentSenderMetadataSchema = z.object({
+  agentId: z.string(),
+  avatar: z.string().optional(),
+  chatGroupId: z.string().optional(),
+  hop: z.number().int().positive().optional(),
+  name: z.string().optional(),
+  threadId: z.string().optional(),
+  title: z.string().optional(),
+  topicAgentId: z.string().optional(),
+  topicId: z.string().optional(),
+  topicTitle: z.string().optional(),
+});
 
 /**
  * Where a server-injected user turn came from when no human typed it: a
@@ -260,12 +402,14 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   botSender: BotSenderMetadataSchema.optional(),
   externalOrigin: ExternalOriginMetadataSchema.optional(),
   agentDispatch: AgentDispatchMetadataSchema.optional(),
+  agentSender: AgentSenderMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
   // NOT strip them from writes going through UpdateMessageParamsSchema /
   // CreateMessageParamsSchema (the renderer executor's `messageService` path).
   heteroMessageId: z.string().optional(),
+  codexTurnId: z.string().optional(),
   heteroSessionId: z.string().optional(),
   // Durable watermark for replace-only heterogeneous tool-state snapshots.
   // The pair is scoped by operation so a later run may restart seq at 1.
@@ -287,14 +431,21 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   performance: ModelPerformanceSchema.optional(),
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
+  selectedSkillIds: z.array(z.string()).optional(),
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   steer: z.boolean().optional(),
+  // User message carrying a background sub-agent's answer back to its parent;
+  // its sender is that sub-agent.
+  subAgentCallback: MessageSubAgentCallbackSchema.optional(),
   subAgentId: z.string().optional(),
   // role='taskCallback' card: which task delivered its handoff back to this
   // conversation, and the run outcome. The card header + jump link read this.
   taskCallback: MessageTaskCallbackSchema.optional(),
   toolExecutionTimeMs: z.number().optional(),
+  toolResultSuccess: z.boolean().optional(),
+  toolResultStop: z.boolean().optional(),
+  toolWorkRegistration: ToolWorkRegistrationSchema.optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
   // role='verify' card: which Agent Run (agent_operations.id) it renders.
   verifyOperationId: z.string().optional(),
@@ -304,6 +455,21 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   // so zod doesn't strip `metadata.usage` from legacy writes during migration.
   usage: ModelUsageSchema.optional(),
 });
+
+/**
+ * `agentSender` is written only by the server, from a verified source operation
+ * (see `resolveAgentSenderFromOperation`), and the renderer trusts it over the
+ * persisted human sender. A client-supplied copy would let any caller make a
+ * message read as another agent's, so client-writable inputs drop it.
+ */
+export const ClientMessageMetadataSchema = MessageMetadataSchema.omit({ agentSender: true });
+
+/** Drops server-owned blocks from metadata a client sent untyped (passthrough / record inputs). */
+export const omitServerOwnedMessageMetadata = <T>(metadata: T): T => {
+  if (!metadata || typeof metadata !== 'object' || !('agentSender' in metadata)) return metadata;
+  const { agentSender: _agentSender, ...rest } = metadata as Record<string, unknown>;
+  return rest as T;
+};
 
 export interface ModelUsage extends ModelTokensUsage {
   /**
@@ -360,9 +526,15 @@ export interface MessageMetadata {
    */
   agentDispatch?: AgentDispatchMetadata;
   /**
+   * Sending agent of an agent → agent turn; see `AgentSenderMetadata`.
+   */
+  agentSender?: AgentSenderMetadata;
+  /**
    * Real platform author of a bot-channel user message; see `BotSenderMetadata`.
    */
   botSender?: BotSenderMetadata;
+  /** Native Codex turn, distinct from an assistant item inside that turn. */
+  codexTurnId?: string;
   /**
    * Message collapse state
    * true: collapsed, false/undefined: expanded
@@ -387,6 +559,12 @@ export interface MessageMetadata {
   cost?: number;
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
+  /**
+   * Where the model request behind this message ran. `client`: the server
+   * relayed it to the user's device (a local model only that device can
+   * reach), so the platform neither paid for nor billed it. Absent: the server.
+   */
+  executionSite?: 'client';
   /**
    * The provider event that produced this server-injected user turn
    * (GitHub CI failure, review feedback, …). See {@link ExternalOriginMetadata}.
@@ -518,6 +696,11 @@ export interface MessageMetadata {
    */
   scope?: string;
   /**
+   * Skills the user selected for this user turn, injected with their bodies
+   * on this and every later turn of the topic by the server runtime.
+   */
+  selectedSkillIds?: string[];
+  /**
    * External-signal lineage for messages produced as reactive replies
    * to an out-of-band trigger (Monitor stdout push, webhook callback,
    * scheduled tick, …) rather than a fresh user turn. Phase-1 storage —
@@ -546,6 +729,13 @@ export interface MessageMetadata {
    * - scope: 'group' | 'group_agent': indicates the agent that generated this message in group mode
    * Used by callAgent tool (sub_agent) and group orchestration (group modes)
    */
+  /**
+   * Present on a user message that delivers a background sub-agent's answer
+   * (`callSubAgent` / `callAgent` with `runInBackground`) back to its parent
+   * conversation: the answer is the content, and this is its sender in place
+   * of the human.
+   */
+  subAgentCallback?: MessageSubAgentCallback;
   subAgentId?: string;
   /**
    * Task-callback card pointer (for role='taskCallback' messages). Identifies
@@ -560,6 +750,11 @@ export interface MessageMetadata {
    * Tool execution time for tool messages (ms)
    */
   toolExecutionTimeMs?: number;
+  toolResultStop?: boolean;
+  /** Terminal tool-result flags retained for step redelivery. */
+  toolResultSuccess?: boolean;
+  /** Durable registration intent; omitted from runtime conversation contexts. */
+  toolWorkRegistration?: WorkRegistrationIntent;
   /** @deprecated use the top-level message `usage` field instead */
   totalInputTokens?: number;
   /** @deprecated use the top-level message `usage` field instead */
@@ -581,6 +776,11 @@ export interface MessageMetadata {
    */
   usage?: ModelUsage;
   /**
+   * The model reported no usage, so the server estimated the token counts from
+   * the request and the output text. Only set alongside `executionSite: 'client'`.
+   */
+  usageEstimated?: boolean;
+  /**
    * Agent Run operation id this verify card belongs to (for role='verify' messages).
    * References `agent_operations.id`; the card reads the verify plan + results off it.
    */
@@ -598,6 +798,20 @@ export interface MessageMetadata {
 export interface MessageWorkMetadata {
   rootOperationId: string;
   userMessageId?: string;
+}
+
+/** Who sent a background sub-agent's answer — see `MessageMetadata.subAgentCallback`. */
+export interface MessageSubAgentCallback {
+  /**
+   * The agent that answered: a `callAgent` target, or the parent agent itself
+   * for an anonymous `callSubAgent` clone. Its avatar is the sender's.
+   */
+  agentId?: string;
+  /** The sender's label: the call's description, or the target agent's name. */
+  name: string;
+  status: 'completed' | 'error';
+  /** The sub-agent's isolation thread (its full trace, and its id to follow up). */
+  threadId: string;
 }
 
 /**

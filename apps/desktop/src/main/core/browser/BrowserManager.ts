@@ -39,6 +39,7 @@ export class BrowserManager {
   }
 
   showMainWindow() {
+    if (this.app.startupUpdatePending) return;
     logger.debug('Showing main window');
     const browser = this.getMainWindow();
     const window = browser.browserWindow;
@@ -346,6 +347,7 @@ export class BrowserManager {
    * @param options Browser window options
    */
   private retrieveOrInitialize(options: BrowserWindowOpts) {
+    if (this.app.startupUpdatePending) throw new Error('Startup update is still pending');
     let browser = this.browsers.get(options.identifier);
     if (browser) {
       logger.debug(`Retrieved existing browser: ${options.identifier}`);

@@ -1,6 +1,6 @@
 'use client';
 
-import { Text } from '@lobehub/ui/base-ui';
+import { Text } from '@lobehub/ui';
 import { Fragment, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -37,6 +37,8 @@ const COMPACT_HEADER_TABS = [
   SettingsTabs.Plans,
   SettingsTabs.Profile,
   SettingsTabs.Referral,
+  SettingsTabs.Drive,
+  SettingsTabs.Environments,
   SettingsTabs.ServiceModel,
   SettingsTabs.Stats,
   SettingsTabs.Storage,
@@ -69,6 +71,8 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
     [SettingsTabs.Plans]: t('subscription:tab.plans'),
     [SettingsTabs.Profile]: t('auth:profile.title'),
     [SettingsTabs.Referral]: t('subscription:tab.referral'),
+    [SettingsTabs.Drive]: t('setting:tab.drive'),
+    [SettingsTabs.Environments]: t('setting:tab.environments'),
     [SettingsTabs.ServiceModel]: t('setting:tab.serviceModel'),
     [SettingsTabs.Stats]: t('auth:tab.stats'),
     [SettingsTabs.Storage]: t('setting:tab.storage'),

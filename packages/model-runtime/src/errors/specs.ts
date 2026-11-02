@@ -397,6 +397,30 @@ export const ERROR_CODE_SPECS: SpecMap = {
     countAsFailure: false,
     description: 'Provider timed out while downloading a remote image or file URL.',
   },
+  [AgentRuntimeErrorType.ClientLlmExecutorLost]: {
+    code: AgentRuntimeErrorType.ClientLlmExecutorLost,
+    numericId: 6003,
+    category: 'network',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 504,
+    retryable: true,
+    countAsFailure: false,
+    description:
+      'The user device running a relayed model request went silent (closed, refreshed or disconnected) mid-stream.',
+  },
+  [AgentRuntimeErrorType.ClientLlmTimeout]: {
+    code: AgentRuntimeErrorType.ClientLlmTimeout,
+    numericId: 6004,
+    category: 'network',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 504,
+    retryable: true,
+    countAsFailure: false,
+    description:
+      'A relayed model request on the user device missed its first-output or total deadline.',
+  },
 
   // ─── 7xxx Stream / Runtime ────────────────────────────────────────────
   [AgentRuntimeErrorType.StreamChunkError]: {
@@ -738,6 +762,18 @@ export const ERROR_CODE_SPECS: SpecMap = {
     retryable: false,
     countAsFailure: false,
     description: 'Provider connection check failed during setup.',
+  },
+  [AgentRuntimeErrorType.ClientLlmExecutorUnavailable]: {
+    code: AgentRuntimeErrorType.ClientLlmExecutorUnavailable,
+    numericId: 9007,
+    category: 'config',
+    severity: 'warning',
+    attribution: 'user',
+    httpStatus: 409,
+    retryable: false,
+    countAsFailure: false,
+    description:
+      'The model is only reachable from the user device and no open LobeHub client picked up the request.',
   },
 };
 

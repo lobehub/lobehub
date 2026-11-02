@@ -2,9 +2,7 @@
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
-import { Flexbox, Popover } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Flexbox, Popover, Text } from '@lobehub/ui';
 import type { AiModelForSelect } from 'model-bank';
 import numeral from 'numeral';
 import { memo, useMemo } from 'react';
@@ -24,16 +22,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   descriptionText_dark: css`
     color: ${cssVar.colorText};
-  `,
-  popover: css`
-    .ant-popover-inner {
-      background: ${cssVar.colorBgElevated};
-    }
-  `,
-  popover_dark: css`
-    .ant-popover-inner {
-      background: ${cssVar.colorBgSpotlight};
-    }
   `,
   priceText: css`
     font-weight: 500;
@@ -173,11 +161,7 @@ const GenerationModelItem = memo<GenerationModelItemProps>(
     if (!showPopover || !popoverContent) return content;
 
     return (
-      <Popover
-        classNames={{ root: cx(styles.popover, isDarkMode && styles.popover_dark) }}
-        content={popoverContent}
-        placement="rightTop"
-      >
+      <Popover content={popoverContent} placement="rightTop">
         {content}
       </Popover>
     );

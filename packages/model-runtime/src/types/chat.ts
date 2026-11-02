@@ -4,7 +4,9 @@ import type {
   ModelTokensUsage,
   ModelUsage,
 } from '@lobechat/types';
+import type OpenAI from 'openai';
 
+import type { ComputeChatCostOptions } from '../core/usageConverters/utils/computeChatCost';
 import type { ModelPricingContext } from './pricing';
 import type { ModelRuntimeDiagnostics } from './providerDiagnostics';
 import type { MessageToolCall, MessageToolCallChunk } from './toolsCalling';
@@ -73,6 +75,10 @@ export interface OpenAIChatMessage {
   provider?: string;
   reasoning?: ModelReasoning;
   reasoning_content?: string;
+  /** Native tool output parts, including images and files, for Responses replay. */
+  responsesOutput?: OpenAI.Responses.ResponseCustomToolCallOutput['output'];
+  /** Tools introduced at this position in a Responses conversation. */
+  responsesTools?: OpenAI.Responses.Tool[];
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];
@@ -155,6 +161,8 @@ export interface ChatStreamPayload {
   reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   response_format?: ChatResponseFormat;
   responseMode?: 'stream' | 'json';
+  /** Native Responses tools, including namespaces and free-form custom tools. */
+  responsesTools?: OpenAI.Responses.Tool[];
   /**
    * @title Whether to enable streaming requests
    * @default true
@@ -273,12 +281,22 @@ export interface OnFinishData {
    */
   finishReason?: string;
   grounding?: any;
+  /** Options used to price `usage.cost` (e.g. cache TTL lookups), so hooks can reprice the same usage. */
+  pricingOptions?: ComputeChatCostOptions;
+  /**
+   * USD charge reported by the upstream provider (OpenRouter, Vercel AI Gateway). Server-side
+   * only: unlike `usage`, it is never streamed to clients or persisted on messages.
+   */
+  providerReportedCost?: number;
   reasoning?: ModelReasoning;
   /** Stable identities and terminal outcome for the provider attempt producing this result. */
   routeAttempt?: {
     attemptId: string;
+    /** Router channel that served the attempt. */
+    channelId?: string;
     outcome?: 'completed' | 'empty' | 'interrupted' | 'cancelled' | 'failed';
     requestId: string;
+    routerId?: string;
   };
   speed?: ModelPerformance;
   text: string;

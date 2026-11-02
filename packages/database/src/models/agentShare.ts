@@ -16,7 +16,7 @@ import type {
   AgentShareItem,
   NormalizedAgentShareConfig,
 } from '../schemas';
-import { agents, agentShares, users } from '../schemas';
+import { agents, agentShares, users, workspaces } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '../utils/inboxAgent';
 import { notTrashed } from '../utils/softDelete';
@@ -654,10 +654,14 @@ export class AgentShareModel {
         userViewCount: agentShares.userViewCount,
         visibility: agentShares.visibility,
         workspaceId: agents.workspaceId,
+        // Lets the owner's "settings" link land inside the share's Workspace
+        // route instead of whichever Workspace happens to be active.
+        workspaceSlug: workspaces.slug,
       })
       .from(agentShares)
       .innerJoin(agents, eq(agentShares.agentId, agents.id))
       .leftJoin(users, eq(agents.userId, users.id))
+      .leftJoin(workspaces, eq(agents.workspaceId, workspaces.id))
       .where(and(eq(agentShares.id, shareId), notTrashed(agents.isDeleted)))
       .limit(1);
 

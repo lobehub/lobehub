@@ -1,4 +1,5 @@
 import type { VerifyCheckItem } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -14,14 +15,6 @@ import { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-sweep');
-
-/** An operation in any of these can still produce a verdict. */
-const LIVE_OPERATION_STATUSES = new Set([
-  'idle',
-  'running',
-  'waiting_for_human',
-  'waiting_for_async_tool',
-]);
 
 const PENDING_RESULT_STATUSES = new Set(['pending', 'running']);
 
@@ -154,7 +147,8 @@ const recoverRun = async (
       // Its verifier is still working — `settleVerifierCheckFromTerminal` owns
       // this row's ending, and stamping it `errored` now would discard a verdict
       // that is still coming.
-      if (verifierOp && LIVE_OPERATION_STATUSES.has(verifierOp.status)) return 'skipped';
+      // A still-live verifier (parked ones included) can still produce a verdict.
+      if (verifierOp && isAgentOperationInFlight(verifierOp.status)) return 'skipped';
     }
   }
 

@@ -1,0 +1,61 @@
+name: Close Stale PRs
+
+# Closes PRs nobody is moving forward; issues are left alone.
+# - PRs still labeled `pr:incomplete` by the admission check close after 14 days without
+#   activity (the admission comment already announced this), via pr-admission-check.cjs.
+# - Other PRs are marked stale after 30 days without activity and closed 14 days later.
+#
+# Runs in dry-run mode (logs candidates only) until the repository variable
+# PR_STALE_ENABLED is set to `true`, so the first runs can be reviewed before anything closes.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: pr-stale
+
+permissions:
+  # actions/stale persists its scan cursor in the Actions cache between runs.
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DRY_RUN: ${{ vars.PR_STALE_ENABLED != 'true' }}
+    steps:
+      - name: Checkout scripts
+        uses: actions/checkout@v7
+        with:
+          # Cone mode also checks out files directly under .github/, including maintainers.txt.
+          sparse-checkout: .github/scripts
+
+      - name: Close incomplete PRs
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const check = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pr-admission-check.cjs`);
+            await check.closeIncomplete({ context, core, dryRun: process.env.DRY_RUN === 'true', github });
+
+      - name: Close inactive PRs
+        uses: actions/stale@v11
+        with:
+          debug-only: ${{ env.DRY_RUN }}
+          days-before-issue-stale: -1
+          days-before-issue-close: -1
+          days-before-pr-stale: 30
+          days-before-pr-close: 14
+          exempt-pr-labels: keep-open,pr:incomplete
+          exempt-draft-pr: true
+          stale-pr-label: stale
+          stale-pr-message: >-
+            This PR has had no activity for 30 days. It will be closed in 14 days unless it is
+            updated or labeled `keep-open`.
+          close-pr-message: >-
+            Closing after 44 days without activity. Feel free to reopen when you pick it up again.
+          operations-per-run: 200

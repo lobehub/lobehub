@@ -1,10 +1,14 @@
+import type { AgentRunLlmExecutor } from '@lobechat/agent-runtime';
 import type { BotPlatformContext } from '@lobechat/context-engine';
 import type {
+  AgentSenderMetadata,
   BotSenderMetadata,
   ChatTopicBotContext,
   ExecAgentParams,
   ExternalOriginMetadata,
   LobeAgentChatConfig,
+  LobeAgentConfig,
+  MessageMetadata,
   RuntimeMentionedAgent,
   UserInterventionConfig,
   WorkingDirConfig,
@@ -37,8 +41,19 @@ export interface ExecRunContext {
   appContext?: InternalExecAgentParams['appContext'];
   /** Persisted assistant placeholder row id (spinner anchor / error sink). */
   assistantMessageId: string;
+  /**
+   * Channel facts of a bot-originated run. Ambient like the agent config: the
+   * operation keeps them on `principal.actor.bot` / `world.channel`, so a stage
+   * that re-runs later reads them back from there rather than from the turn's
+   * request.
+   */
+  botContext?: InternalExecAgentParams['botContext'];
+  botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   canUseDevice: boolean;
   deviceAccessReason: DeviceAccessReason;
+  /** Tri-state disabled plugin identifiers; mirrored on `world.disabledPluginIds`. */
+  disabledPluginIds: string[];
+  discordContext?: InternalExecAgentParams['discordContext'];
   /** Effective model for this run (topic-pinned model already applied). */
   model: string;
   parentMessageId?: string;
@@ -67,6 +82,13 @@ export interface ExecRunContext {
   trigger?: string;
   /** User turn row id; undefined when the run starts from history (resume). */
   userMessageId?: string;
+  /**
+   * Metadata the user turn row was persisted with (attached content, steer,
+   * trigger, …); undefined when no row was created. Stages read attached content
+   * from here rather than from request fields, so a field persisted on the row
+   * is also the field the run sees.
+   */
+  userMessageMetadata?: MessageMetadata;
 }
 
 /**
@@ -75,6 +97,12 @@ export interface ExecRunContext {
  */
 export interface InternalExecAgentParams extends ExecAgentParams {
   /**
+   * The calling client renders `file` Works in pushed snapshots, derived from
+   * the `streamFeatures` it declared on `aiAgent.execAgent`. See
+   * `OperationCreationParams.acceptsFileWorks`.
+   */
+  acceptsFileWorks?: boolean;
+  /**
    * The calling client handles `member_runtime_end`, derived from the
    * `streamFeatures` it declared on `aiAgent.execAgent`. See
    * `OperationCreationParams.acceptsMemberRuntimeEnd`.
@@ -82,6 +110,15 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   acceptsMemberRuntimeEnd?: boolean;
   /** Additional plugin IDs to inject (e.g., task tool during task execution) */
   additionalPluginIds?: string[];
+  /** Trusted settings frozen by a durable dispatcher, never accepted from a client. */
+  agentConfigSnapshot?: LobeAgentConfig;
+  /**
+   * The sending agent of an agent → agent turn, already resolved from its
+   * `sourceOperationId` by the server. Set by a queued follow-up, whose sender
+   * was resolved when it was queued: by the time it starts, the sending run may
+   * have settled and could no longer vouch for it. Never client-passable.
+   */
+  agentSender?: AgentSenderMetadata;
   /**
    * Server-authored generic intervention claim id. When present, the message
    * claim stores this exact id so a retry after dispatch-but-before-publish can
@@ -169,6 +206,8 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   functionTools?: Array<{ description?: string; name: string; parameters?: Record<string, any> }>;
   /** External lifecycle hooks (auto-adapt to local/production mode) */
   hooks?: AgentHook[];
+  /** Initial LLM-call count offset for resumed operations (accumulated from previous runs) */
+  initialLlmCalls?: number;
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
   /**
@@ -179,6 +218,11 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * and a refusal here destroys the message before it is ever persisted.
    */
   interactiveStart?: boolean;
+  /**
+   * The client's relay executor. Server callers may also set the channel it
+   * relays on (`channelOperationId`), which a client never can.
+   */
+  llmExecutor?: AgentRunLlmExecutor;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /**
@@ -193,8 +237,24 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   onOperationCreated?: (operationId: string) => Promise<void>;
   /** Parent message ID to continue from. Only takes effect when resume is true */
   parentMessageId?: string;
+  /**
+   * A server-started turn that takes over where a finished run left off (the
+   * server-side drain of queued follow-ups). Non-interactive thread starts
+   * must hold the thread-start fence and find no other live run — see
+   * `startOnThread`. Unlike `steer`, it never marks the user message.
+   */
+  queuedSuccessor?: boolean;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /**
+   * The run must take place on the requested `deviceId`: refuse it, before
+   * anything is written, when the agent's effective execution target would drop
+   * that device (a workspace agent fixed to another target). Without it the
+   * device is a preference the target policy may override.
+   */
+  requireDevice?: boolean;
+  /** An idle operation reserved by the dispatcher for this exact Agent, topic and requester. */
+  reservedOperationId?: string;
   /** Whether to continue execution from an existing persisted message */
   resume?: boolean;
   /**
@@ -247,6 +307,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
     toolCallId: string;
   };
   /**
+   * Skill identifiers the user selected for this message. Persisted on the
+   * user message (`metadata.selectedSkillIds`) and, together with the ones
+   * earlier turns of the topic selected, injected with their bodies like a
+   * pinned skill. Never widens what the skill pool already allows.
+   */
+  selectedSkillIds?: string[];
+  /**
    * Tool identifiers the user @-mentioned in this message. Merged into the
    * agent's plugin set for this run (alongside `additionalPluginIds`) so a
    * mentioned tool that isn't pinned to the agent — e.g. a custom MCP connector
@@ -263,9 +330,10 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
-   * The prompt was queued while the previous turn was still running. The user
-   * message is persisted with `metadata.steer` so it renders as a continuation
-   * of that turn.
+   * The send directly steered the turn it replaces: an interrupting "send
+   * now", not a follow-up that waited in queue and started as the next turn.
+   * The user message is persisted with `metadata.steer` so it renders as a
+   * continuation of the steered turn.
    */
   steer?: boolean;
   /**

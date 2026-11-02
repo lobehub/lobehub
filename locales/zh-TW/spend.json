@@ -19,6 +19,7 @@
   "table.columns.trigger.enums.agent_share": "代理分享",
   "table.columns.trigger.enums.agent_signal": "代理信號",
   "table.columns.trigger.enums.api": "API 呼叫",
+  "table.columns.trigger.enums.asr": "語音轉錄",
   "table.columns.trigger.enums.bot": "機器人訊息",
   "table.columns.trigger.enums.builder_suggestion": "建構者建議",
   "table.columns.trigger.enums.chat": "聊天訊息",

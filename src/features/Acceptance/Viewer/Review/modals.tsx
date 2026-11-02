@@ -1,15 +1,16 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
   type ModalInstance,
   Text,
   TextArea,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,7 @@ import {
   AttachmentUploadButton,
   useFeedbackAttachments,
 } from '../Evidence/attachments';
+import RejectFeedbackPreview from './RejectFeedbackPreview';
 
 const styles = createStaticStyles(({ css }) => ({
   warning: css`
@@ -104,6 +106,9 @@ export const openAcceptModal = (options: AcceptContentProps): ModalInstance =>
   });
 
 interface RejectContentProps {
+  /** Previews the open feedback the repair agent reads alongside the reason, so
+      the reviewer knows whose comments and screenshots ride along. */
+  acceptanceId: string;
   /** The rounds name an authoring agent — the server sends the reject back to
       it. Without one the dialog promises no next round: it copies the prompt. */
   dispatchAvailable: boolean;
@@ -111,7 +116,7 @@ interface RejectContentProps {
   onConfirm: (comment: string) => Promise<boolean>;
 }
 
-const RejectContent = memo<RejectContentProps>(({ dispatchAvailable, onConfirm }) => {
+const RejectContent = memo<RejectContentProps>(({ acceptanceId, dispatchAvailable, onConfirm }) => {
   const { t: translate } = useTranslation('verify');
   const { close } = useModalContext();
   const [comment, setComment] = useState('');
@@ -129,6 +134,9 @@ const RejectContent = memo<RejectContentProps>(({ dispatchAvailable, onConfirm }
 
   return (
     <Flexbox gap={16}>
+      {/* What the repair prompt carries besides the reason leads the dialog —
+            otherwise nobody can tell whether teammates' notes go along. */}
+      <RejectFeedbackPreview acceptanceId={acceptanceId} />
       <Text fontSize={13} type={'secondary'}>
         {translate(
           dispatchAvailable ? 'acceptance.reject.description' : 'acceptance.reject.descriptionCopy',
@@ -166,7 +174,7 @@ export const openRejectModal = (options: RejectContentProps): ModalInstance =>
     maskClosable: true,
     styles: frostedModalStyles,
     title: t('acceptance.actions.reject', { ns: 'verify' }),
-    width: 'min(90vw, 480px)',
+    width: 'min(90vw, 520px)',
   });
 
 interface GroupFeedbackContentProps {

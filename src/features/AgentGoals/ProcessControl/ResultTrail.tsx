@@ -1,18 +1,27 @@
 'use client';
 
-import { Flexbox, Icon, Markdown, Tooltip } from '@lobehub/ui';
-import { Button, Skeleton, Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Markdown,
+  Skeleton,
+  Spin,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import {
   BookOpen,
   ChevronRight,
   ExternalLink,
   FileDown,
   FileText,
-  GitBranch,
   type LucideIcon,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEntityMarkdown } from '@/features/EntityLink';
@@ -38,7 +47,7 @@ import { KIND_COLOR, KIND_ICON } from './shared';
  *
  * Read top-down, one layer at a time: the document above is the answer; each
  * stage here is a piece of the way there with the conclusions it reached and
- * the files it wrote; a conclusion expands into its evidence.
+ * the files it wrote; a conclusion opens its evidence beside the page.
  *
  * Once the wrap-up agent has written the Goal report, the stages are its
  * chapters — titled, narrated, and honest about the detours taken, each of
@@ -51,15 +60,6 @@ const styles = createStaticStyles(({ css }) => ({
   arrow: css`
     flex: none;
     color: ${cssVar.colorTextQuaternary};
-    transition: transform 0.2s;
-  `,
-  arrowOpen: css`
-    transform: rotate(90deg);
-  `,
-  /** Aligned with the item title: tile (32) + gap (12) + row padding (12). */
-  evidence: css`
-    padding-block: 0 12px;
-    padding-inline: 56px 12px;
   `,
   /** One stage's outputs, framed as a single list like the frontier's. */
   list: css`
@@ -147,26 +147,29 @@ const styles = createStaticStyles(({ css }) => ({
   stepMuted: css`
     opacity: 0.55;
   `,
+  /**
+   * Review: the count is a note about the chapter, not a badge — plain gray
+   * text, with no tinted fill or pill around it, so it never competes with the
+   * chapter title it sits beside.
+   */
   detour: css`
     cursor: pointer;
 
     display: inline-flex;
     flex: none;
-    gap: 4px;
     align-items: center;
 
-    padding-block: 2px;
-    padding-inline: 8px;
-    border: 1px dashed ${cssVar.colorWarningBorder};
-    border-radius: 999px;
+    /* Reset the native button chrome — the hint is text, not a control. */
+    padding: 0;
+    border: none;
 
     font-size: 12px;
-    color: ${cssVar.colorWarningText};
+    color: ${cssVar.colorTextSecondary};
 
-    background: ${cssVar.colorWarningBg};
+    background: none;
 
     &:hover {
-      border-style: solid;
+      color: ${cssVar.colorText};
     }
 
     &:focus-visible {
@@ -251,46 +254,32 @@ const TrailItem = ({
   </Flexbox>
 );
 
-const TrailFinding = ({ view }: { view: GoalNodeView }) => {
+/**
+ * A conclusion opens beside the page, like every other drill-down here: read
+ * inline, a long finding pushed the rest of the trail off screen and left the
+ * reader scrolling back to find the stage it belonged to.
+ */
+const TrailFinding = ({
+  onOpen,
+  view,
+}: {
+  onOpen: (nodeId: string) => void;
+  view: GoalNodeView;
+}) => {
   const { t } = useTranslation('chat');
-  const [open, setOpen] = useState(false);
-  const markdownProps = useEntityMarkdown();
-  const description = view.node.description;
-  const summary = summaryOf(description);
+  const summary = summaryOf(view.node.description);
 
   return (
-    <div>
-      <TrailItem
-        icon={KIND_ICON.finding}
-        title={view.node.title}
-        tone={KIND_COLOR.finding}
-        // Expanded, the evidence below already says what the summary said.
-        subtitle={
-          open
-            ? undefined
-            : summary
-              ? `${t('goalProcess.kind.finding')} · ${summary}`
-              : t('goalProcess.kind.finding')
-        }
-        trailing={
-          description ? (
-            <Icon
-              className={cx(styles.arrow, open && styles.arrowOpen)}
-              icon={ChevronRight}
-              size={14}
-            />
-          ) : undefined
-        }
-        onClick={description ? () => setOpen(!open) : undefined}
-      />
-      {open && description && (
-        <div className={styles.evidence}>
-          <Markdown fontSize={13} variant={'chat'} {...markdownProps}>
-            {description}
-          </Markdown>
-        </div>
-      )}
-    </div>
+    <TrailItem
+      icon={KIND_ICON.finding}
+      title={view.node.title}
+      tone={KIND_COLOR.finding}
+      trailing={<Icon className={styles.arrow} icon={ChevronRight} size={14} />}
+      subtitle={
+        summary ? `${t('goalProcess.kind.finding')} · ${summary}` : t('goalProcess.kind.finding')
+      }
+      onClick={() => onOpen(view.node.id)}
+    />
   );
 };
 
@@ -429,7 +418,7 @@ const TrailStep = ({
     >
       <div className={styles.list}>
         {step.findings.map((finding) => (
-          <TrailFinding key={finding.node.id} view={finding} />
+          <TrailFinding key={finding.node.id} view={finding} onOpen={onSelect} />
         ))}
         {step.artifacts.map((artifact) => (
           <TrailArtifact
@@ -471,7 +460,6 @@ const DetourHint = ({
       }
     >
       <button className={styles.detour} type={'button'} onClick={onOpen}>
-        <Icon icon={GitBranch} size={12} />
         {t('goalProcess.result.story.detours', { count })}
       </button>
     </Tooltip>
@@ -483,12 +471,14 @@ const StoryChapter = ({
   goalId,
   last,
   onOpenArtifact,
+  onSelect,
   view,
 }: {
   documentId?: string;
   goalId: string;
   last: boolean;
   onOpenArtifact: (artifact: GoalArtifactView) => void;
+  onSelect: (nodeId: string) => void;
   view: StoryChapterView;
 }) => {
   const openChapter = useChatStore((s) => s.openGoalReportChapter);
@@ -517,7 +507,7 @@ const StoryChapter = ({
       {hasItems && (
         <div className={styles.list}>
           {view.findings.map((finding) => (
-            <TrailFinding key={finding.node.id} view={finding} />
+            <TrailFinding key={finding.node.id} view={finding} onOpen={onSelect} />
           ))}
           {view.artifacts.map((artifact) => (
             <TrailArtifact
@@ -622,6 +612,7 @@ const ResultTrail = ({ documentId, graph, onSelect }: ResultTrailProps) => {
               last={index === chapters.length - 1}
               view={chapter}
               onOpenArtifact={openArtifact}
+              onSelect={onSelect}
             />
           ))}
         </Flexbox>

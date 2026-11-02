@@ -410,4 +410,62 @@ describe('frozen model facts', () => {
     expect(other.capabilities.isCanUseFC('plain', 'openai')).toBe(true);
     expect(other.capabilities.isCanUseVision('plain', 'openai')).toBe(false);
   });
+
+  it('merges the user deployment alias over the bundled card when freezing', async () => {
+    // Codex P1 (4256356269): a user-configured alias must win over the bundled
+    // card, otherwise deployment-catalog providers inject the catalog default
+    // and 404 wherever only the user's endpoint exists.
+    const live = liveProviders();
+    live.getUserModelRow.mockResolvedValue({ deploymentName: 'prod-endpoint' });
+
+    const facts = await readFrozenModelFacts(
+      request({ model: 'deepseek-v4-pro', provider: 'deepseek' }),
+      live,
+    );
+    const frozenCard = facts.cards.find((card) => card.providerId === 'deepseek');
+    expect(frozenCard?.deploymentName).toBe('prod-endpoint');
+    // The bundled card is preserved apart from the alias.
+    expect(frozenCard).toMatchObject({ displayName: 'DeepSeek V4 Pro', id: 'deepseek-v4-pro' });
+    // And the transport's lookup answers from the snapshot as stored.
+    expect(
+      facts.cards.find(
+        (card) =>
+          card.providerId === 'deepseek' &&
+          (card.id === 'deepseek-v4-pro' || card.deploymentName === 'deepseek-v4-pro'),
+      )?.deploymentName,
+    ).toBe('prod-endpoint');
+  });
+
+  it('freezes a minimal deployment card for a custom model the bank has no card for', async () => {
+    const live = liveProviders();
+    live.getUserModelRow.mockResolvedValue({ deploymentName: 'prod-endpoint' });
+
+    // No bundled card under volcengine: the user row alone still names the
+    // deployment the transport must inject.
+    const facts = await readFrozenModelFacts(
+      request({ model: 'deepseek-v4-pro', provider: 'volcengine' }),
+      live,
+    );
+    expect(facts.cards[0]).toEqual({
+      deploymentName: 'prod-endpoint',
+      id: 'deepseek-v4-pro',
+      providerId: 'volcengine',
+    });
+    // The canonical card of the same id elsewhere is frozen untouched.
+    expect(facts.cards.slice(1)).not.toContainEqual(
+      expect.objectContaining({ providerId: 'volcengine' }),
+    );
+  });
+
+  it('keeps the bundled deployment name when the user row has none', async () => {
+    const live = liveProviders();
+    live.getUserModelRow.mockResolvedValue({ displayName: 'My model' });
+
+    const facts = await readFrozenModelFacts(
+      request({ model: 'deepseek-v4-pro', provider: 'deepseek' }),
+      live,
+    );
+    const frozenCard = facts.cards.find((card) => card.providerId === 'deepseek');
+    expect(frozenCard?.deploymentName).toBeUndefined();
+  });
 });

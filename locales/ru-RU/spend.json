@@ -19,6 +19,7 @@
   "table.columns.trigger.enums.agent_share": "Доля агента",
   "table.columns.trigger.enums.agent_signal": "Сигнал агента",
   "table.columns.trigger.enums.api": "Вызов API",
+  "table.columns.trigger.enums.asr": "Распознавание речи",
   "table.columns.trigger.enums.bot": "Сообщение бота",
   "table.columns.trigger.enums.builder_suggestion": "Предложения для Создателя",
   "table.columns.trigger.enums.chat": "Сообщение чата",

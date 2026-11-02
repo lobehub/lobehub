@@ -1,10 +1,10 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { Button, Input, TextArea } from '@lobehub/ui/base-ui';
+import { Button, Input, TextArea } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
-import { Form } from 'antd';
-import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,14 +12,9 @@ import { usePermission } from '@/hooks/usePermission';
 
 import { type CredsApi } from '../useCredsApi';
 
-const styles = createStaticStyles(({ css }) => ({
-  footer: css`
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-block-start: 24px;
-  `,
-}));
+const styles = stylex.create({
+  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
+});
 
 interface EditMetaFormProps {
   cred: UserCredSummary;
@@ -36,7 +31,13 @@ interface FormValues {
 const EditMetaForm: FC<EditMetaFormProps> = ({ cred, credsApi, onCancel, onSuccess }) => {
   const { t } = useTranslation('setting');
   const { allowed: canManageCredentials } = usePermission('manage_provider_key');
-  const [form] = Form.useForm<FormValues>();
+  const form = useForm<FormValues>({
+    initialValues: {
+      description: cred.description,
+      name: cred.name,
+    },
+    onSubmit: (values) => handleSubmit(values),
+  });
 
   const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {
@@ -60,32 +61,20 @@ const EditMetaForm: FC<EditMetaFormProps> = ({ cred, credsApi, onCancel, onSucce
   };
 
   return (
-    <Form<FormValues>
-      form={form}
-      layout="vertical"
-      initialValues={{
-        description: cred.description,
-        name: cred.name,
-      }}
-      onFinish={handleSubmit}
-    >
-      <Form.Item
-        label={t('creds.form.name')}
-        name="name"
-        rules={[{ required: true, message: t('creds.form.nameRequired') }]}
-      >
+    <Form form={form} layout="vertical">
+      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
         <Input disabled={!canManageCredentials} />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('creds.form.description')} name="description">
+      <Form.Field label={t('creds.form.description')} name="description">
         <TextArea
           disabled={!canManageCredentials}
           placeholder={t('creds.form.descriptionPlaceholder')}
           rows={2}
         />
-      </Form.Item>
+      </Form.Field>
 
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
         <Button
           disabled={!canManageCredentials}

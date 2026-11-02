@@ -1,9 +1,17 @@
-import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
+import type {
+  LlmCancelData,
+  LlmExecuteData,
+  ToolExecuteData,
+} from '@lobechat/agent-gateway-client';
 import { type AgentState } from '@lobechat/agent-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 
 import { type AgentOperationMetadata, type StepResult } from './AgentStateManager';
-import { type StreamChunkData, type StreamEvent } from './StreamEventManager';
+import {
+  type StreamChunkData,
+  type StreamEvent,
+  type StreamHistoryPage,
+} from './StreamEventManager';
 
 export interface PublishAgentRuntimeEndParams {
   finalState: any;
@@ -176,11 +184,24 @@ export interface IAgentStateManager {
  * Stream Event Manager Interface
  * Abstract interface for stream event publishing, supports Redis and in-memory implementations
  */
+export interface LlmExecuteDispatchResult {
+  /** Clients the gateway reached right away; a late subscriber still gets it from replay. */
+  delivered?: number;
+  /** False when the gateway lacks the relay routes and the event was broadcast instead. */
+  routed: boolean;
+}
+
 export interface IStreamEventManager {
   /**
    * Clean up stream data for operation
    */
   cleanupOperation: (operationId: string) => Promise<void>;
+
+  /** Optional: the relayed attempt is over; the gateway stops replaying it. */
+  closeLlmCall?: (operationId: string, callId: string) => Promise<void>;
+
+  /** Optional: end a one-shot relay channel's gateway session. */
+  closeLlmRelayChannel?: (channel: string) => Promise<void>;
 
   /**
    * Close connections
@@ -203,6 +224,18 @@ export interface IStreamEventManager {
    * Get stream event history
    */
   getStreamHistory: (operationId: string, count?: number) => Promise<StreamEvent[]>;
+
+  getStreamHistoryPage: (
+    operationId: string,
+    cursor?: string,
+    limit?: number,
+  ) => Promise<StreamHistoryPage>;
+
+  /**
+   * Optional: open a one-shot relay channel on the gateway, owned by `userId`.
+   * Present only with a gateway, like {@link sendLlmExecute}.
+   */
+  openLlmRelayChannel?: (channel: string, userId: string) => Promise<void>;
 
   /**
    * Publish Agent runtime end event.
@@ -253,6 +286,19 @@ export interface IStreamEventManager {
     lastEventId?: string,
     blockMs?: number,
   ) => Promise<{ events: StreamEvent[]; lastEventId: string }>;
+
+  /** Optional: stop a relayed LLM attempt on every client (`llm_cancel`). */
+  sendLlmCancel?: (
+    operationId: string,
+    data: LlmCancelData & { stepIndex: number },
+  ) => Promise<void>;
+
+  /**
+   * Optional: hand a relayed LLM attempt (`llm_execute`) to the user's device
+   * through the Agent Gateway, routed to the client that started the run.
+   * Absent on managers without a gateway; callers publish a stream event then.
+   */
+  sendLlmExecute?: (operationId: string, data: LlmExecuteData) => Promise<LlmExecuteDispatchResult>;
 
   /**
    * Optional: dispatch a tool execution request to the client via Agent Gateway.

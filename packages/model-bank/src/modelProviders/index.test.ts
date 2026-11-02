@@ -5,6 +5,7 @@ import {
   DEFAULT_MODEL_PROVIDER_LIST,
   getProviderDisplayName,
   isProviderDisableBrowserRequest,
+  isProviderFetchOnClient,
   isProviderOAuthDeviceFlow,
 } from './index';
 
@@ -61,5 +62,29 @@ describe('model provider predicates', () => {
     expect(isProviderOAuthDeviceFlow('enabled-provider')).toBe(false);
     expect(isProviderOAuthDeviceFlow('not-exists')).toBe(false);
     expect(isProviderOAuthDeviceFlow()).toBe(false);
+  });
+});
+
+describe('isProviderFetchOnClient', () => {
+  it('runs a local provider on the device unless fetchOnClient says otherwise', () => {
+    expect(isProviderFetchOnClient('lmstudio', undefined)).toBe(true);
+    expect(isProviderFetchOnClient('ollama', { keyVaults: {} })).toBe(true);
+    expect(isProviderFetchOnClient('lmstudio', { fetchOnClient: false })).toBe(false);
+  });
+
+  it('runs on the server without an endpoint or a key', () => {
+    expect(isProviderFetchOnClient('openai', { fetchOnClient: true, keyVaults: {} })).toBe(false);
+  });
+
+  it('runs on the device when only a base URL is set', () => {
+    expect(
+      isProviderFetchOnClient('openai', { keyVaults: { baseURL: 'http://localhost:8000/v1' } }),
+    ).toBe(true);
+  });
+
+  it('follows fetchOnClient with both a base URL and a key, default server', () => {
+    const keyVaults = { apiKey: 'sk', baseURL: 'http://localhost:8000/v1' };
+    expect(isProviderFetchOnClient('openai', { fetchOnClient: true, keyVaults })).toBe(true);
+    expect(isProviderFetchOnClient('openai', { keyVaults })).toBe(false);
   });
 });

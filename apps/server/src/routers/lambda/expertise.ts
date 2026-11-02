@@ -1,4 +1,4 @@
-import { EXPERTISE_ENFORCEMENTS } from '@lobechat/types';
+import { EXPERTISE_ENFORCEMENTS, EXPERTISE_RULE_DIRECTIONS } from '@lobechat/types';
 import { z } from 'zod';
 
 import {
@@ -10,12 +10,20 @@ import { ExpertiseRuleRepository } from '@/database/repositories/expertiseRules'
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
+  DistillRulesInputSchema,
+  ExpertiseRuleDistillService,
+} from '@/server/services/expertise/distill';
+import {
   DomainDraftSchema,
   EditableDomainDraftSchema,
   ExpertiseDomainService,
 } from '@/server/services/expertise/domain';
 import { ExpertiseIngestionService } from '@/server/services/expertise/ingestion';
-import { DraftRuleInputSchema, ExpertiseRuleDraftService } from '@/server/services/expertise/rules';
+import {
+  DraftRuleInputSchema,
+  ExpertiseRuleDraftService,
+  RULE_DIRECTION_BATCH,
+} from '@/server/services/expertise/rules';
 import { ExpertiseHistoryWorkflow } from '@/server/workflows/expertiseHistory';
 
 /**
@@ -39,6 +47,11 @@ const expertiseProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts
         ctx.workspaceId ?? undefined,
       ),
       expertiseRuleRepository: new ExpertiseRuleRepository(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ),
+      expertiseRuleDistillService: new ExpertiseRuleDistillService(
         ctx.serverDB,
         ctx.userId,
         ctx.workspaceId ?? undefined,
@@ -266,10 +279,73 @@ export const expertiseRouter = router({
     .input(DraftRuleInputSchema)
     .mutation(async ({ ctx, input }) => ctx.expertiseRuleDraftService.draftRule(input)),
 
+  /**
+   * Settles which way the named unjudged rules push the work, one bounded batch per call. The
+   * page names the batch from the list it read; a rule the reviewer already set is never
+   * overwritten.
+   */
+  judgeRuleDirections: expertiseWriteProcedure
+    .input(z.object({ lessonIds: z.array(z.string()).min(1).max(RULE_DIRECTION_BATCH) }))
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseRuleDraftService.judgeDirections(input.lessonIds),
+    ),
+
   /** Drafts a group (name + gate question) from a sentence; `createRuleGroup` persists it. */
   draftRuleGroup: expertiseWriteProcedure
     .input(z.object({ brief: z.string().min(1).max(20_000) }))
     .mutation(async ({ ctx, input }) => ctx.expertiseRuleDraftService.draftRuleGroup(input)),
+
+  /**
+   * Reads a material the reviewer brought — pasted text, a file, a document or a conversation —
+   * and proposes every rule it states. Nothing is written: the reviewer ticks what to keep.
+   */
+  distillRules: expertiseWriteProcedure
+    .input(DistillRulesInputSchema)
+    .mutation(async ({ ctx, input }) => ctx.expertiseRuleDistillService.distillRules(input)),
+
+  /** Files the candidates the reviewer kept from one material, each pinned to its passage. */
+  commitDistilledRules: expertiseWriteProcedure
+    .input(
+      z.object({
+        items: z
+          .array(
+            z.discriminatedUnion('kind', [
+              z.object({
+                domainId: z.string().optional(),
+                kind: z.literal('create'),
+                newGroup: z
+                  .object({ gate: z.string().min(1).max(1000), title: z.string().min(1).max(200) })
+                  .optional(),
+                quote: z.string().max(2000),
+                rule: z.object({
+                  // `compiled` is only true once the compiler links a criterion.
+                  compilability: z.enum(['compilable', 'not-compilable']).optional(),
+                  enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
+                  how: z.string().max(8000).optional(),
+                  limits: z.string().max(4000).optional(),
+                  title: z.string().min(1).max(500),
+                  why: z.string().max(4000).optional(),
+                }),
+              }),
+              z.object({
+                intoId: z.string(),
+                kind: z.literal('merge'),
+                quote: z.string().max(2000),
+              }),
+            ]),
+          )
+          .max(50),
+        material: z.object({
+          subjectId: z.string().nullable(),
+          subjectType: z.enum(['document', 'standalone', 'topic']),
+          title: z.string().max(500),
+          type: z.enum(['document', 'file', 'text', 'topic']),
+        }),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      ctx.expertiseRuleRepository.commitDistilled(input.material, input.items),
+    ),
 
   /** A rule the reviewer writes down by hand. */
   createRule: expertiseWriteProcedure
@@ -278,6 +354,7 @@ export const expertiseRouter = router({
         // `compiled` is only true once the compiler links a criterion; nobody can claim it by hand.
         compilability: z.enum(['compilable', 'not-compilable']).optional(),
         domainId: z.string(),
+        direction: z.enum(EXPERTISE_RULE_DIRECTIONS).optional(),
         enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
         how: z.string().max(8000).optional(),
         limits: z.string().max(4000).optional(),
@@ -293,6 +370,7 @@ export const expertiseRouter = router({
       z.object({
         // `compiled` is only true once the compiler links a criterion; nobody can claim it by hand.
         compilability: z.enum(['compilable', 'not-compilable']).optional(),
+        direction: z.enum(EXPERTISE_RULE_DIRECTIONS).optional(),
         enforcement: z.enum(EXPERTISE_ENFORCEMENTS).optional(),
         lessonId: z.string(),
         reasonKind: z.enum(['mechanism', 'taste']).optional(),

@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, type SQL } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { notTrashed } from './softDelete';
@@ -21,7 +21,10 @@ export const TRASH_AWARE_TABLES: ReadonlySet<string> = new Set([
   'agent_cron_jobs',
   'agent_skills',
   'agents',
+  'channel_threads',
+  'channels',
   'chat_groups',
+  'dashboards',
   'documents',
   'files',
   'generation_batches',
@@ -37,6 +40,7 @@ export const TRASH_AWARE_TABLES: ReadonlySet<string> = new Set([
   'threads',
   'topics',
   'user_memories',
+  'widgets',
   'works',
 ]);
 
@@ -117,19 +121,39 @@ export function buildWorkspaceWhere(
   return and(base, notTrashed(cols.isDeleted)) as SQL;
 }
 
+/**
+ * The workspace scope a write may carry: a real workspace id, or `null` for
+ * personal data.
+ *
+ * An empty string is not a workspace. It shows up whenever a scope gets
+ * "resolved" into a placeholder — an empty `X-Workspace-Id`, an env var that is
+ * present but blank, a `?? ''` on the way through a caller — and every such
+ * value lands in `workspace_id`, where the foreign key to `workspaces` rejects
+ * it and takes the whole statement down with it. Collapse it (and
+ * whitespace-only values) here, so no producer can persist a scope that cannot
+ * exist.
+ */
+export const normalizeWorkspaceId = (value?: string | null): string | null => {
+  const trimmed = value?.trim();
+
+  return trimmed || null;
+};
+
 function buildScopeWhere(
   ctx: {
     callerAgentVisibility?: 'private' | 'public' | null;
     userId: string;
-    workspaceId?: string;
+    workspaceId?: string | null;
   },
   cols: { userId: AnyPgColumn; visibility?: AnyPgColumn; workspaceId: AnyPgColumn },
 ): SQL {
-  if (!ctx.workspaceId) {
+  const workspaceId = normalizeWorkspaceId(ctx.workspaceId);
+
+  if (!workspaceId) {
     return and(eq(cols.userId, ctx.userId), isNull(cols.workspaceId)) as SQL;
   }
 
-  const workspaceMatch = eq(cols.workspaceId, ctx.workspaceId);
+  const workspaceMatch = eq(cols.workspaceId, workspaceId);
   if (!cols.visibility) return workspaceMatch;
 
   // Public agent gate: drop the "creator's own private rows" branch so a
@@ -142,11 +166,12 @@ function buildScopeWhere(
 
   // Workspace + visibility-aware mode: every member sees public rows; private
   // rows are scoped to their creator. NULL visibility is treated as public for
-  // backwards compatibility with rows that pre-date the column.
+  // backwards compatibility with rows that pre-date the column. `owner` (an
+  // acceptance or verify run kept to its creator) is creator-scoped too.
   const visibilityFilter = or(
     isNull(cols.visibility),
     eq(cols.visibility, 'public'),
-    and(eq(cols.visibility, 'private'), eq(cols.userId, ctx.userId)),
+    and(inArray(cols.visibility, ['private', 'owner']), eq(cols.userId, ctx.userId)),
   ) as SQL;
 
   return and(workspaceMatch, visibilityFilter) as SQL;
@@ -156,7 +181,9 @@ function buildScopeWhere(
  * Companion to `buildWorkspaceWhere` for INSERT payloads.
  *
  * Always sets `userId` (the creator) and `workspaceId` (nullable). Personal-mode
- * writes get `workspaceId: null`; team-mode writes get the workspace id.
+ * writes get `workspaceId: null`; team-mode writes get the workspace id. A
+ * blank scope is treated as personal rather than written through — see
+ * {@link normalizeWorkspaceId}.
  *
  * @example
  * ```ts
@@ -169,12 +196,12 @@ function buildScopeWhere(
  * ```
  */
 export function buildWorkspacePayload<T extends object>(
-  ctx: { userId: string; workspaceId?: string },
+  ctx: { userId: string; workspaceId?: string | null },
   base: T,
 ): T & { userId: string; workspaceId: string | null } {
   return {
     ...base,
     userId: ctx.userId,
-    workspaceId: ctx.workspaceId ?? null,
+    workspaceId: normalizeWorkspaceId(ctx.workspaceId),
   };
 }

@@ -22,7 +22,7 @@ export const isRedisAvailable = (): boolean => {
 
 /**
  * Check if queue-based agent runtime is enabled
- * When disabled (default), use InMemory implementations for local/simple deployments
+ * Controls execution scheduling independently of the state/stream storage backend
  */
 const isQueueModeEnabled = (): boolean => {
   return appEnv.enableQueueAgentRuntime === true;
@@ -32,20 +32,19 @@ const isQueueModeEnabled = (): boolean => {
  * Create AgentStateManager based on configuration
  */
 export const createAgentStateManager = (): IAgentStateManager => {
-  // When queue mode is disabled, always use InMemory for simplicity
+  // Share state and interrupt sentinels across web/worker replicas even when
+  // execution stays inline. Storage selection must match the shared stream bus.
+  if (isRedisAvailable()) {
+    log('Redis available, using AgentStateManager');
+    return new AgentStateManager();
+  }
+
   if (!isQueueModeEnabled()) {
-    log('Queue mode disabled, using InMemoryAgentStateManager');
+    log('Redis unavailable and queue mode disabled, using InMemoryAgentStateManager');
     return inMemoryAgentStateManager;
   }
 
-  // Queue mode enabled, Redis is required
-  if (!isRedisAvailable()) {
-    throw new Error(
-      'Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.',
-    );
-  }
-
-  return new AgentStateManager();
+  throw new Error('Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.');
 };
 
 /**
@@ -54,25 +53,44 @@ export const createAgentStateManager = (): IAgentStateManager => {
  * - If Redis is available: RedisStreamEventManager
  * - If Redis is unavailable and enableQueueAgentRuntime=false (default): InMemoryStreamEventManager
  * - If Redis is unavailable and enableQueueAgentRuntime=true: throw
+ *
+ * Pass `inner` to supply the manager yourself — the gateway notifier still wraps
+ * it, so the gateway keeps seeing the events while the caller keeps whatever
+ * delivery it chose (see `CreateStreamEventManagerOptions.inner`).
  */
-export const createStreamEventManager = (
-  options?: GatewayStreamNotifierOptions,
-): IStreamEventManager => {
-  let manager: IStreamEventManager;
+export interface CreateStreamEventManagerOptions extends GatewayStreamNotifierOptions {
+  /**
+   * The manager events are published to and read back from, instead of the
+   * config-driven default. For a caller that owns a per-invocation subscription:
+   * the streaming Responses route consumes the run's events from the same
+   * process that produces them, so it passes a private in-memory manager rather
+   * than taking a second Redis subscriber's connection per request — while the
+   * wrapping notifier still carries every event to the gateway.
+   */
+  inner?: IStreamEventManager;
+}
 
+const createDefaultStreamEventManager = (): IStreamEventManager => {
   // Prefer Redis whenever it is available so the runtime worker and SSE route
   // can communicate through the same stream bus even in local mode.
   if (isRedisAvailable()) {
     log('Redis available, using StreamEventManager');
-    manager = new StreamEventManager();
-  } else if (!isQueueModeEnabled()) {
-    log('Redis unavailable and queue mode disabled, using InMemoryStreamEventManager');
-    manager = inMemoryStreamEventManager;
-  } else {
-    throw new Error(
-      'Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.',
-    );
+    return new StreamEventManager();
   }
+
+  if (!isQueueModeEnabled()) {
+    log('Redis unavailable and queue mode disabled, using InMemoryStreamEventManager');
+    return inMemoryStreamEventManager;
+  }
+
+  throw new Error('Redis is required when AGENT_RUNTIME_MODE=queue. Please configure `REDIS_URL`.');
+};
+
+export const createStreamEventManager = (
+  options?: CreateStreamEventManagerOptions,
+): IStreamEventManager => {
+  const { inner, ...notifierOptions } = options ?? {};
+  const manager = inner ?? createDefaultStreamEventManager();
 
   // Wrap with Gateway notifier when configured. Server pushes prefer the internal
   // URL: the public one is what browsers open, which a container may not reach.
@@ -82,7 +100,7 @@ export const createStreamEventManager = (
     // Resolver lets a queue worker (which never ran the member op's init) mirror
     // its stream events onto the supervisor channel by reading the persisted
     // `mirrorToOperationId` from op metadata. Shares the same state manager
-    // backing the runtime (in-memory singleton locally, Redis in queue mode).
+    // backing the runtime (Redis when configured, otherwise the in-memory singleton).
     const stateManager = createAgentStateManager();
     return new GatewayStreamNotifier(
       manager,
@@ -102,7 +120,7 @@ export const createStreamEventManager = (
         return meta.visitorRedaction ?? FULL_STRIP_REDACTION;
       },
       {
-        ...options,
+        ...notifierOptions,
         // Same again for the supervisor's `member_runtime_end` declaration: the
         // worker mirroring a member's terminal may never have seen its init.
         resolveAcceptsMemberRuntimeEnd: async (operationId) => {

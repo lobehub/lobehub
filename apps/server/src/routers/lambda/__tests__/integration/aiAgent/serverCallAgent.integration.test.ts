@@ -63,9 +63,6 @@ const createCallAgentResponse = () => {
     arguments: JSON.stringify({
       agentId: targetAgentId,
       instruction: 'Handle the delegated backend integration task.',
-      runAsTask: true,
-      taskTitle: 'Delegated backend integration task',
-      timeout: 30_000,
     }),
     call_id: callId,
     name: 'lobe-agent-management____callAgent',

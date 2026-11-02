@@ -1,8 +1,9 @@
 import type { ChatContextContent } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { UnreadableServerResponseError } from '@/libs/trpc/client/unreadableServerResponse';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { shareChatService } from '@/services/shareChat';
@@ -24,7 +25,7 @@ const mockAgentMode = ({
   vi.spyOn(agentByIdSelectors, 'isAgentHeterogeneousById').mockReturnValue(() => heterogeneous);
 };
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
@@ -50,7 +51,10 @@ vi.mock('@/services/shareChat', () => ({
 }));
 
 vi.mock('i18next', () => ({
-  t: (key: string, options?: { reason?: string }) => {
+  t: (
+    key: string,
+    options?: { message?: string; reason?: string; requestId?: string; status?: number },
+  ) => {
     if (key === 'upload.permissionDenied') {
       return 'You do not have permission to upload files in this workspace.';
     }
@@ -58,6 +62,12 @@ vi.mock('i18next', () => ({
     if (key === 'upload.uploadFailed') return 'File upload failed.';
 
     if (key === 'upload.unknownError') return `Error reason: ${options?.reason}`;
+
+    if (key === 'upload.serviceUnavailable') return 'The upload service is unavailable.';
+
+    if (key === 'response.withRequestDetail') {
+      return `${options?.message} (HTTP ${options?.status} · Request ID: ${options?.requestId})`;
+    }
 
     return key;
   },
@@ -205,6 +215,40 @@ describe('useFileStore:chat', () => {
     expect(result.current.chatUploadFileList).toEqual([]);
   });
 
+  it('clears only submitted uploads while retaining newer files and their status', () => {
+    const { result } = renderHook(() => useStore());
+    const newerFile = { id: 'new', status: 'uploading' };
+    act(() => {
+      useStore.setState({ chatUploadFileList: [{ id: 'submitted' }, newerFile] as any });
+      result.current.clearChatUploadFileList(['submitted']);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+    act(() => {
+      result.current.clearChatUploadFileList([]);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+  });
+
+  it('restoreChatUploadFileList puts cleared uploads back without duplicating newer drafts', () => {
+    const { result } = renderHook(() => useStore());
+    const submittedFile = { id: 'submitted', status: 'success' };
+    const newerFile = { id: 'new', status: 'uploading' };
+
+    // The composer cleared everything on send; a fresh draft arrived while the
+    // rejected send was still unwinding.
+    act(() => {
+      useStore.setState({ chatUploadFileList: [newerFile] as any });
+      result.current.restoreChatUploadFileList([submittedFile, newerFile] as any);
+    });
+
+    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
+
+    act(() => {
+      result.current.restoreChatUploadFileList([]);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
+  });
+
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {
     // chat mode: agent mode disabled and not a heterogeneous agent
     mockAgentMode({ enableAgentMode: false, heterogeneous: false });
@@ -302,6 +346,36 @@ describe('useFileStore:chat', () => {
         agentId: AGENT_ID,
         error: 'You do not have permission to upload files in this workspace.',
         id: 'test.txt',
+        status: 'error',
+      }),
+    ]);
+  });
+
+  // Regression: a gateway HTML error page answered the upload API and the card
+  // showed `Error reason: Unexpected token '<', "<!doctype "... is not valid JSON`.
+  it('shows the upload-unavailable copy with the request id of an HTML error page', async () => {
+    mockAgentMode({ enableAgentMode: true, heterogeneous: false });
+
+    const { result } = renderHook(() => useStore());
+    const file = new File(['docx'], 'report.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+
+    // tRPC wraps an error thrown by the link's fetch as the client error's cause.
+    vi.spyOn(result.current, 'uploadWithProgress').mockRejectedValue(
+      new Error('wrapped', {
+        cause: new UnreadableServerResponseError({ requestId: 'a4f7-SJC', status: 502 }),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.uploadChatFiles([file], AGENT_ID);
+    });
+
+    expect(result.current.chatUploadFileList).toEqual([
+      expect.objectContaining({
+        error: 'The upload service is unavailable. (HTTP 502 · Request ID: a4f7-SJC)',
+        id: 'report.docx',
         status: 'error',
       }),
     ]);

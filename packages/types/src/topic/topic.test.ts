@@ -162,6 +162,21 @@ describe('chatTopicMetadataUpdateSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('carries the sandbox binding through — a stripped key writes nothing and still answers 200', () => {
+    const metadata = { sandboxInstanceId: 'a2c1d0e4-0000-4000-8000-000000000000' };
+
+    expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
+  });
+
+  it('carries the drive folder through and drops the retired sandbox mode', () => {
+    expect(chatTopicMetadataUpdateSchema.parse({ sandboxWorkingDirectory: 'reports' })).toEqual({
+      sandboxWorkingDirectory: 'reports',
+    });
+    // Choosing a folder is the choice to persist, so a mode written by an old
+    // client is stripped rather than stored next to a choice it contradicts.
+    expect(chatTopicMetadataUpdateSchema.parse({ sandboxMode: 'persistent' })).toEqual({});
+  });
+
   it('keeps the onboarding feedback comment limit at the shared contract boundary', () => {
     const result = chatTopicMetadataUpdateSchema.safeParse({
       onboardingFeedback: {

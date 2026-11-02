@@ -11,6 +11,10 @@ import {
   type QuestionSubmissionAction,
   QuestionSubmissionActionImpl,
 } from './entries/questionSubmission';
+import {
+  type ServerOperationReconciliationAction,
+  ServerOperationReconciliationActionImpl,
+} from './state/serverOperationReconciliation';
 import { type StreamingStatesAction } from './state/streamingStates';
 import { StreamingStatesActionImpl } from './state/streamingStates';
 import { type ClientToolExecutionAction } from './transports/client/clientToolExecution';
@@ -25,6 +29,7 @@ export type ChatAgentRunAction = ClientToolExecutionAction &
   ConversationControlAction &
   QuestionSubmissionAction &
   GatewayAction &
+  ServerOperationReconciliationAction &
   StreamingExecutorAction &
   StreamingStatesAction;
 
@@ -44,6 +49,7 @@ export const chatAgentRun: StateCreator<
     new ConversationControlActionImpl(...params),
     new QuestionSubmissionActionImpl(...params),
     new GatewayActionImpl(...params),
+    new ServerOperationReconciliationActionImpl(...params),
     new StreamingExecutorActionImpl(...params),
     new StreamingStatesActionImpl(...params),
   ]);

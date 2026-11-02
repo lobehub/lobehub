@@ -36,7 +36,9 @@ import type {
   CreateDirectoryParams,
   CreateFileParams,
 } from '@lobechat/local-file-shell/types';
+import type { DeviceCliRestartParams } from '@lobechat/types';
 
+import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
 import { defaultCopyAssetForPublish, defaultReadExternalAssetForPublish } from './filePreview';
@@ -46,11 +48,14 @@ import { defaultListProjectDirectory } from './projectFileIndex';
 import { prepareSkillDirectory } from './skillDirectory';
 import type {
   BrowseDirectoryParams,
+  CloseTerminalParams,
   CopyAssetForPublishParams,
+  CreateTerminalSessionParams,
   DeviceControlDeps,
   EnrollWorkspaceParams,
   ExternalAssetForPublishParams,
   InitWorkspaceParams,
+  ListClaudeCodeMemoryParams,
   ListHeterogeneousAgentModelsParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
@@ -58,8 +63,11 @@ import type {
   ProjectDirectoryListParams,
   ProjectFileIndexParams,
   ProjectFileSearchParams,
+  ReadTerminalParams,
+  ResizeTerminalParams,
   TrashLocalFilesParams,
   UnenrollWorkspaceParams,
+  WriteTerminalParams,
 } from './types';
 import { browseDirectory, initWorkspace, listProjectSkills, statPath } from './workspace';
 import { assertEntriesWithinWorkspace, WORKSPACE_ESCAPE_MESSAGE } from './workspaceGuard';
@@ -79,6 +87,7 @@ export const DEVICE_RPC_METHODS = [
   'getCodexQuota',
   'getKimiCodeQuota',
   'listProjectSkills',
+  'listClaudeCodeMemory',
   'prepareSkillDirectory',
   'browseDirectory',
   'statPath',
@@ -121,15 +130,38 @@ export const DEVICE_RPC_METHODS = [
   'getAppUpdateState',
   'checkAppUpdate',
   'installAppUpdate',
+  // Interactive terminal (PTY). One session, drained by cursor — see
+  // `CreateTerminalSessionParams` for why this is polling and not a stream.
+  'createTerminalSession',
+  'writeTerminal',
+  'readTerminal',
+  'resizeTerminal',
+  'closeTerminal',
+  'getCliUpdateState',
+  'checkCliUpdate',
+  'restartCli',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
 
+export { deviceRpcClients } from './rpcClients';
+
 /** Why a client without the app-update handlers rejects those RPCs. */
 export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not support remote updates';
 
+export const CLI_UPDATE_UNSUPPORTED_MESSAGE =
+  'This device client does not support remote CLI updates';
+
 /** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
 export const TRASH_UNSUPPORTED_MESSAGE = 'This device does not support moving files to the trash';
+
+/**
+ * Why a client without PTY handlers rejects the terminal RPCs. Hosts opt in by
+ * providing the `*Terminal*` deps; the desktop app serves its own terminal over
+ * IPC instead, so until it opts in a terminal opened against it is refused here
+ * rather than left waiting for a session.
+ */
+export const TERMINAL_UNSUPPORTED_MESSAGE = 'This device client does not support a terminal';
 
 /** File-mutation params carry the approved workspace root they must stay inside. */
 type WorkspaceScoped<T> = T & { workspaceRoot?: string };
@@ -209,6 +241,10 @@ export const executeDeviceRpc = async (
 
     case 'listProjectSkills': {
       return listProjectSkills(params as ListProjectSkillsParams, deps);
+    }
+
+    case 'listClaudeCodeMemory': {
+      return listClaudeCodeMemory(params as ListClaudeCodeMemoryParams, deps);
     }
 
     case 'prepareSkillDirectory': {
@@ -430,6 +466,49 @@ export const executeDeviceRpc = async (
     case 'installAppUpdate': {
       if (!deps.installAppUpdate) throw new Error(APP_UPDATE_UNSUPPORTED_MESSAGE);
       return deps.installAppUpdate();
+    }
+
+    // Interactive terminal. All five handlers are host-injected together, so a
+    // host that provides none of them refuses every one of these with the same
+    // reason instead of exposing a half-working session.
+    case 'createTerminalSession': {
+      if (!deps.createTerminalSession) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.createTerminalSession(params as CreateTerminalSessionParams);
+    }
+
+    case 'writeTerminal': {
+      if (!deps.writeTerminal) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.writeTerminal(params as WriteTerminalParams);
+    }
+
+    case 'readTerminal': {
+      if (!deps.readTerminal) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.readTerminal(params as ReadTerminalParams);
+    }
+
+    case 'resizeTerminal': {
+      if (!deps.resizeTerminal) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.resizeTerminal(params as ResizeTerminalParams);
+    }
+
+    case 'closeTerminal': {
+      if (!deps.closeTerminal) throw new Error(TERMINAL_UNSUPPORTED_MESSAGE);
+      return deps.closeTerminal(params as CloseTerminalParams);
+    }
+
+    case 'getCliUpdateState': {
+      if (!deps.getCliUpdateState) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.getCliUpdateState();
+    }
+
+    case 'checkCliUpdate': {
+      if (!deps.checkCliUpdate) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.checkCliUpdate();
+    }
+
+    case 'restartCli': {
+      if (!deps.restartCli) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.restartCli(params as DeviceCliRestartParams);
     }
 
     default: {

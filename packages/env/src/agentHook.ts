@@ -51,17 +51,22 @@ export const getAgentHookConfig = () => {
   }
   if (
     env.AGENT_HOOK_WEBHOOK_ON_ERROR === 'block' &&
-    env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING !== 'toolCall'
+    env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING === 'ignore'
   )
     throw new Error(
       'AGENT_HOOK_WEBHOOK_ON_ERROR=block requires AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING=toolCall',
     );
+  const controlEvents =
+    env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING === 'toolCall'
+      ? ['beforeToolCall', 'afterToolCall']
+      : [];
   if (
-    env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING === 'toolCall' &&
-    !env.AGENT_HOOK_WEBHOOK_EVENTS?.includes('beforeToolCall')
-  )
+    controlEvents.length > 0 &&
+    !env.AGENT_HOOK_WEBHOOK_EVENTS?.some((type) => controlEvents.includes(type))
+  ) {
     throw new Error(
-      'AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING=toolCall requires beforeToolCall in AGENT_HOOK_WEBHOOK_EVENTS',
+      `AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING=${env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING} requires ${controlEvents.join(' or ')} in AGENT_HOOK_WEBHOOK_EVENTS`,
     );
+  }
   return env;
 };

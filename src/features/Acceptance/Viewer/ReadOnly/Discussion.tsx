@@ -1,12 +1,12 @@
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Empty, Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Spin, Text } from '@lobehub/ui/base-ui';
+import { Avatar, Button, Empty, Flexbox, Spin, Text } from '@lobehub/ui';
 import { BadgeCheck, GitCommitHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
+import AccessRequestEntry from '../Comments/AccessRequestEntry';
 import CommentContent from '../Comments/CommentContent';
 import { buildDiscussionTimeline } from '../Comments/discussionTimeline';
 import { styles } from '../Comments/styles';
@@ -128,6 +128,27 @@ const ReadDiscussion = () => {
             />
           );
         }
+        if (entry.kind === 'accessRequest')
+          return (
+            <AccessRequestEntry
+              at={entry.at}
+              canManage={false}
+              key={entry.request.id}
+              request={entry.request}
+            />
+          );
+        // A circled note reads as its thread; the picture it points at stays on
+        // the check section of this report.
+        if (entry.kind === 'region')
+          return (
+            <Flexbox gap={8} key={entry.thread.root.id}>
+              {[entry.thread.root, ...entry.thread.replies].map((comment) => (
+                <ReadComment comment={comment} key={comment.id} />
+              ))}
+            </Flexbox>
+          );
+        // Send-backs are only built from the checks, which this report does not pass.
+        if (entry.kind !== 'message') return null;
         return <ReadComment comment={entry.comment} key={entry.comment.id} threaded={false} />;
       })}
     </Flexbox>

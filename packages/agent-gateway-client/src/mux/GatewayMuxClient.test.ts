@@ -605,6 +605,35 @@ describe('GatewayMuxClient', () => {
       expect(sub.active).toBe(true);
     });
 
+    it('does not end on a parked LLM call error, only on the run end after it', async () => {
+      const { mux } = createMux();
+      const ws = await connectAndReady(mux);
+      const sub = mux.subscribe('op-1');
+      const onComplete = vi.fn();
+      sub.on('session_complete', onComplete);
+
+      ws.simulateMessage({
+        event: {
+          data: {
+            body: { reason: 'not_delivered', recoverable: true },
+            error: 'ClientLlmExecutorUnavailable',
+          },
+          operationId: 'op-1',
+          stepIndex: 0,
+          timestamp: 1,
+          type: 'error',
+        } as any,
+        id: '1',
+        operationId: 'op-1',
+        type: 'agent_event',
+      });
+      expect(sub.active).toBe(true);
+      expect(onComplete).not.toHaveBeenCalled();
+
+      ws.simulateMessage(agentEvent('op-1', '2', 'agent_runtime_end'));
+      expect(sub.active).toBe(false);
+    });
+
     it('does NOT end on a mirrored member terminal for a different operationId', async () => {
       const { mux } = createMux();
       const ws = await connectAndReady(mux);
@@ -1398,29 +1427,25 @@ describe('GatewayMuxClient', () => {
       expect(mockWsInstances).toHaveLength(4);
     });
 
-    it('does not spend the budget on a healthy socket that drops', async () => {
+    it('recovers a previously healthy socket after more than the initial dial budget', async () => {
       const { mux } = createMux();
       const onUnavailable = vi.fn();
       mux.on('unavailable', onUnavailable);
-      mux.subscribe('op-1');
-
-      // A working connection that later drops is a network event, not evidence
-      // that this deployment cannot serve v2.
+      const sub = mux.subscribe('op-1');
       let ws = await connectAndReady(mux);
-      ws.simulateClose(1006);
-      await vi.advanceTimersByTimeAsync(500);
-      ws = await settle();
-      ws.simulateClose(1006);
-      await vi.advanceTimersByTimeAsync(1000);
-      ws = await settle();
-      ws.simulateClose(1006);
-      expect(onUnavailable).not.toHaveBeenCalled();
 
-      // Three dials that never reached `ready` do spend it.
-      await vi.advanceTimersByTimeAsync(2000);
-      ws = await settle();
-      ws.simulateClose(1006);
-      expect(onUnavailable).toHaveBeenCalledOnce();
+      // A restart can outlast three dials; v2 support was already established.
+      for (const delay of [500, 1000, 2000, 4000, 8000]) {
+        ws.simulateClose(1006);
+        await vi.advanceTimersByTimeAsync(delay);
+        ws = await settle();
+      }
+      expect(onUnavailable).not.toHaveBeenCalled();
+      expect(mux.isUnavailable).toBe(false);
+      ws.simulateMessage(READY);
+      expect(mux.status).toBe('connected');
+      expect(sub.active).toBe(true);
+      expect(ws.ofType('subscribe')).toHaveLength(1);
     });
 
     it('counts token failures that follow a healthy socket', async () => {

@@ -1,4 +1,4 @@
-import { Input, type InputProps as Props } from '@lobehub/ui/base-ui';
+import { Input, type InputProps as Props } from '@lobehub/ui';
 import { memo, useEffect, useRef, useState } from 'react';
 
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
@@ -7,7 +7,7 @@ interface FormInputProps extends Omit<Props, 'onChange'> {
   onChange?: (value: string) => void;
 }
 
-const FormInput = memo<FormInputProps>(({ onChange, value: defaultValue, ...props }) => {
+const FormInput = memo<FormInputProps>(({ onBlur, onChange, value: defaultValue, ...props }) => {
   const ref = useRef<HTMLInputElement>(null);
   const { compositionProps, isComposingRef } = useIMECompositionEvent();
 
@@ -20,8 +20,9 @@ const FormInput = memo<FormInputProps>(({ onChange, value: defaultValue, ...prop
   return (
     <Input
       ref={ref}
-      onBlur={() => {
+      onBlur={(e) => {
         onChange?.(value);
+        onBlur?.(e);
       }}
       onChange={(e) => {
         setValue(e.target.value);
@@ -32,7 +33,7 @@ const FormInput = memo<FormInputProps>(({ onChange, value: defaultValue, ...prop
         onChange?.(value);
       }}
       {...props}
-      value={value}
+      value={value ?? ''}
     />
   );
 });

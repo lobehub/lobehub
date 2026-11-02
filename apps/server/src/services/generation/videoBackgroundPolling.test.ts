@@ -12,7 +12,14 @@ import { processBackgroundVideoPolling } from '@/server/services/generation/vide
 import { AsyncTaskError, AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 
+const { mockEnsureTopicCover } = vi.hoisted(() => ({ mockEnsureTopicCover: vi.fn() }));
+
 vi.mock('@/database/models/asyncTask');
+vi.mock('@/server/services/generation', () => ({
+  GenerationService: vi.fn(function () {
+    return { ensureTopicCover: mockEnsureTopicCover };
+  }),
+}));
 vi.mock('@/database/models/generation');
 vi.mock('@/server/services/generation/video');
 vi.mock('@/business/server/video-generation/chargeAfterGenerate', () => ({
@@ -177,6 +184,11 @@ describe('videoBackgroundPolling', () => {
         duration: expect.any(Number),
         status: AsyncTaskStatus.Success,
       });
+      // The topic cover is filled before Success so a refreshing client sees it
+      expect(mockEnsureTopicCover).toHaveBeenCalledWith('topic-789', 'thumb-key-456');
+      expect(mockEnsureTopicCover.mock.invocationCallOrder[0]).toBeLessThan(
+        mockAsyncTaskModel.update.mock.invocationCallOrder.at(-1)!,
+      );
       expect(notifyVideoCompleted).toHaveBeenCalledWith(
         expect.objectContaining({
           generationBatchId: 'batch-123',
@@ -188,6 +200,40 @@ describe('videoBackgroundPolling', () => {
           model: 'test-model',
           prechargeResult: { credits: 10 },
           usage: { completionTokens: 28_960, totalTokens: 29_120 },
+        }),
+      );
+    });
+
+    it('bills output tokens from the downloaded video when the provider reports no usage', async () => {
+      // Resolved once to poll and once to charge
+      vi.mocked(resolveBusinessModelMapping)
+        .mockResolvedValueOnce({ resolvedModelId: 'bytedance/seedance-2.5' } as any)
+        .mockResolvedValueOnce({ resolvedModelId: 'bytedance/seedance-2.5' } as any);
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+      });
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key',
+        duration: 4.04,
+        fileHash: 'hash',
+        fileSize: 1024,
+        frames: 97,
+        height: 592,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key',
+        videoKey: 'video-key',
+        width: 710,
+      });
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      // fal billed 39.815K tokens for this image-to-video output
+      const tokens = 39_815;
+      expect(chargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'bytedance/seedance-2.5',
+          usage: { completionTokens: tokens, totalTokens: tokens },
         }),
       );
     });

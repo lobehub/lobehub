@@ -323,7 +323,12 @@ describe('skillsRuntime', () => {
     }));
     mocks.isLhCommand.mockReturnValue(false);
     mocks.buildDeviceLhEnv.mockReturnValue(undefined);
-    mocks.resolveContentWorkspaceId.mockResolvedValue(undefined);
+    // Mirrors the real helper: the context's own id when it has one, the
+    // agent's workspace when the dispatch path dropped it. Tests that exercise
+    // the recovery override this with a value of their own.
+    mocks.resolveContentWorkspaceId.mockImplementation(
+      async (ctx?: { workspaceId?: string }) => ctx?.workspaceId,
+    );
     mocks.resolveRunWorkspaceId.mockResolvedValue(undefined);
     mocks.sandboxService.callTool.mockResolvedValue({
       result: {
@@ -414,6 +419,8 @@ describe('skillsRuntime', () => {
       'user-1',
       'workspace-1',
       false,
+      // These runtimes carry no run context, so there is no operation to forward.
+      undefined,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith('runCommand', {
       command: 'LOBEHUB_WORKSPACE_ID=workspace-1 npx -y @lobehub/cli agent edit agt_123',
@@ -448,6 +455,8 @@ describe('skillsRuntime', () => {
       'user-1',
       'workspace-1',
       false,
+      // These runtimes carry no run context, so there is no operation to forward.
+      undefined,
     );
   });
 
@@ -455,6 +464,38 @@ describe('skillsRuntime', () => {
   // execScript too; on Cloud, where gateway mode routes through this runtime
   // instead, `lh` inside execScript reached the sandbox raw — no CLI, no
   // credentials, no workspace scope.
+  it('forwards the run operation id so a sandbox dispatch can be attributed', async () => {
+    mocks.preprocessLhCommand.mockResolvedValueOnce({
+      command: 'lh agent run -a agt_123',
+      isLhCommand: true,
+      skipSkillLookup: true,
+    });
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      operationId: 'op-abc',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+      workspaceId: 'workspace-1',
+    });
+
+    await runtime.execScript({
+      activatedSkills: [],
+      command: 'lh agent run -a agt_123',
+      description: 'Delegate',
+    });
+
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(
+      'lh agent run -a agt_123',
+      'user-1',
+      'workspace-1',
+      false,
+      'op-abc',
+    );
+  });
+
   it('preprocesses lh commands passed to execScript, not just runCommand', async () => {
     mocks.preprocessLhCommand.mockResolvedValueOnce({
       command:
@@ -483,6 +524,9 @@ describe('skillsRuntime', () => {
       'user-1',
       'workspace-1',
       false,
+      // No run context here, so there is no operation for a dispatch to be
+      // attributed to.
+      undefined,
     );
     expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
       'execScript',
@@ -546,7 +590,7 @@ describe('skillsRuntime', () => {
     });
 
     const [, toolCall] = mocks.executeToolCall.mock.calls.at(-1)!;
-    expect(JSON.parse(toolCall.arguments).env).toEqual({ LOBEHUB_WORKSPACE_ID: 'workspace-1' });
+    expect(mocks.buildDeviceLhEnv.mock.calls[0][0]).toMatchObject({ operationId: 'op-1' });
     // Auth stays with the device — the caller's token must not travel there.
     expect(JSON.parse(toolCall.arguments).env).not.toHaveProperty('LOBEHUB_JWT');
   });
@@ -1376,6 +1420,11 @@ describe('skillsRuntime', () => {
     const { MarketService } = await import('@/server/services/market');
     const { skillsRuntime } = await import('../skills');
 
+    // The id now comes from the recovery helper, which answers with the
+    // context's own value when it has one and with the agent's workspace when
+    // the dispatch path dropped it.
+    mocks.resolveContentWorkspaceId.mockResolvedValueOnce('workspace-1');
+
     await skillsRuntime.factory({
       serverDB: {} as never,
       toolManifestMap: {},
@@ -1386,7 +1435,7 @@ describe('skillsRuntime', () => {
 
     expect(MarketService).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        userInfo: { userId: 'user-1', workspaceId: 'workspace-1' },
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: 'workspace-1' }),
       }),
     );
 
@@ -1399,7 +1448,37 @@ describe('skillsRuntime', () => {
 
     expect(MarketService).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        userInfo: { userId: 'user-1', workspaceId: undefined },
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: undefined }),
+      }),
+    );
+  });
+
+  // The dispatch and resume paths reach this runtime without `workspaceId`, and
+  // a workspace topic resolved in the personal scope came back as "no such
+  // topic" — the run went ephemeral, `pwd` answered `/workspace`, and whatever
+  // the conversation wrote was thrown away with the session.
+  it('recovers the workspace from the agent when the context lost it', async () => {
+    const { MarketService } = await import('@/server/services/market');
+    const { skillsRuntime } = await import('../skills');
+
+    mocks.resolveContentWorkspaceId.mockImplementation(async () => 'workspace-1');
+
+    await skillsRuntime.factory({
+      agentId: 'agt-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    // The same id the session is keyed by, so the sandbox this runtime reaches
+    // is the workspace's and not the member's personal one.
+    expect(mocks.resolveContentWorkspaceId).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agt-1' }),
+    );
+    expect(MarketService).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({ workspaceId: 'workspace-1' }),
       }),
     );
   });

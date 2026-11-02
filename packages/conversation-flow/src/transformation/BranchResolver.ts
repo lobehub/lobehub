@@ -1,4 +1,5 @@
 import type { IdNode, Message } from '../types';
+import { toTime } from '../utils/timestamp';
 
 /**
  * BranchResolver - Handles branch resolution logic
@@ -151,7 +152,7 @@ export class BranchResolver {
         if (descendant?.threadId) continue;
 
         if (descendant?.role === 'user') {
-          const timestamp = descendant.createdAt;
+          const timestamp = toTime(descendant.createdAt);
           if (timestamp > latestTimestamp) {
             latestTimestamp = timestamp;
             selectedBranchId = branchId;

@@ -10,6 +10,7 @@ import {
   type MessageMetadata,
   type MessagePluginItem,
   type ModelRankItem,
+  type TopicMessageSearchMatch,
   type UIChatMessage,
   type UpdateMessageParams,
   type UpdateMessageRAGParams,
@@ -23,6 +24,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { abortableRequest } from '../utils/abortableRequest';
 import type { MessageListPage, MessageRoundCursor } from './cache';
 import { supportsRoundCursor } from './cache';
+import { readMessagesByRoundCursor, takePrimedMessageListPage } from './roundCursorPage';
 
 /**
  * Query context for message operations
@@ -36,11 +38,17 @@ export interface MessageQueryContext {
   topicShareId?: string;
 }
 
-interface MessageReadQueryContext {
+export interface MessageReadQueryContext {
   agentId?: string | null;
   /** Agent-share visitor surface — routes the read through `shareChat.getMessages`. */
   agentShareId?: string;
   groupId?: string | null;
+  /**
+   * Ask the server for render-facing tool view models instead of the stored
+   * payloads. Only set it for a read whose result is never turned into an LLM
+   * context in the browser — see `readConversationMessages`.
+   */
+  projectToolPayloads?: boolean;
   /**
    * Skip the Work-summary assembly on the server — set by mid-stream
    * refetches (tool_end / step_complete) so each tool round doesn't re-run
@@ -51,12 +59,6 @@ interface MessageReadQueryContext {
   topicId?: string | null;
   topicShareId?: string;
 }
-
-/**
- * Rows walked per round-cursor page: whole rounds up to this many mainline rows,
- * matching the newest-first window `getMessages` serves.
- */
-const MESSAGE_PAGE_ROW_BUDGET = 1000;
 
 export type MessageBatchOperation =
   | {
@@ -236,7 +238,12 @@ export class MessageService {
   ): Promise<MessageListPage | UIChatMessage[]> => {
     if (!supportsRoundCursor(params)) return this.getMessages(params);
 
-    return this.getMessagesByRoundCursor(params, null);
+    // A page primed for this conversation (see `primeMessageListPage`) answers
+    // its first read; if that request failed, read again rather than fail.
+    const primed = takePrimedMessageListPage(params);
+    if (primed) return primed.catch(() => readMessagesByRoundCursor(params, null));
+
+    return readMessagesByRoundCursor(params, null);
   };
 
   /**
@@ -254,7 +261,7 @@ export class MessageService {
     // current window instead of hitting the authed endpoint.
     if (params.agentShareId) return { messages: [], olderCursor: null };
 
-    if (supportsRoundCursor(params)) return this.getMessagesByRoundCursor(params, cursor);
+    if (supportsRoundCursor(params)) return readMessagesByRoundCursor(params, cursor);
 
     const data = await lambdaClient.message.getMessages.query({
       ...params,
@@ -265,27 +272,11 @@ export class MessageService {
     return { messages: data as unknown as UIChatMessage[] };
   };
 
-  private getMessagesByRoundCursor = async (
-    params: MessageReadQueryContext,
-    cursor: MessageRoundCursor | null,
-  ): Promise<MessageListPage> => {
-    const page = await lambdaClient.message.getMessagesByCursor.query({
-      agentId: params.agentId,
-      countBudget: MESSAGE_PAGE_ROW_BUDGET,
-      cursor,
-      groupId: params.groupId,
-      includeFileWorks: true,
-      // The row budget is the real bound; ask for as many whole rounds as it holds.
-      roundLimit: MESSAGE_PAGE_ROW_BUDGET,
-      skipWorks: params.skipWorks,
-      topicId: params.topicId,
-      topicShareId: params.topicShareId,
-    });
-
-    return {
-      messages: page.messages as unknown as UIChatMessage[],
-      olderCursor: page.nextCursor,
-    };
+  searchInTopic = async (params: {
+    keyword: string;
+    topicId: string;
+  }): Promise<TopicMessageSearchMatch[]> => {
+    return lambdaClient.message.searchInTopic.query(params);
   };
 
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
@@ -439,11 +430,20 @@ export class MessageService {
     return lambdaClient.message.removeMessage.mutate({ ...ctx, id });
   };
 
+  /**
+   * Moves the messages to the recycle bin. `permanent` hard-deletes instead —
+   * only for internal cleanup whose rows must never be restorable.
+   */
   removeMessages = async (
     ids: string[],
     ctx?: MessageQueryContext,
+    options?: { permanent?: boolean },
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.removeMessages.mutate({ ...ctx, ids });
+    return lambdaClient.message.removeMessages.mutate({
+      ...ctx,
+      ids,
+      ...(options?.permanent ? { permanent: true } : {}),
+    });
   };
 
   removeMessagesByAssistant = async (sessionId: string, topicId?: string) => {

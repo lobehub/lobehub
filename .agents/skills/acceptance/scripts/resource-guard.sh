@@ -26,6 +26,9 @@
 #
 # Spec: comma-separated KEY=VALUE, any subset of
 #   swap=PCT   free=PCT   total.rss=MB   group.NAME.rss=MB   group.NAME.count=N
+# swap/free thresholds apply on Linux only. On macOS these remain diagnostics;
+# kern.memorystatus_vm_pressure_level supplies normal/warning/critical instead.
+# A macOS watcher requires three consecutive red samples before stop-owned.
 # total.rss is the summed RSS of the declared groups, so it stays 0 without --group.
 # Ownership is positive, never inferred from timing: a process belongs to this run
 # only when its command line contains the run tag, or it was registered with `claim`,
@@ -34,7 +37,7 @@
 # would otherwise be stopped by this one. stop-owned only ever stops owned processes,
 # and only in the groups named with --group: never a process-name kill.
 #
-# Exit (check): 0 green, 10 yellow, 20 red, 2 unsupported platform or bad usage.
+# Exit (check): 0 green, 10 yellow, 20 red, 2 unknown pressure/unsupported/usage.
 set -uo pipefail
 
 PROG='[resource-guard]'
@@ -144,8 +147,10 @@ emit_sample() {
   local groups="$1" yellow="$2" red="$3"
   local swap_out free_out swap_pct swap_mb swap_total free_pct
   local breaches="" tier="green" line name pattern stats count rss yv rv
+  local platform pressure_level pressure_status pressure_json="null"
   local total_rss=0
 
+  platform="$(platform_name)"
   swap_out="$(read_swap || true)"
   free_out="$(read_free || true)"
   swap_pct=""; swap_mb=""; swap_total=""; free_pct=""
@@ -196,7 +201,9 @@ emit_sample() {
     breaches="${breaches}{\"metric\":\"total.rss\",\"value\":${total_rss},\"threshold\":${yv},\"tier\":\"yellow\"},"
   fi
 
-  if [ -n "$swap_pct" ]; then
+  # macOS swap allocation grows dynamically, and free+speculative pages exclude
+  # reclaimable memory. Neither ratio is a destructive-action pressure signal.
+  if [ "$platform" = Linux ] && [ -n "$swap_pct" ]; then
     yv="$(spec_value "$yellow" swap)"; rv="$(spec_value "$red" swap)"
     if ge "$swap_pct" "$rv"; then
       tier="red"; breaches="${breaches}{\"metric\":\"swap\",\"value\":${swap_pct},\"threshold\":${rv},\"tier\":\"red\"},"
@@ -205,7 +212,7 @@ emit_sample() {
       breaches="${breaches}{\"metric\":\"swap\",\"value\":${swap_pct},\"threshold\":${yv},\"tier\":\"yellow\"},"
     fi
   fi
-  if [ -n "$free_pct" ]; then
+  if [ "$platform" = Linux ] && [ -n "$free_pct" ]; then
     yv="$(spec_value "$yellow" free)"; rv="$(spec_value "$red" free)"
     if [ -n "$rv" ] && awk -v v="$free_pct" -v t="$rv" 'BEGIN{ exit !(v+0<=t+0) }'; then
       tier="red"; breaches="${breaches}{\"metric\":\"free\",\"value\":${free_pct},\"threshold\":${rv},\"tier\":\"red\"},"
@@ -214,15 +221,39 @@ emit_sample() {
       breaches="${breaches}{\"metric\":\"free\",\"value\":${free_pct},\"threshold\":${yv},\"tier\":\"yellow\"},"
     fi
   fi
+  if [ "$platform" = Darwin ]; then
+    # The sysctl exports dispatch flags (1/2/4), NOT the internal 0/1/2/3 enum.
+    pressure_level="$(sysctl -n kern.memorystatus_vm_pressure_level 2>/dev/null)" || pressure_level=""
+    case "$pressure_level" in
+      1) pressure_status=normal ;;
+      2)
+        pressure_status=warning
+        [ "$tier" = red ] || tier=yellow
+        breaches="${breaches}{\"metric\":\"pressure\",\"value\":2,\"tier\":\"yellow\"},"
+        ;;
+      4)
+        pressure_status=critical
+        tier=red
+        breaches="${breaches}{\"metric\":\"pressure\",\"value\":4,\"tier\":\"red\"},"
+        ;;
+      *)
+        pressure_status=unknown
+        pressure_level=null
+        tier=unknown
+        breaches="${breaches}{\"metric\":\"pressure\",\"value\":null,\"tier\":\"unknown\"},"
+        ;;
+    esac
+    pressure_json="{\"level\":${pressure_level},\"status\":\"${pressure_status}\"}"
+  fi
   breaches="${breaches%,}"
 
-  printf '{"ts":%s,"platform":"%s","tier":"%s","swap":%s,"free":%s,"totalRssMb":%s,"groups":{%s},"breaches":[%s]}\n' \
-    "$(date +%s)" "$(platform_name)" "$tier" "$swap_json" "$free_json" "$total_rss" "$groups_json" "$breaches"
+  printf '{"ts":%s,"platform":"%s","tier":"%s","pressure":%s,"swap":%s,"free":%s,"totalRssMb":%s,"groups":{%s},"breaches":[%s]}\n' \
+    "$(date +%s)" "$platform" "$tier" "$pressure_json" "$swap_json" "$free_json" "$total_rss" "$groups_json" "$breaches"
 }
 
 count_lines() { [ -f "$1" ] || { echo 0; return; }; local n; n="$(wc -l < "$1" | tr -d ' ')"; echo "${n:-0}"; }
 count_match() { [ -f "$2" ] || { echo 0; return; }; local n; n="$(grep -c -e "$1" "$2" 2>/dev/null)"; echo "${n:-0}"; }
-tier_of() { printf '%s\n' "$1" | sed -n 's/.*"tier":"\([a-z]*\)".*/\1/p'; }
+tier_of() { printf '%s\n' "$1" | sed -n 's/^[^{]*{[^}]*"platform":"[^"]*","tier":"\([a-z]*\)".*/\1/p'; }
 
 # --- modes -------------------------------------------------------------------
 
@@ -249,7 +280,8 @@ do_check() {
   case "$tier" in
     green) exit 0 ;;
     yellow) exit 10 ;;
-    *) exit 20 ;;
+    red) exit 20 ;;
+    *) exit 2 ;;
   esac
 }
 
@@ -341,16 +373,18 @@ stop_owned() {  # $1 group name, $2 pattern, $3 newline-separated owned set
 }
 
 watch_loop() {
-  local plat sample tier
+  local plat sample tier red_streak=0 required_red=1
   plat="$(platform_name)"
   case "$plat" in Darwin|Linux) ;; *) fail "Unsupported platform: $plat" ;; esac
+  [ "$plat" != Darwin ] || required_red=3
   load_config
   while [ -f "$STATE_DIR/guard.pid" ]; do
     sample="$(emit_sample "$GROUP_SPECS" "$YELLOW" "$RED")"
     printf '%s\n' "$sample" >> "$STATE_DIR/samples.jsonl"
     tier="$(tier_of "$sample")"
-    if [ "$tier" = red ] && [ "$ON_RED" = stop-owned ]; then
-      printf '{"ts":%s,"event":"tier","tier":"red","action":"stop-owned"}\n' "$(date +%s)" >> "$STATE_DIR/events.jsonl"
+    if [ "$tier" = red ]; then red_streak=$((red_streak + 1)); else red_streak=0; fi
+    if [ "$tier" = red ] && [ "$ON_RED" = stop-owned ] && [ "$red_streak" -ge "$required_red" ]; then
+      printf '{"ts":%s,"event":"tier","tier":"red","action":"stop-owned","consecutiveRed":%s}\n' "$(date +%s)" "$red_streak" >> "$STATE_DIR/events.jsonl"
       local line name pattern owned
       owned="$(owned_set)"
       while IFS= read -r line; do
@@ -358,6 +392,8 @@ watch_loop() {
         name="${line%%=*}"; pattern="${line#*=}"
         stop_owned "$name" "$pattern" "$owned"
       done <<< "$GROUP_SPECS"
+    elif [ "$tier" = red ] && [ "$ON_RED" = stop-owned ]; then
+      printf '{"ts":%s,"event":"tier","tier":"red","action":"pending","consecutiveRed":%s}\n' "$(date +%s)" "$red_streak" >> "$STATE_DIR/events.jsonl"
     elif [ "$tier" != green ]; then
       printf '{"ts":%s,"event":"tier","tier":"%s","action":"none"}\n' "$(date +%s)" "$tier" >> "$STATE_DIR/events.jsonl"
     fi
@@ -407,19 +443,20 @@ do_stop() {
 
 do_status() {
   [ -n "$STATE_DIR" ] || fail "status needs --state-dir"
-  local last events y r total running
+  local last events y r u total running
   last="$(tail -n 1 "$STATE_DIR/samples.jsonl" 2>/dev/null)"
   total="$(count_lines "$STATE_DIR/samples.jsonl")"
   events="$(count_lines "$STATE_DIR/events.jsonl")"
   y="$(count_match '"tier":"yellow"' "$STATE_DIR/samples.jsonl")"
   r="$(count_match '"tier":"red"' "$STATE_DIR/samples.jsonl")"
+  u="$(count_match '"tier":"unknown"' "$STATE_DIR/samples.jsonl")"
   running=no; [ -f "$STATE_DIR/guard.pid" ] && running=yes
   if [ "$JSON" = 1 ]; then
-    printf '{"running":%s,"samples":%s,"yellow":%s,"red":%s,"events":%s,"last":%s}\n' \
-      "$([ "$running" = yes ] && echo true || echo false)" "$total" "$y" "$r" "$events" "${last:-null}"
+    printf '{"running":%s,"samples":%s,"yellow":%s,"red":%s,"unknown":%s,"events":%s,"last":%s}\n' \
+      "$([ "$running" = yes ] && echo true || echo false)" "$total" "$y" "$r" "$u" "$events" "${last:-null}"
   else
-    printf '%s running=%s samples=%s yellow=%s red=%s events=%s\n' \
-      "$PROG" "$running" "$total" "$y" "$r" "$events"
+    printf '%s running=%s samples=%s yellow=%s red=%s unknown=%s events=%s\n' \
+      "$PROG" "$running" "$total" "$y" "$r" "$u" "$events"
     [ -n "$last" ] && printf '%s\n' "$last"
   fi
 }

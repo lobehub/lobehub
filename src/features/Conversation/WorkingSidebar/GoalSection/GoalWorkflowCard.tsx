@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Skeleton } from '@lobehub/ui';
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -18,10 +16,10 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import AssigneeProfileAvatar from '@/features/AgentGoals/ProcessControl/AssigneeProfileAvatar';
-import { buildGoalStepSegments } from '@/features/Conversation/Messages/GoalTaskCard/goalTaskProgress';
 import { useChatStore } from '@/store/chat';
 
 import {
+  buildGoalStepSegments,
   type GoalWorkflowRow,
   MAX_VISIBLE_WORKFLOW_ROWS,
   sliceVisibleWorkflowRows,

@@ -11,7 +11,7 @@ const messageLoadingMock = vi.hoisted(() => vi.fn());
 const messageDestroyMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { error: messageErrorMock, loading: messageLoadingMock },
 }));

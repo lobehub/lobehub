@@ -9,8 +9,10 @@ import { useTranslation } from 'react-i18next';
  * shows raw keys, so the form waits the moment it takes to load.
  */
 export const useAskUserLabels = (overrides: {
+  /** An empty string drops the skip button: the question has no "not now". */
   skip?: string;
   submit?: string;
+  supplementPlaceholder?: string;
 }): AskUserQuestionLabels | undefined => {
   const { t, ready } = useTranslation('tool');
   if (ready === false) return undefined;
@@ -25,7 +27,8 @@ export const useAskUserLabels = (overrides: {
     skip: overrides.skip ?? t('askUserQuestion.skip'),
     submit: overrides.submit ?? t('askUserQuestion.submit'),
     supplementEnter: t('askUserQuestion.supplement.enter'),
-    supplementPlaceholder: t('askUserQuestion.supplement.placeholder'),
+    supplementPlaceholder:
+      overrides.supplementPlaceholder ?? t('askUserQuestion.supplement.placeholder'),
     timeExpired: '',
     timeExpiredNoAnswer: '',
     timeRemaining: () => '',

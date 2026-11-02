@@ -36,10 +36,16 @@ export const appendException = (existing: string | undefined, exception: string)
  * conversation must not claim the reviewer rejected anything.
  */
 export const ruleOrigin = (
-  rule: Pick<RuleItem, 'authored' | 'conversationHitCount' | 'rejectionHitCount'>,
+  rule: Pick<
+    RuleItem,
+    'authored' | 'conversationHitCount' | 'materialHitCount' | 'rejectionHitCount'
+  >,
 ) => {
   const { conversationHitCount: conversations, rejectionHitCount: rejections } = rule;
   if (rule.authored) return { key: 'authored' } as const;
+  // Read out of a material the reviewer brought, and not seen in practice since.
+  if (rule.materialHitCount > 0 && rejections === 0 && conversations === 0)
+    return { key: 'fromMaterial', params: { count: rule.materialHitCount } } as const;
   if (rejections > 0 && conversations > 0)
     return { key: 'distilledAndObserved', params: { conversations, rejections } } as const;
   if (rejections > 0) return { key: 'distilled', params: { hits: rejections } } as const;
@@ -141,4 +147,36 @@ export const findMove = (
     }
   }
   return null;
+};
+
+/** How many rules of one part are in force — the number each switcher option carries. */
+export const liveCount = (section: OwnerSection) =>
+  section.groups.flatMap((group) => group.rules).filter((rule) => rule.status === 'active').length;
+
+/**
+ * The agent parts in the order the picker lists them: most lessons first, so the agents that
+ * learned the most are on top however many there are. Ties keep the server's order.
+ */
+export const agentSectionsByCount = (sections: OwnerSection[]) =>
+  sections
+    .filter((section) => section.owner.kind === 'agent')
+    .map((section) => ({ count: liveCount(section), section }))
+    .sort((a, b) => b.count - a.count)
+    .map(({ section }) => section);
+
+/** Sorting by the "checked" column: off (the reviewer's own order), most first, fewest first. */
+export type RunsSort = 'asc' | 'desc' | null;
+
+/** One click on the column header steps off → most first → fewest first → off. */
+export const nextRunsSort = (sort: RunsSort): RunsSort =>
+  sort === null ? 'desc' : sort === 'desc' ? 'asc' : null;
+
+/**
+ * Rules in one group ordered by how many runs checked them. Off returns the reviewer's order
+ * untouched; ties keep it too, so equal counts never shuffle between renders.
+ */
+export const sortByRuns = <T extends Pick<RuleItem, 'hitRunCount'>>(rules: T[], sort: RunsSort) => {
+  if (!sort) return rules;
+  const sign = sort === 'desc' ? -1 : 1;
+  return [...rules].sort((a, b) => sign * ((a.hitRunCount ?? 0) - (b.hitRunCount ?? 0)));
 };

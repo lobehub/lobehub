@@ -206,7 +206,11 @@ describe('createGatewayEventHandler', () => {
 
     // Mid-stream tool_end refetches skip the Work-summary assembly and graft
     // previously rendered works back via `preserveWorks`.
-    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(getMessages).toHaveBeenCalledWith({
+      ...context,
+      projectToolPayloads: false,
+      skipWorks: true,
+    });
     expect(store.replaceMessages).toHaveBeenCalledWith([], { context, preserveWorks: true });
   });
 
@@ -1116,7 +1120,11 @@ describe('createGatewayEventHandler', () => {
     handler(makeEvent('message_patch', { deletes: [], revision: 2, upserts: [] }));
     await flush();
 
-    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(getMessages).toHaveBeenCalledWith({
+      ...context,
+      projectToolPayloads: false,
+      skipWorks: true,
+    });
     expect(store.replaceMessages).toHaveBeenCalledWith(recovered, {
       context,
       preserveWorks: true,
@@ -1376,7 +1384,11 @@ describe('createGatewayEventHandler', () => {
       }),
     );
     await flush();
-    expect(getMessages).toHaveBeenCalledWith({ ...context, skipWorks: true });
+    expect(getMessages).toHaveBeenCalledWith({
+      ...context,
+      projectToolPayloads: false,
+      skipWorks: true,
+    });
     expect(store.updateTopicStatus).toHaveBeenLastCalledWith(
       expect.objectContaining({ status: 'running', topicId: 'topic-1' }),
     );

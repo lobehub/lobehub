@@ -46,14 +46,14 @@ export type NotificationWebhook = AgentHookWebhook & {
   responseHandling?: 'ignore';
 };
 
-/** Control hooks are webhook-only and synchronous. Evaluated at tool execution entry, after product permission and approval. */
+/** Control hooks are webhook-only and synchronous. Evaluated at execution entry or after the complete result, before it enters model context. */
 export type AgentHook = {
   id: string;
   matcher?: AgentHookMatcher;
 } & (
   | {
       handler?: never;
-      type: 'beforeToolCall';
+      type: 'beforeToolCall' | 'afterToolCall';
       webhook: AgentHookWebhook & { delivery?: 'fetch'; responseHandling: 'toolCall' };
     }
   | {

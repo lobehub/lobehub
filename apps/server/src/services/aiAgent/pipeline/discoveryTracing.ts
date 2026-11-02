@@ -1,23 +1,14 @@
 import type { Span } from '@lobechat/observability-otel/api';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
-import { tracer as agentRuntimeTracer } from '@lobechat/observability-otel/modules/agent-runtime';
+
+import { createStageTracer } from './sendTracing';
 
 /**
  * Wrap an IO-bound discovery stage in a span. Discovery runs on the send path
  * before the operation exists, so these spans are the only breakdown of how
  * long a user waits between "message saved" and "operation started".
  */
-export const traceDiscoveryStage = <T>(stage: string, fn: (span: Span) => Promise<T>): Promise<T> =>
-  agentRuntimeTracer.startActiveSpan(`tool_discovery ${stage}`, async (span) => {
-    try {
-      return await fn(span);
-    } catch (error) {
-      span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error)?.message });
-      throw error;
-    } finally {
-      span.end();
-    }
-  });
+export const traceDiscoveryStage = createStageTracer('tool_discovery');
 
 /**
  * Surface failures a stage absorbed instead of throwing (settled promises,

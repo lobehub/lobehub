@@ -401,6 +401,90 @@ describe('AgentInterventionModel', () => {
     });
   });
 
+  // ROOT CAUSE:
+  // The operation/tool uniqueness constraint prevented another native approval
+  // for the same item, even after its first batch had settled. Scope uniqueness
+  // to the sealed batch so every callback retains its original review history.
+  /** @example Native callbacks can reuse one item while their durable rows remain distinct. */
+  it('preserves separate batches for repeated approvals of the same tool item', async () => {
+    const [first] = await createQuestionBatch({
+      batchId: 'native-first',
+      items: [questionItem({ toolCallId: 'native-item' })],
+    });
+    const [second] = await createQuestionBatch({
+      batchId: 'native-second',
+      items: [questionItem({ toolCallId: 'native-item' })],
+    });
+    /** @example The second callback gets a new durable identity. */
+    expect(second.id).not.toBe(first.id);
+    const original = await serverDB
+      .select()
+      .from(agentInterventions)
+      .where(eq(agentInterventions.id, first.id));
+    /** @example The prior batch and its review-token hash are preserved. */
+    expect(original).toEqual([first]);
+  });
+
+  // ROOT CAUSE:
+  // Codex can ask again for one native item. Looking up only operation/tool
+  // identity selected the earlier durable row and could settle the wrong card.
+  // The callback and batch now fence each individual native request.
+  /** @example Two approvals for one item remain distinct after a server restart. */
+  it('locates an exact native callback when the tool item is reused', async () => {
+    const firstItem = questionItem({ toolCallId: 'native-item' });
+    const secondItem = questionItem({ toolCallId: 'native-item' });
+    const [first] = await createQuestionBatch({
+      batchId: 'native-first',
+      items: [
+        {
+          ...firstItem,
+          sanitizedRequest: { ...firstItem.sanitizedRequest, interventionId: 'callback-first' },
+        },
+      ],
+    });
+    const [second] = await createQuestionBatch({
+      batchId: 'native-second',
+      items: [
+        {
+          ...secondItem,
+          sanitizedRequest: { ...secondItem.sanitizedRequest, interventionId: 'callback-second' },
+        },
+      ],
+    });
+
+    /** @example A pair-only legacy lookup must reject ambiguous native history. */
+    await expect(
+      AgentInterventionModel.locateByOperationAndToolCall(serverDB, operationId, 'native-item'),
+    ).rejects.toThrow('Ambiguous intervention callback');
+    /** @example A cold producer receipt locates the second callback precisely. */
+    expect(
+      await AgentInterventionModel.locateByOperationAndToolCall(
+        serverDB,
+        operationId,
+        'native-item',
+        { interventionId: 'callback-second' },
+      ),
+    ).toMatchObject({ id: second.id });
+    /** @example A review token's batch keeps its original item identity. */
+    expect(
+      await AgentInterventionModel.locateByOperationAndToolCall(
+        serverDB,
+        operationId,
+        'native-item',
+        { batchId: 'native-first' },
+      ),
+    ).toMatchObject({ id: first.id });
+    /** @example Mixing an old callback with a new batch cannot resolve either item. */
+    expect(
+      await AgentInterventionModel.locateByOperationAndToolCall(
+        serverDB,
+        operationId,
+        'native-item',
+        { batchId: 'native-second', interventionId: 'callback-first' },
+      ),
+    ).toBeUndefined();
+  });
+
   it('requires complete identity equality for idempotent create', async () => {
     const params: Parameters<typeof model.createBatch>[0] = {
       activityKey: 'identity-activity',

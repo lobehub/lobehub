@@ -16,7 +16,10 @@ import {
   findFinalAcceptanceView,
   findGoalAcceptanceGate,
   findOpenChangeRequest,
+  goalReportPageId,
+  goalResultHeadline,
   hasGoalResult,
+  isGoalReportOrganizing,
   latestRoundRunId,
   resultTrailSource,
 } from './goalResultState';
@@ -442,6 +445,9 @@ describe('buildCriterionOutcomes', () => {
     expect(outcomes[1].summary).toBe('Two claims have no source');
     expect(outcomes[1].reason).toBe('Sources are missing');
     expect(outcomes[2].evidence).toEqual([]);
+    // The Portal's check view finds a criterion by its bundle row id.
+    expect(outcomes[0].checkId).toBe('c1');
+    expect(outcomes[2].checkId).toBeUndefined();
   });
 
   it('ignores results from earlier rounds', () => {
@@ -549,8 +555,11 @@ describe('buildUserDecisions', () => {
 
 describe('buildAbandonedNodes', () => {
   it('lists rejected and retired tasks with the reason that ended them', () => {
-    const task = (id: string, status: string, attempts: unknown[] = []) =>
-      ({ attempts, node: { id, kind: 'task', status, title: id } }) as unknown as GoalNodeView;
+    const task = (id: string, status: string, attempts: unknown[] = [], description?: string) =>
+      ({
+        attempts,
+        node: { description, id, kind: 'task', status, title: id },
+      }) as unknown as GoalNodeView;
 
     const abandoned = buildAbandonedNodes({
       nodes: [
@@ -559,9 +568,12 @@ describe('buildAbandonedNodes', () => {
           { outcome: 'failed', reason: 'First try' },
           { outcome: 'retired', reason: 'Source site is down' },
         ]),
-        task('rejected', 'rejected'),
+        // No closing note and no attempt: the node's description is what says why.
+        task('rejected', 'rejected', [], 'Page scraping broke on every restyle'),
+        // Nothing recorded anywhere — still omitted rather than invented.
+        task('bare', 'rejected'),
         {
-          ...task('closed-early', 'retired'),
+          ...task('closed-early', 'retired', [], 'A plan that never ran'),
           closedReason: 'Goal canceled before it started',
         } as GoalNodeView,
       ],
@@ -569,7 +581,8 @@ describe('buildAbandonedNodes', () => {
 
     expect(abandoned.map((a) => [a.view.node.id, a.reason])).toEqual([
       ['retired', 'Source site is down'],
-      ['rejected', undefined],
+      ['rejected', 'Page scraping broke on every restyle'],
+      ['bare', undefined],
       ['closed-early', 'Goal canceled before it started'],
     ]);
   });
@@ -733,6 +746,15 @@ describe('resultTrailSource', () => {
     const broken = { ...latest, metadata: { headline: 'x' } as any };
     expect(resultTrailSource(report({ latest: broken, status: 'completed' })).kind).toBe('derived');
   });
+
+  it('leads the result with the report HTML page, kept while a newer report is written', () => {
+    const withPage = { ...latest, pageDocumentId: 'docs-report' };
+    expect(goalReportPageId(report({ latest: withPage, status: 'completed' }))).toBe('docs-report');
+    expect(goalReportPageId(report({ latest: withPage, status: 'running' }))).toBe('docs-report');
+    // A markdown-only report, or none yet, has no page to lead with.
+    expect(goalReportPageId(report({ latest, status: 'completed' }))).toBeUndefined();
+    expect(goalReportPageId({})).toBeUndefined();
+  });
 });
 
 describe('buildStoryChapters', () => {
@@ -792,5 +814,29 @@ describe('buildStoryChapters', () => {
     expect(chapters[0].detourNodeIds).toEqual(['dead']);
     expect(chapters[1].artifacts.map((item) => item.workVersionId)).toEqual(['v-1']);
     expect(chapters[1].detourNodeIds).toEqual([]);
+  });
+});
+
+describe('goalResultHeadline', () => {
+  const reportAt = (status: string, headline?: string) =>
+    ({
+      report: { latest: headline ? { metadata: { headline } } : undefined, status },
+    }) as unknown as Pick<GoalGraphView, 'report'>;
+
+  /**
+   * Regression: a new result's wrap-up runs while `report.latest` is still the
+   * version written for the previous one, so the header named the old result on
+   * top of the rework. The headline of this result only exists once its own run
+   * has landed; until then the caller shows the organizing state.
+   */
+  it('names this result, but never the previous one while the next is being written', () => {
+    expect(goalResultHeadline(reportAt('completed', 'Shipped the brief'))).toBe(
+      'Shipped the brief',
+    );
+    expect(goalResultHeadline(reportAt('running', 'Old headline'))).toBeUndefined();
+    expect(isGoalReportOrganizing(reportAt('running', 'Old headline'))).toBe(true);
+
+    expect(goalResultHeadline(reportAt('completed'))).toBeUndefined();
+    expect(isGoalReportOrganizing(reportAt('completed', 'Shipped the brief'))).toBe(false);
   });
 });

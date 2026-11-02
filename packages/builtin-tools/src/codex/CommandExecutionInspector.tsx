@@ -1,9 +1,11 @@
 'use client';
 
 import { SiGit, SiGooglechrome, SiNodedotjs, SiPython } from '@icons-pack/react-simple-icons';
+import { getGoalCommand } from '@lobechat/shared-tool-ui/goal-command';
 import {
   createGrepContentInspector,
   createReadLocalFileInspector,
+  GoalCommandInspector,
   RunCommandInspector,
 } from '@lobechat/shared-tool-ui/inspectors';
 import type { RunCommandState } from '@lobechat/tool-runtime';
@@ -120,6 +122,10 @@ const CommandExecutionInspector = memo<
     result,
     toolCallId,
   } = props;
+
+  // `/goal` in a Codex conversation creates and plans the goal through `lh`.
+  const goalCommand = getGoalCommand(args?.command) ?? getGoalCommand(partialArgs?.command);
+  if (goalCommand) return <GoalCommandInspector {...props} goalCommand={goalCommand} />;
 
   const readArgs = mapCommandToReadArgs(args?.command);
   const partialReadArgs = mapCommandToReadArgs(partialArgs?.command);

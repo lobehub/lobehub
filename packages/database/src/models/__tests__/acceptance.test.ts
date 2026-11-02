@@ -1,9 +1,21 @@
 // @vitest-environment node
 import type { AcceptanceStatus } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { acceptances, topics, users, verifyRuns, workspaces } from '../../schemas';
+import {
+  acceptanceComments,
+  acceptances,
+  goalNodes,
+  goals,
+  tasks,
+  topics,
+  users,
+  verifyRuns,
+  workspaceMembers,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AcceptanceModel } from '../acceptance';
 import { ProjectModel } from '../project';
@@ -128,6 +140,25 @@ describe('AcceptanceModel', () => {
       projectId: project.id,
     });
     expect((await model.findById(acceptance.id))?.projectId).toBeNull();
+  });
+
+  it('fills a project only on an ungrouped acceptance it owns', async () => {
+    const projectModel = new ProjectModel(serverDB, userId);
+    const first = await projectModel.create({ identifier: 'FILA', name: 'First' });
+    const second = await projectModel.create({ identifier: 'FILB', name: 'Second' });
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.ensureForSubject('topic', topicId);
+
+    // Another user's model cannot file it.
+    expect(
+      await new AcceptanceModel(serverDB, otherUserId).fillProject(acceptance.id, first.id),
+    ).toBe(false);
+    expect((await model.findById(acceptance.id))?.projectId).toBeNull();
+
+    expect(await model.fillProject(acceptance.id, first.id)).toBe(true);
+    // Once grouped, a later fill leaves it where it is.
+    expect(await model.fillProject(acceptance.id, second.id)).toBe(false);
+    expect((await model.findById(acceptance.id))?.projectId).toBe(first.id);
   });
 
   it('keeps the first standalone display title and backfills one when initially absent', async () => {
@@ -257,6 +288,289 @@ describe('AcceptanceModel', () => {
     });
   });
 
+  it('filters by project to only the unfiled acceptances when projectId is null', async () => {
+    const alpha = await new ProjectModel(serverDB, userId).create({
+      identifier: 'ALPHA',
+      name: 'Alpha project',
+    });
+    const model = new AcceptanceModel(serverDB, userId);
+    await model.create({ projectId: alpha.id, subjectId: 'filed', subjectType: 'standalone' });
+    await model.create({ subjectId: 'unfiled', subjectType: 'standalone' });
+
+    expect((await model.query({ projectId: null })).map((row) => row.subjectId)).toEqual([
+      'unfiled',
+    ]);
+    expect((await model.queryPage({ projectId: null })).items.map((row) => row.subjectId)).toEqual([
+      'unfiled',
+    ]);
+  });
+
+  it('splits task acceptances into goal steps and plain tasks by source', async () => {
+    await serverDB.insert(tasks).values([
+      {
+        createdByUserId: userId,
+        id: 'goal-step-task',
+        identifier: 'T-1',
+        instruction: 'x',
+        seq: 1,
+      },
+      { createdByUserId: userId, id: 'plain-task', identifier: 'T-2', instruction: 'x', seq: 2 },
+    ]);
+    const [goal] = await serverDB.insert(goals).values({ title: 'Ship it', userId }).returning();
+    await serverDB
+      .insert(goalNodes)
+      .values({ goalId: goal.id, kind: 'task', taskId: 'goal-step-task', title: 'Step' });
+
+    const model = new AcceptanceModel(serverDB, userId);
+    await model.create({ subjectId: 'goal-step-task', subjectType: 'task' });
+    await model.create({ subjectId: 'plain-task', subjectType: 'task' });
+    await model.create({ subjectId: topicId, subjectType: 'topic' });
+    await model.create({ subjectId: 'cli-run', subjectType: 'standalone' });
+    await model.create({ subjectId: 'doc-1', subjectType: 'document' });
+    await model.create({ subjectId: 'release-node', subjectType: 'goal_gate' });
+
+    const subjectsFor = async (source: 'goal' | 'standalone' | 'task' | 'topic') =>
+      (await model.queryPage({ source })).items.map((row) => row.subjectId).sort();
+
+    expect(await subjectsFor('goal')).toEqual(['goal-step-task', 'release-node']);
+    expect(await subjectsFor('task')).toEqual(['plain-task']);
+    expect(await subjectsFor('topic')).toEqual([topicId]);
+    expect(await subjectsFor('standalone')).toEqual(['cli-run', 'doc-1']);
+    expect(await model.query({ source: 'all' })).toHaveLength(6);
+  });
+
+  describe('scope', () => {
+    const thirdUserId = 'acceptance-test-third';
+    const workspaceId = 'acceptance-test-ws';
+
+    beforeEach(async () => {
+      await serverDB.insert(users).values({ id: thirdUserId });
+    });
+
+    afterEach(async () => {
+      await serverDB.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    });
+
+    const comment = (acceptanceId: string, authorUserId: string, kind = 'comment') =>
+      serverDB.insert(acceptanceComments).values({
+        acceptanceId,
+        authorUserId,
+        clientId: `${acceptanceId}-${authorUserId}-${kind}`,
+        content: 'looks good',
+        kind: kind as 'comment',
+      });
+
+    it('lists every readable acceptance the caller commented on or approved, across owners', async () => {
+      const mine = await new AcceptanceModel(serverDB, userId).create({
+        subjectId: 'mine',
+        subjectType: 'standalone',
+      });
+      const otherModel = new AcceptanceModel(serverDB, otherUserId);
+      const sharedPublic = await otherModel.create({
+        subjectId: 'shared-public',
+        subjectType: 'standalone',
+        visibility: 'public',
+      });
+      const approved = await otherModel.create({
+        subjectId: 'approved',
+        subjectType: 'standalone',
+        visibility: 'public',
+      });
+      const reactedOnly = await otherModel.create({
+        subjectId: 'reacted-only',
+        subjectType: 'standalone',
+        visibility: 'public',
+      });
+      const untouched = await otherModel.create({
+        subjectId: 'untouched',
+        subjectType: 'standalone',
+        visibility: 'public',
+      });
+      const madePrivate = await otherModel.create({
+        subjectId: 'made-private',
+        subjectType: 'standalone',
+        visibility: 'private',
+      });
+
+      await comment(mine.id, userId);
+      await comment(sharedPublic.id, userId);
+      await comment(approved.id, userId, 'approval');
+      await comment(reactedOnly.id, userId, 'reaction');
+      await comment(untouched.id, thirdUserId);
+      await comment(madePrivate.id, userId);
+
+      const model = new AcceptanceModel(serverDB, userId);
+      const expected = ['approved', 'mine', 'shared-public'];
+      expect(
+        (await model.query({ scope: 'participated' })).map((row) => row.subjectId).sort(),
+      ).toEqual(expected);
+      expect(
+        (await model.queryPage({ scope: 'participated' })).items.map((row) => row.subjectId).sort(),
+      ).toEqual(expected);
+    });
+
+    it('keeps private acceptances of the caller own workspace readable through membership', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: otherUserId, slug: workspaceId });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId: otherUserId, workspaceId },
+        { role: 'editor', userId, workspaceId },
+      ]);
+      const teammate = new AcceptanceModel(serverDB, otherUserId, workspaceId);
+      const internal = await teammate.create({
+        subjectId: 'internal',
+        subjectType: 'standalone',
+        visibility: 'private',
+      });
+      await comment(internal.id, userId);
+
+      // Participation follows the person, so the personal scope still sees it.
+      const personal = new AcceptanceModel(serverDB, userId);
+      expect((await personal.query({ scope: 'participated' })).map((row) => row.id)).toEqual([
+        internal.id,
+      ]);
+
+      // Leaving the workspace takes it away.
+      await serverDB
+        .update(workspaceMembers)
+        .set({ deletedAt: new Date() })
+        .where(eq(workspaceMembers.userId, userId));
+      expect(await personal.query({ scope: 'participated' })).toEqual([]);
+    });
+
+    it('narrows the workspace list to the caller own acceptances with created', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'editor', userId: otherUserId, workspaceId },
+      ]);
+      await new AcceptanceModel(serverDB, userId, workspaceId).create({
+        subjectId: 'by-me',
+        subjectType: 'standalone',
+        visibility: 'public',
+      });
+      await new AcceptanceModel(serverDB, otherUserId, workspaceId).create({
+        subjectId: 'by-teammate',
+        subjectType: 'standalone',
+        visibility: 'public',
+      });
+
+      const model = new AcceptanceModel(serverDB, userId, workspaceId);
+      expect((await model.query({ scope: 'all' })).map((row) => row.subjectId).sort()).toEqual([
+        'by-me',
+        'by-teammate',
+      ]);
+      expect((await model.query({ scope: 'created' })).map((row) => row.subjectId)).toEqual([
+        'by-me',
+      ]);
+    });
+
+    it('lists teammates private workspace acceptances under all, but keeps writes creator-only', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'editor', userId: otherUserId, workspaceId },
+      ]);
+      // Workspace creation defaults to `private` — member-gated, not creator-only.
+      await new AcceptanceModel(serverDB, userId, workspaceId).create({
+        subjectId: 'by-me',
+        subjectType: 'standalone',
+      });
+      const teammates = await new AcceptanceModel(serverDB, otherUserId, workspaceId).create({
+        subjectId: 'by-teammate',
+        subjectType: 'standalone',
+      });
+      expect(teammates.visibility).toBe('private');
+
+      const model = new AcceptanceModel(serverDB, userId, workspaceId);
+      expect((await model.query({ scope: 'all' })).map((row) => row.subjectId).sort()).toEqual([
+        'by-me',
+        'by-teammate',
+      ]);
+      expect(
+        (await model.queryPage({ scope: 'all' })).items.map((row) => row.subjectId).sort(),
+      ).toEqual(['by-me', 'by-teammate']);
+      expect((await model.query({ scope: 'created' })).map((row) => row.subjectId)).toEqual([
+        'by-me',
+      ]);
+      // The personal scope never sees workspace rows.
+      expect(await new AcceptanceModel(serverDB, userId).query({ scope: 'all' })).toEqual([]);
+      // Widening the list leaves the model's write scope alone (members write via canManageAcceptance).
+      await model.updateStatus(teammates.id, 'accepted');
+      expect(
+        (await new AcceptanceModel(serverDB, otherUserId, workspaceId).findById(teammates.id))
+          ?.status,
+      ).toBe('pending');
+    });
+
+    it('keeps an only-me workspace acceptance out of teammates lists, participated included', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'editor', userId: otherUserId, workspaceId },
+      ]);
+      const teammateModel = new AcceptanceModel(serverDB, otherUserId, workspaceId);
+      await teammateModel.create({ subjectId: 'team', subjectType: 'standalone' });
+      const hidden = await teammateModel.create({
+        subjectId: 'only-teammate',
+        subjectType: 'standalone',
+        visibility: 'owner',
+      });
+      await comment(hidden.id, userId);
+
+      const model = new AcceptanceModel(serverDB, userId, workspaceId);
+      expect((await model.query({ scope: 'all' })).map((row) => row.subjectId)).toEqual(['team']);
+      expect((await model.queryPage({ scope: 'all' })).items.map((row) => row.subjectId)).toEqual([
+        'team',
+      ]);
+      expect(await model.query({ scope: 'participated' })).toEqual([]);
+      // Its creator still sees it everywhere.
+      expect(
+        (await teammateModel.query({ scope: 'all' })).map((row) => row.subjectId).sort(),
+      ).toEqual(['only-teammate', 'team']);
+      expect(
+        (await teammateModel.query({ scope: 'created' })).map((row) => row.subjectId).sort(),
+      ).toEqual(['only-teammate', 'team']);
+    });
+
+    it('keeps an only-me acceptance and its rounds within its creator ownership scope', async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'ws', primaryOwnerId: userId, slug: workspaceId });
+      await serverDB.insert(workspaceMembers).values([
+        { role: 'owner', userId, workspaceId },
+        { role: 'editor', userId: otherUserId, workspaceId },
+      ]);
+      const model = new AcceptanceModel(serverDB, userId, workspaceId);
+      const acceptance = await model.create({ subjectId: 'flip', subjectType: 'standalone' });
+      const runs = new VerifyRunModel(serverDB, userId, workspaceId);
+      const run = await runs.create({ goal: 'g' });
+      await runs.attachToAcceptance(run.id, acceptance.id);
+
+      await model.update(acceptance.id, { visibility: 'owner' });
+      await runs.setVisibilityByAcceptance(acceptance.id, 'owner');
+
+      // The creator still reads and writes it, and still sees its rounds.
+      expect((await model.findById(acceptance.id))?.visibility).toBe('owner');
+      expect((await runs.listByAcceptance(acceptance.id)).map((row) => row.id)).toEqual([run.id]);
+      await model.update(acceptance.id, { visibility: 'private' });
+      expect((await model.findById(acceptance.id))?.visibility).toBe('private');
+
+      // A teammate's ownership scope never reaches an owner row.
+      await model.update(acceptance.id, { visibility: 'owner' });
+      expect(
+        await new AcceptanceModel(serverDB, otherUserId, workspaceId).findById(acceptance.id),
+      ).toBeUndefined();
+    });
+  });
+
   it('updateStatus stamps completedAt only on user-terminal statuses', async () => {
     const model = new AcceptanceModel(serverDB, userId);
     const row = await model.ensureForSubject('topic', topicId);
@@ -273,6 +587,56 @@ describe('AcceptanceModel', () => {
     // A new round re-opening the loop clears the completion stamp.
     await model.updateStatus(row.id, 'verifying');
     expect((await model.findById(row.id))?.completedAt).toBeNull();
+  });
+
+  it('patches metadata keys without reverting keys another writer committed', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.create({
+      metadata: { title: 'Before' },
+      subjectId: topicId,
+      subjectType: 'topic',
+    });
+    const pullRequests = [
+      {
+        linkedAt: '2026-10-06T00:00:00.000Z',
+        number: 20426,
+        provider: 'github' as const,
+        repoFullName: 'lobehub/lobehub',
+        url: 'https://github.com/lobehub/lobehub/pull/20426',
+      },
+    ];
+
+    // A rename that read `acceptance` before a PR was linked.
+    await serverDB
+      .update(acceptances)
+      .set({ metadata: { ...acceptance.metadata, pullRequests } })
+      .where(eq(acceptances.id, acceptance.id));
+    const renamed = await model.patchMetadata(acceptance.id, { title: 'After' });
+
+    expect(renamed?.metadata).toEqual({ pullRequests, title: 'After' });
+    expect(
+      await new AcceptanceModel(serverDB, otherUserId).patchMetadata(acceptance.id, { title: 'x' }),
+    ).toBeUndefined();
+  });
+
+  it('fills a missing title on ensure without dropping keys written since its read', async () => {
+    const model = new AcceptanceModel(serverDB, userId);
+    const acceptance = await model.create({ subjectId: topicId, subjectType: 'topic' });
+    const findBySubject = model.findBySubject;
+    // Another writer links a PR between ensure's read and its write.
+    model.findBySubject = async (...args) => {
+      const existing = await findBySubject(...args);
+      await serverDB
+        .update(acceptances)
+        .set({ metadata: { pullRequests: [] } })
+        .where(eq(acceptances.id, acceptance.id));
+      return existing;
+    };
+
+    await model.ensureForSubject('topic', topicId, { metadata: { title: 'Delivery' } });
+
+    const stored = await model.findById(acceptance.id);
+    expect(stored?.metadata).toEqual({ pullRequests: [], title: 'Delivery' });
   });
 
   describe('queryPage', () => {

@@ -19,6 +19,7 @@
   "table.columns.trigger.enums.agent_share": "에이전트 공유",
   "table.columns.trigger.enums.agent_signal": "에이전트 신호",
   "table.columns.trigger.enums.api": "API 호출",
+  "table.columns.trigger.enums.asr": "음성 전사",
   "table.columns.trigger.enums.bot": "봇 메시지",
   "table.columns.trigger.enums.builder_suggestion": "빌더 제안",
   "table.columns.trigger.enums.chat": "채팅 메시지",

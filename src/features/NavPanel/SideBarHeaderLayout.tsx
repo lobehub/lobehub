@@ -1,8 +1,13 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Breadcrumb, type BreadcrumbItem, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Breadcrumb,
+  type BreadcrumbItem,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
@@ -93,7 +98,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
               if (href) {
                 event.preventDefault();
                 event.stopPropagation();
-                // eslint-disable-next-line @eslint-react/dom/no-flush-sync
+                // eslint-disable-next-line @eslint-react/dom-no-flush-sync
                 flushSync(() => navigate(href));
               }
             },

@@ -1,7 +1,6 @@
 import type { RecentItem } from '@lobechat/types';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon } from '@lobehub/ui';
 import { PencilLineIcon, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +11,6 @@ import { openRenameModal } from '@/components/RenameModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
-import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
@@ -20,7 +18,6 @@ import { useHomeStore } from '@/store/home';
 
 export const useRecentItemDropdownMenu = (item: RecentItem) => {
   const { t } = useTranslation(['common', 'topic', 'components']);
-  const scope = useCacheScope();
   const [renameRecent, refreshRecents] = useHomeStore((s) => [s.renameRecent, s.refreshRecents]);
 
   // Viewer can read recents but cannot rename/delete them — keep the menu
@@ -38,8 +35,8 @@ export const useRecentItemDropdownMenu = (item: RecentItem) => {
   const transferMenuItems = documentTransferItems ?? taskTransferItems;
 
   const handleRename = useCallback(
-    (newTitle: string) => renameRecent({ id: item.id, scope, title: newTitle, type: item.type }),
-    [item.id, item.type, renameRecent, scope],
+    (newTitle: string) => renameRecent({ id: item.id, title: newTitle, type: item.type }),
+    [item.id, item.type, renameRecent],
   );
 
   const handleDelete = useCallback(() => {
@@ -48,7 +45,7 @@ export const useRecentItemDropdownMenu = (item: RecentItem) => {
         onConfirm: async (removeFiles) => {
           // Home has no active agent/group, so chatStore.removeTopic early-returns; call the service directly.
           await topicService.removeTopic(item.id, removeFiles);
-          await refreshRecents(scope);
+          await refreshRecents();
         },
         topicIds: [item.id],
       });
@@ -75,13 +72,13 @@ export const useRecentItemDropdownMenu = (item: RecentItem) => {
             break;
           }
         }
-        await refreshRecents(scope);
+        await refreshRecents();
       },
       title: t('delete', { ns: 'common' }),
     });
-  }, [item, refreshRecents, scope, t]);
+  }, [item, refreshRecents, t]);
 
-  const dropdownMenu = useCallback((): MenuProps['items'] => {
+  const dropdownMenu = useCallback((): DropdownItem[] => {
     const items: NativeContextMenuItem[] = [
       {
         disabled: !canEdit,
@@ -103,7 +100,7 @@ export const useRecentItemDropdownMenu = (item: RecentItem) => {
         sfSymbol: 'trash',
       },
     ];
-    return items as MenuProps['items'];
+    return items as DropdownItem[];
   }, [canEdit, t, item.title, handleRename, handleDelete, transferMenuItems]);
 
   return { dropdownMenu };

@@ -1,4 +1,5 @@
 import FileLink from './FileLink';
+import GoalTurn from './GoalTurn';
 import ImageSearchRef from './ImageSearchRef';
 import Link from './Link';
 import LobeAgents from './LobeAgents';
@@ -29,6 +30,7 @@ export const markdownElements: MarkdownElement[] = [
   Tool,
   Task,
   ScmEvent,
+  GoalTurn,
   UserFeedback,
   ImageSearchRef,
   LobeAgents,

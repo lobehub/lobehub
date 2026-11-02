@@ -1,23 +1,32 @@
 'use client';
 
-import type { ExpertiseEnforcement, ExpertiseReasonKind } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
+import {
+  EXPERTISE_RULE_DIRECTIONS,
+  type ExpertiseEnforcement,
+  type ExpertiseReasonKind,
+} from '@lobechat/types';
 import {
   ActionIcon,
+  Block,
   Button,
+  createStaticStyles,
+  cssVar,
+  cx,
   type DropdownItem,
   DropdownMenu,
+  Flexbox,
+  Icon,
   SkeletonText,
   Tag,
   Text,
   TextArea,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   ActivityIcon,
   BellIcon,
   ClipboardCheckIcon,
+  FileTextIcon,
   HistoryIcon,
   type LucideIcon,
   MessageSquareTextIcon,
@@ -32,10 +41,12 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { docsFilePath, docsPagePath } from '@/features/ResourceHome/paths';
 import RightPanel from '@/features/RightPanel';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import type { RuleGroup, RuleItem, UpdateRuleInput } from '@/services/expertise';
 
+import { DIRECTION_ICON } from './DirectionToggle';
 import Field from './Field';
 import { useRuleRevisions, useRuleSources } from './hooks';
 import {
@@ -378,6 +389,24 @@ const RuleDocument = ({
             </span>
           </Property>
           <Property
+            icon={DIRECTION_ICON[rule.direction ?? 'unset']}
+            label={t('rules.meta.direction')}
+            menu={
+              editable
+                ? choose(
+                    EXPERTISE_RULE_DIRECTIONS,
+                    (value) => t(`rules.direction.${value}`),
+                    (direction) => void save({ direction }),
+                  )
+                : undefined
+            }
+          >
+            <Text weight={500}>{t(`rules.direction.${rule.direction ?? 'unset'}`)}</Text>
+            <span className={styles.muted}>
+              {t(`rules.direction.${rule.direction ?? 'unset'}Desc`)}
+            </span>
+          </Property>
+          <Property
             icon={ClipboardCheckIcon}
             label={t('rules.meta.method')}
             menu={
@@ -521,7 +550,9 @@ const RuleDocument = ({
                     {t(
                       source.fromAcceptance
                         ? 'rules.sources.acceptance'
-                        : 'rules.sources.conversation',
+                        : source.materialType
+                          ? `rules.sources.material.${source.materialType as 'document' | 'file' | 'text' | 'topic'}`
+                          : 'rules.sources.conversation',
                     )}
                   </Tag>
                   <span style={{ fontSize: 13, fontWeight: 500 }}>
@@ -544,6 +575,25 @@ const RuleDocument = ({
                   >
                     <Icon icon={MessageSquareTextIcon} size={12} />
                     {t(source.messageId ? 'rules.sources.openMessage' : 'rules.sources.openTopic')}
+                  </a>
+                )}
+                {/* A document or file it was read from opens where the reviewer keeps it. */}
+                {source.documentId && (
+                  <a
+                    className={styles.link}
+                    href={buildWorkspaceAwarePath(
+                      source.documentFileId
+                        ? docsFilePath(source.documentFileId)
+                        : docsPagePath(source.documentId),
+                      workspaceSlug,
+                    )}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate(e.currentTarget.getAttribute('href')!);
+                    }}
+                  >
+                    <Icon icon={FileTextIcon} size={12} />
+                    {t('rules.sources.openMaterial')}
                   </a>
                 )}
                 {source.acceptanceId && (
@@ -652,6 +702,7 @@ interface DetailPanelProps extends Omit<RuleDocumentProps, 'rule' | 'code'> {
  */
 const DetailPanel = ({ code, onClose, rule, ...rest }: DetailPanelProps) => (
   <RightPanel
+    expandFollowsSelection
     defaultWidth={440}
     expand={Boolean(rule)}
     maxWidth={760}
